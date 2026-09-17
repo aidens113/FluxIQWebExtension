@@ -17,6 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshot } from "..";
+import { webFailureRepairParameters } from "../repairable-parameters";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 
 /** Every selector this page contains. None of them may survive into the packet. */
@@ -51,6 +52,10 @@ const ALLOWED_PACKET_KEYS = new Set([
   // The packet itself.
   "schemaVersion", "trust", "location", "title", "elements", "elementTotal",
   "truncated", "captureTruncated", "elementsTruncated", "budgetTruncated",
+  // A failure packet's statements about the failed action: which control it
+  // addressed, and which parameters a repair fills (`element`, the one every
+  // repairable action has).
+  "failedTarget", "failedTargetMissing", "failedTargetUnknown", "repairParameters", "element",
   // Page context.
   "frame", "isTop", "childFrameIds", "loading", "readyState", "busy", "spinner",
   "pendingNavigation", "navigation", "type", "redirects", "referrer", "dialogs",
@@ -121,6 +126,21 @@ test("no selector from a realistic page survives into the packet", () => {
   // anywhere in it, is one somebody wrote down here. A field added later --
   // whatever it is called, however deeply it is nested -- fails this line
   // rather than quietly shipping whatever it holds to a language model.
+  assert.deepEqual([...packetKeys(evidence)].filter((key) => !ALLOWED_PACKET_KEYS.has(key)), []);
+});
+
+test("a failure packet, marked and naming its repair parameters, still carries no selector", () => {
+  const evidence = sanitizeWebLlmSnapshot(realisticSnapshot(), {
+    maxEvidenceBytes: 12_000,
+    failedAction: { selector: "#place-order", repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) },
+  });
+  const serialized = JSON.stringify(evidence);
+  assert.equal(evidence.failedTarget, "target.1");
+  assert.deepEqual(Object.keys(evidence.repairParameters ?? {}), ["element"]);
+  for (const selector of SELECTORS) {
+    assert.doesNotMatch(serialized, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"), selector);
+  }
+  assert.doesNotMatch(serialized, /"(?:selector|selectors|xpath|queryPath|css|locator|cssSelector|path)"/u);
   assert.deepEqual([...packetKeys(evidence)].filter((key) => !ALLOWED_PACKET_KEYS.has(key)), []);
 });
 

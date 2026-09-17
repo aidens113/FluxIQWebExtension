@@ -25,8 +25,42 @@ function outputTargetFromPayload(payload) {
   });
 }
 function elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget2?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget2?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+  const adapted = [adaptedTarget2?.element, selectedCandidate, adaptedFingerprint, adaptedTarget2];
+  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget2 = objectValue(parameters.target);
+  if (!adaptedTarget2) return false;
+  if (adaptedTarget2.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget2)) return true;
+  const named = firstElementFingerprint([adaptedTarget2.element, adaptedTarget2.fingerprint, adaptedTarget2]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
 }
 function firstElementFingerprint(sources) {
   for (const source of sources) {
@@ -1044,6 +1078,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -1112,7 +1152,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters2.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1935,8 +1976,9 @@ function commandElementFingerprint(target, parameters) {
   return void 0;
 }
 function elementFingerprintSources2(target, parameters) {
+  if (!adaptedTargetSupersedesRecording(parameters)) return [parameters.element, target.element, target.fingerprint];
   const adaptedTarget2 = jsonObject4(parameters.target);
-  return adaptedTarget2?.selectedCandidate !== void 0 ? [target.element, target.fingerprint, parameters.element] : [parameters.element, target.element, target.fingerprint];
+  return [target.element, target.fingerprint, adaptedTarget2?.element, adaptedTarget2?.fingerprint, adaptedTarget2, parameters.element];
 }
 function webAutomationActionResultPayload(result) {
   return compactJsonObject2({

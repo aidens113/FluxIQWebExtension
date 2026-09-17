@@ -808,6 +808,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -876,7 +882,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1807,11 +1814,13 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: void 0,
-    // Nor are these: `markFailedTarget` writes exactly one of them, and only
-    // for a packet that is describing a failure. Named for the same reason.
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
     failedTarget: void 0,
     failedTargetMissing: void 0,
-    failedTargetUnknown: void 0
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
@@ -1819,6 +1828,7 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
 }
 function markFailedTarget(evidence, selectors, failedAction) {
   if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
   if (!failedAction.selector) {
     evidence.failedTargetUnknown = true;
     return;
@@ -1844,7 +1854,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     }
     markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -1915,9 +1925,17 @@ var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
+// src/runtime/llm-evidence/repairable-parameters.ts
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
+
 // src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
 var SELECTOR_NODE_IDS = new Set(
   webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 

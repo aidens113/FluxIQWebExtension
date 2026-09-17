@@ -907,6 +907,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -975,7 +981,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }

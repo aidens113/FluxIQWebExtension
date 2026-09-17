@@ -45,6 +45,7 @@ import {
   type WebPlanNodeResolutionInput
 } from "./plan-resolution";
 import { present } from "./present";
+import { webFailureRepairParameters } from "./repairable-parameters";
 import { currentElementForReturnedTarget, safeRevealElement } from "./reveal";
 import {
   createWebLlmExtractionHandles,
@@ -296,12 +297,17 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         // Core's failed-action identity is an attempt, a node and a definition
         // id, and carries nothing about the control -- so this recapture marks
         // no target and says `failedTargetUnknown` rather than leaving the
-        // model to read the silence as "the target is still there".
-        failedAction: {},
+        // model to read the silence as "the target is still there". What it
+        // does carry is enough to name the parameters a repair fills, which
+        // Core tells the model to fill from this packet; without them a correct
+        // live repair was refused for guessing the key.
+        failedAction: { repairParameters: webFailureRepairParameters({ definitionId: input.failedAction.definitionId }) },
       }))).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
-      if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent" };
+      // Judged before the target: a packet of another version, or not a packet
+      // at all, is not one this domain issued, whatever handles it holds.
+      if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent", reason: "evidence_unrecognized" };
       return validateWebRuntimeTargetOverrideEvidence(
         evidence as WebLlmPageEvidence,
         target,

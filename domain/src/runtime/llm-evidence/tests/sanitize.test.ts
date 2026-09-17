@@ -241,6 +241,53 @@ test("a handle the byte budget trimmed away becomes a missing target rather than
   assert.ok(!evidence.elements.some((element) => element.name === "Pay now"));
 });
 
+// A failure packet's other statement: which keys a target override fills. Core
+// tells the model to fill one handle per repairable parameter the evidence
+// offers, so a packet that offered none left the model to guess the key, and a
+// correct live repair was refused for guessing wrong (`run-mu4tfxld-e78debce`).
+const ELEMENT_PARAMETER = { element: "the target handle of the one element the failed action should act on instead" };
+
+test("a failure packet names the parameters a repair fills, as a copy of what the producer gave", () => {
+  const repairParameters = { ...ELEMENT_PARAMETER };
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters } });
+  assert.deepEqual(evidence.repairParameters, ELEMENT_PARAMETER);
+  assert.equal(evidence.failedTargetUnknown, true, "naming the parameters is not naming the control");
+  repairParameters.element = "changed afterwards";
+  assert.deepEqual(evidence.repairParameters, ELEMENT_PARAMETER);
+  // Beside a marked control as well.
+  const marked = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay", repairParameters: ELEMENT_PARAMETER } });
+  assert.equal(marked.failedTarget, "target.2");
+  assert.deepEqual(marked.repairParameters, ELEMENT_PARAMETER);
+  assert.doesNotMatch(JSON.stringify(marked), /#pay|selector/u);
+});
+
+test("an empty map says the failed action offers nothing to re-point, and no map says nothing at all", () => {
+  assert.deepEqual(sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: {} } }).repairParameters, {});
+  assert.equal("repairParameters" in sanitizeWebLlmSnapshot(failurePage(), { failedAction: {} }), false);
+  assert.equal("repairParameters" in sanitizeWebLlmSnapshot(failurePage()), false);
+});
+
+test("the parameters are paid for inside the budget, and given up only after the page facts", () => {
+  const generous = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: ELEMENT_PARAMETER } });
+  const generousBytes = Buffer.byteLength(JSON.stringify(generous), "utf8");
+  assert.equal(generous.budgetTruncated, undefined);
+  // One byte short: an element goes, the parameters stay, and it fits.
+  const tight = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: ELEMENT_PARAMETER }, maxEvidenceBytes: generousBytes - 1 });
+  assert.ok(Buffer.byteLength(JSON.stringify(tight), "utf8") <= generousBytes - 1);
+  assert.equal(tight.budgetTruncated, true);
+  assert.equal(tight.elements.length, 1);
+  assert.deepEqual(tight.repairParameters, ELEMENT_PARAMETER);
+  // A budget the parameters cannot fit beside even one element: the page facts
+  // go first, then the parameters, and the one element is kept.
+  const oversized = { element: `the target handle ${"x".repeat(400)}` };
+  const starved = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: oversized }, maxEvidenceBytes: 300 });
+  assert.ok(Buffer.byteLength(JSON.stringify(starved), "utf8") <= 300);
+  assert.equal(starved.repairParameters, undefined);
+  assert.equal(starved.title, undefined);
+  assert.equal(starved.elements.length, 1);
+  assert.equal(starved.budgetTruncated, true);
+});
+
 function failurePage(): Record<string, unknown> {
   return {
     url: "https://fixture.test/checkout",

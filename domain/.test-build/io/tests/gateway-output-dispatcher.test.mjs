@@ -53,8 +53,42 @@ function outputTargetFromPayload(payload) {
   });
 }
 function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];
+  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
 }
 function firstElementFingerprint(sources) {
   for (const source of sources) {
@@ -838,6 +872,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -906,7 +946,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }

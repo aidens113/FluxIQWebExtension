@@ -19,7 +19,9 @@
 // when the action's control is not among the elements described (it left the
 // page, or `budgetTruncated` says the trim cut it), `failedTargetUnknown` when
 // the producer did not say which control the action addressed. Exactly one of
-// the three is present on a failure packet, and none of them on any other.
+// the three is present on a failure packet, and none of them on any other. A
+// failure packet also names the parameters a repair fills, `repairParameters`,
+// in the domain's own words rather than the page's.
 //
 // Three limits can set `truncated`, and they are three different problems with
 // three different answers: the browser's capture already dropped elements
@@ -67,6 +69,15 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
   failedTargetMissing?: true;
   /** The producer did not say which control the failed action addressed, so the packet marks none. Not the same as the control being gone. */
   failedTargetUnknown?: true;
+  /**
+   * On a failure packet: each parameter a target override for the failed
+   * action names in `target.handles`, with what its handle must be. Core tells
+   * the model to fill one handle per parameter the evidence offers, and a
+   * packet that offered none left it to guess the key
+   * (`run-mu4tfxld-e78debce`). An empty map says the failed action offers
+   * nothing to re-point.
+   */
+  repairParameters?: Record<string, string>;
 };
 
 /**
@@ -91,8 +102,10 @@ export type WebLlmSanitizeOptions = {
    * producer said the action addressed; it stays inside this module, and what
    * leaves is the handle it maps to. Passing `{}` is the honest form of "the
    * producer did not say", and marks the packet `failedTargetUnknown`.
+   * `repairParameters` is what the packet tells the model a repair fills; it is
+   * the domain's own wording, never page data, and is copied as given.
    */
-  failedAction?: { selector?: string };
+  failedAction?: { selector?: string; repairParameters?: Readonly<Record<string, string>> };
 };
 
 export function sanitizeWebLlmSnapshot(input: unknown, options: WebLlmSanitizeOptions = {}): WebLlmPageEvidence {
@@ -151,11 +164,13 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: undefined,
-    // Nor are these: `markFailedTarget` writes exactly one of them, and only
-    // for a packet that is describing a failure. Named for the same reason.
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
     failedTarget: undefined,
     failedTargetMissing: undefined,
-    failedTargetUnknown: undefined
+    failedTargetUnknown: undefined,
+    repairParameters: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
@@ -163,13 +178,16 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
 }
 
 /**
- * Writes the failure packet's one statement about its own target, before the
- * trim runs so that the bytes it costs are inside the budget rather than
- * pushing the packet over it afterwards. Nothing is written for a packet that
- * is not describing a failure.
+ * Writes the failure packet's statements about the failed action -- its one
+ * mark on the target, and the parameters a repair fills -- before the trim
+ * runs, so that the bytes they cost are inside the budget rather than pushing
+ * the packet over it afterwards. Nothing is written for a packet that is not
+ * describing a failure.
  */
 function markFailedTarget(evidence: WebLlmPageEvidence, selectors: Map<string, string>, failedAction: WebLlmSanitizeOptions["failedAction"]): void {
   if (!failedAction) return;
+  // A copy, so a producer that reuses its map cannot change a packet already issued.
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
   if (!failedAction.selector) {
     evidence.failedTargetUnknown = true;
     return;
@@ -185,8 +203,13 @@ function budgetFor(options: WebLlmSanitizeOptions): number {
     : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
 }
 
-/** The page facts a packet can lose and still be worth reading. Ordered least useful first where they are dropped. */
-type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "dialogs" | "blockedBy" | "frame";
+/**
+ * The fields a packet can lose and still be worth reading. Ordered least useful
+ * first where they are dropped: the page facts, then the repair parameters,
+ * which are worth more than any page fact to a repair but less than the last
+ * element, since a packet describing nothing has nothing to repair to.
+ */
+type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "dialogs" | "blockedBy" | "frame" | "repairParameters";
 
 /**
  * Trim until the packet fits, lowest value first: the ranked tail of elements
@@ -218,7 +241,7 @@ function trimToBudget(evidence: WebLlmPageEvidence, selectors: Map<string, strin
     }
     markBudgetTruncated();
   };
-  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
+  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();

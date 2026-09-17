@@ -1,6 +1,7 @@
 // src/client/tests/gateway-mapping-identity.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -72,8 +73,42 @@ function outputTargetFromPayload(payload) {
   });
 }
 function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];
+  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
 }
 function firstElementFingerprint(sources) {
   for (const source of sources) {
@@ -776,6 +811,17 @@ var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 // src/extraction/label-key.ts
 var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
+// src/extraction/structure-detection.ts
+function webAutomationStructureDetectionRequestValue(value) {
+  const request = record(value);
+  if (!request || Object.keys(request).some((key) => key !== "selector")) return void 0;
+  if (request.selector === void 0) return {};
+  return typeof request.selector === "string" && request.selector.trim() !== "" ? { selector: request.selector } : void 0;
+}
+function record(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/output-nodes/extract-list/records-path.ts
 var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
 
@@ -916,6 +962,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -931,7 +983,7 @@ var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
 );
 function createWebAutomationOutputNodeDefinition(definition) {
   const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
-  const requiredParameters = new Set(
+  const requiredParameters2 = new Set(
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
@@ -965,7 +1017,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     // could replace the dataset schema, and with it the excluded fields.
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
-      ...requiredParameters.has(parameter.id) ? { required: true } : {},
+      ...requiredParameters2.has(parameter.id) ? { required: true } : {},
       allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
@@ -983,8 +1035,9 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // key press to the focused element, a URL assertion, a tab operation —
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
-      ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...requiredParameters2.has("selector") ? { elementTarget: true } : {},
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1046,6 +1099,8 @@ function iconForOutput(outputId) {
 
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
+var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
+var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -1108,10 +1163,10 @@ function isSensitiveControlType(type) {
 // src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record = descriptor;
-  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  const record2 = descriptor;
+  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
   return {
-    inputType: stringField(record.inputType),
+    inputType: stringField(record2.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -1146,6 +1201,16 @@ function webAutomationSecretStatePath(key) {
 function webAutomationSecretBinding(key) {
   return { $state: { path: webAutomationSecretStatePath(key) } };
 }
+function webAutomationSecretBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
+}
+function webAutomationUnresolvedSecretParameters(parameters) {
+  return Object.entries(parameters).flatMap(([parameter, value]) => {
+    const path = webAutomationSecretBindingPath(value);
+    return path === void 0 ? [] : [{ parameter, path }];
+  });
+}
 
 // src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
@@ -1154,6 +1219,10 @@ function webAutomationUploadStatePath(key) {
 }
 function webAutomationUploadBinding(key) {
   return { $state: { path: webAutomationUploadStatePath(key) } };
+}
+function webAutomationUploadBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
 }
 
 // src/output-nodes/url-path.ts
@@ -1560,6 +1629,180 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
+// src/client/gateway-action-parameters.ts
+function webAutomationReadActionParameters(parameters) {
+  const lifted = {
+    // Which tab and frame the action runs in, as opposed to the tab a
+    // `web.browser.tab` operation acts on, which travels inside `tab`.
+    tabId: nonNegativeInteger3(parameters.browserTabId ?? parameters.tabId),
+    frameId: nonNegativeInteger3(parameters.browserFrameId ?? parameters.frameId),
+    // The child frame's document path, which finds the frame again after Chrome
+    // renumbers it. Only the recorded node's name is read.
+    frameUrlPath: webAutomationUrlPath(parameters.browserFrameUrlPath),
+    newTab: booleanValue3(parameters.newTab),
+    option: optionSelectorValue(parameters.option),
+    scroll: scrollRequestValue(parameters.scroll),
+    wait: waitRequestValue(parameters.wait),
+    modifiers: keyModifiersValue(parameters.modifiers),
+    checked: booleanValue3(parameters.checked),
+    assert: assertRequestValue(parameters.assert),
+    extract: webAutomationExtractReadValue(parameters.extract),
+    extractList: webAutomationExtractListRequestValue(parameters.extractList),
+    // Only `web.dom.capture_snapshot` reads it, and only the authoring runtime
+    // sends it (`extraction/structure-detection.ts`).
+    detectStructure: webAutomationStructureDetectionRequestValue(parameters.detectStructure),
+    upload: uploadRequestValue(parameters.upload),
+    dialog: dialogRequestValue(parameters.dialog),
+    tab: tabRequestValue(parameters.tab),
+    download: downloadRequestValue(parameters.download)
+  };
+  const refused = Object.keys(lifted).filter((field) => lifted[field] === void 0 && suppliedParameter(parameters, field) !== void 0);
+  return { lifted, refused };
+}
+function suppliedParameter(parameters, field) {
+  if (field === "tabId") return parameters.browserTabId ?? parameters.tabId;
+  if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
+  if (field === "frameUrlPath") return parameters.browserFrameUrlPath;
+  return parameters[field];
+}
+function optionSelectorValue(value) {
+  const request = jsonObject3(value);
+  if (!request) return void 0;
+  if (request.by === "value") {
+    const optionValue = stringValue2(request.value);
+    return optionValue === void 0 ? void 0 : { by: "value", value: optionValue };
+  }
+  if (request.by === "label") {
+    const label = stringValue2(request.label);
+    return label === void 0 ? void 0 : { by: "label", label };
+  }
+  const index = nonNegativeInteger3(request.index);
+  return request.by === "index" && index !== void 0 ? { by: "index", index } : void 0;
+}
+function scrollRequestValue(value) {
+  const request = jsonObject3(value);
+  const mode = memberOf2(request?.mode, ["by", "toElement", "untilStable"]);
+  if (!request || mode === void 0) return void 0;
+  if (mode === "toElement") return { mode };
+  const y = finiteNumber(request.y);
+  if (mode === "by") {
+    const x = finiteNumber(request.x);
+    return { mode, ...x !== void 0 ? { x } : {}, ...y !== void 0 ? { y } : {} };
+  }
+  const maxScrolls = positiveInteger2(request.maxScrolls);
+  return maxScrolls === void 0 ? void 0 : { mode, maxScrolls, ...y !== void 0 ? { y } : {} };
+}
+function waitRequestValue(value) {
+  const request = jsonObject3(value);
+  const condition = memberOf2(request?.condition, WAIT_CONDITIONS);
+  if (!request || condition === void 0) return void 0;
+  const url = nonEmptyString2(request.url);
+  const stableForMs = positiveInteger2(request.stableForMs);
+  return { condition, ...url !== void 0 ? { url } : {}, ...stableForMs !== void 0 ? { stableForMs } : {} };
+}
+function keyModifiersValue(value) {
+  const request = jsonObject3(value);
+  if (!request) return void 0;
+  const modifiers = {
+    ...typeof request.alt === "boolean" ? { alt: request.alt } : {},
+    ...typeof request.ctrl === "boolean" ? { ctrl: request.ctrl } : {},
+    ...typeof request.meta === "boolean" ? { meta: request.meta } : {},
+    ...typeof request.shift === "boolean" ? { shift: request.shift } : {}
+  };
+  return Object.keys(modifiers).length > 0 ? modifiers : void 0;
+}
+function assertRequestValue(value) {
+  const request = jsonObject3(value);
+  const kind = memberOf2(request?.kind, ASSERT_KINDS);
+  if (!request || kind === void 0) return void 0;
+  const expected = stringValue2(request.expected);
+  const timeoutMs = positiveInteger2(request.timeoutMs);
+  return { kind, ...expected !== void 0 ? { expected } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
+}
+function uploadRequestValue(value) {
+  const request = jsonObject3(value);
+  const supplied = Array.isArray(request?.files) ? request.files : void 0;
+  if (supplied === void 0 || supplied.length === 0) return void 0;
+  const files = [];
+  let totalBytes = 0;
+  for (const entry of supplied) {
+    const file = jsonObject3(entry);
+    const name = nonEmptyString2(file?.name);
+    const mimeType = nonEmptyString2(file?.mimeType);
+    const contentBase64 = typeof file?.contentBase64 === "string" ? file.contentBase64 : void 0;
+    if (name === void 0 || mimeType === void 0 || contentBase64 === void 0) return void 0;
+    const bytes = base64ByteLength(contentBase64);
+    if (bytes === void 0 || bytes > WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES) return void 0;
+    totalBytes += bytes;
+    if (totalBytes > WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES) return void 0;
+    files.push({ name, mimeType, contentBase64 });
+  }
+  return { files };
+}
+function base64ByteLength(content) {
+  if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) return void 0;
+  const padding = content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0;
+  return content.length / 4 * 3 - padding;
+}
+function dialogRequestValue(value) {
+  const request = jsonObject3(value);
+  const response = memberOf2(request?.response, ["accept", "dismiss"]);
+  if (!request || response === void 0) return void 0;
+  const promptText = response === "accept" ? stringValue2(request.promptText) : void 0;
+  return { response, ...promptText !== void 0 ? { promptText } : {} };
+}
+function tabRequestValue(value) {
+  const request = jsonObject3(value);
+  const operation = memberOf2(request?.operation, ["open", "switch", "close"]);
+  if (!request || operation === void 0) return void 0;
+  const tabId = nonNegativeInteger3(request.tabId);
+  if (operation === "open") {
+    const url = nonEmptyString2(request.url);
+    const active = booleanValue3(request.active);
+    return { operation, ...url !== void 0 ? { url } : {}, ...active !== void 0 ? { active } : {} };
+  }
+  if (operation === "switch") {
+    const urlPattern = nonEmptyString2(request.urlPattern);
+    const urlPath = webAutomationUrlPath(request.urlPath);
+    if (request.urlPath !== void 0 && urlPath === void 0) return void 0;
+    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {}, ...urlPath !== void 0 ? { urlPath } : {} };
+  }
+  return { operation, ...tabId !== void 0 ? { tabId } : {} };
+}
+function downloadRequestValue(value) {
+  const request = jsonObject3(value);
+  if (!request) return void 0;
+  const filename = nonEmptyString2(request.filename);
+  const timeoutMs = positiveInteger2(request.timeoutMs);
+  return { ...filename !== void 0 ? { filename } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
+}
+var WAIT_CONDITIONS = ["present", "visible", "enabled", "absent", "url", "stable"];
+var ASSERT_KINDS = ["exists", "absent", "text", "url", "visible", "enabled"];
+function booleanValue3(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function finiteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function nonNegativeInteger3(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function positiveInteger2(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+}
+function stringValue2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function nonEmptyString2(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function memberOf2(value, members) {
+  return typeof value === "string" && members.includes(value) ? value : void 0;
+}
+function jsonObject3(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
@@ -1609,11 +1852,121 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
     })
   };
 }
+function webAutomationActionFromGatewayCommand(command) {
+  const normalized = normalizeWebAutomationActionType(command.actionType);
+  if (!normalized.ok) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
+  }
+  const parameters = command.parameters ?? {};
+  const uploadPath = webAutomationUploadBindingPath(parameters.upload);
+  const unmet = [...webAutomationUnresolvedSecretParameters(parameters), ...uploadPath !== void 0 ? [{ parameter: "upload", path: uploadPath }] : []];
+  if (unmet.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
+  }
+  const { lifted, refused } = webAutomationReadActionParameters(parameters);
+  const required = requiredParameters(normalized.actionType);
+  const unreadable = refused.filter((field) => required.includes(field));
+  if (unreadable.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
+  const encrypted = normalized.actionType === "web.dom.extract_list" ? encryptedFieldKeys(lifted.extractList) : [];
+  if (encrypted.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: encryptedFieldMessage(encrypted), failure: encryptedFieldFailure(encrypted) };
+  }
+  const target = command.target ?? {};
+  return compactJsonObject2({
+    commandId: command.commandId,
+    actionType: normalized.actionType,
+    selector: stringValue3(target.selector) ?? stringValue3(parameters.selector),
+    text: stringValue3(parameters.text),
+    value: stringValue3(parameters.value),
+    key: stringValue3(parameters.key),
+    url: stringValue3(parameters.url),
+    timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
+    coordinates: pointValue(target.coordinates ?? parameters.coordinates),
+    visualTarget: jsonObject4(target.visualTarget ?? parameters.visualTarget),
+    element: commandElementFingerprint(target, parameters),
+    ...lifted,
+    options: parameters
+  });
+}
+function commandElementFingerprint(target, parameters) {
+  for (const source of elementFingerprintSources2(target, parameters)) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function elementFingerprintSources2(target, parameters) {
+  if (!adaptedTargetSupersedesRecording(parameters)) return [parameters.element, target.element, target.fingerprint];
+  const adaptedTarget = jsonObject4(parameters.target);
+  return [target.element, target.fingerprint, adaptedTarget?.element, adaptedTarget?.fingerprint, adaptedTarget, parameters.element];
+}
+function normalizeWebAutomationActionType(actionType) {
+  if (CANONICAL_ACTION_TYPES.has(actionType)) return { ok: true, actionType };
+  const canonical = LEGACY_ACTION_TYPE_ALIASES.get(actionType);
+  if (canonical !== void 0) return { ok: true, actionType: canonical };
+  const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
+  return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
+}
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+function unsuppliedValueFailure(unmet) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected: `values supplied at run time for ${unmet.map((entry) => entry.path).join(", ")}`,
+    actual: "the run supplied none, so the action was not dispatched"
+  });
+}
+function unsuppliedValueMessage(unmet) {
+  return `Not dispatched: these parameters need values supplied at run time that this run did not supply: ${unmet.map((entry) => `${entry.parameter} (${entry.path})`).join(", ")}`;
+}
+function unreadableFieldFailure(actionType, fields) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, {
+    expected: `${actionType} with a well-formed ${fields.join(", ")}`,
+    actual: `${fields.join(", ")} could not be read, so the action was not dispatched`
+  });
+}
+function unreadableFieldMessage(actionType, fields) {
+  return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
+}
+function encryptedFieldKeys(request) {
+  if (request === void 0) return [];
+  return Object.entries(request.fields).filter(([, field]) => typeof field !== "string" && field.handling === "encrypt").map(([key]) => key);
+}
+function encryptedFieldFailure(keys) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, {
+    expected: "web.dom.extract_list fields whose column is included or excluded",
+    actual: `${namedFieldKeys(keys)} asked to be encrypted, which is not implemented yet, so the action was not dispatched`
+  });
+}
+function encryptedFieldMessage(keys) {
+  return `Not dispatched: web.dom.extract_list asks to encrypt ${namedFieldKeys(keys)}, and the Encrypt column is not implemented yet.`;
+}
+function namedFieldKeys(keys) {
+  const named = keys.slice(0, 5).join(", ");
+  return keys.length > 5 ? `${named} and ${keys.length - 5} more` : named;
+}
+function requiredParameters(actionType) {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === actionType)?.parameterSchema;
+  return Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
+}
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
 );
+function stringValue3(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue2(value) {
+  return typeof value === "number" ? value : void 0;
+}
+function pointValue(value) {
+  if (!value || typeof value !== "object") return void 0;
+  const point = value;
+  return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : void 0;
+}
+function jsonObject4(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
 function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
@@ -1680,4 +2033,49 @@ test("a signal the normalizer does not know does not reach the page", () => {
   assert.ok(fingerprint);
   assert.equal(fingerprint.accessibleName, void 0);
   assert.equal("ariaName" in fingerprint, false);
+});
+var repairedSave = {
+  handles: { element: "target.2" },
+  handleResolution: "named",
+  tagName: "button",
+  accessibleName: "Apply changes",
+  selector: "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)",
+  metadata: { controlType: "submit", formId: "settings-form" }
+};
+function recordedSaveNode() {
+  return webAutomationOutputPayload("web.dom.click", recordedClick(recordedSave).payload);
+}
+function preparedByCore(parameters) {
+  const target = normalizeAutomationStudioElementTarget(parameters.target, { source: "runtime" }) ?? normalizeAutomationStudioElementTarget(parameters, { source: "runtime" });
+  assert.ok(target, "Core found an element target to prepare");
+  return { ...parameters, target };
+}
+function dispatchedClick(commandId, parameters, target = outputTargetFromPayload(parameters)) {
+  const command = webAutomationActionFromGatewayCommand({ commandId, actionType: "web.dom.click", ...target ? { target } : {}, parameters });
+  assert.equal("status" in command, false, `the click was not refused: ${JSON.stringify(command)}`);
+  return command;
+}
+test("a persisted repair reaches the page as one element: the repaired selector and the repaired identity", () => {
+  const stored = { ...recordedSaveNode(), target: repairedSave };
+  for (const [shape, parameters] of [["as the node stores it", stored], ["as Core dispatches it", preparedByCore(stored)]]) {
+    const wireTarget = outputTargetFromPayload(parameters);
+    const command = dispatchedClick(`repair:${shape}`, parameters, wireTarget);
+    assert.equal(command.selector, repairedSave.selector, shape);
+    assert.deepEqual(command.element, { selector: repairedSave.selector, tagName: "button", accessibleName: "Apply changes" }, shape);
+    assert.deepEqual(command.element, wireTarget?.element, `${shape}: the declared field and the wire target name the same element`);
+  }
+});
+test("an unrepaired recorded node keeps the whole recording on the declared field after Core's rewrite", () => {
+  const node = recordedSaveNode();
+  const prepared = preparedByCore(node);
+  assert.equal(adaptedTargetSupersedesRecording(prepared), false);
+  const command = dispatchedClick("unrepaired", prepared);
+  assert.deepEqual(command.element, elementFingerprint(node.element), "context, label and the implied role all survive");
+  assert.equal(command.selector, "#save-settings");
+});
+test("a command whose wire target carried no element still takes the repair, never the recording", () => {
+  const prepared = preparedByCore({ ...recordedSaveNode(), target: repairedSave });
+  const command = dispatchedClick("repair:bare-wire-target", prepared, { selector: String(repairedSave.selector) });
+  assert.equal(command.element?.accessibleName, "Apply changes");
+  assert.equal(command.element?.testId, void 0);
 });

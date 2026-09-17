@@ -53,8 +53,42 @@ function outputTargetFromPayload(payload) {
   });
 }
 function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];
+  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
 }
 function firstElementFingerprint(sources) {
   for (const source of sources) {
@@ -1021,6 +1055,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -1089,7 +1129,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -3443,11 +3484,13 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: void 0,
-    // Nor are these: `markFailedTarget` writes exactly one of them, and only
-    // for a packet that is describing a failure. Named for the same reason.
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
     failedTarget: void 0,
     failedTargetMissing: void 0,
-    failedTargetUnknown: void 0
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
@@ -3455,6 +3498,7 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
 }
 function markFailedTarget(evidence, selectors, failedAction) {
   if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
   if (!failedAction.selector) {
     evidence.failedTargetUnknown = true;
     return;
@@ -3480,7 +3524,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     }
     markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -3876,8 +3920,8 @@ function webAutomationRecoveryHarnessOptionBundle(context) {
 
 // src/runtime/llm-evidence/repairable-parameters.ts
 var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
-var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
-var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
+var ELEMENT_PARAMETER_DESCRIPTION = "the target handle of the one element the failed action should act on instead";
+var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 var ELEMENT_ROLE_BY_DEFINITION_ID = {
   "web.output.dom-type": "fillable",
   "web.output.dom-clear": "fillable",
@@ -3887,31 +3931,41 @@ var ELEMENT_ROLE_BY_DEFINITION_ID = {
   "web.output.dom-wait_for_selector": "observable",
   "web.output.dom-extract": "observable"
 };
-var LIST_EXTRACTION_DEFINITION_ID = "web.output.dom-extract_list";
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
 function webRepairableParameters(definitionId) {
-  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID[definitionId];
-  if (elementRole) return [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: elementRole, required: true }];
-  if (definitionId === LIST_EXTRACTION_DEFINITION_ID) return [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }];
-  return [];
+  const elementRole = Object.hasOwn(ELEMENT_ROLE_BY_DEFINITION_ID, definitionId) ? ELEMENT_ROLE_BY_DEFINITION_ID[definitionId] : void 0;
+  return elementRole ? [elementParameter(elementRole)] : [];
 }
 function webRepairableParameterFor(definitionId, name) {
-  const declared2 = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
-  if (declared2) return declared2;
-  if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
-  return { name, role: "observable", required: false };
+  return webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+}
+function webFailedActionDefinitionId(failedAction) {
+  const outputId = failedAction.outputId;
+  if (outputId === void 0) return failedAction.definitionId;
+  const dispatched = OUTPUT_NODE_ID_BY_OUTPUT_ID.get(outputId);
+  if (dispatched === void 0) return void 0;
+  if (failedAction.definitionId !== POLICY_ACTION_DEFINITION_ID && failedAction.definitionId !== dispatched) return void 0;
+  return dispatched;
+}
+function webFailureRepairParameters(failedAction) {
+  if (failedAction.definitionId === POLICY_ACTION_DEFINITION_ID && failedAction.outputId === void 0) {
+    return { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: ELEMENT_PARAMETER_DESCRIPTION };
+  }
+  const definitionId = webFailedActionDefinitionId(failedAction);
+  const offered = definitionId === void 0 ? [] : webRepairableParameters(definitionId);
+  return Object.fromEntries(offered.map((parameter) => [parameter.name, parameter.description]));
 }
 function elementFillsRepairableParameter(element, role) {
   if (role === "fillable") return safeFillTag(element.tag, element.inputType);
   if (role === "selectable") return element.tag === "select";
   if (role === "clickable") return actionableEvidenceElement(element);
   if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
-  if (role === "list_item") return element.item !== void 0;
   return true;
 }
-function isFieldParameterName(name) {
-  if (!name.startsWith(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX)) return false;
-  const key = name.slice(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX.length);
-  return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
+function elementParameter(role) {
+  return { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role, required: true, description: ELEMENT_PARAMETER_DESCRIPTION };
 }
 
 // src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
@@ -3929,6 +3983,9 @@ var EXTRACTION_HANDLE = /^extraction\.[1-9][0-9]{0,8}$/u;
 var MAX_SEARCH_DEPTH = 8;
 var SELECTOR_NODE_IDS = new Set(
   webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 var TARGET_ISSUES = {
@@ -3958,6 +4015,8 @@ function resolveWebPlanNodeParameters(input, stores) {
   if (frameId === "mixed" || declared2 !== void 0 && declared2 !== (frameId ?? 0)) return refused(/* @__PURE__ */ new Set(["web.handle.frame_mismatch"]));
   const parameters = {};
   for (const [key, value] of Object.entries(input.parameters)) parameters[key] = replaced.get(key)?.value ?? value;
+  const identity = replaced.get("selector")?.element;
+  if (identity !== void 0 && ELEMENT_NODE_IDS.has(input.nodeDefinitionId)) parameters.element = identity;
   if (frameId !== void 0 && frameId !== 0) parameters.browserFrameId = frameId;
   return { status: "resolved", parameters };
 }
@@ -3970,7 +4029,7 @@ function resolveTarget(value, scope, targets) {
   if (value.location !== void 0 && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
   const resolution = targets.resolve(scope, handle, value.location);
   if (!resolution.ok) return TARGET_ISSUES[resolution.code];
-  return { value: resolution.selector, frameId: resolution.frameId };
+  return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element };
 }
 function resolveExtraction(value, scope, extractions) {
   if (Object.keys(value).some((key) => key !== "handle" && key !== "minItems" && key !== "maxItems")) return "web.handle.malformed";
@@ -3985,7 +4044,7 @@ function resolveExtraction(value, scope, extractions) {
   if (value.maxItems !== void 0) request.maxItems = value.maxItems;
   const checked = webAutomationExtractListRequestValue(request);
   if (checked === void 0 || checked.minItems !== request.minItems || checked.maxItems !== request.maxItems) return "web.handle.malformed";
-  return { value: request, frameId: resolution.binding.frameId };
+  return { value: request, frameId: resolution.binding.frameId, element: void 0 };
 }
 function isHandleObject(value) {
   return isJsonRecord(value) && Object.prototype.hasOwnProperty.call(value, "handle");
@@ -3997,8 +4056,8 @@ function containsRecognisableHandle(value, depth) {
   if (typeof value.handle === "string" && (TARGET_HANDLE.test(value.handle) || EXTRACTION_HANDLE.test(value.handle))) return true;
   return Object.values(value).some((entry) => containsRecognisableHandle(entry, depth + 1));
 }
-function handleFrame(resolved) {
-  const frames = new Set(resolved.map((entry) => entry.frameId ?? 0));
+function handleFrame(resolved2) {
+  const frames = new Set(resolved2.map((entry) => entry.frameId ?? 0));
   if (frames.size > 1) return "mixed";
   const only = [...frames][0];
   return only === 0 ? void 0 : only;
@@ -4008,6 +4067,28 @@ function declaredFrame(value) {
 }
 function refused(issues) {
   return { status: "refused", issueCodes: WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => issues.has(code)) };
+}
+
+// src/runtime/llm-evidence/plan-resolution/element-identity.ts
+var CONTENT_TAGS = /* @__PURE__ */ new Set(["input", "textarea", "select"]);
+function webPlanElementIdentity(element, selector) {
+  const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
+  const context = present({
+    formId: uncut(element.form, WEB_LLM_EVIDENCE_BOUNDS.placement),
+    listPosition: element.item === void 0 ? void 0 : { index: element.item.index, total: element.item.total }
+  });
+  return present({
+    tagName: element.tag,
+    role: element.role,
+    accessibleName: secret ? void 0 : uncut(element.name, WEB_LLM_EVIDENCE_BOUNDS.text),
+    visibleText: secret || CONTENT_TAGS.has(element.tag) ? void 0 : uncut(element.text, WEB_LLM_EVIDENCE_BOUNDS.text),
+    selector,
+    inputType: element.inputType,
+    context: Object.keys(context).length > 0 ? context : void 0
+  });
+}
+function uncut(value, bound) {
+  return value !== void 0 && value.length < bound ? value : void 0;
 }
 
 // src/runtime/llm-evidence/plan-resolution/target-packets.ts
@@ -4034,7 +4115,7 @@ function createWebLlmTargetPackets() {
         if (selector === void 0) continue;
         const address = `${element.frameId ?? 0}\0${selector}`;
         uses.set(address, (uses.get(address) ?? 0) + 1);
-        targets.set(element.target, { selector, frameId: element.frameId, shared: false });
+        targets.set(element.target, { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector), shared: false });
       }
       for (const target of targets.values()) target.shared = (uses.get(`${target.frameId ?? 0}\0${target.selector}`) ?? 0) > 1;
       flow.pages.delete(location);
@@ -4058,7 +4139,7 @@ function createWebLlmTargetPackets() {
         if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
         const target = page.get(handle);
         if (target === void 0) return { ok: false, code: "unknown" };
-        return target.shared ? { ok: false, code: "not_unique" } : { ok: true, selector: target.selector, frameId: target.frameId };
+        return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
       }
       const seen = /* @__PURE__ */ new Map();
       for (const page of flow.pages.values()) {
@@ -4066,15 +4147,35 @@ function createWebLlmTargetPackets() {
         if (target === void 0) continue;
         const address = `${target.frameId ?? 0}\0${target.selector}`;
         const known = seen.get(address);
-        seen.set(address, known?.shared ? known : target);
+        seen.set(address, known === void 0 ? target : {
+          selector: known.selector,
+          frameId: known.frameId,
+          element: agreedIdentity(known.element, target.element),
+          shared: known.shared || target.shared
+        });
       }
       if (seen.size > 1) return { ok: false, code: "ambiguous" };
       const only = [...seen.values()][0];
       if (only?.shared) return { ok: false, code: "not_unique" };
-      if (only !== void 0) return { ok: true, selector: only.selector, frameId: only.frameId };
+      if (only !== void 0) return resolved(only);
       return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
     }
   };
+}
+function resolved(target) {
+  return { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+}
+function agreedIdentity(left, right) {
+  const agreed = (a, b) => JSON.stringify(a) === JSON.stringify(b) ? a : void 0;
+  return present({
+    tagName: agreed(left.tagName, right.tagName),
+    role: agreed(left.role, right.role),
+    accessibleName: agreed(left.accessibleName, right.accessibleName),
+    visibleText: agreed(left.visibleText, right.visibleText),
+    selector: agreed(left.selector, right.selector),
+    inputType: agreed(left.inputType, right.inputType),
+    context: agreed(left.context, right.context)
+  });
 }
 function scopeKey(scope) {
   return `${scope.projectId}\0${scope.flowId}`;
@@ -4275,50 +4376,50 @@ function copyBinding(binding) {
 
 // src/runtime/llm-evidence/target-override.ts
 function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction, selectors) {
-  const declared2 = webRepairableParameters(failedAction.definitionId);
-  if (declared2.length === 0) return { status: "absent" };
+  const definitionId = webFailedActionDefinitionId(failedAction);
+  const declared2 = definitionId === void 0 ? [] : webRepairableParameters(definitionId);
+  if (definitionId === void 0 || declared2.length === 0) return { status: "absent", reason: "action_not_repairable" };
   const handles = proposedHandles(target);
-  if (!handles) return { status: "absent" };
-  if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
-  if (declared2.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
-  const resolved = /* @__PURE__ */ new Map();
+  if (!handles) return { status: "absent", reason: "target_malformed" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(definitionId, name))) return { status: "absent", reason: "parameter_not_offered" };
+  if (declared2.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent", reason: "parameter_missing" };
+  const resolved2 = /* @__PURE__ */ new Map();
   for (const [name, handle] of Object.entries(handles)) {
-    const parameter = webRepairableParameterFor(failedAction.definitionId, name);
-    const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
-    const named = evidence.elements.filter((element) => element.target === handle);
-    if (named.length > 1) return { status: "ambiguous" };
+    const parameter = webRepairableParameterFor(definitionId, name);
+    const candidates = evidence.elements.filter((element2) => elementFillsRepairableParameter(element2, parameter.role));
+    const named = evidence.elements.filter((element2) => element2.target === handle);
+    if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
     if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
-      resolved.set(name, { element: named[0], named: true });
+      resolved2.set(name, { element: named[0], named: true });
       continue;
     }
-    if (candidates.length === 0) return { status: "absent" };
-    if (candidates.length > 1) return { status: "ambiguous" };
-    resolved.set(name, { element: candidates[0], named: false });
+    if (candidates.length === 0) return { status: "absent", reason: "no_compatible_element" };
+    if (candidates.length > 1) return { status: "ambiguous", reason: named.length === 1 ? "handle_incompatible" : "handle_not_issued" };
+    resolved2.set(name, { element: candidates[0], named: false });
   }
-  return { status: "resolved", target: resolvedTarget(handles, resolved, selectors) };
+  const element = resolved2.get(WEB_REPAIRABLE_ELEMENT_PARAMETER);
+  if (resolved2.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
+  return { status: "resolved", target: resolvedTarget(handles, element, selectors) };
 }
 function proposedHandles(target) {
   const handles = target?.handles;
   if (!handles || typeof handles !== "object" || Array.isArray(handles)) return void 0;
   const entries = Object.entries(handles);
-  if (entries.length === 0) return void 0;
   if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
   return Object.fromEntries(entries);
 }
-function resolvedTarget(handles, resolved, selectors) {
-  const handleResolution = [...resolved.values()].every((entry) => entry.named) ? "named" : "inferred";
-  const single = resolved.size === 1 ? resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER)?.element : void 0;
-  const flat = single ? elementFingerprint2(single, selectors) : void 0;
+function resolvedTarget(handles, resolved2, selectors) {
+  const handleResolution = resolved2.named ? "named" : "inferred";
+  const fingerprint = elementFingerprint2(resolved2.element, selectors);
   return present({
-    handles: Object.fromEntries([...resolved].map(([name, entry]) => [name, entry.element.target])),
+    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved2.element.target },
     handleResolution,
-    tagName: flat?.tagName,
-    role: flat?.role,
-    accessibleName: flat?.accessibleName,
-    visibleText: flat?.visibleText,
-    selector: flat?.selector,
-    metadata: flat?.metadata,
-    targets: flat ? void 0 : Object.fromEntries([...resolved].map(([name, entry]) => [name, elementFingerprint2(entry.element, selectors)])),
+    tagName: fingerprint.tagName,
+    role: fingerprint.role,
+    accessibleName: fingerprint.accessibleName,
+    visibleText: fingerprint.visibleText,
+    selector: fingerprint.selector,
+    metadata: fingerprint.metadata,
     proposedHandles: handleResolution === "inferred" ? handles : void 0
   });
 }
@@ -4509,12 +4610,15 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
         // Core's failed-action identity is an attempt, a node and a definition
         // id, and carries nothing about the control -- so this recapture marks
         // no target and says `failedTargetUnknown` rather than leaving the
-        // model to read the silence as "the target is still there".
-        failedAction: {}
+        // model to read the silence as "the target is still there". What it
+        // does carry is enough to name the parameters a repair fills, which
+        // Core tells the model to fill from this packet; without them a correct
+        // live repair was refused for guessing the key.
+        failedAction: { repairParameters: webFailureRepairParameters({ definitionId: input.failedAction.definitionId }) }
       }))).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
-      if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent" };
+      if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent", reason: "evidence_unrecognized" };
       return validateWebRuntimeTargetOverrideEvidence(
         evidence,
         target,
@@ -5073,7 +5177,7 @@ var HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
 var MAX_DIFF_ELEMENTS = 10;
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
 var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
-var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
+var POLICY_ACTION_DEFINITION_ID2 = "builtin.policy.action";
 var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
 function createWebAutomationHostRuntime(gateway) {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
@@ -5147,7 +5251,7 @@ function actionSnapshot(payload) {
 function actsOnPage(node) {
   if (WEB_AUTOMATION_NODE_IDS.has(node.definitionId)) return true;
   const outputId = node.parameterValues?.outputId;
-  return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
+  return node.definitionId === POLICY_ACTION_DEFINITION_ID2 && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
 }
 function evidenceElements(summary) {
   const elements = summary?.elements;

@@ -421,11 +421,13 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: void 0,
-    // Nor are these: `markFailedTarget` writes exactly one of them, and only
-    // for a packet that is describing a failure. Named for the same reason.
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
     failedTarget: void 0,
     failedTargetMissing: void 0,
-    failedTargetUnknown: void 0
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
@@ -433,6 +435,7 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
 }
 function markFailedTarget(evidence, selectors, failedAction) {
   if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
   if (!failedAction.selector) {
     evidence.failedTargetUnknown = true;
     return;
@@ -458,7 +461,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     }
     markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -528,46 +531,6 @@ var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
-
-// src/runtime/llm-evidence/repairable-parameters.ts
-var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
-var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
-var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
-var ELEMENT_ROLE_BY_DEFINITION_ID = {
-  "web.output.dom-type": "fillable",
-  "web.output.dom-clear": "fillable",
-  "web.output.dom-select": "selectable",
-  "web.output.dom-click": "clickable",
-  "web.output.dom-keypress": "keyable",
-  "web.output.dom-wait_for_selector": "observable",
-  "web.output.dom-extract": "observable"
-};
-var LIST_EXTRACTION_DEFINITION_ID = "web.output.dom-extract_list";
-function webRepairableParameters(definitionId) {
-  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID[definitionId];
-  if (elementRole) return [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: elementRole, required: true }];
-  if (definitionId === LIST_EXTRACTION_DEFINITION_ID) return [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }];
-  return [];
-}
-function webRepairableParameterFor(definitionId, name) {
-  const declared2 = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
-  if (declared2) return declared2;
-  if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
-  return { name, role: "observable", required: false };
-}
-function elementFillsRepairableParameter(element, role) {
-  if (role === "fillable") return safeFillTag(element.tag, element.inputType);
-  if (role === "selectable") return element.tag === "select";
-  if (role === "clickable") return actionableEvidenceElement(element);
-  if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
-  if (role === "list_item") return element.item !== void 0;
-  return true;
-}
-function isFieldParameterName(name) {
-  if (!name.startsWith(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX)) return false;
-  const key = name.slice(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX.length);
-  return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
-}
 
 // src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -861,6 +824,53 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
     }
   };
 }
+
+// src/actions/types.ts
+var WEB_AUTOMATION_ACTION_TYPES = [
+  "web.browser.navigate",
+  "web.dom.click",
+  "web.dom.type",
+  "web.dom.clear",
+  "web.dom.select",
+  "web.dom.scroll",
+  "web.dom.keypress",
+  "web.dom.wait_for_selector",
+  "web.dom.wait_for_text",
+  "web.dom.extract",
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
+];
+
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -1166,31 +1176,6 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
-
 // src/output-nodes/extract-list/catalog-text.ts
 var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
   "scrape",
@@ -1372,6 +1357,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -1440,7 +1431,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1500,36 +1492,59 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/actions/types.ts
-var WEB_AUTOMATION_ACTION_TYPES = [
-  "web.browser.navigate",
-  "web.dom.click",
-  "web.dom.type",
-  "web.dom.clear",
-  "web.dom.select",
-  "web.dom.scroll",
-  "web.dom.keypress",
-  "web.dom.wait_for_selector",
-  "web.dom.wait_for_text",
-  "web.dom.extract",
-  "web.dom.capture_snapshot",
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
-
 // src/output-nodes/parameter-contracts.ts
 var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
 };
 
+// src/runtime/llm-evidence/repairable-parameters.ts
+var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
+var ELEMENT_PARAMETER_DESCRIPTION = "the target handle of the one element the failed action should act on instead";
+var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
+var ELEMENT_ROLE_BY_DEFINITION_ID = {
+  "web.output.dom-type": "fillable",
+  "web.output.dom-clear": "fillable",
+  "web.output.dom-select": "selectable",
+  "web.output.dom-click": "clickable",
+  "web.output.dom-keypress": "keyable",
+  "web.output.dom-wait_for_selector": "observable",
+  "web.output.dom-extract": "observable"
+};
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
+function webRepairableParameters(definitionId) {
+  const elementRole = Object.hasOwn(ELEMENT_ROLE_BY_DEFINITION_ID, definitionId) ? ELEMENT_ROLE_BY_DEFINITION_ID[definitionId] : void 0;
+  return elementRole ? [elementParameter(elementRole)] : [];
+}
+function webRepairableParameterFor(definitionId, name) {
+  return webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+}
+function webFailedActionDefinitionId(failedAction) {
+  const outputId = failedAction.outputId;
+  if (outputId === void 0) return failedAction.definitionId;
+  const dispatched = OUTPUT_NODE_ID_BY_OUTPUT_ID.get(outputId);
+  if (dispatched === void 0) return void 0;
+  if (failedAction.definitionId !== POLICY_ACTION_DEFINITION_ID && failedAction.definitionId !== dispatched) return void 0;
+  return dispatched;
+}
+function elementFillsRepairableParameter(element, role) {
+  if (role === "fillable") return safeFillTag(element.tag, element.inputType);
+  if (role === "selectable") return element.tag === "select";
+  if (role === "clickable") return actionableEvidenceElement(element);
+  if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
+  return true;
+}
+function elementParameter(role) {
+  return { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role, required: true, description: ELEMENT_PARAMETER_DESCRIPTION };
+}
+
 // src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
 var SELECTOR_NODE_IDS = new Set(
   webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
@@ -1539,50 +1554,50 @@ var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 
 // src/runtime/llm-evidence/target-override.ts
 function validateWebRuntimeTargetOverrideEvidence(evidence, target2, failedAction, selectors) {
-  const declared2 = webRepairableParameters(failedAction.definitionId);
-  if (declared2.length === 0) return { status: "absent" };
+  const definitionId = webFailedActionDefinitionId(failedAction);
+  const declared2 = definitionId === void 0 ? [] : webRepairableParameters(definitionId);
+  if (definitionId === void 0 || declared2.length === 0) return { status: "absent", reason: "action_not_repairable" };
   const handles = proposedHandles(target2);
-  if (!handles) return { status: "absent" };
-  if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
-  if (declared2.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
+  if (!handles) return { status: "absent", reason: "target_malformed" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(definitionId, name))) return { status: "absent", reason: "parameter_not_offered" };
+  if (declared2.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent", reason: "parameter_missing" };
   const resolved = /* @__PURE__ */ new Map();
   for (const [name, handle] of Object.entries(handles)) {
-    const parameter = webRepairableParameterFor(failedAction.definitionId, name);
-    const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
-    const named = evidence.elements.filter((element) => element.target === handle);
-    if (named.length > 1) return { status: "ambiguous" };
+    const parameter = webRepairableParameterFor(definitionId, name);
+    const candidates = evidence.elements.filter((element2) => elementFillsRepairableParameter(element2, parameter.role));
+    const named = evidence.elements.filter((element2) => element2.target === handle);
+    if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
     if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
       resolved.set(name, { element: named[0], named: true });
       continue;
     }
-    if (candidates.length === 0) return { status: "absent" };
-    if (candidates.length > 1) return { status: "ambiguous" };
+    if (candidates.length === 0) return { status: "absent", reason: "no_compatible_element" };
+    if (candidates.length > 1) return { status: "ambiguous", reason: named.length === 1 ? "handle_incompatible" : "handle_not_issued" };
     resolved.set(name, { element: candidates[0], named: false });
   }
-  return { status: "resolved", target: resolvedTarget(handles, resolved, selectors) };
+  const element = resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER);
+  if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
+  return { status: "resolved", target: resolvedTarget(handles, element, selectors) };
 }
 function proposedHandles(target2) {
   const handles = target2?.handles;
   if (!handles || typeof handles !== "object" || Array.isArray(handles)) return void 0;
   const entries = Object.entries(handles);
-  if (entries.length === 0) return void 0;
   if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
   return Object.fromEntries(entries);
 }
 function resolvedTarget(handles, resolved, selectors) {
-  const handleResolution = [...resolved.values()].every((entry) => entry.named) ? "named" : "inferred";
-  const single = resolved.size === 1 ? resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER)?.element : void 0;
-  const flat = single ? elementFingerprint2(single, selectors) : void 0;
+  const handleResolution = resolved.named ? "named" : "inferred";
+  const fingerprint = elementFingerprint2(resolved.element, selectors);
   return present({
-    handles: Object.fromEntries([...resolved].map(([name, entry]) => [name, entry.element.target])),
+    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved.element.target },
     handleResolution,
-    tagName: flat?.tagName,
-    role: flat?.role,
-    accessibleName: flat?.accessibleName,
-    visibleText: flat?.visibleText,
-    selector: flat?.selector,
-    metadata: flat?.metadata,
-    targets: flat ? void 0 : Object.fromEntries([...resolved].map(([name, entry]) => [name, elementFingerprint2(entry.element, selectors)])),
+    tagName: fingerprint.tagName,
+    role: fingerprint.role,
+    accessibleName: fingerprint.accessibleName,
+    visibleText: fingerprint.visibleText,
+    selector: fingerprint.selector,
+    metadata: fingerprint.metadata,
     proposedHandles: handleResolution === "inferred" ? handles : void 0
   });
 }
@@ -1746,6 +1761,7 @@ var webAutomationGatewayCapabilities = [
 
 // src/runtime/llm-evidence/tests/target-override.test.ts
 var target = (handles) => ({ handles });
+var NOT_REPAIRABLE = { status: "absent", reason: "action_not_repairable" };
 var formBinding = () => sanitizeWebLlmSnapshotWithBindings({
   url: "https://example.test/form",
   interactiveElements: [
@@ -1812,14 +1828,103 @@ test("a string that is a valid CSS selector is just an unminted handle: it never
     assert.equal(resolvedTarget2?.selector, "#wanted", invented);
   }
 });
-test("refuses a parameter the action never declared, and an action with no repairable parameters", () => {
+test("refuses a parameter the action never declared, as not offered", () => {
   const { evidence, selectors } = formBinding();
   const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.3" }), clickAction, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3", extra: "target.1" }), clickAction, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), { nodeId: "n", definitionId: "web.output.browser-navigate" }, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: {} }, clickAction, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {}, clickAction, selectors), { status: "absent" });
+  const notOffered = { status: "absent", reason: "parameter_not_offered" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.3" }), clickAction, selectors), notOffered);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3", extra: "target.1" }), clickAction, selectors), notOffered);
+});
+test("refuses a handle map that names no parameter, as a required one missing", () => {
+  const { evidence, selectors } = formBinding();
+  const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
+  assert.deepEqual(
+    validateWebRuntimeTargetOverrideEvidence(evidence, { handles: {} }, clickAction, selectors),
+    { status: "absent", reason: "parameter_missing" }
+  );
+});
+test("refuses a target that is not a map of parameters to handles, as malformed", () => {
+  const { evidence, selectors } = formBinding();
+  const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
+  const malformed = { status: "absent", reason: "target_malformed" };
+  const targets = [
+    {},
+    { handles: [] },
+    { handles: "target.3" },
+    { handles: { element: 3 } },
+    { handles: { element: "" } },
+    { selector: "#unique" }
+  ];
+  for (const candidate of targets) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, candidate, clickAction, selectors), malformed, JSON.stringify(candidate));
+  }
+});
+test("refuses a handle the packet issued twice, as ambiguous", () => {
+  const { evidence, selectors } = formBinding();
+  const doubled = { ...evidence, elements: [...evidence.elements, { ...evidence.elements[2], name: "Other" }] };
+  assert.deepEqual(
+    validateWebRuntimeTargetOverrideEvidence(doubled, target({ element: "target.3" }), { nodeId: "submit", definitionId: "web.output.dom-click" }, selectors),
+    { status: "ambiguous", reason: "handle_ambiguous" }
+  );
+});
+test("refuses a handle naming something the verb cannot use, when no single other element could stand in", () => {
+  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
+  const page = sanitizeWebLlmSnapshot({
+    url: "https://example.test/form",
+    interactiveElements: [
+      { tagName: "input", selector: "#first", name: "First" },
+      { tagName: "textarea", selector: "#second", name: "Second" },
+      { tagName: "button", selector: "#go", name: "Go" }
+    ]
+  });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "target.3" }), typeAction), { status: "ambiguous", reason: "handle_incompatible" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "target.9" }), typeAction), { status: "ambiguous", reason: "handle_not_issued" });
+});
+test("an action with nothing to re-point says so in Core's word, whatever the target names", () => {
+  const { evidence, selectors } = formBinding();
+  const navigate = { nodeId: "n", definitionId: "web.output.browser-navigate" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), navigate, selectors), NOT_REPAIRABLE);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {}, navigate, selectors), NOT_REPAIRABLE);
+});
+test("a recorded action is repaired as the verb its output names", () => {
+  const { evidence, selectors } = formBinding();
+  const recordedClick = { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.dom.click" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedClick, selectors), {
+    status: "resolved",
+    target: { handles: { element: "target.3" }, handleResolution: "named", tagName: "button", accessibleName: "Unique", selector: "#unique" }
+  });
+  const recordedType = { nodeId: "name", definitionId: "builtin.policy.action", outputId: "web.dom.type" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedType, selectors), {
+    status: "resolved",
+    target: {
+      handles: { element: "target.1" },
+      handleResolution: "inferred",
+      tagName: "textarea",
+      accessibleName: "Name",
+      selector: "#name",
+      proposedHandles: { element: "target.3" }
+    }
+  });
+  const createdClick = { nodeId: "submit", definitionId: "web.output.dom-click", outputId: "web.dom.click" };
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), createdClick, selectors).status, "resolved");
+});
+test("a failed action whose output names no repairable web verb, or contradicts its node, is refused", () => {
+  const { evidence, selectors } = formBinding();
+  const refusedIdentities = [
+    // A recorded action Core could name no output for says nothing about its verb.
+    { nodeId: "save", definitionId: "builtin.policy.action" },
+    { nodeId: "save", definitionId: "builtin.policy.action", outputId: "vendor.output.press" },
+    { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.browser.navigate" },
+    // A node definition id is not an output id.
+    { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.output.dom-click" },
+    // A web output node whose output id names another verb.
+    { nodeId: "submit", definitionId: "web.output.dom-click", outputId: "web.dom.type" },
+    // A node that is neither a recorded action nor that output's own node.
+    { nodeId: "ask", definitionId: "builtin.llm.prompt", outputId: "web.dom.click" }
+  ];
+  for (const failedAction of refusedIdentities) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), failedAction, selectors), NOT_REPAIRABLE, JSON.stringify(failedAction));
+  }
 });
 test("without the binding the repair is fingerprint-only, which is weaker rather than wrong", () => {
   const { evidence } = formBinding();
@@ -1831,9 +1936,10 @@ test("without the binding the repair is fingerprint-only, which is weaker rather
 test("refuses a repair when nothing compatible was described, and refuses to guess between several", () => {
   const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
   const noTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "select", selector: "#plan" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.9" }), typeAction), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.9" }), typeAction), { status: "absent", reason: "no_compatible_element" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.1" }), typeAction), { status: "absent", reason: "no_compatible_element" });
   const twoTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "input", selector: "#first" }, { tagName: "textarea", selector: "#second" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "target.9" }), typeAction), { status: "ambiguous" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "target.9" }), typeAction), { status: "ambiguous", reason: "handle_not_issued" });
 });
 test("carries a child-frame element's frame beside the selector that works inside it", () => {
   const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
@@ -1854,32 +1960,50 @@ test("carries a child-frame element's frame beside the selector that works insid
     }
   });
 });
-test("a list extraction repairs its row and its fields through the same contract", () => {
-  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
-    url: "https://example.test/catalogue",
-    interactiveElements: [
-      { tagName: "a", selector: ".row:nth-child(1)", name: "Widget", context: { listPosition: { index: 1, total: 2 } } },
-      { tagName: "span", selector: ".row:nth-child(1) .price", name: "10.00" }
-    ]
-  });
+var catalogueBinding = () => sanitizeWebLlmSnapshotWithBindings({
+  url: "https://example.test/catalogue",
+  interactiveElements: [
+    { tagName: "a", selector: ".row:nth-child(1)", name: "Widget", context: { listPosition: { index: 1, total: 2 } } },
+    { tagName: "span", selector: ".row:nth-child(1) .price", name: "10.00" }
+  ]
+});
+test("a list extraction is refused as not repairable, whatever it names, before any handle is resolved", () => {
+  const { evidence, selectors } = catalogueBinding();
   const extraction = { nodeId: "rows", definitionId: "web.output.dom-extract_list" };
-  const validation = validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.1", "field.price": "target.2" }), extraction, selectors);
-  assert.equal(validation.status, "resolved");
-  const resolvedTarget2 = validation.status === "resolved" ? validation.target : void 0;
-  assert.deepEqual(resolvedTarget2?.handles, { item: "target.1", "field.price": "target.2" });
-  assert.equal(resolvedTarget2?.handleResolution, "named");
-  assert.equal(resolvedTarget2?.selector, void 0);
-  assert.deepEqual(resolvedTarget2?.targets, {
-    item: { tagName: "a", accessibleName: "Widget", selector: ".row:nth-child(1)", metadata: { listIndex: 1, listTotal: 2 } },
-    "field.price": { tagName: "span", accessibleName: "10.00", selector: ".row:nth-child(1) .price" }
-  });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.2" }), extraction, selectors), {
+  const proposals = [
+    { item: "target.1", "field.price": "target.2" },
+    { item: "target.1" },
+    { item: "target.2" },
+    { "field.price": "target.2" },
+    { element: "target.1" }
+  ];
+  for (const handles of proposals) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target(handles), extraction, selectors), NOT_REPAIRABLE, JSON.stringify(handles));
+  }
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {}, extraction, selectors), NOT_REPAIRABLE);
+  const identities = [
+    { nodeId: "rows", definitionId: "builtin.policy.action", outputId: "web.dom.extract_list" },
+    { nodeId: "rows", definitionId: "web.output.dom-extract_list", outputId: "web.dom.extract_list" },
+    // An extraction node whose output id claims a click is a contradiction, not a click.
+    { nodeId: "rows", definitionId: "web.output.dom-extract_list", outputId: "web.dom.click" }
+  ];
+  for (const failedAction of identities) {
+    for (const handles of [{ item: "target.1" }, { element: "target.1" }]) {
+      assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target(handles), failedAction, selectors), NOT_REPAIRABLE, `${JSON.stringify(failedAction)} ${JSON.stringify(handles)}`);
+    }
+  }
+});
+test("a click on a list row still resolves flat, with the row's position as metadata", () => {
+  const { evidence, selectors } = catalogueBinding();
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "open", definitionId: "web.output.dom-click" }, selectors), {
     status: "resolved",
     target: {
-      handles: { item: "target.1" },
-      handleResolution: "inferred",
-      targets: { item: { tagName: "a", accessibleName: "Widget", selector: ".row:nth-child(1)", metadata: { listIndex: 1, listTotal: 2 } } },
-      proposedHandles: { item: "target.2" }
+      handles: { element: "target.1" },
+      handleResolution: "named",
+      tagName: "a",
+      accessibleName: "Widget",
+      selector: ".row:nth-child(1)",
+      metadata: { listIndex: 1, listTotal: 2 }
     }
   });
 });

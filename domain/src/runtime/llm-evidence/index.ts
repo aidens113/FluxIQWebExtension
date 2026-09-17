@@ -28,8 +28,6 @@ export {
   webRepairableParameterFor,
   webRepairableParameters,
   WEB_REPAIRABLE_ELEMENT_PARAMETER,
-  WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX,
-  WEB_REPAIRABLE_ITEM_PARAMETER,
   type WebRepairableParameter,
   type WebRepairableParameterRole
 } from "./repairable-parameters";

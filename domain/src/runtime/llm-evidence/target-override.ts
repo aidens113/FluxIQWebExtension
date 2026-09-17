@@ -17,11 +17,26 @@
 // one signal among many -- Core's own matcher weights it 14 against 28 for a
 // test id and 24 for an accessible name -- so a page that renumbers its DOM
 // does not invalidate the repair.
+//
+// An action with nothing to re-point is refused in Core's own word for it,
+// `action_not_repairable`, so the model and the run record are told plainly.
+// A list extraction is one: its repair used to be accepted, saved where the
+// extract node never reads, and "applied" to no effect.
+//
+// Every other refusal names its case too, from Core's closed vocabulary, so a
+// refused repair says whether the model invented a parameter, named a handle it
+// was never shown, or pointed at something the verb cannot use -- which a bare
+// `absent` said in one word for all three (`run-mu4rpka7-845d919a`).
+//
+// Which action failed is read from the output it dispatches wherever Core
+// names one (`webFailedActionDefinitionId`), because a recorded action is
+// Core's generic `builtin.policy.action` whatever its verb.
 
 import { type WebLlmEvidenceElement } from "./elements";
 import { present } from "./present";
 import {
   elementFillsRepairableParameter,
+  webFailedActionDefinitionId,
   webRepairableParameterFor,
   webRepairableParameters,
   WEB_REPAIRABLE_ELEMENT_PARAMETER
@@ -52,43 +67,60 @@ export function validateWebRuntimeTargetOverrideEvidence(
   failedAction: AutomationStudioRuntimeTargetOverrideFailedAction,
   selectors?: ReadonlyMap<string, string>
 ): AutomationStudioRuntimeTargetOverrideEvidenceValidation {
-  const declared = webRepairableParameters(failedAction.definitionId);
-  if (declared.length === 0) return { status: "absent" };
+  const definitionId = webFailedActionDefinitionId(failedAction);
+  const declared = definitionId === undefined ? [] : webRepairableParameters(definitionId);
+  // Judged before the target is read: whatever the model named, this action
+  // offers nothing to put it in.
+  if (definitionId === undefined || declared.length === 0) return { status: "absent", reason: "action_not_repairable" };
   const handles = proposedHandles(target);
-  if (!handles) return { status: "absent" };
+  if (!handles) return { status: "absent", reason: "target_malformed" };
   // A parameter this action never offered is an invented one. Refusing the
   // whole repair rather than ignoring the extra key is the point: it means the
   // model was working from something other than what it was shown.
-  if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
-  if (declared.some((parameter) => parameter.required && handles[parameter.name] === undefined)) return { status: "absent" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(definitionId, name))) return { status: "absent", reason: "parameter_not_offered" };
+  if (declared.some((parameter) => parameter.required && handles[parameter.name] === undefined)) return { status: "absent", reason: "parameter_missing" };
 
   const resolved = new Map<string, { element: WebLlmEvidenceElement; named: boolean }>();
   for (const [name, handle] of Object.entries(handles)) {
-    const parameter = webRepairableParameterFor(failedAction.definitionId, name)!;
+    const parameter = webRepairableParameterFor(definitionId, name)!;
     const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
     const named = evidence.elements.filter((element) => element.target === handle);
-    if (named.length > 1) return { status: "ambiguous" };
+    // Only a packet altered after it was issued names one handle twice.
+    if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
     if (named.length === 1 && elementFillsRepairableParameter(named[0]!, parameter.role)) {
       resolved.set(name, { element: named[0]!, named: true });
       continue;
     }
-    if (candidates.length === 0) return { status: "absent" };
-    if (candidates.length > 1) return { status: "ambiguous" };
+    // The handle did not stand: it was never issued, or it names something
+    // this verb cannot use. The one compatible element stands in for it; with
+    // none there is nothing to repair to, and with several the domain will not
+    // choose -- and says which way the handle failed.
+    if (candidates.length === 0) return { status: "absent", reason: "no_compatible_element" };
+    if (candidates.length > 1) return { status: "ambiguous", reason: named.length === 1 ? "handle_incompatible" : "handle_not_issued" };
     resolved.set(name, { element: candidates[0]!, named: false });
   }
-  return { status: "resolved", target: resolvedTarget(handles, resolved, selectors) };
+  const element = resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER);
+  // Core writes a resolved target into the node's `target`, and a DOM output
+  // reads one flat element fingerprint from there. A resolution of anything
+  // else would be saved where nothing reads it, so it is refused rather than
+  // written. No declared action produces one; this keeps it that way if one is
+  // ever declared before something reads it -- and such an action has nothing
+  // this contract can re-point, which is what the refusal says.
+  if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
+  return { status: "resolved", target: resolvedTarget(handles, element, selectors) };
 }
 
 /**
  * The handles the model proposed, or `undefined` when the target is not a
  * handle map at all. Core has already bounded this; the check is repeated
- * because the domain must not depend on the order the two run in.
+ * because the domain must not depend on the order the two run in. An empty map
+ * is a map: what is wrong with it is that it names no parameter, which the
+ * required-parameter check says.
  */
 function proposedHandles(target: AutomationStudioRuntimeTargetOverrideTarget): Record<string, string> | undefined {
   const handles: unknown = target?.handles;
   if (!handles || typeof handles !== "object" || Array.isArray(handles)) return undefined;
   const entries = Object.entries(handles as Record<string, unknown>);
-  if (entries.length === 0) return undefined;
   if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return undefined;
   return Object.fromEntries(entries as Array<[string, string]>);
 }
@@ -96,28 +128,22 @@ function proposedHandles(target: AutomationStudioRuntimeTargetOverrideTarget): R
 /**
  * The resolution Core carries and never reads.
  *
- * A one-parameter repair -- every DOM output today -- writes its fingerprint
- * flat, because that is the shape every other element target in this system
- * already has, and Core's element-target normalizer reads it with no new
- * branch. A repair with more than one parameter, which is what a list
- * extraction will be, writes `targets` instead: one fingerprint per parameter,
- * keyed by the same names the handles were. Exactly one of the two is filled,
- * which is why both are named on every build rather than conditionally added.
+ * The fingerprint is written flat, because that is the shape every other
+ * element target in this system already has: Core's element-target normalizer
+ * and the DOM outputs read it with no new branch. There is no keyed form. One
+ * existed for a list extraction and nothing read it.
  */
 type WebResolvedRepairTarget = {
-  /** The handles actually used, which are the domain's own where it overrode the model. */
+  /** The handle actually used, which is the domain's own where it overrode the model. */
   handles: Record<string, string>;
-  /** Whether the handles used are the ones the model named, or ones the domain inferred. */
+  /** Whether the handle used is the one the model named, or one the domain inferred. */
   handleResolution: "named" | "inferred";
-  /** The single element's fingerprint, flat. Present only for a one-parameter repair. */
-  tagName?: string;
+  tagName: string;
   role?: string;
   accessibleName?: string;
   visibleText?: string;
   selector?: string;
   metadata?: WebRepairElementMetadata;
-  /** One fingerprint per parameter. Present only for a repair with more than one. */
-  targets?: Record<string, WebRepairElementFingerprint>;
   /** What the model asked for, kept only where the domain did not use it. */
   proposedHandles?: Record<string, string>;
 };
@@ -150,22 +176,20 @@ type WebRepairElementMetadata = {
 
 function resolvedTarget(
   handles: Record<string, string>,
-  resolved: Map<string, { element: WebLlmEvidenceElement; named: boolean }>,
+  resolved: { element: WebLlmEvidenceElement; named: boolean },
   selectors: ReadonlyMap<string, string> | undefined
 ): AutomationStudioRuntimeTargetOverrideTarget {
-  const handleResolution = [...resolved.values()].every((entry) => entry.named) ? "named" : "inferred";
-  const single = resolved.size === 1 ? resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER)?.element : undefined;
-  const flat = single ? elementFingerprint(single, selectors) : undefined;
+  const handleResolution = resolved.named ? "named" : "inferred";
+  const fingerprint = elementFingerprint(resolved.element, selectors);
   return present<WebResolvedRepairTarget>({
-    handles: Object.fromEntries([...resolved].map(([name, entry]) => [name, entry.element.target])),
+    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved.element.target },
     handleResolution,
-    tagName: flat?.tagName,
-    role: flat?.role,
-    accessibleName: flat?.accessibleName,
-    visibleText: flat?.visibleText,
-    selector: flat?.selector,
-    metadata: flat?.metadata,
-    targets: flat ? undefined : Object.fromEntries([...resolved].map(([name, entry]) => [name, elementFingerprint(entry.element, selectors)])),
+    tagName: fingerprint.tagName,
+    role: fingerprint.role,
+    accessibleName: fingerprint.accessibleName,
+    visibleText: fingerprint.visibleText,
+    selector: fingerprint.selector,
+    metadata: fingerprint.metadata,
     proposedHandles: handleResolution === "inferred" ? handles : undefined
   });
 }

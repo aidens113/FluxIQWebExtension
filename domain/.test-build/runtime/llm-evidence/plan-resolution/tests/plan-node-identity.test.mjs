@@ -1,34 +1,10 @@
-// src/runtime/llm-evidence/plan-resolution/tests/resolve-plan-node.test.ts
+// src/runtime/llm-evidence/plan-resolution/tests/plan-node-identity.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
-
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
 
 // src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -38,6 +14,70 @@ function isWebAutomationExtractFieldKey(key) {
 }
 
 // src/output-nodes/targets/targets.ts
+function outputTargetFromPayload(payload) {
+  const adaptedTarget = objectValue(payload.target);
+  const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
+  const selectedCandidate = selectedTargetCandidate(adaptedTarget);
+  const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
+  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
+  if (!selector && !explicitVisualTarget) return void 0;
+  return compact({
+    selector,
+    ...element ? { element } : {},
+    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
+  });
+}
+function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];
+  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function selectedTargetCandidate(target) {
+  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
+  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
+  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
+}
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -171,6 +211,14 @@ function webAutomationExtractListRequestValue(value) {
     ...maxItems !== void 0 ? { maxItems } : {},
     ...minItems !== void 0 ? { minItems } : {}
   };
+}
+function webAutomationExtractReadValue(value) {
+  const read = jsonObject(value);
+  const mode = memberOf(read?.mode, WEB_AUTOMATION_EXTRACT_READ_MODES);
+  if (!read || mode === void 0) return void 0;
+  const attribute = mode === "attribute" ? nonEmptyString(read.attribute) : void 0;
+  if (mode === "attribute" ? attribute === void 0 : read.attribute !== void 0) return void 0;
+  return { mode, ...attribute !== void 0 ? { attribute } : {} };
 }
 function fieldMapValue(value) {
   const fields = jsonObject(value);
@@ -322,6 +370,51 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
     }
   };
 }
+
+// src/actions/types.ts
+var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
+var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
+var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
+var WEB_AUTOMATION_ACTION_TYPES = [
+  "web.browser.navigate",
+  "web.dom.click",
+  "web.dom.type",
+  "web.dom.clear",
+  "web.dom.select",
+  "web.dom.scroll",
+  "web.dom.keypress",
+  "web.dom.wait_for_selector",
+  "web.dom.wait_for_text",
+  "web.dom.extract",
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
+];
+var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
+  "web.browser.navigate": "browser.navigate",
+  "web.dom.click": "dom.click",
+  "web.dom.type": "dom.type",
+  "web.dom.clear": "dom.clear",
+  "web.dom.select": "dom.select",
+  "web.dom.scroll": "dom.scroll",
+  "web.dom.keypress": "dom.keypress",
+  "web.dom.wait_for_selector": "dom.wait_for_selector",
+  "web.dom.wait_for_text": "dom.wait_for_text",
+  "web.dom.extract": "dom.extract",
+  "web.dom.capture_snapshot": "dom.capture_snapshot",
+  "web.dom.check": "dom.check",
+  "web.dom.assert": "dom.assert",
+  "web.dom.extract_list": "dom.extract_list",
+  "web.dom.upload": "dom.upload",
+  "web.dom.dialog": "dom.dialog",
+  "web.browser.tab": "browser.tab",
+  "web.browser.download": "browser.download"
+};
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -627,6 +720,31 @@ var webAutomationActionDefinitions = [
   }
 ];
 
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
+
 // src/output-nodes/extract-list/catalog-text.ts
 var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
   "scrape",
@@ -670,6 +788,12 @@ var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
 // src/extraction/structure-detection.ts
 var WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS = ["target_not_found", "ambiguous_target", "no_repeating_run", "sensitive_region"];
+function webAutomationStructureDetectionRequestValue(value) {
+  const request = record(value);
+  if (!request || Object.keys(request).some((key) => key !== "selector")) return void 0;
+  if (request.selector === void 0) return {};
+  return typeof request.selector === "string" && request.selector.trim() !== "" ? { selector: request.selector } : void 0;
+}
 function webAutomationStructureDetectionValue(value) {
   const detection = record(value);
   if (!detection) return void 0;
@@ -887,7 +1011,7 @@ var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
 );
 function createWebAutomationOutputNodeDefinition(definition) {
   const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
-  const requiredParameters = new Set(
+  const requiredParameters2 = new Set(
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
@@ -921,7 +1045,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     // could replace the dataset schema, and with it the excluded fields.
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
-      ...requiredParameters.has(parameter.id) ? { required: true } : {},
+      ...requiredParameters2.has(parameter.id) ? { required: true } : {},
       allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
@@ -939,7 +1063,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // key press to the focused element, a URL assertion, a tab operation —
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
-      ...requiredParameters.has("selector") ? { elementTarget: true } : {},
+      ...requiredParameters2.has("selector") ? { elementTarget: true } : {},
       ...recordsPath ? { recordsPath } : {},
       ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
@@ -1001,28 +1125,6 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/actions/types.ts
-var WEB_AUTOMATION_ACTION_TYPES = [
-  "web.browser.navigate",
-  "web.dom.click",
-  "web.dom.type",
-  "web.dom.clear",
-  "web.dom.select",
-  "web.dom.scroll",
-  "web.dom.keypress",
-  "web.dom.wait_for_selector",
-  "web.dom.wait_for_text",
-  "web.dom.extract",
-  "web.dom.capture_snapshot",
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
-
 // src/output-nodes/parameter-contracts.ts
 var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
@@ -1058,6 +1160,564 @@ function isSensitiveElementDescriptor(descriptor) {
 }
 function stringField(value) {
   return typeof value === "string" ? value : void 0;
+}
+
+// src/output-nodes/secret-binding.ts
+var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
+}
+function webAutomationUnresolvedSecretParameters(parameters) {
+  return Object.entries(parameters).flatMap(([parameter, value]) => {
+    const path = webAutomationSecretBindingPath(value);
+    return path === void 0 ? [] : [{ parameter, path }];
+  });
+}
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
+}
+
+// src/io/input-model.ts
+var WEB_AUTOMATION_INPUT_IDS = {
+  browserState: "web.browser.state",
+  recordingEvidence: "web.recording.evidence",
+  navigationRequested: "web.user.navigation_requested",
+  elementClicked: "web.user.element_clicked",
+  textEntered: "web.user.text_entered",
+  fieldCleared: "web.user.field_cleared",
+  optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
+  keyPressed: "web.user.key_pressed",
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed",
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
+};
+var stateInputDefinitions = [
+  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
+  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
+];
+var actionInputDefinitions = [
+  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
+  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
+  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
+  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
+  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
+  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
+];
+var OUTPUT_FOR_ACTION_INPUT = new Map(
+  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
+);
+
+// src/runtime/capabilities.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
+var webAutomationRuntimeCapabilities = [
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES
+  },
+  {
+    id: "web.snapshots",
+    label: "Web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.state",
+    label: "Web state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.flow-runtime",
+    label: "Web flow runtime",
+    kind: "flow",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
+  }
+];
+var webAutomationGatewayCapabilities = [
+  {
+    id: "web.context.state",
+    label: "Web context state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
+  },
+  {
+    id: "web.structured.snapshot",
+    label: "Structured web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+    // structure it found (`extraction/structure-detection.ts`). A flag on an
+    // existing observe-only action rather than an action of its own, so it
+    // lists no action type: nothing new is executable. The authoring evidence
+    // runtime refuses its detection tool for a client that does not declare it.
+    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+    label: "Repeating-structure detection",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
+  },
+  {
+    id: "web.recording.events",
+    label: "Web recording events",
+    kind: "recording",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  },
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  }
+];
+
+// src/runtime/failure/codes.ts
+var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
+  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  ACTION_REJECTED: "web.action.rejected",
+  /** No element matched the action's target with enough confidence. */
+  TARGET_NOT_FOUND: "web.target.not_found",
+  /** Several elements matched the action's target and none could be preferred. */
+  TARGET_AMBIGUOUS: "web.target.ambiguous",
+  /** The action ran and its post-condition did not hold (decision D4). */
+  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /** An authored `web.dom.assert` condition did not hold. */
+  STATE_MISMATCH: "web.validation.state_mismatch",
+  /** The browser landed somewhere other than the requested URL, or never left where it was. */
+  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
+  /**
+   * The document was replaced, or routed away, while the action was running.
+   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+   * remembers the page an action started on and supersedes the verb's own code
+   * when it finished somewhere else.
+   */
+  PAGE_CHANGED: "web.page.changed",
+  /** A wait, or an action, ran out of time. */
+  TIMEOUT: "web.action.timeout",
+  /** The host wants a sign-in before the action can continue. */
+  AUTH_REQUIRED: "web.auth.required",
+  /**
+   * A person must act before the run can continue -- Core's category, stated no
+   * more narrowly here than Core states it. Two producers, and they are not the
+   * same shape of "act": `content/action-runtime/results.ts` reports it when a
+   * modal dialog is standing over the page and the target is behind it, and
+   * `runtime/adapter.ts` when no single paired client could be selected, which
+   * only the operator can fix. The narrower gloss this carried before -- "a
+   * captcha, or a native dialog waiting for an answer" -- described neither,
+   * and reading it as the definition made both look wrong.
+   */
+  USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /** The client does not implement the requested action type at all. */
+  UNSUPPORTED_TYPE: "web.action.unsupported_type",
+  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
+  NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
+  /** The action ran and failed for a reason no other code names. */
+  ACTION_FAILED: "web.action.failed",
+  /** Nothing said why the action failed. */
+  UNKNOWN: "web.action.unknown"
+});
+var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
+  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
+  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
+  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
+  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
+  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
+  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
+  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+});
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
+
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
+// src/recording/web-state/evidence/project.ts
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
+
+// src/client/gateway-action-parameters.ts
+function webAutomationReadActionParameters(parameters) {
+  const lifted = {
+    // Which tab and frame the action runs in, as opposed to the tab a
+    // `web.browser.tab` operation acts on, which travels inside `tab`.
+    tabId: nonNegativeInteger2(parameters.browserTabId ?? parameters.tabId),
+    frameId: nonNegativeInteger2(parameters.browserFrameId ?? parameters.frameId),
+    // The child frame's document path, which finds the frame again after Chrome
+    // renumbers it. Only the recorded node's name is read.
+    frameUrlPath: webAutomationUrlPath(parameters.browserFrameUrlPath),
+    newTab: booleanValue3(parameters.newTab),
+    option: optionSelectorValue(parameters.option),
+    scroll: scrollRequestValue(parameters.scroll),
+    wait: waitRequestValue(parameters.wait),
+    modifiers: keyModifiersValue(parameters.modifiers),
+    checked: booleanValue3(parameters.checked),
+    assert: assertRequestValue(parameters.assert),
+    extract: webAutomationExtractReadValue(parameters.extract),
+    extractList: webAutomationExtractListRequestValue(parameters.extractList),
+    // Only `web.dom.capture_snapshot` reads it, and only the authoring runtime
+    // sends it (`extraction/structure-detection.ts`).
+    detectStructure: webAutomationStructureDetectionRequestValue(parameters.detectStructure),
+    upload: uploadRequestValue(parameters.upload),
+    dialog: dialogRequestValue(parameters.dialog),
+    tab: tabRequestValue(parameters.tab),
+    download: downloadRequestValue(parameters.download)
+  };
+  const refused2 = Object.keys(lifted).filter((field) => lifted[field] === void 0 && suppliedParameter(parameters, field) !== void 0);
+  return { lifted, refused: refused2 };
+}
+function suppliedParameter(parameters, field) {
+  if (field === "tabId") return parameters.browserTabId ?? parameters.tabId;
+  if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
+  if (field === "frameUrlPath") return parameters.browserFrameUrlPath;
+  return parameters[field];
+}
+function optionSelectorValue(value) {
+  const request = jsonObject2(value);
+  if (!request) return void 0;
+  if (request.by === "value") {
+    const optionValue = stringValue2(request.value);
+    return optionValue === void 0 ? void 0 : { by: "value", value: optionValue };
+  }
+  if (request.by === "label") {
+    const label = stringValue2(request.label);
+    return label === void 0 ? void 0 : { by: "label", label };
+  }
+  const index = nonNegativeInteger2(request.index);
+  return request.by === "index" && index !== void 0 ? { by: "index", index } : void 0;
+}
+function scrollRequestValue(value) {
+  const request = jsonObject2(value);
+  const mode = memberOf2(request?.mode, ["by", "toElement", "untilStable"]);
+  if (!request || mode === void 0) return void 0;
+  if (mode === "toElement") return { mode };
+  const y = finiteNumber(request.y);
+  if (mode === "by") {
+    const x = finiteNumber(request.x);
+    return { mode, ...x !== void 0 ? { x } : {}, ...y !== void 0 ? { y } : {} };
+  }
+  const maxScrolls = positiveInteger2(request.maxScrolls);
+  return maxScrolls === void 0 ? void 0 : { mode, maxScrolls, ...y !== void 0 ? { y } : {} };
+}
+function waitRequestValue(value) {
+  const request = jsonObject2(value);
+  const condition = memberOf2(request?.condition, WAIT_CONDITIONS);
+  if (!request || condition === void 0) return void 0;
+  const url = nonEmptyString2(request.url);
+  const stableForMs = positiveInteger2(request.stableForMs);
+  return { condition, ...url !== void 0 ? { url } : {}, ...stableForMs !== void 0 ? { stableForMs } : {} };
+}
+function keyModifiersValue(value) {
+  const request = jsonObject2(value);
+  if (!request) return void 0;
+  const modifiers = {
+    ...typeof request.alt === "boolean" ? { alt: request.alt } : {},
+    ...typeof request.ctrl === "boolean" ? { ctrl: request.ctrl } : {},
+    ...typeof request.meta === "boolean" ? { meta: request.meta } : {},
+    ...typeof request.shift === "boolean" ? { shift: request.shift } : {}
+  };
+  return Object.keys(modifiers).length > 0 ? modifiers : void 0;
+}
+function assertRequestValue(value) {
+  const request = jsonObject2(value);
+  const kind = memberOf2(request?.kind, ASSERT_KINDS);
+  if (!request || kind === void 0) return void 0;
+  const expected = stringValue2(request.expected);
+  const timeoutMs = positiveInteger2(request.timeoutMs);
+  return { kind, ...expected !== void 0 ? { expected } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
+}
+function uploadRequestValue(value) {
+  const request = jsonObject2(value);
+  const supplied = Array.isArray(request?.files) ? request.files : void 0;
+  if (supplied === void 0 || supplied.length === 0) return void 0;
+  const files = [];
+  let totalBytes = 0;
+  for (const entry of supplied) {
+    const file = jsonObject2(entry);
+    const name = nonEmptyString2(file?.name);
+    const mimeType = nonEmptyString2(file?.mimeType);
+    const contentBase64 = typeof file?.contentBase64 === "string" ? file.contentBase64 : void 0;
+    if (name === void 0 || mimeType === void 0 || contentBase64 === void 0) return void 0;
+    const bytes = base64ByteLength(contentBase64);
+    if (bytes === void 0 || bytes > WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES) return void 0;
+    totalBytes += bytes;
+    if (totalBytes > WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES) return void 0;
+    files.push({ name, mimeType, contentBase64 });
+  }
+  return { files };
+}
+function base64ByteLength(content) {
+  if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) return void 0;
+  const padding = content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0;
+  return content.length / 4 * 3 - padding;
+}
+function dialogRequestValue(value) {
+  const request = jsonObject2(value);
+  const response = memberOf2(request?.response, ["accept", "dismiss"]);
+  if (!request || response === void 0) return void 0;
+  const promptText = response === "accept" ? stringValue2(request.promptText) : void 0;
+  return { response, ...promptText !== void 0 ? { promptText } : {} };
+}
+function tabRequestValue(value) {
+  const request = jsonObject2(value);
+  const operation = memberOf2(request?.operation, ["open", "switch", "close"]);
+  if (!request || operation === void 0) return void 0;
+  const tabId = nonNegativeInteger2(request.tabId);
+  if (operation === "open") {
+    const url = nonEmptyString2(request.url);
+    const active = booleanValue3(request.active);
+    return { operation, ...url !== void 0 ? { url } : {}, ...active !== void 0 ? { active } : {} };
+  }
+  if (operation === "switch") {
+    const urlPattern = nonEmptyString2(request.urlPattern);
+    const urlPath = webAutomationUrlPath(request.urlPath);
+    if (request.urlPath !== void 0 && urlPath === void 0) return void 0;
+    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {}, ...urlPath !== void 0 ? { urlPath } : {} };
+  }
+  return { operation, ...tabId !== void 0 ? { tabId } : {} };
+}
+function downloadRequestValue(value) {
+  const request = jsonObject2(value);
+  if (!request) return void 0;
+  const filename = nonEmptyString2(request.filename);
+  const timeoutMs = positiveInteger2(request.timeoutMs);
+  return { ...filename !== void 0 ? { filename } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
+}
+var WAIT_CONDITIONS = ["present", "visible", "enabled", "absent", "url", "stable"];
+var ASSERT_KINDS = ["exists", "absent", "text", "url", "visible", "enabled"];
+function booleanValue3(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function finiteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function nonNegativeInteger2(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function positiveInteger2(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+}
+function stringValue2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function nonEmptyString2(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function memberOf2(value, members) {
+  return typeof value === "string" && members.includes(value) ? value : void 0;
+}
+function jsonObject2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
+// src/client/gateway-mapping.ts
+function webAutomationActionFromGatewayCommand(command) {
+  const normalized = normalizeWebAutomationActionType(command.actionType);
+  if (!normalized.ok) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
+  }
+  const parameters = command.parameters ?? {};
+  const uploadPath = webAutomationUploadBindingPath(parameters.upload);
+  const unmet = [...webAutomationUnresolvedSecretParameters(parameters), ...uploadPath !== void 0 ? [{ parameter: "upload", path: uploadPath }] : []];
+  if (unmet.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
+  }
+  const { lifted, refused: refused2 } = webAutomationReadActionParameters(parameters);
+  const required = requiredParameters(normalized.actionType);
+  const unreadable = refused2.filter((field) => required.includes(field));
+  if (unreadable.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
+  const encrypted = normalized.actionType === "web.dom.extract_list" ? encryptedFieldKeys(lifted.extractList) : [];
+  if (encrypted.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: encryptedFieldMessage(encrypted), failure: encryptedFieldFailure(encrypted) };
+  }
+  const target = command.target ?? {};
+  return compactJsonObject2({
+    commandId: command.commandId,
+    actionType: normalized.actionType,
+    selector: stringValue3(target.selector) ?? stringValue3(parameters.selector),
+    text: stringValue3(parameters.text),
+    value: stringValue3(parameters.value),
+    key: stringValue3(parameters.key),
+    url: stringValue3(parameters.url),
+    timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
+    coordinates: pointValue(target.coordinates ?? parameters.coordinates),
+    visualTarget: jsonObject3(target.visualTarget ?? parameters.visualTarget),
+    element: commandElementFingerprint(target, parameters),
+    ...lifted,
+    options: parameters
+  });
+}
+function commandElementFingerprint(target, parameters) {
+  for (const source of elementFingerprintSources2(target, parameters)) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function elementFingerprintSources2(target, parameters) {
+  if (!adaptedTargetSupersedesRecording(parameters)) return [parameters.element, target.element, target.fingerprint];
+  const adaptedTarget = jsonObject3(parameters.target);
+  return [target.element, target.fingerprint, adaptedTarget?.element, adaptedTarget?.fingerprint, adaptedTarget, parameters.element];
+}
+function normalizeWebAutomationActionType(actionType) {
+  if (CANONICAL_ACTION_TYPES.has(actionType)) return { ok: true, actionType };
+  const canonical = LEGACY_ACTION_TYPE_ALIASES.get(actionType);
+  if (canonical !== void 0) return { ok: true, actionType: canonical };
+  const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
+  return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
+}
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+function unsuppliedValueFailure(unmet) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected: `values supplied at run time for ${unmet.map((entry) => entry.path).join(", ")}`,
+    actual: "the run supplied none, so the action was not dispatched"
+  });
+}
+function unsuppliedValueMessage(unmet) {
+  return `Not dispatched: these parameters need values supplied at run time that this run did not supply: ${unmet.map((entry) => `${entry.parameter} (${entry.path})`).join(", ")}`;
+}
+function unreadableFieldFailure(actionType, fields) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, {
+    expected: `${actionType} with a well-formed ${fields.join(", ")}`,
+    actual: `${fields.join(", ")} could not be read, so the action was not dispatched`
+  });
+}
+function unreadableFieldMessage(actionType, fields) {
+  return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
+}
+function encryptedFieldKeys(request) {
+  if (request === void 0) return [];
+  return Object.entries(request.fields).filter(([, field]) => typeof field !== "string" && field.handling === "encrypt").map(([key]) => key);
+}
+function encryptedFieldFailure(keys) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, {
+    expected: "web.dom.extract_list fields whose column is included or excluded",
+    actual: `${namedFieldKeys(keys)} asked to be encrypted, which is not implemented yet, so the action was not dispatched`
+  });
+}
+function encryptedFieldMessage(keys) {
+  return `Not dispatched: web.dom.extract_list asks to encrypt ${namedFieldKeys(keys)}, and the Encrypt column is not implemented yet.`;
+}
+function namedFieldKeys(keys) {
+  const named = keys.slice(0, 5).join(", ");
+  return keys.length > 5 ? `${named} and ${keys.length - 5} more` : named;
+}
+function requiredParameters(actionType) {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === actionType)?.parameterSchema;
+  return Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
+}
+var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
+var LEGACY_ACTION_TYPE_ALIASES = new Map(
+  Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
+);
+function stringValue3(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue2(value) {
+  return typeof value === "number" ? value : void 0;
+}
+function pointValue(value) {
+  if (!value || typeof value !== "object") return void 0;
+  const point = value;
+  return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : void 0;
+}
+function jsonObject3(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function compactJsonObject2(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
 // src/runtime/llm-evidence/limits.ts
@@ -1131,7 +1791,7 @@ function jsonRecord(input, name) {
   if (!isJsonRecord(input)) throw new Error(`${name} must be an object`);
   return input;
 }
-function boundedText(input, maximum) {
+function boundedText2(input, maximum) {
   if (typeof input !== "string") return void 0;
   const value = input.replace(/\s+/gu, " ").trim();
   return value ? value.slice(0, maximum) : void 0;
@@ -1153,17 +1813,17 @@ var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
   if (!isJsonRecord(raw)) return void 0;
-  const tag = boundedText(raw.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const tag = boundedText2(raw.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const addressed = frameAddressedSelector(raw);
   if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return void 0;
   const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
-  const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const text = rawText === name ? void 0 : rawText;
-  const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText2(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const rawText = boundedText2(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const text2 = rawText === name ? void 0 : rawText;
+  const rawInputType = boundedText2(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const inputType = rawInputType === "text" ? void 0 : rawInputType;
-  const rawControlType = boundedText(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const rawControlType = boundedText2(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const controlType = rawControlType === rawInputType || rawControlType === "text" ? void 0 : rawControlType;
   const href = sameOriginHref(raw.href, context.url);
   const options = tag === "select" ? sanitizedOptions(raw.options) : void 0;
@@ -1171,7 +1831,7 @@ function sanitizedEvidenceElement(raw, context) {
   const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
   const revealKind = semanticRevealKind(tag, role, attributes);
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
-  const placement = elementPlacement(raw.context, { name, text });
+  const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
   const element = present({
     target: context.target,
@@ -1179,7 +1839,7 @@ function sanitizedEvidenceElement(raw, context) {
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
-    text: text || void 0,
+    text: text2 || void 0,
     inputType: inputType || void 0,
     controlType: controlType || void 0,
     hasValue,
@@ -1210,33 +1870,33 @@ function actionableEvidenceElement(element) {
 function semanticRevealKind(tag, role, attributes) {
   if (role === "tab" || role === "menuitem" || role === "treeitem") return "view";
   if (tag === "summary") return "disclosure";
-  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
-  const controls = boundedText(attributes["aria-controls"], WEB_LLM_EVIDENCE_BOUNDS.text);
+  const expanded = boundedText2(attributes["aria-expanded"], 10)?.toLowerCase();
+  const controls = boundedText2(attributes["aria-controls"], WEB_LLM_EVIDENCE_BOUNDS.text);
   return expanded === "true" || expanded === "false" || controls ? "disclosure" : void 0;
 }
 function semanticExpandedState(attributes) {
-  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
+  const expanded = boundedText2(attributes["aria-expanded"], 10)?.toLowerCase();
   return expanded === "true" ? true : expanded === "false" ? false : void 0;
 }
 function frameAddressedSelector(raw) {
-  const rawSelector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  const rawSelector = boundedText2(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
   if (!rawSelector) return void 0;
   const match = FRAME_SELECTOR_PATTERN.exec(rawSelector);
-  const selector = match ? boundedText(match[2], WEB_LLM_EVIDENCE_BOUNDS.selector) : rawSelector;
+  const selector = match ? boundedText2(match[2], WEB_LLM_EVIDENCE_BOUNDS.selector) : rawSelector;
   if (!selector) return void 0;
   const frameId = stampedFrameId(raw) ?? (match ? boundedCount(Number(match[1]), 999999) : void 0);
   return frameId ? { selector, frameId } : { selector };
 }
 function stampedFrameId(raw) {
   const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
-  const stamped = boundedText(attributes[FRAME_ID_ATTRIBUTE], 20);
+  const stamped = boundedText2(attributes[FRAME_ID_ATTRIBUTE], 20);
   return stamped === void 0 ? void 0 : boundedCount(Number(stamped), 999999);
 }
 function elementPlacement(input, named) {
   const described = isJsonRecord(input) ? input : {};
-  const form = boundedText(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  const landmark = boundedText(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
-  const rawHeading = boundedText(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const form = boundedText2(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText2(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText2(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
   const heading = rawHeading === named.name || rawHeading === named.text ? void 0 : rawHeading;
   return {
     form: form || void 0,
@@ -1257,7 +1917,7 @@ function tablePlacement(input) {
   const row = boundedCount(input.row, 1e5);
   const column = boundedCount(input.column, 1e5);
   if (row === void 0 || column === void 0) return void 0;
-  const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const header = boundedText2(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
   return present({ row, column, header: header || void 0 });
 }
 function sanitizedOptions(input) {
@@ -1265,20 +1925,15 @@ function sanitizedOptions(input) {
   const result = [];
   for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.options)) {
     if (!isJsonRecord(raw)) continue;
-    const value = boundedText(raw.value, WEB_LLM_EVIDENCE_BOUNDS.attribute);
-    const label = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+    const value = boundedText2(raw.value, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+    const label = boundedText2(raw.label, WEB_LLM_EVIDENCE_BOUNDS.attribute);
     if (value && label) result.push({ value, label });
   }
   return result.length ? result : void 0;
 }
 function sanitizedSelectedValue(input, options) {
-  const value = boundedText(input, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+  const value = boundedText2(input, WEB_LLM_EVIDENCE_BOUNDS.attribute);
   return value && options.some((option) => option.value === value) ? value : void 0;
-}
-
-// src/page-evidence/wire.ts
-function pageEvidenceWire(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
 // src/runtime/llm-evidence/page-evidence.ts
@@ -1293,7 +1948,7 @@ function webLlmPageContext(snapshot, childFrameIds) {
   const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
   const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
   const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
-  const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const selectedText = boundedText2(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
   return present({
     frame,
     loading,
@@ -1338,7 +1993,7 @@ function evidenceFrame(input, childFrameIds) {
 }
 function evidenceLoading(input) {
   if (!input) return void 0;
-  const documentState = boundedText(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const documentState = boundedText2(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
   const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
   const loading = present({
@@ -1351,7 +2006,7 @@ function evidenceLoading(input) {
 }
 function evidenceNavigation(input) {
   if (!input) return void 0;
-  const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const type = boundedText2(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
   const navigation = present({
     type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : void 0,
@@ -1373,8 +2028,8 @@ function evidenceDialogs(input) {
   for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
     const raw = pageEvidenceWire(item);
     if (!raw) continue;
-    const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-    const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+    const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+    const name = boundedText2(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !modal) continue;
     dialogs.push(present({
@@ -1388,8 +2043,8 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const role = boundedText2(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText2(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
   if (!role && !name && !blocks) return void 0;
   return present({
@@ -1419,7 +2074,7 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
-  const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const title = boundedText2(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
   const captureTruncated = capturedTruncated(snapshot);
   const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
   const context = webLlmPageContext(snapshot, childFrameIds);
@@ -1791,12 +2446,12 @@ function exactKeys(value, allowed) {
   if (Object.keys(value).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) recoverable("invalid_input");
 }
 async function defaultSleep(ms, signal) {
-  await new Promise((resolve2) => {
-    const timer = setTimeout(resolve2, ms);
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
     timer.unref?.();
     signal?.addEventListener("abort", () => {
       clearTimeout(timer);
-      resolve2();
+      resolve();
     }, { once: true });
   });
 }
@@ -2190,7 +2845,7 @@ function shownField(key, label, kind, coverage) {
     key,
     // A label is page structure, but it is still page text: one line, bounded,
     // and the key when nothing readable is left of it.
-    label: boundedText(label, WEB_LLM_EVIDENCE_BOUNDS.placement) ?? key,
+    label: boundedText2(label, WEB_LLM_EVIDENCE_BOUNDS.placement) ?? key,
     kind,
     coverage: Math.round(coverage * 100) / 100
   };
@@ -2407,141 +3062,6 @@ function elementFingerprint2(element, selectors) {
   });
 }
 
-// src/io/input-model.ts
-var WEB_AUTOMATION_INPUT_IDS = {
-  browserState: "web.browser.state",
-  recordingEvidence: "web.recording.evidence",
-  navigationRequested: "web.user.navigation_requested",
-  elementClicked: "web.user.element_clicked",
-  textEntered: "web.user.text_entered",
-  fieldCleared: "web.user.field_cleared",
-  optionSelected: "web.user.option_selected",
-  checkboxToggled: "web.user.checkbox_toggled",
-  keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled",
-  filesChosen: "web.user.files_chosen",
-  tabSwitched: "web.user.tab_switched",
-  tabClosed: "web.user.tab_closed",
-  // One input, for the one form of extraction the product can define: a list,
-  // which saves a dataset.
-  //
-  // The single-value form had its own input -- an input maps to exactly one
-  // output, and the two forms run different verbs -- and nothing could ever
-  // produce it. The worker refuses to start a `value` pick and refuses one that
-  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
-  // `value` definition on the run path, and the picker's recorded event attaches
-  // no element for one. A registered action input that no event can reach
-  // advertises a trigger that never fires, which is the mirror of an unmapped
-  // input becoming executable, so it is not registered.
-  //
-  // The domain still *reads* a value definition
-  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
-  // an output a Flow may author; a recorded one stays passive evidence. When the
-  // picker can record a single value, this is one id and one row again.
-  dataExtractionDefined: "web.user.data_extraction_defined"
-};
-var stateInputDefinitions = [
-  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
-  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
-];
-var actionInputDefinitions = [
-  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
-  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
-  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
-  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
-  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
-  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
-  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
-  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
-  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
-];
-var OUTPUT_FOR_ACTION_INPUT = new Map(
-  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
-);
-
-// src/runtime/capabilities.ts
-var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
-var webAutomationRuntimeCapabilities = [
-  {
-    id: "web.actions",
-    label: "Web actions",
-    kind: "action",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
-    outputIds: WEB_AUTOMATION_ACTION_TYPES
-  },
-  {
-    id: "web.snapshots",
-    label: "Web snapshots",
-    kind: "snapshot",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
-  },
-  {
-    id: "web.state",
-    label: "Web state",
-    kind: "state",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
-  },
-  {
-    id: "web.flow-runtime",
-    label: "Web flow runtime",
-    kind: "flow",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
-  }
-];
-var webAutomationGatewayCapabilities = [
-  {
-    id: "web.context.state",
-    label: "Web context state",
-    kind: "state",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
-  },
-  {
-    id: "web.structured.snapshot",
-    label: "Structured web snapshots",
-    kind: "snapshot",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
-  },
-  {
-    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
-    // structure it found (`extraction/structure-detection.ts`). A flag on an
-    // existing observe-only action rather than an action of its own, so it
-    // lists no action type: nothing new is executable. The authoring evidence
-    // runtime refuses its detection tool for a client that does not declare it.
-    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
-    label: "Repeating-structure detection",
-    kind: "snapshot",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
-  },
-  {
-    id: "web.recording.events",
-    label: "Web recording events",
-    kind: "recording",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
-  },
-  {
-    id: "web.actions",
-    label: "Web actions",
-    kind: "action",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
-    outputIds: WEB_AUTOMATION_ACTION_TYPES,
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
-  }
-];
-
 // src/runtime/llm-evidence/tools.ts
 var TARGET_HANDLE_PATTERN2 = "^target\\.[1-9][0-9]?$";
 var RETAINED_SELECTOR_BINDINGS = 8;
@@ -2752,555 +3272,160 @@ function exactToolKeys(input, allowed) {
   if (Object.keys(input).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key))) recoverable("invalid_input");
 }
 
-// src/runtime/llm-evidence/structure/tests/captured-detections.ts
-var CAPTURED_DETECTIONS = {
-  "product-catalog-largest": {
-    url: "http://127.0.0.1:4173/scenarios/product-catalog/",
-    title: "Product catalog",
-    structure: {
-      "ok": true,
-      "proposal": {
-        "container": '[data-testid="product-list"]',
-        "item": '[data-testid="product-card"]',
-        "itemCount": 8,
-        "fields": [
-          {
-            "key": "product-image_src",
-            "label": "product-image src",
-            "spec": {
-              "kind": "attribute",
-              "selector": '[data-testid="product-image"]',
-              "attribute": "src",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "product-image_alt",
-            "label": "product-image alt",
-            "spec": {
-              "kind": "attribute",
-              "selector": '[data-testid="product-image"]',
-              "attribute": "alt",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "product-name",
-            "label": "product-name",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="product-name"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "product-link",
-            "label": "product-link",
-            "spec": {
-              "kind": "link",
-              "selector": '[data-testid="product-link"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "product-price",
-            "label": "product-price",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="product-price"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "product-rating",
-            "label": "product-rating",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="product-rating"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "stock-badge",
-            "label": "stock-badge",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="stock-badge"]',
-              "required": true
-            },
-            "coverage": 1
-          }
-        ],
-        "pagination": {
-          "next": '[data-testid="pagination-next"]',
-          "maxPages": 3
-        },
-        "confidence": 1
-      }
-    }
-  },
-  "data-table-largest": {
-    url: "http://127.0.0.1:4173/scenarios/data-table/",
-    title: "Inventory",
-    structure: {
-      "ok": true,
-      "proposal": {
-        "container": '[data-testid="inventory-body"]',
-        "item": '[data-testid="inventory-row"]',
-        "itemCount": 12,
-        "fields": [
-          {
-            "key": "product",
-            "label": "Product",
-            "spec": {
-              "kind": "column",
-              "header": "Product",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "category",
-            "label": "Category",
-            "spec": {
-              "kind": "column",
-              "header": "Category",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "price",
-            "label": "Price",
-            "spec": {
-              "kind": "column",
-              "header": "Price",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "stock",
-            "label": "Stock",
-            "spec": {
-              "kind": "column",
-              "header": "Stock",
-              "required": true
-            },
-            "coverage": 1
-          }
-        ],
-        "confidence": 1
-      }
-    }
-  },
-  "member-directory-largest": {
-    url: "http://127.0.0.1:4173/scenarios/member-directory/",
-    title: "Members \xB7 Meridian",
-    structure: {
-      "ok": true,
-      "proposal": {
-        "container": '[data-testid="member-rows"]',
-        "item": '[data-testid="member-rows"] > tr.css-0dfc6os',
-        "itemCount": 240,
-        "fields": [
-          {
-            "key": "member",
-            "label": "Member",
-            "spec": {
-              "kind": "column",
-              "header": "Member",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "role",
-            "label": "Role",
-            "spec": {
-              "kind": "column",
-              "header": "Role",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "team",
-            "label": "Team",
-            "spec": {
-              "kind": "column",
-              "header": "Team",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "status",
-            "label": "Status",
-            "spec": {
-              "kind": "column",
-              "header": "Status",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "last_active",
-            "label": "Last active",
-            "spec": {
-              "kind": "column",
-              "header": "Last active",
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "actions",
-            "label": "Actions",
-            "spec": {
-              "kind": "column",
-              "header": "Actions",
-              "required": true
-            },
-            "coverage": 1
-          }
-        ],
-        "confidence": 0.75
-      }
-    }
-  },
-  "infinite-feed-largest": {
-    url: "http://127.0.0.1:4173/scenarios/infinite-feed/",
-    title: "Neighbourhood feed",
-    structure: {
-      "ok": true,
-      "proposal": {
-        "container": '[data-testid="feed-page-1"]',
-        "item": '[data-testid="feed-item"]',
-        "itemCount": 10,
-        "fields": [
-          {
-            "key": "feed-item-title",
-            "label": "feed-item-title",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-title"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "feed-item-author",
-            "label": "feed-item-author",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-author"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "feed-item-time",
-            "label": "feed-item-time",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-time"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "feed-item-summary",
-            "label": "feed-item-summary",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-summary"]',
-              "required": true
-            },
-            "coverage": 1
-          }
-        ],
-        "confidence": 1
-      },
-      "infiniteScroll": true
-    }
-  },
-  "infinite-feed-load-more": {
-    url: "http://127.0.0.1:4173/scenarios/infinite-feed/",
-    title: "Neighbourhood feed",
-    structure: {
-      "ok": true,
-      "proposal": {
-        "container": '[data-testid="feed-page-1"]',
-        "item": '[data-testid="feed-item"]',
-        "itemCount": 10,
-        "fields": [
-          {
-            "key": "feed-item-title",
-            "label": "feed-item-title",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-title"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "feed-item-author",
-            "label": "feed-item-author",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-author"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "feed-item-time",
-            "label": "feed-item-time",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-time"]',
-              "required": true
-            },
-            "coverage": 1
-          },
-          {
-            "key": "feed-item-summary",
-            "label": "feed-item-summary",
-            "spec": {
-              "kind": "text",
-              "selector": '[data-testid="feed-item-summary"]',
-              "required": true
-            },
-            "coverage": 1
-          }
-        ],
-        "pagination": {
-          "mode": "loadMore",
-          "control": '[data-testid="load-more"]',
-          "maxPages": 50
-        },
-        "confidence": 1
-      }
-    }
-  }
-};
-
-// src/runtime/llm-evidence/plan-resolution/tests/resolve-plan-node.test.ts
+// src/runtime/llm-evidence/plan-resolution/tests/plan-node-identity.test.ts
 var TYPE_NODE = webAutomationOutputNodeId("web.dom.type");
 var CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
-var EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
-var NAVIGATE_NODE = webAutomationOutputNodeId("web.browser.navigate");
-var SNAPSHOT_NODE = webAutomationOutputNodeId("web.dom.capture_snapshot");
+var SELECT_NODE = webAutomationOutputNodeId("web.dom.select");
 var FORM_URL = "https://example.test/form";
-var NAME_SELECTOR = 'input[name="name"]';
-var nameField = { tagName: "input", selector: NAME_SELECTOR, inputType: "text", accessibleName: "Name", attributes: { name: "name", type: "text" } };
-var submit = { tagName: "button", selector: "#submit", visibleText: "Submit" };
-var NAME_IDENTITY = { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR };
-var SUBMIT_IDENTITY = { tagName: "button", visibleText: "Submit", selector: "#submit" };
-function clickResolvedTo(selector, tagName, visibleText) {
-  return { status: "resolved", parameters: { selector, element: { tagName, visibleText, selector } } };
-}
-function runtimeOver(page, onAction = () => void 0) {
+var NAME_SELECTOR = '[data-testid="instruction-name"]';
+var nameInput = {
+  tagName: "input",
+  selector: NAME_SELECTOR,
+  inputType: "text",
+  name: "name",
+  accessibleName: "Name",
+  implicitRole: "textbox",
+  testId: "instruction-name",
+  attributes: { name: "name", "data-testid": "instruction-name", autocomplete: "off" },
+  context: { formId: "signup", landmark: "main" }
+};
+var submit = { tagName: "button", selector: '[data-testid="instruction-submit"]', visibleText: "Submit", accessibleName: "Submit", implicitRole: "button" };
+function runtimeOver(page) {
   return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
-    structureDetectionSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => {
-      onAction(command.actionType);
       if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
       const current = page();
-      const snapshot = { url: current.url, title: "Fixture", interactiveElements: current.elements };
-      return { status: "succeeded", payload: current.structure === void 0 ? { snapshot } : { snapshot, structure: current.structure } };
+      return { status: "succeeded", payload: { snapshot: { url: current.url, title: "Fixture", interactiveElements: current.elements } } };
     }
   });
 }
 var calls = 0;
-async function inspect(runtime, flowId = "flow.one") {
+async function inspect(runtime) {
   calls += 1;
-  return await runtime.executeTool({ projectId: "project.one", flowId, callId: `call.inspect.${calls}`, toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: `call.inspect.${calls}`, toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
 }
-function resolve(runtime, nodeDefinitionId, parameters, scope = {}) {
-  return runtime.resolvePlanNodeParameters({ projectId: scope.projectId ?? "project.one", flowId: scope.flowId ?? "flow.one", nodeDefinitionId, parameters });
+function resolvedParameters(runtime, nodeDefinitionId, parameters) {
+  const resolution = runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters });
+  assert.equal(resolution.status, "resolved", JSON.stringify(resolution));
+  return resolution.status === "resolved" ? resolution.parameters : {};
 }
-function refusedWith(...issueCodes) {
-  return { status: "refused", issueCodes };
+function dispatchedElement(actionType, parameters) {
+  const prepared = Object.assign({}, parameters);
+  const target = normalizeAutomationStudioElementTarget(parameters, { source: "runtime" });
+  if (target) prepared.target = target;
+  const command = webAutomationActionFromGatewayCommand({ commandId: "command.one", actionType, parameters: prepared, target: outputTargetFromPayload(prepared) ?? {} });
+  assert.equal("status" in command, false, "the command is dispatched");
+  return command.element;
 }
-test("a selector handle becomes the selector the exploration was shown, which the packet never held", async () => {
-  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit] }));
-  const shown = await inspect(runtime);
-  assert.equal(JSON.stringify(shown).includes(NAME_SELECTOR), false, "the model never saw the selector");
-  assert.equal(JSON.stringify(shown).includes("#submit"), false);
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada", timeoutMs: 5e3 }), {
-    status: "resolved",
-    parameters: { selector: NAME_SELECTOR, text: "Ada", timeoutMs: 5e3, element: NAME_IDENTITY }
+test("a resolved type and click node carry the identity of the element the model was shown, in the recorded shape", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameInput, submit] }));
+  await inspect(runtime);
+  const typed = resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada Lovelace" });
+  assert.deepEqual(typed, {
+    selector: NAME_SELECTOR,
+    text: "Ada Lovelace",
+    element: { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR, context: { formId: "signup" } }
   });
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), { status: "resolved", parameters: { selector: "#submit", browserFrameId: 0, element: SUBMIT_IDENTITY } });
-});
-test("a node with no handle is unchanged, and a literal selector is never passed off as resolved", async () => {
-  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField] }));
-  await inspect(runtime);
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: 'input[name="Name"]', text: "Ada" }), { status: "unchanged" });
-  assert.deepEqual(resolve(runtime, CLICK_NODE, {}), { status: "unchanged" });
-  assert.deepEqual(resolve(runtime, "builtin.data.write-records", { records: [{ handle: "a-user-handle" }] }), { status: "unchanged" });
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: NAME_SELECTOR, text: { handle: "not-a-handle" } }), { status: "unchanged" });
-});
-test("an extraction handle becomes the request the detection kept, with the plan's own bounds", async () => {
-  const capture2 = CAPTURED_DETECTIONS["data-table-largest"];
-  const runtime = runtimeOver(() => ({ url: capture2.url, elements: [], structure: structuredClone(capture2.structure) }));
-  const detected = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
-  const handle = detected.evidence.extraction;
-  const item = capture2.structure.ok ? capture2.structure.proposal.item : "";
-  assert.equal(JSON.stringify(detected).includes(item), false, "the model never saw the item selector");
-  const resolved2 = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle, minItems: 0 }, timeoutMs: 2e4 });
-  assert.equal(resolved2.status, "resolved");
-  if (resolved2.status !== "resolved") return;
-  assert.deepEqual(resolved2.parameters, {
-    extractList: {
-      item,
-      fields: {
-        product: { kind: "column", header: "Product", required: true },
-        category: { kind: "column", header: "Category", required: true },
-        price: { kind: "column", header: "Price", required: true },
-        stock: { kind: "column", header: "Stock", required: true }
-      },
-      minItems: 0
-    },
-    timeoutMs: 2e4
+  const clicked = resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
+  assert.deepEqual(clicked, {
+    selector: submit.selector,
+    element: { tagName: "button", accessibleName: "Submit", selector: submit.selector }
   });
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle, maxItems: 50 } }).status, "resolved");
-  for (const extractList of [{ handle, minItems: -1 }, { handle, maxItems: 5e3 }, { handle, minItems: 20, maxItems: 10 }, { handle, fields: {} }, { handle: 7 }]) {
-    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedWith("web.handle.malformed"), JSON.stringify(extractList));
-  }
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle } }, { flowId: "flow.two" }), refusedWith("web.handle.unknown"));
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: "extraction.999" } }), refusedWith("web.handle.unknown"));
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: "tr", fields: { name: "td" } } }), { status: "unchanged" });
+  for (const parameters of [typed, clicked]) assert.deepEqual(elementFingerprint(parameters.element), parameters.element);
 });
-test("a let-go extraction handle is stale", async () => {
-  const capture2 = CAPTURED_DETECTIONS["infinite-feed-largest"];
-  const runtime = runtimeOver(() => ({ url: capture2.url, elements: [], structure: structuredClone(capture2.structure) }));
-  const handles = [];
-  for (let index = 0; index < 17; index += 1) {
-    const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: `call.detect.${index}`, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
-    handles.push(result.evidence.extraction);
-  }
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: handles[0] } }), refusedWith("web.handle.stale"));
-  const newest = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: handles[16] } });
-  assert.equal(newest.status, "resolved");
-  assert.deepEqual(newest.status === "resolved" && newest.parameters.extractList.paginate, { mode: "scroll", maxScrolls: 50 });
+test("the identity stops Core reading the typed text as the element's visible text", async () => {
+  const literal = dispatchedElement("web.dom.type", { selector: NAME_SELECTOR, text: "Ada Lovelace" });
+  assert.equal(literal?.visibleText, "Ada Lovelace");
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameInput, submit] }));
+  await inspect(runtime);
+  const element = dispatchedElement("web.dom.type", resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada Lovelace" }));
+  assert.equal(element?.tagName, "input");
+  assert.equal(element?.accessibleName, "Name");
+  assert.equal(element?.selector, NAME_SELECTOR);
+  assert.equal(element?.visibleText, void 0);
+  assert.equal(JSON.stringify(element).includes("Ada"), false, "no typed word reaches the identity");
 });
-test("handles are resolved per page: a recapture replaces a page, pages that disagree make a bare handle ambiguous", async () => {
-  let page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#first", visibleText: "First" }] };
-  const runtime = runtimeOver(() => page);
+test("no value reaches the identity: not a control's contents, not a cut name, nothing from a secret control", async () => {
+  const notes = { tagName: "textarea", selector: "#notes", visibleText: "Prefilled private note", accessibleName: "Notes" };
+  const plan = {
+    tagName: "select",
+    selector: "#plan",
+    visibleText: "Starter Team Enterprise",
+    accessibleName: "Plan",
+    selectedValue: "team",
+    options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }]
+  };
+  const long = "L".repeat(WEB_LLM_EVIDENCE_BOUNDS.text + 40);
+  const card = { tagName: "a", selector: "#card", accessibleName: long, visibleText: `${long} more`, href: "/p/card" };
+  const password = { tagName: "input", selector: "#password", inputType: "password", accessibleName: "Password" };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [notes, plan, card, password] }));
   await inspect(runtime);
-  page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
-  await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#renamed", "button", "Renamed"));
-  page = { url: "https://example.test/b", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
-  await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#renamed", "button", "Renamed"));
-  page = { url: "https://example.test/c", elements: [{ tagName: "a", selector: "#other", visibleText: "Other" }] };
-  await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedWith("web.handle.ambiguous"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/never" } }), refusedWith("web.handle.unknown"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/c" } }), refusedWith("web.handle.unknown"));
-  for (let index = 0; index < 8; index += 1) {
-    page = { url: `https://example.test/more/${index}`, elements: [{ tagName: "button", selector: "#other", visibleText: "Other" }] };
-    await inspect(runtime);
-  }
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), refusedWith("web.handle.stale"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedWith("web.handle.stale"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#other", "button", "Other"));
-});
-test("a handle is this project and Flow's alone, and a reveal's recapture is what the plan resolves against", async () => {
-  const more = { tagName: "button", selector: "#more", visibleText: "More", attributes: { "aria-expanded": "false" } };
-  let expanded = false;
-  const runtime = runtimeOver(
-    () => ({ url: FORM_URL, elements: expanded ? [more, nameField] : [more] }),
-    (actionType) => {
-      if (actionType === "web.dom.click") expanded = true;
-    }
+  assert.deepEqual(resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "x" }).element, { tagName: "textarea", accessibleName: "Notes", selector: "#notes" });
+  assert.deepEqual(resolvedParameters(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "team" }).element, { tagName: "select", accessibleName: "Plan", selector: "#plan" });
+  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.3" } }).element, { tagName: "a", selector: "#card" });
+  assert.deepEqual(
+    runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "target.4" } } }),
+    { status: "refused", issueCodes: ["web.handle.unknown"] }
   );
-  await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }, { flowId: "flow.two" }), refusedWith("web.handle.unknown"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }, { projectId: "project.two" }), refusedWith("web.handle.unknown"));
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), refusedWith("web.handle.unknown"));
-  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.1" } });
-  assert.equal(revealed.resultCode, "web.action.succeeded");
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR, element: NAME_IDENTITY } });
+  const binding = sanitizeWebLlmSnapshotWithBindings({ url: FORM_URL, interactiveElements: [] });
+  binding.evidence.elements.push({ target: "target.1", tag: "input", inputType: "password", name: "Password", text: "hunter2" });
+  binding.selectors.set("target.1", "#password");
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.one" };
+  targets.remember(scope, binding);
+  const resolution = targets.resolve(scope, "target.1", void 0);
+  assert.deepEqual(resolution, { ok: true, selector: "#password", frameId: void 0, element: { tagName: "input", selector: "#password", inputType: "password" } });
 });
-test("a misplaced or malformed handle refuses the whole node, by name", async () => {
-  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit] }));
+test("a list item and a child frame's element keep their place in the identity", async () => {
+  const framed = {
+    tagName: "a",
+    selector: 'frame[4] >> [data-testid="product-link"]',
+    accessibleName: "Lamp",
+    attributes: { "data-testid": "product-link", "data-fluxiq-frame-id": "4" },
+    context: { listPosition: { index: 2, total: 9 } }
+  };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [framed] }));
   await inspect(runtime);
-  const misplaced = [
-    [TYPE_NODE, { selector: NAME_SELECTOR, text: { handle: "target.1" } }],
-    [NAVIGATE_NODE, { url: { handle: "target.1" } }],
-    [SNAPSHOT_NODE, { selector: { handle: "target.1" } }],
-    [EXTRACT_LIST_NODE, { selector: { handle: "target.1" } }],
-    [EXTRACT_LIST_NODE, { extractList: { handle: "target.1" } }],
-    [EXTRACT_LIST_NODE, { extractList: { item: { handle: "target.1" }, fields: { name: "td" } } }],
-    [CLICK_NODE, { selector: { handle: "extraction.1" } }],
-    ["builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "target.2" } } }]
-  ];
-  for (const [node, parameters] of misplaced) {
-    assert.deepEqual(resolve(runtime, node, parameters), refusedWith("web.handle.misplaced"), `${node} ${JSON.stringify(parameters)}`);
-  }
-  const malformed = [
-    { selector: { handle: "target.x" } },
-    { selector: { handle: "target.100" } },
-    { selector: { handle: 5 } },
-    { selector: { handle: "target.1", extra: true } },
-    { selector: { handle: "target.1", location: 3 } },
-    { selector: { handle: "target.1", location: "" } }
-  ];
-  for (const parameters of malformed) {
-    assert.deepEqual(resolve(runtime, CLICK_NODE, parameters), refusedWith("web.handle.malformed"), JSON.stringify(parameters));
-  }
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.9" }, text: { handle: "target.1" } }), refusedWith("web.handle.misplaced", "web.handle.unknown"));
-  assert.deepEqual([...WEB_PLAN_HANDLE_ISSUE_CODES], ["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown", "web.handle.stale", "web.handle.ambiguous", "web.handle.not_unique", "web.handle.frame_mismatch"]);
+  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), {
+    selector: '[data-testid="product-link"]',
+    element: { tagName: "a", accessibleName: "Lamp", selector: '[data-testid="product-link"]', context: { listPosition: { index: 2, total: 9 } } },
+    browserFrameId: 4
+  });
 });
-test("a selector the page gave to several controls is refused rather than acted on at the first of them", async () => {
-  const link = (name) => ({ tagName: "a", selector: '[data-testid="product-link"]', accessibleName: name, attributes: { href: `/p/${name}`, "data-testid": "product-link" } });
-  let page = { url: "https://example.test/catalog", elements: [submit, link("one"), link("two")] };
+test("pages that agree on a bare handle's selector but not its description carry only what they agree on", async () => {
+  let page = { url: "https://example.test/step-1", elements: [{ tagName: "button", selector: "#next", accessibleName: "Next" }] };
   const runtime = runtimeOver(() => page);
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedWith("web.handle.not_unique"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/catalog" } }), refusedWith("web.handle.not_unique"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  page = { url: "https://example.test/other", elements: [submit, link("one")] };
+  page = { url: "https://example.test/step-2", elements: [{ tagName: "button", selector: "#next", accessibleName: "Finish" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), refusedWith("web.handle.not_unique"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/other" } }), {
-    status: "resolved",
-    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "one", selector: '[data-testid="product-link"]' } }
-  });
-  const framedLink = { tagName: "a", selector: 'frame[4] >> [data-testid="product-link"]', accessibleName: "framed", attributes: { href: "/p/framed", "data-testid": "product-link", "data-fluxiq-frame-id": "4" } };
-  page = { url: "https://example.test/framed", elements: [link("top"), framedLink] };
+  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }).element, { tagName: "button", selector: "#next" });
+  assert.deepEqual(
+    resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/step-2" } }).element,
+    { tagName: "button", accessibleName: "Finish", selector: "#next" }
+  );
+  page = { url: "https://example.test/step-3", elements: [{ tagName: "a", selector: "#next", accessibleName: "Finish" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/framed" } }), {
-    status: "resolved",
-    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "framed", selector: '[data-testid="product-link"]' }, browserFrameId: 4 }
-  });
+  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }).element, { selector: "#next" });
 });
-test("a child frame's element names its frame, and a node naming another frame is refused", async () => {
-  const framed = { tagName: "input", selector: `frame[7] >> ${NAME_SELECTOR}`, inputType: "text", accessibleName: "Name", attributes: { name: "name", type: "text", "data-fluxiq-frame-id": "7" } };
-  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [submit, framed] }));
+test("the handle decides the identity: a model-written element beside it is replaced, beside a literal selector it is left alone", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameInput, submit] }));
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, text: "Ada" }), {
-    status: "resolved",
-    parameters: { selector: NAME_SELECTOR, text: "Ada", element: NAME_IDENTITY, browserFrameId: 7 }
+  const claimed = { accessibleName: "Delete account", testId: "danger" };
+  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: claimed }).element, {
+    tagName: "button",
+    accessibleName: "Submit",
+    selector: submit.selector
   });
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 7 }), { status: "resolved", parameters: { selector: NAME_SELECTOR, browserFrameId: 7, element: NAME_IDENTITY } });
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 3 }), refusedWith("web.handle.frame_mismatch"));
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), refusedWith("web.handle.frame_mismatch"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" }, browserFrameId: 7 }), refusedWith("web.handle.frame_mismatch"));
+  assert.deepEqual(
+    runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: "#literal", element: claimed } }),
+    { status: "unchanged" }
+  );
+  assert.deepEqual(
+    runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: { handle: "target.2" }, element: { handle: "target.1" } } }),
+    { status: "refused", issueCodes: ["web.handle.misplaced"] }
+  );
+  const first = resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
+  first.element.accessibleName = "tampered";
+  assert.equal(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } }).element.accessibleName, "Submit");
 });

@@ -422,11 +422,13 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: void 0,
-    // Nor are these: `markFailedTarget` writes exactly one of them, and only
-    // for a packet that is describing a failure. Named for the same reason.
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
     failedTarget: void 0,
     failedTargetMissing: void 0,
-    failedTargetUnknown: void 0
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
@@ -434,6 +436,7 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
 }
 function markFailedTarget(evidence, selectors, failedAction) {
   if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
   if (!failedAction.selector) {
     evidence.failedTargetUnknown = true;
     return;
@@ -459,7 +462,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     }
     markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();

@@ -211,6 +211,58 @@ test("a repair on a packet this runtime issued gets its selector hint back, with
   });
 });
 
+// Core tells the model to fill one handle per repairable parameter the failure
+// evidence offers. Before the packet named one, a live repair of a recorded
+// click was refused for naming some other key (`run-mu4tfxld-e78debce`).
+test("post-failure evidence names the parameter a repair fills, and nothing for an action that offers none", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async () => ({ status: "succeeded", payload: { snapshot: {
+      url: "https://example.test/form",
+      interactiveElements: [{ tagName: "button", selector: "#place-order", visibleText: "Place order" }],
+    } } }),
+  });
+  const capture = (definitionId: string) => runtime.captureSanitizedFailureEvidence({
+    projectId: "project.one",
+    flowId: "flow.one",
+    runId: "run.failed",
+    failedAction: { attemptId: "attempt.failed", nodeId: "node.failed", definitionId, status: "failed" },
+  });
+  const created = await capture("web.output.dom-click");
+  assert.deepEqual(Object.keys(created.repairParameters ?? {}), ["element"]);
+  assert.match(created.repairParameters?.element ?? "", /target handle/u);
+  // A recorded action: Core's capture request does not say which output it
+  // dispatches, so the one parameter every repairable action has is offered.
+  const recorded = await capture("builtin.policy.action");
+  assert.deepEqual(recorded.repairParameters, created.repairParameters);
+  // An action this domain knows offers nothing says so, rather than inviting a
+  // repair the check will refuse.
+  assert.deepEqual((await capture("web.output.dom-extract_list")).repairParameters, {});
+  assert.deepEqual((await capture("web.output.browser-navigate")).repairParameters, {});
+  // Naming the parameters is not naming the control.
+  assert.equal(recorded.failedTargetUnknown, true);
+  assert.doesNotMatch(JSON.stringify(recorded), /#place-order|selector/u);
+});
+
+test("a packet this domain did not issue is refused as unrecognized, before the target is read", () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) });
+  const clickAction = { nodeId: "node.click", definitionId: "web.output.dom-click" };
+  const issued = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] });
+  const unrecognized = { status: "absent", reason: "evidence_unrecognized" };
+  const issuedPacket = issued as unknown as JsonObject;
+  const packets: JsonObject[] = [
+    { ...issuedPacket, schemaVersion: "web-llm-evidence.v1" },
+    { ...issuedPacket, elements: "target.1" },
+    { schemaVersion: "web-llm-evidence.v2" },
+    {},
+  ];
+  for (const packet of packets) {
+    assert.deepEqual(runtime.validateTargetOverrideEvidence(packet, { handles: { element: "target.1" } }, clickAction), unrecognized, JSON.stringify(packet));
+  }
+  // The issued packet itself is recognized and resolved.
+  assert.equal(runtime.validateTargetOverrideEvidence(issuedPacket, { handles: { element: "target.1" } }, clickAction).status, "resolved");
+});
+
 test("bounds post-failure evidence to Core's gate when the host names no budget", async () => {
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],

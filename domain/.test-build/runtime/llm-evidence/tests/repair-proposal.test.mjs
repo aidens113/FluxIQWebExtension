@@ -1,12 +1,533 @@
-// src/runtime/tests/reusable-evidence-coordinator.test.ts
+// src/runtime/llm-evidence/tests/repair-proposal.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/runtime/adapter.ts
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
-
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
+
+// src/runtime/llm-evidence/limits.ts
+import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
+var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
+  ceiling: 12e3,
+  exploration: 6e3,
+  failure: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES
+});
+var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
+  elements: 40,
+  url: 2e3,
+  text: 300,
+  selector: 500,
+  tag: 40,
+  role: 80,
+  attribute: 200,
+  options: 20,
+  placement: 80,
+  dialogs: 3
+});
+function serializedBytes(input) {
+  return new TextEncoder().encode(JSON.stringify(input)).byteLength;
+}
+function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling) {
+  const cap = Math.min(ceiling, WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
+  if (input === void 0) return Math.min(fallback, cap);
+  if (!Number.isSafeInteger(input) || Number(input) < 1 || Number(input) > 1e5) throw new Error("maxEvidenceBytes must be a positive bounded integer");
+  return Math.min(Number(input), cap);
+}
+
+// src/runtime/llm-evidence/harness-options/execute.ts
+import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
+
+// src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
+// src/runtime/llm-evidence/location.ts
+function safeEvidenceUrl(input) {
+  if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
+  const url = new URL(input);
+  if (url.protocol !== "http:" && url.protocol !== "https:" || url.username || url.password) throw new Error("web evidence URL must be an HTTP(S) URL without credentials");
+  return url;
+}
+function evidenceLocation(url) {
+  return `${url.origin}${url.pathname}`;
+}
+function sameOriginHref(input, base) {
+  if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) return void 0;
+  try {
+    const url = new URL(input, base);
+    return url.origin === base.origin && (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password ? evidenceLocation(url) : void 0;
+  } catch {
+    return void 0;
+  }
+}
+
+// src/runtime/llm-evidence/untrusted-json.ts
+function isJsonRecord(input) {
+  return Boolean(input) && typeof input === "object" && !Array.isArray(input);
+}
+function jsonRecord(input, name) {
+  if (!isJsonRecord(input)) throw new Error(`${name} must be an object`);
+  return input;
+}
+function boundedText(input, maximum) {
+  if (typeof input !== "string") return void 0;
+  const value = input.replace(/\s+/gu, " ").trim();
+  return value ? value.slice(0, maximum) : void 0;
+}
+function trueFlag(input) {
+  return input === true ? true : void 0;
+}
+function boundedCount(input, maximum) {
+  if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0 || input > maximum) return void 0;
+  return input;
+}
+
+// src/runtime/llm-evidence/elements.ts
+var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
+var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
+function sanitizedEvidenceElement(raw, context) {
+  if (!isJsonRecord(raw)) return void 0;
+  const tag = boundedText(raw.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const addressed = frameAddressedSelector(raw);
+  if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return void 0;
+  const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
+  const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const text = rawText === name ? void 0 : rawText;
+  const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const inputType = rawInputType === "text" ? void 0 : rawInputType;
+  const rawControlType = boundedText(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const controlType = rawControlType === rawInputType || rawControlType === "text" ? void 0 : rawControlType;
+  const href = sameOriginHref(raw.href, context.url);
+  const options = tag === "select" ? sanitizedOptions(raw.options) : void 0;
+  const hasValue = safeFillTag(tag, inputType) && typeof raw.hasValue === "boolean" ? raw.hasValue : void 0;
+  const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
+  const revealKind = semanticRevealKind(tag, role, attributes);
+  const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
+  const placement = elementPlacement(raw.context, { name, text });
+  const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
+  const element = present({
+    target: context.target,
+    tag,
+    frameId: addressed.frameId,
+    role: role || void 0,
+    name: name || void 0,
+    text: text || void 0,
+    inputType: inputType || void 0,
+    controlType: controlType || void 0,
+    hasValue,
+    selectedValue: selectedValue || void 0,
+    href: href || void 0,
+    options: options?.length ? options : void 0,
+    revealKind,
+    expanded,
+    focused,
+    recent: trueFlag(raw.recentlyInteracted),
+    changed: trueFlag(raw.changed),
+    form: placement.form,
+    landmark: placement.landmark,
+    heading: placement.heading,
+    item: placement.item,
+    cell: placement.cell
+  });
+  return { element, selector: addressed.selector };
+}
+function safeFillTag(tag, inputType) {
+  return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
+}
+function actionableEvidenceElement(element) {
+  if (["button", "a", "summary", "select", "textarea"].includes(element.tag)) return true;
+  if (element.tag === "input") return element.inputType !== "hidden";
+  return ["button", "link", "checkbox", "radio", "option", "switch", "tab", "menuitem", "treeitem"].includes(element.role ?? "");
+}
+function semanticRevealKind(tag, role, attributes) {
+  if (role === "tab" || role === "menuitem" || role === "treeitem") return "view";
+  if (tag === "summary") return "disclosure";
+  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
+  const controls = boundedText(attributes["aria-controls"], WEB_LLM_EVIDENCE_BOUNDS.text);
+  return expanded === "true" || expanded === "false" || controls ? "disclosure" : void 0;
+}
+function semanticExpandedState(attributes) {
+  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
+  return expanded === "true" ? true : expanded === "false" ? false : void 0;
+}
+function frameAddressedSelector(raw) {
+  const rawSelector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  if (!rawSelector) return void 0;
+  const match = FRAME_SELECTOR_PATTERN.exec(rawSelector);
+  const selector = match ? boundedText(match[2], WEB_LLM_EVIDENCE_BOUNDS.selector) : rawSelector;
+  if (!selector) return void 0;
+  const frameId = stampedFrameId(raw) ?? (match ? boundedCount(Number(match[1]), 999999) : void 0);
+  return frameId ? { selector, frameId } : { selector };
+}
+function stampedFrameId(raw) {
+  const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
+  const stamped = boundedText(attributes[FRAME_ID_ATTRIBUTE], 20);
+  return stamped === void 0 ? void 0 : boundedCount(Number(stamped), 999999);
+}
+function elementPlacement(input, named) {
+  const described = isJsonRecord(input) ? input : {};
+  const form = boundedText(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const heading = rawHeading === named.name || rawHeading === named.text ? void 0 : rawHeading;
+  return {
+    form: form || void 0,
+    landmark: landmark || void 0,
+    heading: heading || void 0,
+    item: listPlacement(described.listPosition),
+    cell: tablePlacement(described.tablePosition)
+  };
+}
+function listPlacement(input) {
+  if (!isJsonRecord(input)) return void 0;
+  const index = boundedCount(input.index, 1e5);
+  const total = boundedCount(input.total, 1e5);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePlacement(input) {
+  if (!isJsonRecord(input)) return void 0;
+  const row = boundedCount(input.row, 1e5);
+  const column = boundedCount(input.column, 1e5);
+  if (row === void 0 || column === void 0) return void 0;
+  const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  return present({ row, column, header: header || void 0 });
+}
+function sanitizedOptions(input) {
+  if (!Array.isArray(input)) return void 0;
+  const result = [];
+  for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.options)) {
+    if (!isJsonRecord(raw)) continue;
+    const value = boundedText(raw.value, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+    const label = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+    if (value && label) result.push({ value, label });
+  }
+  return result.length ? result : void 0;
+}
+function sanitizedSelectedValue(input, options) {
+  const value = boundedText(input, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+  return value && options.some((option) => option.value === value) ? value : void 0;
+}
+
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
+// src/runtime/llm-evidence/page-evidence.ts
+var READY_STATES = ["loading", "interactive", "complete"];
+var ORDINARY_NAVIGATION_TYPE = "navigate";
+var MAX_REDIRECTS = 100;
+var MAX_BLOCKED_CONTROLS = 1e4;
+function webLlmPageContext(snapshot, childFrameIds) {
+  const evidence = pageEvidence(snapshot);
+  const frame = evidenceFrame(snapshot.frame, childFrameIds);
+  const loading = evidenceLoading(pageEvidenceWire(evidence?.loading));
+  const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
+  const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
+  const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
+  const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
+  return present({
+    frame,
+    loading,
+    navigation,
+    dialogs,
+    blockedBy,
+    selectedText: selectedText || void 0,
+    // The one page-context field this reader does not read. It is the element
+    // funnel's number, so `sanitize.ts` supplies it beside the elements it
+    // counted. Named here rather than left out, because leaving a field out is
+    // exactly what this seam exists to make impossible.
+    elementTotal: void 0
+  });
+}
+function evidenceElementTotal(snapshot, carried) {
+  const declared2 = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
+  const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
+  const total = Math.max(declared2 ?? 0, received);
+  return total > carried ? total : void 0;
+}
+function capturedTruncated(snapshot) {
+  if (trueFlag(snapshot.truncated) === true) return true;
+  return trueFlag(captureElementTotals(snapshot)?.truncated) === true;
+}
+function pageEvidence(snapshot) {
+  return pageEvidenceWire(snapshot.evidence);
+}
+function captureElementTotals(snapshot) {
+  return pageEvidenceWire(pageEvidence(snapshot)?.elements);
+}
+function items(input) {
+  return Array.isArray(input) ? input : [];
+}
+function evidenceFrame(input, childFrameIds) {
+  const declared2 = isJsonRecord(input) ? input : void 0;
+  const isTop = typeof declared2?.isTop === "boolean" ? declared2.isTop : void 0;
+  if (isTop === void 0 && !childFrameIds.length) return void 0;
+  return present({
+    isTop: isTop ?? true,
+    childFrameIds: childFrameIds.length ? childFrameIds : void 0
+  });
+}
+function evidenceLoading(input) {
+  if (!input) return void 0;
+  const documentState = boundedText(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
+  const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
+  const loading = present({
+    readyState: readyState && readyState !== "complete" ? readyState : void 0,
+    busy: trueFlag(input.busy),
+    spinner: spinner ? true : void 0,
+    pendingNavigation: trueFlag(input.pendingNavigation)
+  });
+  return Object.keys(loading).length ? loading : void 0;
+}
+function evidenceNavigation(input) {
+  if (!input) return void 0;
+  const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
+  const navigation = present({
+    type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : void 0,
+    redirects: redirects || void 0,
+    referrer: safeLocation(input.referrer)
+  });
+  return Object.keys(navigation).length ? navigation : void 0;
+}
+function safeLocation(input) {
+  try {
+    return evidenceLocation(safeEvidenceUrl(input));
+  } catch {
+    return void 0;
+  }
+}
+function evidenceDialogs(input) {
+  if (!input) return void 0;
+  const dialogs = [];
+  for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
+    const raw = pageEvidenceWire(item);
+    if (!raw) continue;
+    const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+    const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+    const modal = trueFlag(raw.modal);
+    if (!role && !name && !modal) continue;
+    dialogs.push(present({
+      role: role || void 0,
+      name: name || void 0,
+      modal
+    }));
+  }
+  return dialogs.length ? dialogs : void 0;
+}
+function evidenceBlocker(input) {
+  const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
+  if (!blocker) return void 0;
+  const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
+  return present({
+    role: role || void 0,
+    name: name || void 0,
+    blocks: blocks || void 0
+  });
+}
+
+// src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
+function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
+  const snapshot = jsonRecord(input, "web DOM snapshot");
+  const url = safeEvidenceUrl(snapshot.url);
+  if (options.expectedOrigin !== void 0 && url.origin !== options.expectedOrigin) throw new Error("web DOM snapshot escaped the expected origin");
+  const maxEvidenceBytes = budgetFor(options);
+  if (!Array.isArray(snapshot.interactiveElements)) throw new Error("web DOM snapshot elements are malformed");
+  const focusedSelector = sanitizedEvidenceElement(snapshot.focusedElement, { target: "target.focus", url })?.selector;
+  const elements = [];
+  const selectors = /* @__PURE__ */ new Map();
+  for (const raw of snapshot.interactiveElements) {
+    if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
+  }
+  const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
+  const elementTotal = evidenceElementTotal(snapshot, elements.length);
+  const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot);
+  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
+  const context = webLlmPageContext(snapshot, childFrameIds);
+  const evidence = present({
+    schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
+    trust: "untrusted-page-evidence",
+    location: evidenceLocation(url),
+    title: title || void 0,
+    // The page context is carried field by field rather than spread, so a
+    // packet field renamed or dropped in `page-evidence.ts` fails here instead
+    // of quietly leaving the packet.
+    frame: context.frame,
+    loading: context.loading,
+    navigation: context.navigation,
+    dialogs: context.dialogs,
+    blockedBy: context.blockedBy,
+    selectedText: context.selectedText,
+    elementTotal,
+    elements,
+    truncated: captureTruncated || elementsTruncated,
+    captureTruncated: captureTruncated ? true : void 0,
+    elementsTruncated: elementsTruncated ? true : void 0,
+    // Not written here: `trimToBudget` below sets it if and only if a removal
+    // was needed. Mentioned so the packet's key set stays exhaustive.
+    budgetTruncated: void 0,
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
+    failedTarget: void 0,
+    failedTargetMissing: void 0,
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
+  });
+  markFailedTarget(evidence, selectors, options.failedAction);
+  trimToBudget(evidence, selectors, maxEvidenceBytes);
+  return { evidence, selectors };
+}
+function markFailedTarget(evidence, selectors, failedAction) {
+  if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
+  if (!failedAction.selector) {
+    evidence.failedTargetUnknown = true;
+    return;
+  }
+  const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
+  if (handle === void 0) evidence.failedTargetMissing = true;
+  else evidence.failedTarget = handle;
+}
+function budgetFor(options) {
+  return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
+}
+function trimToBudget(evidence, selectors, maxEvidenceBytes) {
+  const markBudgetTruncated = () => {
+    evidence.truncated = true;
+    evidence.budgetTruncated = true;
+  };
+  const popElement = () => {
+    const removed = evidence.elements.pop();
+    if (removed) selectors.delete(removed.target);
+    if (removed && evidence.failedTarget === removed.target) {
+      delete evidence.failedTarget;
+      evidence.failedTargetMissing = true;
+    }
+    markBudgetTruncated();
+  };
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
+  while (serializedBytes(evidence) > maxEvidenceBytes) {
+    if (evidence.elements.length > 1) {
+      popElement();
+      continue;
+    }
+    const field = droppable.shift();
+    if (field !== void 0) {
+      if (evidence[field] !== void 0) {
+        delete evidence[field];
+        markBudgetTruncated();
+      }
+      continue;
+    }
+    if (evidence.elements.length) {
+      popElement();
+      continue;
+    }
+    throw new Error("web DOM snapshot exceeds the evidence byte limit");
+  }
+}
+
+// src/runtime/llm-evidence/tool-rejection.ts
+var WEB_LLM_TOOL_REJECTION_CODES = [
+  "invalid_input",
+  "cross_origin",
+  "out_of_scope",
+  "no_progress",
+  "target_unobserved",
+  "target_unsafe",
+  "sensitive_value",
+  "no_repeating_structure"
+];
+
+// src/runtime/llm-evidence/vocabulary.ts
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
+var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
+var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
+var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
+var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
+var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
+var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
+function webLlmToolRejectionResultCode(code) {
+  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
+}
+var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
+  WEB_LLM_INSPECT_RESULT_CODE,
+  WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
+  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
+]);
+
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
+var WEB_RECOVERY_HARNESS_OPTION_IDS = [
+  "web.recovery.inspect",
+  "web.recovery.reveal",
+  "web.recovery.act_safe",
+  "web.recovery.wait_for_change",
+  "web.recovery.navigate_in_scope"
+];
+var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+
+// src/runtime/llm-evidence/harness-options/execute.ts
+var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
 // src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -302,7 +823,6 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
 }
 
 // src/actions/types.ts
-var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -323,26 +843,6 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.tab",
   "web.browser.download"
 ];
-var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
-  "web.browser.navigate": "browser.navigate",
-  "web.dom.click": "dom.click",
-  "web.dom.type": "dom.type",
-  "web.dom.clear": "dom.clear",
-  "web.dom.select": "dom.select",
-  "web.dom.scroll": "dom.scroll",
-  "web.dom.keypress": "dom.keypress",
-  "web.dom.wait_for_selector": "dom.wait_for_selector",
-  "web.dom.wait_for_text": "dom.wait_for_text",
-  "web.dom.extract": "dom.extract",
-  "web.dom.capture_snapshot": "dom.capture_snapshot",
-  "web.dom.check": "dom.check",
-  "web.dom.assert": "dom.assert",
-  "web.dom.extract_list": "dom.extract_list",
-  "web.dom.upload": "dom.upload",
-  "web.dom.dialog": "dom.dialog",
-  "web.browser.tab": "browser.tab",
-  "web.browser.download": "browser.download"
-};
 
 // src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
@@ -807,8 +1307,8 @@ function isNonNegativeInteger(value) {
 }
 
 // src/output-nodes/extract-list/parameter-contract.ts
-function webAutomationExtractListParameterContract(input2) {
-  return input2.parameterId === "extractList" ? webAutomationExtractListIssues(input2.value) : [];
+function webAutomationExtractListParameterContract(input) {
+  return input.parameterId === "extractList" ? webAutomationExtractListIssues(input.value) : [];
 }
 
 // src/output-nodes/extract-list/parameters.ts
@@ -994,17 +1494,131 @@ var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
 };
 
-// src/sensitivity/signature.ts
-var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
-var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
-function isSensitiveFieldSignature(signature) {
-  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
-  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+// src/runtime/llm-evidence/repairable-parameters.ts
+var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
+var ELEMENT_PARAMETER_DESCRIPTION = "the target handle of the one element the failed action should act on instead";
+var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
+var ELEMENT_ROLE_BY_DEFINITION_ID = {
+  "web.output.dom-type": "fillable",
+  "web.output.dom-clear": "fillable",
+  "web.output.dom-select": "selectable",
+  "web.output.dom-click": "clickable",
+  "web.output.dom-keypress": "keyable",
+  "web.output.dom-wait_for_selector": "observable",
+  "web.output.dom-extract": "observable"
+};
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
+function webRepairableParameters(definitionId) {
+  const elementRole = Object.hasOwn(ELEMENT_ROLE_BY_DEFINITION_ID, definitionId) ? ELEMENT_ROLE_BY_DEFINITION_ID[definitionId] : void 0;
+  return elementRole ? [elementParameter(elementRole)] : [];
 }
-function isSensitiveControlType(type) {
-  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+function webRepairableParameterFor(definitionId, name) {
+  return webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+}
+function webFailedActionDefinitionId(failedAction) {
+  const outputId = failedAction.outputId;
+  if (outputId === void 0) return failedAction.definitionId;
+  const dispatched = OUTPUT_NODE_ID_BY_OUTPUT_ID.get(outputId);
+  if (dispatched === void 0) return void 0;
+  if (failedAction.definitionId !== POLICY_ACTION_DEFINITION_ID && failedAction.definitionId !== dispatched) return void 0;
+  return dispatched;
+}
+function elementFillsRepairableParameter(element, role) {
+  if (role === "fillable") return safeFillTag(element.tag, element.inputType);
+  if (role === "selectable") return element.tag === "select";
+  if (role === "clickable") return actionableEvidenceElement(element);
+  if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
+  return true;
+}
+function elementParameter(role) {
+  return { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role, required: true, description: ELEMENT_PARAMETER_DESCRIPTION };
+}
+
+// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
+var SELECTOR_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
+
+// src/runtime/llm-evidence/structure/handles.ts
+var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
+var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
+
+// src/runtime/llm-evidence/target-override.ts
+function validateWebRuntimeTargetOverrideEvidence(evidence, target2, failedAction, selectors) {
+  const definitionId = webFailedActionDefinitionId(failedAction);
+  const declared2 = definitionId === void 0 ? [] : webRepairableParameters(definitionId);
+  if (definitionId === void 0 || declared2.length === 0) return { status: "absent", reason: "action_not_repairable" };
+  const handles = proposedHandles(target2);
+  if (!handles) return { status: "absent", reason: "target_malformed" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(definitionId, name))) return { status: "absent", reason: "parameter_not_offered" };
+  if (declared2.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent", reason: "parameter_missing" };
+  const resolved = /* @__PURE__ */ new Map();
+  for (const [name, handle] of Object.entries(handles)) {
+    const parameter = webRepairableParameterFor(definitionId, name);
+    const candidates = evidence.elements.filter((element2) => elementFillsRepairableParameter(element2, parameter.role));
+    const named = evidence.elements.filter((element2) => element2.target === handle);
+    if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
+    if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
+      resolved.set(name, { element: named[0], named: true });
+      continue;
+    }
+    if (candidates.length === 0) return { status: "absent", reason: "no_compatible_element" };
+    if (candidates.length > 1) return { status: "ambiguous", reason: named.length === 1 ? "handle_incompatible" : "handle_not_issued" };
+    resolved.set(name, { element: candidates[0], named: false });
+  }
+  const element = resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER);
+  if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
+  return { status: "resolved", target: resolvedTarget(handles, element, selectors) };
+}
+function proposedHandles(target2) {
+  const handles = target2?.handles;
+  if (!handles || typeof handles !== "object" || Array.isArray(handles)) return void 0;
+  const entries = Object.entries(handles);
+  if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
+  return Object.fromEntries(entries);
+}
+function resolvedTarget(handles, resolved, selectors) {
+  const handleResolution = resolved.named ? "named" : "inferred";
+  const fingerprint = elementFingerprint2(resolved.element, selectors);
+  return present({
+    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved.element.target },
+    handleResolution,
+    tagName: fingerprint.tagName,
+    role: fingerprint.role,
+    accessibleName: fingerprint.accessibleName,
+    visibleText: fingerprint.visibleText,
+    selector: fingerprint.selector,
+    metadata: fingerprint.metadata,
+    proposedHandles: handleResolution === "inferred" ? handles : void 0
+  });
+}
+function elementFingerprint2(element, selectors) {
+  const metadata = present({
+    browserFrameId: element.frameId,
+    inputType: element.inputType,
+    controlType: element.controlType,
+    formId: element.form,
+    listIndex: element.item?.index,
+    listTotal: element.item?.total
+  });
+  return present({
+    tagName: element.tag,
+    role: element.role,
+    accessibleName: element.name,
+    visibleText: element.text,
+    // The hint, and only where the caller still holds the binding that issued
+    // the handle. The packet has not carried a selector since `.v2`, so a repair
+    // resolved from a packet alone is fingerprint-only -- which is weaker, not
+    // wrong: the name, the role and the tag are what Core scores highest.
+    selector: selectors?.get(element.target),
+    metadata: Object.keys(metadata).length ? metadata : void 0
+  });
 }
 
 // src/io/input-model.ts
@@ -1142,555 +1756,118 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// src/runtime/failure/codes.ts
-var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
-  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
-  ACTION_REJECTED: "web.action.rejected",
-  /** No element matched the action's target with enough confidence. */
-  TARGET_NOT_FOUND: "web.target.not_found",
-  /** Several elements matched the action's target and none could be preferred. */
-  TARGET_AMBIGUOUS: "web.target.ambiguous",
-  /** The action ran and its post-condition did not hold (decision D4). */
-  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
-  /** An authored `web.dom.assert` condition did not hold. */
-  STATE_MISMATCH: "web.validation.state_mismatch",
-  /** The browser landed somewhere other than the requested URL, or never left where it was. */
-  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-  /**
-   * The document was replaced, or routed away, while the action was running.
-   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
-   * remembers the page an action started on and supersedes the verb's own code
-   * when it finished somewhere else.
-   */
-  PAGE_CHANGED: "web.page.changed",
-  /** A wait, or an action, ran out of time. */
-  TIMEOUT: "web.action.timeout",
-  /** The host wants a sign-in before the action can continue. */
-  AUTH_REQUIRED: "web.auth.required",
-  /**
-   * A person must act before the run can continue -- Core's category, stated no
-   * more narrowly here than Core states it. Two producers, and they are not the
-   * same shape of "act": `content/action-runtime/results.ts` reports it when a
-   * modal dialog is standing over the page and the target is behind it, and
-   * `runtime/adapter.ts` when no single paired client could be selected, which
-   * only the operator can fix. The narrower gloss this carried before -- "a
-   * captcha, or a native dialog waiting for an answer" -- described neither,
-   * and reading it as the definition made both look wrong.
-   */
-  USER_INTERVENTION_REQUIRED: "web.intervention.required",
-  /** The client does not implement the requested action type at all. */
-  UNSUPPORTED_TYPE: "web.action.unsupported_type",
-  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
-  NOT_IMPLEMENTED: "web.action.not_implemented",
-  /**
-   * A field the action requires arrived in a shape that cannot be read, so the
-   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
-   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
-   * authored wrong and only an edit fixes it: a structural fault in the Flow,
-   * not a capability the client lacks.
-   */
-  INVALID_PARAMETER: "web.action.invalid_parameter",
-  /** The action ran and failed for a reason no other code names. */
-  ACTION_FAILED: "web.action.failed",
-  /** Nothing said why the action failed. */
-  UNKNOWN: "web.action.unknown"
+// src/runtime/llm-evidence/tests/repair-proposal.test.ts
+import {
+  proposeAutomationStudioRuntimeTargetOverride
+} from "fluxiq/automation-studio";
+var target = (handles) => ({ handles });
+var NOT_REPAIRABLE = { status: "absent", reason: "action_not_repairable" };
+var formBinding = () => sanitizeWebLlmSnapshotWithBindings({
+  url: "https://example.test/form",
+  interactiveElements: [
+    { tagName: "textarea", selector: "#name", name: "Name" },
+    { tagName: "select", selector: "#plan", name: "Plan", options: [{ value: "team", label: "Team" }] },
+    { tagName: "button", selector: "#unique", name: "Unique" }
+  ]
 });
-var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
-  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
-  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
-  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
-  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
-  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
-  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
-  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
-  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
-  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
-  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
-  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
-  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
-  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
-  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
-  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+var catalogueBinding = () => sanitizeWebLlmSnapshotWithBindings({
+  url: "https://example.test/catalogue",
+  interactiveElements: [
+    { tagName: "a", selector: ".row:nth-child(1)", name: "Widget", context: { listPosition: { index: 1, total: 2 } } },
+    { tagName: "span", selector: ".row:nth-child(1) .price", name: "10.00" }
+  ]
 });
-function webAutomationFailureRecord(code, comparison = {}) {
-  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
-  const expected = boundedText(comparison.expected);
-  const actual = boundedText(comparison.actual);
-  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
-  return {
-    category: definition.category,
-    code,
-    retryable: definition.retryable,
-    stage: definition.stage,
-    ...expected === void 0 ? {} : { expected },
-    ...actual === void 0 ? {} : { actual },
-    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
-  };
-}
-var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
-function boundedText(value) {
-  if (value === void 0) return void 0;
-  const collapsed = value.replace(/\s+/gu, " ").trim();
-  if (collapsed.length === 0) return void 0;
-  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
-  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
-}
-
-// src/runtime/llm-evidence/limits.ts
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
-var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
-  ceiling: 12e3,
-  exploration: 6e3,
-  failure: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES
+var oneActionFlow = (node) => ({
+  schemaVersion: "0.1",
+  flowId: "flow.repair",
+  ownerKind: "routine",
+  ownerId: "routine.repair",
+  name: "Repair",
+  createdAt: 1,
+  updatedAt: 1,
+  nodes: [
+    node,
+    { id: "end", definitionId: "builtin.control.end", parameterValues: { resultStatus: "success" } }
+  ],
+  edges: [{ id: `${node.id}.end`, sourceNodeId: node.id, sourcePortId: "success", targetNodeId: "end", targetPortId: "in" }]
 });
-var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
-  elements: 40,
-  url: 2e3,
-  text: 300,
-  selector: 500,
-  tag: 40,
-  role: 80,
-  attribute: 200,
-  options: 20,
-  placement: 80,
-  dialogs: 3
+var recordedNode = (id, outputId) => ({
+  id,
+  definitionId: "builtin.policy.action",
+  parameterValues: { outputId, parameters: { selector: "#recorded" } }
 });
-
-// src/runtime/llm-evidence/harness-options/execute.ts
-import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
-
-// src/runtime/llm-evidence/untrusted-json.ts
-function isJsonRecord(input2) {
-  return Boolean(input2) && typeof input2 === "object" && !Array.isArray(input2);
-}
-
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
-
-// src/runtime/llm-evidence/tool-rejection.ts
-var WEB_LLM_TOOL_REJECTION_CODES = [
-  "invalid_input",
-  "cross_origin",
-  "out_of_scope",
-  "no_progress",
-  "target_unobserved",
-  "target_unsafe",
-  "sensitive_value",
-  "no_repeating_structure"
-];
-
-// src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
-var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
-var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
-var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
-var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
-var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
-var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
-var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
-var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
-function webLlmToolRejectionResultCode(code) {
-  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
-}
-var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
-  WEB_LLM_INSPECT_RESULT_CODE,
-  WEB_LLM_ACTION_RESULT_CODE,
-  WEB_LLM_STRUCTURE_RESULT_CODE,
-  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
-]);
-
-// src/runtime/llm-evidence/harness-options/vocabulary.ts
-var WEB_RECOVERY_HARNESS_OPTION_IDS = [
-  "web.recovery.inspect",
-  "web.recovery.reveal",
-  "web.recovery.act_safe",
-  "web.recovery.wait_for_change",
-  "web.recovery.navigate_in_scope"
-];
-var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
-var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
-var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
-var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
-var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
-
-// src/runtime/llm-evidence/harness-options/execute.ts
-var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
-
-// src/runtime/llm-evidence/repairable-parameters.ts
-var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
-  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
-);
-
-// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
-var SELECTOR_NODE_IDS = new Set(
-  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
-);
-var ELEMENT_NODE_IDS = new Set(
-  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
-);
-var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
-
-// src/runtime/llm-evidence/structure/handles.ts
-var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
-var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
-
-// src/recording/web-state/evidence/project.ts
-var COLLECTION = { elementKind: "collection", comparable: false };
-var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
-var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
-
-// src/client/gateway-mapping.ts
-var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
-var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
-var LEGACY_ACTION_TYPE_ALIASES = new Map(
-  Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
-);
-
-// src/runtime/expectation/conditions.ts
-var ASSERT_KINDS = Object.freeze({
-  exists: true,
-  absent: true,
-  text: true,
-  url: true,
-  visible: true,
-  enabled: true
+var repairPolicy = {
+  schemaVersion: "0.1",
+  policyId: "policy.repair",
+  scope: { kind: "flow", flowId: "flow.repair" },
+  preset: "repair",
+  proposalMode: "manual",
+  allowRuntimeRecovery: true,
+  allowCreateRecoveryPaths: true,
+  allowModifySubflows: true,
+  allowCreateSubflows: true,
+  allowModifyRouter: true,
+  allowModifyExpectations: true,
+  allowModifyActionTargets: true,
+  allowDeleteOrDisableBehavior: false,
+  allowExternalSideEffects: false,
+  requireApprovalForDestructiveChanges: true,
+  requireApprovalForExternalSideEffects: true,
+  createdAt: 1,
+  updatedAt: 1
+};
+var proposeThroughCore = (binding, node, proposed) => proposeAutomationStudioRuntimeTargetOverride({
+  projectId: "project.repair",
+  flowId: "flow.repair",
+  runId: "run.failed",
+  flow: oneActionFlow(node),
+  failedAttempt: { attemptId: `${node.id}.attempt.1`, nodeId: node.id, definitionId: node.definitionId, startedAt: 1, finishedAt: 2, status: "failed", route: "failed", inputs: {}, outputs: {}, effects: [] },
+  patch: { kind: "temporary_target_override", targetNodeId: node.id, target: proposed, reason: "Re-point the failed action." },
+  policy: repairPolicy,
+  proposalMode: "manual",
+  now: () => 10,
+  validateTargetOverrideEvidence: (candidate, failedAction) => validateWebRuntimeTargetOverrideEvidence(binding.evidence, candidate, failedAction, binding.selectors)
 });
-
-// src/runtime/host-runtime.ts
-var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
-var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
-var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
-
-// src/runtime/reusable-evidence.ts
-import { createHash } from "node:crypto";
-var WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION = "web-reusable-evidence-fingerprint.v1";
-var WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION = "web-reusable-evidence-projection.v1";
-var WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v2";
-var WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION = "web-client-capabilities.v1";
-var WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS = 40;
-var WEB_REUSABLE_EVIDENCE_MAX_ACTIONS = 20;
-var WEB_REUSABLE_EVIDENCE_MAX_CAPABILITIES = 20;
-var WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_ITEMS = 24;
-var WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES = 4096;
-function produceWebReusableEvidence(input2, options = {}) {
-  if (input2.evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || input2.evidence.trust !== "untrusted-page-evidence" || !Array.isArray(input2.evidence.elements)) {
-    throw new Error("Reusable web evidence requires the current sanitized evidence schema");
-  }
-  enforceSourceItemLimit(input2.evidence.elements.length, WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS, "element");
-  enforceSourceItemLimit(input2.actions?.length ?? 0, WEB_REUSABLE_EVIDENCE_MAX_ACTIONS, "action");
-  enforceSourceItemLimit(input2.clientCapabilities?.length ?? 0, WEB_REUSABLE_EVIDENCE_MAX_CAPABILITIES, "capability");
-  const location = safeLocation(input2.evidence.location);
-  const elements = normalizedElements(input2.evidence.elements, location);
-  const actions = normalizedActions(input2.actions ?? []);
-  const capabilities = normalizedCapabilities(input2.clientCapabilities ?? []);
-  const structuralDigest = digest({ location, elements });
-  const capabilityDigest = digest({ schemaVersion: WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION, capabilities });
-  const fingerprintBase = {
-    schemaVersion: WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION,
-    sanitizerVersion: WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION,
-    evidenceSchemaVersion: boundedTag(input2.evidence.schemaVersion, "evidence schema version"),
-    capabilitySchemaVersion: WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION,
-    location,
-    structuralDigest,
-    capabilityDigest,
-    compatibilityTags: [
-      `web.location:${digest(location)}`,
-      `web.structure:${structuralDigest}`,
-      `web.capabilities:${capabilityDigest}`,
-      `web.sanitizer:${WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION}`
-    ]
-  };
-  const fingerprint = { ...fingerprintBase, digest: digest(fingerprintBase) };
-  const candidates = [
-    ...elements.map(promptElementFact),
-    ...actions.map((action) => ({ kind: "action", ...action }))
-  ];
-  return {
-    fingerprint,
-    promptProjection: boundedProjection(fingerprint, candidates, options)
-  };
-}
-function normalizedElements(input2, location) {
-  const unique = /* @__PURE__ */ new Map();
-  for (const element of input2) {
-    const tag = boundedToken(element.tag, 40);
-    if (!tag || unshareableControl(element)) continue;
-    const normalized = compact2({
-      tag: tag.toLowerCase(),
-      role: boundedToken(element.role, 80)?.toLowerCase(),
-      name: boundedText3(element.name, 160),
-      inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
-      controlType: boundedToken(element.controlType, 40)?.toLowerCase(),
-      optionCount: Array.isArray(element.options) ? Math.min(element.options.length, 20) : void 0,
-      sameOriginLink: sameOriginHref2(element.href, location.origin) ? true : void 0
-    });
-    unique.set(canonicalJson(normalized), normalized);
-  }
-  return [...unique.values()].sort(compareCanonical);
-}
-function normalizedActions(input2) {
-  const unique = /* @__PURE__ */ new Map();
-  for (const action of input2) {
-    const definitionId = boundedTag(action.definitionId, "action definition ID");
-    if (!definitionId.startsWith("web.")) continue;
-    if (action.status !== "succeeded" && action.status !== "failed") continue;
-    if (action.route !== void 0 && action.route !== "success" && action.route !== "failed") continue;
-    const normalized = compact2({ definitionId, status: action.status, route: action.route });
-    unique.set(canonicalJson(normalized), normalized);
-  }
-  return [...unique.values()].sort(compareCanonical);
-}
-function normalizedCapabilities(input2) {
-  const values = input2.map((value) => boundedTag(value, "client capability"));
-  return [...new Set(values)].sort();
-}
-function promptElementFact(element) {
-  return { kind: "element", ...element };
-}
-function boundedProjection(fingerprint, candidates, options) {
-  const maxBytes = boundedLimit(options.maxProjectionBytes, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES, "projection byte limit");
-  const maxItems = boundedLimit(options.maxProjectionItems, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_ITEMS, "projection item limit");
-  const facts = candidates.slice(0, maxItems);
-  let truncated = facts.length !== candidates.length;
-  for (; ; ) {
-    const base = {
-      schemaVersion: WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION,
-      sanitizerVersion: WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION,
-      compatibilityDigest: fingerprint.digest,
-      location: fingerprint.location,
-      facts,
-      truncated
-    };
-    const withDigest = { ...base, digest: digest(base) };
-    const byteCount = stableByteCount(withDigest);
-    const result = { ...withDigest, byteCount };
-    if (serializedBytes2(result) <= maxBytes) return result;
-    if (!facts.length) throw new Error("Web reusable-evidence projection envelope exceeds the byte limit");
-    facts.pop();
-    truncated = true;
-  }
-}
-function stableByteCount(input2) {
-  let value = 0;
-  for (let index = 0; index < 8; index += 1) {
-    const next = serializedBytes2({ ...input2, byteCount: value });
-    if (next === value) return value;
-    value = next;
-  }
-  return value;
-}
-function safeLocation(input2) {
-  const url = new URL(input2);
-  if (url.protocol !== "http:" && url.protocol !== "https:" || url.username || url.password) throw new Error("Reusable web evidence requires an HTTP(S) location without credentials");
-  return { origin: url.origin, path: url.pathname };
-}
-function sameOriginHref2(input2, origin) {
-  if (typeof input2 !== "string" || !input2) return false;
-  try {
-    const url = new URL(input2, origin);
-    return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && url.origin === origin;
-  } catch {
-    return false;
-  }
-}
-var NON_REUSABLE_CONTROL_TYPES = /* @__PURE__ */ new Set(["hidden", "file"]);
-function unshareableControl(element) {
-  const types = [element.inputType, element.controlType].filter((value) => typeof value === "string").map((value) => value.trim().toLowerCase());
-  if (types.some((value) => NON_REUSABLE_CONTROL_TYPES.has(value))) return true;
-  return isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
-}
-function boundedLimit(input2, hardMaximum, label) {
-  if (input2 === void 0) return hardMaximum;
-  if (!Number.isSafeInteger(input2) || input2 < 1 || input2 > hardMaximum) throw new Error(`${label} must be between 1 and ${hardMaximum}`);
-  return input2;
-}
-function enforceSourceItemLimit(actual, maximum, label) {
-  if (actual > maximum) throw new Error(`Reusable web evidence ${label} count exceeds ${maximum}`);
-}
-function boundedTag(input2, label) {
-  const value = boundedText3(input2, 160);
-  if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u.test(value)) throw new Error(`${label} is malformed`);
-  return value;
-}
-function boundedToken(input2, maximum) {
-  const value = boundedText3(input2, maximum);
-  return value && /^[A-Za-z0-9_.:-]+$/u.test(value) ? value : void 0;
-}
-function boundedText3(input2, maximum) {
-  if (typeof input2 !== "string") return void 0;
-  const value = input2.replace(/\s+/gu, " ").trim();
-  return value ? value.slice(0, maximum) : void 0;
-}
-function compact2(input2) {
-  return Object.fromEntries(Object.entries(input2).filter(([, value]) => value !== void 0));
-}
-function compareCanonical(left, right) {
-  return canonicalJson(left).localeCompare(canonicalJson(right));
-}
-function digest(input2) {
-  return createHash("sha256").update(canonicalJson(input2)).digest("hex");
-}
-function serializedBytes2(input2) {
-  return Buffer.byteLength(JSON.stringify(input2), "utf8");
-}
-function canonicalJson(input2) {
-  if (Array.isArray(input2)) return `[${input2.map(canonicalJson).join(",")}]`;
-  if (input2 && typeof input2 === "object") return `{${Object.entries(input2).filter(([, value]) => value !== void 0).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${JSON.stringify(key)}:${canonicalJson(value)}`).join(",")}}`;
-  return JSON.stringify(input2);
-}
-
-// src/runtime/reusable-evidence-coordinator.ts
-function mapCompletedWebReusableEvidenceToPutRequest(input2) {
-  if (input2.completionStatus !== "completed") throw new Error("Reusable web evidence can be written only after completion");
-  const projectId = identifier(input2.projectId, "project");
-  const flowId = identifier(input2.flowId, "Flow");
-  const subflowId = input2.subflowId === void 0 ? void 0 : identifier(input2.subflowId, "Subflow");
-  const recordId = input2.recordId === void 0 ? void 0 : identifier(input2.recordId, "record");
-  const sourceRunIds = identifiers(input2.sourceRunIds ?? [], "source run");
-  const sourceAdaptationIds = identifiers(input2.sourceAdaptationIds ?? [], "source adaptation");
-  if (!sourceRunIds.length && !sourceAdaptationIds.length) throw new Error("Reusable web evidence requires explicit source provenance");
-  if (!Number.isSafeInteger(input2.completedAt) || input2.completedAt < 0) throw new Error("Reusable web evidence completion time is invalid");
-  if (input2.ttlMs !== void 0 && (!Number.isSafeInteger(input2.ttlMs) || input2.ttlMs < 1)) throw new Error("Reusable web evidence TTL is invalid");
-  const produced = produceWebReusableEvidence({
-    evidence: input2.evidence,
-    ...input2.actions === void 0 ? {} : { actions: input2.actions },
-    ...input2.clientCapabilities === void 0 ? {} : { clientCapabilities: input2.clientCapabilities }
+test("Core keeps no proposal for a list extraction repair, and records why", () => {
+  const proposed = target({ item: "target.1", "field.price": "target.2" });
+  const result = proposeThroughCore(catalogueBinding(), { id: "rows", definitionId: "web.output.dom-extract_list" }, proposed);
+  assert.equal(result.preflight.ok, false);
+  assert.equal(result.preflight.issues.length, 1);
+  assert.match(result.preflight.issues[0], /\(action_not_repairable\)\.$/u);
+  assert.deepEqual(result.metadata, { proposalOnly: true, executed: false, targetOverrideRefusal: NOT_REPAIRABLE });
+  assert.equal(result.adaptation, void 0);
+  assert.equal(result.changeProposal, void 0);
+  assert.deepEqual(result.patch, { kind: "temporary_target_override", targetNodeId: "rows", target: proposed, reason: "Re-point the failed action." });
+  const recorded = proposeThroughCore(catalogueBinding(), recordedNode("rows", "web.dom.extract_list"), proposed);
+  assert.equal(recorded.preflight.ok, false);
+  assert.deepEqual(recorded.metadata, { proposalOnly: true, executed: false, targetOverrideRefusal: NOT_REPAIRABLE });
+  assert.equal(recorded.changeProposal, void 0);
+});
+test("Core proposes a recorded click repair, from the output the recording dispatches", () => {
+  const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "target.3" }));
+  assert.deepEqual(result.preflight, { ok: true, issues: [], requiresExternalSideEffectApproval: true });
+  assert.equal(result.metadata?.targetResolution, "resolved");
+  assert.deepEqual(result.patch.kind === "temporary_target_override" ? result.patch.target : void 0, {
+    handles: { element: "target.3" },
+    handleResolution: "named",
+    tagName: "button",
+    accessibleName: "Unique",
+    selector: "#unique"
   });
-  const compatibilityTags = produced.fingerprint.compatibilityTags.map((tag) => {
-    const separator = tag.indexOf(":");
-    if (separator < 1 || separator === tag.length - 1) throw new Error("Reusable web evidence compatibility tag is malformed");
-    return { name: tag.slice(0, separator), value: tag.slice(separator + 1) };
+  assert.notEqual(result.adaptation, void 0);
+  assert.notEqual(result.changeProposal, void 0);
+});
+test("Core still proposes a click repair, carrying the flat fingerprint the domain resolved", () => {
+  const result = proposeThroughCore(formBinding(), { id: "submit", definitionId: "web.output.dom-click" }, target({ element: "target.3" }));
+  assert.deepEqual(result.preflight, { ok: true, issues: [], requiresExternalSideEffectApproval: true });
+  assert.equal(result.metadata?.targetResolution, "resolved");
+  assert.deepEqual(result.patch.kind === "temporary_target_override" ? result.patch.target : void 0, {
+    handles: { element: "target.3" },
+    handleResolution: "named",
+    tagName: "button",
+    accessibleName: "Unique",
+    selector: "#unique"
   });
-  compatibilityTags.push({ name: "web.fingerprint", value: produced.fingerprint.digest });
-  compatibilityTags.push({ name: "web.fingerprint-schema", value: WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION });
-  compatibilityTags.sort((left, right) => left.name.localeCompare(right.name) || left.value.localeCompare(right.value));
-  return {
-    projectId,
-    record: {
-      ...recordId ? { recordId } : {},
-      flowId,
-      ...subflowId ? { subflowId } : {},
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      evidenceKind: input2.evidenceKind,
-      evidenceSchemaVersion: produced.fingerprint.evidenceSchemaVersion,
-      sanitizerVersion: produced.fingerprint.sanitizerVersion,
-      compatibilityTags,
-      promptProjection: produced.promptProjection,
-      outcome: input2.outcome,
-      reviewerState: input2.reviewerState,
-      validationState: input2.validationState,
-      sourceRunIds,
-      sourceAdaptationIds,
-      createdAt: input2.completedAt,
-      ...input2.ttlMs === void 0 ? {} : { ttlMs: input2.ttlMs }
-    }
-  };
-}
-async function writeCompletedWebReusableEvidence(input2, port) {
-  if (input2.enabled !== true) return { status: "disabled" };
-  const request = mapCompletedWebReusableEvidenceToPutRequest(input2);
-  let response;
-  try {
-    response = await port.putReusableLlmContext(request);
-  } catch {
-    throw new Error("Protected reusable-context write was rejected by Core");
-  }
-  const recordId = response.payload?.context?.recordId;
-  const contentDigest = response.payload?.context?.contentDigest;
-  if (!response.ok || typeof recordId !== "string" || !recordId || typeof contentDigest !== "string" || !/^[a-f0-9]{64}$/u.test(contentDigest)) {
-    throw new Error("Protected reusable-context write was rejected by Core");
-  }
-  return { status: "stored", recordId, contentDigest };
-}
-function identifiers(input2, label) {
-  if (input2.length > 25) throw new Error(`Reusable web evidence ${label} IDs exceed 25`);
-  return [...new Set(input2.map((value) => identifier(value, label)))].sort();
-}
-function identifier(input2, label) {
-  const value = typeof input2 === "string" ? input2.trim() : "";
-  if (!value || value.length > 200 || !/^[A-Za-z0-9._:-]+$/u.test(value)) throw new Error(`Reusable web evidence ${label} ID is invalid`);
-  return value;
-}
-
-// src/runtime/tests/reusable-evidence-coordinator.test.ts
-function input(overrides = {}) {
-  return {
-    enabled: true,
-    completionStatus: "completed",
-    projectId: "project.one",
-    flowId: "flow.one",
-    subflowId: "subflow.one",
-    evidenceKind: "runtime_failure",
-    evidence: {
-      schemaVersion: "web-llm-evidence.v2",
-      trust: "untrusted-page-evidence",
-      location: "https://example.test/form?secret=query#fragment",
-      elements: [
-        { target: "target.1", tag: "textarea", name: "Name", hasValue: true },
-        { target: "target.2", tag: "input", inputType: "password", name: "Password" },
-        { target: "target.3", tag: "select", name: "Plan", selectedValue: "private-value", options: [{ value: "private-value", label: "Private label" }] }
-      ],
-      truncated: false
-    },
-    actions: [{ definitionId: "web.output.dom-type", status: "failed", route: "failed" }],
-    clientCapabilities: ["web.actions.v1", "web.snapshots.v1"],
-    outcome: "failed",
-    reviewerState: "unreviewed",
-    validationState: "unknown",
-    sourceRunIds: ["run.one"],
-    sourceAdaptationIds: [],
-    completedAt: 1e3,
-    ttlMs: 6e4,
-    ...overrides
-  };
-}
-test("maps completed sanitized evidence to the protected Core put contract", () => {
-  const request = mapCompletedWebReusableEvidenceToPutRequest(input());
-  assert.equal(request.projectId, "project.one");
-  assert.deepEqual(request.record.sourceRunIds, ["run.one"]);
-  assert.equal(request.record.domainId, "web-automation");
-  assert.equal(request.record.outcome, "failed");
-  assert.match(request.record.compatibilityTags.find((tag) => tag.name === "web.fingerprint")?.value ?? "", /^[a-f0-9]{64}$/u);
-  const serialized = JSON.stringify(request);
-  assert.doesNotMatch(serialized, /secret=query|fragment|private-value|Private label|Password|adapted-name|#plan|#password|target\.1/iu);
-  assert.doesNotMatch(serialized, /selector|selectedValue|hasValue|options|rawDom|cookie|headers/iu);
-  const projection = request.record.promptProjection;
-  assert.ok(projection.facts.some((fact) => fact.kind === "action" && fact.status === "failed"));
-  assert.ok(projection.facts.some((fact) => fact.kind === "element" && fact.tag === "textarea"));
-});
-test("does not call Core while feature-gated off", async () => {
-  let calls = 0;
-  const result = await writeCompletedWebReusableEvidence(input({ enabled: false }), { putReusableLlmContext: async () => {
-    calls += 1;
-    return { ok: true };
-  } });
-  assert.deepEqual(result, { status: "disabled" });
-  assert.equal(calls, 0);
-});
-test("writes once and returns only protected Core identity", async () => {
-  const requests = [];
-  const result = await writeCompletedWebReusableEvidence(input(), {
-    putReusableLlmContext: async (request) => {
-      requests.push(request);
-      return { ok: true, payload: { context: { recordId: "llm-context:one", contentDigest: "a".repeat(64) } } };
-    }
-  });
-  assert.deepEqual(result, { status: "stored", recordId: "llm-context:one", contentDigest: "a".repeat(64) });
-  assert.equal(requests.length, 1);
-});
-test("fails closed on incomplete provenance and every rejected protected write", async () => {
-  assert.throws(() => mapCompletedWebReusableEvidenceToPutRequest(input({ completionStatus: "running" })), /only after completion/u);
-  assert.throws(() => mapCompletedWebReusableEvidenceToPutRequest(input({ sourceRunIds: [], sourceAdaptationIds: [] })), /explicit source provenance/u);
-  let rejectedCalls = 0;
-  await assert.rejects(() => writeCompletedWebReusableEvidence(input(), { putReusableLlmContext: async () => {
-    rejectedCalls += 1;
-    return { ok: false };
-  } }), /rejected by Core/u);
-  assert.equal(rejectedCalls, 1);
-  let thrownCalls = 0;
-  await assert.rejects(() => writeCompletedWebReusableEvidence(input(), { putReusableLlmContext: async () => {
-    thrownCalls += 1;
-    throw new Error("content protection unavailable");
-  } }), /rejected by Core/u);
-  assert.equal(thrownCalls, 1);
+  assert.notEqual(result.adaptation, void 0);
+  assert.notEqual(result.changeProposal, void 0);
 });

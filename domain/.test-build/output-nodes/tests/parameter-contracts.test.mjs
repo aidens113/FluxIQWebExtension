@@ -1190,7 +1190,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1249,7 +1250,7 @@ function iconForOutput(outputId) {
   if (outputId === "web.browser.download") return "download";
   return "square-dot";
 }
-var controlInput, outputPorts, recordsPort, recordsPathByOutput, catalogTextByOutput, expectedStateParameter, webAutomationOutputNodeDefinitions;
+var controlInput, outputPorts, recordsPort, recordsPathByOutput, catalogTextByOutput, VERIFIES_STATE_METADATA_KEY, stateVerifyingOutputs, expectedStateParameter, webAutomationOutputNodeDefinitions;
 var init_definitions = __esm({
   "src/output-nodes/definitions.ts"() {
     "use strict";
@@ -1269,6 +1270,12 @@ var init_definitions = __esm({
     catalogTextByOutput = {
       "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
     };
+    VERIFIES_STATE_METADATA_KEY = "verifiesState";
+    stateVerifyingOutputs = /* @__PURE__ */ new Set([
+      "web.dom.assert",
+      "web.dom.wait_for_text",
+      "web.dom.wait_for_selector"
+    ]);
     expectedStateParameter = {
       id: "expectedState",
       label: "Expected State",

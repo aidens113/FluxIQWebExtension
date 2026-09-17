@@ -416,11 +416,13 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: void 0,
-    // Nor are these: `markFailedTarget` writes exactly one of them, and only
-    // for a packet that is describing a failure. Named for the same reason.
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
     failedTarget: void 0,
     failedTargetMissing: void 0,
-    failedTargetUnknown: void 0
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
@@ -428,6 +430,7 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
 }
 function markFailedTarget(evidence, selectors, failedAction) {
   if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
   if (!failedAction.selector) {
     evidence.failedTargetUnknown = true;
     return;
@@ -453,7 +456,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     }
     markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -817,6 +820,53 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
+// src/actions/types.ts
+var WEB_AUTOMATION_ACTION_TYPES = [
+  "web.browser.navigate",
+  "web.dom.click",
+  "web.dom.type",
+  "web.dom.clear",
+  "web.dom.select",
+  "web.dom.scroll",
+  "web.dom.keypress",
+  "web.dom.wait_for_selector",
+  "web.dom.wait_for_text",
+  "web.dom.extract",
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
+];
+
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
+
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
@@ -1121,31 +1171,6 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
-
 // src/output-nodes/extract-list/catalog-text.ts
 var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
   "scrape",
@@ -1327,6 +1352,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -1395,7 +1426,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1455,36 +1487,22 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/actions/types.ts
-var WEB_AUTOMATION_ACTION_TYPES = [
-  "web.browser.navigate",
-  "web.dom.click",
-  "web.dom.type",
-  "web.dom.clear",
-  "web.dom.select",
-  "web.dom.scroll",
-  "web.dom.keypress",
-  "web.dom.wait_for_selector",
-  "web.dom.wait_for_text",
-  "web.dom.extract",
-  "web.dom.capture_snapshot",
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
-
 // src/output-nodes/parameter-contracts.ts
 var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
 };
 
+// src/runtime/llm-evidence/repairable-parameters.ts
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
+
 // src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
 var SELECTOR_NODE_IDS = new Set(
   webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
@@ -1852,6 +1870,41 @@ test("a handle the byte budget trimmed away becomes a missing target rather than
   assert.equal(evidence.failedTarget, void 0, "the element it named was popped");
   assert.equal(evidence.failedTargetMissing, true);
   assert.ok(!evidence.elements.some((element) => element.name === "Pay now"));
+});
+var ELEMENT_PARAMETER = { element: "the target handle of the one element the failed action should act on instead" };
+test("a failure packet names the parameters a repair fills, as a copy of what the producer gave", () => {
+  const repairParameters = { ...ELEMENT_PARAMETER };
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters } });
+  assert.deepEqual(evidence.repairParameters, ELEMENT_PARAMETER);
+  assert.equal(evidence.failedTargetUnknown, true, "naming the parameters is not naming the control");
+  repairParameters.element = "changed afterwards";
+  assert.deepEqual(evidence.repairParameters, ELEMENT_PARAMETER);
+  const marked = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay", repairParameters: ELEMENT_PARAMETER } });
+  assert.equal(marked.failedTarget, "target.2");
+  assert.deepEqual(marked.repairParameters, ELEMENT_PARAMETER);
+  assert.doesNotMatch(JSON.stringify(marked), /#pay|selector/u);
+});
+test("an empty map says the failed action offers nothing to re-point, and no map says nothing at all", () => {
+  assert.deepEqual(sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: {} } }).repairParameters, {});
+  assert.equal("repairParameters" in sanitizeWebLlmSnapshot(failurePage(), { failedAction: {} }), false);
+  assert.equal("repairParameters" in sanitizeWebLlmSnapshot(failurePage()), false);
+});
+test("the parameters are paid for inside the budget, and given up only after the page facts", () => {
+  const generous = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: ELEMENT_PARAMETER } });
+  const generousBytes = Buffer.byteLength(JSON.stringify(generous), "utf8");
+  assert.equal(generous.budgetTruncated, void 0);
+  const tight = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: ELEMENT_PARAMETER }, maxEvidenceBytes: generousBytes - 1 });
+  assert.ok(Buffer.byteLength(JSON.stringify(tight), "utf8") <= generousBytes - 1);
+  assert.equal(tight.budgetTruncated, true);
+  assert.equal(tight.elements.length, 1);
+  assert.deepEqual(tight.repairParameters, ELEMENT_PARAMETER);
+  const oversized = { element: `the target handle ${"x".repeat(400)}` };
+  const starved = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { repairParameters: oversized }, maxEvidenceBytes: 300 });
+  assert.ok(Buffer.byteLength(JSON.stringify(starved), "utf8") <= 300);
+  assert.equal(starved.repairParameters, void 0);
+  assert.equal(starved.title, void 0);
+  assert.equal(starved.elements.length, 1);
+  assert.equal(starved.budgetTruncated, true);
 });
 function failurePage() {
   return {

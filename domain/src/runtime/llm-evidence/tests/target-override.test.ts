@@ -5,6 +5,7 @@ import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 import type { AutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation-studio";
 
 const target = (handles: Record<string, string>): AutomationStudioRuntimeTargetOverrideTarget => ({ handles });
+const NOT_REPAIRABLE = { status: "absent", reason: "action_not_repairable" } as const;
 
 // The packet and the binding behind it. The packet is what a model reads and
 // has carried no selector since `.v2`; the binding is what the domain kept, and
@@ -89,14 +90,127 @@ test("a string that is a valid CSS selector is just an unminted handle: it never
   }
 });
 
-test("refuses a parameter the action never declared, and an action with no repairable parameters", () => {
+// Every refusal names which case it was, in Core's closed vocabulary. A bare
+// `absent` described an invented parameter, a handle never shown and an action
+// the domain cannot repair in the same word, and a refused live repair could
+// not say which (`run-mu4rpka7-845d919a`).
+test("refuses a parameter the action never declared, as not offered", () => {
   const { evidence, selectors } = formBinding();
   const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.3" }), clickAction, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3", extra: "target.1" }), clickAction, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), { nodeId: "n", definitionId: "web.output.browser-navigate" }, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: {} } as AutomationStudioRuntimeTargetOverrideTarget, clickAction, selectors), { status: "absent" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {} as AutomationStudioRuntimeTargetOverrideTarget, clickAction, selectors), { status: "absent" });
+  const notOffered = { status: "absent", reason: "parameter_not_offered" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.3" }), clickAction, selectors), notOffered);
+  // Beside the right one, too: the model was working from something it was not shown.
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3", extra: "target.1" }), clickAction, selectors), notOffered);
+});
+
+test("refuses a handle map that names no parameter, as a required one missing", () => {
+  const { evidence, selectors } = formBinding();
+  const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
+  assert.deepEqual(
+    validateWebRuntimeTargetOverrideEvidence(evidence, { handles: {} } as AutomationStudioRuntimeTargetOverrideTarget, clickAction, selectors),
+    { status: "absent", reason: "parameter_missing" }
+  );
+});
+
+test("refuses a target that is not a map of parameters to handles, as malformed", () => {
+  const { evidence, selectors } = formBinding();
+  const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
+  const malformed = { status: "absent", reason: "target_malformed" };
+  const targets: unknown[] = [
+    {},
+    { handles: [] },
+    { handles: "target.3" },
+    { handles: { element: 3 } },
+    { handles: { element: "" } },
+    { selector: "#unique" },
+  ];
+  for (const candidate of targets) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, candidate as AutomationStudioRuntimeTargetOverrideTarget, clickAction, selectors), malformed, JSON.stringify(candidate));
+  }
+});
+
+test("refuses a handle the packet issued twice, as ambiguous", () => {
+  const { evidence, selectors } = formBinding();
+  // Only a packet that was altered after it was issued can name one handle twice.
+  const doubled = { ...evidence, elements: [...evidence.elements, { ...evidence.elements[2]!, name: "Other" }] };
+  assert.deepEqual(
+    validateWebRuntimeTargetOverrideEvidence(doubled, target({ element: "target.3" }), { nodeId: "submit", definitionId: "web.output.dom-click" }, selectors),
+    { status: "ambiguous", reason: "handle_ambiguous" }
+  );
+});
+
+test("refuses a handle naming something the verb cannot use, when no single other element could stand in", () => {
+  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
+  const page = sanitizeWebLlmSnapshot({
+    url: "https://example.test/form",
+    interactiveElements: [
+      { tagName: "input", selector: "#first", name: "First" },
+      { tagName: "textarea", selector: "#second", name: "Second" },
+      { tagName: "button", selector: "#go", name: "Go" },
+    ],
+  });
+  // `target.3` is real, and it is a button: typing cannot use it, and two
+  // controls could, so the domain will not pick one.
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "target.3" }), typeAction), { status: "ambiguous", reason: "handle_incompatible" });
+  // A handle the packet never issued, with the same two candidates.
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "target.9" }), typeAction), { status: "ambiguous", reason: "handle_not_issued" });
+});
+
+test("an action with nothing to re-point says so in Core's word, whatever the target names", () => {
+  const { evidence, selectors } = formBinding();
+  const navigate = { nodeId: "n", definitionId: "web.output.browser-navigate" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), navigate, selectors), NOT_REPAIRABLE);
+  // The action is judged before the target is read, so a malformed one gets the same answer.
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {} as AutomationStudioRuntimeTargetOverrideTarget, navigate, selectors), NOT_REPAIRABLE);
+});
+
+// A recorded action is a `builtin.policy.action` node whatever it does, so the
+// verb that failed is the output it dispatches, which Core passes as
+// `outputId`. Read from the definition id alone, every recorded Flow's repair
+// was refused -- the live repair lane's included.
+test("a recorded action is repaired as the verb its output names", () => {
+  const { evidence, selectors } = formBinding();
+  const recordedClick = { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.dom.click" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedClick, selectors), {
+    status: "resolved",
+    target: { handles: { element: "target.3" }, handleResolution: "named", tagName: "button", accessibleName: "Unique", selector: "#unique" },
+  });
+  // The output decides the role: a recorded type cannot land on the button it
+  // was pointed at, and takes the one fillable control instead, saying so.
+  const recordedType = { nodeId: "name", definitionId: "builtin.policy.action", outputId: "web.dom.type" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedType, selectors), {
+    status: "resolved",
+    target: {
+      handles: { element: "target.1" },
+      handleResolution: "inferred",
+      tagName: "textarea",
+      accessibleName: "Name",
+      selector: "#name",
+      proposedHandles: { element: "target.3" },
+    },
+  });
+  // A created node names its output as well, and the two agree.
+  const createdClick = { nodeId: "submit", definitionId: "web.output.dom-click", outputId: "web.dom.click" };
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), createdClick, selectors).status, "resolved");
+});
+
+test("a failed action whose output names no repairable web verb, or contradicts its node, is refused", () => {
+  const { evidence, selectors } = formBinding();
+  const refusedIdentities = [
+    // A recorded action Core could name no output for says nothing about its verb.
+    { nodeId: "save", definitionId: "builtin.policy.action" },
+    { nodeId: "save", definitionId: "builtin.policy.action", outputId: "vendor.output.press" },
+    { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.browser.navigate" },
+    // A node definition id is not an output id.
+    { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.output.dom-click" },
+    // A web output node whose output id names another verb.
+    { nodeId: "submit", definitionId: "web.output.dom-click", outputId: "web.dom.type" },
+    // A node that is neither a recorded action nor that output's own node.
+    { nodeId: "ask", definitionId: "builtin.llm.prompt", outputId: "web.dom.click" },
+  ];
+  for (const failedAction of refusedIdentities) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), failedAction, selectors), NOT_REPAIRABLE, JSON.stringify(failedAction));
+  }
 });
 
 test("without the binding the repair is fingerprint-only, which is weaker rather than wrong", () => {
@@ -113,9 +227,11 @@ test("without the binding the repair is fingerprint-only, which is weaker rather
 test("refuses a repair when nothing compatible was described, and refuses to guess between several", () => {
   const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
   const noTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "select", selector: "#plan" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.9" }), typeAction), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.9" }), typeAction), { status: "absent", reason: "no_compatible_element" });
+  // Named, and still nothing: the select is real but typing cannot use it.
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.1" }), typeAction), { status: "absent", reason: "no_compatible_element" });
   const twoTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "input", selector: "#first" }, { tagName: "textarea", selector: "#second" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "target.9" }), typeAction), { status: "ambiguous" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "target.9" }), typeAction), { status: "ambiguous", reason: "handle_not_issued" });
 });
 
 test("carries a child-frame element's frame beside the selector that works inside it", () => {
@@ -138,37 +254,62 @@ test("carries a child-frame element's frame beside the selector that works insid
   });
 });
 
-test("a list extraction repairs its row and its fields through the same contract", () => {
-  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
-    url: "https://example.test/catalogue",
-    interactiveElements: [
-      { tagName: "a", selector: ".row:nth-child(1)", name: "Widget", context: { listPosition: { index: 1, total: 2 } } },
-      { tagName: "span", selector: ".row:nth-child(1) .price", name: "10.00" },
-    ],
-  });
+// A catalogue page: a row the capture reported a list position for, and a
+// price inside it. Everything a list extraction's repair used to name.
+const catalogueBinding = (): ReturnType<typeof sanitizeWebLlmSnapshotWithBindings> => sanitizeWebLlmSnapshotWithBindings({
+  url: "https://example.test/catalogue",
+  interactiveElements: [
+    { tagName: "a", selector: ".row:nth-child(1)", name: "Widget", context: { listPosition: { index: 1, total: 2 } } },
+    { tagName: "span", selector: ".row:nth-child(1) .price", name: "10.00" },
+  ],
+});
+
+// D-4. A list extraction's repair used to resolve its row and fields to a keyed
+// map of fingerprints, which Core saved into the node's `target` -- and the
+// extract node never reads `target`: it reads its `extractList` request. The
+// repair was "applied" and the run went exactly as before. Until an extraction
+// is repaired by re-issuing that request, it is refused outright instead.
+test("a list extraction is refused as not repairable, whatever it names, before any handle is resolved", () => {
+  const { evidence, selectors } = catalogueBinding();
   const extraction = { nodeId: "rows", definitionId: "web.output.dom-extract_list" };
-  const validation = validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.1", "field.price": "target.2" }), extraction, selectors);
-  assert.equal(validation.status, "resolved");
-  const resolvedTarget = validation.status === "resolved" ? validation.target : undefined;
-  assert.deepEqual(resolvedTarget?.handles, { item: "target.1", "field.price": "target.2" });
-  assert.equal(resolvedTarget?.handleResolution, "named");
-  // More than one parameter, so the fingerprints are keyed rather than flat.
-  assert.equal(resolvedTarget?.selector, undefined);
-  assert.deepEqual(resolvedTarget?.targets, {
-    item: { tagName: "a", accessibleName: "Widget", selector: ".row:nth-child(1)", metadata: { listIndex: 1, listTotal: 2 } },
-    "field.price": { tagName: "span", accessibleName: "10.00", selector: ".row:nth-child(1) .price" },
-  });
-  // The row must be something the capture reported a list position for. An
-  // extraction never takes the flat form, whatever its parameter count: its
-  // parameters are not the node's `target`, so keying them is the only shape
-  // that says which fingerprint repairs which.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.2" }), extraction, selectors), {
+  const proposals: Array<Record<string, string>> = [
+    { item: "target.1", "field.price": "target.2" },
+    { item: "target.1" },
+    { item: "target.2" },
+    { "field.price": "target.2" },
+    { element: "target.1" },
+  ];
+  for (const handles of proposals) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target(handles), extraction, selectors), NOT_REPAIRABLE, JSON.stringify(handles));
+  }
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {} as AutomationStudioRuntimeTargetOverrideTarget, extraction, selectors), NOT_REPAIRABLE);
+  // A recorded extraction names its verb only through the output it
+  // dispatches, and a created one names it on both sides. Each is refused the
+  // same way, whatever the target names.
+  const identities = [
+    { nodeId: "rows", definitionId: "builtin.policy.action", outputId: "web.dom.extract_list" },
+    { nodeId: "rows", definitionId: "web.output.dom-extract_list", outputId: "web.dom.extract_list" },
+    // An extraction node whose output id claims a click is a contradiction, not a click.
+    { nodeId: "rows", definitionId: "web.output.dom-extract_list", outputId: "web.dom.click" },
+  ];
+  for (const failedAction of identities) {
+    for (const handles of [{ item: "target.1" }, { element: "target.1" }]) {
+      assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target(handles), failedAction, selectors), NOT_REPAIRABLE, `${JSON.stringify(failedAction)} ${JSON.stringify(handles)}`);
+    }
+  }
+});
+
+test("a click on a list row still resolves flat, with the row's position as metadata", () => {
+  const { evidence, selectors } = catalogueBinding();
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "open", definitionId: "web.output.dom-click" }, selectors), {
     status: "resolved",
     target: {
-      handles: { item: "target.1" },
-      handleResolution: "inferred",
-      targets: { item: { tagName: "a", accessibleName: "Widget", selector: ".row:nth-child(1)", metadata: { listIndex: 1, listTotal: 2 } } },
-      proposedHandles: { item: "target.2" },
+      handles: { element: "target.1" },
+      handleResolution: "named",
+      tagName: "a",
+      accessibleName: "Widget",
+      selector: ".row:nth-child(1)",
+      metadata: { listIndex: 1, listTotal: 2 },
     },
   });
 });

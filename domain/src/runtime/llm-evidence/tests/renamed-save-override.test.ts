@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateWebRuntimeTargetOverrideEvidence } from "..";
-import { elementFillsRepairableParameter } from "../repairable-parameters";
+import { elementFillsRepairableParameter, webFailureRepairParameters } from "../repairable-parameters";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 
 // Whether a correct repair of identity-drift's `renamed-redesign` could pass
@@ -15,8 +15,10 @@ import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 // Chromium on 2026-09-16 (`harness.capture()`), with the layout fields the
 // sanitizer never reads -- bounds, xpath, class lists, viewport visibility --
 // left out, and the lab's random port fixed. It is sanitized exactly as
-// `captureSanitizedFailureEvidence` does it: the failure budget, and
-// `failedAction: {}`, because Core's failed-action identity names no control.
+// `captureSanitizedFailureEvidence` does it for this recorded Flow: the failure
+// budget, no control named (Core's failed-action identity names none), and the
+// repairable parameters offered for a `builtin.policy.action`, whose verb Core's
+// capture request does not name.
 
 const FORM_SECTION = { formId: "settings-form", landmark: "region", landmarkName: "General", heading: "General" };
 const ADVANCED_SECTION = { formId: "settings-form", landmark: "region", landmarkName: "Advanced", heading: "Advanced" };
@@ -102,13 +104,19 @@ const capturedRenamedRedesign = {
   focusedElement: { tagName: "body", selector: "body" }
 };
 
-const failurePacket = () => sanitizeWebLlmSnapshotWithBindings(capturedRenamedRedesign, { budget: "failure", failedAction: {} });
+const failurePacket = () => sanitizeWebLlmSnapshotWithBindings(capturedRenamedRedesign, {
+  budget: "failure",
+  failedAction: { repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) }
+});
 const clickAction = { nodeId: "save-changes", definitionId: "web.output.dom-click" };
 const override = (handle: string) => ({ handles: { element: handle } });
 
 test("the failure packet shows the renamed Save as the page's one submit control, by its accessible name and never by selector", () => {
   const { evidence, selectors } = failurePacket();
   assert.equal(evidence.failedTargetUnknown, true);
+  // The key a repair fills is named, and the packet still fits Core's gate with it.
+  assert.deepEqual(Object.keys(evidence.repairParameters ?? {}), ["element"]);
+  assert.ok(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= 3_000);
   const submits = evidence.elements.filter((element) => element.controlType === "submit");
   // Named by its accessible name; the visible text is the same words, so it is not repeated.
   assert.deepEqual(submits, [{ target: "target.2", tag: "button", name: "Apply changes", controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
@@ -123,7 +131,7 @@ test("the failure packet shows the renamed Save as the page's one submit control
 
 test("accepts an override naming the renamed Save, and resolves it fingerprint first", () => {
   const { evidence, selectors } = failurePacket();
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), clickAction, selectors), {
+  const resolvedSave = {
     status: "resolved",
     target: {
       handles: { element: "target.2" },
@@ -135,7 +143,12 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
       selector: RENAMED_SAVE_SELECTOR,
       metadata: { controlType: "submit", formId: "settings-form" }
     }
-  });
+  };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), clickAction, selectors), resolvedSave);
+  // The same repair as the live lane asks for it: a recorded click, named by
+  // the output its policy node dispatches.
+  const recordedClick = { nodeId: "save-changes", definitionId: "builtin.policy.action", outputId: "web.dom.click" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), recordedClick, selectors), resolvedSave);
 });
 
 test("refuses an override naming a handle it was never shown, or anything on the page a click cannot use", () => {
@@ -148,11 +161,14 @@ test("refuses an override naming a handle it was never shown, or anything on the
   assert.deepEqual(clickable, ["target.1", "target.2", "target.3"]);
   const unpressable = evidence.elements.filter((element) => !clickable.includes(element.target)).map((element) => element.target);
   assert.ok(unpressable.length > 0, "the packet described nothing a click cannot use");
-  for (const handle of ["save-changes", "#save-settings", "Save changes", "target.0", "target.99", ...unpressable]) {
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "ambiguous" }, handle);
+  for (const handle of ["save-changes", "#save-settings", "Save changes", "target.0", "target.99"]) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "ambiguous", reason: "handle_not_issued" }, handle);
+  }
+  for (const handle of unpressable) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "ambiguous", reason: "handle_incompatible" }, handle);
   }
   // An invented parameter is refused whatever handle rides with it.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: { element: "target.2", button: "target.2" } }, clickAction, selectors), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: { element: "target.2", button: "target.2" } }, clickAction, selectors), { status: "absent", reason: "parameter_not_offered" });
 });
 
 test("does not tell a pressable wrong control from Save: Discard, named by its own handle, is accepted as Discard", () => {

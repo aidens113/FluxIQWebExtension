@@ -92,46 +92,6 @@ var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
-// src/runtime/llm-evidence/repairable-parameters.ts
-var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
-var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
-var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
-var ELEMENT_ROLE_BY_DEFINITION_ID = {
-  "web.output.dom-type": "fillable",
-  "web.output.dom-clear": "fillable",
-  "web.output.dom-select": "selectable",
-  "web.output.dom-click": "clickable",
-  "web.output.dom-keypress": "keyable",
-  "web.output.dom-wait_for_selector": "observable",
-  "web.output.dom-extract": "observable"
-};
-var LIST_EXTRACTION_DEFINITION_ID = "web.output.dom-extract_list";
-function webRepairableParameters(definitionId) {
-  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID[definitionId];
-  if (elementRole) return [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: elementRole, required: true }];
-  if (definitionId === LIST_EXTRACTION_DEFINITION_ID) return [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }];
-  return [];
-}
-function webRepairableParameterFor(definitionId, name) {
-  const declared2 = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
-  if (declared2) return declared2;
-  if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
-  return { name, role: "observable", required: false };
-}
-function elementFillsRepairableParameter(element2, role) {
-  if (role === "fillable") return safeFillTag(element2.tag, element2.inputType);
-  if (role === "selectable") return element2.tag === "select";
-  if (role === "clickable") return actionableEvidenceElement(element2);
-  if (role === "keyable") return safeFillTag(element2.tag, element2.inputType) || element2.tag === "select" || actionableEvidenceElement(element2);
-  if (role === "list_item") return element2.item !== void 0;
-  return true;
-}
-function isFieldParameterName(name) {
-  if (!name.startsWith(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX)) return false;
-  const key = name.slice(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX.length);
-  return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
-}
-
 // src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
@@ -424,6 +384,53 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
     }
   };
 }
+
+// src/actions/types.ts
+var WEB_AUTOMATION_ACTION_TYPES = [
+  "web.browser.navigate",
+  "web.dom.click",
+  "web.dom.type",
+  "web.dom.clear",
+  "web.dom.select",
+  "web.dom.scroll",
+  "web.dom.keypress",
+  "web.dom.wait_for_selector",
+  "web.dom.wait_for_text",
+  "web.dom.extract",
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
+];
+
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -729,31 +736,6 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
-
 // src/output-nodes/extract-list/catalog-text.ts
 var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
   "scrape",
@@ -935,6 +917,12 @@ var recordsPathByOutput = {
 var catalogTextByOutput = {
   "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
+var VERIFIES_STATE_METADATA_KEY = "verifiesState";
+var stateVerifyingOutputs = /* @__PURE__ */ new Set([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -1003,7 +991,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...requiredParameters.has("selector") ? { elementTarget: true } : {},
-      ...recordsPath ? { recordsPath } : {}
+      ...recordsPath ? { recordsPath } : {},
+      ...stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {}
     }
   };
 }
@@ -1063,36 +1052,67 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/actions/types.ts
-var WEB_AUTOMATION_ACTION_TYPES = [
-  "web.browser.navigate",
-  "web.dom.click",
-  "web.dom.type",
-  "web.dom.clear",
-  "web.dom.select",
-  "web.dom.scroll",
-  "web.dom.keypress",
-  "web.dom.wait_for_selector",
-  "web.dom.wait_for_text",
-  "web.dom.extract",
-  "web.dom.capture_snapshot",
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
-
 // src/output-nodes/parameter-contracts.ts
 var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
 };
 
+// src/runtime/llm-evidence/repairable-parameters.ts
+var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
+var ELEMENT_PARAMETER_DESCRIPTION = "the target handle of the one element the failed action should act on instead";
+var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
+var ELEMENT_ROLE_BY_DEFINITION_ID = {
+  "web.output.dom-type": "fillable",
+  "web.output.dom-clear": "fillable",
+  "web.output.dom-select": "selectable",
+  "web.output.dom-click": "clickable",
+  "web.output.dom-keypress": "keyable",
+  "web.output.dom-wait_for_selector": "observable",
+  "web.output.dom-extract": "observable"
+};
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
+function webRepairableParameters(definitionId) {
+  const elementRole = Object.hasOwn(ELEMENT_ROLE_BY_DEFINITION_ID, definitionId) ? ELEMENT_ROLE_BY_DEFINITION_ID[definitionId] : void 0;
+  return elementRole ? [elementParameter(elementRole)] : [];
+}
+function webRepairableParameterFor(definitionId, name) {
+  return webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+}
+function webFailedActionDefinitionId(failedAction) {
+  const outputId = failedAction.outputId;
+  if (outputId === void 0) return failedAction.definitionId;
+  const dispatched = OUTPUT_NODE_ID_BY_OUTPUT_ID.get(outputId);
+  if (dispatched === void 0) return void 0;
+  if (failedAction.definitionId !== POLICY_ACTION_DEFINITION_ID && failedAction.definitionId !== dispatched) return void 0;
+  return dispatched;
+}
+function webFailureRepairParameters(failedAction) {
+  if (failedAction.definitionId === POLICY_ACTION_DEFINITION_ID && failedAction.outputId === void 0) {
+    return { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: ELEMENT_PARAMETER_DESCRIPTION };
+  }
+  const definitionId = webFailedActionDefinitionId(failedAction);
+  const offered = definitionId === void 0 ? [] : webRepairableParameters(definitionId);
+  return Object.fromEntries(offered.map((parameter) => [parameter.name, parameter.description]));
+}
+function elementFillsRepairableParameter(element2, role) {
+  if (role === "fillable") return safeFillTag(element2.tag, element2.inputType);
+  if (role === "selectable") return element2.tag === "select";
+  if (role === "clickable") return actionableEvidenceElement(element2);
+  if (role === "keyable") return safeFillTag(element2.tag, element2.inputType) || element2.tag === "select" || actionableEvidenceElement(element2);
+  return true;
+}
+function elementParameter(role) {
+  return { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role, required: true, description: ELEMENT_PARAMETER_DESCRIPTION };
+}
+
 // src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
 var SELECTOR_NODE_IDS = new Set(
   webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
@@ -1237,7 +1257,8 @@ var webAutomationGatewayCapabilities = [
 
 // src/runtime/llm-evidence/tests/repairable-parameters.test.ts
 var element = (fields) => ({ target: "target.1", tag: "div", ...fields });
-test("every declared parameter name is a name Core will carry as a handle key", () => {
+var elementDescription = () => webRepairableParameters("web.output.dom-click")[0].description;
+test("every declared parameter name is a name Core will carry as a handle key, and says what its handle is", () => {
   const coreHandleKey = /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u;
   const definitionIds = [
     "web.output.dom-type",
@@ -1246,8 +1267,7 @@ test("every declared parameter name is a name Core will carry as a handle key", 
     "web.output.dom-click",
     "web.output.dom-keypress",
     "web.output.dom-wait_for_selector",
-    "web.output.dom-extract",
-    "web.output.dom-extract_list"
+    "web.output.dom-extract"
   ];
   for (const definitionId of definitionIds) {
     const declared2 = webRepairableParameters(definitionId);
@@ -1255,26 +1275,61 @@ test("every declared parameter name is a name Core will carry as a handle key", 
     for (const parameter of declared2) {
       assert.match(parameter.name, coreHandleKey, `${definitionId} ${parameter.name}`);
       assert.ok(parameter.name.length <= 64, parameter.name);
+      assert.match(parameter.description, /target handle/u, `${definitionId} ${parameter.name}`);
     }
   }
   assert.deepEqual(webRepairableParameters("web.output.browser-navigate"), []);
+  assert.deepEqual(webRepairableParameters("web.output.dom-extract_list"), []);
   assert.deepEqual(webRepairableParameters(""), []);
+  for (const inherited of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+    assert.deepEqual(webRepairableParameters(inherited), [], inherited);
+  }
 });
 test("a one-target DOM output declares exactly one element parameter, with the verb it has to carry", () => {
-  assert.deepEqual(webRepairableParameters("web.output.dom-type"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "fillable", required: true }]);
-  assert.deepEqual(webRepairableParameters("web.output.dom-select"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "selectable", required: true }]);
-  assert.deepEqual(webRepairableParameters("web.output.dom-click"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "clickable", required: true }]);
-  assert.deepEqual(webRepairableParameters("web.output.dom-wait_for_selector"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "observable", required: true }]);
+  const description = elementDescription();
+  assert.deepEqual(webRepairableParameters("web.output.dom-type"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "fillable", required: true, description }]);
+  assert.deepEqual(webRepairableParameters("web.output.dom-select"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "selectable", required: true, description }]);
+  assert.deepEqual(webRepairableParameters("web.output.dom-click"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "clickable", required: true, description }]);
+  assert.deepEqual(webRepairableParameters("web.output.dom-wait_for_selector"), [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "observable", required: true, description }]);
 });
-test("a list extraction declares its row, and accepts a field parameter per declared field key", () => {
-  assert.deepEqual(webRepairableParameters("web.output.dom-extract_list"), [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }]);
-  assert.deepEqual(webRepairableParameterFor("web.output.dom-extract_list", "field.price"), { name: "field.price", role: "observable", required: false });
-  assert.deepEqual(webRepairableParameterFor("web.output.dom-extract_list", "field.a-b_c.d"), { name: "field.a-b_c.d", role: "observable", required: false });
+test("a list extraction declares nothing a target repair may re-point", () => {
+  const listExtraction = "web.output.dom-extract_list";
+  assert.deepEqual(webRepairableParameters(listExtraction), []);
+  for (const name of ["item", "field.price", "field.a-b_c.d", WEB_REPAIRABLE_ELEMENT_PARAMETER]) {
+    assert.equal(webRepairableParameterFor(listExtraction, name), void 0, name);
+  }
   assert.equal(webRepairableParameterFor("web.output.dom-click", "field.price"), void 0);
-  assert.equal(webRepairableParameterFor("web.output.dom-extract_list", "field."), void 0);
-  assert.equal(webRepairableParameterFor("web.output.dom-extract_list", "field.#price"), void 0);
-  assert.equal(webRepairableParameterFor("web.output.dom-extract_list", "field.a b"), void 0);
-  assert.equal(webRepairableParameterFor("web.output.dom-extract_list", `field.${"x".repeat(41)}`), void 0);
+  assert.equal(webRepairableParameterFor("web.output.dom-click", "item"), void 0);
+});
+test("a declared parameter is found by its name, and nothing else is", () => {
+  const description = elementDescription();
+  assert.deepEqual(webRepairableParameterFor("web.output.dom-click", WEB_REPAIRABLE_ELEMENT_PARAMETER), { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "clickable", required: true, description });
+  assert.deepEqual(webRepairableParameterFor("web.output.dom-type", WEB_REPAIRABLE_ELEMENT_PARAMETER), { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: "fillable", required: true, description });
+  assert.equal(webRepairableParameterFor("web.output.dom-click", "button"), void 0);
+  assert.equal(webRepairableParameterFor("web.output.browser-navigate", WEB_REPAIRABLE_ELEMENT_PARAMETER), void 0);
+});
+test("the failed action is the output it dispatches where Core names one, and its node otherwise", () => {
+  assert.equal(webFailedActionDefinitionId({ definitionId: "web.output.dom-click" }), "web.output.dom-click");
+  assert.equal(webFailedActionDefinitionId({ definitionId: "builtin.policy.action" }), "builtin.policy.action");
+  assert.equal(webFailedActionDefinitionId({ definitionId: "builtin.policy.action", outputId: "web.dom.click" }), "web.output.dom-click");
+  assert.equal(webFailedActionDefinitionId({ definitionId: "builtin.policy.action", outputId: "web.dom.extract_list" }), "web.output.dom-extract_list");
+  assert.equal(webFailedActionDefinitionId({ definitionId: "web.output.dom-type", outputId: "web.dom.type" }), "web.output.dom-type");
+  assert.equal(webFailedActionDefinitionId({ definitionId: "builtin.policy.action", outputId: "vendor.output.press" }), void 0);
+  assert.equal(webFailedActionDefinitionId({ definitionId: "builtin.policy.action", outputId: "web.output.dom-click" }), void 0);
+  assert.equal(webFailedActionDefinitionId({ definitionId: "web.output.dom-extract_list", outputId: "web.dom.click" }), void 0);
+  assert.equal(webFailedActionDefinitionId({ definitionId: "builtin.llm.prompt", outputId: "web.dom.click" }), void 0);
+});
+test("a failure packet offers the parameters the failed action declares, and `element` where the verb is not known yet", () => {
+  const offersElement = { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: elementDescription() };
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "web.output.dom-click" }), offersElement);
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "web.output.dom-type" }), offersElement);
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "builtin.policy.action", outputId: "web.dom.click" }), offersElement);
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "builtin.policy.action" }), offersElement);
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "web.output.dom-extract_list" }), {});
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "builtin.policy.action", outputId: "web.dom.extract_list" }), {});
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "web.output.browser-navigate" }), {});
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "builtin.data.constant" }), {});
+  assert.deepEqual(webFailureRepairParameters({ definitionId: "builtin.policy.action", outputId: "vendor.output.press" }), {});
 });
 test("a role is checked against what the element actually is", () => {
   assert.equal(elementFillsRepairableParameter(element({ tag: "textarea" }), "fillable"), true);
@@ -1284,7 +1339,5 @@ test("a role is checked against what the element actually is", () => {
   assert.equal(elementFillsRepairableParameter(element({ tag: "button" }), "clickable"), true);
   assert.equal(elementFillsRepairableParameter(element({ tag: "p" }), "clickable"), false);
   assert.equal(elementFillsRepairableParameter(element({ tag: "select" }), "keyable"), true);
-  assert.equal(elementFillsRepairableParameter(element({ tag: "li", item: { index: 1, total: 4 } }), "list_item"), true);
-  assert.equal(elementFillsRepairableParameter(element({ tag: "li" }), "list_item"), false);
   assert.equal(elementFillsRepairableParameter(element({ tag: "p" }), "observable"), true);
 });
