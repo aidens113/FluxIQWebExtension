@@ -137,8 +137,32 @@ incompatible system, which git itself cannot detect.
 
 ## Reusing What Already Exists
 
-Evidence: [reports/pair-mechanics.md](./agent-git-workflow-plan/reports/pair-mechanics.md).
-The orchestrator half is still PENDING on its own report.
+Evidence: [reports/pair-mechanics.md](./agent-git-workflow-plan/reports/pair-mechanics.md)
+and [reports/orchestrator-gap.md](./agent-git-workflow-plan/reports/orchestrator-gap.md).
+
+**`packages/agent-orchestrator` is not the foundation, and `scripts/task/` will
+not be built on it.** It is dormant: nothing in the repository imports it, and
+its only caller is a manual root script. It contributes exactly one useful
+artifact — a validated three-command argv plan for
+`git worktree add -b` / `status --short` / `worktree remove`
+(`packages/agent-orchestrator/src/worktree.ts:90-92`) — and spawns nothing.
+
+It is rejected as a base because its types encode a different problem. An
+`AgentTaskPacket` mandates `scenario {id, seed, command}` and
+`baseline {runId, artifactIndexSha256}`, with a uint32 seed and 64-hex hash
+enforced (`src/types.ts:48-49`, `src/task.ts:62-63`), so an ordinary authoring
+task cannot be expressed in it at all; a packet addresses exactly one
+repository, which a Core-paired task violates; and its review gate demands two
+full `RunEvaluation`s plus a `CandidateComparison`, which a task validated by
+`pnpm check` rather than by the Testing Lab cannot supply. Retrofitting it would
+mean breaking changes to a package built for scenario-based improvement runs.
+
+What is taken from it is the *idea* of a disposable-root path policy — a
+worktree must live inside a disposable base that overlaps neither the repository
+nor the main workspace — reimplemented in `scripts/worktree/`. Its hash-chained
+NDJSON audit log is deliberately **not** adopted: it is ceremony this workflow
+does not need, and its `evaluateReviewGate` trusts an unchecked `auditVerified`
+boolean with no link to any log anyway.
 
 **`pnpm lab:pair` does not create worktrees.** It only moves a pair that
 already exists, and refuses otherwise with "create it with
@@ -226,21 +250,47 @@ regression gate.
 `--filter` builds, instance directories, the build lock, the Core build watch,
 and its own move planning.
 
-## Tooling To Build — PENDING refinement
+## Tooling To Build
 
-A `scripts/task/` module, following this repository's structure rules, exposing:
+The tooling is the enforcement. A rule that is one command is followed; a rule
+that is a paragraph in `AGENTS.md` is not. Two new directories, each following
+the small-single-purpose-file shape `scripts/lab/pair/` already uses (one
+exported thing per file, an `index.mjs` barrel, tests in `tests/`).
+
+### `scripts/worktree/` — operating safely on a checkout
+
+Owns what both the Lab and the task tooling need. Moved from
+`scripts/lab/pair/`: `git-command.mjs`, `pnpm-command.mjs`, `path-identity.mjs`,
+`process-list.mjs`, `processes-using-roots.mjs`, `markers.mjs`, `side-state.mjs`.
+New here, because `lab:pair` never had it:
+
+- `create.mjs` — `git worktree add -b <branch> <root> <startPoint>`, then the
+  sibling Core worktree, then install, then verify the Core link resolves.
+- `remove.mjs` — refuse when dirty or when a process runs below the root, then
+  `git worktree remove`, then prune.
+- `disposable-root.mjs` — the path policy: a worktree lives under the
+  disposable base and overlaps neither the repository nor any working checkout.
+- `core-sibling.mjs` — resolve and **prove** the Core sibling, closing the
+  weakness that `lab:pair` only checks Core is the top of some checkout.
+- `env-local.mjs` — copy `.env.local` into a new worktree when one exists,
+  reporting by source and never reading the value.
+
+### `scripts/task/` — the task lifecycle
 
 - `pnpm task start <slug> [--worktree] [--core]` — allocate the id, branch off
-  `dev`, optionally create the worktree pair and install, report the path.
-- `pnpm task finish <id>` — refuse if dirty, integrate `dev`, require observed
-  checks, merge `--no-ff`, delete the branch, remove the worktree.
+  `dev`, optionally create the worktree pair and install, print the path.
+- `pnpm task finish <id>` — refuse if dirty, merge `dev` in, require the checks
+  to have been observed, merge `--no-ff` into `dev`, delete the branch, remove
+  the worktree.
 - `pnpm task abandon <id>` — delete branch and worktree without merging.
 - `pnpm task list` — open tasks, their worktrees, and how far behind `dev`.
 
-The tooling is the enforcement. A rule that is one command is followed; a rule
-that is a paragraph in `AGENTS.md` is not. The only hook proposed is a
-`commit-msg` hook requiring the `Task:` trailer on `task/*` branches, which
-leaves Tier 0 commits on `dev` untouched.
+Every command decides all refusals before changing anything, supports
+`--dry-run`, prints one JSON line on stdout with progress on stderr, and never
+operates on the checkout it runs from.
+
+The only hook proposed is a `commit-msg` hook requiring the `Task:` trailer on
+`task/*` branches, which leaves Tier 0 commits on `dev` untouched.
 
 ## Work Ledger
 
@@ -267,6 +317,11 @@ leaves Tier 0 commits on `dev` untouched.
 - Should `pnpm task finish` refuse without observed check output, or only warn?
   Refusing is mechanical enforcement; warning keeps Tier 1 at two commands.
   Owner: supervisor, settled once worktree cost is known.
+- `packages/agent-orchestrator` is dormant — no importer anywhere — yet its 16
+  tests run inside every `pnpm check` and `pnpm test`. This plan does not build
+  on it, which leaves it with no prospective consumer either. Keep it, wire it
+  up, or retire it? Owner: user. Out of scope here; recorded so the decision is
+  not lost.
 - `week1-core-production-build` is **not** merged into `dev`: it holds 4 commits
   `dev` does not have, the newest being `99dbed6` (2026-09-15, "Stop durable
   publications leaving their own temporary behind"), while `dev` is 101 ahead.
