@@ -8,13 +8,13 @@ import { parseTaskBranch } from "./branch-name.mjs";
 import { listWorktrees } from "./locate.mjs";
 
 export async function listTasks(repositoryRoot, { integrationBranch = "dev" } = {}) {
-  const { stdout } = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", "task/*"]);
+  const stdout = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", "task/*"]);
   const branches = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
   const worktrees = await listWorktrees(repositoryRoot);
 
   return Promise.all(branches.map(async (branch) => {
     const counts = await runGit(repositoryRoot, ["rev-list", "--left-right", "--count", `${integrationBranch}...${branch}`]);
-    const [behind, ahead] = counts.stdout.trim().split(/\s+/u).map(Number);
+    const [behind, ahead] = counts.trim().split(/\s+/u).map(Number);
     const parsed = parseTaskBranch(branch);
 
     return {

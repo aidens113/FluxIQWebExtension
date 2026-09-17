@@ -12,7 +12,7 @@ import { locateTask } from "./locate.mjs";
 export async function abandonTask({ repositoryRoot, id, integrationBranch = "dev", force = false, allowRunning = false, dryRun = false }) {
   const task = await locateTask(repositoryRoot, id);
 
-  const { stdout } = await runGit(repositoryRoot, ["rev-list", "--count", `${integrationBranch}..${task.branch}`]);
+  const stdout = await runGit(repositoryRoot, ["rev-list", "--count", `${integrationBranch}..${task.branch}`]);
   const unmerged = Number(stdout.trim());
   if (unmerged > 0 && !force) {
     throw new Error(`${task.branch} has ${unmerged} commit(s) that never reached ${integrationBranch}. Abandoning discards them; pass --force if that is what you mean.`);

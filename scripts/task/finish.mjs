@@ -24,7 +24,7 @@ export async function finishTask({ repositoryRoot, id, integrationBranch = "dev"
     throw new Error(`${workRoot} has ${state.dirtyLines.length} uncommitted or untracked change(s) (${state.dirtyLines.slice(0, 3).map((line) => line.trim()).join("; ")}). Commit or discard them: a task merges what is in its history, never what is lying in its tree.`);
   }
 
-  const mainBranch = (await runGit(repositoryRoot, ["rev-parse", "--abbrev-ref", "HEAD"])).stdout.trim();
+  const mainBranch = (await runGit(repositoryRoot, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
   if (task.worktree && mainBranch !== integrationBranch) {
     throw new Error(`${repositoryRoot} is on ${mainBranch}, not ${integrationBranch}, so there is nothing here to merge task ${id} into. Switch it first.`);
   }

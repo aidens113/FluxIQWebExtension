@@ -16,8 +16,8 @@ export async function nextTaskId(repositoryRoot, { integrationBranch = "dev" } =
   const subjects = await runGit(repositoryRoot, ["log", "--first-parent", "--format=%s", integrationBranch]);
 
   const used = [
-    ...branches.stdout.split("\n").map((line) => OPEN.exec(line.trim())?.[1]),
-    ...subjects.stdout.split("\n").map((line) => MERGED.exec(line.trim())?.[1])
+    ...branches.split("\n").map((line) => OPEN.exec(line.trim())?.[1]),
+    ...subjects.split("\n").map((line) => MERGED.exec(line.trim())?.[1])
   ].filter(Boolean).map(Number);
 
   const next = used.length === 0 ? 1 : Math.max(...used) + 1;

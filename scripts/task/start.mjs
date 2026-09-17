@@ -23,7 +23,7 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
   const branch = taskBranchName(id, slug);
 
   const existing = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", branch]);
-  if (existing.stdout.trim()) throw new Error(`${branch} already exists.`);
+  if (existing.trim()) throw new Error(`${branch} already exists.`);
 
   const roots = worktree ? resolveTaskRoots({ repositoryRoot, id, slug, core, base }) : null;
   if (roots) {

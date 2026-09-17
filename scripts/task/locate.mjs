@@ -8,7 +8,7 @@ import { runGit } from "../worktree/index.mjs";
 import { parseTaskBranch } from "./branch-name.mjs";
 
 export async function listWorktrees(repositoryRoot) {
-  const { stdout } = await runGit(repositoryRoot, ["worktree", "list", "--porcelain"]);
+  const stdout = await runGit(repositoryRoot, ["worktree", "list", "--porcelain"]);
   const worktrees = [];
   let current = null;
 
@@ -27,7 +27,7 @@ export async function listWorktrees(repositoryRoot) {
 }
 
 export async function locateTask(repositoryRoot, id) {
-  const { stdout } = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", `task/${id}-*`]);
+  const stdout = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", `task/${id}-*`]);
   const branches = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
 
   if (branches.length === 0) throw new Error(`No branch for task ${id}. Open tasks are listed by "pnpm task list".`);
