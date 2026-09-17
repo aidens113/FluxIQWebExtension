@@ -44,6 +44,12 @@ export async function abandonTask({ repositoryRoot, coreRepositoryRoot, id, inte
     await runGit(coreRepositoryRoot, ["branch", "-D", core.branch]);
   }
   if (task.worktree) await removeWorktree({ repositoryRoot, root: task.worktree.root, allowRunning });
+  // A task worked on in place leaves this checkout standing on its own branch,
+  // and git refuses to delete the branch HEAD is on. Stepping back to the
+  // integration branch first is what makes abandoning a task branch in the
+  // shared checkout -- the common case, and the cheap tier -- work at all.
+  const head = (await runGit(repositoryRoot, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+  if (head === task.branch) await runGit(repositoryRoot, ["checkout", integrationBranch]);
   await runGit(repositoryRoot, ["branch", "-D", task.branch]);
 
   return { ...result, applied: true };

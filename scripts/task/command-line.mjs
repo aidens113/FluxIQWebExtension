@@ -11,11 +11,12 @@ import { listTasks } from "./list.mjs";
 import { pruneTasks } from "./prune.mjs";
 import { startTask } from "./start.mjs";
 
-const COMMANDS = new Set(["start", "finish", "abandon", "list", "prune"]);
+// Which commands exist is command-options.mjs's to say, and parseTaskArguments
+// already refuses anything else -- checking it twice is how the two lists come
+// to disagree.
 
 export async function runTaskCommandLine({ argv, repositoryRoot, coreRepositoryRoot }) {
   const { command, positional, flags, values } = parseTaskArguments(argv);
-  if (!COMMANDS.has(command)) throw new Error(`Unknown command "${command}". Use start, finish, abandon, list or prune.`);
 
   const shared = {
     repositoryRoot,

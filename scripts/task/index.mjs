@@ -4,6 +4,7 @@
 // docs/working/agent-git-workflow-plan.md.
 
 export { parseTaskArguments } from "./arguments.mjs";
+export { COMMAND_OPTIONS } from "./command-options.mjs";
 export { abandonTask } from "./abandon.mjs";
 export { parseTaskBranch, taskBranchName } from "./branch-name.mjs";
 export { runTaskCommandLine } from "./command-line.mjs";
