@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { renderSummaryMarkdown, totalsOf } from "../../summary/index.mjs";
 import { attempt, resultLine } from "../../tests/attempts.mjs";
 import { CATALOG } from "../../tests/tasks.mjs";
 import { summarizeTask } from "../index.mjs";
@@ -65,3 +66,48 @@ test("a run that failed on the facility says where, and a refusal keeps its vari
   assert.equal(refusal("key 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 refused"), "key [redacted] refused");
   assert.equal(refusal(`${"word ".repeat(100)}end`).length, 320);
 });
+
+// run-mu5vfd6o-d98abd77: `member-directory` / `member-left` declares
+// `target_not_found` / `web.target.not_found`, reported exactly that after the
+// wrong-row fix, and still read `failed` in the row, the totals and the table.
+test("a run that reports the failure its scenario declared reads as a pass, with the runner's verdict no longer deciding", () => {
+  const declared = { category: "target_not_found", code: "web.target.not_found" };
+  const bundle = (evaluation) => ({ evaluation, run: null, liveLlm: null, flowLane: null });
+  const refusal = {
+    verdict: "passed", facilityFailure: null, flowCreated: true, oracleVerdict: "passed",
+    automationFailureReported: declared, automationFailureExpected: declared,
+    actions: [{ actionType: "web.dom.click" }], extraction: null, llm: { mode: "live", calls: 4 },
+  };
+  // What the Lab printed is still the runner's own verdict and category.
+  const printed = attempt({ code: 1, stdout: resultLine({ verdict: "failed", failureCategory: "action.dispatch" }) });
+
+  const row = summarizeTask(CATALOG[0], [{ attempt: 1, exitCode: 1, ramFault: null }], printed, bundle(refusal));
+  assert.equal(row.verdict, "passed", "the evaluation's verdict, not the Lab's printed one");
+  assert.equal(row.succeeded, true);
+  assert.equal(row.failureCategory, null, "a passed run carries no category, whatever the runner said");
+  assert.equal(row.runnerMessage, null);
+  assert.deepEqual([row.declaredFailure, row.automationFailure], ["target_not_found/web.target.not_found", "target_not_found/web.target.not_found"]);
+  assert.match(renderSummaryMarkdown(summaryOf([row])), /as declared: target_not_found\/web\.target\.not_found/u);
+
+  // A run that refused differently, which the evaluation fails: the row reads it as the failure it is.
+  const wrong = { ...refusal, verdict: "failed", failureCategory: "action.dispatch", automationFailureReported: { category: "timeout", code: "web.action.timeout" } };
+  const missed = summarizeTask(CATALOG[0], [], printed, bundle(wrong));
+  assert.deepEqual([missed.verdict, missed.succeeded, missed.failureCategory], ["failed", false, "action.dispatch"]);
+  assert.equal(missed.automationFailure, "timeout/web.action.timeout");
+  assert.doesNotMatch(renderSummaryMarkdown(summaryOf([missed])), /as declared/u);
+
+  // An ordinary run, and one with no evaluation at all, still read the Lab's printed verdict.
+  const ordinary = summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({}) }), bundle({ ...refusal, automationFailureExpected: null, automationFailureReported: null, oracleVerdict: "passed", verdict: "passed" }));
+  assert.deepEqual([ordinary.verdict, ordinary.declaredFailure], ["passed", null]);
+  const unevaluated = summarizeTask(CATALOG[0], [], printed, bundle(null));
+  assert.deepEqual([unevaluated.verdict, unevaluated.failureCategory], ["failed", "action.dispatch"]);
+});
+
+/** The campaign summary a set of rows renders as, with only the members the Markdown reads. */
+function summaryOf(tasks) {
+  return {
+    campaignId: "campaign-test", startedAt: "2026-09-17T18:00:00.000Z", finishedAt: "2026-09-17T19:00:00.000Z",
+    options: { profiles: { create: "create", repair: "repair" }, provider: "deepseek", model: "deepseek-chat", maxAttempts: 2 },
+    totals: totalsOf(tasks), tasks,
+  };
+}

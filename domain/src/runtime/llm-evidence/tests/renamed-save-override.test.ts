@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateWebRuntimeTargetOverrideEvidence } from "..";
+import { WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "../limits";
 import { elementFillsRepairableParameter, webFailureRepairParameters } from "../repairable-parameters";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 
@@ -108,7 +109,18 @@ const failurePacket = () => sanitizeWebLlmSnapshotWithBindings(capturedRenamedRe
   budget: "failure",
   failedAction: { repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) }
 });
-const clickAction = { nodeId: "save-changes", definitionId: "web.output.dom-click" };
+/**
+ * Save as the recording captured it on the unarmed page: the id, the test id
+ * and the label the redesign drops, the submit type, and the form it sits in.
+ * Core passes this beside the failed action's identity, and without it the
+ * check cannot tell a renamed Save from another control in Save's place.
+ */
+const RECORDED_SAVE = {
+  tagName: "button", selector: "#save-settings", id: "save-settings", testId: "save-changes", text: "Save changes", visibleText: "Save changes",
+  accessibleName: "Save changes", implicitRole: "button", context: FORM_SECTION,
+  attributes: { id: "save-settings", class: "btn btn-primary", type: "submit", "data-testid": "save-changes" }
+};
+const clickAction = { nodeId: "save-changes", definitionId: "web.output.dom-click", recordedTarget: { element: RECORDED_SAVE } };
 const override = (handle: string) => ({ handles: { element: handle } });
 
 test("the failure packet shows the renamed Save as the page's one submit control, by its accessible name and never by selector", () => {
@@ -116,7 +128,10 @@ test("the failure packet shows the renamed Save as the page's one submit control
   assert.equal(evidence.failedTargetUnknown, true);
   // The key a repair fills is named, and the packet still fits Core's gate with it.
   assert.deepEqual(Object.keys(evidence.repairParameters ?? {}), ["element"]);
-  assert.ok(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= 3_000);
+  // Still inside Core's own gate for a failure packet, whatever that number is:
+  // it was 3,000 bytes and became the exploration figure on 2026-09-17, and
+  // what this row is about is that the packet fits it, not what it is.
+  assert.ok(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure);
   const submits = evidence.elements.filter((element) => element.controlType === "submit");
   // Named by its accessible name; the visible text is the same words, so it is not repeated.
   assert.deepEqual(submits, [{ target: "target.2", tag: "button", name: "Apply changes", controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
@@ -147,48 +162,70 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), clickAction, selectors), resolvedSave);
   // The same repair as the live lane asks for it: a recorded click, named by
   // the output its policy node dispatches.
-  const recordedClick = { nodeId: "save-changes", definitionId: "builtin.policy.action", outputId: "web.dom.click" };
+  const recordedClick = { nodeId: "save-changes", definitionId: "builtin.policy.action", outputId: "web.dom.click", recordedTarget: { element: RECORDED_SAVE } };
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), recordedClick, selectors), resolvedSave);
 });
 
 test("refuses an override naming a handle it was never shown, or anything on the page a click cannot use", () => {
   const { evidence, selectors } = failurePacket();
   // Three controls a click can use are described -- Discard, the renamed Save
-  // and the text field -- so a handle that resolves to none of them has no
-  // single compatible element to fall back to, and is refused as ambiguous.
-  // Core's preflight turns that into "ambiguous in current sanitized evidence".
+  // and the text field -- and a handle that resolves to none of them is refused
+  // as one the packet never issued. Nothing is put in its place.
   const clickable = evidence.elements.filter((element) => elementFillsRepairableParameter(element, "clickable")).map((element) => element.target);
   assert.deepEqual(clickable, ["target.1", "target.2", "target.3"]);
   const unpressable = evidence.elements.filter((element) => !clickable.includes(element.target)).map((element) => element.target);
   assert.ok(unpressable.length > 0, "the packet described nothing a click cannot use");
   for (const handle of ["save-changes", "#save-settings", "Save changes", "target.0", "target.99"]) {
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "ambiguous", reason: "handle_not_issued" }, handle);
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "absent", reason: "handle_not_issued" }, handle);
   }
   for (const handle of unpressable) {
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "ambiguous", reason: "handle_incompatible" }, handle);
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "absent", reason: "handle_incompatible" }, handle);
   }
   // An invented parameter is refused whatever handle rides with it.
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: { element: "target.2", button: "target.2" } }, clickAction, selectors), { status: "absent", reason: "parameter_not_offered" });
 });
 
-test("does not tell a pressable wrong control from Save: Discard, named by its own handle, is accepted as Discard", () => {
+// The two controls this check used to accept. Both are on the page, both are
+// things a click can use, and neither is Save: Discard changes is the reset
+// beside it -- the scenario's pressable wrong answer -- and the workspace name
+// field is not a button at all. The judgement is now the domain's, not the
+// scenario oracle's after the fact.
+test("refuses the reset beside Save and the field above it, as controls that do something else", () => {
   const { evidence, selectors } = failurePacket();
-  // The check proves the model was shown the control and that a click can use
-  // it, not that it is the right one. Discard and the text field both pass it,
-  // each resolved to its own fingerprint and never to Save's, so what stops a
-  // run that presses one is the scenario's oracle, not this check.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), clickAction, selectors), {
-    status: "resolved",
-    target: {
-      handles: { element: "target.1" },
-      handleResolution: "named",
-      tagName: "button",
-      accessibleName: "Discard changes",
-      selector: "#discard-settings",
-      metadata: { controlType: "reset", formId: "settings-form" }
-    }
+  const notEquivalent = { status: "absent", reason: "target_not_equivalent" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), clickAction, selectors), notEquivalent);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.3"), clickAction, selectors), notEquivalent);
+});
+
+// identity-drift's `save-and-exit`: Save is gone and a different action stands
+// in its slot, alone in the form, carrying nothing but its own text. The live
+// run proposed it (`run-mu4y3pm6-5d09061a`), which is the whole task: the
+// control is pressable, it is in Save's place, and pressing it leaves the
+// workspace as well as saving it.
+/** Save's slot with the lone `<button>Save changes and exit</button>` in it: no id, no test id, no type. */
+const SAVE_AND_EXIT_SELECTOR = "main > form > section:nth-of-type(1) > div > button";
+
+const capturedSaveAndExit = {
+  ...capturedRenamedRedesign,
+  interactiveElements: capturedRenamedRedesign.interactiveElements
+    .filter((element) => !("testId" in element) || element.testId !== "discard-changes")
+    .map((element) => element.selector === RENAMED_SAVE_SELECTOR
+      ? { tagName: "button", selector: SAVE_AND_EXIT_SELECTOR, text: "Save changes and exit", visibleText: "Save changes and exit", accessibleName: "Save changes and exit", implicitRole: "button", context: FORM_SECTION }
+      : element)
+};
+
+test("refuses Save changes and exit, the different action standing in Save's slot", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings(capturedSaveAndExit, {
+    budget: "failure",
+    failedAction: { repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) }
   });
-  const textField = validateWebRuntimeTargetOverrideEvidence(evidence, override("target.3"), clickAction, selectors);
-  assert.equal(textField.status, "resolved");
-  assert.deepEqual(textField.status === "resolved" ? [textField.target.tagName, textField.target.selector] : undefined, ["input", "#display-name"]);
+  const saveAndExit = evidence.elements.filter((element) => element.name === "Save changes and exit");
+  assert.equal(saveAndExit.length, 1, "the packet describes the one control in Save's slot");
+  // It is the form's only button, so what refuses it is its name and not its
+  // place: it does what Save did and then something else.
+  assert.deepEqual(evidence.elements.filter((element) => element.tag === "button").map((element) => element.name), ["Save changes and exit"]);
+  assert.deepEqual(
+    validateWebRuntimeTargetOverrideEvidence(evidence, override(saveAndExit[0]!.target), clickAction, selectors),
+    { status: "absent", reason: "target_not_equivalent" }
+  );
 });

@@ -8,7 +8,8 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
   const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
   const selectedCandidate = selectedTargetCandidate(adaptedTarget);
   const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
-  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  const chosen = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  const element = withRecordedRecord(chosen, payload);
   // The selector keeps the order it always had, adapted first. What changed is
   // that the identity now follows it whenever the adaptation names another
   // element, so the page judges the selector's match by the same description.
@@ -24,6 +25,42 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
     ...(element ? { element } : {}),
     ...(explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {})
   });
+}
+
+/**
+ * The dispatched element, carrying the record the *recording* named whatever
+ * else superseded it.
+ *
+ * **Why this is not just another signal in the chain above.** That chain picks
+ * one source for the whole identity, and on an applied repair the adapted
+ * target wins it. A repair's target is normalized by Core from
+ * `parameters.target` alone and never sees `parameters.element`
+ * (`runtime/io-policy.ts`), so it carries no `context` at all -- and Core's
+ * `normalizeFingerprint` has no `context` key either
+ * (`model/action-element-target.ts`). Measured on the real path: a renamed
+ * control inside a list dispatched with `context.record: null`, so the page's
+ * record gate was off for exactly the steps a repair had touched
+ * (reports/w2-wrong-row-acted-on.md §8).
+ *
+ * **Why carrying it is right rather than a patch.** The rule above compares
+ * *descriptive* signals only, and its own documentation says why `selector` and
+ * `xpath` are exempt: a target that merely locates the recorded control
+ * somewhere else keeps the recorded identity. The record is in that same
+ * category, and more strongly. A repair says what the control is now called; it
+ * has no standing to say which of 240 rows it belongs to, and the shape it
+ * arrives in proves the point -- `runtime/llm-evidence/target-override.ts`
+ * writes `listIndex` and `listTotal`, a position in the list, which is exactly
+ * the signal a departed member invalidates.
+ *
+ * So: the adapted source keeps the identity it won, and the record comes from
+ * the recording. An adapted source that somehow names a record of its own keeps
+ * it, because then it is describing a record and not merely inheriting one.
+ */
+function withRecordedRecord(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
+  if (!element || element.context?.record) return element;
+  const record = elementRecord(objectValue(objectValue(payload.element)?.context)?.record);
+  if (!record) return element;
+  return { ...element, context: { ...element.context, record } };
 }
 
 /**

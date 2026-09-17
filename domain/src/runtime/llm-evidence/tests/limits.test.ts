@@ -21,12 +21,16 @@ const largePage = (count: number, extra: Record<string, unknown> = {}): Record<s
   ...extra,
 });
 
-test("the failure budget is Core's own gate, and the exploration budget sits under the shared ceiling", () => {
+// A repair and a Flow being authored now see the same amount of the same page:
+// Core raised its failure gate to the exploration figure, because a packet that
+// shows a repair eight rows and none of their values cannot tell it which
+// record to act on. The assertion is the relationship, not the number -- the
+// number is Core's to choose and this file must never restate it.
+test("the failure budget is Core's own gate, at parity with exploration and under the shared ceiling", () => {
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, 3_000);
+  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, 6_000);
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, 12_000);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure < WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true);
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration < WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, true);
 });
 
@@ -35,12 +39,15 @@ test("applies each path's default when the caller names no budget", () => {
   assert.equal(bytes(exploration) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true, `${bytes(exploration)} bytes`);
   const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure" });
   assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
-  assert.equal(failure.elements.length < exploration.elements.length, true);
+  // The two defaults are now the same number, so the same page produces the
+  // same packet on both paths. That equality is the change: a repair is no
+  // longer shown less of the page than the authoring of the Flow was.
+  assert.deepEqual(failure, exploration);
 });
 
 test("clamps a request above the path's ceiling instead of honouring it", () => {
   // Core's parser drops a failure packet over its gate whole, taking the
-  // diagnosis with it, so a host asking for more must still get 3,000.
+  // diagnosis with it, so a host asking for more must still get Core's number.
   const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure", maxEvidenceBytes: 9_000 });
   assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
   const exploration = sanitizeWebLlmSnapshot(largePage(60), { maxEvidenceBytes: 50_000 });

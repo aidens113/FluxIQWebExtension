@@ -20,6 +20,7 @@ export function summarizeTask(task, attempts, final, bundle) {
   const spend = reportedSpend(liveLlm, flowLane);
   const recovery = evaluation?.harnessRecovery ?? flowLane?.harnessRecovery ?? null;
   const automationFailure = evaluation?.automationFailureReported ?? run?.automationFailure ?? null;
+  const declaredFailure = evaluation?.automationFailureExpected ?? null;
   const oracleVerdict = evaluation?.oracleVerdict ?? result?.observation?.oracleVerdict ?? null;
   const providerCalls = liveLlm?.observed?.calls ?? evaluation?.llm?.calls ?? null;
   const repairing = task.kind === "repair";
@@ -30,7 +31,15 @@ export function summarizeTask(task, attempts, final, bundle) {
     const dataset = task.judgeBy === "expected-dataset" ? datasetJudgement(evaluation?.extraction ?? result?.observation?.extraction ?? null) : null;
     judgement = { by: task.judgeBy, passed: dataset === null ? (oracleVerdict === null ? null : oracleVerdict === "passed") : dataset.passed, oracleVerdict, dataset };
   }
-  const verdict = result?.verdict ?? "no-result";
+  // The run's own `evaluation.json` is the verdict, and the Lab's printed
+  // result is the fallback for a run that has none (the existing and clone
+  // targets run on no evaluation lane and publish no evaluation). The two
+  // agree except where a scenario or variant declares the failure it must
+  // report: such a run passes by reporting exactly that failure, which only
+  // the evaluation applies (`packages/test-runner/src/run-evaluation`). Read
+  // from the printed result alone, a correct refusal reads as a failure here,
+  // in the totals, and in every dashboard built on them.
+  const verdict = result ? (evaluation?.verdict ?? result.verdict) : "no-result";
   const lastFault = attempts.at(-1)?.ramFault ?? null;
   return {
     taskId: task.id, scenarioId: task.scenarioId, workflowId: task.workflowId ?? null, variantId: task.variantId ?? null, kind: task.kind,
@@ -54,8 +63,13 @@ export function summarizeTask(task, attempts, final, bundle) {
     reportedCostUsd: spend.costUsd,
     spendSource: spend.source,
     callsWithoutReportedTokens: spend.callsWithoutReportedTokens,
-    failureCategory: result?.failureCategory ?? evaluation?.failureCategory ?? refusal?.category ?? (lastFault ? `ram-fault: ${lastFault}` : null),
-    automationFailure: automationFailure ? [automationFailure.category, automationFailure.code].filter(Boolean).join("/") : null,
+    // A passed run has no failure category: the runner's own category survives
+    // on the evaluation's judgement invariant, which is where a refusal the
+    // declaration passed records what the runner had made of it.
+    failureCategory: verdict === "passed" ? null : result?.failureCategory ?? evaluation?.failureCategory ?? refusal?.category ?? (lastFault ? `ram-fault: ${lastFault}` : null),
+    automationFailure: failureLabel(automationFailure),
+    /** The failure the scenario or variant declared this run must report, when it declared one. */
+    declaredFailure: failureLabel(declaredFailure),
     issueCodes: distinct([
       ...calls.flatMap((call) => call.validationCodes ?? []),
       ...(recovery?.interventions ?? []).flatMap((item) => item.validationCodes ?? []),
@@ -67,8 +81,13 @@ export function summarizeTask(task, attempts, final, bundle) {
     // What stopped the run, when the run itself did not say: the runner's
     // refusal for an attempt with no result, or the facility failure a
     // finished bundle recorded.
-    runnerMessage: result ? (result.verdict === "passed" ? null : describeFacilityFailure(evaluation?.facilityFailure)) : shortMessage(refusal?.message),
+    runnerMessage: result ? (verdict === "passed" ? null : describeFacilityFailure(evaluation?.facilityFailure)) : shortMessage(refusal?.message),
   };
+}
+
+/** A failure as `category/code`, its category alone when it carries no code, and `null` for none. */
+function failureLabel(failure) {
+  return failure ? [failure.category, failure.code].filter(Boolean).join("/") : null;
 }
 
 const MAX_MESSAGE_CHARS = 320;

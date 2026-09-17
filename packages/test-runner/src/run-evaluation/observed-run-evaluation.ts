@@ -1,5 +1,6 @@
 import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type LlmUsage, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import { declaredFailureOutcome } from "./declared-failure-verdict.js";
 import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
 import type { FlowLaneEvidence } from "./flow-lane-evidence-sizes.js";
 import type { RunOutcome } from "./run-outcome.js";
@@ -68,10 +69,26 @@ export type ObservedRun = {
  * Measured packets are also judged against their budget here
  * (`evidenceBudgetInvariant`), so a packet over it fails the run and its bench
  * row alike.
+ *
+ * A run whose scenario or variant declares the failure it must report is
+ * judged by whether it reported exactly that failure rather than by whether it
+ * succeeded (`declaredFailureOutcome`), which is likewise stated once here so
+ * a single `lab run` and its bench row cannot read a correct refusal
+ * differently.
  */
 export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   const { identity, outcome, observation, evidence } = input;
-  const judged = withEvidenceBudget(outcome, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
+  // The declaration first, the evidence budget on top of it: a run judged by
+  // the failure it declared is still a run, and a packet over the budget fails
+  // it as `performance.budget` exactly as it fails any other.
+  const declared = declaredFailureOutcome({
+    expected: identity.expectedFailure,
+    reported: observation.automationFailureReported,
+    oracleVerdict: observation.oracleVerdict,
+    facilityFailure: input.facilityFailure,
+    outcome,
+  });
+  const judged = withEvidenceBudget(declared, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
   const evaluation: RunEvaluation = {
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     runId: outcome.runId,

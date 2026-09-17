@@ -16,6 +16,13 @@ fix gives the recording a record identity -- which row, card or list item the
 control sat in -- and refuses any match in a different one, at both acting
 paths, failing closed.
 
+**Section 8 is a follow-up and should be read before trusting this end to end.**
+The gate was reaching the page on a recorded step and **not** on a step an
+applied repair had rewritten -- so it was off for exactly the steps the loop had
+touched. That is measured, closed and tested there. It also answers why the
+record is not expressed through Core's `entityId`/`entityKind`, with numbers,
+and why no Core change is needed.
+
 ---
 
 ## 1. What happened, with the decision points
@@ -401,3 +408,179 @@ pinned to their record, which is a strengthening:**
    wrong button back. The two changes are complementary, and the gate is the one
    that holds whichever strategy produced the answer. `element-finder.ts` and
    the three e2e specs are another worker's; nothing here touches them.
+
+---
+
+## 8. Does the record survive an applied repair? (follow-up)
+
+**Question put by the coordinator**: Core normalises an element target through a
+fixed whitelist that does not include `context`, and that normaliser runs on
+every policy output dispatch and on an applied repair's target. When a repair is
+applied to a recorded step inside a list, does the record identity still reach
+the veto?
+
+**Answer: it did not. It does now.** Everything below was executed, not
+reasoned: the probes ran the domain's real `outputTargetFromPayload` and
+`webAutomationActionFromGatewayCommand` against Core's real
+`normalizeAutomationStudioElementTarget`, and they are kept in this session's
+scratchpad as `probe-a.mjs`, `probe-b.mjs` and `probe-entity-score.mjs`.
+
+### 8.1 Confirmed: Core's whitelist has no `context`
+
+`AS/model/action-element-target.ts` `normalizeFingerprint` (line 131) builds
+exactly: `visibleText, accessibleName, label, id, testId, automationId,
+entityId, entityKind, tagName, role, selector, xpath, queryPath, statePath,
+url, classNames, bounds, attributes, metadata`. No `context`.
+
+### 8.2 Measured: which paths carried the record, and which dropped it
+
+The recorded element carries `context.record = {data-member-id, usr_3c95c2}`.
+"Rule 0" means `command.element.context.record` arrived, which is the only thing
+the page's gate reads.
+
+| Path | adapted supersedes | record on `command.element` | rule 0 |
+| --- | --- | --- | --- |
+| recorded, untouched | no | present | on |
+| recorded + Core's dispatch rewrite | no | present | on |
+| **repair applied, as stored** | **yes** | **null** | **off** |
+| **repair applied + Core's rewrite** | **yes** | **null** | **off** |
+
+The renamed-Save-in-a-row case is the third and fourth rows: a repair naming the
+control "Save changes" where the recording said "Save" makes
+`adaptedTargetSupersedesRecording` true, and the record went with the identity
+it replaced. The gate was therefore off for **exactly the steps a repair had
+touched** -- which is precisely where a page has been changing underneath the
+Flow.
+
+**Why, in two mechanisms that compound.** `elementFingerprintSources`
+(`targets.ts`) picks *one* source for the whole identity, and on a repair the
+adapted target wins it. That adapted target is normalised by Core from
+`parameters.target` **alone**; it never sees `parameters.element`, so it cannot
+inherit the recording's context either. The recorded record did survive in the
+untyped `options.element` bag, but `recordedTarget()` (`resolve-target.ts`)
+reads the declared `action.element` first and falls back only when it is empty,
+which it is not.
+
+### 8.3 `entityId` / `entityKind`: they survive Core, and they still cannot do this
+
+The preferred fix was to express a record through Core's generic record
+identity. Both signals **do** survive Core's whitelist, and Core's re-derivation
+from `parameters.element` propagates them onto its own target -- verified. Three
+findings stopped me using them, in increasing order of importance.
+
+1. **The domain strips them today.** `elementFingerprint` writes
+   `entityId: undefined, entityKind: undefined` deliberately ("a browser
+   recording has no source for any of them"). That is a change here either way,
+   and on its own it is not an objection.
+2. **They still do not survive the repair path.** With `entityId` on the
+   recorded element, the renamed-repair rows above still dispatched
+   `entityId: null`, because Core normalises the repair's target in isolation.
+   The entity route therefore needs the same carry-across fix as 8.4 *and* a
+   scoring change; it does not replace it.
+3. **They are scored, and the separation they buy is a tenth of what a decision
+   needs.** `entityId` has weight 24 in
+   `fingerprinting/element-fingerprint.ts` and counts among the "strong match"
+   signals. Measured against Core's own matcher, on a candidate otherwise
+   identical to the recording:
+
+   | recorded | candidate | normalized | confidence |
+   | --- | --- | --- | --- |
+   | no entity | no entity | 1.000 | 0.94 |
+   | entity | **cannot answer** | **0.697** | 0.655 |
+   | entity | agrees | 1.000 | 1.00 |
+   | entity | **different record** | **0.640** | 0.602 |
+
+   Two consequences. Putting an `entityId` on every recorded row control costs
+   **0.303** of normalized score against every candidate that cannot answer it,
+   and today none can -- Core builds candidates from visual layers and the
+   extension puts no entity on them -- so this would move Core's calibrated
+   matching for every element the recorder describes, against a
+   `TARGET_SCORE_FLOOR` of 0.35. And the right record and the wrong record
+   separate by **0.057**, against the **0.2** margin a winner must beat the
+   runner-up by; 0.640 for another member's row is also comfortably above the
+   veto's floor of 0.
+
+   This is the same finding `candidates.ts` recorded for `tablePosition` (0.037
+   against the same 0.2 margin), reached independently: **a record is a gate,
+   not a weight.** Carrying it on a scored signal makes it worse at the job --
+   it cannot decide, and it disturbs everything that can.
+
+### 8.4 The fix taken, and why no Core diff is needed
+
+`domain/src/output-nodes/targets/targets.ts`, `withRecordedRecord`: the adapted
+source keeps the identity it won, and **the record comes from the recording**.
+
+This is not a patch around the rule; it is the rule's own exemption. Its
+documentation already says why `selector` and `xpath` are excluded from the
+comparison -- "a target that only locates the recorded control somewhere else
+keeps the recorded identity". A record is in that category and more strongly.
+**A repair says what a control is now called; it has no standing to say which of
+240 rows it belongs to.** The shape a repair arrives in proves the point:
+`runtime/llm-evidence/target-override.ts` writes `listIndex` and `listTotal`, a
+*position* in the list, which is exactly the signal a departed member
+invalidates. An adapted source that names a record of its own keeps it, because
+then it is describing a record rather than inheriting one.
+
+One change covers both ends: `commandElementFingerprint` reads `target.element`
+first, and that is what `outputTargetFromPayload` produced, so
+`client/gateway-mapping.ts` needed no edit. Re-measured after the change, the
+renamed repair dispatches `accessibleName: "Member actions"` **and**
+`record: {data-member-id, usr_3c95c2}`, before and after Core's rewrite.
+
+**No Core diff is required.** Core is not losing anything it was asked to keep;
+the hole was entirely in this repo's producer, which chose one identity source.
+For the record, Core does also offer a non-scored carrier if one is ever wanted:
+`promotedFingerprintMetadataKeys` (line 259) does not list `context`, so
+`sanitizeJsonObject(metadata, promoted)` passes `fingerprint.metadata.context`
+through **intact** -- verified. I did not write into it, because `targets.ts`
+has an explicit decision not to write behind its declared fields into Core's
+metadata slot and no consumer needs it today. If the generic expression is still
+wanted, its prerequisite is that Core's candidates answer `entityId`, and that
+is reachable from **this** repo (the visual-layer metadata Core reads), not from
+Core -- but 8.3 says it would still not decide anything.
+
+### 8.5 Tests
+
+| File | Rows |
+| --- | --- |
+| `domain/output-nodes/targets/tests/targets.test.ts` | a repair inside a list keeps its own name and still carries the recorded record; the same after Core's rewrite, asserting first that Core's fingerprint has no `context`, so the row fails if the loss it compensates for ever goes away; an adapted target naming a record of its own is not overwritten; a recording that named no record still dispatches without one |
+| `content/action-runtime/tests/wrong-row-resolution.test.ts` | a repaired step is refused when the control it finds sits in another record; and resolves when it sits in the recorded one |
+
+The extension rows pin the refusal **strategy by strategy** rather than matching
+the phrase anywhere in the message. That is not belt and braces: while the row
+was being written the stub page still showed the *recorded* name, so the score
+refused the match at -0.11 and the row passed while testing nothing about
+records. The tightened assertion fails in that state.
+
+### 8.6 Commands and observed results
+
+| Command | Result |
+| --- | --- |
+| scratchpad `probe-a.mjs` / `probe-b.mjs` (real domain, real Core normaliser) | the 8.2 table; after the fix, the record is present on every row |
+| scratchpad `probe-entity-score.mjs` (Core's real matcher) | the 8.3 table |
+| `domain`: `tsc -p tsconfig.json --noEmit` | clean |
+| `domain`: `node scripts/test-domain.mjs` | `# tests 661  # pass 654  # fail 7` -- the 4 new rows pass; the same seven pre-existing `llm-evidence` failures as section 4, unchanged in name and count |
+| `apps/extension`: `tsc -p tsconfig.json --noEmit` | clean |
+| `apps/extension`: `node scripts/test-extension.mjs` | `# pass 678  # fail 0` |
+| `apps/scenario-lab`: `pnpm test` | `# pass 242  # fail 0` |
+| `node scripts/structure-audit.mjs` | `passed (63 warning(s), 122 baselined)` |
+| `member-directory --variant member-left --flow`, provider-free, after the domain change | `run-mu5wev6x-fd65956b`: oracle passed, reported failed, `web.target.not_found`, 1 action -- identical to `run-mu5vfd6o-d98abd77`, so the carry-across changed nothing on the unrepaired path |
+
+### 8.7 Not verified, and one warning I added
+
+- **No live repair was run**, by the no-provider instruction. What is shown is
+  that a repaired step's dispatched element carries the record, and that the
+  page refuses on it -- through the real domain code and Core's real normaliser,
+  at unit level. An applied repair replaying against a real page is not shown.
+- **The repair shape is read from `runtime/llm-evidence/target-override.ts` as
+  it stands in the working tree**, which another worker is editing. If the
+  applied-repair shape changes, 8.2's third row is the one to re-measure.
+- **I added one advisory warning.**
+  `domain/src/output-nodes/targets/targets.ts` is now 420 lines, past the
+  400-line advisory threshold (63 warnings, up from 62; the audit still passes).
+  The split is already prescribed by that directory's own barrel comment --
+  "the fingerprint normalizer, the output-target builder, and the JSON value
+  readers are three separate things sharing one file today" -- and the context
+  readers are now a fourth. I did not do it here: it is a shared module, other
+  workers have the domain open, and it would turn a correctness follow-up into a
+  refactor. Flagged for scheduling rather than left silent.

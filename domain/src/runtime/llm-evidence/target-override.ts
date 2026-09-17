@@ -7,9 +7,16 @@
 // against the packet the model was shown: `target.3` is a name this domain
 // minted for the third element it described, and is a key in a map nobody else
 // holds. A handle that was invented, or that was trimmed out of the packet, or
-// that names a control the failed verb cannot use, resolves to the single
-// compatible element or to nothing at all. There is no path by which a string
-// the model chose addresses the page.
+// that names a control the failed verb cannot use, resolves to nothing at all.
+// There is no path by which a string the model chose addresses the page.
+//
+// Being shown a control the verb can use is not the same as it being the
+// control the failed action acted on, and until 2026-09-17 nothing asked the
+// second question: every refusal task in that day's live repair campaign came
+// back with a proposed target override on a page whose honest answer was that
+// there is nothing to repair. `./target-equivalence.ts` is that question, and
+// what the failed node addressed -- the recording, or the repair that
+// superseded it -- is what Core now passes for it to be answered against.
 //
 // What comes back is the domain's own resolution, which Core carries without
 // reading: an element fingerprint. It is fingerprint-first on purpose. The
@@ -42,6 +49,7 @@ import {
   WEB_REPAIRABLE_ELEMENT_PARAMETER
 } from "./repairable-parameters";
 import type { WebLlmPageEvidence } from "./sanitize";
+import { webRepairEquivalenceRefusal } from "./target-equivalence";
 import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
@@ -57,9 +65,8 @@ import type {
  * oversight. Core writes the target it is handed straight into the node's
  * parameters, so a target that stayed as the model wrote it would reach
  * execution as a bare handle map, which addresses nothing. Every accepted
- * repair therefore comes back as `resolved`, and whether the model's own
- * handles were the ones used is recorded inside the resolution as
- * `handleResolution` instead of being thrown away.
+ * repair therefore comes back as `resolved`, carrying the fingerprint of the
+ * element the model's own handle named.
  */
 export function validateWebRuntimeTargetOverrideEvidence(
   evidence: WebLlmPageEvidence,
@@ -80,24 +87,26 @@ export function validateWebRuntimeTargetOverrideEvidence(
   if (Object.keys(handles).some((name) => !webRepairableParameterFor(definitionId, name))) return { status: "absent", reason: "parameter_not_offered" };
   if (declared.some((parameter) => parameter.required && handles[parameter.name] === undefined)) return { status: "absent", reason: "parameter_missing" };
 
-  const resolved = new Map<string, { element: WebLlmEvidenceElement; named: boolean }>();
+  const resolved = new Map<string, WebLlmEvidenceElement>();
   for (const [name, handle] of Object.entries(handles)) {
     const parameter = webRepairableParameterFor(definitionId, name)!;
-    const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
     const named = evidence.elements.filter((element) => element.target === handle);
     // Only a packet altered after it was issued names one handle twice.
     if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
-    if (named.length === 1 && elementFillsRepairableParameter(named[0]!, parameter.role)) {
-      resolved.set(name, { element: named[0]!, named: true });
-      continue;
-    }
-    // The handle did not stand: it was never issued, or it names something
-    // this verb cannot use. The one compatible element stands in for it; with
-    // none there is nothing to repair to, and with several the domain will not
-    // choose -- and says which way the handle failed.
-    if (candidates.length === 0) return { status: "absent", reason: "no_compatible_element" };
-    if (candidates.length > 1) return { status: "ambiguous", reason: named.length === 1 ? "handle_incompatible" : "handle_not_issued" };
-    resolved.set(name, { element: candidates[0]!, named: false });
+    // The handle has to stand on its own. Nothing is substituted for it: the
+    // single compatible element used to be, and that made the domain the
+    // author of a repair the model never proposed -- the search box for a
+    // revenue field, the only link on a guard's page for a control that was
+    // never there (live repair campaign, 2026-09-17). `no_compatible_element`
+    // still separates "nothing here could do this at all" from a bad handle.
+    const compatible = evidence.elements.some((element) => elementFillsRepairableParameter(element, parameter.role));
+    if (named.length === 0) return { status: "absent", reason: compatible ? "handle_not_issued" : "no_compatible_element" };
+    if (!elementFillsRepairableParameter(named[0]!, parameter.role)) return { status: "absent", reason: compatible ? "handle_incompatible" : "no_compatible_element" };
+    // Shown it, and the verb can use it. Whether it is the control the failed
+    // action acted on is a different question, and the one that was missing.
+    const equivalence = webRepairEquivalenceRefusal({ elements: evidence.elements, named: named[0]!, role: parameter.role, recordedTarget: failedAction.recordedTarget });
+    if (equivalence) return { status: equivalence === "target_indistinguishable" ? "ambiguous" : "absent", reason: equivalence };
+    resolved.set(name, named[0]!);
   }
   const element = resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER);
   // Core writes a resolved target into the node's `target`, and a DOM output
@@ -107,7 +116,7 @@ export function validateWebRuntimeTargetOverrideEvidence(
   // ever declared before something reads it -- and such an action has nothing
   // this contract can re-point, which is what the refusal says.
   if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
-  return { status: "resolved", target: resolvedTarget(handles, element, selectors) };
+  return { status: "resolved", target: resolvedTarget(element, selectors) };
 }
 
 /**
@@ -134,18 +143,23 @@ function proposedHandles(target: AutomationStudioRuntimeTargetOverrideTarget): R
  * existed for a list extraction and nothing read it.
  */
 type WebResolvedRepairTarget = {
-  /** The handle actually used, which is the domain's own where it overrode the model. */
+  /** The handle used, which is always the one the model named. */
   handles: Record<string, string>;
-  /** Whether the handle used is the one the model named, or one the domain inferred. */
-  handleResolution: "named" | "inferred";
+  /**
+   * That the handle used is the model's own. The domain no longer has another
+   * answer: it used to substitute the single compatible element for a handle it
+   * never issued and record that as `inferred`, which made the domain the
+   * author of a repair nobody proposed. The field stays, and stays required,
+   * because a stored target is told from Core's own re-derivation of a node by
+   * exactly this key (`output-nodes/targets.ts`).
+   */
+  handleResolution: "named";
   tagName: string;
   role?: string;
   accessibleName?: string;
   visibleText?: string;
   selector?: string;
   metadata?: WebRepairElementMetadata;
-  /** What the model asked for, kept only where the domain did not use it. */
-  proposedHandles?: Record<string, string>;
 };
 
 /**
@@ -175,22 +189,19 @@ type WebRepairElementMetadata = {
 };
 
 function resolvedTarget(
-  handles: Record<string, string>,
-  resolved: { element: WebLlmEvidenceElement; named: boolean },
+  resolved: WebLlmEvidenceElement,
   selectors: ReadonlyMap<string, string> | undefined
 ): AutomationStudioRuntimeTargetOverrideTarget {
-  const handleResolution = resolved.named ? "named" : "inferred";
-  const fingerprint = elementFingerprint(resolved.element, selectors);
+  const fingerprint = elementFingerprint(resolved, selectors);
   return present<WebResolvedRepairTarget>({
-    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved.element.target },
-    handleResolution,
+    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved.target },
+    handleResolution: "named",
     tagName: fingerprint.tagName,
     role: fingerprint.role,
     accessibleName: fingerprint.accessibleName,
     visibleText: fingerprint.visibleText,
     selector: fingerprint.selector,
-    metadata: fingerprint.metadata,
-    proposedHandles: handleResolution === "inferred" ? handles : undefined
+    metadata: fingerprint.metadata
   });
 }
 

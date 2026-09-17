@@ -227,7 +227,8 @@ assert.equal(bootstrapDryRun.request.estimatedInputTokens + 512 <= 4_000, true);
 assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
 const bootstrapDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(bootstrapDryRun.request);
 assert.equal(bootstrapDeepSeekBodyTokens <= 3_000, true);
-const evidenceTools = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) }).tools;
+const evidenceRuntime = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) });
+const evidenceTools = evidenceRuntime.tools;
 const bootstrapPlanSchema = (bootstrapContext.outputSchema.properties as JsonObject | undefined)?.plan;
 assert.ok(bootstrapPlanSchema !== undefined, "the bootstrap output schema defines plan");
 const evidenceCompletionSchema: JsonObject = {
@@ -236,7 +237,9 @@ const evidenceCompletionSchema: JsonObject = {
 };
 const evidencePage = {
   schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/products", title: "Products",
-  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", selector: `[data-product='${index}']`, role: "button", name: `Product ${index}`, text: "Open this bounded product result and inspect its available non-sensitive details." })),
+  // Addressed by handle, never by locator: this domain denies `selector`, and
+  // Core refuses to carry a decision request that holds a denied key.
+  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", target: `target.${index}`, role: "button", name: `Product ${index}`, text: "Open this bounded product result and inspect its available non-sensitive details." })),
   truncated: false
 };
 const evidencePageBytes = Buffer.byteLength(JSON.stringify(evidencePage), "utf8");
@@ -244,6 +247,9 @@ assert.equal(evidencePageBytes >= 6_500 && evidencePageBytes <= 7_488, true, `ma
 const evidenceDryRun = await runAutomationStudioLlmHarness({
   ...bootstrapHarnessInput,
   taskKind: "evidence_tool_decision",
+  // Core carries no evidence without the keys the bound domain declares, so
+  // the loop's own request declares this domain's, exactly as production does.
+  deniedEvidenceKeys: evidenceRuntime.deniedEvidenceKeys,
   flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution, maxInputTokens: 5_000 },
   evidenceLoop: {
     iteration: 2,

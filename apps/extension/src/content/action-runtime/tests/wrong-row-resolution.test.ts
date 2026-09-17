@@ -39,8 +39,13 @@ import type { BrowserActionCommand } from "../../types";
 /** The recorded selector: a position in the table, which is all the page offered. */
 const ROW_SELECTOR = '[data-testid="member-rows"] > tr:nth-of-type(92) > td:nth-of-type(7) > button';
 
-/** A row action button inside a row keyed by `memberId`, answering what resolution asks of it. */
-function rowAction(memberId: string): Element {
+/**
+ * A row action button inside a row keyed by `memberId`, answering what
+ * resolution asks of it. `label` is what the page shows, so a row can be made
+ * to agree with a repaired identity in every way except the row it is in --
+ * which is what isolates the record rule from the two that score.
+ */
+function rowAction(memberId: string, label = "Row actions"): Element {
   const row = {
     localName: "tr", tagName: "TR", parentElement: null,
     getAttribute: (name: string) => (name === "data-member-id" ? memberId : null),
@@ -56,7 +61,7 @@ function rowAction(memberId: string): Element {
     isConnected: true,
     id: "",
     classList: ["x1f4a"],
-    textContent: "Row actions",
+    textContent: label,
     ownerDocument: { defaultView: { getComputedStyle: () => ({ display: "block", visibility: "visible" }) } },
     getBoundingClientRect: () => ({ x: 0, y: 0, width: 24, height: 24, top: 10, bottom: 34 }),
     getAttribute: () => null,
@@ -70,8 +75,8 @@ function rowAction(memberId: string): Element {
 }
 
 /** The page after the recorded member left: the recorded position now holds another member's row. */
-function installDirectoryPage(t: TestContext): Element {
-  const occupant = rowAction("usr_b17");
+function installDirectoryPage(t: TestContext, label?: string): Element {
+  const occupant = rowAction("usr_b17", label);
   const page = {
     querySelector: (selector: string): Element | null => (selector === ROW_SELECTOR ? occupant : null),
     querySelectorAll: (selector: string): Element[] => (selector === ROW_SELECTOR ? [occupant] : []),
@@ -120,4 +125,62 @@ test("a positional selector that lands in another record fails the step instead 
   Object.defineProperty(page, "querySelectorAll", { value: (selector: string) => (selector === ROW_SELECTOR ? [rowAction("usr_a91")] : []), configurable: true });
   assert.equal(resolveTarget(recordedRowAction()).resolution.strategy, "selector");
   assert.notEqual(resolveTarget(recordedRowAction()).element, occupant);
+});
+
+// The same refusal, for a step a repair has already rewritten.
+//
+// A repair is the automation loop's answer to a control the page renamed, and
+// it replaces the recorded identity wholesale: the dispatched element carries
+// the *repaired* name, not the recorded one
+// (`domain/src/output-nodes/targets/targets.ts`, `adaptedTargetSupersedesRecording`).
+// That identity comes from a target Core normalized in isolation, and Core's
+// `normalizeFingerprint` has no `context` key, so for a while the record simply
+// stopped arriving for exactly the steps a repair had touched -- the gate was
+// off precisely where a page had been changing underneath the Flow. The domain
+// carries the recorded record across that substitution now; this row is the
+// page-side half, and it fails if the record ever stops arriving or stops being
+// read.
+//
+// What a repair is allowed to change is the point of the row: the control may
+// be called anything at all, and it still may not be in another row.
+
+/** A repaired step: the loop's new name for the control, and the row the recording belonged to. */
+function repairedRowAction(): BrowserActionCommand {
+  return {
+    commandId: "cmd-repair",
+    actionType: "web.dom.click",
+    selector: ROW_SELECTOR,
+    element: {
+      selector: ROW_SELECTOR, tagName: "button", role: "button",
+      accessibleName: "Member actions", visibleText: "Member actions",
+      context: { record: { keyAttribute: "data-member-id", key: "usr_a91" } }
+    }
+  } as BrowserActionCommand;
+}
+
+test("a repaired step is refused too when the control it finds sits in another record", (t) => {
+  // The occupant wears the repaired name, so both scoring rules accept it and
+  // the record rule is the only thing left that can refuse.
+  installDirectoryPage(t, "Member actions");
+
+  assert.throws(() => resolveTarget(repairedRowAction()), (error: unknown) => {
+    assert.equal((error as { failure?: { code?: string } }).failure?.code, "web.target.not_found");
+    // Named strategy by strategy, so the row cannot quietly decay into a test of
+    // rule 1: it did exactly that while being written, because the stub page was
+    // still showing the *recorded* name and the score refused the match at -0.11
+    // before the record was ever consulted.
+    assert.match(String(error), /selector .*?\(refused [^)]*in another record\)/, "the selector's one answer was refused by the record, not by its score");
+    return true;
+  });
+});
+
+test("and the same repaired step resolves in the row the recording named", (t) => {
+  installDirectoryPage(t, "Member actions");
+  const page = globalThis.document as unknown as object;
+  Object.defineProperty(page, "querySelectorAll", { value: (selector: string) => (selector === ROW_SELECTOR ? [rowAction("usr_a91", "Member actions")] : []), configurable: true });
+
+  // The recorded name is gone from the page and the repaired one is what the
+  // command carries, so nothing but the record connects this answer to the
+  // recording -- which is exactly the case the gate must not over-refuse.
+  assert.equal(resolveTarget(repairedRowAction()).resolution.strategy, "selector");
 });

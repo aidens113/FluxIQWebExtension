@@ -1,7 +1,12 @@
 import { failureCategories, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 
-/** The one invariant every evaluated run carries: the runner's own verdict on it. */
-const RUNNER_VERDICT = "runner-verdict";
+/**
+ * The one invariant every evaluated run carries: the runner's own verdict on
+ * it, or -- for a run whose scenario declares the failure it must report --
+ * that declaration's judgement, restated under the same id
+ * (`declared-failure-verdict.ts`).
+ */
+export const RUNNER_VERDICT_INVARIANT = "runner-verdict";
 
 /**
  * The run-as-a-test half of a `RunEvaluation`: the runner's verdict, the
@@ -40,7 +45,7 @@ export function runOutcome(input: RunOutcomeInput): RunOutcome {
     runId: input.runId,
     verdict: input.verdict,
     ...(category === undefined ? {} : { failureCategory: category }),
-    invariants: [{ id: RUNNER_VERDICT, passed, expected: "passed", actual: passed ? "passed" : `failed: ${category}`, evidenceSequences: closing === undefined ? [] : [closing] }],
+    invariants: [{ id: RUNNER_VERDICT_INVARIANT, passed, expected: "passed", actual: passed ? "passed" : `failed: ${category}`, evidenceSequences: closing === undefined ? [] : [closing] }],
     metrics: { ...input.metrics },
     durationMs: runDurationMs(input.manifest) ?? input.wallClockMs,
   };

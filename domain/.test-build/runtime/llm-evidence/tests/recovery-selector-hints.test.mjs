@@ -140,7 +140,7 @@ function sanitizedEvidenceElement(raw, context) {
   const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const text = rawText === name ? void 0 : rawText;
+  const text2 = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const inputType = rawInputType === "text" ? void 0 : rawInputType;
   const rawControlType = boundedText(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -151,7 +151,7 @@ function sanitizedEvidenceElement(raw, context) {
   const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
   const revealKind = semanticRevealKind(tag, role, attributes);
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
-  const placement = elementPlacement(raw.context, { name, text });
+  const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
   const element = present({
     target: context.target,
@@ -159,7 +159,7 @@ function sanitizedEvidenceElement(raw, context) {
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
-    text: text || void 0,
+    text: text2 || void 0,
     inputType: inputType || void 0,
     controlType: controlType || void 0,
     hasValue,
@@ -590,6 +590,47 @@ function isWebAutomationExtractFieldKey(key) {
 }
 
 // src/output-nodes/targets/targets.ts
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -2267,7 +2308,7 @@ function namedColumn(name, attributeGiven, detected, path) {
 function detectedKey(name, detected) {
   if (Object.hasOwn(detected, name)) return name;
   const header = name.startsWith(HEADER_PREFIX) ? name.slice(HEADER_PREFIX.length) : name;
-  const folded = (text) => text.trim().replace(/\s+/gu, " ").toLowerCase();
+  const folded = (text2) => text2.trim().replace(/\s+/gu, " ").toLowerCase();
   const matches = Object.entries(detected).filter(([key, spec]) => !name.startsWith(HEADER_PREFIX) && key.toLowerCase() === name.toLowerCase() || typeof spec !== "string" && spec.kind === "column" && spec.header !== void 0 && folded(spec.header) === folded(header)).map(([key]) => key);
   const unique = [...new Set(matches)];
   if (unique.length > 1) return { issue: "web.handle.ambiguous" };
@@ -2699,6 +2740,151 @@ function scopeKey2(scope) {
   return `${scope.projectId}\0${scope.flowId}`;
 }
 
+// src/runtime/llm-evidence/target-equivalence.ts
+function webRepairEquivalenceRefusal(input) {
+  const recorded = recordedControl(input.recordedTarget);
+  if (!recorded) return "recorded_target_unknown";
+  const namedKind = evidenceControlKind(input.named);
+  const usable = input.elements.filter((element) => element !== input.named && elementFillsRepairableParameter(element, input.role));
+  if (usable.some((rival) => indistinguishable(rival, input.named))) return "target_indistinguishable";
+  if (conflictingKinds(recordedControlKind(recorded), namedKind)) return "target_not_equivalent";
+  const namedLabels = evidenceNames(input.named);
+  const recordedLabels = recordedNames(recorded.fingerprint);
+  if (joinsMoreActions(namedLabels.all, recordedLabels)) return "target_not_equivalent";
+  if (namesAgree(namedLabels.whole, recordedLabels)) return void 0;
+  if (soleControlOfItsKindInRecordedForm(input.elements, input.named, namedKind, recorded.formId)) return void 0;
+  return "target_unanchored";
+}
+function recordedControl(recordedTarget) {
+  if (!recordedTarget) return void 0;
+  const parameters = {};
+  if (recordedTarget.element) parameters.element = recordedTarget.element;
+  if (recordedTarget.target) parameters.target = recordedTarget.target;
+  const target = objectValue(recordedTarget.target);
+  const adapted = [target?.element, target?.fingerprint, recordedTarget.target];
+  const sources = adaptedTargetSupersedesRecording(parameters) ? [...adapted, recordedTarget.element] : [recordedTarget.element, ...adapted];
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (!fingerprint || !identifiesAControl(fingerprint)) continue;
+    const metadata = objectValue(objectValue(source)?.metadata);
+    const controlType = text(fingerprint.attributes?.type) ?? text(metadata?.controlType);
+    return {
+      fingerprint,
+      formId: text(fingerprint.context?.formId) ?? text(fingerprint.context?.formName) ?? text(metadata?.formId),
+      controlType,
+      controlTypeKnown: controlType !== void 0 || fingerprint.attributes !== void 0
+    };
+  }
+  return void 0;
+}
+function identifiesAControl(fingerprint) {
+  return text(fingerprint.tagName) !== void 0 || text(fingerprint.role) !== void 0 || recordedNames(fingerprint).length > 0;
+}
+function indistinguishable(rival, named) {
+  return rival.tag === named.tag && rival.role === named.role && rival.name === named.name && rival.text === named.text && rival.inputType === named.inputType && rival.controlType === named.controlType && rival.form === named.form && rival.frameId === named.frameId;
+}
+function conflictingKinds(recorded, named) {
+  if (!recorded || !named) return false;
+  if (recorded.family !== named.family) return true;
+  return recorded.variant !== void 0 && named.variant !== void 0 && recorded.variant !== named.variant;
+}
+var ROLE_KINDS = Object.freeze({
+  button: { family: "button" },
+  link: { family: "link" },
+  checkbox: { family: "checkbox" },
+  menuitemcheckbox: { family: "checkbox" },
+  switch: { family: "checkbox" },
+  radio: { family: "radio" },
+  menuitemradio: { family: "radio" },
+  combobox: { family: "select" },
+  listbox: { family: "select" },
+  textbox: { family: "text" },
+  searchbox: { family: "text", variant: "search" },
+  tab: { family: "tab" },
+  menuitem: { family: "menuitem" },
+  option: { family: "option" }
+});
+var PRESSING_INPUT_TYPES = /* @__PURE__ */ new Set(["submit", "button", "image"]);
+function recordedControlKind(recorded) {
+  const authored = ROLE_KINDS[lower(recorded.fingerprint.role) ?? ""];
+  if (authored) return authored;
+  const tagged = tagControlKind({
+    tag: lower(recorded.fingerprint.tagName),
+    inputType: lower(recorded.fingerprint.inputType) ?? lower(recorded.controlType),
+    controlType: lower(recorded.controlType),
+    controlTypeKnown: recorded.controlTypeKnown
+  });
+  return tagged ?? ROLE_KINDS[lower(recorded.fingerprint.implicitRole) ?? ""];
+}
+function evidenceControlKind(element) {
+  const authored = ROLE_KINDS[lower(element.role) ?? ""];
+  if (authored) return authored;
+  return tagControlKind({
+    tag: lower(element.tag),
+    inputType: lower(element.inputType) ?? lower(element.controlType),
+    controlType: lower(element.controlType),
+    controlTypeKnown: true
+  });
+}
+function tagControlKind(input) {
+  if (input.tag === "a") return { family: "link" };
+  if (input.tag === "select") return { family: "select" };
+  if (input.tag === "textarea") return { family: "text", variant: "text" };
+  if (input.tag === "button") return buttonKind(input.controlType, input.controlTypeKnown);
+  if (input.tag !== "input") return void 0;
+  const type = input.inputType ?? (input.controlTypeKnown ? "text" : void 0);
+  if (type === void 0) return { family: "text" };
+  if (type === "reset" || PRESSING_INPUT_TYPES.has(type)) return buttonKind(type, true);
+  if (type === "checkbox" || type === "radio") return { family: type };
+  return { family: "text", variant: type };
+}
+function buttonKind(controlType, controlTypeKnown) {
+  if (controlType === "reset") return { family: "button", variant: "reset" };
+  return controlTypeKnown ? { family: "button", variant: "activate" } : { family: "button" };
+}
+function recordedNames(fingerprint) {
+  const attributes = fingerprint.attributes;
+  return [fingerprint.accessibleName, fingerprint.visibleText, fingerprint.text, fingerprint.label, attributes?.["aria-label"], attributes?.title].flatMap((value) => text(value) === void 0 ? [] : [value]);
+}
+function evidenceNames(element) {
+  const all = [element.name, element.text].flatMap((value) => text(value) === void 0 ? [] : [value]);
+  return { all, whole: all.filter((value) => value.length < WEB_LLM_EVIDENCE_BOUNDS.text) };
+}
+var CONJUNCTIONS = /* @__PURE__ */ new Set(["and", "then", "plus", "&", "+"]);
+function joinsMoreActions(named, recorded) {
+  return conjunctionCount(named) > conjunctionCount(recorded);
+}
+function conjunctionCount(names) {
+  return names.reduce((most, name) => Math.max(most, words(name).filter((word) => CONJUNCTIONS.has(word)).length), 0);
+}
+function namesAgree(named, recorded) {
+  return named.some((candidate) => {
+    const proposed = words(candidate);
+    return proposed.length > 0 && recorded.some((value) => {
+      const known = words(value);
+      return known.length > 0 && proposed.every((word, index) => word === known[index]);
+    });
+  });
+}
+function soleControlOfItsKindInRecordedForm(elements, named, namedKind, recordedForm) {
+  if (!recordedForm || !namedKind || named.form !== recordedForm) return false;
+  const sameKind = elements.filter((element) => element.form === recordedForm && sameControlKind(evidenceControlKind(element), namedKind));
+  return sameKind.length === 1;
+}
+function sameControlKind(kind, other) {
+  return kind !== void 0 && kind.family === other.family && kind.variant === other.variant;
+}
+function words(value) {
+  return value.normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+|[&+]/gu) ?? [];
+}
+function text(value) {
+  return typeof value === "string" && value.trim() !== "" ? value : void 0;
+}
+function lower(value) {
+  const found = text(value);
+  return found === void 0 ? void 0 : found.toLowerCase();
+}
+
 // src/runtime/llm-evidence/target-override.ts
 function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction, selectors) {
   const definitionId = webFailedActionDefinitionId(failedAction);
@@ -2711,20 +2897,18 @@ function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction
   const resolved2 = /* @__PURE__ */ new Map();
   for (const [name, handle] of Object.entries(handles)) {
     const parameter = webRepairableParameterFor(definitionId, name);
-    const candidates = evidence.elements.filter((element2) => elementFillsRepairableParameter(element2, parameter.role));
     const named = evidence.elements.filter((element2) => element2.target === handle);
     if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
-    if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
-      resolved2.set(name, { element: named[0], named: true });
-      continue;
-    }
-    if (candidates.length === 0) return { status: "absent", reason: "no_compatible_element" };
-    if (candidates.length > 1) return { status: "ambiguous", reason: named.length === 1 ? "handle_incompatible" : "handle_not_issued" };
-    resolved2.set(name, { element: candidates[0], named: false });
+    const compatible = evidence.elements.some((element2) => elementFillsRepairableParameter(element2, parameter.role));
+    if (named.length === 0) return { status: "absent", reason: compatible ? "handle_not_issued" : "no_compatible_element" };
+    if (!elementFillsRepairableParameter(named[0], parameter.role)) return { status: "absent", reason: compatible ? "handle_incompatible" : "no_compatible_element" };
+    const equivalence = webRepairEquivalenceRefusal({ elements: evidence.elements, named: named[0], role: parameter.role, recordedTarget: failedAction.recordedTarget });
+    if (equivalence) return { status: equivalence === "target_indistinguishable" ? "ambiguous" : "absent", reason: equivalence };
+    resolved2.set(name, named[0]);
   }
   const element = resolved2.get(WEB_REPAIRABLE_ELEMENT_PARAMETER);
   if (resolved2.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
-  return { status: "resolved", target: resolvedTarget(handles, element, selectors) };
+  return { status: "resolved", target: resolvedTarget(element, selectors) };
 }
 function proposedHandles(target) {
   const handles = target?.handles;
@@ -2733,19 +2917,17 @@ function proposedHandles(target) {
   if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
   return Object.fromEntries(entries);
 }
-function resolvedTarget(handles, resolved2, selectors) {
-  const handleResolution = resolved2.named ? "named" : "inferred";
-  const fingerprint = elementFingerprint2(resolved2.element, selectors);
+function resolvedTarget(resolved2, selectors) {
+  const fingerprint = elementFingerprint2(resolved2, selectors);
   return present({
-    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved2.element.target },
-    handleResolution,
+    handles: { [WEB_REPAIRABLE_ELEMENT_PARAMETER]: resolved2.target },
+    handleResolution: "named",
     tagName: fingerprint.tagName,
     role: fingerprint.role,
     accessibleName: fingerprint.accessibleName,
     visibleText: fingerprint.visibleText,
     selector: fingerprint.selector,
-    metadata: fingerprint.metadata,
-    proposedHandles: handleResolution === "inferred" ? handles : void 0
+    metadata: fingerprint.metadata
   });
 }
 function elementFingerprint2(element, selectors) {
@@ -3468,6 +3650,12 @@ var CAPTURED_DETECTIONS = {
 // src/runtime/llm-evidence/tests/recovery-selector-hints.test.ts
 var SCOPE = { projectId: "project.repair", flowId: "flow.repair", runId: "run.repair" };
 var CLICK = { nodeId: "node.save", definitionId: "web.output.dom-click" };
+function asRecorded(packet, handle) {
+  const element = packet.elements.find((candidate) => candidate.target === handle);
+  const accessibleName = typeof element?.name === "string" ? element.name : void 0;
+  const recorded = accessibleName === void 0 ? { tagName: "button", role: "button" } : { tagName: "button", role: "button", accessibleName };
+  return { ...CLICK, recordedTarget: { element: recorded } };
+}
 var DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID };
 var POLICY = {
   schemaVersion: "0.1",
@@ -3559,10 +3747,10 @@ function askAsCore(runtime, explored, handle) {
   assert.ok(qualified, handle);
   const carried = explored.find((entry) => entry.evidenceId === qualified[1]);
   assert.ok(carried, `Core carried ${qualified[1]}`);
-  return runtime.validateTargetOverrideEvidence(carried.packet, { handles: { element: qualified[2] } }, CLICK);
+  return runtime.validateTargetOverrideEvidence(carried.packet, { handles: { element: qualified[2] } }, asRecorded(carried.packet, qualified[2]));
 }
 function askFailure(runtime, failure, handle) {
-  return runtime.validateTargetOverrideEvidence(failure, { handles: { element: handle } }, CLICK);
+  return runtime.validateTargetOverrideEvidence(failure, { handles: { element: handle } }, asRecorded(failure, handle));
 }
 function handleNamed(packet, name) {
   const element = packet.elements.find((candidate) => candidate.name === name);
@@ -3593,11 +3781,11 @@ test("a repair naming a control only the exploration revealed resolves with the 
 });
 test("a handle no packet issued is still refused, and a packet this domain never issued gets no selector hint", async () => {
   const { runtime, failure, explored } = await dismissedDialog();
-  assert.deepEqual(askAsCore(runtime, explored, "explored.2:target.9"), { status: "ambiguous", reason: "handle_not_issued" });
-  assert.deepEqual(askFailure(runtime, failure, "target.9"), { status: "ambiguous", reason: "handle_not_issued" });
+  assert.deepEqual(askAsCore(runtime, explored, "explored.2:target.9"), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(askFailure(runtime, failure, "target.9"), { status: "absent", reason: "handle_not_issued" });
   const altered = structuredClone(explored[1].packet);
   for (const element of altered.elements) element.name = `${element.name} (edited)`;
-  const target = resolvedTarget2(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "target.1" } }, CLICK));
+  const target = resolvedTarget2(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "target.1" } }, asRecorded(altered, "target.1")));
   assert.equal(target.selector, void 0);
 });
 test("a failure packet and explored packets of the same page, with the same element count, never lend each other selector hints", async () => {

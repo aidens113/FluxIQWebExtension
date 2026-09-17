@@ -1527,6 +1527,24 @@ var ELEMENT_NODE_IDS = new Set(
 var WEB_OUTPUT_IDS = new Set(webAutomationActionDefinitions.map((definition) => definition.actionType));
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
+// src/runtime/llm-evidence/target-equivalence.ts
+var ROLE_KINDS = Object.freeze({
+  button: { family: "button" },
+  link: { family: "link" },
+  checkbox: { family: "checkbox" },
+  menuitemcheckbox: { family: "checkbox" },
+  switch: { family: "checkbox" },
+  radio: { family: "radio" },
+  menuitemradio: { family: "radio" },
+  combobox: { family: "select" },
+  listbox: { family: "select" },
+  textbox: { family: "text" },
+  searchbox: { family: "text", variant: "search" },
+  tab: { family: "tab" },
+  menuitem: { family: "menuitem" },
+  option: { family: "option" }
+});
+
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -1674,12 +1692,11 @@ var largePage = (count, extra = {}) => ({
   })),
   ...extra
 });
-test("the failure budget is Core's own gate, and the exploration budget sits under the shared ceiling", () => {
+test("the failure budget is Core's own gate, at parity with exploration and under the shared ceiling", () => {
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, 3e3);
+  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, 6e3);
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, 12e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure < WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true);
   assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration < WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, true);
 });
 test("applies each path's default when the caller names no budget", () => {
@@ -1687,7 +1704,7 @@ test("applies each path's default when the caller names no budget", () => {
   assert.equal(bytes(exploration) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true, `${bytes(exploration)} bytes`);
   const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure" });
   assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
-  assert.equal(failure.elements.length < exploration.elements.length, true);
+  assert.deepEqual(failure, exploration);
 });
 test("clamps a request above the path's ceiling instead of honouring it", () => {
   const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure", maxEvidenceBytes: 9e3 });

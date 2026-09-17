@@ -11,6 +11,18 @@
 // therefore costs the intervention, not just the surplus bytes, so the failure
 // path both defaults to and is clamped at Core's own number -- imported, never
 // restated, so the two cannot drift.
+//
+// Core's number was half the exploration budget until 2026-09-17, and the
+// difference was measurable on these very fixtures: at 3,000 bytes the
+// product-catalogue failure packet carried its eight rows and not one price or
+// rating, and the member directory arrived as four buttons. Core raised its
+// gate to the exploration figure, so the two paths now see the same amount of
+// the same page and the line below reads 6,000. Nothing here changed to make
+// that happen, which is the point of importing it.
+//
+// What still differs is what each path is *given*: the failure packet is built
+// once, by whoever captured the failure, while an exploration may ask again
+// with more room up to `ceiling`.
 
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 

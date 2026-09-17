@@ -429,3 +429,78 @@ test("a record with nothing in it is absent, not an empty object", () => {
   assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: {} } }) ?? {}), false);
   assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: "row 92" } }) ?? {}), false, "a record that is not an object is no context at all");
 });
+
+// --- A repair may rename a control; it may not move it to another record -----
+//
+// The record gate the page applies (`content/identity/record.ts`) is only as
+// good as the record reaching the page, and the repair path is where it stopped
+// reaching it. Two facts, both executed rather than reasoned
+// (reports/w2-wrong-row-acted-on.md §8):
+//
+// - Core's `normalizeFingerprint` has no `context` key at all, so nothing of
+//   `context` survives a target Core derives.
+// - A repair's target is normalized from `parameters.target` alone and never
+//   sees `parameters.element`, so it cannot inherit the recording's context
+//   either -- and `adaptedTargetSupersedesRecording` hands it the whole
+//   identity.
+//
+// A renamed control inside a list therefore dispatched with no record, and the
+// gate was off for exactly the steps a repair had touched. These rows pin that
+// the repair keeps the identity it earned and the record still travels.
+
+/** The member directory's row action, recorded: nothing but its row tells it from the other 239. */
+const recordedRowAction = {
+  selector: '[data-testid="member-rows"] > tr:nth-of-type(171) > td:nth-of-type(7) > button',
+  tagName: "button",
+  accessibleName: "Row actions",
+  visibleText: "Row actions",
+  implicitRole: "button",
+  classNames: ["x1f4a"],
+  context: { tablePosition: { row: 171, column: 7 }, record: { keyAttribute: "data-member-id", key: "usr_3c95c2" } }
+};
+
+/** The same control found again under a new name -- and the list position, which is all a repair knows about the row. */
+const renamedRowAction = {
+  handles: { element: "target.2" },
+  handleResolution: "named",
+  tagName: "button",
+  accessibleName: "Member actions",
+  selector: '[data-testid="member-rows"] > tr:nth-of-type(171) > td:nth-of-type(7) > button',
+  metadata: { controlType: "button", listIndex: 171, listTotal: 240 }
+};
+
+const rowNode = (): JsonObject => webAutomationOutputPayload("web.dom.click", { element: recordedRowAction });
+const recordOf = (target: ReturnType<typeof outputTargetFromPayload>): unknown =>
+  (target?.element as { context?: { record?: unknown } } | undefined)?.context?.record;
+
+test("a repair inside a list keeps its own name and still carries the recorded record", () => {
+  const node = { ...rowNode(), target: renamedRowAction };
+  assert.equal(adaptedTargetSupersedesRecording(node), true, "the repair names a label the recording never held");
+  const target = outputTargetFromPayload(node);
+  assert.equal((target?.element as { accessibleName?: string }).accessibleName, "Member actions", "the repair's identity is what the page is asked for");
+  assert.deepEqual(recordOf(target), { keyAttribute: "data-member-id", key: "usr_3c95c2" });
+});
+
+test("and still carries it after Core's dispatch rewrite, which is where it used to be lost", () => {
+  const node = dispatched({ ...rowNode(), target: renamedRowAction });
+  const fingerprint = (node.target as { fingerprint?: Record<string, unknown> }).fingerprint ?? {};
+  assert.equal("context" in fingerprint, false, "Core's normalizer has no context key: this is the loss being compensated for");
+  assert.equal(adaptedTargetSupersedesRecording(node), true);
+  const target = outputTargetFromPayload(node);
+  assert.equal((target?.element as { accessibleName?: string }).accessibleName, "Member actions");
+  assert.deepEqual(recordOf(target), { keyAttribute: "data-member-id", key: "usr_3c95c2" });
+});
+
+test("the recorded record does not overwrite one an adapted target named for itself", () => {
+  const node = {
+    ...rowNode(),
+    target: { ...renamedRowAction, element: { tagName: "button", accessibleName: "Member actions", context: { record: { keyAttribute: "data-member-id", key: "usr_b430d2" } } } }
+  };
+  assert.deepEqual(recordOf(outputTargetFromPayload(node)), { keyAttribute: "data-member-id", key: "usr_b430d2" },
+    "a source describing a record of its own is describing one, not inheriting one");
+});
+
+test("a recording that named no record still dispatches without one", () => {
+  const node = { ...recordedNode(), target: repairedSave };
+  assert.equal(recordOf(outputTargetFromPayload(node)), undefined, "nothing is invented for a control that sits in no record");
+});

@@ -1350,6 +1350,24 @@ var ELEMENT_NODE_IDS = new Set(
 var WEB_OUTPUT_IDS = new Set(webAutomationActionDefinitions.map((definition) => definition.actionType));
 var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
+// src/runtime/llm-evidence/target-equivalence.ts
+var ROLE_KINDS = Object.freeze({
+  button: { family: "button" },
+  link: { family: "link" },
+  checkbox: { family: "checkbox" },
+  menuitemcheckbox: { family: "checkbox" },
+  switch: { family: "checkbox" },
+  radio: { family: "radio" },
+  menuitemradio: { family: "radio" },
+  combobox: { family: "select" },
+  listbox: { family: "select" },
+  textbox: { family: "text" },
+  searchbox: { family: "text", variant: "search" },
+  tab: { family: "tab" },
+  menuitem: { family: "menuitem" },
+  option: { family: "option" }
+});
+
 // src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };

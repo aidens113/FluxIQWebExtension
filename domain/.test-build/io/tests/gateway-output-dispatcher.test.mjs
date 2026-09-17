@@ -43,7 +43,8 @@ function outputTargetFromPayload(payload) {
   const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
   const selectedCandidate = selectedTargetCandidate(adaptedTarget);
   const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
-  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  const chosen = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  const element = withRecordedRecord(chosen, payload);
   const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
   if (!selector && !explicitVisualTarget) return void 0;
   return compact({
@@ -51,6 +52,12 @@ function outputTargetFromPayload(payload) {
     ...element ? { element } : {},
     ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
   });
+}
+function withRecordedRecord(element, payload) {
+  if (!element || element.context?.record) return element;
+  const record = elementRecord(objectValue(objectValue(payload.element)?.context)?.record);
+  if (!record) return element;
+  return { ...element, context: { ...element.context, record } };
 }
 function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
   const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];

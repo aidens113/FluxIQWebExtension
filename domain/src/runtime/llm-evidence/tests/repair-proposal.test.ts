@@ -61,7 +61,14 @@ const oneActionFlow = (node: FlowNode): AutomationStudioFlowDocument => ({
 const recordedNode = (id: string, outputId: string): FlowNode => ({
   id,
   definitionId: "builtin.policy.action",
-  parameterValues: { outputId, parameters: { selector: "#recorded" } },
+  parameterValues: { outputId, parameters: { selector: "#recorded", element: { tagName: "button", accessibleName: "Unique" } } },
+});
+
+/** A created node, which holds its target the way a bootstrap wrote it. */
+const createdNode = (id: string, definitionId: string): FlowNode => ({
+  id,
+  definitionId,
+  parameterValues: { element: { tagName: "button", accessibleName: "Unique" } },
 });
 
 const repairPolicy: AutomationStudioAdaptationPolicy = {
@@ -85,16 +92,22 @@ const repairPolicy: AutomationStudioAdaptationPolicy = {
   updatedAt: 1,
 };
 
+/** The failure a target override is Core's answer to, which is what these fixtures fail with. */
+type FailureRecord = NonNullable<Parameters<typeof proposeAutomationStudioRuntimeTargetOverride>[0]["failedAttempt"]["failure"]>;
+
+const TARGET_NOT_FOUND: FailureRecord = { category: "target_not_found", code: "web.target.not_found", retryable: true };
+
 const proposeThroughCore = (
   binding: ReturnType<typeof sanitizeWebLlmSnapshotWithBindings>,
   node: FlowNode,
-  proposed: AutomationStudioRuntimeTargetOverrideTarget
+  proposed: AutomationStudioRuntimeTargetOverrideTarget,
+  failure: FailureRecord = TARGET_NOT_FOUND
 ): ReturnType<typeof proposeAutomationStudioRuntimeTargetOverride> => proposeAutomationStudioRuntimeTargetOverride({
   projectId: "project.repair",
   flowId: "flow.repair",
   runId: "run.failed",
   flow: oneActionFlow(node),
-  failedAttempt: { attemptId: `${node.id}.attempt.1`, nodeId: node.id, definitionId: node.definitionId, startedAt: 1, finishedAt: 2, status: "failed", route: "failed", inputs: {}, outputs: {}, effects: [] },
+  failedAttempt: { attemptId: `${node.id}.attempt.1`, nodeId: node.id, definitionId: node.definitionId, startedAt: 1, finishedAt: 2, status: "failed", route: "failed", inputs: {}, outputs: {}, effects: [], failure },
   patch: { kind: "temporary_target_override", targetNodeId: node.id, target: proposed, reason: "Re-point the failed action." },
   policy: repairPolicy,
   proposalMode: "manual",
@@ -136,7 +149,7 @@ test("Core proposes a recorded click repair, from the output the recording dispa
 });
 
 test("Core still proposes a click repair, carrying the flat fingerprint the domain resolved", () => {
-  const result = proposeThroughCore(formBinding(), { id: "submit", definitionId: "web.output.dom-click" }, target({ element: "target.3" }));
+  const result = proposeThroughCore(formBinding(), createdNode("submit", "web.output.dom-click"), target({ element: "target.3" }));
   assert.deepEqual(result.preflight, { ok: true, issues: [], requiresExternalSideEffectApproval: true });
   assert.equal(result.metadata?.targetResolution, "resolved");
   assert.deepEqual(result.patch.kind === "temporary_target_override" ? result.patch.target : undefined, {
@@ -148,4 +161,32 @@ test("Core still proposes a click repair, carrying the flat fingerprint the doma
   });
   assert.notEqual(result.adaptation, undefined);
   assert.notEqual(result.changeProposal, undefined);
+});
+
+// The failure classes a target override cannot fix: the guard refused the
+// destination, the page was retired, the record is locked. Core knows the class
+// and the domain does not, so Core refuses before the domain is asked -- which
+// is what these two live tasks needed (`failure-surfaces-refuse-guarded-link`,
+// `navigation-refuse-retired-page`, live repair campaign 2026-09-17).
+test("Core keeps no proposal for a failure a different target cannot fix, and never asks the domain", () => {
+  for (const category of ["navigation_unexpected", "blocked_by_capability_or_policy", "auth_required"] as const) {
+    const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "target.3" }), { category, code: `web.${category}`, retryable: false });
+    assert.equal(result.preflight.ok, false, category);
+    assert.match(result.preflight.issues[0]!, /\(failure_not_target_repairable\)\.$/u, category);
+    assert.equal(result.adaptation, undefined, category);
+    assert.equal(result.changeProposal, undefined, category);
+  }
+});
+
+// The domain's own refusal, carried through Core the same way: a control the
+// model was shown, that a click can use, and that is not the one the step acted
+// on. Before this the proposal was saved and the run recorded a repair.
+test("Core keeps no proposal for a repair naming another control, and records which case it was", () => {
+  const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "target.1" }));
+
+  assert.equal(result.preflight.ok, false);
+  assert.match(result.preflight.issues[0]!, /\(target_not_equivalent\)\.$/u);
+  assert.deepEqual(result.metadata, { proposalOnly: true, executed: false, targetOverrideRefusal: { status: "absent", reason: "target_not_equivalent" } });
+  assert.equal(result.adaptation, undefined);
+  assert.equal(result.changeProposal, undefined);
 });

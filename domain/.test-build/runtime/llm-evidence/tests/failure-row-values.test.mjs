@@ -1,35 +1,497 @@
-// src/output-nodes/targets/tests/targets.test.ts
+// src/runtime/llm-evidence/tests/failure-row-values.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
+// src/runtime/llm-evidence/limits.ts
+import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
+var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
+  ceiling: 12e3,
+  exploration: 6e3,
+  failure: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES
+});
+var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
+  elements: 40,
+  url: 2e3,
+  text: 300,
+  selector: 500,
+  tag: 40,
+  role: 80,
+  attribute: 200,
+  options: 20,
+  placement: 80,
+  dialogs: 3
+});
+function serializedBytes(input) {
+  return new TextEncoder().encode(JSON.stringify(input)).byteLength;
+}
+function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling) {
+  const cap = Math.min(ceiling, WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
+  if (input === void 0) return Math.min(fallback, cap);
+  if (!Number.isSafeInteger(input) || Number(input) < 1 || Number(input) > 1e5) throw new Error("maxEvidenceBytes must be a positive bounded integer");
+  return Math.min(Number(input), cap);
+}
+
+// src/runtime/llm-evidence/harness-options/execute.ts
+import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
+
+// src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
+// src/runtime/llm-evidence/location.ts
+function safeEvidenceUrl(input) {
+  if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
+  const url = new URL(input);
+  if (url.protocol !== "http:" && url.protocol !== "https:" || url.username || url.password) throw new Error("web evidence URL must be an HTTP(S) URL without credentials");
+  return url;
+}
+function evidenceLocation(url) {
+  return `${url.origin}${url.pathname}`;
+}
+function sameOriginHref(input, base) {
+  if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) return void 0;
+  try {
+    const url = new URL(input, base);
+    return url.origin === base.origin && (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password ? evidenceLocation(url) : void 0;
+  } catch {
+    return void 0;
+  }
+}
+
+// src/runtime/llm-evidence/untrusted-json.ts
+function isJsonRecord(input) {
+  return Boolean(input) && typeof input === "object" && !Array.isArray(input);
+}
+function jsonRecord(input, name) {
+  if (!isJsonRecord(input)) throw new Error(`${name} must be an object`);
+  return input;
+}
+function boundedText(input, maximum) {
+  if (typeof input !== "string") return void 0;
+  const value = input.replace(/\s+/gu, " ").trim();
+  return value ? value.slice(0, maximum) : void 0;
+}
+function trueFlag(input) {
+  return input === true ? true : void 0;
+}
+function boundedCount(input, maximum) {
+  if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0 || input > maximum) return void 0;
+  return input;
+}
+
+// src/runtime/llm-evidence/elements.ts
+var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
+var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
+function sanitizedEvidenceElement(raw, context) {
+  if (!isJsonRecord(raw)) return void 0;
+  const tag = boundedText(raw.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const addressed = frameAddressedSelector(raw);
+  if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return void 0;
+  const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
+  const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const text = rawText === name ? void 0 : rawText;
+  const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const inputType = rawInputType === "text" ? void 0 : rawInputType;
+  const rawControlType = boundedText(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const controlType = rawControlType === rawInputType || rawControlType === "text" ? void 0 : rawControlType;
+  const href = sameOriginHref(raw.href, context.url);
+  const options = tag === "select" ? sanitizedOptions(raw.options) : void 0;
+  const hasValue = safeFillTag(tag, inputType) && typeof raw.hasValue === "boolean" ? raw.hasValue : void 0;
+  const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
+  const revealKind = semanticRevealKind(tag, role, attributes);
+  const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
+  const placement = elementPlacement(raw.context, { name, text });
+  const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
+  const element = present({
+    target: context.target,
+    tag,
+    frameId: addressed.frameId,
+    role: role || void 0,
+    name: name || void 0,
+    text: text || void 0,
+    inputType: inputType || void 0,
+    controlType: controlType || void 0,
+    hasValue,
+    selectedValue: selectedValue || void 0,
+    href: href || void 0,
+    options: options?.length ? options : void 0,
+    revealKind,
+    expanded,
+    focused,
+    recent: trueFlag(raw.recentlyInteracted),
+    changed: trueFlag(raw.changed),
+    form: placement.form,
+    landmark: placement.landmark,
+    heading: placement.heading,
+    item: placement.item,
+    cell: placement.cell
+  });
+  return { element, selector: addressed.selector };
+}
+function safeFillTag(tag, inputType) {
+  return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
+}
+function semanticRevealKind(tag, role, attributes) {
+  if (role === "tab" || role === "menuitem" || role === "treeitem") return "view";
+  if (tag === "summary") return "disclosure";
+  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
+  const controls = boundedText(attributes["aria-controls"], WEB_LLM_EVIDENCE_BOUNDS.text);
+  return expanded === "true" || expanded === "false" || controls ? "disclosure" : void 0;
+}
+function semanticExpandedState(attributes) {
+  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
+  return expanded === "true" ? true : expanded === "false" ? false : void 0;
+}
+function frameAddressedSelector(raw) {
+  const rawSelector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  if (!rawSelector) return void 0;
+  const match = FRAME_SELECTOR_PATTERN.exec(rawSelector);
+  const selector = match ? boundedText(match[2], WEB_LLM_EVIDENCE_BOUNDS.selector) : rawSelector;
+  if (!selector) return void 0;
+  const frameId = stampedFrameId(raw) ?? (match ? boundedCount(Number(match[1]), 999999) : void 0);
+  return frameId ? { selector, frameId } : { selector };
+}
+function stampedFrameId(raw) {
+  const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
+  const stamped = boundedText(attributes[FRAME_ID_ATTRIBUTE], 20);
+  return stamped === void 0 ? void 0 : boundedCount(Number(stamped), 999999);
+}
+function elementPlacement(input, named) {
+  const described = isJsonRecord(input) ? input : {};
+  const form = boundedText(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const heading = rawHeading === named.name || rawHeading === named.text ? void 0 : rawHeading;
+  return {
+    form: form || void 0,
+    landmark: landmark || void 0,
+    heading: heading || void 0,
+    item: listPlacement(described.listPosition),
+    cell: tablePlacement(described.tablePosition)
+  };
+}
+function listPlacement(input) {
+  if (!isJsonRecord(input)) return void 0;
+  const index = boundedCount(input.index, 1e5);
+  const total = boundedCount(input.total, 1e5);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePlacement(input) {
+  if (!isJsonRecord(input)) return void 0;
+  const row = boundedCount(input.row, 1e5);
+  const column = boundedCount(input.column, 1e5);
+  if (row === void 0 || column === void 0) return void 0;
+  const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  return present({ row, column, header: header || void 0 });
+}
+function sanitizedOptions(input) {
+  if (!Array.isArray(input)) return void 0;
+  const result = [];
+  for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.options)) {
+    if (!isJsonRecord(raw)) continue;
+    const value = boundedText(raw.value, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+    const label = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+    if (value && label) result.push({ value, label });
+  }
+  return result.length ? result : void 0;
+}
+function sanitizedSelectedValue(input, options) {
+  const value = boundedText(input, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+  return value && options.some((option) => option.value === value) ? value : void 0;
+}
+
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
+// src/runtime/llm-evidence/page-evidence.ts
+var READY_STATES = ["loading", "interactive", "complete"];
+var ORDINARY_NAVIGATION_TYPE = "navigate";
+var MAX_REDIRECTS = 100;
+var MAX_BLOCKED_CONTROLS = 1e4;
+function webLlmPageContext(snapshot, childFrameIds) {
+  const evidence = pageEvidence(snapshot);
+  const frame = evidenceFrame(snapshot.frame, childFrameIds);
+  const loading = evidenceLoading(pageEvidenceWire(evidence?.loading));
+  const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
+  const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
+  const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
+  const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
+  return present({
+    frame,
+    loading,
+    navigation,
+    dialogs,
+    blockedBy,
+    selectedText: selectedText || void 0,
+    // The one page-context field this reader does not read. It is the element
+    // funnel's number, so `sanitize.ts` supplies it beside the elements it
+    // counted. Named here rather than left out, because leaving a field out is
+    // exactly what this seam exists to make impossible.
+    elementTotal: void 0
+  });
+}
+function evidenceElementTotal(snapshot, carried) {
+  const declared2 = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
+  const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
+  const total = Math.max(declared2 ?? 0, received);
+  return total > carried ? total : void 0;
+}
+function capturedTruncated(snapshot) {
+  if (trueFlag(snapshot.truncated) === true) return true;
+  return trueFlag(captureElementTotals(snapshot)?.truncated) === true;
+}
+function pageEvidence(snapshot) {
+  return pageEvidenceWire(snapshot.evidence);
+}
+function captureElementTotals(snapshot) {
+  return pageEvidenceWire(pageEvidence(snapshot)?.elements);
+}
+function items(input) {
+  return Array.isArray(input) ? input : [];
+}
+function evidenceFrame(input, childFrameIds) {
+  const declared2 = isJsonRecord(input) ? input : void 0;
+  const isTop = typeof declared2?.isTop === "boolean" ? declared2.isTop : void 0;
+  if (isTop === void 0 && !childFrameIds.length) return void 0;
+  return present({
+    isTop: isTop ?? true,
+    childFrameIds: childFrameIds.length ? childFrameIds : void 0
+  });
+}
+function evidenceLoading(input) {
+  if (!input) return void 0;
+  const documentState = boundedText(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
+  const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
+  const loading = present({
+    readyState: readyState && readyState !== "complete" ? readyState : void 0,
+    busy: trueFlag(input.busy),
+    spinner: spinner ? true : void 0,
+    pendingNavigation: trueFlag(input.pendingNavigation)
+  });
+  return Object.keys(loading).length ? loading : void 0;
+}
+function evidenceNavigation(input) {
+  if (!input) return void 0;
+  const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
+  const navigation = present({
+    type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : void 0,
+    redirects: redirects || void 0,
+    referrer: safeLocation(input.referrer)
+  });
+  return Object.keys(navigation).length ? navigation : void 0;
+}
+function safeLocation(input) {
+  try {
+    return evidenceLocation(safeEvidenceUrl(input));
+  } catch {
+    return void 0;
+  }
+}
+function evidenceDialogs(input) {
+  if (!input) return void 0;
+  const dialogs = [];
+  for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
+    const raw = pageEvidenceWire(item);
+    if (!raw) continue;
+    const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+    const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+    const modal = trueFlag(raw.modal);
+    if (!role && !name && !modal) continue;
+    dialogs.push(present({
+      role: role || void 0,
+      name: name || void 0,
+      modal
+    }));
+  }
+  return dialogs.length ? dialogs : void 0;
+}
+function evidenceBlocker(input) {
+  const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
+  if (!blocker) return void 0;
+  const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
+  return present({
+    role: role || void 0,
+    name: name || void 0,
+    blocks: blocks || void 0
+  });
+}
+
+// src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
+function sanitizeWebLlmSnapshot(input, options = {}) {
+  return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
+}
+function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
+  const snapshot = jsonRecord(input, "web DOM snapshot");
+  const url = safeEvidenceUrl(snapshot.url);
+  if (options.expectedOrigin !== void 0 && url.origin !== options.expectedOrigin) throw new Error("web DOM snapshot escaped the expected origin");
+  const maxEvidenceBytes = budgetFor(options);
+  if (!Array.isArray(snapshot.interactiveElements)) throw new Error("web DOM snapshot elements are malformed");
+  const focusedSelector = sanitizedEvidenceElement(snapshot.focusedElement, { target: "target.focus", url })?.selector;
+  const elements = [];
+  const selectors = /* @__PURE__ */ new Map();
+  for (const raw of snapshot.interactiveElements) {
+    if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
+  }
+  const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
+  const elementTotal = evidenceElementTotal(snapshot, elements.length);
+  const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot);
+  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
+  const context = webLlmPageContext(snapshot, childFrameIds);
+  const evidence = present({
+    schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
+    trust: "untrusted-page-evidence",
+    location: evidenceLocation(url),
+    title: title || void 0,
+    // The page context is carried field by field rather than spread, so a
+    // packet field renamed or dropped in `page-evidence.ts` fails here instead
+    // of quietly leaving the packet.
+    frame: context.frame,
+    loading: context.loading,
+    navigation: context.navigation,
+    dialogs: context.dialogs,
+    blockedBy: context.blockedBy,
+    selectedText: context.selectedText,
+    elementTotal,
+    elements,
+    truncated: captureTruncated || elementsTruncated,
+    captureTruncated: captureTruncated ? true : void 0,
+    elementsTruncated: elementsTruncated ? true : void 0,
+    // Not written here: `trimToBudget` below sets it if and only if a removal
+    // was needed. Mentioned so the packet's key set stays exhaustive.
+    budgetTruncated: void 0,
+    // Nor are these: `markFailedTarget` writes exactly one of the three marks,
+    // and the repair parameters where the producer gave them, and only for a
+    // packet that is describing a failure. Named for the same reason.
+    failedTarget: void 0,
+    failedTargetMissing: void 0,
+    failedTargetUnknown: void 0,
+    repairParameters: void 0
+  });
+  markFailedTarget(evidence, selectors, options.failedAction);
+  trimToBudget(evidence, selectors, maxEvidenceBytes);
+  return { evidence, selectors };
+}
+function markFailedTarget(evidence, selectors, failedAction) {
+  if (!failedAction) return;
+  if (failedAction.repairParameters) evidence.repairParameters = { ...failedAction.repairParameters };
+  if (!failedAction.selector) {
+    evidence.failedTargetUnknown = true;
+    return;
+  }
+  const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
+  if (handle === void 0) evidence.failedTargetMissing = true;
+  else evidence.failedTarget = handle;
+}
+function budgetFor(options) {
+  return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
+}
+function trimToBudget(evidence, selectors, maxEvidenceBytes) {
+  const markBudgetTruncated = () => {
+    evidence.truncated = true;
+    evidence.budgetTruncated = true;
+  };
+  const popElement = () => {
+    const removed = evidence.elements.pop();
+    if (removed) selectors.delete(removed.target);
+    if (removed && evidence.failedTarget === removed.target) {
+      delete evidence.failedTarget;
+      evidence.failedTargetMissing = true;
+    }
+    markBudgetTruncated();
+  };
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
+  while (serializedBytes(evidence) > maxEvidenceBytes) {
+    if (evidence.elements.length > 1) {
+      popElement();
+      continue;
+    }
+    const field = droppable.shift();
+    if (field !== void 0) {
+      if (evidence[field] !== void 0) {
+        delete evidence[field];
+        markBudgetTruncated();
+      }
+      continue;
+    }
+    if (evidence.elements.length) {
+      popElement();
+      continue;
+    }
+    throw new Error("web DOM snapshot exceeds the evidence byte limit");
+  }
+}
+
+// src/runtime/llm-evidence/tool-rejection.ts
+var WEB_LLM_TOOL_REJECTION_CODES = [
+  "invalid_input",
+  "cross_origin",
+  "out_of_scope",
+  "no_progress",
+  "target_unobserved",
+  "target_unsafe",
+  "sensitive_value",
+  "no_repeating_structure"
+];
+
+// src/extraction/dataset-id.ts
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 
 // src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -39,77 +501,6 @@ function isWebAutomationExtractFieldKey(key) {
 }
 
 // src/output-nodes/targets/targets.ts
-function outputTargetFromPayload(payload) {
-  const adaptedTarget = objectValue(payload.target);
-  const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
-  const selectedCandidate = selectedTargetCandidate(adaptedTarget);
-  const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
-  const chosen = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
-  const element = withRecordedRecord(chosen, payload);
-  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
-  if (!selector && !explicitVisualTarget) return void 0;
-  return compact({
-    selector,
-    ...element ? { element } : {},
-    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
-  });
-}
-function withRecordedRecord(element, payload) {
-  if (!element || element.context?.record) return element;
-  const record = elementRecord(objectValue(objectValue(payload.element)?.context)?.record);
-  if (!record) return element;
-  return { ...element, context: { ...element.context, record } };
-}
-function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];
-  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
-}
-function adaptedTargetSupersedesRecording(parameters) {
-  const adaptedTarget = objectValue(parameters.target);
-  if (!adaptedTarget) return false;
-  if (adaptedTarget.selectedCandidate !== void 0) return true;
-  if (isRepairResolution(adaptedTarget)) return true;
-  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
-  if (!named) return false;
-  const recorded = recordedStrings(parameters);
-  return DESCRIPTIVE_SIGNALS.some((signal) => {
-    const value = named[signal];
-    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
-  });
-}
-var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
-var CORE_SIGNAL_LENGTH = 1e3;
-function isRepairResolution(target) {
-  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
-}
-function recordedStrings(parameters) {
-  const element = objectValue(parameters.element);
-  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
-  const strings = /* @__PURE__ */ new Set();
-  for (const source of described) {
-    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
-      if (typeof value !== "string") continue;
-      strings.add(comparableText(value));
-      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
-    }
-  }
-  return strings;
-}
-function comparableText(value) {
-  return value.trim().toLowerCase();
-}
-function firstElementFingerprint(sources) {
-  for (const source of sources) {
-    const fingerprint = elementFingerprint(source);
-    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
-  }
-  return void 0;
-}
-function selectedTargetCandidate(target) {
-  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
-  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
-  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
-}
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -255,14 +646,6 @@ function webAutomationExtractListRequestValue(value) {
     ...minItems !== void 0 ? { minItems } : {}
   };
 }
-function webAutomationExtractReadValue(value) {
-  const read = jsonObject(value);
-  const mode = memberOf(read?.mode, WEB_AUTOMATION_EXTRACT_READ_MODES);
-  if (!read || mode === void 0) return void 0;
-  const attribute = mode === "attribute" ? nonEmptyString(read.attribute) : void 0;
-  if (mode === "attribute" ? attribute === void 0 : read.attribute !== void 0) return void 0;
-  return { mode, ...attribute !== void 0 ? { attribute } : {} };
-}
 function fieldMapValue(value) {
   const fields = jsonObject(value);
   if (!fields) return void 0;
@@ -361,57 +744,6 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/recorded-definition.ts
-var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
-var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
-var LABEL_MAX_LENGTH = 200;
-function webAutomationRecordedExtraction(value) {
-  const definition = jsonObject2(value);
-  if (!definition) return void 0;
-  if (definition.form === "value") return recordedValueExtraction(definition);
-  return definition.form === "list" ? recordedListExtraction(definition) : void 0;
-}
-function recordedListExtraction(definition) {
-  const datasetId = datasetIdValue(definition.datasetId);
-  const label = labelValue(definition.label);
-  const request = webAutomationExtractListRequestValue(definition.request);
-  const itemCount = nonNegativeInteger2(definition.itemCount);
-  if (datasetId === void 0 || label === void 0 || request === void 0 || itemCount === void 0) return void 0;
-  const fieldLabels = fieldLabelsValue(definition.fieldLabels, request);
-  if (fieldLabels === void 0) return void 0;
-  return { form: "list", datasetId, label, request, fieldLabels, itemCount };
-}
-function recordedValueExtraction(definition) {
-  const label = labelValue(definition.label);
-  const read = webAutomationExtractReadValue(definition.read);
-  return label === void 0 || read === void 0 ? void 0 : { form: "value", label, read };
-}
-function fieldLabelsValue(value, request) {
-  if (value === void 0) return {};
-  const labels = jsonObject2(value);
-  if (!labels) return void 0;
-  const read = [];
-  for (const [key, entry] of Object.entries(labels)) {
-    if (!isWebAutomationExtractFieldKey(key) || !(key in request.fields)) continue;
-    const label = labelValue(entry);
-    if (label === void 0) return void 0;
-    read.push([key, label]);
-  }
-  return Object.fromEntries(read);
-}
-function datasetIdValue(value) {
-  return typeof value === "string" && !RESERVED_DATASET_IDS.has(value) && DATASET_ID_PATTERN.test(value) ? value : void 0;
-}
-function labelValue(value) {
-  return typeof value === "string" && value.trim().length > 0 && value.length <= LABEL_MAX_LENGTH ? value : void 0;
-}
-function nonNegativeInteger2(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
-}
-function jsonObject2(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
-
 // src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
@@ -464,6 +796,99 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
     }
   };
 }
+
+// src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+
+// src/runtime/llm-evidence/vocabulary.ts
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
+var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
+var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
+var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
+var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
+var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
+var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
+function webLlmToolRejectionResultCode(code) {
+  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
+}
+var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
+  WEB_LLM_INSPECT_RESULT_CODE,
+  WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
+  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
+]);
+
+// src/runtime/llm-evidence/structure/handles.ts
+var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
+var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
+
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
+var WEB_RECOVERY_HARNESS_OPTION_IDS = [
+  "web.recovery.inspect",
+  "web.recovery.reveal",
+  "web.recovery.act_safe",
+  "web.recovery.wait_for_change",
+  "web.recovery.navigate_in_scope",
+  "web.recovery.detect_repeating_structure"
+];
+var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+var WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
+
+// src/runtime/llm-evidence/harness-options/execute.ts
+var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
+
+// src/actions/types.ts
+var WEB_AUTOMATION_ACTION_TYPES = [
+  "web.browser.navigate",
+  "web.dom.click",
+  "web.dom.type",
+  "web.dom.clear",
+  "web.dom.select",
+  "web.dom.scroll",
+  "web.dom.keypress",
+  "web.dom.wait_for_selector",
+  "web.dom.wait_for_text",
+  "web.dom.extract",
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
+];
+
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -803,12 +1228,6 @@ var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
   paginate: { mode: "next", next: "a.next", maxPages: 5 }
 };
 
-// src/extraction/dataset-id.ts
-var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
-
-// src/extraction/label-key.ts
-var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
-
 // src/output-nodes/extract-list/records-path.ts
 var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
 
@@ -1089,527 +1508,265 @@ var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
 };
 
-// src/sensitivity/signature.ts
-var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
-var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
-function isSensitiveFieldSignature(signature) {
-  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
-  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
-}
-function isSensitiveControlType(type) {
-  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
-}
+// src/runtime/llm-evidence/repairable-parameters.ts
+var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
+  WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
+);
 
-// src/sensitivity/descriptor.ts
-function sensitiveFieldSignatureOfDescriptor(descriptor) {
-  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record = descriptor;
-  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
-  return {
-    inputType: stringField(record.inputType),
-    controlType: stringField(attributes.type),
-    autocomplete: stringField(attributes.autocomplete),
-    dataSensitive: stringField(attributes["data-sensitive"])
-  };
-}
-function isSensitiveElementDescriptor(descriptor) {
-  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
-}
-function stringField(value) {
-  return typeof value === "string" ? value : void 0;
-}
+// src/runtime/llm-evidence/plan-resolution/handle-tokens.ts
+var EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 
-// src/output-nodes/recorded-element-key.ts
-function webAutomationRecordedElementKey(payload) {
-  const element = objectValue(payload.element);
-  const attributes = objectValue(element?.attributes);
-  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
-  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
-  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
-  const key = sanitizeRecordedElementKey(identity ?? "");
-  return key.length ? key : void 0;
-}
-function sanitizeRecordedElementKey(value) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
-}
+// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
+var SELECTOR_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var WEB_OUTPUT_IDS = new Set(webAutomationActionDefinitions.map((definition) => definition.actionType));
+var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
-// src/output-nodes/secret-binding.ts
-var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
-function webAutomationSecretStatePath(key) {
-  return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
-}
-function webAutomationSecretBinding(key) {
-  return { $state: { path: webAutomationSecretStatePath(key) } };
-}
-
-// src/output-nodes/upload-binding.ts
-var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
-function webAutomationUploadStatePath(key) {
-  return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
-}
-function webAutomationUploadBinding(key) {
-  return { $state: { path: webAutomationUploadStatePath(key) } };
-}
-
-// src/output-nodes/url-path.ts
-function webAutomationUrlPath(value) {
-  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
-}
-
-// src/output-nodes/payloads.ts
-function webAutomationOutputPayload(outputId, payload) {
-  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
-}
-function withRecordedFrame(outputId, payload, parameters) {
-  const browserFrameId = frameIdValue(payload.browserFrameId);
-  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
-  if (Object.keys(parameters).length === 0) return parameters;
-  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : void 0;
-  return { ...parameters, browserFrameId, ...browserFrameUrlPath !== void 0 ? { browserFrameUrlPath } : {} };
-}
-function frameIdValue(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
-}
-function httpUrlPath(value) {
-  if (typeof value !== "string") return void 0;
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : void 0;
-  } catch {
-    return void 0;
-  }
-}
-function recordedOutputParameters(outputId, payload) {
-  const element = elementFingerprint(payload.element);
-  const selector = stringValue(element?.selector);
-  const visualTarget = objectValue(payload.visualTarget);
-  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
-  const hasTarget = Object.keys(target).length > 0;
-  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
-  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
-  if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...hasTarget ? target : {} });
-  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
-  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
-  if (outputId === "web.dom.scroll") {
-    const scroll = objectValue(payload.scroll);
-    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
-  }
-  if (outputId === "web.dom.check") {
-    const checked = recordedCheckedState(payload);
-    return compact({ selector, checked, ...hasTarget ? target : {} });
-  }
-  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
-  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
-  if (outputId === "web.dom.extract") {
-    const read = recordedValueRead(payload);
-    return compact({ selector, ...hasTarget ? target : {}, ...read !== void 0 ? { extract: read } : {} });
-  }
-  if (outputId === "web.dom.extract_list") return recordedListExtractionParameters(payload);
-  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
-  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
-  if (outputId === "web.dom.capture_snapshot") return {};
-  return {};
-}
-function recordedListExtractionParameters(payload) {
-  const definition = webAutomationRecordedExtraction(payload.extraction);
-  return definition?.form === "list" ? { extractList: definition.request } : {};
-}
-function recordedValueRead(payload) {
-  const definition = webAutomationRecordedExtraction(payload.extraction);
-  return definition?.form === "value" ? definition.read : void 0;
-}
-function recordedUploadParameters(payload, selector, target) {
-  const key = webAutomationRecordedElementKey(payload);
-  if (key === void 0) return {};
-  const element = objectValue(target.element);
-  const fileTarget = element === void 0 ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) };
-  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
-}
-function recordedTabParameters(payload) {
-  const tab = objectValue(payload.tab);
-  if (tab?.operation === "close") return { tab: { operation: "close" } };
-  if (tab?.operation !== "switch") return {};
-  const urlPath = webAutomationUrlPath(tab.urlPath);
-  return { tab: { operation: "switch", ...urlPath !== void 0 ? { urlPath } : {} } };
-}
-function recordedTypedText(payload) {
-  const recorded = stringValue(payload.inputValue);
-  if (recorded !== void 0) return recorded;
-  if (!isSensitiveElementDescriptor(payload.element)) return "";
-  const key = webAutomationRecordedElementKey(payload);
-  return key === void 0 ? "" : webAutomationSecretBinding(key);
-}
-function recordedCheckedState(payload) {
-  const element = objectValue(payload.element);
-  if (!element) return void 0;
-  if (typeof element.checked === "boolean") return element.checked;
-  const ariaChecked = stringValue(objectValue(element.attributes)?.["aria-checked"]);
-  if (ariaChecked === "true") return true;
-  if (ariaChecked === "false") return false;
-  return isRadioElement(element) ? true : void 0;
-}
-function isRadioElement(element) {
-  return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
-}
-
-// src/output-nodes/targets/tests/targets.test.ts
-test("identity signals are read from the descriptor's own fields", () => {
-  const fingerprint = elementFingerprint({
-    selector: "#save",
-    tagName: "button",
-    testId: "save-button",
-    accessibleName: "Save changes",
-    label: "Save"
-  });
-  assert.equal(fingerprint?.testId, "save-button");
-  assert.equal(fingerprint?.accessibleName, "Save changes");
-  assert.equal(fingerprint?.label, "Save");
+// src/runtime/llm-evidence/target-equivalence.ts
+var ROLE_KINDS = Object.freeze({
+  button: { family: "button" },
+  link: { family: "link" },
+  checkbox: { family: "checkbox" },
+  menuitemcheckbox: { family: "checkbox" },
+  switch: { family: "checkbox" },
+  radio: { family: "radio" },
+  menuitemradio: { family: "radio" },
+  combobox: { family: "select" },
+  listbox: { family: "select" },
+  textbox: { family: "text" },
+  searchbox: { family: "text", variant: "search" },
+  tab: { family: "tab" },
+  menuitem: { family: "menuitem" },
+  option: { family: "option" }
 });
-test("a recording made before the producer emitted the fields still resolves them from attributes", () => {
-  const fingerprint = elementFingerprint({
-    selector: "#save",
-    tagName: "button",
-    attributes: { "data-testid": "save-button", "aria-label": "Save changes" }
-  });
-  assert.equal(fingerprint?.testId, "save-button");
-  assert.equal(fingerprint?.accessibleName, "Save changes");
-});
-test("the test id falls back through the attribute names the selector prefers", () => {
-  assert.equal(elementFingerprint({ selector: "#a", attributes: { "data-test": "alpha" } })?.testId, "alpha");
-  assert.equal(elementFingerprint({ selector: "#a", attributes: { "data-cy": "beta" } })?.testId, "beta");
-  assert.equal(elementFingerprint({ selector: "#a", testId: "own", attributes: { "data-testid": "attribute" } })?.testId, "own");
-});
-test("an element with no identity signals gains no empty ones", () => {
-  const fingerprint = elementFingerprint({ selector: "#plain", tagName: "div" });
-  assert.deepEqual(fingerprint, { selector: "#plain", tagName: "div" });
-});
-test("the signals survive into the dispatched target", () => {
-  const target = outputTargetFromPayload({
-    selector: "#save",
-    element: { selector: "#save", tagName: "button", testId: "save-button", accessibleName: "Save changes" }
-  });
-  assert.equal((target?.element).testId, "save-button");
-  assert.equal((target?.element).accessibleName, "Save changes");
-});
-var recordedElement = {
-  selector: "#save-settings",
-  xpath: "/html/body/main/form/button",
-  tagName: "button",
-  id: "save-settings",
-  text: "Save changes",
-  testId: "save-changes",
-  accessibleName: "Save changes",
-  label: "Save",
-  visibleText: "Save changes",
-  implicitRole: "button",
-  classNames: ["btn", "btn-primary"],
-  attributes: { id: "save-settings", "data-testid": "save-changes" }
+
+// src/io/input-model.ts
+var WEB_AUTOMATION_INPUT_IDS = {
+  browserState: "web.browser.state",
+  recordingEvidence: "web.recording.evidence",
+  navigationRequested: "web.user.navigation_requested",
+  elementClicked: "web.user.element_clicked",
+  textEntered: "web.user.text_entered",
+  fieldCleared: "web.user.field_cleared",
+  optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
+  keyPressed: "web.user.key_pressed",
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed",
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
 };
-var signalCount = (target) => Object.keys(target?.element ?? {}).length;
-test("Core passed the target through untouched: the recorded identity is the dispatched one", () => {
-  const target = outputTargetFromPayload({ selector: "#save-settings", element: recordedElement });
-  assert.equal(signalCount(target), 12);
-  assert.equal((target?.element).testId, "save-changes");
+var stateInputDefinitions = [
+  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
+  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
+];
+var actionInputDefinitions = [
+  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
+  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
+  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
+  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
+  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
+  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
+];
+var OUTPUT_FOR_ACTION_INPUT = new Map(
+  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
+);
+
+// src/runtime/capabilities.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
+var webAutomationRuntimeCapabilities = [
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES
+  },
+  {
+    id: "web.snapshots",
+    label: "Web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.state",
+    label: "Web state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.flow-runtime",
+    label: "Web flow runtime",
+    kind: "flow",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
+  }
+];
+var webAutomationGatewayCapabilities = [
+  {
+    id: "web.context.state",
+    label: "Web context state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
+  },
+  {
+    id: "web.structured.snapshot",
+    label: "Structured web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+    // structure it found (`extraction/structure-detection.ts`). A flag on an
+    // existing observe-only action rather than an action of its own, so it
+    // lists no action type: nothing new is executable. The authoring evidence
+    // runtime refuses its detection tool for a client that does not declare it.
+    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+    label: "Repeating-structure detection",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
+  },
+  {
+    id: "web.recording.events",
+    label: "Web recording events",
+    kind: "recording",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  },
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  }
+];
+
+// src/runtime/llm-evidence/tests/failure-row-values.test.ts
+var FORMER_FAILURE_BUDGET = 3e3;
+var PRODUCTS = [
+  { name: "Ember Scented Candle", price: "$189.00", rating: "4.3 out of 5" },
+  { name: "Drift Wool Throw", price: "$22.00", rating: "4.1 out of 5" },
+  { name: "Harbour Ceramic Mug", price: "$14.50", rating: "4.6 out of 5" },
+  { name: "Pinewood Serving Board", price: "$38.00", rating: "4.0 out of 5" },
+  { name: "Slate Linen Napkins", price: "$27.25", rating: "4.4 out of 5" },
+  { name: "Copper Pour-Over Kettle", price: "$96.00", rating: "4.8 out of 5" },
+  { name: "Fern Stoneware Bowl", price: "$19.75", rating: "3.9 out of 5" },
+  { name: "Ash Handled Basket", price: "$44.00", rating: "4.2 out of 5" }
+];
+test("a repair sees a whole catalogue row, which the budget it used to be given could not fit", () => {
+  const page = catalogue();
+  const failed = { selector: '[data-testid="product-1-add"]' };
+  const now = sanitizeWebLlmSnapshot(page, { budget: "failure", failedAction: failed });
+  const before = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: FORMER_FAILURE_BUDGET, failedAction: failed });
+  assert.equal(wholeRows(before).length, 0, `the former ${FORMER_FAILURE_BUDGET}-byte budget carried a whole row`);
+  assert.equal(wholeRows(now).length > 0, true, `no whole row at ${WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure} bytes: ${JSON.stringify(rowsSeen(now))}`);
+  const carried = JSON.stringify(now);
+  assert.match(carried, /\$189\.00/u);
+  assert.match(carried, /4\.3 out of 5/u);
+  assert.equal(new TextEncoder().encode(carried).byteLength <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${carried.length} bytes`);
 });
-test("Core matched nothing: the recorded identity beats its own lossy re-derivation", () => {
-  const target = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: recordedElement,
-    target: { kind: "element", fingerprint: { selector: "#save-settings", statePath: "web.elements.save.changes" }, source: "runtime" }
-  });
-  assert.equal(signalCount(target), 12, "all twelve recorded signals reach the wire, not just the selector");
-  assert.equal((target?.element).testId, "save-changes");
-  assert.equal((target?.element).accessibleName, "Save changes");
-  assert.equal((target?.element).implicitRole, "button");
-  assert.equal(target?.selector, "#save-settings");
+test("the row the action failed on is one of the rows that survives", () => {
+  const evidence = sanitizeWebLlmSnapshot(catalogue(), { budget: "failure", failedAction: { selector: '[data-testid="product-1-add"]' } });
+  assert.equal(typeof evidence.failedTarget, "string", JSON.stringify({ failedTarget: evidence.failedTarget, failedTargetMissing: evidence.failedTargetMissing }));
+  assert.equal(evidence.failedTargetMissing, void 0);
+  assert.equal(wholeRows(evidence).includes(1), true, `row 1 incomplete: ${JSON.stringify(rowsSeen(evidence))}`);
 });
-test("Core matched a candidate: the drift-corrected candidate beats the recorded identity", () => {
-  const target = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: recordedElement,
-    target: {
-      kind: "element",
-      fingerprint: { selector: "#save-settings" },
-      candidates: [
-        { candidateId: "candidate.stale", selector: "#save-settings-old", tagName: "button" },
-        { candidateId: "candidate.current", selector: "#settings-save-v2", tagName: "button", testId: "save-changes", accessibleName: "Save changes" }
+function wholeRows(evidence) {
+  return Object.entries(rowsSeen(evidence)).filter(([, seen]) => seen.name && seen.price && seen.rating).map(([index]) => Number(index));
+}
+function rowsSeen(evidence) {
+  const rows = {};
+  for (const element of evidence.elements) {
+    const index = element.item?.index;
+    if (index === void 0) continue;
+    rows[index] ??= { name: false, price: false, rating: false };
+    const said = `${element.name ?? ""} ${element.text ?? ""}`;
+    if (PRODUCTS.some((product) => said.includes(product.name))) rows[index].name = true;
+    if (/\$\d/u.test(said)) rows[index].price = true;
+    if (/out of 5/u.test(said)) rows[index].rating = true;
+  }
+  return rows;
+}
+function catalogue() {
+  const row = (index) => {
+    const product = PRODUCTS[index - 1];
+    const context = { landmark: "main", heading: "All products", listPosition: { index, total: PRODUCTS.length } };
+    return {
+      controls: [
+        { tagName: "a", selector: `[data-testid="product-${index}-link"]`, name: product.name, context },
+        { tagName: "button", selector: `[data-testid="product-${index}-add"]`, name: "Add to cart", context },
+        { tagName: "input", selector: `[data-testid="product-${index}-compare"]`, type: "checkbox", name: "Compare", context }
       ],
-      selectedCandidate: { candidateId: "candidate.current", confidence: 0.91, matchedSignals: ["testId"], failedSignals: ["selector"] }
-    }
-  });
-  assert.equal((target?.element).selector, "#settings-save-v2", "the element the page really has, not the one that was recorded");
-  assert.equal(target?.selector, "#settings-save-v2");
-  assert.ok(signalCount(target) < 12);
-});
-test("Core matched but adapted only the fingerprint: the adaptation is still not discarded", () => {
-  const target = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: recordedElement,
-    target: {
-      kind: "element",
-      fingerprint: { selector: "#settings-save-v2", tagName: "button", testId: "save-changes-v2" },
-      selectedCandidate: { candidateId: "candidate.current", confidence: 0.88, matchedSignals: ["testId"], failedSignals: [] }
-    }
-  });
-  assert.equal((target?.element).testId, "save-changes-v2");
-  assert.equal((target?.element).selector, "#settings-save-v2");
-});
-test("an adapted target's own element wins when Core matched, and when it names another control", () => {
-  const adaptedElement = { selector: "#settings-save-v2", tagName: "button", testId: "save-changes-v2" };
-  const matched = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: recordedElement,
-    target: { element: adaptedElement, selectedCandidate: { candidateId: "candidate.current", confidence: 0.9 } }
-  });
-  assert.equal((matched?.element).testId, "save-changes-v2");
-  const unmatched = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: recordedElement,
-    target: { element: adaptedElement }
-  });
-  assert.equal((unmatched?.element).testId, "save-changes-v2", "an element the recording never described is an adaptation");
-  const passThrough = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: recordedElement,
-    target: { element: { selector: "#save-settings", tagName: "BUTTON", testId: "save-changes", visibleText: " Save changes " } }
-  });
-  assert.equal(signalCount(passThrough), 12, "the recording's own values, however Core spaced or cased them, keep the richer recording");
-});
-test("a source with no recognized signal does not shadow one that has them", () => {
-  const target = outputTargetFromPayload({
-    selector: "#save-settings",
-    element: { nothingRecognized: true },
-    target: { kind: "element", fingerprint: { selector: "#save-settings", tagName: "button" }, source: "runtime" }
-  });
-  assert.deepEqual(target?.element, { selector: "#save-settings", tagName: "button" });
-});
-test("the element ordering does not decide the selector or the emptiness guard", () => {
-  assert.equal(outputTargetFromPayload({
-    selector: "#recorded",
-    element: recordedElement,
-    target: { kind: "element", fingerprint: { selector: "#adapted" }, source: "runtime" }
-  })?.selector, "#adapted");
-  assert.equal(outputTargetFromPayload({ element: recordedElement })?.selector, "#save-settings", "an element-only payload still resolves its selector from the element");
-  assert.equal(outputTargetFromPayload({ element: { tagName: "button", text: "Save" } }), void 0, "no selector and no visual target is still no target");
-});
-var repairedSave = {
-  handles: { element: "target.2" },
-  handleResolution: "named",
-  tagName: "button",
-  accessibleName: "Apply changes",
-  selector: "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)",
-  metadata: { controlType: "submit", formId: "settings-form" }
-};
-var recordedNode = () => webAutomationOutputPayload("web.dom.click", {
-  element: recordedElement,
-  visualTarget: { namespace: "web", statePath: "web.elements.button.save", documentBounds: { x: 10, y: 20, width: 90, height: 30 } }
-});
-function dispatched(parameters) {
-  const target = normalizeAutomationStudioElementTarget(parameters.target, { source: "runtime" }) ?? normalizeAutomationStudioElementTarget(parameters, { source: "runtime" });
-  assert.ok(target, "Core found an element target to prepare");
-  return { ...parameters, target };
-}
-test("an applied repair, as the node stores it, names the element the page is asked for", () => {
-  const node = { ...recordedNode(), target: repairedSave };
-  assert.equal(adaptedTargetSupersedesRecording(node), true);
-  const target = outputTargetFromPayload(node);
-  assert.equal(target?.selector, repairedSave.selector);
-  assert.deepEqual(target?.element, { selector: repairedSave.selector, tagName: "button", accessibleName: "Apply changes" });
-});
-test("the same repair after Core's dispatch rewrite still names it, though its handles are gone", () => {
-  const node = dispatched({ ...recordedNode(), target: repairedSave });
-  assert.equal("handles" in node.target, false, "Core's rewrite keeps no marker, which is why the rule reads content");
-  assert.equal(adaptedTargetSupersedesRecording(node), true);
-  const target = outputTargetFromPayload(node);
-  assert.equal(target?.selector, repairedSave.selector);
-  assert.deepEqual(target?.element, { selector: repairedSave.selector, tagName: "button", accessibleName: "Apply changes" });
-  assert.equal((target?.element).testId, void 0, "nothing of the stale Save rides along");
-});
-test("Core's rewrite of an unrepaired node is recognised as the recording, whatever the recording looked like", () => {
-  const longText = `Save ${"and keep going ".repeat(120)}`.trim();
-  const recordings = [
-    ["the identity-drift Save", "web.dom.click", { element: { ...recordedElement, role: "", context: { formId: "settings-form", heading: "Workspace settings" } } }],
-    ["a typed field, whose typed text is not its identity", "web.dom.type", { inputValue: "Aurora Field Team", element: { selector: "#display-name", tagName: "input", inputType: "text", name: "displayName", label: "Workspace name", implicitRole: "textbox" } }],
-    ["signals only in the attributes", "web.dom.click", { element: { selector: "button.go", tagName: "button", attributes: { "aria-label": "Go now", "data-testid": "go" } } }],
-    ["padded text and an upper-case tag", "web.dom.click", { element: { selector: "#pad", tagName: "BUTTON", visibleText: "  Save changes  ", text: " Save changes " } }],
-    ["text and an implied role only", "web.dom.click", { element: { selector: "#plain", tagName: "a", text: "Read more", implicitRole: "link", href: "https://example.test/more" } }],
-    ["text past Core's length bound", "web.dom.click", { element: { selector: "#long", tagName: "button", visibleText: longText } }],
-    ["a visual target beside the element", "web.dom.click", { element: { selector: "#v", tagName: "button", visibleText: "Next" }, visualTarget: { namespace: "web", statePath: "web.elements.next", entityId: "next", entityKind: "button" } }]
-  ];
-  assert.ok(longText.length > 1e3, "the fixture reaches Core's bound");
-  for (const [name, outputId, recording] of recordings) {
-    const node = webAutomationOutputPayload(outputId, recording);
-    const prepared = dispatched(node);
-    assert.equal(adaptedTargetSupersedesRecording(prepared), false, name);
-    assert.deepEqual(outputTargetFromPayload(prepared)?.element, outputTargetFromPayload(node)?.element, `${name}: the recording is dispatched whole`);
-  }
-});
-test("a target that only moves the recorded control keeps the recorded identity, and still moves the selector", () => {
-  const node = dispatched({ ...recordedNode(), target: { tagName: "button", accessibleName: "Save changes", visibleText: "Save changes", selector: "footer > button" } });
-  assert.equal(adaptedTargetSupersedesRecording(node), false);
-  const target = outputTargetFromPayload(node);
-  assert.equal(target?.selector, "footer > button");
-  assert.equal(signalCount(target), 12, "the page checks the new place against everything the recording knew");
-});
-test("a repair with no selector still carries its own identity, beside the recorded selector the page will check against it", () => {
-  const fingerprintOnly = { handles: repairedSave.handles, handleResolution: "named", tagName: "button", accessibleName: "Apply changes", metadata: repairedSave.metadata };
-  const node = dispatched({ ...recordedNode(), target: fingerprintOnly });
-  const target = outputTargetFromPayload(node);
-  assert.deepEqual(target?.element, { tagName: "button", accessibleName: "Apply changes" });
-  assert.equal(target?.selector, "#save-settings", "the recorded selector is a hint the page vetoes by the repair, not by the recording");
-});
-test("handles without a resolution are not the domain's mark, and the content rule still decides", () => {
-  const sameControl = { ...recordedNode(), target: { handles: { element: "target.1" }, tagName: "button", accessibleName: "Save changes" } };
-  assert.equal(adaptedTargetSupersedesRecording(sameControl), false);
-  const otherControl = { ...recordedNode(), target: { handles: { element: "target.1" }, handleResolution: "guessed", tagName: "button", accessibleName: "Discard changes" } };
-  assert.equal(adaptedTargetSupersedesRecording(otherControl), true);
-  assert.equal(adaptedTargetSupersedesRecording(recordedNode()), false, "no target at all is the recording");
-});
-var recordedContext = {
-  formId: "settings-form",
-  formName: "settings",
-  formAction: "/workspace/settings",
-  fieldsetLegend: "General",
-  landmark: "main",
-  landmarkName: "Workspace",
-  heading: "Workspace settings",
-  listPosition: { index: 3, total: 24 },
-  tablePosition: { row: 2, column: 4, columnHeader: "Total" }
-};
-test("where the element sat survives into the fingerprint, field by field", () => {
-  const fingerprint = elementFingerprint({ selector: "#save", tagName: "button", context: recordedContext });
-  assert.deepEqual(fingerprint?.context, recordedContext);
-});
-test("and into the dispatched target, which is the layer it used to die at", () => {
-  const target = outputTargetFromPayload({
-    selector: "#save",
-    element: { selector: "#save", tagName: "button", context: { formName: "settings", fieldsetLegend: "General" } }
-  });
-  assert.deepEqual((target?.element).context, { formName: "settings", fieldsetLegend: "General" });
-});
-test("a context key the normalizer does not know does not reach the page", () => {
-  const fingerprint = elementFingerprint({
-    selector: "#save",
-    context: { formName: "settings", formIdentifier: "settings-form", landmark: 7 }
-  });
-  assert.deepEqual(fingerprint?.context, { formName: "settings" }, "an unknown key and a mistyped one are both dropped");
-});
-test("a position is only a position when it is complete", () => {
-  const partial = elementFingerprint({
-    selector: "#cell",
-    context: { listPosition: { index: 3 }, tablePosition: { row: 2, column: 4 } }
-  });
-  assert.deepEqual(partial?.context, { tablePosition: { row: 2, column: 4 } }, "an index with no total says how far along nothing");
-});
-test("an element inside no form, list or table carries no context at all", () => {
-  assert.equal("context" in (elementFingerprint({ selector: "#plain", tagName: "div" }) ?? {}), false);
-  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: {} }) ?? {}), false, "an empty context is absent, not an empty object");
-  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: "main" }) ?? {}), false, "a context that is not an object is absent");
-});
-test("the attribute map is narrowed to the strings Core compares", () => {
-  const fingerprint = elementFingerprint({
-    selector: "#save",
-    attributes: { "data-testid": "save", "aria-hidden": true, "data-config": { nested: 1 } }
-  });
-  assert.deepEqual(fingerprint?.attributes, { "data-testid": "save" });
-  assert.deepEqual(elementFingerprint({ selector: "#save", attributes: {} })?.attributes, {}, "an element that carried an empty map still carries one");
-});
-test("a checkbox's checked state survives into the fingerprint and the dispatched target, unchecked included", () => {
-  assert.equal(elementFingerprint({ selector: "#agree", inputType: "checkbox", checked: true })?.checked, true);
-  const target = outputTargetFromPayload({
-    selector: "#agree",
-    element: { selector: "#agree", tagName: "input", inputType: "checkbox", checked: false }
-  });
-  assert.equal((target?.element).checked, false, "false is a state, not an absence");
-});
-test("a checked state that is not a boolean does not reach the page", () => {
-  for (const checked of ["true", 1, null, { value: true }]) {
-    assert.equal("checked" in (elementFingerprint({ selector: "#agree", checked }) ?? {}), false, JSON.stringify(checked));
-  }
-});
-test("a landmark's name reaches the dispatched target beside the role it names", () => {
-  const target = outputTargetFromPayload({
-    selector: "#agree",
-    element: { selector: "#agree", context: { landmark: "region", landmarkName: "Billing details" } }
-  });
-  assert.deepEqual((target?.element).context, { landmark: "region", landmarkName: "Billing details" });
-  assert.equal("context" in (elementFingerprint({ selector: "#agree", context: { landmarkName: 7 } }) ?? {}), false, "a name that is not text is no context at all");
-});
-test("the record the element sat in survives into the fingerprint", () => {
-  const record = { keyAttribute: "data-member-id", key: "usr_a91", text: "Priya Iqbal" };
-  const fingerprint = elementFingerprint({ selector: "#row-action", tagName: "button", context: { record } });
-  assert.deepEqual(fingerprint?.context, { record });
-});
-test("and into the dispatched target, which is where the page reads it", () => {
-  const target = outputTargetFromPayload({
-    selector: "#row-action",
-    element: { selector: "#row-action", context: { record: { keyAttribute: "data-member-id", key: "usr_a91" } } }
-  });
-  assert.deepEqual(
-    (target?.element).context?.record,
-    { keyAttribute: "data-member-id", key: "usr_a91" }
-  );
-});
-test("a record is read with the same closed vocabulary as the context around it", () => {
-  const fingerprint = elementFingerprint({
-    selector: "#row-action",
-    context: { record: { key: "usr_a91", rowIndex: 92, text: 7 } }
-  });
-  assert.deepEqual(fingerprint?.context, { record: { key: "usr_a91" } }, "an unknown key and a mistyped one are both dropped");
-});
-test("a record with nothing in it is absent, not an empty object", () => {
-  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: {} } }) ?? {}), false);
-  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: "row 92" } }) ?? {}), false, "a record that is not an object is no context at all");
-});
-var recordedRowAction = {
-  selector: '[data-testid="member-rows"] > tr:nth-of-type(171) > td:nth-of-type(7) > button',
-  tagName: "button",
-  accessibleName: "Row actions",
-  visibleText: "Row actions",
-  implicitRole: "button",
-  classNames: ["x1f4a"],
-  context: { tablePosition: { row: 171, column: 7 }, record: { keyAttribute: "data-member-id", key: "usr_3c95c2" } }
-};
-var renamedRowAction = {
-  handles: { element: "target.2" },
-  handleResolution: "named",
-  tagName: "button",
-  accessibleName: "Member actions",
-  selector: '[data-testid="member-rows"] > tr:nth-of-type(171) > td:nth-of-type(7) > button',
-  metadata: { controlType: "button", listIndex: 171, listTotal: 240 }
-};
-var rowNode = () => webAutomationOutputPayload("web.dom.click", { element: recordedRowAction });
-var recordOf = (target) => target?.element?.context?.record;
-test("a repair inside a list keeps its own name and still carries the recorded record", () => {
-  const node = { ...rowNode(), target: renamedRowAction };
-  assert.equal(adaptedTargetSupersedesRecording(node), true, "the repair names a label the recording never held");
-  const target = outputTargetFromPayload(node);
-  assert.equal((target?.element).accessibleName, "Member actions", "the repair's identity is what the page is asked for");
-  assert.deepEqual(recordOf(target), { keyAttribute: "data-member-id", key: "usr_3c95c2" });
-});
-test("and still carries it after Core's dispatch rewrite, which is where it used to be lost", () => {
-  const node = dispatched({ ...rowNode(), target: renamedRowAction });
-  const fingerprint = node.target.fingerprint ?? {};
-  assert.equal("context" in fingerprint, false, "Core's normalizer has no context key: this is the loss being compensated for");
-  assert.equal(adaptedTargetSupersedesRecording(node), true);
-  const target = outputTargetFromPayload(node);
-  assert.equal((target?.element).accessibleName, "Member actions");
-  assert.deepEqual(recordOf(target), { keyAttribute: "data-member-id", key: "usr_3c95c2" });
-});
-test("the recorded record does not overwrite one an adapted target named for itself", () => {
-  const node = {
-    ...rowNode(),
-    target: { ...renamedRowAction, element: { tagName: "button", accessibleName: "Member actions", context: { record: { keyAttribute: "data-member-id", key: "usr_b430d2" } } } }
+      text: [
+        { tagName: "span", selector: `[data-testid="product-${index}-price"]`, visibleText: product.price, context },
+        { tagName: "span", selector: `[data-testid="product-${index}-rating"]`, visibleText: product.rating, context },
+        { tagName: "span", selector: `[data-testid="product-${index}-stock"]`, visibleText: index % 3 === 0 ? "Out of stock" : "In stock", context },
+        { tagName: "p", selector: `[data-testid="product-${index}-blurb"]`, visibleText: `${product.name} is hand finished in small batches and ships within two working days.`, context }
+      ]
+    };
   };
-  assert.deepEqual(
-    recordOf(outputTargetFromPayload(node)),
-    { keyAttribute: "data-member-id", key: "usr_b430d2" },
-    "a source describing a record of its own is describing one, not inheriting one"
-  );
-});
-test("a recording that named no record still dispatches without one", () => {
-  const node = { ...recordedNode(), target: repairedSave };
-  assert.equal(recordOf(outputTargetFromPayload(node)), void 0, "nothing is invented for a control that sits in no record");
-});
+  const rows = PRODUCTS.map((_, offset) => row(offset + 1));
+  const failedSelector = '[data-testid="product-1-add"]';
+  const controls = rows.flatMap((entry) => entry.controls);
+  const filters = ["Sort by price", "Sort by rating", "In stock only", "Under $25", "Clear filters", "Search products"].map((name, offset) => ({ tagName: "button", selector: `[data-testid="filter-${offset}"]`, name, context: { landmark: "navigation", heading: "Refine" } }));
+  const pagination = [
+    { tagName: "a", selector: '[data-testid="page-next"]', name: "Next page" },
+    { tagName: "a", selector: '[data-testid="page-2"]', name: "Page 2" },
+    { tagName: "a", selector: '[data-testid="page-3"]', name: "Page 3" }
+  ];
+  const interactive = [
+    ...controls.filter((element) => element.selector === failedSelector),
+    ...controls.filter((element) => element.selector !== failedSelector),
+    ...filters,
+    ...pagination
+  ];
+  const text = [
+    ...rows.flatMap((entry) => entry.text),
+    { tagName: "p", selector: '[data-testid="page-count"]', visibleText: "Page 1 of 3" },
+    { tagName: "p", selector: '[data-testid="product-count"]', visibleText: "23 products" }
+  ];
+  return {
+    url: "https://example.test/catalog",
+    title: "Product catalog",
+    elementTotal: interactive.length + text.length,
+    interactiveElements: [...interactive, ...text]
+  };
+}

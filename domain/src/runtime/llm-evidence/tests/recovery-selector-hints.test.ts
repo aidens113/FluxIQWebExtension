@@ -31,6 +31,19 @@ import { CAPTURED_DETECTIONS } from "../structure/tests/captured-detections";
 
 const SCOPE = { projectId: "project.repair", flowId: "flow.repair", runId: "run.repair" };
 const CLICK = { nodeId: "node.save", definitionId: "web.output.dom-click" };
+
+/** What the recording addressed, for a row that resolves the control named by `handle`: the same control. */
+function asRecorded(packet: JsonObject, handle: string) {
+  const element = (packet.elements as Array<{ target: string; name?: string }>).find((candidate) => candidate.target === handle);
+  const accessibleName = typeof element?.name === "string" ? element.name : undefined;
+  // A handle the packet never issued names no control, and the recording is
+  // then a button and nothing more: the rows that pass one are about the handle
+  // being refused before anything is compared.
+  const recorded: JsonObject = accessibleName === undefined
+    ? { tagName: "button", role: "button" }
+    : { tagName: "button", role: "button", accessibleName };
+  return { ...CLICK, recordedTarget: { element: recorded } };
+}
 const DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID } as const;
 
 /** A policy that lets the exploration change the page, as a repair preset may. */
@@ -147,11 +160,11 @@ function askAsCore(runtime: WebAutomationLlmEvidenceRuntime, explored: Explored[
   assert.ok(qualified, handle);
   const carried = explored.find((entry) => entry.evidenceId === qualified[1]);
   assert.ok(carried, `Core carried ${qualified[1]}`);
-  return runtime.validateTargetOverrideEvidence(carried.packet, { handles: { element: qualified[2]! } }, CLICK);
+  return runtime.validateTargetOverrideEvidence(carried.packet, { handles: { element: qualified[2]! } }, asRecorded(carried.packet, qualified[2]!));
 }
 
 function askFailure(runtime: WebAutomationLlmEvidenceRuntime, failure: JsonObject, handle: string): AutomationStudioRuntimeTargetOverrideEvidenceValidation {
-  return runtime.validateTargetOverrideEvidence(failure, { handles: { element: handle } }, CLICK);
+  return runtime.validateTargetOverrideEvidence(failure, { handles: { element: handle } }, asRecorded(failure, handle));
 }
 
 function handleNamed(packet: JsonObject, name: string): string {
@@ -195,12 +208,12 @@ test("a repair naming a control only the exploration revealed resolves with the 
 test("a handle no packet issued is still refused, and a packet this domain never issued gets no selector hint", async () => {
   const { runtime, failure, explored } = await dismissedDialog();
 
-  assert.deepEqual(askAsCore(runtime, explored, "explored.2:target.9"), { status: "ambiguous", reason: "handle_not_issued" });
-  assert.deepEqual(askFailure(runtime, failure, "target.9"), { status: "ambiguous", reason: "handle_not_issued" });
+  assert.deepEqual(askAsCore(runtime, explored, "explored.2:target.9"), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(askFailure(runtime, failure, "target.9"), { status: "absent", reason: "handle_not_issued" });
 
   const altered = structuredClone(explored[1]!.packet);
   for (const element of altered.elements as Array<{ name?: string }>) element.name = `${element.name} (edited)`;
-  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "target.1" } }, CLICK));
+  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "target.1" } }, asRecorded(altered, "target.1")));
   assert.equal(target.selector, undefined);
 });
 
