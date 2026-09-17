@@ -7,7 +7,7 @@
 // it would move another agent's checkout.
 
 import path from "node:path";
-import { samePath } from "./path-identity.mjs";
+import { samePath } from "../../worktree/index.mjs";
 
 const LINK = /^link:(.+)$/u;
 

@@ -8,7 +8,7 @@
     "agent:orchestrator": "pnpm --filter @fluxiq-web-extension/agent-orchestrator build && node packages/agent-orchestrator/dist/cli.js",
     "boundary:audit": "pnpm --filter @fluxiq-web-extension/boundary-audit build && node packages/boundary-audit/dist/cli.js --repository .",
     "build": "pnpm -r build",
-    "check": "pnpm structure:test && pnpm lab:test && node scripts/structure-audit.mjs && pnpm -r check",
+    "check": "pnpm structure:test && pnpm lab:test && pnpm task:test && node scripts/structure-audit.mjs && pnpm -r check",
     "dev": "node scripts/run-fluxiq-web.mjs",
     "demo:record": "pnpm --filter @fluxiq-web-extension/scenario-lab build && pnpm --filter @fluxiq-web-extension/extension test:e2e:build && pnpm --filter @fluxiq-web-extension/test-runner... build && node scripts/record-demo-workspace.mjs",
     "demo:llm:setup": "node scripts/setup-demo-llm-key.mjs",
@@ -55,6 +55,8 @@
     "structure:check": "node scripts/structure-audit.mjs",
     "structure:baseline": "node scripts/structure-audit.mjs --update",
     "structure:test": "node --test \"scripts/structure-audit/rules/tests/*.test.mjs\" \"scripts/structure-audit/tests/*.test.mjs\"",
+    "task": "node scripts/task/run-task.mjs",
+    "task:test": "node --test \"scripts/task/tests/*.test.mjs\" \"scripts/worktree/tests/*.test.mjs\"",
     "test": "pnpm -r test"
   },
   "devDependencies": {

@@ -9,12 +9,12 @@ test("a trailing separator does not make a different directory", () => {
 
 test("on Windows, case and slash direction do not make a different directory", { skip: process.platform !== "win32" }, () => {
   assert.equal(samePath("f:\\FXLAB\\Lab-Ext", "F:/fxlab/lab-ext"), true);
-  assert.equal(pathInside("F:\\FXLAB\\!fluxiq\\packages\\fluxiq", "F:/fxlab/!FluxIQ"), true);
+  assert.equal(pathInside("F:/fxlab/!FluxIQ", "F:\\FXLAB\\!fluxiq\\packages\\fluxiq"), true);
 });
 
-test("inside means the directory itself or below it, never a sibling sharing a prefix", () => {
-  assert.equal(pathInside("F:/fxlab/!FluxIQ/packages/fluxiq", "F:/fxlab/!FluxIQ"), true);
+test("inside means the parent itself or below it, never a sibling sharing a prefix", () => {
+  assert.equal(pathInside("F:/fxlab/!FluxIQ", "F:/fxlab/!FluxIQ/packages/fluxiq"), true);
   assert.equal(pathInside("F:/fxlab/!FluxIQ", "F:/fxlab/!FluxIQ"), true);
-  assert.equal(pathInside("F:/fxlab/!FluxIQ-old/packages/fluxiq", "F:/fxlab/!FluxIQ"), false);
-  assert.equal(pathInside("F:/!FluxIQ/packages/fluxiq", "F:/fxlab/!FluxIQ"), false);
+  assert.equal(pathInside("F:/fxlab/!FluxIQ", "F:/fxlab/!FluxIQ-old/packages/fluxiq"), false);
+  assert.equal(pathInside("F:/fxlab/!FluxIQ", "F:/!FluxIQ/packages/fluxiq"), false);
 });

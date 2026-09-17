@@ -1,6 +1,6 @@
 // Every running process's id, parent, name and command line, as the operating
 // system reports them. A listing that cannot be read is an error, never an
-// empty list: an empty list would read as "nothing is running in the pair".
+// empty list: an empty list would read as "nothing is running in this worktree".
 
 import { execFile } from "node:child_process";
 import path from "node:path";

@@ -10,28 +10,17 @@ import { withoutProviderSecrets } from "../../provider-secret-environment.mjs";
 import { repositoryRoot } from "../lab-instance.mjs";
 import { PAIR_USAGE, parsePairArgs } from "./arguments.mjs";
 import { campaignEnvironment } from "./campaign-environment.mjs";
-import { runGit } from "./git-command.mjs";
+import { buildCore, clearMarker, coreDistPaths, pathInside, processesUsingRoots, readSideState, runGit, runPnpm, samePath, writeMarker } from "../../worktree/index.mjs";
 import { renderPairInstructions } from "./instructions.mjs";
-import { clearMarker, writeMarker } from "./markers.mjs";
 import { planSideMove } from "./move-plan.mjs";
-import { pathInside, samePath } from "./path-identity.mjs";
-import { runPnpm } from "./pnpm-command.mjs";
-import { listProcesses } from "./process-list.mjs";
-import { processesUsingRoots } from "./processes-using-roots.mjs";
 import { providerKeySource } from "./provider-key.mjs";
 import { resolvePairRoots } from "./roots.mjs";
-import { readSideState } from "./side-state.mjs";
 
 /**
  * The Core packages a Lab run reads from `dist`, in Core's own build order
  * (its root `build` script). Core's web panel is not here: the Lab builds it
  * itself, into a cache keyed by these packages' output.
  */
-const CORE_PACKAGES = [
-  { filter: "@fluxiq/contracts", directory: "contracts" },
-  { filter: "fluxiq", directory: "fluxiq" },
-  { filter: "@fluxiq/client-gateway-websocket", directory: "client-gateway-websocket" },
-];
 const INSTALL = ["install", "--frozen-lockfile", "--config.confirm-modules-purge=false"];
 
 /** Runs `pnpm lab:pair` for `argv` and sets the process exit code. */
@@ -48,14 +37,14 @@ async function pairCommand(argv) {
   const { extRoot, coreRoot } = await resolvePairRoots({ repositoryRoot, extRoot: options.extRoot, readText: (file) => readFile(file, "utf8") });
   await requireWorktreeOfThisRepository(extRoot);
   const [core, ext] = await Promise.all([
-    readSideState({ side: "core", root: coreRoot, target: options.core, buildable: true, distPaths: CORE_PACKAGES.map((item) => path.join(coreRoot, "packages", item.directory, "dist")) }),
-    readSideState({ side: "ext", root: extRoot, target: options.ext, buildable: false, distPaths: [] }),
+    readSideState(coreRoot, options.core, { side: "core", buildable: true, distPaths: coreDistPaths(coreRoot) }),
+    readSideState(extRoot, options.ext, { side: "ext" }),
   ]);
   const plans = [planSideMove({ ...core, forceBuild: options.buildCore }), planSideMove({ ...ext, forceBuild: false })];
   const refusals = plans.flatMap((plan) => (plan.refusal === null ? [] : [plan.refusal]));
   if (refusals.length > 0) throw new Error(refusals.join(" "));
   if (!options.allowRunning && plans.some((plan) => plan.checkout || plan.install || plan.build)) {
-    const busy = processesUsingRoots({ processes: await listProcesses(), roots: [extRoot, coreRoot], selfPid: process.pid });
+    const busy = await processesUsingRoots([extRoot, coreRoot]);
     if (busy.length > 0) {
       const named = busy.slice(0, 5).map((entry) => `${entry.name} (pid ${entry.pid})`).join(", ");
       throw new Error(`${busy.length} running process(es) are working inside the pair, e.g. ${named}. Moving it now would change files they have loaded; wait for them to finish, or pass --allow-running.`);
@@ -85,9 +74,8 @@ async function applyPlan(plan) {
     await writeMarker(plan.root, "install", plan.targetLock);
   }
   if (plan.build) {
-    note({ state: "build", side: plan.side, root: plan.root, commit: plan.to, packages: CORE_PACKAGES.map((item) => item.filter) });
     await clearMarker(plan.root, "build");
-    for (const item of CORE_PACKAGES) await runPnpm(plan.root, ["--filter", item.filter, "build"], env);
+    await buildCore(plan.root, { env, note: (line) => note({ state: "build", side: plan.side, commit: plan.to, ...line }) });
     await writeMarker(plan.root, "build", plan.to);
   }
 }
@@ -95,10 +83,10 @@ async function applyPlan(plan) {
 async function install(plan, env) {
   note({ state: "install", side: plan.side, root: plan.root, lockfile: plan.targetLock, offline: true });
   try {
-    await runPnpm(plan.root, [...INSTALL, "--offline"], env);
+    await runPnpm(plan.root, [...INSTALL, "--offline"], { env });
   } catch (error) {
     note({ state: "install", side: plan.side, root: plan.root, offline: false, why: `the offline install failed, so the store may lack a package: ${error instanceof Error ? error.message : String(error)}` });
-    await runPnpm(plan.root, INSTALL, env);
+    await runPnpm(plan.root, INSTALL, { env });
   }
 }
 
@@ -113,7 +101,7 @@ async function requireWorktreeOfThisRepository(extRoot) {
 async function requireCoreLink(extRoot, coreRoot) {
   const link = path.join(extRoot, "domain", "node_modules", "fluxiq");
   const target = await realpath(link);
-  if (!pathInside(target, coreRoot)) throw new Error(`${link} resolves to ${target}, not into the pair's Core ${coreRoot}`);
+  if (!pathInside(coreRoot, target)) throw new Error(`${link} resolves to ${target}, not into the pair's Core ${coreRoot}`);
   note({ state: "linked", link, target });
 }
 

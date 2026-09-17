@@ -23,7 +23,7 @@ test("a marker is absent until written, reads back trimmed, and is gone once cle
 });
 
 test("an unknown marker kind is refused rather than written somewhere unexpected", async () => {
-  await assert.rejects(readMarker("F:/x", "other"), /Unknown pair marker "other"/u);
+  await assert.rejects(readMarker("F:/x", "other"), /Unknown worktree marker "other"/u);
 });
 
 test("a marker that cannot be read for any reason but absence is an error, not null", async () => {

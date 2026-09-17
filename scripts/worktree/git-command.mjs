@@ -1,5 +1,5 @@
-// Running git against one worktree of the pair. Output is returned with only
-// its trailing newline removed: a porcelain status line can begin with a space.
+// Running git against one worktree. Output is returned with only its trailing
+// newline removed: a porcelain status line can begin with a space.
 
 import { execFile } from "node:child_process";
 

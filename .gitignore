@@ -37,8 +37,9 @@ apps/extension/.test-build-scratch/
 # manifest, icons or HTML and is not loadable -- browsers and the Lab load
 # apps/extension/dist/<target>/, already ignored -- and domain/.test-build/ is
 # written and imported inside one test-domain.mjs process. Tracking them made 55
-# of every 100 commits carry generated output, and the sourcemaps are single
-# 438KB-995KB lines that cannot be merged. Regenerate with the extension build
-# and the domain test run. See docs/working/agent-git-workflow-plan.md.
+# of every 100 commits carry generated output, and four of the five sourcemaps
+# are a single line of 549KB to 1.26MB that cannot be merged. Regenerate with
+# the extension build and the domain test run. See
+# docs/working/agent-git-workflow-plan.md.
 apps/extension/build/
 domain/.test-build/

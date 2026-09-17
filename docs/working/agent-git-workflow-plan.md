@@ -13,13 +13,29 @@ Related: [AGENTS.md](../../AGENTS.md), [Agent Working Document Protocol](./agent
 
 ## Current State
 
-Nothing is implemented yet. This document records the design and the evidence
-behind it.
+The design is settled and evidenced by four measurement reports under
+`agent-git-workflow-plan/reports/`. Implementation is part done.
 
-Today every agent works in the single checkout at `F:\!FluxIQWebExtension` on
-the `dev` branch. Workers edit that shared working tree and never commit; the
-supervisor commits and pushes. There are no authoring branches. The only
-branches that exist are `dev`, `main` and a stale `week1-core-production-build`.
+**Landed.** Generated build output is untracked and line endings are normalized
+(`e46b987`); `AGENTS.md` carries the tiering rule and the worktree layout;
+`scripts/task/` is written, wired as `pnpm task`, and its argument, branch-name
+and layout tests pass 12/12. A pre-existing type error on `dev` was fixed on the
+way (`eff5097`) — `pnpm check` had been red, which would have made
+`pnpm task finish` refuse every task.
+
+**In flight.** `scripts/worktree/` (the extraction from `scripts/lab/pair/`
+plus the create/remove/Core-sibling modules), the architecture policy documents
+that still assert the old tracking answer, and the `test-domain.mjs` outdir
+cleaning fix.
+
+**Not started.** End-to-end exercise of a real task through
+`start` → `finish` on a throwaway slug; the Core-side paired-branch half.
+
+Before this work, every agent worked in the single checkout at
+`F:\!FluxIQWebExtension` on `dev`. Workers edit that shared working tree and
+never commit; the supervisor commits and pushes. There were no authoring
+branches — only `dev`, `main` and `week1-core-production-build`, which turned
+out to hold 4 unmerged commits rather than being stale (see Open Questions).
 
 That arrangement has three concrete costs, and it is worth being precise about
 which of them branch-per-agent would actually fix:
@@ -275,6 +291,26 @@ each rebuild will collide in minified bundles and source maps, which cannot be
 hand-resolved. Whatever the chosen remedy, the workflow must never ask an agent
 to resolve such a conflict by hand. Depends on the generated-output report.
 
+## A Guard Untracking Removed, And Why That Is Accepted
+
+Untracking the generated bundles removed a refusal the Testing Lab was getting
+for free. `scripts/lab/pair` reads dirtiness with
+`git status --porcelain=v1 --untracked-files=normal`, which does not report
+ignored paths. While `apps/extension/build/` was tracked, an unlabelled build in
+a pair worktree left it modified, and the next attempt to move the pair refused.
+Now that the path is ignored, that refusal no longer fires.
+
+This is accepted rather than replaced, for three reasons. The refusal was
+incidental — a side effect of tracking build output, not a guard anyone
+designed. The hazard it half-covered is still covered directly: `lab:pair`
+refuses to move a worktree while a process is running below it, which is the
+actual concurrency risk, and the build's destructive `rm` of the unpacked
+extension is what a concurrent reader needs protecting from. And the Lab rebuilds
+on every run, so stale ignored output is overwritten rather than trusted.
+
+What is lost is the nudge that made someone clean up after an unlabelled build.
+That is a cost worth paying to make parallel branches possible at all.
+
 ## Where The Shared Primitives Live — decided
 
 `scripts/task/` must not import from `scripts/lab/pair/`: authoring tooling
@@ -362,6 +398,15 @@ The only hook proposed is a `commit-msg` hook requiring the `Task:` trailer on
 - Should `pnpm task finish` refuse without observed check output, or only warn?
   Refusing is mechanical enforcement; warning keeps Tier 1 at two commands.
   Owner: supervisor, settled once worktree cost is known.
+- Scratch directories from past worker runs are never reclaimed: measured
+  2026-09-17, `apps/extension/.test-build-scratch` holds 1.4 GB across 162
+  label directories and `domain/.test-build-scratch` 178 MB across 99, plus the
+  `.lab-instances` directories. Each self-cleans when its label is reused, but
+  an abandoned label is never removed. All of it is ignored space, so this is
+  disk cost rather than repository cost. A blind sweep is unsafe because a
+  running worker owns one; the fix is an age-based prune, which fits naturally
+  as a `pnpm task prune` alongside `git worktree prune`. Owner: supervisor, once
+  the task tooling is verified.
 - `packages/agent-orchestrator` is dormant — no importer anywhere — yet its 16
   tests run inside every `pnpm check` and `pnpm test`. This plan does not build
   on it, which leaves it with no prospective consumer either. Keep it, wire it

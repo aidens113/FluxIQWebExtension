@@ -217,10 +217,18 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
 ## Generated Data
 
 Do not hand-edit generated or runtime state; regenerate it through the owning
-script. Never commit `.fluxiq/`, `apps/extension/dist/`, or
-`domain/.script-build/`. `apps/extension/build/` and `domain/.test-build/` are
-tracked — update them by running their build, not by hand. The per-path detail
-is in [repository layout and commands](docs/architecture/repository-layout.md).
+script. No build output is tracked. Never commit `.fluxiq/`,
+`apps/extension/dist/`, `apps/extension/build/`, `domain/.test-build/`, or
+`domain/.script-build/`. Regenerate the extension bundles with
+`pnpm --filter @fluxiq-web-extension/extension build` and the domain test build
+with an unlabelled `pnpm --filter @fluxiq-web-extension/domain test`. The
+per-path detail is in
+[repository layout and commands](docs/architecture/repository-layout.md).
+
+`apps/extension/build/` and `domain/.test-build/` were tracked until 2026-09-17.
+Nothing read the committed copies, and their sourcemaps are single lines of
+several hundred kilobytes that no merge tool can resolve, so parallel branches
+could not have worked while they stayed in the index.
 
 ## Documentation Maintenance
 
@@ -253,6 +261,50 @@ and state what was and was not exercised.
 
 Do not start the FluxIQ web panel by default. When the user explicitly asks
 you to manage it, use `pnpm dev`; otherwise tell the user which command to run.
+
+## Branches And Worktrees
+
+Isolation is per unit of work, never per agent. A branch bounds a change, not a
+worker: workers are ephemeral, several may serve one brief, and a re-dispatched
+worker is still the same unit of work. Agent identity travels in commit
+trailers instead. Full design and the measurements behind it are in
+[the agent git workflow plan](docs/working/agent-git-workflow-plan.md).
+
+The senior supervisor agent picks the tier when it writes the brief:
+
+- **Direct on `dev`** for supervisor edits of at most two files it already
+  understands — documentation, a ledger entry, config, a one-line fix. No
+  ceremony, and this stays the common case.
+- **A task branch** for any unit of work that has a brief. `pnpm task start
+  <slug>` branches `task/t<NNN>-<slug>` off `dev`; `pnpm task finish <id>`
+  integrates `dev`, merges back `--no-ff`, and deletes the branch.
+- **A task branch plus its own worktree** — `pnpm task start <slug> --worktree`
+  — when another agent is running repository-wide validation concurrently, when
+  the work is experimental and may be thrown away, or for a long Lab or build
+  run. The trigger is validation, not editing: concurrent workers editing
+  disjoint files in one checkout are safe, but a validation run that reads a
+  tree someone else is editing reports false failures and invites a worker to
+  "fix" a file another worker is still writing.
+
+Authoring worktrees live under `F:/fxwork/`, never `F:/fxlab/`, which holds the
+Lab's pinned test worktrees. `domain/package.json` links Core by a relative path
+out of the repository, so Core must be the worktree's sibling; sibling worktrees
+therefore share one Core, which is what makes a second worktree cost about four
+seconds instead of fifty. A task that edits Core takes a nested layout with its
+own Core worktree, because the shared one is detached and read-only. Remove a
+worktree with `pnpm task abandon` or `pnpm task finish`, never with
+`git worktree remove --force`, which fails on `node_modules` and partly deletes
+the tree before aborting.
+
+Commits on a task branch carry `Task: t<NNN>`, and `Worker: <agent-label>` where
+a worker produced the change. A task merges with `--no-ff` and the subject
+`Merge task t<NNN>: <title>`, so first-parent history reads as a list of tasks
+and `git revert -m 1 <merge>` undoes one cleanly. Commits are never squashed:
+they are the step-by-step record, and the merge commit is the boundary.
+
+Merge `dev` into the task branch and re-run the narrowest relevant checks before
+merging back. That is what catches two tasks that changed different files and
+still produced an incompatible system, which git cannot detect.
 
 ## Committing And Pushing
 

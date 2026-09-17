@@ -10,7 +10,7 @@ import { readSideState } from "../side-state.mjs";
 // A throwaway repository, with this machine's git configuration kept out so
 // the fixture neither depends on it nor is affected by it.
 async function withRepository(body) {
-  const root = await mkdtemp(path.join(tmpdir(), "lab-pair-side-"));
+  const root = await mkdtemp(path.join(tmpdir(), "worktree-side-"));
   const saved = { ...process.env };
   Object.assign(process.env, {
     GIT_CONFIG_GLOBAL: path.join(root, "gitconfig"), GIT_CONFIG_NOSYSTEM: "1",
@@ -43,7 +43,7 @@ async function withRepository(body) {
 
 test("a clean worktree reports its head, the resolved target and the target's lockfile", async () => {
   await withRepository(async ({ repo, git, first, second }) => {
-    const state = await readSideState({ side: "core", root: repo, target: "second-tag", buildable: true, distPaths: [path.join(repo, "packages", "x", "dist")] });
+    const state = await readSideState(repo, "second-tag", { side: "core", buildable: true, distPaths: [path.join(repo, "packages", "x", "dist")] });
     assert.deepEqual(state, {
       side: "core", root: repo, head: first, target: second, dirtyLines: [],
       targetLock: git("rev-parse", `${second}:pnpm-lock.yaml`), installedLock: null,
@@ -58,12 +58,12 @@ test("no target means the side stays at HEAD; markers and dist are read back", a
     await writeMarker(repo, "install", "lock-x");
     await writeMarker(repo, "build", first);
     await mkdir(path.join(repo, "dist"));
-    const state = await readSideState({ side: "core", root: repo, target: null, buildable: true, distPaths: [path.join(repo, "dist")] });
+    const state = await readSideState(repo, null, { side: "core", buildable: true, distPaths: [path.join(repo, "dist")] });
     assert.equal(state.target, first);
     assert.equal(state.installedLock, "lock-x");
     assert.equal(state.builtCommit, first);
     assert.equal(state.distPresent, true);
-    const ext = await readSideState({ side: "ext", root: repo, target: null, buildable: false, distPaths: [] });
+    const ext = await readSideState(repo, null, { side: "ext" });
     assert.equal(ext.builtCommit, null);
     assert.deepEqual(ext.dirtyLines, []);
   });
@@ -75,15 +75,15 @@ test("modified and untracked files are reported; ignored ones are not", async ()
     await writeFile(path.join(repo, "stray.txt"), "x\n");
     await mkdir(path.join(repo, "node_modules"), { recursive: true });
     await writeFile(path.join(repo, "node_modules", "ignored.txt"), "x\n");
-    const state = await readSideState({ side: "ext", root: repo, target: null, buildable: false, distPaths: [] });
+    const state = await readSideState(repo, null, { side: "ext" });
     assert.deepEqual(state.dirtyLines, [" M pnpm-lock.yaml", "?? stray.txt"]);
   });
 });
 
 test("a revision that names no commit, or a directory below the checkout top, is refused", async () => {
   await withRepository(async ({ repo }) => {
-    await assert.rejects(readSideState({ side: "ext", root: repo, target: "no-such-branch", buildable: false, distPaths: [] }), /ext revision "no-such-branch" does not name a commit/u);
+    await assert.rejects(readSideState(repo, "no-such-branch", { side: "ext" }), /ext revision "no-such-branch" does not name a commit/u);
     await mkdir(path.join(repo, "sub"));
-    await assert.rejects(readSideState({ side: "core", root: path.join(repo, "sub"), target: null, buildable: true, distPaths: [] }), /is not the top of a git checkout/u);
+    await assert.rejects(readSideState(path.join(repo, "sub"), null, { side: "core", buildable: true }), /is not the top of a git checkout/u);
   });
 });

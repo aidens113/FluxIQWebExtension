@@ -1,7 +1,11 @@
-// What the pair last completed in a worktree: the lockfile blob it installed
-// and the Core commit it built. Each marker sits in that worktree's ignored
+// What was last completed in a worktree: the lockfile blob installed there and
+// the commit built there. Each marker sits in that worktree's ignored
 // `node_modules`, is cleared before its step starts and written only after the
 // step succeeded, so it never claims work that did not finish.
+//
+// The on-disk names still say `lab-pair` because they are state, not code: the
+// Lab's pair already holds files under these names, and renaming them would
+// make every existing pair reinstall and rebuild once for nothing.
 
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -10,7 +14,7 @@ const FILES = { install: ".lab-pair-installed-lock", build: ".lab-pair-built-com
 
 function markerPath(root, kind) {
   const file = FILES[kind];
-  if (file === undefined) throw new Error(`Unknown pair marker ${JSON.stringify(kind)}`);
+  if (file === undefined) throw new Error(`Unknown worktree marker ${JSON.stringify(kind)}`);
   return path.join(root, "node_modules", file);
 }
 
