@@ -88,17 +88,11 @@ into `AS/runtime/recovery/annotation/`, and `service.ts` went 6757 -> 6468 with
 the baseline lowered to match, so it can never silently grow back.
 
 **Two silent-no-protection defects were closed, and one of them was live.**
-Making `deniedEvidenceKeys` required and fail-closed exposed that Flow
-Bootstrap never forwarded the bound domain's declared keys at all: its reusable
-context had been reaching the model with only Core's own `target` family
-denied, so the web domain's `html`, `innerHtml`, `outerHtml`, `pageSource`,
-`cookies`, `headers` and `selector` were not enforced on that path. Fixed by
-`automationStudioHarnessInputWithDeniedEvidenceKeys`, forwarded and never
-defaulted — a `?? []` there would restore the same hole. Separately, the
-structured diagnosis now reads `response.diagnosis` and *refuses* a
-diagnosis-shaped key found in `response.metadata`, recording it by field name
-and never by value, so a metadata-only `patchNeeded: false` can no longer
-cancel a billed patch call.
+`deniedEvidenceKeys` is required and fail-closed, which exposed that Flow
+Bootstrap never forwarded the bound domain's declared keys at all; it is
+forwarded now and never defaulted, because a `?? []` there restores the hole.
+The structured diagnosis reads `response.diagnosis` and refuses a
+diagnosis-shaped key in `response.metadata`, by field name and never by value.
 
 **The `llm` / `recovery` module cycle is now a build failure, not a comment.**
 `runtime/llm` may not import a value out of `runtime/recovery`; type-only
