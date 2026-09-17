@@ -78,14 +78,9 @@ The generalizable lesson, recorded because it was missed for most of a day: when
 a designed-in limit keeps generating blockers, the limit is the defect. Report
 it as such instead of engineering successive workarounds inside it.
 
-**The exploration now runs in production, as of 2026-09-16.** All three diffs
-in `reports/w2-3-bounded-exploration.md` are applied and four negative probes
-confirm the wiring is load-bearing: removing the exploration call fails four
-tests, dropping it from the trace fails two, and dropping either
-`recoveryDeadline` or `classifyRefusal` fails one each. R0 was taken rather
-than raising the frozen baseline — `maybeAnnotateRunDetailWithRuntimeLlm` moved
-into `AS/runtime/recovery/annotation/`, and `service.ts` went 6757 -> 6468 with
-the baseline lowered to match, so it can never silently grow back.
+**The exploration runs in production, as of 2026-09-16**, wired through
+`AS/runtime/recovery/annotation/` with four negative probes proving it is
+load-bearing (`reports/w2-3-bounded-exploration.md`).
 
 **Two silent-no-protection defects were closed, and one of them was live.**
 `deniedEvidenceKeys` is required and fail-closed, which exposed that Flow
@@ -101,10 +96,8 @@ by the supervisor reintroducing the exact cycle, observing the audit fail with
 a message naming the three ways out, and reverting. The shared values live in
 the new `runtime/loop-limits/`, which neither directory owns.
 
-**Both repositories are green at this point.** Core `pnpm check` exit 0,
-`vitest run src/programs/automation-studio/runtime` 884 passed / 884 across 97
-files; this repository `pnpm check` exit 0, `test-runner` 940 passed / 0
-failed, `structure-audit` passed in both.
+**Both repositories pass their structure audit at the 2026-09-17 pause**; the
+per-change test counts are in that day's ledger entries.
 
 **Concurrency is five workers, not nine.** Both crashes happened with nine heavy
 workers running on a machine with a known memory fault, so this is recorded as a
