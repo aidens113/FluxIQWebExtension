@@ -5,3 +5,4 @@ export * from "./built-flow.js";
 export * from "./core-identity.js";
 export * from "./final-state-facts.js";
 export * from "./probe-step.js";
+export * from "./probe-target.js";

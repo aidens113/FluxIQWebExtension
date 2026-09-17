@@ -15,7 +15,13 @@ export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 50_000 as const;
 export const LLM_LAB_MAX_CALLS_PER_RUN = 64 as const;
 export const LLM_LAB_MAX_ESTIMATED_COST_USD = 0.25 as const;
 
-export const llmTaskKinds = ["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt"] as const;
+/**
+ * `repair` is the iterating repair of a Flow that failed: the Lab plans it as
+ * Core's `explore_and_adapt`, which may gather evidence of its own before it
+ * proposes a change. `adapt` stays the narrower `diagnose_and_adapt`, which
+ * proposes one target override and never explores beyond the failure record.
+ */
+export const llmTaskKinds = ["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt", "repair"] as const;
 export type LlmTaskKind = (typeof llmTaskKinds)[number];
 
 export const llmEvidenceKinds = [

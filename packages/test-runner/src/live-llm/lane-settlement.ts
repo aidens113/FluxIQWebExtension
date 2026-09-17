@@ -9,6 +9,7 @@
 
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import type { RunnerFailure } from "../failure.js";
+import type { LiveLlmExplorationControl } from "./exploration-record.js";
 import type { LiveLlmRunBundle } from "./live-llm-run.js";
 
 /** The two settlements a live run offers, as `LiveLlmRun` implements them. */
@@ -16,7 +17,7 @@ export type LiveLlmLaneSettlement = {
   settle(control: LiveLlmLaneDetailReader, input: { projectId: string; runId: string }, bundle: LiveLlmRunBundle, publish: LiveLlmLanePublish): Promise<void>;
   settleUnfinished(control: LiveLlmLaneDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmLanePublish): Promise<RunnerFailure | undefined>;
 };
-type LiveLlmLaneDetailReader = { getRunDetail(projectId: string, runId: string): Promise<ExistingRunDetail> };
+type LiveLlmLaneDetailReader = { getRunDetail(projectId: string, runId: string): Promise<ExistingRunDetail> } & LiveLlmExplorationControl;
 type LiveLlmLanePublish = (details: Record<string, unknown>) => Promise<unknown>;
 
 /**

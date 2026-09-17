@@ -88,6 +88,36 @@ test("live LLM CLI takes a run token budget only when one is typed", () => {
   assert.throws(() => parseLabCommand(["run", "basic-form", "--llm-max-run-tokens", "150000"]), /explicit --live-llm/u);
 });
 
+test("--llm-task repair is a live task with the same budget options as adapt", () => {
+  const repair = ["--live-llm", "--llm-profile", "lab-explore-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "repair"];
+  // The campaign's own repair limits, which an iterating repair needs room for.
+  const command = parseLabCommand(["run", "identity-drift", "--variant", "renamed-redesign", "--flow", ...repair, "--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-calls", "26", "--llm-max-run-tokens", "600000"]);
+  assert.equal(command.command === "run" ? command.llm?.task : undefined, "repair");
+  assert.equal(command.command === "run" ? command.llm?.budget.maxCallsPerRun : undefined, 26);
+  assert.equal(command.command === "run" ? command.llm?.budget.maxTotalTokensPerRun : undefined, 600_000);
+  // Not a small fixed cap: an iterating repair takes the operator's number, up to Core's backstop.
+  assert.equal(parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--llm-max-calls", "64"]).command === "run" ? 64 : 0, 64);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--llm-max-calls", "65"]), /from 1 to 64/u);
+});
+
+test("--replays applies and replays the repair, and only for the two tasks that produce one", () => {
+  const repair = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "repair"];
+  const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
+  const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
+  for (const [task, count] of [[repair, "2"], [adapt, "3"], [repair, "0"]] as const) {
+    const command = parseLabCommand(["run", "identity-drift", "--flow", ...task, "--replays", count]);
+    assert.equal(command.command === "run" ? command.replays : undefined, Number(count));
+  }
+  // Absent unless typed, so an existing repair run applies and replays nothing.
+  const untyped = parseLabCommand(["run", "identity-drift", "--flow", ...adapt]);
+  assert.equal(untyped.command === "run" ? "replays" in untyped : true, false);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", ...create, "--instruction-task", "identity-drift-save", "--replays", "1"]), /--replays requires --live-llm with --llm-task repair or --llm-task adapt/u);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--replays", "1"]), /--replays requires --live-llm/u);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--replays", "1"]), /--replays replays the Flow the lane built/u);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--replays", "11"]), /--replays must be between 0 and 10/u);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--replays", "twice"]), /--replays must be an integer/u);
+});
+
 test("live LLM CLI fails closed without opt-in or required non-secret identity", () => {
   assert.throws(() => parseLabCommand(["run", "basic-form", "--llm-provider", "deepseek"]), /explicit --live-llm/);
   assert.throws(() => parseLabCommand(["run", "basic-form", "--live-llm"]), /--llm-profile is required/);

@@ -213,7 +213,11 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
  */
 test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the probe's start-page step, and the final-state facts", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep \} from "\.\/lane-rules\/index\.js";/u);
+  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, coreProbeTargetUsable, finalStateFacts, selectCoreProbeStep \} from "\.\/lane-rules\/index\.js";/u);
+  // The probe asks whether the page will accept the action, not whether the target is visible:
+  // a consent overlay covers a visible field, and Core refuses to type into a covered one.
+  assert.ok(source.includes("selector => coreProbeTargetUsable(page, selector, PROBE_TARGET_VISIBLE_MS)"), "H3: the probe's target check is a trial click, which tests occlusion");
+  assert.equal(/waitFor\(\{ state: "visible", timeout: PROBE_TARGET_VISIBLE_MS \}\)/u.test(source), false, "H3: the visibility-only probe check is gone");
   // Both Flow lanes -- the one built from the run's recording and the one built from a live instruction task -- are the Flow lane here.
   assert.ok(source.includes("const flowLane = options.flow === true || creation !== undefined;"), "H2: a created-Flow run is a Flow-lane run");
   assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");

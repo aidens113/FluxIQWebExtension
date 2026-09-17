@@ -96,7 +96,9 @@ async function runOnce(budget: Partial<LlmExecutionProfile["budget"]>) {
   const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: unknown }> = [];
   await run.settle(
-    { getRunDetail: async () => detail },
+    // No recovery trace on this run detail: the snapshot must then say the
+    // exploration record is absent rather than inventing an empty one.
+    { getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) },
     { projectId: "project-1", runId: "run-1" },
     { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } },
     async () => undefined,
@@ -118,6 +120,8 @@ test("a default adapt run records that it sent no high-token confirmation, and w
   assert.equal(snapshot.highTokenConfirmation.authorizedTokens, 100_000);
   assert.equal(snapshot.highTokenConfirmation.threshold, 100_000);
   assert.match(snapshot.highTokenConfirmation.reason, /within Core's 100000-token confirmation threshold; no confirmation is needed/u);
+  assert.equal(snapshot.exploration.source, "absent");
+  assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
   assert.equal(run.usage.calls, 3);
 });
 

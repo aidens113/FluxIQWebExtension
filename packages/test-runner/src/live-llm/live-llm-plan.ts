@@ -176,14 +176,17 @@ function highTokenConfirmation(budget: RunTokenBudget): LiveLlmPlan["highTokenCo
 
 // `adapt` stays the narrow `diagnose_and_adapt` grant, which now iterates and
 // may gather evidence but may still change only one target, as a proposal.
-// `create-flow` is the web panel's "Explore and create proposal": an iterating
-// `build_and_adapt` grant for one Flow build. `explore_and_adapt` is a purpose
-// the Lab can plan and carry, and no `--llm-task` selects it yet.
+// `repair` is the iterating repair: an `explore_and_adapt` grant, which may
+// gather its own evidence from the live page before it proposes, and whose
+// patch Core may execute rather than only propose. `create-flow` is the web
+// panel's "Explore and create proposal": an iterating `build_and_adapt` grant
+// for one Flow build.
 function purposeOf(task: LlmTaskKind): LiveLlmPurpose {
   if (task === "diagnose") return "diagnosis_only";
   if (task === "adapt") return "diagnose_and_adapt";
+  if (task === "repair") return "explore_and_adapt";
   if (task === "create-flow") return "build_and_adapt";
-  throw refusal(`--llm-task ${task} has no live runner; use diagnose, adapt or create-flow`);
+  throw refusal(`--llm-task ${task} has no live runner; use diagnose, adapt, repair or create-flow`);
 }
 
 function bounded(value: number, option: string, maximum: number): number {

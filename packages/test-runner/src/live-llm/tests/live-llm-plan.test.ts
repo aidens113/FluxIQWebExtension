@@ -83,13 +83,20 @@ test("an adapt call limit above Core's backstop or below one is refused, naming 
   assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 2.5 })), /--llm-max-calls 2\.5 must be a whole number/u);
 });
 
-test("explore_and_adapt is a purpose the Lab can type and carry into a Flow run", () => {
+test("repair plans the iterating explore_and_adapt grant, and adapt stays the narrow one", () => {
   // Compile-time as much as run-time: the purpose must be one the plan names
   // and one the Flow lane will carry to Core.
   const purpose: LiveLlmPurpose = "explore_and_adapt";
   const carried: PersistedFlowLlmExecution = { grantId: "llm-grant:test", purpose };
   assert.equal(carried.purpose, "explore_and_adapt");
-  // No --llm-task selects it yet; adapt stays the narrow grant.
+  const repair = planLiveLlmExecution(profile({ task: "repair" }));
+  assert.equal(repair.purpose, "explore_and_adapt");
+  assert.equal(repair.task, "repair");
+  // It iterates, so the operator's own call count stands, as it does for adapt.
+  assert.equal(repair.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
+  assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 40 })).maxCalls, 40);
+  assert.throws(() => planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 65 })), /--llm-max-calls 65 must be a whole number between 1 and 64/u);
+  // The narrow grant is unchanged: `repair` is a new task, not a redefinition of `adapt`.
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });
 
@@ -176,7 +183,7 @@ test("the operator's own budget is carried through untouched for the post-run ch
 test("an unsupported provider, model, task or retry count is refused", () => {
   assert.throws(() => planLiveLlmExecution(profile({ provider: "openai" })), /--llm-provider openai is unsupported/u);
   assert.throws(() => planLiveLlmExecution(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported/u);
-  assert.throws(() => planLiveLlmExecution(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; use diagnose, adapt or create-flow/u);
+  assert.throws(() => planLiveLlmExecution(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; use diagnose, adapt, repair or create-flow/u);
   assert.throws(() => planLiveLlmExecution(profile({ task: "edit-flow" })), /--llm-task edit-flow has no live runner/u);
   assert.throws(() => planLiveLlmExecution(profile({}, { maxRetries: 1 })), /--llm-max-retries 1 is unsupported/u);
 });

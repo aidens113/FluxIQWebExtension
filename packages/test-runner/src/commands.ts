@@ -9,7 +9,8 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 // A compare report is a bench id under `<runs>/bench/`, or a path to its `report.json` or bench directory.
 export type LabCommand =
   // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true }
+  // `replays` exists only with `llm.task` `repair` or `adapt`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
@@ -34,7 +35,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}) };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", ...llmOptionNames]);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--replays", ...llmOptionNames]);
     const { flowLane, rest: withoutFlow } = flowLaneOption(args);
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
@@ -43,9 +44,10 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (flowLane && (target.target === "existing" || target.target === "clone")) throw new Error("--flow builds a Flow from the run's own recording; existing and clone targets run a pre-existing Flow");
     const variant = optionalVariant(rest);
     const creation = creationOptions(rest, llm, { flowLane, dryRun });
+    const replays = replaysOption(rest, llm, flowLane);
     // A created Flow is built for the task's variant and run on it, so the variant needs no recorded Flow lane.
     if (variant.variantId && !flowLane && !creation) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
-    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...creation };
+    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...creation, ...replays };
   }
   if (command === "matrix") {
     rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
@@ -111,7 +113,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow)] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -138,7 +140,7 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
   const provider = required("--llm-provider");
   const model = required("--llm-model");
   const task = required("--llm-task");
-  if (!["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt"].includes(task)) throw new Error("--llm-task is invalid");
+  if (!["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt", "repair"].includes(task)) throw new Error("--llm-task is invalid");
   const cost = option(args, "--llm-max-cost-usd");
   const maxEstimatedCostUsd = cost === undefined ? undefined : Number(cost);
   if (maxEstimatedCostUsd !== undefined && (!Number.isFinite(maxEstimatedCostUsd) || maxEstimatedCostUsd < 0)) throw new Error("--llm-max-cost-usd must be a non-negative number");
@@ -218,6 +220,31 @@ function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, f
   if (flags.flowLane) throw new Error("--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
   if (taskId !== undefined && !KEBAB_ID.test(taskId)) throw new Error("--instruction-task must be a lowercase kebab-case task ID");
   return { ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...(flags.dryRun ? { dryRun: true as const } : {}) };
+}
+/** The most replays one run may ask for. A repair that holds three times holds; a hundred replays is a benchmark, not a proof. */
+const MAX_REPLAYS = 10;
+/**
+ * `--replays N`: prove the repair this run produced is reusable.
+ *
+ * It is one option because the three steps are one claim. The run approves the
+ * adaptation Core saved, applies it to the Flow, and then runs that Flow N
+ * times with no execution grant, checking each time that no provider was called
+ * and that the fixture's goal still held. `--replays 0` applies the repair and
+ * replays nothing, which is how a repair is made durable without paying for the
+ * proof. Without the option none of it happens, so an existing repair run keeps
+ * behaving exactly as it did.
+ *
+ * It belongs to the two tasks that repair a failed run. `create-flow` builds a
+ * Flow rather than repairing one, and `diagnose` changes nothing, so neither has
+ * anything to apply.
+ */
+function replaysOption(args: string[], llm: LlmExecutionProfile | undefined, flowLane: boolean): { replays?: number } {
+  const value = optionalIntegerOption(args, "--replays");
+  if (value === undefined) return {};
+  if (llm?.task !== "repair" && llm?.task !== "adapt") throw new Error("--replays requires --live-llm with --llm-task repair or --llm-task adapt: it applies and replays the repair that run produced");
+  if (!flowLane) throw new Error("--replays replays the Flow the lane built from this run's recording: pass --flow");
+  if (value < 0 || value > MAX_REPLAYS) throw new Error(`--replays must be between 0 and ${MAX_REPLAYS}`);
+  return { replays: value };
 }
 /** The variant of the resolved workflow the Flow lane arms before its run. */
 function optionalVariant(args: string[]): { variantId?: string } { const value = option(args, "--variant"); if (value === undefined) return {}; if (!KEBAB_ID.test(value)) throw new Error("--variant must be a lowercase kebab-case variant ID"); return { variantId: value }; }

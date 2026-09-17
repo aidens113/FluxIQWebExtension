@@ -75,32 +75,66 @@ function fakeCore() {
   };
 }
 
+/**
+ * The raw `get-flow-run-detail` answer the exploration record is read from.
+ * The client's parser drops `metadata`, so the settlement reads it itself, and
+ * these are the counts Core's own `exploration` stage publishes.
+ */
+function runDetailWithExploration(stageDetail: Record<string, unknown> = {}): unknown {
+  return {
+    runDetail: {
+      metadata: {
+        recoveryTrace: {
+          schemaVersion: "automation-studio.recovery-trace.v1",
+          stages: [
+            { stage: "diagnosis", status: "completed", providerCalled: true, reason: "a sentence Core wrote", detail: {} },
+            {
+              stage: "exploration", status: "completed", providerCalled: true, reason: "another sentence Core wrote",
+              detail: { requested: true, outcome: "evidence_gathered", endedBy: "evidence_gathered", actions: 3, observedActions: 3, refusedActions: 0, unusableDecisions: 1, providerCalls: 4, evidenceBytes: 8_192, durationMs: 9_100, ...stageDetail },
+            },
+          ],
+          refused: [],
+        },
+      },
+    },
+  };
+}
+
 async function harness(options: { authorize?: boolean; detail?: () => Promise<ExistingRunDetail> } = {}) {
   const live = new LiveLlmRun(planLiveLlmExecution(PROFILE), CREDENTIAL);
   if (options.authorize !== false) await live.authorizer(fakeCore(), { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: Record<string, any> }> = [];
   const published: Record<string, unknown>[] = [];
   const reads: string[] = [];
+  const explorationReads: string[] = [];
   const settlement = {
     live,
-    control: { getRunDetail: async (_projectId: string, runId: string) => { reads.push(runId); return options.detail ? await options.detail() : failedRunDetail(); } },
+    control: {
+      getRunDetail: async (_projectId: string, runId: string) => { reads.push(runId); return options.detail ? await options.detail() : failedRunDetail(); },
+      automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+        if (endpoint !== "get-flow-run-detail") throw new Error(`unexpected endpoint ${endpoint}`);
+        explorationReads.push(String(payload.runId));
+        return runDetailWithExploration();
+      },
+    },
     projectId: "project-1",
     bundle: { writeStructured: async (path: string, value: unknown) => { written.push({ path, value: value as Record<string, any> }); } },
     publish: async (details: Record<string, unknown>) => { published.push(details); },
   };
   const snapshot = () => written.find((entry) => entry.path === "snapshots/live-llm.json")?.value;
-  return { live, written, published, reads, settlement, snapshot };
+  return { live, written, published, reads, explorationReads, settlement, snapshot };
 }
 
 const unexpectedFailure = new RunnerFailure("runtime.behavior", "The Flow reported an unexpected target_not_found failure");
 
 test("a lane that fails after Core ran the Flow still leaves its provider calls itemized, and its own failure stands", async () => {
-  const { live, published, reads, settlement, snapshot } = await harness();
+  const { live, published, reads, explorationReads, settlement, snapshot } = await harness();
   await assert.rejects(
     runLaneWithLiveLlmSettlement(settlement, async (identified) => { identified("run-failed"); throw unexpectedFailure; }),
     (error: unknown) => error === unexpectedFailure,
   );
   assert.deepEqual(reads, ["run-failed"]);
+  assert.deepEqual(explorationReads, ["run-failed"], "a lane that failed after exploring did not have its exploration read");
   const written = snapshot();
   assert.ok(written, "no live-LLM snapshot was written");
   assert.equal(written.settlement, "lane_failed");
@@ -109,6 +143,13 @@ test("a lane that fails after Core ran the Flow still leaves its provider calls 
   assert.deepEqual(written.observed.observedCalls.map((line: { taskKind: string }) => line.taskKind), ["runtime_diagnosis", "evidence_tool_decision", "runtime_patch"]);
   assert.equal(written.observed.accounting.totalTokens, 3_000);
   assert.equal(written.granted.maxCalls, 26);
+  // What exploring did, from Core's own recovery trace, and nothing Core wrote in prose.
+  assert.equal(written.exploration.source, "recovery-trace");
+  assert.equal(written.exploration.outcome, "evidence_gathered");
+  assert.equal(written.exploration.requested, true);
+  assert.deepEqual(written.exploration.counts, { actions: 3, observedActions: 3, refusedActions: 0, unusableDecisions: 1, providerCalls: 4, evidenceBytes: 8_192, durationMs: 9_100 });
+  assert.equal(written.exploration.toolDetail, "not-published");
+  assert.equal(JSON.stringify(written).includes("sentence Core wrote"), false, "the snapshot carries Core's own prose");
   assert.equal(JSON.stringify(written).includes(CREDENTIAL.value), false, "the snapshot carries the credential");
   assert.deepEqual(published, [{ calls: 3, interventions: 2, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true }, settledAfterLaneFailure: true }]);
   // The evaluation's usage is the run's, not zero.
@@ -170,13 +211,13 @@ test("a finished lane is settled from its own run, once, and its settlement's re
 test("with no live run the lane simply runs", async () => {
   const identified: string[] = [];
   const lane = await runLaneWithLiveLlmSettlement(
-    { live: undefined, control: { getRunDetail: async () => { throw new Error("never read"); } }, projectId: "project-1", bundle: { writeStructured: async () => { throw new Error("never written"); } }, publish: async () => undefined },
+    { live: undefined, control: { getRunDetail: async () => { throw new Error("never read"); }, automationStudioCall: async () => { throw new Error("never read"); } }, projectId: "project-1", bundle: { writeStructured: async () => { throw new Error("never written"); } }, publish: async () => undefined },
     async (report) => { report("run-quiet"); identified.push("run-quiet"); return { run: { runId: "run-quiet" } }; },
   );
   assert.equal(lane.run.runId, "run-quiet");
   assert.deepEqual(identified, ["run-quiet"]);
   await assert.rejects(
-    runLaneWithLiveLlmSettlement({ live: undefined, control: { getRunDetail: async () => failedRunDetail() }, projectId: "project-1", bundle: { writeStructured: async () => undefined }, publish: async () => undefined }, async () => { throw unexpectedFailure; }),
+    runLaneWithLiveLlmSettlement({ live: undefined, control: { getRunDetail: async () => failedRunDetail(), automationStudioCall: async () => ({}) }, projectId: "project-1", bundle: { writeStructured: async () => undefined }, publish: async () => undefined }, async () => { throw unexpectedFailure; }),
     (error: unknown) => error === unexpectedFailure,
   );
 });

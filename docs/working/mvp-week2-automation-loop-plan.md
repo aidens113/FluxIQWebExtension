@@ -61,16 +61,10 @@ design around (user decision, 2026-09-16).** His words: "I want you to allow as
 many calls as are needed for iteration of adaptations! Stop setting hard limits
 like this. It should be allowed to automatically explore and whatnot within
 reason. Ofc we'll work to reduce tokens where needed, but this hard limit is
-causing a lot of problems." Every live blocker recorded above traces back to it:
-a runtime recovery ran in a mode hard-capped at exactly two provider calls,
-which also forbade the `evidence_tool_decision` task kind, so the model's first
-move -- asking to gather more evidence -- had no call available to serve it.
-Two real DeepSeek runs (`run-mu3we5jm-38461449`, `run-mu4hob80-7876a32e`)
-reached the provider and passed their scenario while diagnosing nothing, both
-ending `validationOk: false` at `+stage.gather`. The bounded exploration was
-built, wired, tested and still inert for the same reason, and the exploration
-allowance added earlier the same day was necessary but could not help, because
-the request was never reachable.
+causing a lot of problems." Every live blocker that day traced back to a
+recovery mode hard-capped at two provider calls, which also forbade the
+evidence request the model's first move asked for; the archived ledger entries
+carry the run ids and the measurements.
 
 The replacement model: an adaptation iterates while it is making progress, and
 stops on a guard that means something -- the per-run estimated cost ceiling, the

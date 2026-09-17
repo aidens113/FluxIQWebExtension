@@ -27,20 +27,20 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
-import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
+import { assertFlowLaneBuiltFlow, coreIdentityRequired, coreProbeTargetUsable, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
-import { awaitExtensionWorker, cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
+import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun };
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
@@ -427,6 +427,18 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         }));
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
+        // `--replays N`: approve the repair this run produced, apply it to the Flow, and replay that Flow N
+        // times with no grant, so "the model fixed it" becomes "the Flow works without the model". Without
+        // the option the lane does nothing. `checkGoal` is judged against the scenario's own expected final
+        // state, never the proposal-only one an `adapt` run's Flow run was held to.
+        await runLiveRepairLane(control, {
+          ...(options.replays === undefined ? {} : { replays: options.replays }), ...(live ? { live } : {}),
+          lane, projectId, facilityRunId: runId, scenarioId: scenario.id, secrets: declaredSecrets, steps: flowWorkflow.recordingScript,
+          scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken,
+          prepare: flowRunHooks(activeTopology, async () => undefined).prepareFlowPage,
+          checkGoal: () => findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow).then(found => { scenarioPage = found; return true; }, () => false),
+          bundle, publish: details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live repair was applied and replayed"), details }),
+        });
       }
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
@@ -629,7 +641,9 @@ const PROBE_TARGET_VISIBLE_MS = 1_000;
  * reason. Each action is reported to `record`.
  */
 async function proveCoreActionRoundTrip(page: Page, topology: RunningTopology, sessionId: string, scenarioId: string, workflow: ResolvedScenarioWorkflow, capture: EvidenceCaptureController, runId: string, record: (timing: RunActionTiming, result: unknown) => void) {
-  const choice = await selectCoreProbeStep(workflow.recordingScript, selector => page.locator(selector).first().waitFor({ state: "visible", timeout: PROBE_TARGET_VISIBLE_MS }).then(() => true, () => false));
+  // Visible is not enough: a consent overlay covers a visible field, and Core rightly refuses to type into it.
+  // A trial click runs the whole actionability check, including "receives events", and presses nothing.
+  const choice = await selectCoreProbeStep(workflow.recordingScript, selector => coreProbeTargetUsable(page, selector, PROBE_TARGET_VISIBLE_MS));
   if (choice.kind === "skipped") {
     await capture.trigger({ ...event(runId, scenarioId, undefined, "runtime.settle", "The Core action probe was skipped"), details: { reason: choice.reason, stepIds: choice.stepIds } });
     return;
@@ -704,29 +718,6 @@ async function assertCoreRoundTrip(topology: RunningTopology, expectedSessionId?
   throw new RunnerFailure("recording.persistence", recordingBaseline ? "Core did not persist a new recording for the completed scenario run" : "Core did not persist a recording for the completed scenario");
 }
 function recordingIds(response: any): Set<string> { const values = response?.payload?.recordings ?? response?.payload?.items ?? response?.payload; if (!Array.isArray(values)) return new Set(); return new Set(values.flatMap((item: any) => { const id = item?.recordingId ?? item?.id; return typeof id === "string" && id ? [id] : []; })); }
-async function runtimeMessage(page: Page, message: Record<string, unknown>): Promise<any> { const response = await page.evaluate((value: Record<string, unknown>) => (globalThis as any).chrome.runtime.sendMessage(value), message); if (!response?.ok) throw new RunnerFailure("extension.worker", response?.error ?? "Extension runtime message failed"); return response; }
-async function extensionStatus(page: Page): Promise<unknown> { return (await runtimeMessage(page, { type: "fluxiq.getStatus" })).status; }
-async function pollStatus(page: Page, predicate: (value: any) => boolean): Promise<any> { const deadline = Date.now() + 15_000; while (Date.now() < deadline) { const response = await runtimeMessage(page, { type: "fluxiq.getStatus" }); if (predicate(response.status)) return response.status; await new Promise(resolve => setTimeout(resolve, 100)); } throw new RunnerFailure("gateway.connection", "Timed out waiting for extension connection state"); }
-/** The extension's own account of a recording start. Labels and reasons only: activity details and tab URLs carry page data. */
-function recordingStartDiagnostic(status: any): Record<string, unknown> | undefined {
-  if (!status) return undefined;
-  return {
-    connectionState: status.connectionState,
-    recordingState: status.recordingState,
-    hasSessionId: typeof status.sessionId === "string",
-    hasProjectId: typeof status.projectId === "string",
-    unsupportedPageReason: status.unsupportedPage?.reason,
-    recordingBlockCode: status.recordingBlock?.code,
-    lastError: status.lastError,
-    queueSize: status.queueSize,
-    eventCount: status.eventCount,
-    activities: Array.isArray(status.recentActivities) ? status.recentActivities.map((entry: any) => `${entry?.kind}:${entry?.label}`) : undefined
-  };
-}
-function describeRecordingStartDiagnostic(diagnostic: Record<string, unknown> | undefined): string {
-  if (!diagnostic) return "the extension reported no status";
-  return `connectionState=${String(diagnostic.connectionState)} recordingState=${String(diagnostic.recordingState)} lastError=${String(diagnostic.lastError ?? "none")} unsupportedPage=${String(diagnostic.unsupportedPageReason ?? "none")} recordingBlock=${String(diagnostic.recordingBlockCode ?? "none")}`;
-}
 /** The facts `finalStateFacts` chooses: the final state, then a positive primary run's playback-goal facts. */
 async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page)); }
 async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }

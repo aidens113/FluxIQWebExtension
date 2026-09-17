@@ -5,6 +5,7 @@ export { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmA
 export { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "./budget.js";
 export { liveLlmBuildUsage } from "./build-usage.js";
 export { issueLiveLlmExecutionGrant, type LiveLlmExecutionGrant, type LiveLlmGrantControl } from "./execution-grant.js";
+export { liveLlmExplorationRecord, readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord, type LiveLlmExplorationSource } from "./exploration-record.js";
 export { configureFlowLiveLlmExecution, type LiveLlmFlowSettingsControl } from "./flow-settings.js";
 export { runLaneWithLiveLlmSettlement, type LiveLlmLaneSettlement } from "./lane-settlement.js";
 export { planLiveLlmExecution, type LiveLlmPlan, type LiveLlmPurpose } from "./live-llm-plan.js";

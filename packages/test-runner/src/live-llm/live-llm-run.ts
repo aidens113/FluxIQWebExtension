@@ -14,6 +14,7 @@ import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmA
 import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached } from "./budget.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
 import type { LiveLlmExecutionGrant } from "./execution-grant.js";
+import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
@@ -22,7 +23,12 @@ import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from
 export type LiveLlmRunCredentials = { projectId?: string; authorizationPassword?: string; authorizationPin?: string };
 /** The bundle, as far as this module needs one. */
 export type LiveLlmRunBundle = { writeStructured(bundlePath: string, value: unknown): Promise<unknown> };
-type LiveLlmRunDetailReader = { getRunDetail(projectId: string, runId: string): Promise<ExistingRunDetail> };
+/**
+ * What a settlement reads the run back through: the parsed detail for the
+ * accounting, and the raw call for the exploration record, which lives in
+ * `metadata.recoveryTrace` and does not survive the client's parser.
+ */
+type LiveLlmRunDetailReader = { getRunDetail(projectId: string, runId: string): Promise<ExistingRunDetail> } & LiveLlmExplorationControl;
 type LiveLlmPublish = (details: Record<string, unknown>) => Promise<unknown>;
 
 /**
@@ -56,6 +62,8 @@ export class LiveLlmRun {
   private observed: LiveLlmObservedUsage | undefined;
   /** The grant Core issued for this run, and what its request sent; `undefined` before that. */
   private grant: LiveLlmExecutionGrant | undefined;
+  /** What the bounded exploration did, read at settlement; `undefined` before that. */
+  private exploration: LiveLlmExplorationRecord | undefined;
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
 
@@ -72,6 +80,17 @@ export class LiveLlmRun {
    */
   get proposesRepairOnly(): boolean {
     return this.plan.purpose === "diagnose_and_adapt";
+  }
+
+  /**
+   * Whether this run's grant repairs a Flow that failed, and so whether the
+   * repair it produced can be approved, applied and replayed: `adapt`, which
+   * proposes one target override, and `repair`, which explores first and whose
+   * patch Core may execute. A diagnosis changes nothing and a build has no
+   * failed run to repair, so neither qualifies.
+   */
+  get repairsFlow(): boolean {
+    return this.plan.purpose === "diagnose_and_adapt" || this.plan.purpose === "explore_and_adapt";
   }
 
   /**
@@ -160,7 +179,11 @@ export class LiveLlmRun {
    * being a live run must not be masked by whatever the automation then did.
    */
   async settle(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
-    await this.settleObserved(liveLlmObservedUsage(await control.getRunDetail(input.projectId, input.runId)), bundle, publish, {});
+    const detail = await control.getRunDetail(input.projectId, input.runId);
+    // Read before the snapshot is written, and never allowed to fail the
+    // settlement: it says what exploring did, not whether the run was legal.
+    this.exploration = await readLiveLlmExploration(control, input);
+    await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {});
   }
 
   /**
@@ -218,6 +241,9 @@ export class LiveLlmRun {
     } catch {
       observed = undefined;
     }
+    // A lane that failed after exploring is exactly the run whose exploration
+    // record is worth having, so it is read here too, on the same run id.
+    if (input.runId) this.exploration = await readLiveLlmExploration(control, { projectId: input.projectId, runId: input.runId });
     if (!observed) {
       await this.writeSnapshot(bundle, null, { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" });
       return undefined;
@@ -276,6 +302,11 @@ export class LiveLlmRun {
       },
       declared: this.plan.declared,
       observed,
+      // What the bounded exploration did on this run, from Core's own recovery
+      // trace: counts, its outcome and the code that ended it. `null` before a
+      // settlement read one; `source` says whether Core published one at all,
+      // so an empty record is never read as "it explored nothing".
+      exploration: this.exploration ?? null,
       ...extra,
     });
   }
