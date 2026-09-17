@@ -187,7 +187,16 @@ export type BenchCorpusMetrics = {
    * is optional, as `notExecutedRuns` is.
    */
   extractionByLane?: Partial<Record<EvaluationLane, BenchExtractionMetrics>>;
-  /** Week 2 measurements: `null` in Week 1, reserved so the schema is already present. */
+  /**
+   * Week 2 aggregates, still reserved: always `null`, and refused otherwise,
+   * because no bench aggregates them yet. The per-run measurements they will
+   * aggregate are typed on `RunEvaluation` (`harnessRecovery`, including each
+   * patch attempt's verdict, and the four adaptation measurements in
+   * `adaptation-reuse.ts`), and a bench keeps each run's evaluation beside
+   * `runs.json`: read those, and never read a `null` here as a measurement of
+   * zero. Defining an aggregate means defining it here, in its validator, in
+   * the bench's comparison rows and in its rendering together.
+   */
   harnessRecovery: null;
   adaptationCost: null;
   adaptationValidation: null;

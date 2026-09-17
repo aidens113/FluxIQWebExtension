@@ -1,3 +1,4 @@
+import type { RunAdaptationCost, RunAdaptationPersistence, RunAdaptationReuse, RunAdaptationValidation } from "./adaptation-reuse.js";
 import type { AutomationStudioAdaptiveFailureClass } from "./failure-category.js";
 import type { RunHarnessRecovery } from "./harness-recovery.js";
 import type { LlmExecutionProfile } from "./llm.js";
@@ -223,11 +224,23 @@ export type RunEvaluation = {
    * a 0.3 evaluation holding `null` reads exactly as before.
    */
   harnessRecovery: RunHarnessRecovery | null;
-  /** Week 2 measurements: `null` in Week 1, reserved so the schema is already present. */
-  adaptationCost: null;
-  adaptationValidation: null;
-  adaptationPersistence: null;
-  adaptationReuse: null;
+  /**
+   * The Week 2 adaptation measurements (`adaptation-reuse.ts`), read from
+   * Core's run detail and adaptation store. Each is `null` when the run did
+   * not measure it, which is every run on which no Flow ran and every
+   * evaluation written before the member was defined; only a run whose Flow
+   * was created may state one. They were reserved in schema 0.3, so defining
+   * them changes no version: a 0.3 evaluation holding `null` reads exactly as
+   * before.
+   *
+   * `adaptationReuse.providerCalls` and `adaptationCost.providerCalls` are one
+   * count and must agree, and both are 0 or `null` unless `llm.mode` is
+   * `live`.
+   */
+  adaptationCost: RunAdaptationCost | null;
+  adaptationValidation: RunAdaptationValidation | null;
+  adaptationPersistence: RunAdaptationPersistence | null;
+  adaptationReuse: RunAdaptationReuse | null;
 };
 
 export type CandidateComparison = {

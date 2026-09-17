@@ -3,15 +3,22 @@ import {
   facilityFailureOperationStages, facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
   type CandidateComparison, type LlmUsage, type RunEvaluation, type RunExtractionMeasurement,
 } from "./evaluation.js";
+import { validateRunAdaptationCost, validateRunAdaptationPersistence, validateRunAdaptationReuse, validateRunAdaptationValidation } from "./adaptation-reuse-validation.js";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
 import { validateRunHarnessRecovery } from "./harness-recovery-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, enumeration, finite, isObject, keys, object, optionalText, parseJson, result, text, type JsonObject } from "./runtime-validation.js";
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-/** The Week 2 members that are still reserved: `harnessRecovery` is defined and checked on its own. */
-const reservedWeek2Keys = ["adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const;
-const week2Keys = ["harnessRecovery", ...reservedWeek2Keys] as const;
+/** The Week 2 adaptation measurements, each with its own validator; `harnessRecovery` is checked on its own. */
+const adaptationValidators = {
+  adaptationCost: validateRunAdaptationCost,
+  adaptationValidation: validateRunAdaptationValidation,
+  adaptationPersistence: validateRunAdaptationPersistence,
+  adaptationReuse: validateRunAdaptationReuse,
+} as const satisfies { [Key in keyof RunEvaluation]?: (input: unknown) => ValidationResult<unknown> };
+const adaptationKeys = ["adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const satisfies readonly (keyof typeof adaptationValidators)[];
+const week2Keys = ["harnessRecovery", ...adaptationKeys] as const;
 const runEvaluationKeys = [
   "schemaVersion", "runId", "verdict", "failureCategory", "facilityFailure", "invariants", "metrics",
   "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "reportedVerdict",
@@ -135,7 +142,38 @@ function checkRunMeasurements(value: JsonObject, issues: ValidationIssue[]): voi
   if (!("extraction" in value)) add(issues, "$.extraction", "is required: null when extraction was not measured");
   else checkExtraction(value.extraction, "$.extraction", issues);
   checkHarnessRecovery(value, issues);
-  for (const key of reservedWeek2Keys) if (value[key] !== null) add(issues, `$.${key}`, "must be null until Week 2 defines it");
+  checkAdaptationMeasurements(value, issues);
+}
+
+/**
+ * The four Week 2 adaptation measurements: each required, `null` when the run
+ * did not measure it, and otherwise valid under its own contract. Like
+ * `harnessRecovery`, only a run whose Flow was created and ran has
+ * adaptations to measure.
+ */
+function checkAdaptationMeasurements(value: JsonObject, issues: ValidationIssue[]): void {
+  for (const key of adaptationKeys) {
+    if (!(key in value)) { add(issues, `$.${key}`, "is required: null when the run did not measure it"); continue; }
+    if (value[key] === null) continue;
+    if (value.lane !== "flow" || value.flowCreated !== true) add(issues, `$.${key}`, "must be null unless a Flow was created and ran");
+    nest(adaptationValidators[key](value[key]), `$.${key}`, issues);
+  }
+  checkAdaptationProviderCalls(value, issues);
+}
+
+/**
+ * The run's provider calls are one count, stated by reuse and by cost alike,
+ * so the two must agree where both state it. And a run that configured no live
+ * provider made no call: Core cannot have reached a model the run never gave
+ * it, so a non-zero count there is a fabricated one.
+ */
+function checkAdaptationProviderCalls(value: JsonObject, issues: ValidationIssue[]): void {
+  const cost = isObject(value.adaptationCost) ? value.adaptationCost.providerCalls : undefined;
+  const reuse = isObject(value.adaptationReuse) ? value.adaptationReuse.providerCalls : undefined;
+  if (typeof cost === "number" && typeof reuse === "number" && cost !== reuse) add(issues, "$.adaptationCost.providerCalls", "must equal adaptationReuse.providerCalls: both are Core's count of the run's provider calls");
+  if (!isObject(value.llm) || value.llm.mode === "live") return;
+  if (typeof cost === "number" && cost !== 0) add(issues, "$.adaptationCost.providerCalls", "must be 0 or null when the run configured no live provider");
+  if (typeof reuse === "number" && reuse !== 0) add(issues, "$.adaptationReuse.providerCalls", "must be 0 or null when the run configured no live provider");
 }
 
 /**

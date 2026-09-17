@@ -147,6 +147,31 @@ test("a Flow-lane run reports the lane's own observation, not an inference over 
 });
 
 /**
+ * The bench's Flow lane copies the lane's recovery record member for member, as
+ * a single `lab run` does, so the two producers write the same row. Only the
+ * lane can tell "recovered nothing" from "never measured", so a run that never
+ * reached it states no recovery at all.
+ */
+test("a Flow-lane run records Core's recovery as the lane observed it, each attempt's verdict included", () => {
+  const harnessRecovery: NonNullable<RunLaneObservation["harnessRecovery"]> = {
+    attempted: true,
+    interventions: [{ kind: "runtime_patch", validationOk: true, validationCodes: [] }],
+    runtimePatchAttempts: [
+      { kind: "temporary_target_override", proposalOnly: false, executed: null, preflightOk: true, issueCodes: [], adaptationCreated: true, changeProposalCreated: false, verdict: { outcome: "verified", basis: ["downstream_assertion"] } },
+      { kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: true, issueCodes: [], adaptationCreated: false, changeProposalCreated: true, verdict: null },
+    ],
+    adaptationIds: ["adaptation.run-flow.temporary_target_override.1789000000000"],
+    changeProposalIds: ["proposal.adaptation.run-flow.temporary_target_override.1789000000001"],
+  };
+  const evaluation = evaluateFlowRun(flowInput({ result: { runId: "run-flow", verdict: "passed", path: NO_BUNDLE, observation: { ...createdFlow, harnessActivations: 1, harnessRecovery } } }));
+  assert.deepEqual(evaluation.harnessRecovery, harnessRecovery);
+  assert.notEqual(evaluation.harnessRecovery, harnessRecovery, "the row holds a copy, not the lane's own record");
+  assert.equal(evaluateFlowRun(flowInput({ result: { runId: "run-none", verdict: "failed", failureCategory: "gateway.pairing", path: NO_BUNDLE } })).harnessRecovery, null);
+  // No lane reports the four adaptation measurements yet, so a bench row states them unmeasured, never as zeros.
+  assert.deepEqual([evaluation.adaptationCost, evaluation.adaptationValidation, evaluation.adaptationPersistence, evaluation.adaptationReuse], [null, null, null, null]);
+});
+
+/**
  * A run that never reached the Flow lane measured no extraction. `[]` would
  * say the run measured extraction and found no extract step, which is what the
  * bench's per-lane block is built on, so the two cannot be spelled the same.

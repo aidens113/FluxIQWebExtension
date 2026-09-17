@@ -299,7 +299,7 @@ test("identity, repeat index, lane, and measurements are bounded", () => {
   assert.equal(validateRunEvaluation({ ...flowRun(), harnessActivations: 2 }).valid, true);
 });
 
-test("Week 2 fields are present, and the reserved ones null", () => {
+test("Week 2 fields are present, and a bare number is never one of them", () => {
   for (const key of Object.keys(week2)) {
     rejects({ ...flowRun(), [key]: 0 }, `${key} set`);
     rejects(without(flowRun(), key), `${key} missing`);

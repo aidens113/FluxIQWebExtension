@@ -1,5 +1,5 @@
-import type { RunHarnessRecovery } from "./harness-recovery.js";
-import { add, array, keys, object, result } from "./runtime-validation.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, type RunHarnessRecovery } from "./harness-recovery.js";
+import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
 /** Core's kind names: lowercase words joined by underscores. */
@@ -15,13 +15,31 @@ const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "ada
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
 const patchFlagKeys = ["proposalOnly", "executed", "preflightOk"] as const;
 const patchOutcomeKeys = ["adaptationCreated", "changeProposalCreated"] as const;
-const patchAttemptKeys = ["kind", ...patchFlagKeys, "issueCodes", ...patchOutcomeKeys] as const;
+const patchAttemptKeys = ["kind", ...patchFlagKeys, "issueCodes", ...patchOutcomeKeys, "verdict"] as const;
+const verdictKeys = ["outcome", "basis"] as const;
+/** The outcomes that say the change's trial ran. */
+const ranOutcomes: readonly unknown[] = ["verified", "contradicted", "unverifiable"];
+
+/**
+ * Whether `input` is shaped like a Core identifier: at most 256 characters,
+ * no space, so it can carry no text. Every identifier a Week 2 measurement
+ * holds is checked against this one shape.
+ */
+export function isCoreIdentifier(input: unknown): input is string {
+  return typeof input === "string" && input.length <= IDENTIFIER_MAX_LENGTH && IDENTIFIER.test(input);
+}
+
+/** Whether `input` is shaped like one of Core's kind or status words: at most 64 characters, lowercase words joined by underscores. */
+export function isCoreKind(input: unknown): input is string {
+  return typeof input === "string" && input.length <= KIND_MAX_LENGTH && KIND.test(input);
+}
 
 /**
  * Validates a `RunHarnessRecovery`; `RunEvaluation` embeds one as
- * `harnessRecovery`. Every string in it is a kind, a code or an identifier,
- * checked against its shape, which is what keeps a message, a prompt or page
- * text out of an evaluation: each shape refuses a space.
+ * `harnessRecovery`. Every string in it is a kind, a code, an identifier or a
+ * closed verdict word, checked against its shape, which is what keeps a
+ * message, a prompt or page text out of an evaluation: each shape refuses a
+ * space.
  *
  * `attempted` must agree with the lists, so a run with no recovery cannot be
  * read as one whose recovery failed, and the reverse.
@@ -57,16 +75,40 @@ function checkPatchAttempt(input: unknown, path: string, issues: ValidationIssue
   for (const key of patchFlagKeys) nullableBoolean(value[key], `${path}.${key}`, issues);
   array(value.issueCodes, `${path}.issueCodes`, issues, checkCode);
   for (const key of patchOutcomeKeys) if (typeof value[key] !== "boolean") add(issues, `${path}.${key}`, "must be a boolean");
+  // Absent in a record written before the verdict existed, and null when Core stated none: both unmeasured.
+  if (value.verdict !== undefined && value.verdict !== null) checkVerdict(value, `${path}.verdict`, issues);
+}
+
+/**
+ * One attempt's verdict: closed words, a basis exactly when verified, and an
+ * outcome the attempt's own flags do not contradict. A patch Core only
+ * proposed, refused at preflight, or states it did not execute had no trial,
+ * so its verdict can only be `not_executed`; one Core states it executed had
+ * one, so its verdict cannot be.
+ */
+function checkVerdict(attempt: JsonObject, path: string, issues: ValidationIssue[]): void {
+  const verdict = object(attempt.verdict, path, issues); if (!verdict) return;
+  keys(verdict, verdictKeys, path, issues);
+  enumeration(verdict.outcome, harnessChangeVerdictOutcomes, `${path}.outcome`, issues);
+  array(verdict.basis, `${path}.basis`, issues, (basis, basisPath, target) => enumeration(basis, harnessChangeVerdictBases, basisPath, target));
+  if (Array.isArray(verdict.basis)) {
+    uniqueStrings(verdict.basis, `${path}.basis`, issues, "basis kinds");
+    if (verdict.outcome === "verified" && verdict.basis.length === 0) add(issues, `${path}.basis`, "must name the evidence a verified change rests on: a change whose node merely succeeded is unverifiable");
+    if (verdict.outcome !== "verified" && verdict.basis.length > 0) add(issues, `${path}.basis`, "must be empty unless the outcome is verified");
+  }
+  const ran = ranOutcomes.includes(verdict.outcome);
+  if (ran && (attempt.proposalOnly === true || attempt.executed === false || attempt.preflightOk === false)) add(issues, `${path}.outcome`, "must be not_executed for a patch that was only proposed, refused at preflight, or not executed");
+  if (verdict.outcome === "not_executed" && attempt.executed === true) add(issues, `${path}.outcome`, "cannot be not_executed for a patch Core states it executed");
 }
 
 function checkKind(input: unknown, path: string, issues: ValidationIssue[]): void {
-  if (typeof input !== "string" || input.length > KIND_MAX_LENGTH || !KIND.test(input)) add(issues, path, `must be a kind name of at most ${KIND_MAX_LENGTH} lowercase words joined by underscores`);
+  if (!isCoreKind(input)) add(issues, path, `must be a kind name of at most ${KIND_MAX_LENGTH} lowercase words joined by underscores`);
 }
 function checkCode(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (typeof input !== "string" || !CODE.test(input)) add(issues, path, "must be an issue code, never an issue message");
 }
 function checkIdentifier(input: unknown, path: string, issues: ValidationIssue[]): void {
-  if (typeof input !== "string" || input.length > IDENTIFIER_MAX_LENGTH || !IDENTIFIER.test(input)) add(issues, path, `must be a Core identifier of at most ${IDENTIFIER_MAX_LENGTH} characters`);
+  if (!isCoreIdentifier(input)) add(issues, path, `must be a Core identifier of at most ${IDENTIFIER_MAX_LENGTH} characters`);
 }
 function nullableBoolean(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (input !== null && typeof input !== "boolean") add(issues, path, "must be a boolean or null");

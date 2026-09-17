@@ -45,6 +45,13 @@ export type RunHarnessIntervention = { kind: string; validationOk: boolean | nul
  * (`runtime_patch.target_node_invalid`, ...), never Core's issue text.
  * `adaptationCreated` and `changeProposalCreated` say whether this attempt
  * produced one; the identifiers are on the run's own lists.
+ *
+ * `verdict` is Core's judgement of this attempt's trial. It is per attempt,
+ * not per run, because Core records it on each attempt and a run may try more
+ * than one change: a second drift after a repaired node starts a second trial.
+ * `null` when Core stated no verdict for the attempt. **Absent** only in a
+ * record written before the member existed, which reads as unmeasured, the
+ * same as `null`, and never as a trial that proved nothing.
  */
 export type RunHarnessPatchAttempt = {
   kind: string | null;
@@ -54,4 +61,30 @@ export type RunHarnessPatchAttempt = {
   issueCodes: string[];
   adaptationCreated: boolean;
   changeProposalCreated: boolean;
+  verdict?: RunHarnessChangeVerdict | null;
 };
+
+/**
+ * The outcomes of Core's change verdict (`AutomationStudioChangeVerdict`), the
+ * same four words as the runtime patch verification it replaces.
+ * `not_executed` is a patch that never ran: proposed only, refused at
+ * preflight, or not applicable to the Flow.
+ */
+export const harnessChangeVerdictOutcomes = ["verified", "contradicted", "unverifiable", "not_executed"] as const;
+export type HarnessChangeVerdictOutcome = (typeof harnessChangeVerdictOutcomes)[number];
+
+/**
+ * The evidence a `verified` verdict may rest on. Core also checks that each
+ * changed node succeeded and that the run could continue, but neither is
+ * evidence the change was right, so neither is ever a basis: a change whose
+ * node merely succeeded is `unverifiable`.
+ */
+export const harnessChangeVerdictBases = ["expected_state", "expected_route", "expected_outputs", "records", "downstream_assertion"] as const;
+export type HarnessChangeVerdictBasis = (typeof harnessChangeVerdictBases)[number];
+
+/**
+ * Core's verdict on one change's trial, reduced to closed words: never Core's
+ * reason sentence, and never the checks' node ids. `basis` is non-empty
+ * exactly when `outcome` is `verified`, and names each kind of evidence once.
+ */
+export type RunHarnessChangeVerdict = { outcome: HarnessChangeVerdictOutcome; basis: HarnessChangeVerdictBasis[] };
