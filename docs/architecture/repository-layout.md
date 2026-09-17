@@ -85,10 +85,10 @@ owning scripts.
 | Path | Tracked | Notes |
 | --- | --- | --- |
 | `.fluxiq/` | No | Local configuration, caches, databases, recordings, project artifacts, and other runtime state. |
-| `apps/extension/build/` | Yes | Intermediate bundles. Update by running the extension build when sources change. |
+| `apps/extension/build/` | No | Intermediate bundles, untracked since 2026-09-17. Regenerate with `pnpm --filter @fluxiq-web-extension/extension build`. |
 | `apps/extension/dist/` | No | Loadable Chrome and Firefox builds. |
 | `domain/dist/` | No | Domain build output, including the web panel host module (`domain/package.json` `fluxiqHostModule`, today `dist/host/web-panel-host.mjs`), rebuilt by `host:build`, `pnpm dev`, and every isolated Testing Lab run. The build also runs `scripts/clean-dist.mjs` and `scripts/rewrite-dist-specifiers.mjs`: `tsc` overwrites but never deletes, so a module split can leave a stale sibling behind that a later import resolves to, and `tsc` never rewrites a specifier, so the extensionless relative specifiers `moduleResolution: "Bundler"` allows in `domain/src` have to be given explicit paths in the output. The clean step deliberately preserves `dist/host/web-panel-host.mjs`, which `pnpm lab:interactive` builds before the workspace build reaches this package. A Lab instance runs from its own copy of that bundle, so a sibling instance's build cannot rewrite the file a running Core is about to import. |
-| `domain/.test-build/` | Yes | Generated domain-test artifacts. Let the domain test/build workflow update them. |
+| `domain/.test-build/` | No | Generated domain-test artifacts, untracked since 2026-09-17. Regenerate with an unlabelled `pnpm --filter @fluxiq-web-extension/domain test` ([Test Build Labels](#test-build-labels)). |
 | `apps/extension/.test-build-scratch/<label>/`, `domain/.test-build-scratch/<label>/` | No | One labelled unit-test run's bundles ([Test Build Labels](#test-build-labels)). |
 | `apps/extension/e2e/content/.harness-build/` | No | One content-harness run's own bundles, removed when that run ends ([Content Harness](#content-harness)). |
 | `test-results/` | No | Playwright reports and failure artifacts, such as `apps/extension/e2e/test-results/content/`. |
@@ -96,6 +96,38 @@ owning scripts.
 | `<package>/.lab-instances/<instance>/` | No | One concurrent Lab instance's own build output, under the package that produced it. Written only by `scripts/lab/run-lab.mjs`; removable at any time. |
 | `.lab-locks/` | No | The file lock that serializes the Lab build phase across instances. |
 | `test-runs/`, `test-runs/instances/<instance>/` | No | Lab run evidence and durable bench campaigns. An instance writes under its own subdirectory; serial and sharded campaign state under `bench/` remains runtime data. |
+
+### Why The Two Build Directories Stopped Being Tracked
+
+`apps/extension/build/` and `domain/.test-build/` were committed until
+2026-09-17 for no reason anyone had written down, and nothing reads the
+committed copies. `apps/extension/build/` holds bundled scripts and their
+sourcemaps alone — no manifest, no icons, no HTML — so it is not a loadable
+extension; browsers and the Testing Lab load `apps/extension/dist/<target>/`,
+which was already ignored. `domain/.test-build/` is written and imported
+inside a single `node scripts/test-domain.mjs` process, and both domain
+`tsconfig` files already exclude it, so nothing outside that one run ever
+resolves a path into it.
+
+Tracking them was not free. Generated output rode along in 55 of every 100
+commits, and 40% of everything ever committed by byte was build output rather
+than authored source. Worse, the five sourcemaps are seven-line files whose
+fourth line is a single string, running from over 400KB to nearly 1MB in four
+of the five. Two branches that have each run a build conflict on that one
+line, no merge tool can resolve it, and the only remedy was to rebuild and
+take one side wholesale. Regenerate them on demand
+instead — `pnpm --filter @fluxiq-web-extension/extension build` for the
+extension bundles, and an unlabelled
+`pnpm --filter @fluxiq-web-extension/domain test` for the domain test build.
+
+`.gitattributes` was added in the same change and normalizes the working tree
+with `* text=auto eol=lf`, which matters for the same bytes. With
+`core.autocrlf=true` and no attributes, `git checkout` wrote some sources with
+CRLF while tool-written files kept LF — both clean to git, so neither showed as
+a change — and esbuild copies the bytes it reads verbatim into a sourcemap's
+`sourcesContent`. The same commit therefore built different bytes in different
+checkouts. A build's output is now a function of the commit rather than of who
+checked it out.
 
 ## Durable Bench Commands And Layout
 
@@ -180,7 +212,7 @@ must pick the edit up while the running one keeps the extension Chromium
 already loaded. A single shared `dist/` cannot do both -- the destructive
 `rm` at the top of `apps/extension/scripts/build-extension.mjs` deletes the
 unpacked extension a running browser is reading. In instance mode that script
-writes under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT` instead, so the tracked
+writes under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT` instead, so the shared
 `apps/extension/build/` is refreshed only by the default build.
 
 An instance's output lives **inside the package that produced it**, not in one
@@ -251,7 +283,7 @@ It then prints the environment a run from the pair needs, and the commands:
 | --- | --- | --- |
 | `FLUXIQ_CORE_ROOT` | `F:/fxlab/!FluxIQ` | The runner and its Core-quiet guard watch the pair's Core. |
 | `FLUXIQ_TEST_ENV_FILES` | `none` | No target configuration comes from an env file. |
-| `FLUXIQ_LAB_INSTANCE` | `lab-pair` | Builds go to the ignored `.lab-instances/`. Without a label the extension build rewrites the tracked `apps/extension/build/`, the pair turns dirty, and the next move refuses. |
+| `FLUXIQ_LAB_INSTANCE` | `lab-pair` | Builds go to the ignored `.lab-instances/`. Without a label the extension build rewrites the pair's own `apps/extension/build/` and `apps/extension/dist/`, and the destructive `rm` at the top of that build deletes the unpacked extension a concurrent run is reading. Both paths have been ignored since 2026-09-17, so an unlabelled build no longer turns the pair dirty and the next move no longer refuses for that reason. |
 | `npm_config_workspace_concurrency` | `1` | One workspace build at a time. |
 
 Start the Lab and the campaign from the pair by absolute path, as printed --
@@ -413,7 +445,7 @@ pnpm --filter @fluxiq-web-extension/extension test:content -- --workers=2 select
   a running test. The harness needs no build label.
 
 `pnpm --filter @fluxiq-web-extension/extension test:e2e` is a different suite.
-It runs the extension build first, which rewrites the tracked
+It runs the extension build first, which rewrites the shared
 `apps/extension/build/`, then the specs directly under `apps/extension/e2e/`
 (`e2e/playwright.config.ts`, which ignores `e2e/content/`).
 
@@ -432,11 +464,12 @@ DOMAIN_TEST_BUILD_LABEL=my-task pnpm --filter @fluxiq-web-extension/domain test
 | Variable | With a label, bundles go to | Without one |
 | --- | --- | --- |
 | `EXTENSION_TEST_BUILD_LABEL` | `apps/extension/.test-build-scratch/<label>/` | `apps/extension/.test-build-scratch/default/` |
-| `DOMAIN_TEST_BUILD_LABEL` | `domain/.test-build-scratch/<label>/` | the tracked `domain/.test-build/` |
+| `DOMAIN_TEST_BUILD_LABEL` | `domain/.test-build-scratch/<label>/` | the shared `domain/.test-build/` |
 
-An unlabelled domain test run therefore rewrites tracked files. That is how
-`domain/.test-build/` is regenerated, and why parallel runs must each set a
-label.
+An unlabelled domain test run therefore rewrites the shared
+`domain/.test-build/`. That is how the directory is regenerated now that it is
+no longer committed, and why parallel runs must each set a label: two
+unlabelled runs would overwrite each other's bundles mid-run.
 
 ## Panel Commands
 

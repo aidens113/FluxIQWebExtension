@@ -1864,8 +1864,32 @@ Do not commit or hand-edit generated runtime data:
 | `.browser-profiles/` | Ignored disposable browser profiles. |
 | `playwright-report/`, `test-results/`, `.playwright/` | Ignored Playwright output and local browser data. |
 | `apps/extension/dist/` | Ignored loadable Chrome, Firefox, and E2E Chromium builds. Regenerate with the extension build. |
-| `apps/extension/build/` | Tracked intermediate extension bundles. Regenerate; do not hand-edit. |
-| `domain/.test-build/` | Tracked generated domain-test artifacts. Regenerate through domain test/build workflows. |
+| `apps/extension/build/` | Ignored intermediate extension bundles. Regenerate with `pnpm --filter @fluxiq-web-extension/extension build`; do not hand-edit. |
+| `domain/.test-build/` | Ignored generated domain-test artifacts. Regenerate with an unlabelled `pnpm --filter @fluxiq-web-extension/domain test`; do not hand-edit. |
+
+The last two were committed until 2026-09-17, and nothing read the committed
+copies. `apps/extension/build/` carries bundled scripts without a manifest,
+icons or HTML, so it is not a loadable extension: the Lab and every browser
+load `apps/extension/dist/<target>/`, which was already ignored.
+`domain/.test-build/` is written and imported inside a single
+`node scripts/test-domain.mjs` process, and both domain `tsconfig` files
+exclude it. Committing them put generated output in 55 of every 100 commits
+and made 40% of all committed bytes build output, and because a sourcemap
+keeps its whole payload on one line — over 400KB, and nearly 1MB for the
+content script — any two branches that had both run a build conflicted on a
+line no merge tool can resolve. The Lab loses
+nothing: `scripts/lab/run-lab.mjs` rebuilds what it is about to load before
+every run, into `.lab-instances/` when an instance label is set and into the
+shared directories otherwise.
+
+`.gitattributes` normalizes the working tree with `* text=auto eol=lf` for a
+related reason. With `core.autocrlf=true` and no attributes, `git checkout`
+wrote some sources with CRLF while tool-written files kept LF — both clean to
+git — and esbuild copies those bytes verbatim into a sourcemap's
+`sourcesContent`, so one commit produced different build output in different
+checkouts. A build's output is now a function of the commit rather than of the
+checkout it was built in, which is what lets evidence from two machines be
+compared at all.
 
 Run artifacts may contain page evidence even when synthetic. Keep all captures,
 profiles, credentials, cookies, authorization headers, pairing tokens, and
