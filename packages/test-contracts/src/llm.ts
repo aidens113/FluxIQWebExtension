@@ -1,5 +1,13 @@
 export const LLM_LAB_SCHEMA_VERSION = "0.1" as const;
-export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 50_000 as const;
+/**
+ * The most a single request may carry, which is deepseek-chat's own 64k context
+ * rather than a number chosen here. It was 50,000, and that was the fifth and
+ * last of the ceilings that between them made a real page impossible to
+ * describe on 2026-09-17 -- the others being this file's default budget, the
+ * Lab plan's cap, Core's grant default and Core's provider-side rejection.
+ * Raising any one of them alone was silently overridden by the next.
+ */
+export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 64_000 as const;
 /**
  * The most provider calls any Lab run may declare: FluxIQ Core's absolute
  * backstop against a runaway loop (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS`
