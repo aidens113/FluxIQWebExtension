@@ -1,13 +1,22 @@
 // What each runtime harness option actually does to the page.
 //
-// Five actions, in increasing order of what they are allowed to do: inspect
-// observes; wait observes again after a bounded pause; reveal uncovers
-// structure through one narrowly safe disclosure; act dismisses or switches a
-// view through the semantic ladder in `safety.ts`; navigate moves, but only
-// where Core's scope policy says it may. Form entry, option selection and
-// submission are absent here as they are absent from the authoring tools, and
-// for a stronger reason: this runs while a real workflow is mid-failure, so a
-// wrong click is a side effect on somebody's live account.
+// Six actions, in increasing order of what they are allowed to do: inspect
+// observes; detect observes the repeating structure a scrape reads, exactly as
+// the authoring detection does (`../structure/`); wait observes again after a
+// bounded pause; reveal uncovers structure through one narrowly safe
+// disclosure; act dismisses or switches a view through the semantic ladder in
+// `safety.ts`; navigate moves, but only where Core's scope policy says it may.
+// Form entry, option selection and submission are absent here as they are
+// absent from the authoring tools, and for a stronger reason: this runs while a
+// real workflow is mid-failure, so a wrong click is a side effect on somebody's
+// live account.
+//
+// A target handle is bound only through a packet this exploration returned,
+// never through a capture the model was not shown. Every packet returned is
+// also handed to the runtime's selector retention, so a repair that names one
+// of its handles -- Core writes it `explored.N:target.M` and strips the
+// qualifier before asking -- gets the selector hint behind exactly that
+// control.
 //
 // Every refusal returns a bare code. A refusal must never become a side channel
 // for the page content the refusal was protecting.
@@ -29,6 +38,7 @@ import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
 import { currentElementForReturnedTarget, safeRevealElement } from "../reveal";
 import type { WebLlmSnapshotBinding } from "../sanitize";
+import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
 import { recoverable, RecoverableToolRejection, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE } from "../vocabulary";
@@ -36,6 +46,7 @@ import { webRecoverySafeActionVerdict } from "./safety";
 import {
   webAutomationExplorationScope,
   WEB_RECOVERY_ACT_OPTION_ID,
+  WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_REVEAL_OPTION_ID,
@@ -50,6 +61,20 @@ export type WebRecoveryHarnessContext = {
   gateway: WebLlmEvidenceGateway;
   /** Core's policy, compared against opaque scope strings this domain supplies. */
   scopePolicy: AutomationStudioExplorationScopePolicy;
+  /**
+   * The runtime's selector retention, handed every packet an option returns.
+   * Core asks the target check about an explored packet without saying where
+   * it came from, so the selectors behind its handles must already be where
+   * that check looks. Required: a bundle that retained nothing would resolve
+   * every explored repair without its hint, and nothing would say so.
+   */
+  retainSelectors: (binding: WebLlmSnapshotBinding) => unknown;
+  /**
+   * The runtime's extraction-handle store, shared with authoring, so a handle a
+   * recovery's detection issued resolves through `resolveExtractionHandle` and
+   * the plan resolver for the same project and Flow.
+   */
+  extractionHandles: WebLlmExtractionHandles;
   /** Injectable so a test does not spend real seconds proving a bounded wait. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 };
@@ -58,6 +83,16 @@ export type WebRecoveryHarnessContext = {
 export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessContext): Record<WebRecoveryHarnessOptionId, AutomationStudioHarnessOptionImplementation> {
   const returned = new Map<string, WebLlmSnapshotBinding>();
   const sleep = context.sleep ?? defaultSleep;
+  // Every packet an option hands the model: the one a later target is bound
+  // through, and one the repair check can find the selectors of.
+  const shown = (input: Handled, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
+    returned.set(input.scopeKey, binding);
+    context.retainSelectors(binding);
+    return binding;
+  };
+  // The packet a target handle was copied from. Before this exploration has
+  // shown one, no handle can have been, whatever the current page numbers.
+  const shownPacket = (input: Handled): WebLlmSnapshotBinding => returned.get(input.scopeKey) ?? recoverable("target_unobserved");
   const run = (handler: (input: Handled) => Promise<WebLlmEvidenceToolExecution>): AutomationStudioHarnessOptionImplementation =>
     async (execution) => {
       const handled = prepare(context, execution);
@@ -72,25 +107,37 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
   return {
     [WEB_RECOVERY_INSPECT_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, []);
-      return toolExecution(remember(returned, input, await capture(context, input)).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
+      return toolExecution(shown(input, await capture(context, input)).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_REVEAL_OPTION_ID]: run(async (input) => {
       const target = targetHandle(input.request.value);
+      const observed = shownPacket(input);
       const current = await capture(context, input);
-      const element = currentElementForReturnedTarget(returned.get(input.scopeKey), current, target);
+      const element = currentElementForReturnedTarget(observed, current, target);
       // The reveal allowlist is narrower than the action ladder and stays as it
       // is: a disclosure, a tab, a menu item, and nothing else.
       if (!safeRevealElement(element)) recoverable("target_unsafe");
-      return await clickAndReport(context, input, current, element.selector, returned);
+      return await clickAndReport(context, input, current, element.selector, shown);
     }),
     [WEB_RECOVERY_ACT_OPTION_ID]: run(async (input) => {
       const target = targetHandle(input.request.value);
+      const observed = shownPacket(input);
       const current = await capture(context, input);
-      const element = currentElementForReturnedTarget(returned.get(input.scopeKey), current, target);
+      const element = currentElementForReturnedTarget(observed, current, target);
       const verdict = webRecoverySafeActionVerdict(element, current.evidence);
       if (!verdict.ok) recoverable(verdict.code);
-      return await clickAndReport(context, input, current, element.selector, returned);
+      return await clickAndReport(context, input, current, element.selector, shown);
     }),
+    // The authoring detection, bound through this exploration's packets and
+    // keeping its handle in the runtime's store. It returns a structure packet,
+    // not a page, so nothing is shown or retained: no target check reads one.
+    [WEB_RECOVERY_DETECT_OPTION_ID]: run(async (input) => await detectRepeatingStructure({
+      gateway: context.gateway,
+      sessionId: input.sessionId,
+      request: input.request,
+      returned: Object.prototype.hasOwnProperty.call(input.request.value, "target") ? shownPacket(input) : undefined,
+      handles: context.extractionHandles
+    })),
     [WEB_RECOVERY_WAIT_OPTION_ID]: run(async (input) => {
       const waitMs = boundedWait(input.request.value);
       const before = await capture(context, input);
@@ -100,7 +147,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // Nothing moved, so the wait bought nothing. Saying so is the point: a
       // packet identical to the last one reads to a model as fresh evidence.
       if (sameEvidence(before, after)) recoverable("no_progress");
-      return toolExecution(remember(returned, input, after).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
+      return toolExecution(shown(input, after).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_NAVIGATE_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, ["url"]);
@@ -115,7 +162,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // The recapture asserts it landed in the scope the policy allowed, not in
       // the one it started from: this is the one option permitted to move.
       const moved = await actAndCapture(context.gateway, input.sessionId, input.request, "web.browser.navigate", { url: destination.href }, current, input.request.signal, webAutomationExplorationScope(destination.href));
-      return toolExecution(remember(returned, input, moved).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+      return toolExecution(shown(input, moved).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
     })
   };
 }
@@ -152,16 +199,11 @@ async function clickAndReport(
   input: Handled,
   current: WebLlmSnapshotBinding,
   selector: string,
-  returned: Map<string, WebLlmSnapshotBinding>
+  shown: (input: Handled, binding: WebLlmSnapshotBinding) => WebLlmSnapshotBinding
 ): Promise<WebLlmEvidenceToolExecution> {
   const after = await actAndCapture(context.gateway, input.sessionId, input.request, "web.dom.click", { selector }, current, input.request.signal);
   if (sameEvidence(current, after)) recoverable("no_progress");
-  return toolExecution(remember(returned, input, after).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
-}
-
-function remember(returned: Map<string, WebLlmSnapshotBinding>, input: Handled, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding {
-  returned.set(input.scopeKey, binding);
-  return binding;
+  return toolExecution(shown(input, after).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
 }
 
 function sameEvidence(left: WebLlmSnapshotBinding, right: WebLlmSnapshotBinding): boolean {

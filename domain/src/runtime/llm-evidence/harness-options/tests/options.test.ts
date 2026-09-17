@@ -10,6 +10,8 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../constants";
 import type { WebLlmEvidenceGateway } from "../../capture";
 import { present } from "../../present";
+import type { WebLlmSnapshotBinding } from "../../sanitize";
+import { createWebLlmExtractionHandles } from "../../structure";
 import type { WebRecoveryHarnessContext } from "../execute";
 import {
   webAutomationExplorationRefusalClassifier,
@@ -22,7 +24,7 @@ import {
 // Core's harness-option registry, not built into Core. Every assertion below
 // goes through the real registry, so "registered" means the registry accepted
 // them, offered them, and dispatched to them.
-test("registers five options into Core's registry and offers them only while exploring", () => {
+test("registers six options into Core's registry and offers them only while exploring", () => {
   const registry = registered();
 
   assert.deepEqual(registry.list(resolution()).map((option) => option.toolId), [...WEB_RECOVERY_HARNESS_OPTION_IDS]);
@@ -54,12 +56,12 @@ test("declares nothing destructive, and withholds the mutating options from a ca
   assert.deepEqual(registry.list(resolution()).filter((option) => option.safety?.sideEffect === "destructive"), []);
   assert.deepEqual(
     registry.list({ scope: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID }, stage: "gather" }).map((option) => option.toolId),
-    ["web.recovery.inspect", "web.recovery.wait_for_change"]
+    ["web.recovery.inspect", "web.recovery.wait_for_change", "web.recovery.detect_repeating_structure"]
   );
 });
 
-test("inspects the page and returns a sanitized packet naming elements by opaque handle", async () => {
-  const { registry, commands } = registeredWith();
+test("inspects the page, returns a sanitized packet naming elements by opaque handle, and keeps its selectors for the repair", async () => {
+  const { registry, commands, retained } = registeredWith();
 
   const evidence = await execute(registry, "web.recovery.inspect", {});
 
@@ -67,19 +69,43 @@ test("inspects the page and returns a sanitized packet naming elements by opaque
   assert.deepEqual(((evidence as { elements: Array<{ target: string }> }).elements).map((element) => element.target), ["target.1", "target.2", "target.3"]);
   assert.equal(JSON.stringify(evidence).includes("#delete"), false);
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
+  // The packet the model was shown is the one retained, with the selectors
+  // behind its handles, so a repair naming one of them gets its hint back.
+  assert.equal(retained.length, 1);
+  assert.deepEqual(retained[0]!.evidence, evidence);
+  assert.equal(retained[0]!.selectors.get("target.2"), "#delete");
 });
 
-test("dismisses a corroborated control and refuses the destructive one beside it", async () => {
-  const { registry, commands } = registeredWith();
+test("dismisses a corroborated control and refuses the destructive one beside it, retaining only what the model was shown", async () => {
+  const { registry, commands, retained } = registeredWith();
   await execute(registry, "web.recovery.inspect", {});
 
   const refused = await run(registry, "web.recovery.act_safe", { target: "target.2" });
   assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unsafe" }, effectApplied: false, resultCode: "web.action.rejected.target_unsafe" });
   assert.equal(commands.includes("web.dom.click"), false);
+  // The capture a refusal took was never shown, so nothing new is retained.
+  assert.equal(retained.length, 1);
 
   const dismissed = await run(registry, "web.recovery.act_safe", { target: "target.1" });
   assert.equal((dismissed as { resultCode: string }).resultCode, "web.action.succeeded");
   assert.equal(commands.includes("web.dom.click"), true);
+  // The pre-click capture is not a packet the model saw; the recapture is.
+  assert.equal(retained.length, 2);
+  assert.deepEqual(retained[1]!.evidence, (dismissed as { evidence: unknown }).evidence);
+});
+
+// A handle means something only against a packet this exploration returned.
+// Before any packet, there is nothing the model could have copied it from, so
+// the option refuses rather than binding the handle against a capture the
+// model never saw.
+test("refuses a target handle before this exploration has shown any packet, and clicks nothing", async () => {
+  const { registry, commands } = registeredWith();
+
+  for (const optionId of ["web.recovery.act_safe", "web.recovery.reveal", "web.recovery.detect_repeating_structure"]) {
+    const refused = await run(registry, optionId, { target: "target.1" });
+    assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved" }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" }, optionId);
+  }
+  assert.equal(commands.includes("web.dom.click"), false);
 });
 
 test("navigates only where Core's scope policy allows, and says which refusal it was", async () => {
@@ -116,7 +142,7 @@ test("translates only the terminal refusals into Core's stop reasons", () => {
   assert.equal(webAutomationExplorationRefusalClassifier("web.action.rejected.target_unsafe"), "destructive_action_refused");
   assert.equal(webAutomationExplorationRefusalClassifier("web.action.rejected.out_of_scope"), "out_of_scope_refused");
   assert.equal(webAutomationExplorationRefusalClassifier("web.action.rejected.cross_origin"), "out_of_scope_refused");
-  for (const code of ["web.action.rejected.invalid_input", "web.action.rejected.no_progress", "web.action.rejected.target_unobserved", "web.action.rejected.sensitive_value", "web.inspect.succeeded", "web.action.succeeded"]) {
+  for (const code of ["web.action.rejected.invalid_input", "web.action.rejected.no_progress", "web.action.rejected.target_unobserved", "web.action.rejected.sensitive_value", "web.action.rejected.no_repeating_structure", "web.inspect.succeeded", "web.action.succeeded", "web.structure.detected"]) {
     assert.equal(webAutomationExplorationRefusalClassifier(code), undefined, code);
   }
 });
@@ -158,9 +184,11 @@ function registered(): AutomationStudioHarnessOptionRegistry {
 function registeredWith(overrides: { scopePolicy?: { kind: "same_scope" } | { kind: "allowlist"; scopes: string[] }; sleep?: () => Promise<void> } = {}): {
   registry: AutomationStudioHarnessOptionRegistry;
   commands: string[];
+  retained: WebLlmSnapshotBinding[];
   setTitle(title: string): void;
 } {
   const commands: string[] = [];
+  const retained: WebLlmSnapshotBinding[] = [];
   let title = "Fixture";
   let location = "https://example.test/start";
   const gateway: WebLlmEvidenceGateway = {
@@ -178,9 +206,11 @@ function registeredWith(overrides: { scopePolicy?: { kind: "same_scope" } | { ki
   registry.register(webAutomationRecoveryHarnessOptionBundle(present<WebRecoveryHarnessContext>({
     gateway,
     scopePolicy: overrides.scopePolicy ?? { kind: "same_scope" },
+    retainSelectors: (binding) => { retained.push(binding); },
+    extractionHandles: createWebLlmExtractionHandles(),
     sleep: overrides.sleep
   })));
-  return { registry, commands, setTitle: (next) => { title = next; } };
+  return { registry, commands, retained, setTitle: (next) => { title = next; } };
 }
 
 function resolution(overrides: Partial<AutomationStudioHarnessOptionResolution> = {}): AutomationStudioHarnessOptionResolution {

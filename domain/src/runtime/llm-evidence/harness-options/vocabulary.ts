@@ -18,7 +18,8 @@ export const WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.reveal",
   "web.recovery.act_safe",
   "web.recovery.wait_for_change",
-  "web.recovery.navigate_in_scope"
+  "web.recovery.navigate_in_scope",
+  "web.recovery.detect_repeating_structure"
 ] as const;
 
 export type WebRecoveryHarnessOptionId = (typeof WEB_RECOVERY_HARNESS_OPTION_IDS)[number];
@@ -28,6 +29,7 @@ export const WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
 export const WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
 
 /**
  * This domain's refusals, in Core's vocabulary.
@@ -41,15 +43,16 @@ export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4
  *   it can get it right on the next turn.
  * - `no_progress` means the page did not change, which the loop's own repeat
  *   detection and the budget's repeat limit already bound.
- * - `sensitive_value` is not raised by any option in this bundle today; the
- *   sanitizer drops a secret-bearing control before the model can name it, so
- *   there is nothing to refuse. If an option ever does raise it, it belongs in
- *   the classified set. The authoring structure-detection tool does raise it,
- *   for a list whose every field is sensitive, but that tool is a Flow
- *   authoring tool and never a recovery option, so this classifier never sees
- *   its codes.
- * - `no_repeating_structure` is that same authoring tool saying the page has
- *   no readable list there, which is an answer, not a stop.
+ * - `sensitive_value` is raised by one option, structure detection, for a list
+ *   whose every field is a sensitive control. Nothing was read or shown: the
+ *   answer is "that list is all secrets", and the model can name another
+ *   target or another page, so it is an answer rather than a stop. Core's stop
+ *   vocabulary has no reason it would fit, and forcing it into
+ *   `destructive_action_refused` would end an exploration that was never
+ *   unsafe. The inspect and act options never raise it; the sanitizer drops a
+ *   secret-bearing control before the model can name it.
+ * - `no_repeating_structure` is detection saying the page has no readable list
+ *   there, which is an answer, not a stop.
  *
  * Every unclassified refusal is still charged against the action budget, so a
  * model that does nothing but get refused ends in `budget_exhausted` rather

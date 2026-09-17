@@ -1,6 +1,9 @@
-// src/runtime/llm-evidence/tests/vocabulary.test.ts
+// src/runtime/llm-evidence/tests/recovery-selector-hints.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  automationStudioHarnessOptionRegistry
+} from "fluxiq/automation-studio";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -263,14 +266,14 @@ var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
 var MAX_BLOCKED_CONTROLS = 1e4;
-function webLlmPageContext(snapshot, childFrameIds) {
-  const evidence = pageEvidence(snapshot);
-  const frame = evidenceFrame(snapshot.frame, childFrameIds);
+function webLlmPageContext(snapshot2, childFrameIds) {
+  const evidence = pageEvidence(snapshot2);
+  const frame = evidenceFrame(snapshot2.frame, childFrameIds);
   const loading = evidenceLoading(pageEvidenceWire(evidence?.loading));
   const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
   const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
   const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
-  const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const selectedText = boundedText(snapshot2.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
   return present({
     frame,
     loading,
@@ -285,21 +288,21 @@ function webLlmPageContext(snapshot, childFrameIds) {
     elementTotal: void 0
   });
 }
-function evidenceElementTotal(snapshot, carried) {
-  const declared2 = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
-  const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
+function evidenceElementTotal(snapshot2, carried) {
+  const declared2 = boundedCount(snapshot2.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot2)?.matched, 1e7);
+  const received = Array.isArray(snapshot2.interactiveElements) ? snapshot2.interactiveElements.length : 0;
   const total = Math.max(declared2 ?? 0, received);
   return total > carried ? total : void 0;
 }
-function capturedTruncated(snapshot) {
-  if (trueFlag(snapshot.truncated) === true) return true;
-  return trueFlag(captureElementTotals(snapshot)?.truncated) === true;
+function capturedTruncated(snapshot2) {
+  if (trueFlag(snapshot2.truncated) === true) return true;
+  return trueFlag(captureElementTotals(snapshot2)?.truncated) === true;
 }
-function pageEvidence(snapshot) {
-  return pageEvidenceWire(snapshot.evidence);
+function pageEvidence(snapshot2) {
+  return pageEvidenceWire(snapshot2.evidence);
 }
-function captureElementTotals(snapshot) {
-  return pageEvidenceWire(pageEvidence(snapshot)?.elements);
+function captureElementTotals(snapshot2) {
+  return pageEvidenceWire(pageEvidence(snapshot2)?.elements);
 }
 function items(input) {
   return Array.isArray(input) ? input : [];
@@ -379,15 +382,15 @@ function evidenceBlocker(input) {
 // src/runtime/llm-evidence/sanitize.ts
 var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
-  const snapshot = jsonRecord(input, "web DOM snapshot");
-  const url = safeEvidenceUrl(snapshot.url);
+  const snapshot2 = jsonRecord(input, "web DOM snapshot");
+  const url = safeEvidenceUrl(snapshot2.url);
   if (options.expectedOrigin !== void 0 && url.origin !== options.expectedOrigin) throw new Error("web DOM snapshot escaped the expected origin");
   const maxEvidenceBytes = budgetFor(options);
-  if (!Array.isArray(snapshot.interactiveElements)) throw new Error("web DOM snapshot elements are malformed");
-  const focusedSelector = sanitizedEvidenceElement(snapshot.focusedElement, { target: "target.focus", url })?.selector;
+  if (!Array.isArray(snapshot2.interactiveElements)) throw new Error("web DOM snapshot elements are malformed");
+  const focusedSelector = sanitizedEvidenceElement(snapshot2.focusedElement, { target: "target.focus", url })?.selector;
   const elements = [];
   const selectors = /* @__PURE__ */ new Map();
-  for (const raw of snapshot.interactiveElements) {
+  for (const raw of snapshot2.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
     const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
     if (!described) continue;
@@ -395,11 +398,11 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
-  const elementTotal = evidenceElementTotal(snapshot, elements.length);
-  const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const captureTruncated = capturedTruncated(snapshot);
-  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
-  const context = webLlmPageContext(snapshot, childFrameIds);
+  const elementTotal = evidenceElementTotal(snapshot2, elements.length);
+  const title = boundedText(snapshot2.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot2);
+  const elementsTruncated = snapshot2.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
+  const context = webLlmPageContext(snapshot2, childFrameIds);
   const evidence = present({
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -1052,13 +1055,13 @@ async function detectRepeatingStructure(context) {
   if (result.status !== "succeeded") throw new Error("web structure detection capture failed");
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === void 0 ? void 0 : new URL(current.evidence.location).origin;
-  const page2 = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
+  const page = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
     budget: "exploration",
     maxEvidenceBytes: void 0,
     expectedOrigin,
     failedAction: void 0
   }));
-  if (current !== void 0 && element?.frameId === void 0 && page2.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  if (current !== void 0 && element?.frameId === void 0 && page.evidence.location !== current.evidence.location) recoverable("target_unobserved");
   const detection = webAutomationStructureDetectionValue(payload.structure);
   if (detection === void 0) throw new Error("the web client answered the capture without a structure detection");
   if (!detection.ok) recoverable(REFUSAL_CODES[detection.refused]);
@@ -1066,7 +1069,7 @@ async function detectRepeatingStructure(context) {
   const split = splitDetectedStructure({
     detection,
     handle,
-    location: page2.evidence.location,
+    location: page.evidence.location,
     target,
     frameId: element?.frameId,
     maxEvidenceBytes: request.maxEvidenceBytes
@@ -1155,7 +1158,7 @@ var WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purc
 var WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
 var ACTIONABLE_ROLES = /* @__PURE__ */ new Set(["button", "tab", "menuitem", "treeitem"]);
 var ACTIONABLE_TAGS = /* @__PURE__ */ new Set(["button", "summary"]);
-function webRecoverySafeActionVerdict(element, page2) {
+function webRecoverySafeActionVerdict(element, page) {
   const identity = [element.name, element.text, element.selector].filter(Boolean).join(" ");
   if (WEB_RECOVERY_COMMITTING_WORDS.test(identity)) return { ok: false, code: "target_unsafe", rung: "committing_wording" };
   if (element.controlType === "submit" || element.inputType === "submit" || element.role === "submit") {
@@ -1164,7 +1167,7 @@ function webRecoverySafeActionVerdict(element, page2) {
   if (element.form !== void 0 || element.tag === "form") return { ok: false, code: "target_unsafe", rung: "form_owned" };
   if (!isActionableControl(element)) return { ok: false, code: "target_unsafe", rung: "not_an_actionable_control" };
   const identified = Boolean(element.name) || Boolean(element.text);
-  const signals = agreeingSignals(element, page2);
+  const signals = agreeingSignals(element, page);
   if (signals.length < (identified ? 1 : 2)) return { ok: false, code: "target_unsafe", rung: "unidentified_without_corroboration" };
   return { ok: true, identified, signals };
 }
@@ -1173,11 +1176,11 @@ function isActionableControl(element) {
   if (element.role !== void 0 && ACTIONABLE_ROLES.has(element.role)) return true;
   return element.tag === "input" && (element.controlType === "button" || element.inputType === "button");
 }
-function agreeingSignals(element, page2) {
+function agreeingSignals(element, page) {
   const signals = [];
   const wording = [element.name, element.text].filter(Boolean).join(" ");
   if (wording && WEB_RECOVERY_DISMISSAL_WORDS.test(wording)) signals.push("dismissal_wording");
-  if (page2.dialogs?.some((dialog) => dialog.modal === true) || page2.blockedBy !== void 0) signals.push("modal_dialog");
+  if (page.dialogs?.some((dialog) => dialog.modal === true) || page.blockedBy !== void 0) signals.push("modal_dialog");
   if (element.landmark === "dialog" || element.landmark === "alertdialog") signals.push("dialog_landmark");
   if (element.revealKind === "disclosure") signals.push("reversible_disclosure");
   if (element.revealKind === "view" && element.role !== void 0 && ACTIONABLE_ROLES.has(element.role) && element.role !== "button") signals.push("view_switch");
@@ -2637,15 +2640,15 @@ function createWebLlmTargetPackets() {
       const flow = flows.get(scopeKey2(scope));
       if (!flow) return { ok: false, code: "unknown" };
       if (location !== void 0) {
-        const page2 = flow.pages.get(location);
-        if (!page2) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
-        const target = page2.get(handle);
+        const page = flow.pages.get(location);
+        if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
+        const target = page.get(handle);
         if (target === void 0) return { ok: false, code: "unknown" };
         return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
       }
       const seen = /* @__PURE__ */ new Map();
-      for (const page2 of flow.pages.values()) {
-        const target = page2.get(handle);
+      for (const page of flow.pages.values()) {
+        const target = page.get(handle);
         if (target === void 0) continue;
         const address = `${target.frameId ?? 0}\0${target.selector}`;
         const known = seen.get(address);
@@ -2897,9 +2900,9 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
   const returnedEvidence = /* @__PURE__ */ new Map();
   const extractionHandles = createWebLlmExtractionHandles();
   const targetPackets = createWebLlmTargetPackets();
-  const shown = (input, sessionId, snapshot) => {
-    returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
-    targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
+  const shown = (input, sessionId, snapshot2) => {
+    returnedEvidence.set(evidenceScope(input, sessionId), snapshot2);
+    targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot2);
   };
   const failureSelectors = /* @__PURE__ */ new Map();
   const toolSelectors = /* @__PURE__ */ new Map();
@@ -2972,9 +2975,9 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
       try {
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
-          const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal));
-          shown(input, sessionId, snapshot);
-          return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
+          const snapshot2 = retain(await captureEvidence(gateway, sessionId, input, input.signal));
+          shown(input, sessionId, snapshot2);
+          return toolExecution(snapshot2.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_NAVIGATE_TOOL_ID) {
           exactToolKeys(input.value, ["url"]);
@@ -2990,9 +2993,9 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           });
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
-          const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal, destination.origin));
-          shown(input, sessionId, snapshot);
-          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+          const snapshot2 = retain(await captureEvidence(gateway, sessionId, input, input.signal, destination.origin));
+          shown(input, sessionId, snapshot2);
+          return toolExecution(snapshot2.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_REVEAL_TOOL_ID) {
           exactToolKeys(input.value, ["target"]);
@@ -3000,10 +3003,10 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           const current = await captureEvidence(gateway, sessionId, input, input.signal);
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
           if (!safeRevealElement(element)) recoverable("target_unsafe");
-          const snapshot = retain(await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
-          if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
-          shown(input, sessionId, snapshot);
-          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+          const snapshot2 = retain(await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
+          if (JSON.stringify(snapshot2.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
+          shown(input, sessionId, snapshot2);
+          return toolExecution(snapshot2.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
           return await detectRepeatingStructure({
@@ -3108,53 +3111,525 @@ function exactToolKeys(input, allowed) {
   if (Object.keys(input).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key))) recoverable("invalid_input");
 }
 
-// src/runtime/llm-evidence/tests/vocabulary.test.ts
-var page = (url) => ({ url, title: "Fixture", interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] });
-var gatewayFor = (url) => ({
-  eligibleSessionIds: () => ["session.one"],
-  structureDetectionSessionIds: () => ["session.one"],
-  executeAction: async (_sessionId, command) => command.actionType === "web.dom.capture_snapshot" ? { status: "succeeded", payload: command.parameters.detectStructure === void 0 ? { snapshot: page(url) } : { snapshot: page(url), structure: { ok: false, refused: "no_repeating_run" } } } : { status: "succeeded" }
+// src/runtime/llm-evidence/structure/tests/captured-detections.ts
+var CAPTURED_DETECTIONS = {
+  "product-catalog-largest": {
+    url: "http://127.0.0.1:4173/scenarios/product-catalog/",
+    title: "Product catalog",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="product-list"]',
+        "item": '[data-testid="product-card"]',
+        "itemCount": 8,
+        "fields": [
+          {
+            "key": "product-image_src",
+            "label": "product-image src",
+            "spec": {
+              "kind": "attribute",
+              "selector": '[data-testid="product-image"]',
+              "attribute": "src",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-image_alt",
+            "label": "product-image alt",
+            "spec": {
+              "kind": "attribute",
+              "selector": '[data-testid="product-image"]',
+              "attribute": "alt",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-name",
+            "label": "product-name",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="product-name"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-link",
+            "label": "product-link",
+            "spec": {
+              "kind": "link",
+              "selector": '[data-testid="product-link"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-price",
+            "label": "product-price",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="product-price"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-rating",
+            "label": "product-rating",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="product-rating"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "stock-badge",
+            "label": "stock-badge",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="stock-badge"]',
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "pagination": {
+          "next": '[data-testid="pagination-next"]',
+          "maxPages": 3
+        },
+        "confidence": 1
+      }
+    }
+  },
+  "data-table-largest": {
+    url: "http://127.0.0.1:4173/scenarios/data-table/",
+    title: "Inventory",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="inventory-body"]',
+        "item": '[data-testid="inventory-row"]',
+        "itemCount": 12,
+        "fields": [
+          {
+            "key": "product",
+            "label": "Product",
+            "spec": {
+              "kind": "column",
+              "header": "Product",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "category",
+            "label": "Category",
+            "spec": {
+              "kind": "column",
+              "header": "Category",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "price",
+            "label": "Price",
+            "spec": {
+              "kind": "column",
+              "header": "Price",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "stock",
+            "label": "Stock",
+            "spec": {
+              "kind": "column",
+              "header": "Stock",
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "confidence": 1
+      }
+    }
+  },
+  "member-directory-largest": {
+    url: "http://127.0.0.1:4173/scenarios/member-directory/",
+    title: "Members \xB7 Meridian",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="member-rows"]',
+        "item": '[data-testid="member-rows"] > tr.css-0dfc6os',
+        "itemCount": 240,
+        "fields": [
+          {
+            "key": "member",
+            "label": "Member",
+            "spec": {
+              "kind": "column",
+              "header": "Member",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "role",
+            "label": "Role",
+            "spec": {
+              "kind": "column",
+              "header": "Role",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "team",
+            "label": "Team",
+            "spec": {
+              "kind": "column",
+              "header": "Team",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "status",
+            "label": "Status",
+            "spec": {
+              "kind": "column",
+              "header": "Status",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "last_active",
+            "label": "Last active",
+            "spec": {
+              "kind": "column",
+              "header": "Last active",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "actions",
+            "label": "Actions",
+            "spec": {
+              "kind": "column",
+              "header": "Actions",
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "confidence": 0.75
+      }
+    }
+  },
+  "infinite-feed-largest": {
+    url: "http://127.0.0.1:4173/scenarios/infinite-feed/",
+    title: "Neighbourhood feed",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="feed-page-1"]',
+        "item": '[data-testid="feed-item"]',
+        "itemCount": 10,
+        "fields": [
+          {
+            "key": "feed-item-title",
+            "label": "feed-item-title",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-title"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-author",
+            "label": "feed-item-author",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-author"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-time",
+            "label": "feed-item-time",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-time"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-summary",
+            "label": "feed-item-summary",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-summary"]',
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "confidence": 1
+      },
+      "infiniteScroll": true
+    }
+  },
+  "infinite-feed-load-more": {
+    url: "http://127.0.0.1:4173/scenarios/infinite-feed/",
+    title: "Neighbourhood feed",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="feed-page-1"]',
+        "item": '[data-testid="feed-item"]',
+        "itemCount": 10,
+        "fields": [
+          {
+            "key": "feed-item-title",
+            "label": "feed-item-title",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-title"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-author",
+            "label": "feed-item-author",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-author"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-time",
+            "label": "feed-item-time",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-time"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-summary",
+            "label": "feed-item-summary",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-summary"]',
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "pagination": {
+          "mode": "loadMore",
+          "control": '[data-testid="load-more"]',
+          "maxPages": 50
+        },
+        "confidence": 1
+      }
+    }
+  }
+};
+
+// src/runtime/llm-evidence/tests/recovery-selector-hints.test.ts
+var SCOPE = { projectId: "project.repair", flowId: "flow.repair", runId: "run.repair" };
+var CLICK = { nodeId: "node.save", definitionId: "web.output.dom-click" };
+var DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID };
+var POLICY = {
+  schemaVersion: "0.1",
+  policyId: "policy.repair",
+  scope: { kind: "flow", flowId: SCOPE.flowId },
+  preset: "repair",
+  proposalMode: "manual",
+  allowRuntimeRecovery: true,
+  allowCreateRecoveryPaths: true,
+  allowModifySubflows: true,
+  allowCreateSubflows: true,
+  allowModifyRouter: true,
+  allowModifyExpectations: true,
+  allowModifyActionTargets: true,
+  allowDeleteOrDisableBehavior: false,
+  allowExternalSideEffects: true,
+  requireApprovalForDestructiveChanges: true,
+  requireApprovalForExternalSideEffects: false,
+  createdAt: 1,
+  updatedAt: 1
+};
+var COVERED = { path: "/settings", dialog: true, controls: [{ selector: "#close", name: "Close", inDialog: true }, { selector: "#keep", name: "Keep editing", inDialog: true }] };
+var UNCOVERED = { path: "/settings", dialog: false, controls: [{ selector: "#apply", name: "Apply changes" }, { selector: "#discard", name: "Discard changes" }] };
+var resultPage = (index) => ({
+  path: `/results/${index}`,
+  dialog: false,
+  controls: [{ selector: `#apply-${index}`, name: `Apply result ${index}` }, { selector: `#open-${index}`, name: `Open result ${index}` }]
 });
-test("the published tool ids are exactly the tools the runtime offers, in order", () => {
-  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
-  assert.deepEqual(runtime.tools.map((tool) => tool.toolId), [...WEB_LLM_EVIDENCE_TOOL_IDS]);
-  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
-  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.detect_repeating_structure"), true);
-  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.reveal_safe"), true);
-  assert.equal(new Set(WEB_LLM_EVIDENCE_TOOL_IDS).size, WEB_LLM_EVIDENCE_TOOL_IDS.length);
+function site(first) {
+  let page = first;
+  const commands = [];
+  const gateway = {
+    eligibleSessionIds: () => ["session.one"],
+    structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      commands.push(command.actionType);
+      if (command.actionType === "web.dom.click" && command.parameters.selector === "#close") page = UNCOVERED;
+      if (command.actionType === "web.browser.navigate") page = resultPage(Number(new URL(String(command.parameters.url)).pathname.split("/").at(-1)));
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const payload = { snapshot: snapshot(page) };
+      if (command.parameters.detectStructure !== void 0) payload.structure = structuredClone(CAPTURED_DETECTIONS["product-catalog-largest"].structure);
+      return { status: "succeeded", payload };
+    }
+  };
+  return { runtime: createWebAutomationLlmEvidenceRuntime(gateway), commands };
+}
+function snapshot(page) {
+  return {
+    url: `https://example.test${page.path}`,
+    title: "Settings",
+    viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
+    evidence: page.dialog ? { dialogs: { open: [{ role: "dialog", modal: true }] } } : {},
+    interactiveElements: page.controls.map((control) => ({
+      tagName: "button",
+      selector: control.selector,
+      role: "button",
+      name: control.name,
+      context: control.inDialog ? { landmark: "dialog" } : {}
+    }))
+  };
+}
+function exploration(runtime) {
+  const loop = automationStudioHarnessOptionRegistry({ binding: runtime }).evidenceLoopBinding(SCOPE, { scope: DOMAIN, stage: "gather", policy: POLICY });
+  const explored = [];
+  let calls = 0;
+  return {
+    explored,
+    async call(toolId, value) {
+      calls += 1;
+      const execution = await loop.executeTool({ callId: `call.${calls}`, toolId, value, maxEvidenceBytes: 6e3 });
+      const evidence = execution.evidence;
+      assert.notEqual(evidence.ok, false, `${toolId} was refused: ${JSON.stringify(evidence)}`);
+      explored.push({ evidenceId: `explored.${explored.length + 1}`, toolId, packet: JSON.parse(JSON.stringify(evidence)) });
+      return evidence;
+    }
+  };
+}
+async function failurePacket(runtime) {
+  const evidence = await runtime.captureSanitizedFailureEvidence({
+    ...SCOPE,
+    failedAction: { attemptId: "attempt.1", nodeId: CLICK.nodeId, definitionId: CLICK.definitionId, status: "failed" },
+    maxEvidenceBytes: 6e3
+  });
+  return JSON.parse(JSON.stringify(evidence));
+}
+var CORE_QUALIFIED_HANDLE = /^(explored\.[1-9][0-9]{0,2}):(.+)$/u;
+function askAsCore(runtime, explored, handle) {
+  const qualified = CORE_QUALIFIED_HANDLE.exec(handle);
+  assert.ok(qualified, handle);
+  const carried = explored.find((entry) => entry.evidenceId === qualified[1]);
+  assert.ok(carried, `Core carried ${qualified[1]}`);
+  return runtime.validateTargetOverrideEvidence(carried.packet, { handles: { element: qualified[2] } }, CLICK);
+}
+function askFailure(runtime, failure, handle) {
+  return runtime.validateTargetOverrideEvidence(failure, { handles: { element: handle } }, CLICK);
+}
+function handleNamed(packet, name) {
+  const element = packet.elements.find((candidate) => candidate.name === name);
+  assert.ok(element, `the packet describes ${name}`);
+  return element.target;
+}
+function resolvedTarget2(validation) {
+  if (validation.status !== "resolved") assert.fail(`expected a resolved target, got ${JSON.stringify(validation)}`);
+  return validation.target;
+}
+async function dismissedDialog() {
+  const { runtime } = site(COVERED);
+  const failure = await failurePacket(runtime);
+  const recovery = exploration(runtime);
+  const inspected = await recovery.call("web.recovery.inspect", {});
+  await recovery.call("web.recovery.act_safe", { target: handleNamed(inspected, "Close") });
+  return { runtime, failure, explored: recovery.explored };
+}
+test("a repair naming a control only the exploration revealed resolves with the selector behind that handle", async () => {
+  const { runtime, explored } = await dismissedDialog();
+  const revealed = explored[1];
+  assert.equal(revealed.toolId, "web.recovery.act_safe");
+  const target = resolvedTarget2(askAsCore(runtime, explored, `${revealed.evidenceId}:${handleNamed(revealed.packet, "Apply changes")}`));
+  assert.equal(target.selector, "#apply");
+  assert.equal(target.accessibleName, "Apply changes");
+  assert.equal(target.handleResolution, "named");
+  assert.deepEqual(target.handles, { element: handleNamed(revealed.packet, "Apply changes") });
 });
-test("the published result codes cover every success and every rejection, with none left over", () => {
-  assert.deepEqual([...WEB_LLM_EVIDENCE_RESULT_CODES], [
-    WEB_LLM_INSPECT_RESULT_CODE,
-    WEB_LLM_ACTION_RESULT_CODE,
-    WEB_LLM_STRUCTURE_RESULT_CODE,
-    ...WEB_LLM_TOOL_REJECTION_CODES.map((code) => `web.action.rejected.${code}`)
-  ]);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.length, WEB_LLM_TOOL_REJECTION_CODES.length + 3);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes("web.action.rejected.no_repeating_structure"), true);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes("web.action.rejected.no_progress"), true);
-  for (const code of WEB_LLM_TOOL_REJECTION_CODES) {
-    assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes(webLlmToolRejectionResultCode(code)), true, code);
+test("a handle no packet issued is still refused, and a packet this domain never issued gets no selector hint", async () => {
+  const { runtime, failure, explored } = await dismissedDialog();
+  assert.deepEqual(askAsCore(runtime, explored, "explored.2:target.9"), { status: "ambiguous", reason: "handle_not_issued" });
+  assert.deepEqual(askFailure(runtime, failure, "target.9"), { status: "ambiguous", reason: "handle_not_issued" });
+  const altered = structuredClone(explored[1].packet);
+  for (const element of altered.elements) element.name = `${element.name} (edited)`;
+  const target = resolvedTarget2(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "target.1" } }, CLICK));
+  assert.equal(target.selector, void 0);
+});
+test("a failure packet and explored packets of the same page, with the same element count, never lend each other selector hints", async () => {
+  const { runtime, failure, explored } = await dismissedDialog();
+  const [looked, revealed] = [explored[0], explored[1]];
+  for (const packet of [looked.packet, revealed.packet]) {
+    assert.equal(packet.location, failure.location);
+    assert.equal(packet.elements.length, failure.elements.length);
+  }
+  assert.notDeepEqual(revealed.packet.elements, looked.packet.elements);
+  assert.equal(resolvedTarget2(askFailure(runtime, failure, handleNamed(failure, "Close"))).selector, "#close");
+  assert.equal(resolvedTarget2(askFailure(runtime, failure, handleNamed(failure, "Keep editing"))).selector, "#keep");
+  assert.equal(resolvedTarget2(askAsCore(runtime, explored, `explored.1:${handleNamed(looked.packet, "Close")}`)).selector, "#close");
+  assert.equal(resolvedTarget2(askAsCore(runtime, explored, `explored.2:${handleNamed(revealed.packet, "Apply changes")}`)).selector, "#apply");
+  assert.equal(resolvedTarget2(askAsCore(runtime, explored, `explored.2:${handleNamed(revealed.packet, "Discard changes")}`)).selector, "#discard");
+});
+test("an exploration of more than eight packets never evicts the failure packet's hints, and drops the oldest explored binding first", async () => {
+  const { runtime } = site(COVERED);
+  const failure = await failurePacket(runtime);
+  const recovery = exploration(runtime);
+  for (let index = 1; index <= 9; index += 1) await recovery.call("web.recovery.navigate_in_scope", { url: `https://example.test/results/${index}` });
+  assert.equal(recovery.explored.length, 9);
+  assert.equal(resolvedTarget2(askFailure(runtime, failure, handleNamed(failure, "Close"))).selector, "#close");
+  assert.equal(resolvedTarget2(askFailure(runtime, failure, handleNamed(failure, "Keep editing"))).selector, "#keep");
+  const oldest = recovery.explored[0];
+  const dropped = resolvedTarget2(askAsCore(runtime, recovery.explored, `${oldest.evidenceId}:${handleNamed(oldest.packet, "Apply result 1")}`));
+  assert.equal(dropped.accessibleName, "Apply result 1");
+  assert.equal(dropped.selector, void 0);
+  for (const [position, entry] of recovery.explored.entries()) {
+    if (position === 0) continue;
+    const index = position + 1;
+    assert.equal(resolvedTarget2(askAsCore(runtime, recovery.explored, `${entry.evidenceId}:${handleNamed(entry.packet, `Apply result ${index}`)}`)).selector, `#apply-${index}`, entry.evidenceId);
   }
 });
-test("every result code the runtime actually emits is one the published set contains", async () => {
-  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
-  const base = { projectId: "project.one", flowId: "flow.one" };
-  const emitted = [
-    (await runtime.executeTool({ ...base, callId: "call.one", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/start" } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/" } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: 1 } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.9" } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode
-  ];
-  assert.deepEqual(emitted, [
-    "web.inspect.succeeded",
-    "web.action.rejected.no_progress",
-    "web.action.rejected.cross_origin",
-    "web.action.rejected.invalid_input",
-    "web.action.rejected.target_unobserved",
-    "web.action.rejected.no_repeating_structure"
-  ]);
-  for (const code of emitted) assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes(code), true, code);
+test("a recovery's structure detection is offered while exploring and kept where the runtime resolves extraction handles", async () => {
+  const { runtime, commands } = site(COVERED);
+  const registry = automationStudioHarnessOptionRegistry({ binding: runtime });
+  for (const stage of ["gather", "iterate"]) {
+    assert.equal(registry.list({ scope: DOMAIN, stage, policy: { ...POLICY, allowExternalSideEffects: false } }).some((option) => option.toolId === "web.recovery.detect_repeating_structure"), true, stage);
+  }
+  const recovery = exploration(runtime);
+  const detected = await recovery.call("web.recovery.detect_repeating_structure", {});
+  assert.equal(commands.at(-1), "web.dom.capture_snapshot");
+  const resolved2 = runtime.resolveExtractionHandle({ projectId: SCOPE.projectId, flowId: SCOPE.flowId, handle: String(detected.extraction) });
+  assert.equal(resolved2.ok, true);
+  assert.deepEqual(runtime.resolveExtractionHandle({ projectId: SCOPE.projectId, flowId: "flow.other", handle: String(detected.extraction) }), { ok: false, code: "unknown_handle" });
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(recovery.explored[0].packet, { handles: { element: "target.1" } }, CLICK), { status: "absent", reason: "evidence_unrecognized" });
 });

@@ -1,6 +1,7 @@
-// src/runtime/llm-evidence/tests/vocabulary.test.ts
+// src/runtime/llm-evidence/harness-options/tests/detect-option.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AutomationStudioHarnessOptionRegistry } from "fluxiq/automation-studio";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -1052,13 +1053,13 @@ async function detectRepeatingStructure(context) {
   if (result.status !== "succeeded") throw new Error("web structure detection capture failed");
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === void 0 ? void 0 : new URL(current.evidence.location).origin;
-  const page2 = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
+  const page = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
     budget: "exploration",
     maxEvidenceBytes: void 0,
     expectedOrigin,
     failedAction: void 0
   }));
-  if (current !== void 0 && element?.frameId === void 0 && page2.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  if (current !== void 0 && element?.frameId === void 0 && page.evidence.location !== current.evidence.location) recoverable("target_unobserved");
   const detection = webAutomationStructureDetectionValue(payload.structure);
   if (detection === void 0) throw new Error("the web client answered the capture without a structure detection");
   if (!detection.ok) recoverable(REFUSAL_CODES[detection.refused]);
@@ -1066,7 +1067,7 @@ async function detectRepeatingStructure(context) {
   const split = splitDetectedStructure({
     detection,
     handle,
-    location: page2.evidence.location,
+    location: page.evidence.location,
     target,
     frameId: element?.frameId,
     maxEvidenceBytes: request.maxEvidenceBytes
@@ -1155,7 +1156,7 @@ var WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purc
 var WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
 var ACTIONABLE_ROLES = /* @__PURE__ */ new Set(["button", "tab", "menuitem", "treeitem"]);
 var ACTIONABLE_TAGS = /* @__PURE__ */ new Set(["button", "summary"]);
-function webRecoverySafeActionVerdict(element, page2) {
+function webRecoverySafeActionVerdict(element, page) {
   const identity = [element.name, element.text, element.selector].filter(Boolean).join(" ");
   if (WEB_RECOVERY_COMMITTING_WORDS.test(identity)) return { ok: false, code: "target_unsafe", rung: "committing_wording" };
   if (element.controlType === "submit" || element.inputType === "submit" || element.role === "submit") {
@@ -1164,7 +1165,7 @@ function webRecoverySafeActionVerdict(element, page2) {
   if (element.form !== void 0 || element.tag === "form") return { ok: false, code: "target_unsafe", rung: "form_owned" };
   if (!isActionableControl(element)) return { ok: false, code: "target_unsafe", rung: "not_an_actionable_control" };
   const identified = Boolean(element.name) || Boolean(element.text);
-  const signals = agreeingSignals(element, page2);
+  const signals = agreeingSignals(element, page);
   if (signals.length < (identified ? 1 : 2)) return { ok: false, code: "target_unsafe", rung: "unidentified_without_corroboration" };
   return { ok: true, identified, signals };
 }
@@ -1173,11 +1174,11 @@ function isActionableControl(element) {
   if (element.role !== void 0 && ACTIONABLE_ROLES.has(element.role)) return true;
   return element.tag === "input" && (element.controlType === "button" || element.inputType === "button");
 }
-function agreeingSignals(element, page2) {
+function agreeingSignals(element, page) {
   const signals = [];
   const wording = [element.name, element.text].filter(Boolean).join(" ");
   if (wording && WEB_RECOVERY_DISMISSAL_WORDS.test(wording)) signals.push("dismissal_wording");
-  if (page2.dialogs?.some((dialog) => dialog.modal === true) || page2.blockedBy !== void 0) signals.push("modal_dialog");
+  if (page.dialogs?.some((dialog) => dialog.modal === true) || page.blockedBy !== void 0) signals.push("modal_dialog");
   if (element.landmark === "dialog" || element.landmark === "alertdialog") signals.push("dialog_landmark");
   if (element.revealKind === "disclosure") signals.push("reversible_disclosure");
   if (element.revealKind === "view" && element.role !== void 0 && ACTIONABLE_ROLES.has(element.role) && element.role !== "button") signals.push("view_switch");
@@ -1219,7 +1220,7 @@ function webRecoveryHarnessImplementations(context) {
     return binding;
   };
   const shownPacket = (input) => returned.get(input.scopeKey) ?? recoverable("target_unobserved");
-  const run = (handler) => async (execution) => {
+  const run2 = (handler) => async (execution) => {
     const handled = prepare(context, execution);
     try {
       return await handler(handled);
@@ -1229,11 +1230,11 @@ function webRecoveryHarnessImplementations(context) {
     }
   };
   return {
-    [WEB_RECOVERY_INSPECT_OPTION_ID]: run(async (input) => {
+    [WEB_RECOVERY_INSPECT_OPTION_ID]: run2(async (input) => {
       exactKeys(input.request.value, []);
       return toolExecution(shown(input, await capture(context, input)).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
-    [WEB_RECOVERY_REVEAL_OPTION_ID]: run(async (input) => {
+    [WEB_RECOVERY_REVEAL_OPTION_ID]: run2(async (input) => {
       const target = targetHandle(input.request.value);
       const observed = shownPacket(input);
       const current = await capture(context, input);
@@ -1241,7 +1242,7 @@ function webRecoveryHarnessImplementations(context) {
       if (!safeRevealElement(element)) recoverable("target_unsafe");
       return await clickAndReport(context, input, current, element.selector, shown);
     }),
-    [WEB_RECOVERY_ACT_OPTION_ID]: run(async (input) => {
+    [WEB_RECOVERY_ACT_OPTION_ID]: run2(async (input) => {
       const target = targetHandle(input.request.value);
       const observed = shownPacket(input);
       const current = await capture(context, input);
@@ -1253,14 +1254,14 @@ function webRecoveryHarnessImplementations(context) {
     // The authoring detection, bound through this exploration's packets and
     // keeping its handle in the runtime's store. It returns a structure packet,
     // not a page, so nothing is shown or retained: no target check reads one.
-    [WEB_RECOVERY_DETECT_OPTION_ID]: run(async (input) => await detectRepeatingStructure({
+    [WEB_RECOVERY_DETECT_OPTION_ID]: run2(async (input) => await detectRepeatingStructure({
       gateway: context.gateway,
       sessionId: input.sessionId,
       request: input.request,
       returned: Object.prototype.hasOwnProperty.call(input.request.value, "target") ? shownPacket(input) : void 0,
       handles: context.extractionHandles
     })),
-    [WEB_RECOVERY_WAIT_OPTION_ID]: run(async (input) => {
+    [WEB_RECOVERY_WAIT_OPTION_ID]: run2(async (input) => {
       const waitMs = boundedWait(input.request.value);
       const before = await capture(context, input);
       await sleep(waitMs, input.request.signal);
@@ -1269,7 +1270,7 @@ function webRecoveryHarnessImplementations(context) {
       if (sameEvidence(before, after)) recoverable("no_progress");
       return toolExecution(shown(input, after).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
-    [WEB_RECOVERY_NAVIGATE_OPTION_ID]: run(async (input) => {
+    [WEB_RECOVERY_NAVIGATE_OPTION_ID]: run2(async (input) => {
       exactKeys(input.request.value, ["url"]);
       const current = await capture(context, input);
       const destination = requestedUrl(input.request.value.url);
@@ -2637,15 +2638,15 @@ function createWebLlmTargetPackets() {
       const flow = flows.get(scopeKey2(scope));
       if (!flow) return { ok: false, code: "unknown" };
       if (location !== void 0) {
-        const page2 = flow.pages.get(location);
-        if (!page2) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
-        const target = page2.get(handle);
+        const page = flow.pages.get(location);
+        if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
+        const target = page.get(handle);
         if (target === void 0) return { ok: false, code: "unknown" };
         return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
       }
       const seen = /* @__PURE__ */ new Map();
-      for (const page2 of flow.pages.values()) {
-        const target = page2.get(handle);
+      for (const page of flow.pages.values()) {
+        const target = page.get(handle);
         if (target === void 0) continue;
         const address = `${target.frameId ?? 0}\0${target.selector}`;
         const known = seen.get(address);
@@ -3108,53 +3109,474 @@ function exactToolKeys(input, allowed) {
   if (Object.keys(input).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key))) recoverable("invalid_input");
 }
 
-// src/runtime/llm-evidence/tests/vocabulary.test.ts
-var page = (url) => ({ url, title: "Fixture", interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] });
-var gatewayFor = (url) => ({
-  eligibleSessionIds: () => ["session.one"],
-  structureDetectionSessionIds: () => ["session.one"],
-  executeAction: async (_sessionId, command) => command.actionType === "web.dom.capture_snapshot" ? { status: "succeeded", payload: command.parameters.detectStructure === void 0 ? { snapshot: page(url) } : { snapshot: page(url), structure: { ok: false, refused: "no_repeating_run" } } } : { status: "succeeded" }
-});
-test("the published tool ids are exactly the tools the runtime offers, in order", () => {
-  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
-  assert.deepEqual(runtime.tools.map((tool) => tool.toolId), [...WEB_LLM_EVIDENCE_TOOL_IDS]);
-  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
-  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.detect_repeating_structure"), true);
-  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.reveal_safe"), true);
-  assert.equal(new Set(WEB_LLM_EVIDENCE_TOOL_IDS).size, WEB_LLM_EVIDENCE_TOOL_IDS.length);
-});
-test("the published result codes cover every success and every rejection, with none left over", () => {
-  assert.deepEqual([...WEB_LLM_EVIDENCE_RESULT_CODES], [
-    WEB_LLM_INSPECT_RESULT_CODE,
-    WEB_LLM_ACTION_RESULT_CODE,
-    WEB_LLM_STRUCTURE_RESULT_CODE,
-    ...WEB_LLM_TOOL_REJECTION_CODES.map((code) => `web.action.rejected.${code}`)
-  ]);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.length, WEB_LLM_TOOL_REJECTION_CODES.length + 3);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes("web.action.rejected.no_repeating_structure"), true);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes("web.action.rejected.no_progress"), true);
-  for (const code of WEB_LLM_TOOL_REJECTION_CODES) {
-    assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes(webLlmToolRejectionResultCode(code)), true, code);
+// src/runtime/llm-evidence/structure/tests/captured-detections.ts
+var CAPTURED_DETECTIONS = {
+  "product-catalog-largest": {
+    url: "http://127.0.0.1:4173/scenarios/product-catalog/",
+    title: "Product catalog",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="product-list"]',
+        "item": '[data-testid="product-card"]',
+        "itemCount": 8,
+        "fields": [
+          {
+            "key": "product-image_src",
+            "label": "product-image src",
+            "spec": {
+              "kind": "attribute",
+              "selector": '[data-testid="product-image"]',
+              "attribute": "src",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-image_alt",
+            "label": "product-image alt",
+            "spec": {
+              "kind": "attribute",
+              "selector": '[data-testid="product-image"]',
+              "attribute": "alt",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-name",
+            "label": "product-name",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="product-name"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-link",
+            "label": "product-link",
+            "spec": {
+              "kind": "link",
+              "selector": '[data-testid="product-link"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-price",
+            "label": "product-price",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="product-price"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "product-rating",
+            "label": "product-rating",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="product-rating"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "stock-badge",
+            "label": "stock-badge",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="stock-badge"]',
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "pagination": {
+          "next": '[data-testid="pagination-next"]',
+          "maxPages": 3
+        },
+        "confidence": 1
+      }
+    }
+  },
+  "data-table-largest": {
+    url: "http://127.0.0.1:4173/scenarios/data-table/",
+    title: "Inventory",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="inventory-body"]',
+        "item": '[data-testid="inventory-row"]',
+        "itemCount": 12,
+        "fields": [
+          {
+            "key": "product",
+            "label": "Product",
+            "spec": {
+              "kind": "column",
+              "header": "Product",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "category",
+            "label": "Category",
+            "spec": {
+              "kind": "column",
+              "header": "Category",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "price",
+            "label": "Price",
+            "spec": {
+              "kind": "column",
+              "header": "Price",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "stock",
+            "label": "Stock",
+            "spec": {
+              "kind": "column",
+              "header": "Stock",
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "confidence": 1
+      }
+    }
+  },
+  "member-directory-largest": {
+    url: "http://127.0.0.1:4173/scenarios/member-directory/",
+    title: "Members \xB7 Meridian",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="member-rows"]',
+        "item": '[data-testid="member-rows"] > tr.css-0dfc6os',
+        "itemCount": 240,
+        "fields": [
+          {
+            "key": "member",
+            "label": "Member",
+            "spec": {
+              "kind": "column",
+              "header": "Member",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "role",
+            "label": "Role",
+            "spec": {
+              "kind": "column",
+              "header": "Role",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "team",
+            "label": "Team",
+            "spec": {
+              "kind": "column",
+              "header": "Team",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "status",
+            "label": "Status",
+            "spec": {
+              "kind": "column",
+              "header": "Status",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "last_active",
+            "label": "Last active",
+            "spec": {
+              "kind": "column",
+              "header": "Last active",
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "actions",
+            "label": "Actions",
+            "spec": {
+              "kind": "column",
+              "header": "Actions",
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "confidence": 0.75
+      }
+    }
+  },
+  "infinite-feed-largest": {
+    url: "http://127.0.0.1:4173/scenarios/infinite-feed/",
+    title: "Neighbourhood feed",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="feed-page-1"]',
+        "item": '[data-testid="feed-item"]',
+        "itemCount": 10,
+        "fields": [
+          {
+            "key": "feed-item-title",
+            "label": "feed-item-title",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-title"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-author",
+            "label": "feed-item-author",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-author"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-time",
+            "label": "feed-item-time",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-time"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-summary",
+            "label": "feed-item-summary",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-summary"]',
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "confidence": 1
+      },
+      "infiniteScroll": true
+    }
+  },
+  "infinite-feed-load-more": {
+    url: "http://127.0.0.1:4173/scenarios/infinite-feed/",
+    title: "Neighbourhood feed",
+    structure: {
+      "ok": true,
+      "proposal": {
+        "container": '[data-testid="feed-page-1"]',
+        "item": '[data-testid="feed-item"]',
+        "itemCount": 10,
+        "fields": [
+          {
+            "key": "feed-item-title",
+            "label": "feed-item-title",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-title"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-author",
+            "label": "feed-item-author",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-author"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-time",
+            "label": "feed-item-time",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-time"]',
+              "required": true
+            },
+            "coverage": 1
+          },
+          {
+            "key": "feed-item-summary",
+            "label": "feed-item-summary",
+            "spec": {
+              "kind": "text",
+              "selector": '[data-testid="feed-item-summary"]',
+              "required": true
+            },
+            "coverage": 1
+          }
+        ],
+        "pagination": {
+          "mode": "loadMore",
+          "control": '[data-testid="load-more"]',
+          "maxPages": 50
+        },
+        "confidence": 1
+      }
+    }
   }
+};
+
+// src/runtime/llm-evidence/harness-options/tests/detect-option.test.ts
+var DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID };
+var SCOPE = { projectId: "project.one", flowId: "flow.one" };
+var CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
+var LINK_SELECTOR = '[data-testid="product-link"]';
+var LINK = { tagName: "a", selector: LINK_SELECTOR, accessibleName: "A product", attributes: { href: "/scenarios/product-catalog/products/a", "data-testid": "product-link" } };
+function harness(initial = { url: CATALOG.url, elements: [LINK], structure: CATALOG.structure }, declares = true) {
+  let page = initial;
+  const commands = [];
+  const executeAction = async (_sessionId, command) => {
+    commands.push({ actionType: command.actionType, parameters: command.parameters });
+    const snapshot = { url: page.url, title: CATALOG.title, interactiveElements: page.elements };
+    if (command.parameters.detectStructure === void 0 || page.structure === void 0) return { status: "succeeded", payload: { snapshot } };
+    return { status: "succeeded", payload: { snapshot, structure: structuredClone(page.structure) } };
+  };
+  const gateway = declares ? { eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"], executeAction } : { eligibleSessionIds: () => ["session.one"], executeAction };
+  const handles = createWebLlmExtractionHandles();
+  const registry = new AutomationStudioHarnessOptionRegistry();
+  registry.register(webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: () => {
+  }, extractionHandles: handles }));
+  return { registry, commands, handles, gateway, setPage: (next) => {
+    page = next;
+  } };
+}
+var gathering = { scope: DOMAIN, stage: "gather" };
+var callSequence = 0;
+async function run(registry, optionId, value, flowId = SCOPE.flowId) {
+  callSequence += 1;
+  const result = await registry.execute({ projectId: SCOPE.projectId, flowId, callId: `call.${callSequence}`, optionId, value, maxEvidenceBytes: 64e3 }, gathering);
+  return result;
+}
+function rejection(code) {
+  return { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code }, effectApplied: false, resultCode: `web.action.rejected.${code}` };
+}
+function linkHandle(packet) {
+  const link = packet.elements.find((element) => element.tag === "a");
+  assert.ok(link, "the inspect packet describes the product link");
+  return link.target;
+}
+test("offers structure detection to a recovery while it gathers and iterates, and never to authoring or another domain", () => {
+  const { registry } = harness();
+  const offered = (resolution) => registry.list(resolution).some((option) => option.toolId === WEB_RECOVERY_DETECT_OPTION_ID);
+  assert.equal(offered({ scope: DOMAIN, stage: "gather" }), true);
+  assert.equal(offered({ scope: DOMAIN, stage: "iterate" }), true);
+  assert.equal(offered({ scope: DOMAIN, allowSideEffectsWithoutPolicy: true }), false);
+  for (const stage of ["plan", "implement", "verify"]) assert.equal(offered({ scope: DOMAIN, stage, allowSideEffectsWithoutPolicy: true }), false, stage);
+  assert.equal(offered({ scope: { kind: "domain", domainId: "other.domain" }, stage: "gather" }), false);
 });
-test("every result code the runtime actually emits is one the published set contains", async () => {
-  const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
-  const base = { projectId: "project.one", flowId: "flow.one" };
-  const emitted = [
-    (await runtime.executeTool({ ...base, callId: "call.one", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/start" } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/" } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: 1 } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.9" } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode
-  ];
-  assert.deepEqual(emitted, [
-    "web.inspect.succeeded",
-    "web.action.rejected.no_progress",
-    "web.action.rejected.cross_origin",
-    "web.action.rejected.invalid_input",
-    "web.action.rejected.target_unobserved",
-    "web.action.rejected.no_repeating_structure"
-  ]);
-  for (const code of emitted) assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes(code), true, code);
+test("is declared with the authoring detection's input bounds, observes only, and takes no free look", () => {
+  const { registry, gateway } = harness();
+  const option = registry.get(WEB_RECOVERY_DETECT_OPTION_ID);
+  const authoring = createWebAutomationLlmEvidenceRuntime(gateway).tools.find((tool) => tool.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID);
+  assert.ok(option);
+  assert.ok(authoring);
+  assert.deepEqual(option.inputSchema, authoring.inputSchema);
+  assert.equal(option.effect, "observe");
+  assert.deepEqual(option.safety, { sideEffect: "observe" });
+  assert.deepEqual(option.availability, DOMAIN);
+  assert.deepEqual(option.stages, ["gather", "iterate"]);
+  assert.equal(option.repeatPolicy, void 0);
+  assert.equal(option.initialObservation, void 0);
+});
+test("detects around a control a recovery packet showed, and keeps the handle for that project and Flow only", async () => {
+  const { registry, commands, handles } = harness();
+  const inspected = await run(registry, "web.recovery.inspect", {});
+  const detected = await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: linkHandle(inspected.evidence) });
+  assert.equal(detected.resultCode, "web.structure.detected");
+  assert.equal(detected.effectApplied, false);
+  assert.deepEqual(commands.at(-1), { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: LINK_SELECTOR } } });
+  assert.equal(detected.evidence.schemaVersion, "web-llm-structure.v1");
+  assert.equal(detected.evidence.target, linkHandle(inspected.evidence));
+  const extraction = detected.evidence.extraction;
+  assert.equal(typeof extraction, "string");
+  const resolved2 = handles.resolve(SCOPE, extraction);
+  assert.equal(resolved2.ok, true);
+  if (!resolved2.ok) throw new Error("unreachable");
+  assert.equal(resolved2.binding.extractList.item, CATALOG.structure.proposal.item);
+  assert.deepEqual(handles.resolve({ ...SCOPE, flowId: "flow.two" }, extraction), { ok: false, code: "unknown_handle" });
+});
+test("refuses a target no recovery packet issued, or whose page has moved on, without asking the page to detect", async () => {
+  const { registry, commands, setPage } = harness();
+  await run(registry, "web.recovery.inspect", {});
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.9" }), rejection("target_unobserved"));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }, "flow.two"), rejection("target_unobserved"));
+  setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }), rejection("target_unobserved"));
+  assert.equal(commands.some((command) => command.parameters.detectStructure !== void 0), false);
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "a" }), rejection("invalid_input"));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { selector: LINK_SELECTOR }), rejection("invalid_input"));
+});
+test("answers with a packet Core would carry: none of the domain's denied keys at any depth, and no selector", async () => {
+  const { registry, gateway } = harness();
+  const detected = await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, {});
+  assert.equal(detected.resultCode, "web.structure.detected");
+  const coreKey = (key) => key.replace(/[_-]/g, "").toLowerCase();
+  const denied = new Set(createWebAutomationLlmEvidenceRuntime(gateway).deniedEvidenceKeys.map(coreKey));
+  assert.equal(denied.has("selector"), true);
+  const keys = [];
+  const strings = [];
+  const walk = (value) => {
+    if (typeof value === "string") strings.push(value);
+    if (!value || typeof value !== "object") return;
+    for (const [key, child2] of Array.isArray(value) ? value.map((item) => ["", item]) : Object.entries(value)) {
+      if (key) keys.push(key);
+      walk(child2);
+    }
+  };
+  walk(detected.evidence);
+  assert.deepEqual(keys.filter((key) => denied.has(coreKey(key))), []);
+  assert.equal(typeof detected.evidence.schemaVersion, "string");
+  assert.equal(keys.every((key) => key.length <= 100), true);
+  assert.equal(strings.every((value) => value.length <= 2e3), true);
+  const captureSelectors = [];
+  const collect = (value, key = "") => {
+    if (typeof value === "string" && ["selector", "container", "item"].includes(key)) captureSelectors.push(value);
+    if (value && typeof value === "object") for (const [childKey, child2] of Object.entries(value)) collect(child2, Array.isArray(value) ? key : childKey);
+  };
+  collect(CATALOG.structure);
+  assert.equal(captureSelectors.length > 2, true);
+  const serialized = JSON.stringify(detected.evidence);
+  assert.deepEqual(captureSelectors.filter((selector) => serialized.includes(selector)), []);
+});
+test("a page with no list there is an answer, not a stop; a client that cannot detect is a fault", async () => {
+  const noList = harness({ url: CATALOG.url, elements: [LINK], structure: { ok: false, refused: "no_repeating_run" } });
+  const refused2 = await run(noList.registry, WEB_RECOVERY_DETECT_OPTION_ID, {});
+  assert.deepEqual(refused2, rejection("no_repeating_structure"));
+  assert.equal(webAutomationExplorationRefusalClassifier(refused2.resultCode), void 0);
+  const unable = harness(void 0, false);
+  await assert.rejects(run(unable.registry, WEB_RECOVERY_DETECT_OPTION_ID, {}), /does not declare repeating-structure detection/u);
 });

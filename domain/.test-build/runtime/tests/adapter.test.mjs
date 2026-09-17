@@ -1902,19 +1902,25 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
+// src/runtime/llm-evidence/structure/handles.ts
+var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
+var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
+
 // src/runtime/llm-evidence/harness-options/vocabulary.ts
 var WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.inspect",
   "web.recovery.reveal",
   "web.recovery.act_safe",
   "web.recovery.wait_for_change",
-  "web.recovery.navigate_in_scope"
+  "web.recovery.navigate_in_scope",
+  "web.recovery.detect_repeating_structure"
 ];
 var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
 var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
 var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+var WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
 
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
@@ -1923,10 +1929,6 @@ var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs
 var OUTPUT_NODE_ID_BY_OUTPUT_ID = new Map(
   WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, webAutomationOutputNodeId(outputId)])
 );
-
-// src/runtime/llm-evidence/structure/handles.ts
-var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
-var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 
 // src/runtime/llm-evidence/plan-resolution/handle-tokens.ts
 var EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");

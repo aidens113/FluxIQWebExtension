@@ -492,42 +492,8 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "no_repeating_structure"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
-var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
-var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
-var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
-var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
-var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
-var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
-var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
-var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
-function webLlmToolRejectionResultCode(code) {
-  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
-}
-var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
-  WEB_LLM_INSPECT_RESULT_CODE,
-  WEB_LLM_ACTION_RESULT_CODE,
-  WEB_LLM_STRUCTURE_RESULT_CODE,
-  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
-]);
-
-// src/runtime/llm-evidence/harness-options/vocabulary.ts
-var WEB_RECOVERY_HARNESS_OPTION_IDS = [
-  "web.recovery.inspect",
-  "web.recovery.reveal",
-  "web.recovery.act_safe",
-  "web.recovery.wait_for_change",
-  "web.recovery.navigate_in_scope"
-];
-var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
-var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
-var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
-var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
-var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
-
-// src/runtime/llm-evidence/harness-options/execute.ts
-var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
+// src/extraction/dataset-id.ts
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 
 // src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -821,6 +787,52 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
     }
   };
 }
+
+// src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+
+// src/runtime/llm-evidence/vocabulary.ts
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
+var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
+var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
+var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
+var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
+var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
+var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
+function webLlmToolRejectionResultCode(code) {
+  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
+}
+var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
+  WEB_LLM_INSPECT_RESULT_CODE,
+  WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
+  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
+]);
+
+// src/runtime/llm-evidence/structure/handles.ts
+var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
+var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
+
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
+var WEB_RECOVERY_HARNESS_OPTION_IDS = [
+  "web.recovery.inspect",
+  "web.recovery.reveal",
+  "web.recovery.act_safe",
+  "web.recovery.wait_for_change",
+  "web.recovery.navigate_in_scope",
+  "web.recovery.detect_repeating_structure"
+];
+var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+var WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
+
+// src/runtime/llm-evidence/harness-options/execute.ts
+var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
 // src/actions/types.ts
 var WEB_AUTOMATION_ACTION_TYPES = [
@@ -1207,12 +1219,6 @@ var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
   paginate: { mode: "next", next: "a.next", maxPages: 5 }
 };
 
-// src/extraction/dataset-id.ts
-var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
-
-// src/extraction/label-key.ts
-var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
-
 // src/output-nodes/extract-list/records-path.ts
 var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
 
@@ -1542,10 +1548,6 @@ function elementFillsRepairableParameter(element, role) {
 function elementParameter(role) {
   return { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role, required: true, description: ELEMENT_PARAMETER_DESCRIPTION };
 }
-
-// src/runtime/llm-evidence/structure/handles.ts
-var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
-var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 
 // src/runtime/llm-evidence/plan-resolution/handle-tokens.ts
 var EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");

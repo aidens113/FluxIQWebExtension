@@ -128,7 +128,10 @@ export type WebAutomationLlmEvidenceRuntime = {
  * How many packets' selector bindings are kept so a later repair can still put
  * the selector hint back. Small on purpose: this is a convenience for the
  * in-flight diagnosis, not a store, and a repair that finds no binding is
- * resolved fingerprint-only rather than refused.
+ * resolved fingerprint-only rather than refused. Failure packets get a window
+ * of their own: the target check always needs the failure packet, while an
+ * exploration returns any number of packets and Core carries only the newest
+ * to the repair, so the oldest explored binding is the one to let go.
  */
 const RETAINED_SELECTOR_BINDINGS = 8;
 
@@ -144,15 +147,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   };
   // Keyed by the packet itself, because Core hands the packet back to
   // `validateTargetOverrideEvidence` without the project or flow it came from.
-  const retainedSelectors = new Map<string, Map<string, string>>();
-  const retain = (binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
-    retainedSelectors.set(packetKey(binding.evidence), binding.selectors);
-    for (const key of retainedSelectors.keys()) {
-      if (retainedSelectors.size <= RETAINED_SELECTOR_BINDINGS) break;
-      retainedSelectors.delete(key);
-    }
+  const failureSelectors = new Map<string, Map<string, string>>();
+  const toolSelectors = new Map<string, Map<string, string>>();
+  const retainIn = (window: Map<string, Map<string, string>>) => (binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
+    keepNewest(window, packetKey(binding.evidence), binding.selectors);
     return binding;
   };
+  const retain = retainIn(toolSelectors);
+  const retainFailure = retainIn(failureSelectors);
   return {
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     // The keys Core must refuse in evidence this domain supplies. Core used to
@@ -170,7 +172,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
     // authoring `navigate` tool below already enforces; a per-run allowlist
     // is per-exploration, so threading one needs the coordinator, not this
     // line.
-    harnessOptions: webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" } }),
+    harnessOptions: webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" }, retainSelectors: retain, extractionHandles }),
     // How Core reads a refusal without learning any of this domain's result
     // codes.
     classifyRefusal: webAutomationExplorationRefusalClassifier,
@@ -202,7 +204,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-        description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only.",
+        description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only. Write the list into the extraction node as extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, paginate?: false}.",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "observe",
       },
@@ -290,7 +292,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       assertActive(input.signal);
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
-      return retain(sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
+      return retainFailure(sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
         budget: "failure",
         maxEvidenceBytes: input.maxEvidenceBytes,
         expectedOrigin: undefined,
@@ -312,7 +314,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         evidence as WebLlmPageEvidence,
         target,
         failedAction,
-        retainedSelectors.get(packetKey(evidence as WebLlmPageEvidence))
+        // Equal keys describe equal elements, so a binding from either window fits.
+        failureSelectors.get(packetKey(evidence as WebLlmPageEvidence)) ?? toolSelectors.get(packetKey(evidence as WebLlmPageEvidence))
       );
     },
     resolveExtractionHandle(input) {
@@ -347,15 +350,28 @@ function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[]
   ).map((session) => session.sessionId);
 }
 
+/** Keep `selectors` as the newest entry, re-inserted when shown again, and let the oldest go past the bound. */
+function keepNewest(window: Map<string, Map<string, string>>, key: string, selectors: Map<string, string>): void {
+  window.delete(key);
+  window.set(key, selectors);
+  for (const oldest of window.keys()) {
+    if (window.size <= RETAINED_SELECTOR_BINDINGS) break;
+    window.delete(oldest);
+  }
+}
+
 /**
- * A packet's identity for the binding lookup: its location and the exact
- * handles it describes. Core round-trips the packet through JSON, so this is
- * matched on what the packet says rather than on object identity, and a packet
- * that was trimmed, recaptured or re-ranked no longer matches -- which is the
- * intent, because its handles would then mean something else.
+ * A packet's identity for the binding lookup: its location and every element
+ * it describes, whole. Handles are numbered from 1 in every packet, so keyed on
+ * handles alone two captures of one page with one element count collided, and
+ * a repair got the hint of a different control. Keyed on the elements, equal
+ * keys mean equal fingerprints at every handle. Core round-trips the packet
+ * through JSON, which reproduces this serialization, so it is matched on what
+ * the packet says rather than on object identity, and a packet that was
+ * trimmed, recaptured, re-ranked or edited no longer matches.
  */
 function packetKey(evidence: WebLlmPageEvidence): string {
-  return `${evidence.location} ${evidence.elements.map((element) => element.target).join(",")}`;
+  return `${evidence.location} ${JSON.stringify(evidence.elements)}`;
 }
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {

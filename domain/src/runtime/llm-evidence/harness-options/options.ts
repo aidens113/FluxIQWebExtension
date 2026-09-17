@@ -2,11 +2,17 @@
 //
 // Decision L14 says exploration is a Core capability and an imported domain
 // **extends** the Core set rather than replacing it. This is that extension:
-// five declarations in Core's own option shape, scoped to this domain, pinned
+// six declarations in Core's own option shape, scoped to this domain, pinned
 // to the stages where exploring is what the loop is meant to be doing, and
 // handed to the registry as a bundle. Core does not learn what a page is; it
-// learns that this domain offers five actions, what each one costs in side
+// learns that this domain offers six actions, what each one costs in side
 // effects, and when it may be offered.
+//
+// The sixth is structure detection, the same look at a list that creation has
+// (`web.detect_repeating_structure`), under its own id. It cannot share the
+// authoring id: Core folds the runtime's plain tools and these options into
+// one bundle, and a second declaration of one id would replace the authoring
+// tool with this stage-pinned one and take detection away from creation.
 //
 // Three declaration choices are load-bearing.
 //
@@ -37,6 +43,7 @@ import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
 import { webRecoveryHarnessImplementations, WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";
 import {
   WEB_RECOVERY_ACT_OPTION_ID,
+  WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_REVEAL_OPTION_ID,
@@ -50,7 +57,7 @@ const EXPLORATION_STAGES = ["gather", "iterate"] as const;
 
 const DOMAIN_SCOPE = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID } as const;
 
-/** The five declarations, in the order the registry receives them. */
+/** The six declarations, in the order the registry receives them. */
 export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOption[] {
   return [
     {
@@ -112,6 +119,18 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
       effect: "mutate",
       availability: DOMAIN_SCOPE,
       safety: { sideEffect: "mutate" },
+      stages: [...EXPLORATION_STAGES]
+    },
+    {
+      toolId: WEB_RECOVERY_DETECT_OPTION_ID,
+      description: "Detect the repeating list or table the failing workflow reads: around an element observed during this exploration when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only.",
+      // The authoring detection's input, bound for bound.
+      inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
+      // No repeat policy, as authoring has none: Core refuses an identical
+      // repeat on its own, and a second target is a different request.
+      effect: "observe",
+      availability: DOMAIN_SCOPE,
+      safety: { sideEffect: "observe" },
       stages: [...EXPLORATION_STAGES]
     }
   ];
