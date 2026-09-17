@@ -476,6 +476,14 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   (W-3a), and with the Lab changes "# pass 1102" (test-runner), "# pass 73"
   (lab), "# pass 242" (scenario-lab), audit passed. Service tests time out at
   5 s when run in parallel under load; serial runs are clean.
+- Cause found for the "timed out in 5000ms" service-test failures everyone
+  has been rerunning: `packages/fluxiq/vitest.config.ts` sets
+  `testTimeout: 15_000`, but `npx vitest run <paths>` from Core's repository
+  root never loads it, so those runs used vitest's 5,000 ms default. Run
+  Core tests from inside `packages/fluxiq`, or pass `--config`. The full
+  suite at `9d7cc24` was "4 failed / 2007 passed" that way and the four pass
+  together alone (11/11). The machine's memory fault is still real; this was
+  not it.
 - Hazard, recorded: this repository's domain tests resolve `fluxiq` to Core's
   built `dist` in the main checkout, so a worker rebuilding Core there puts
   its in-flight code into everyone's runs. Three `repair-proposal` failures
