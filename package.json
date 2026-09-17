@@ -50,6 +50,7 @@
     "lab:campaign": "node scripts/lab/live-campaign.mjs",
     "lab:test": "node --test \"scripts/lab/**/tests/*.test.mjs\"",
     "lab:interactive": "node scripts/lab/run-lab.mjs interactive",
+    "lab:pair": "node scripts/lab/pair.mjs",
     "real-site:policy": "pnpm --filter @fluxiq-web-extension/real-site-policy build && node packages/real-site-policy/dist/cli.js",
     "structure:check": "node scripts/structure-audit.mjs",
     "structure:baseline": "node scripts/structure-audit.mjs --update",

@@ -109,25 +109,30 @@ real resource limit rather than caution.
 we have at least basic automation able to be created & repaired by simply
 pointing the instructions at a demo, and having it explore and auto-create
 flows", across "lots of different demos", including flows that navigate demo
-sites and scrape data. Runs serving that goal need no per-run approval. Also in
-flight: `w2-creation-extraction-gap` (can creation emit extraction and
-navigation?) and `w2-live-campaign-catalog` (instruction catalog, campaign runner).
+sites and scrape data. Runs serving that goal need no per-run approval. The
+full campaign (`test-runs/campaigns/2026-09-17T02-23-20-255Z`, 36 creation and
+14 repair tasks, Core `8409ca2` from `F:/fxlab/lab-core`) is running: form and
+rename creation pass; scraping and navigate-and-scrape mostly fail, in three
+ways -- fields missing from extracted records, a repeated tool request ending
+the build, and malformed record-output or handle placement in the plan.
 
 **Next steps, in order:**
-1. Created Flows: `w2-plan-handle-identity` (created nodes carry the element
-   identity the resolver needs), then rerun live creation and the campaign
-   (`pnpm lab:campaign`, create and repair tasks).
-2. The shared back half, per `reports/w2-back-half-design.md` section 8: wave 1
-   now (C-1+C-3, C-2, C-4, W-1, W-2, L-1); C-5 and W-4 after C-1; wave 2 once
-   `live-patch.ts`, `recovery/annotation/**` and `service/**` land (C-6..C-10);
-   wave 3 (C-11 insert-path, C-12 extend mode for non-blank Flows, C-13 docs);
-   Lab L-2..L-5.
-3. In flight: `w2-renamed-repair-rejected`, `w2-run-detail-annotation-loss`,
-   `w2-campaign-repair-tasks`. After them: resume the live pipeline worker for
-   explore -> run -> repair on shared code, and the one-character
-   `xpathFor` id-anchor fix in the extension.
-4. Before pushing: full checks in both repositories; Core docs for today's
-   grant, guard, handle and index changes; `pnpm docs:reference` in Core.
+1. In flight (Core): C-6 trial and judge, now also the recorded-step target in
+   the trial rerun and the file-based applier; C-7 exploration packets reach
+   the repair; `w2-creation-loop-keeps-going` (duplicate requests answered,
+   unusable-decision feedback names the accepted shape, extract_list contract
+   in the catalog); Core docs for today's changes.
+2. In flight (this repository): `w2-created-scrape-fields` (field selectors
+   and handle placement for created scrapers; edits only after the campaign
+   ends); `w2-lab-pair` (an isolated `F:/fxlab/lab-ext` + `F:/fxlab/!FluxIQ`
+   pair, so campaigns stop freezing edits here).
+3. After the campaign: W-3 extraction repair, L-5 fixtures, L-2 repair lane,
+   the `xpathFor` id-anchor fix (with the identity specs); then C-9, C-10,
+   C-11, C-12 (extend mode for non-blank Flows), C-13, L-3, L-4, per
+   `reports/w2-back-half-design.md` section 8. Rerun the campaign from the
+   pair after each batch of fixes.
+4. Before pushing: full checks in both repositories; `pnpm docs:reference` in
+   Core.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -402,6 +407,43 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-16 — Trial and judge, exploration reaches repair, campaign pair
+- Agents: C-6 (`w2-c6-trial.md`, Core `8329477`), C-7
+  (`w2-c7-exploration-handoff.md`, Core `a8ce814`), `w2-lab-pair`
+  (`scripts/lab/pair.mjs`, `F:/fxlab/lab-ext` + `F:/fxlab/!FluxIQ`).
+- C-6: a change is trialled against the failed attempt and judged per node
+  by the flow-change verdict, with the run's remaining steps rather than 50.
+  The trial rerun and the file-based applier now use the shared
+  `actionTargetParameterValues`, so every path repairs a recorded step.
+  Open: the executor must expose remaining steps (C-9 passes them);
+  `verifiesState` is not wired yet; `live-patch.ts` is 744/800, so C-11
+  splits it into `runtime/live-patch/` first.
+- C-7: the patch request carries the explored packets and the target check
+  accepts their handles, written `explored.N:<handle>` because the domain
+  numbers handles per packet (accepted by the supervisor). Found: the
+  provider's pre-send check skips the explored slot, and exploration's own
+  requests do not apply the domain's denied keys (older); both dispatched as
+  C-7b. The domain's recovery options never `retain` selectors, so explored
+  repairs resolve by fingerprint only (added to W-3).
+- Validation: each change was verified alone in a clean Core worktree
+  (`F:/fxlab/verify-core`, HEAD plus only that worker's files, the main
+  checkout's `node_modules` joined in). C-6: `npx tsc --noEmit -p
+  packages/fluxiq` -> exit 0; `vitest run` service-adaptation
+  `--no-file-parallelism` -> "12 passed"; flow-change, live-patch, store,
+  policy-action and recovery -> "27 passed", "435 passed". In parallel the
+  service tests timed out at 5 s under load, a different set each time. C-7:
+  tsc exit 0; recovery, llm and service-adaptation serially -> "52 passed",
+  "595 passed". Pair: `node --test "scripts/lab/pair/tests/*.test.mjs"` ->
+  "# pass 37"; `pnpm lab:test` -> "# pass 67"; non-live `basic-form` from the
+  pair passed (`run-mu4xja1g-acac85a7`, worker-reported).
+- Campaigns from the pair: export the four variables `pnpm lab:pair` prints
+  and `DEEPSEEK_API_KEY` from the main checkout's `.env.local` into the
+  process, never copying the file; summaries land under
+  `F:/fxlab/lab-ext/test-runs/instances/lab-pair/campaigns/`.
+- Found: a fresh Windows checkout of Core fails its own `working-docs` audit
+  rule (index stale), seen in `F:/fxlab/verify-core` and the pair; likely the
+  header reader and CRLF line endings. Not yet investigated.
+
 ### 2026-09-16 — An approved repair now changes what a recorded step clicks
 - Agent: `w2-typed-apply-gates`, integrated by the supervisor as Core
   `c0b04be`.
@@ -425,7 +467,13 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   all 8 records and missed name, price, rating and url in some of them:
   `run-mu4wwkbc-df6cfe60`, `run-mu4wyfaw-001d0bcc`; no recovery was attempted
   because extraction repair is fail-closed until W-3). That worker edits
-  nothing here until the campaign's `finishedAt` is set. Held until the
+  nothing here until the campaign's `finishedAt` is set. Later, from the
+  campaign's next eleven rows (1 of 11 scraping tasks passed):
+  `w2-creation-loop-keeps-going` (Core; `run-mu4xder7-e00d5bf0`,
+  `run-mu4xeh1g-de1433bb`, `run-mu4x6p3f-f7f8b450` ended on a repeated detect
+  request; `run-mu4xatjs-12a5a5c7`, `run-mu4x5m2p-a4a4a29d` on three unusable
+  plans: `record_output.*`, `web.handle.misplaced`/`malformed`), the handle
+  half added to `w2-created-scrape-fields`, and `w2-lab-pair`. Held until the
   campaign ends, because each campaign run rebuilds this checkout: W-3, L-5,
   L-2.
 - Also landed: the `swallowed-failure` audit rule (Core `42bd90a`, mirrored
@@ -436,6 +484,16 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   Core audit ("2 failures are silently dropped, at lines 2, 3") and was
   removed; this repository's audit -> "passed (60 warning(s), 122
   baselined)" after the index was regenerated.
+- Core docs (`a32fdc9`, report `w2-core-docs-loop-changes.md`): grants,
+  guards, per-call records, plan handles, catalog reservation, refusal
+  reasons, gated typed applies, migration 0020. Validation: Core
+  `structure-audit.mjs --rule docs-links` -> "passed (0 warning(s), 0
+  baselined)"; supervisor checked the handle bounds against
+  `plan-node-handles.ts` (64, 16, `MAX_LOCATION_LENGTH = 2_048`) and the
+  review action's `classification: "authoring"` (`api/handlers/runs.ts:135`).
+  Recheck after C-6: the "at most 50 steps" lines and the typed-store-only
+  `parameters.target` wording. `evaluateBootstrapAdaptationApplyGates` is
+  still uncalled by design; C-12 wires it.
 - Not verified: recording-definition nodes drop an applied `parameters.target`
   when materialized (`service/recordings/candidate-definitions.ts:86`);
   recorded Flows use `builtin.policy.action` and are unaffected.
@@ -576,174 +634,9 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   imports from `fluxiq/automation-studio/nodes`. `pnpm --filter
   @fluxiq-web-extension/extension test:e2e:build` -> exit 0.
 
-### 2026-09-16 — First live DeepSeek reply; pushed in both repositories
-- Agent: supervisor; workers `w2-deepseek-preflight-refusal`,
-  `w2-lab-repair-outcome`, `w2-per-call-records`, `w2-remove-max-calls-setting`,
-  `w2-core-contracts-and-docs`, `w2-fluxiq-0-6-0`, `w2-flow-creation-iterates`,
-  `w2-adaptation-certificate-calls`
-- Changed: Core `5300d47`, `0b3ba93`; this repository `e9e69f0`, `fcd7dc9`.
-  Pushed: Core `0e0e2d6..0b3ba93`, this repository `ea0a2ec..fcd7dc9`.
-- Why no live run had ever reached DeepSeek: the DeepSeek adapter's
-  `validateDeepSeekRequest` kept its own copy of the fields a recent action may
-  carry, and it lacked `failureCategory`, which the context packet adds from a
-  `target_not_found` record. Every runtime recovery request was refused before
-  sending, at any token limit, under the single code
-  `llm.provider_configuration_invalid`. Found only after the Lab began keeping
-  Core's per-call issue codes and control refusal reasons. The adapter now uses
-  the packet's own compile-checked check; its 17 pre-send refusals have distinct
-  codes; tests put real recovery requests through the real adapter.
-- Validation: supervisor-run. Live
-  `FLUXIQ_TEST_ENV_FILES=none pnpm lab run identity-drift --variant save-and-exit --flow --live-llm --llm-task adapt --llm-max-calls 26 --llm-max-cost-usd 0.25 --llm-max-input-tokens 42000 --llm-max-output-tokens 8000 --llm-max-total-tokens 50000 --llm-max-run-tokens 600000`
-  -> `run-mu4nxysj-3234c535`, verdict `passed`, `snapshots/live-llm.json`
-  observed calls: `runtime_diagnosis` stage `gather` `validationOk: true`,
-  3,182 in / 559 out, $0.00213796; `runtime_patch` stage `implement`
-  `validationOk: true`, 3,274 in / 527 out, $0.0021362; accounting 7,542 tokens,
-  $0.00427416, 0 breaches; redaction attestation `passed`. Core `pnpm check`
-  exit 0; `vitest run src/programs/automation-studio/runtime` -> "Tests 991
-  passed (991)"; web `vitest run src/features/automation-studio` -> "Tests 1073
-  passed (1073)". This repository `pnpm check` exit 0; test-runner "# pass
-  1003", "# fail 0"; test-contracts "# pass 97", "# fail 0"; audit passed.
-- Repair outcome, from the next live run (`run-mu4ovip2-b15551d3`, same
-  command, after `fcd7dc9`): `harnessRecovery` shows a validated diagnosis and a
-  validated `runtime_patch` reply proposing a `temporary_target_override`,
-  refused at preflight with `runtime_patch.target_override_rejected`; no
-  adaptation, no change proposal; two calls, $0.00407132; redaction `passed`.
-  That is the **correct** outcome: the variant's manifest says Save is gone, a
-  decoy stands in its slot, and the run must refuse it. No existing Lab
-  scenario lets a correct repair succeed -- every other identity-drift variant
-  resolves deterministically, and `llm-target-drift`'s renamed target does
-  nothing when pressed -- so a successful live repair needs a new variant
-  (`w2-repairable-drift-scenario`, dispatched).
-- Not verified: a repair that is accepted and makes the task succeed; whether an
-  iterating recovery gathers evidence live (this
-  run's diagnosis needed none); repeatability. The machine's RAM fault killed
-  roughly half of today's build attempts, so single observations stay single.
-- Open: any failed provider call revokes the whole grant, so one bad reply ends
-  an iterating recovery, patch included. The adapter's 3-bytes-per-token
-  estimate can refuse requests the harness allows under an 8k input limit.
-
-### 2026-09-16 — Iteration replaces fixed call counts (in progress)
-- Agent: supervisor; workers `w2-iterating-recovery-session`,
-  `w2-guards-not-call-counts`, `w2-lab-iterating-calls`,
-  `w2-demo-iterating-calls`, `w2-grant-budget-integration`; in flight at the
-  time of writing: `w2-adaptation-certificate-calls`,
-  `w2-flow-creation-iterates`, `w2-core-contracts-and-docs`
-- Why: the user's decision recorded in Current State. A Claude Code crash
-  stopped the first two workers mid-task with two workers running — well
-  under the recorded five-worker limit, so not a load crash; both were resumed
-  from their transcripts with their partial work intact.
-- The same fixed limit turned up in seven places, each of which alone would
-  have stopped an iterating recovery: Core's two-call runtime purpose; Core's
-  per-mode grant constants; the web panel's runtime request; the web panel's
-  Flow-creation request (4 calls) and Core's Flow Bootstrap loop (4, capped at
-  8); the Lab's contract ceiling and live-run planner; six demo scripts and the
-  adaptation certificate; and -- the least visible -- grant expiry, checked on
-  every call, defaulting to 60 s and capped at 5 minutes, which would have cut
-  a recovery off regardless of its deadline. A saved per-Flow `maxCalls: 1`
-  written by the authoring defaults was a further trap: honouring it would have
-  pinned every adapting run to a single call, so the panel no longer uses it
-  for adapting runs.
-- Model now in the tree: iterating purposes default to 26 calls (a diagnosis,
-  a patch, and exploration's 24-decision default) with a 64 backstop; a grant
-  token budget `maxTotalTokensPerRun` (default min(per-call x calls, 100,000))
-  on which the high-token confirmation is judged; a call and a token/cost
-  margin held back for the patch; `explore_and_adapt` given its grant's budget
-  rather than the $0.25 no-grant one; a 600 s recovery deadline; a
-  no-progress guard with its own outcome; and a grant `ttlMs` that is only a
-  claim window, with claimed grants under a 600 s lease that exchanges expired
-  key authorizations one for one. Worst case for one default recovery: 26
-  calls, 100,000 tokens, $2.00 estimated, 600 s; about $0.09 at DeepSeek peak
-  prices.
-- Validation: supervisor-run, not taken from reports. The grant-lifetime design
-  was reviewed as authorization behaviour before acceptance. Its seven tests
-  pin that an unclaimed grant expires and is revoked, a claimed grant is
-  refused at the end of its lease, the exchange never reveals more keys than
-  the call count, revocation wins at any point, the grant dies with the
-  actor's session and Secret Keys unlock (the test asserts refusal,
-  `activeGrantCount() === 0` and zero reveals), and a revocation racing a mint
-  revokes the fresh authorization. `vitest run .../execution-grant-lifetime.test.ts`
-  -> "Tests 7 passed (7)". Web panel: `vitest run
-  src/features/automation-studio/runtime` -> "Tests 44 passed (44)",
-  `tsc --noEmit` exit 0. Lab: `test-contracts` -> "# pass 94", "# fail 0";
-  `test-runner` -> "# pass 976", "# fail 0"; audit passed. Core
-  `.structure-baseline.json` lowered `service.ts` 6468 -> 6434.
-- Not verified yet: no live provider run since the change; no browser; Core
-  must be rebuilt before a Lab run because the Lab loads Core's compiled
-  output, which still carried the old limits mid-task.
-
-### 2026-09-16 — Four workers integrated; the exploration runs and two holes close
-- Agent: supervisor, integrating workers `w2-r0-service-exploration`,
-  `w2-denied-evidence-keys`, `w2-diagnosis-channel`, `w2-import-cycle`
-- Changed: Core `AS/runtime/recovery/annotation/**` (new), `recovery/index.ts`,
-  `recovery/structured-diagnosis.ts`, `recovery/tests/{plan,stages,runtime-exploration}.test.ts`,
-  `service.ts`, `llm/harness-options/{binding.ts,index.ts}`,
-  `llm/harness/{context-packet.ts,intervention.ts,task-request.ts}`,
-  `llm/evidence-loop.ts`, `runtime/loop-limits/**` (new), `llm/tests/**`,
-  `tests/service-adaptation/**`, `tests/service-bootstrap/**`,
-  `.structure-baseline.json`, `scripts/structure-audit/{config.mjs,rules/imports.mjs,rules/tests/imports.test.mjs}`;
-  this repository `scripts/structure-audit/rules/imports.mjs` and its test
-  (mirrored from Core, which was identical at HEAD before today)
-- Supervisor's own integration work, not a worker's: the two fixture helpers in
-  `recovery/tests/{plan,stages}.test.ts` that still built the abandoned
-  `metadata` route (the diagnosis worker was forbidden to touch them and
-  returned Partial); the Flow Bootstrap forwarding fix; and moving that fix out
-  of `service.ts` into `automationStudioHarnessInputWithDeniedEvidenceKeys` in
-  `binding.ts`, because six lines in `service.ts` breached the freshly lowered
-  6468 baseline and the audit refused them — which is the ratchet working.
-- Validation: supervisor-run, after all four landed. Core `pnpm check` -> exit 0
-  (audit passed, all four packages typecheck). Core
-  `vitest run src/programs/automation-studio/runtime` -> "Test Files 97 passed
-  (97)", "Tests 884 passed (884)". This repository `pnpm check` -> exit 0;
-  `test-runner` -> "# pass 940", "# fail 0"; `structure-audit` -> passed.
-  The import rule was verified adversarially, not read: the exact cycle was
-  reintroduced as a value import, the audit failed naming it, and it was
-  reverted. Restoring the probe also revealed that `git checkout --` on that
-  file had discarded the worker's comment edit; it was restored from a backup
-  taken before the probe.
-- Not verified: no live provider run and no browser. The user asked on
-  2026-09-16 to stop for review before the real DeepSeek step, so that is a
-  deliberate stop, not a blocker.
-- Open, needs the user: the run budget's default of 2 provider calls leaves no
-  allowance for an exploration, so a real recovery that explores would record
-  `budget_exhausted`. The recommendation is an explicit exploration allowance
-  rather than borrowing from the diagnosis/patch pair. Raised at the review gate
-  because it changes what a live run costs.
-
-### 2026-09-16 — The binding contract, two swallowed causes, and compaction
-- Agent: supervisor (not delegated; four Core workers dispatched in parallel
-  alongside this and still in flight at the time of writing)
-- Changed: Core `AS/runtime/llm/harness-options/binding.ts`; downstream
-  `domain/src/runtime/llm-evidence/tools.ts`,
-  `packages/test-runner/src/secret-keys-ui.ts`,
-  `scripts/setup-demo-llm-key.mjs`; this document and its new `archive/`
-- Why: hunks 1 and 2 of `w2-3-bounded-exploration` are the contract every other
-  pending diff depends on, so the supervisor kept them rather than serializing
-  four workers behind one file. `deniedEvidenceKeys` was deliberately left
-  optional here so that a single worker owns the breaking moment end to end
-  rather than leaving Core red for the other three.
-- Also: the two bare `catch` blocks `w2-live-provider` identified as the reason
-  `pnpm demo:llm:setup` reports one uninformative sentence now carry the cause.
-  The first attempt put the cause in the failure's message and broke the test
-  "rejects secret-bearing or unsafe response metadata without echoing it" —
-  which is a real property, not a stale assertion: that test pins the message to
-  its exact constant so untrusted snapshot metadata can never reach it. The
-  message is therefore fixed again and the redacted detail travels on `cause`
-  and `details`, with `setup-demo-llm-key.mjs` walking the chain to surface it.
-- Validation: supervisor-run. Core `npx tsc --noEmit -p packages/fluxiq` ->
-  exit 0. Downstream `npx tsc --noEmit -p domain` and `-p packages/test-runner`
-  -> exit 0. `node --check scripts/setup-demo-llm-key.mjs` -> ok.
-  `pnpm --filter @fluxiq-web-extension/test-runner test` -> "# pass 940",
-  "# fail 0" (939/1 before the message was pinned back).
-  `node scripts/structure-audit.mjs` -> "passed (57 warning(s), 17 baselined)".
-- Compaction: recording the four briefs took this document to 803 lines and the
-  audit refused to baseline a compaction-threshold violation, which is the rule
-  working as intended. Phase D's five approved fixes and the initial scoping
-  briefs are settled, so both moved to
-  `archive/settled-phase-d-and-initial-scoping.md`; 803 -> 707 lines.
-- Not verified: nothing about the exploration actually running, which is the
-  four workers' subject; and no live provider run — the user asked on
-  2026-09-16 to stop for review before the real DeepSeek step, so that run is
-  held deliberately rather than blocked.
+Entries from the first live DeepSeek reply through the binding-contract
+integration (2026-09-16, early) are archived in
+[archive/ledger-2026-09-16-early.md](./mvp-week2-automation-loop-plan/archive/ledger-2026-09-16-early.md).
 
 Entries dated 2026-09-15 and earlier are archived in
 [archive/ledger-2026-09-15-and-earlier.md](./mvp-week2-automation-loop-plan/archive/ledger-2026-09-15-and-earlier.md).

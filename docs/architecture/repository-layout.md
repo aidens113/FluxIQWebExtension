@@ -207,6 +207,69 @@ startup failure, not silent overlap. `pnpm lab inspect <runId>` resolves runs
 inside the current instance's run directory, so inspect with the same
 `FLUXIQ_LAB_INSTANCE` that produced the run.
 
+### A Checkout Pair For Campaigns
+
+An instance label stops two runs overwriting each other's build output, but
+every run still builds from the checkout it runs in and loads the Core that
+checkout links. A campaign started from the working checkouts therefore tests
+whatever another agent has half-edited, and fails for reasons that are not in
+the commit under test. A campaign that must measure fixed commits runs from
+the pair instead: a worktree of this repository, by default
+`<parent of this checkout>/fxlab/lab-ext` (`F:\fxlab\lab-ext` here), and a
+Core worktree beside it, `F:\fxlab\!FluxIQ`. Nobody edits either. The Core
+side is not a setting: `domain/package.json` links Core as
+`link:../../!FluxIQ/...`, so from `lab-ext` that link lands in the pair's own
+Core rather than in `F:\!FluxIQ`.
+
+```bash
+pnpm lab:pair --ext dev --core dev       # move both sides, detached
+pnpm lab:pair --core 42bd90a --dry-run   # say what would happen, change nothing
+pnpm lab:pair                            # move nothing; print the state
+```
+
+`scripts/lab/pair.mjs` refuses, before changing anything, when either
+worktree has uncommitted or untracked changes, when a running process is
+working inside either, when a revision names no commit, or when the Core side
+would be the working Core checkout. Otherwise it:
+
+- checks each side out detached;
+- installs (`--frozen-lockfile`, offline first, then online) only when the
+  target lockfile differs from the one last installed there;
+- rebuilds Core's `contracts`, `fluxiq` and `client-gateway-websocket`
+  packages whenever they were last built at another commit (`--build-core`
+  forces it), because the Lab reads their `dist`. The Lab builds the
+  extension side and Core's web panel itself on every run;
+- confirms `domain/node_modules/fluxiq` resolves into the pair's Core.
+
+What it last installed and built is recorded in marker files in each
+worktree's ignored `node_modules`, written only after the step succeeds, so an
+interrupted move is finished by running the same command again.
+
+It then prints the environment a run from the pair needs, and the commands:
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `FLUXIQ_CORE_ROOT` | `F:/fxlab/!FluxIQ` | The runner and its Core-quiet guard watch the pair's Core. |
+| `FLUXIQ_TEST_ENV_FILES` | `none` | No target configuration comes from an env file. |
+| `FLUXIQ_LAB_INSTANCE` | `lab-pair` | Builds go to the ignored `.lab-instances/`. Without a label the extension build rewrites the tracked `apps/extension/build/`, the pair turns dirty, and the next move refuses. |
+| `npm_config_workspace_concurrency` | `1` | One workspace build at a time. |
+
+Start the Lab and the campaign from the pair by absolute path, as printed --
+`node F:/fxlab/lab-ext/scripts/lab/live-campaign.mjs --all ...` -- not as
+`pnpm lab:campaign`. The pnpm form appears in the process list only as
+`node scripts/lab/live-campaign.mjs`, which names no checkout, so between two
+tasks `pnpm lab:pair` could not see the campaign and would move the pair
+under it. Both scripts resolve every path from their own location, so the
+absolute form behaves the same from any directory.
+
+A live run reads `DEEPSEEK_API_KEY` from the process environment, or from
+`.env` or `.env.local` in the checkout it starts from. The pair has neither
+until someone provides one, and `pnpm lab:pair` says which applies, by source
+and never by value. The pair's runs and its web panel build cache live under
+`F:\fxlab\lab-ext\test-runs\instances\lab-pair\`, and ports are allocated per
+run, so the pair and the working checkout can run at the same time, memory
+permitting.
+
 ### Consuming the domain package
 
 `@fluxiq-web-extension/domain` exposes three entry points. `.` and `./client`
