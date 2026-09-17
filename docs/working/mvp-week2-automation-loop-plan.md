@@ -271,6 +271,45 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-17 — The loop may decline, a repair may look, and a step refuses the wrong record
+- Agents: `w2-repair-refuses` (Core `a830217`), `w2-repair-sees-more` (Core
+  `833aa3c`), `w2-wrong-row-acted-on` (`3ee5e1d` + follow-up), L-2
+  (`0088ac2`), `w2-declared-failure-verdict`, `w2-core-stays-domain-neutral`
+  (Core `25bea03`, here `69e2434`), `w2-xpath-id-anchor` (`f92ae0d`).
+- A repair reply may now be a `no_repair` with one of five named reasons, and
+  both prompts say declining is allowed; no call is spent when the plan
+  allows no override or candidates tie; a refusal may follow exploration; no
+  substitution of the one compatible element. A repair is offered every
+  observation that changes nothing (three, not two) and the rest only under a
+  policy that allows side effects; it carries the diagnosis it just made; the
+  failure page's budget doubles to 6,000 bytes, paid for by explored packets;
+  every string in a recovery context is screened for locator-shaped text.
+- A recorded step now carries which record its control sat in and refuses a
+  control found in another: the member-directory Flow promoted a different
+  member and reported success (`run-mu4yrwgj-02fe85f7`), and now fails with
+  `target_not_found` (`run-mu5vfd6o-d98abd77`). An applied repair kept that
+  protection only after the follow-up: a repair may rename a control, never
+  say which record it belongs to. Core's generic `entityId` was measured as
+  the alternative and rejected — it is scored, costing 0.303 against a 0.35
+  floor and separating right from wrong record by 0.057 against a 0.2 margin.
+- Validation: each change alone in `F:/fxlab/verify-core` or
+  `F:/fxlab/verify-ext`. Refusal: `tsc` exit 0, "696 passed" (49 files).
+  Repair evidence: `tsc` exit 0, "668 passed" (51 files). Wrong row:
+  extension "# pass 676", audit passed. Lab lane: runner "1133 passed",
+  contracts "113", lab "73". Boundary rule: `pnpm structure:test` "# pass
+  182" in both, `--rule web-vocabulary` passed with 7 baselined entries, and
+  a probe adding `cssSelector` failed the build and was refused a baseline.
+- Standing direction recorded above: what the model emits must be easy to
+  produce, and a large reply is asked for as a line format, not JSON.
+  `w2-easy-model-output` is building it; branching is by named step and
+  `on <port>: go to <label>`, subflows as named blocks, sequence otherwise.
+- Open, with owners: two domain test rows still refuse with
+  `recorded_target_unknown` (back with the refusal worker); the three ordering
+  assertions share `action.dispatch`, so a Flow that starts at the wrong step
+  and then hits its declared failure would pass; `targets.ts` is 420 lines
+  and its own barrel prescribes the split; `sanitize.ts` can still trim the
+  failed element's own row.
+
 ### 2026-09-17 — The model could not refuse: the loop's shape, not the context
 - Agent: `w2-model-context-audit` (investigation; report
   `reports/w2-model-context-audit.md`), prompted by the user asking whether
