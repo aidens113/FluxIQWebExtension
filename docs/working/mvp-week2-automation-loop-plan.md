@@ -111,10 +111,12 @@ pointing the instructions at a demo, and having it explore and auto-create
 flows", across "lots of different demos", including flows that navigate demo
 sites and scrape data. Runs serving that goal need no per-run approval. The
 full campaign (`test-runs/campaigns/2026-09-17T02-23-20-255Z`, 36 creation and
-14 repair tasks, Core `8409ca2` from `F:/fxlab/lab-core`) is running: form and
-rename creation pass; scraping and navigate-and-scrape mostly fail, in three
-ways -- fields missing from extracted records, a repeated tool request ending
-the build, and malformed record-output or handle placement in the plan.
+14 repair tasks, Core `8409ca2` from `F:/fxlab/lab-core`) finished 15 of 50:
+forms 6/6, extraction 4/14, navigate-and-extract 1/16, repair 4/14. Scraping
+fails three ways (fields missing from records, a repeated tool request ending
+the build, malformed record-output or handle placement); six refusal tasks
+proposed a substitute control instead of refusing; four tasks never started.
+Later campaigns run from the isolated pair (`pnpm lab:pair`).
 
 **Next steps, in order:**
 1. In flight (Core): C-6 trial and judge, now also the recorded-step target in
@@ -407,6 +409,32 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-16 — First full live campaign: forms pass, scraping and refusals do not
+- Agent: supervisor; `pnpm lab:campaign --all --max-attempts 4` from this
+  checkout against Core `8409ca2` (`F:/fxlab/lab-core`), DeepSeek.
+- Validation: supervisor-read
+  `test-runs/campaigns/2026-09-17T02-23-20-255Z/summary.json`: totals
+  `{"tasks":50,"passed":18,"succeeded":15,"failed":28,"noResult":4,
+  "providerCalls":123,"reportedTokens":638885,"reportedCostUsd":0.3071662}`;
+  by kind form 6/6, extract 4/14, navigate-and-extract 1/16, repair 4/14.
+  Failure codes: `web.validation.output_not_observed` 9,
+  `evidence_unusable_decision` 7, `evidence_duplicate_tool_request` 7,
+  `evidence_duplicate_call` 1, `environment.missing` 5,
+  `web.target.not_found` 3, `web.navigation.unexpected` 2,
+  `web.target.ambiguous` 1.
+- Repair: the renamed-Save repair and three refusals (locked record,
+  blocking offer, blocked popup) succeeded. Six refusal tasks produced a
+  target-override proposal instead of refusing (not executed): the loop
+  guesses a substitute control. Four tasks never started
+  (`environment.missing`, reason lost by the runner); one failed before the
+  model was consulted. The supervisor's mid-run report that the
+  save-and-exit refusal passed was wrong: its run verdict passed and its
+  judgement failed.
+- Dispatched: `w2-repair-refuses`, `w2-w3a-recovery-detection` (W-3 split:
+  detection in recovery and retained selector hints now; extraction-repair
+  resolution after `w2-created-scrape-fields`), `w2-campaign-tasks-start`.
+  Held for a slot: L-2, the `xpathFor` fix. Next campaign runs from the pair.
+
 ### 2026-09-16 — Trial and judge, exploration reaches repair, campaign pair
 - Agents: C-6 (`w2-c6-trial.md`, Core `8329477`), C-7
   (`w2-c7-exploration-handoff.md`, Core `a8ce814`), `w2-lab-pair`
@@ -441,8 +469,13 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   process, never copying the file; summaries land under
   `F:/fxlab/lab-ext/test-runs/instances/lab-pair/campaigns/`.
 - Found: a fresh Windows checkout of Core fails its own `working-docs` audit
-  rule (index stale), seen in `F:/fxlab/verify-core` and the pair; likely the
-  header reader and CRLF line endings. Not yet investigated.
+  rule (index stale), seen in `F:/fxlab/verify-core` and the pair. Fixed
+  (Core `6964d63`, here `7c763e5`, report `w2-audit-line-endings.md`): the
+  rule compared the CRLF checkout byte for byte with its LF index.
+  Validation: `node scripts/structure-audit.mjs` in `verify-core` with a CRLF
+  README -> "passed (153 warning(s), 355 baselined)"; `pnpm structure:test`
+  -> "# pass 166", "# fail 0" in both repositories; `cmp` of both files
+  identical across the three trees.
 
 ### 2026-09-16 — An approved repair now changes what a recorded step clicks
 - Agent: `w2-typed-apply-gates`, integrated by the supervisor as Core
