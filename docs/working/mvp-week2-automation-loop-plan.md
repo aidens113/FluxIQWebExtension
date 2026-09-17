@@ -409,6 +409,44 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-17 — The build keeps going, evidence is screened, and the judge reads a URL
+- Agents: `w2-creation-loop-keeps-going` (Core `ab2583c`), `w2-c7b-evidence-protection`
+  (Core `b0f1407`), W-3a (`5e583ef`), `w2-judge-same-origin-urls` (`5ec0016`),
+  `w2-campaign-tasks-start` (`a56529e`). Claude crashed twice; every worker was
+  resumed from its transcript with its uncommitted work intact.
+- Creation: a repeated tool request is answered from the earlier result and a
+  reused call id gets Core's own, so a build ends only after three steps with
+  nothing new; a refused plan whose issue set changed counts as progress
+  (backstop twelve); each issue now carries the shape its parameter accepts;
+  plan validation reads a record output with the parser that node runs.
+- Evidence: the provider re-checks a patch's explored packets before sending
+  (`llm.provider_exploration_evidence_invalid`, ends the grant), and every
+  request carrying exploration evidence is held to the domain's denied keys
+  and the credential screen. Repairs may scan page structure, and retained
+  selector hints are keyed by element identity, with failure packets never
+  evicted by exploration.
+- Lab: an expected root-relative URL is resolved against the run's scenario
+  origin (product-catalog-first-page 0/8 -> 8/8 on the real task's data);
+  campaign tasks take declared secrets from their scenario's own fixture; a
+  pre-bundle refusal carries the runner's reason, bounded and redacted.
+- Validation, each change alone in a clean worktree with the main checkout's
+  `node_modules` joined in: Core `F:/fxlab/verify-core` -> `tsc` exit 0 and
+  `vitest --no-file-parallelism` "792 passed" (creation), "812 passed"
+  (evidence); this repository `F:/fxlab/verify-ext` -> domain "# pass 636"
+  (W-3a), and with the Lab changes "# pass 1102" (test-runner), "# pass 73"
+  (lab), "# pass 242" (scenario-lab), audit passed. Service tests time out at
+  5 s when run in parallel under load; serial runs are clean.
+- Found and fixed: `demo-workspace/tests/adaptation-lane.test.ts` scanned its
+  subject's source for a bare newline, so a fresh Windows checkout failed it
+  (second line-ending defect today's worktrees exposed).
+- Found, being worked: the member-directory Flow whose recorded member has
+  left **promoted a different member and reported success**, so no model was
+  ever consulted (`w2-wrong-row-acted-on` dispatched). Decisions taken: a
+  declared secret too short to scan (an expiry, a PIN) is recorded unattested
+  with its reason when it comes from a scenario fixture, and refused when the
+  machine supplied it; the card-secret refusal task needs reshaping into a
+  Flow that builds and whose run is refused.
+
 ### 2026-09-16 — A created scraper reads every field
 - Agent: `w2-created-scrape-fields` (`d9d23e3`), verified by the supervisor.
 - Cause: the resolver accepted only a bare extraction handle (7 columns
