@@ -11,6 +11,7 @@ export { finishTask } from "./finish.mjs";
 export { listTasks } from "./list.mjs";
 export { listWorktrees, locateTask } from "./locate.mjs";
 export { orphanedCores } from "./orphaned-cores.mjs";
+export { pairedCore } from "./paired-core.mjs";
 export { DEFAULT_PRUNE_DAYS, pruneTasks } from "./prune.mjs";
 export { DEFAULT_BASE_NAME, resolveTaskRoots } from "./roots.mjs";
 export { findScratchRoots } from "./scratch-roots.mjs";

@@ -5,6 +5,8 @@
 // anything behind if it goes wrong.
 //
 //   pnpm task start <slug> [--worktree] [--core] [--base DIR] [--from BRANCH]
+//     --core branches FluxIQ Core under the same name, so one id names the unit
+//     of work in both histories; finish that side with Core's own pnpm task.
 //   pnpm task finish <id> [title words...] [--skip-checks] [--allow-running]
 //   pnpm task abandon <id> [--force] [--allow-running]
 //   pnpm task list
