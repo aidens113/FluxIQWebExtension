@@ -141,3 +141,32 @@ test("truncated is asserted against what the step reported, and refused when not
   assert.throws(() => assertExtraction([{ step: "read", truncated: false }], "read", records, { truncated: true, nonStringValues: 0 }), /reported truncated=true, expected false/);
   assert.throws(() => assertExtraction([{ step: "read", truncated: true }], "read", records), /declares truncated, which nothing reported/);
 });
+
+/**
+ * A created Flow's `url` column reads the link's absolute address, on a port
+ * that changes every run, while the fixture can only write the root-relative
+ * href (`run-mu4yk4u1-60a1c3a4`: 8 of 8 records carried every field and none
+ * matched). The measurement and the assertion resolve it through the same
+ * comparison, so the two cannot disagree about it.
+ */
+test("a record's same-origin absolute URL matches the root-relative value expected, in the measurement and the assertion alike", () => {
+  const expected = [{ name: "Kettle", url: "/scenarios/catalog/products/kettle" }, { name: "Lamp", url: "/scenarios/catalog/products/lamp" }];
+  const observed = expected.map((record) => ({ ...record, url: `http://127.0.0.1:4100${record.url}` }));
+  const run = { scenarioOrigin: "http://127.0.0.1:4100" };
+  const entry = { step: "read", count: 2, records: expected };
+
+  // Without the run's origin nothing can be resolved: the comparison is exact, as it was.
+  assert.equal(measureExtraction(entry, observed, nothingReported).matchedRecords, 0);
+  assert.throws(() => assertExtraction([entry], "read", observed), /record 0 does not match/);
+
+  assert.equal(measureExtraction(entry, observed, nothingReported, run).matchedRecords, 2);
+  assert.doesNotThrow(() => assertExtraction([entry], "read", observed, nothingReported, run));
+  // The field counts are untouched by it.
+  assert.equal(measureExtraction(entry, observed, nothingReported, run).presentFields, 4);
+
+  // Another run's port is another origin, and a wrong path is still wrong.
+  assert.equal(measureExtraction(entry, observed, nothingReported, { scenarioOrigin: "http://127.0.0.1:4101" }).matchedRecords, 0);
+  const wrongPath = [observed[0]!, { name: "Lamp", url: "http://127.0.0.1:4100/scenarios/catalog/products/kettle" }];
+  assert.equal(measureExtraction(entry, wrongPath, nothingReported, run).matchedRecords, 1);
+  assert.throws(() => assertExtraction([entry], "read", wrongPath, nothingReported, run), /record 1 does not match/);
+});

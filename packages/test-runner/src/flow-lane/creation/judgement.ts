@@ -21,6 +21,8 @@ export function judgeCreatedFlowDataset(input: {
   stepId: string;
   run: PersistedFlowRunOutcome;
   actionTypes: ReadonlyMap<string, string>;
+  /** Where the run's scenario was served from, as `judgeFlowExtraction` takes it. */
+  scenarioOrigin: string;
 }): FlowExtractionJudgement {
   const stepIndex = input.workflow.recordingScript.findIndex((step) => step.operation === "extract" && step.id === input.stepId);
   const step = input.workflow.recordingScript[stepIndex];
@@ -31,6 +33,7 @@ export function judgeCreatedFlowDataset(input: {
     actionTypes: input.actionTypes,
     candidateOrder: new Map(),
     durationsByNode: input.run.extractionDurationsByNode,
+    scenarioOrigin: input.scenarioOrigin,
   });
   const steps = judgement.steps.map((judged) => ({ ...judged, stepIndex, measurement: { ...judged.measurement, stepIndex } }));
   return { ...judgement, steps, measurements: steps.map((judged) => judged.measurement) };

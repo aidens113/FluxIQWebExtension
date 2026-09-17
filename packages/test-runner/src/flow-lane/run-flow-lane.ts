@@ -201,6 +201,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     actionTypes,
     candidateOrder,
     durationsByNode: run.extractionDurationsByNode,
+    scenarioOrigin: input.scenarioOrigin,
   });
   // The oracle and the publish both come before the asserts. An assert throws
   // on any mismatch, and a run that failed one used to leave the runner with no

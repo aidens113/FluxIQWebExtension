@@ -1,5 +1,6 @@
 import type { ExpectedExtraction, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
+import { extractedValueMatches, type ExtractedValueContext } from "./extracted-value-match.js";
 
 /** One record: each field's value, or `null` where the item held no value for it, as `ExpectedExtraction` spells it. */
 export type ExtractionRecord = Record<string, string | null>;
@@ -36,6 +37,9 @@ const NOTHING_REPORTED: ObservedExtraction = { nonStringValues: 0 };
  *
  * Matching is positional, as `assertExtraction` has always compared, and the
  * two share `matchesRecord` so a measurement and an assertion cannot disagree.
+ * `context` is the run's, and lets a record's same-origin absolute URL match a
+ * root-relative expected one (`extractedValueMatches`); without it every value
+ * is compared exactly.
  *
  * - `expectedFields` and `presentFields` are summed over the aligned positions
  *   `i < min(expected, observed)`, counting each expected record's fields that
@@ -64,7 +68,7 @@ const NOTHING_REPORTED: ObservedExtraction = { nonStringValues: 0 };
  * - With no entry, the step ran unexpected: nothing was expected, so every
  *   expectation-derived count is 0 and both flags are false.
  */
-export function measureExtraction(entry: ExpectedExtraction | undefined, records: readonly ExtractionRecord[], observed: ObservedExtraction): ExtractionStepMeasurement {
+export function measureExtraction(entry: ExpectedExtraction | undefined, records: readonly ExtractionRecord[], observed: ObservedExtraction, context?: ExtractedValueContext): ExtractionStepMeasurement {
   const optional = new Set(entry?.optionalFields ?? []);
   const expected = entry?.records;
   let expectedRecords = 0;
@@ -81,7 +85,7 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
       for (let position = 0; position < comparedRecords; position += 1) {
         const wanted = expected[position]!;
         const actual = records[position]!;
-        if (matchesRecord(wanted, actual, optional)) matchedRecords += 1;
+        if (matchesRecord(wanted, actual, optional, context)) matchedRecords += 1;
         for (const key of Object.keys(wanted)) {
           if (optional.has(key)) continue;
           expectedFields += 1;
@@ -140,8 +144,13 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
  * `nonStringValues` is measured here rather than asserted -- the Flow lane
  * refuses a run carrying any before its records are compared
  * (`flow-lane/expectations.ts`).
+ *
+ * `context` is compared with exactly as `measureExtraction` compares. The Flow
+ * lanes pass the run's; the recording lane's pinned four-argument call passes
+ * none, and its records are read by the fixture's own selectors, so an href
+ * there is the attribute as written.
  */
-export function assertExtraction(expected: readonly ExpectedExtraction[] | undefined, stepId: string, records: readonly ExtractionRecord[], observed: ObservedExtraction = NOTHING_REPORTED): void {
+export function assertExtraction(expected: readonly ExpectedExtraction[] | undefined, stepId: string, records: readonly ExtractionRecord[], observed: ObservedExtraction = NOTHING_REPORTED, context?: ExtractedValueContext): void {
   for (const entry of expected ?? []) {
     if (entry.step !== stepId) continue;
     const unjudgeable = unjudgeableFields(entry, observed);
@@ -150,7 +159,7 @@ export function assertExtraction(expected: readonly ExpectedExtraction[] | undef
         details: { stepId, unjudgeableFields: unjudgeable, ...(entry.pages !== undefined ? { expectedPages: entry.pages } : {}), ...(entry.truncated !== undefined ? { expectedTruncated: entry.truncated } : {}) },
       });
     }
-    const measured = measureExtraction(entry, records, observed);
+    const measured = measureExtraction(entry, records, observed, context);
     const optional = new Set(entry.optionalFields ?? []);
     if (entry.count !== undefined && records.length !== entry.count) {
       throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} yielded ${records.length} record(s), expected ${entry.count}`, { details: { stepId, expectedCount: entry.count, actualCount: records.length } });
@@ -172,7 +181,7 @@ export function assertExtraction(expected: readonly ExpectedExtraction[] | undef
       throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} record ${index} carried no value for ${missing.length} required field(s) no optionalFields entry names`, { details: { stepId, index, missingFields: missing } });
     }
     if (measured.matchedRecords !== entry.records.length) {
-      const index = entry.records.findIndex((wanted, position) => !matchesRecord(wanted, records[position]!, optional));
+      const index = entry.records.findIndex((wanted, position) => !matchesRecord(wanted, records[position]!, optional, context));
       throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} record ${index} does not match`, { details: { stepId, index, expected: entry.records[index], actual: records[index] } });
     }
   }
@@ -217,13 +226,14 @@ function carriesField(actual: ExtractionRecord, key: string, expected: string | 
  * One record against one expectation. Every expected field must be present
  * with an equal value, and every observed field must be one the expectation
  * holds, unless `optionalFields` names it: a field may then be absent from
- * either side. With no optional field this is exact equality of both the key
- * set and every value.
+ * either side. With no optional field this is equality of both the key set
+ * and every value, where equal is `extractedValueMatches`: exact, except that
+ * a same-origin absolute URL equals a root-relative expected one.
  */
-function matchesRecord(expected: ExtractionRecord, actual: ExtractionRecord, optional: ReadonlySet<string>): boolean {
+function matchesRecord(expected: ExtractionRecord, actual: ExtractionRecord, optional: ReadonlySet<string>, context: ExtractedValueContext | undefined): boolean {
   for (const key of Object.keys(expected)) {
     if (!Object.hasOwn(actual, key)) { if (!optional.has(key)) return false; continue; }
-    if (actual[key] !== expected[key]) return false;
+    if (!extractedValueMatches(expected[key] as string | null, actual[key] as string | null, context)) return false;
   }
   return Object.keys(actual).every((key) => Object.hasOwn(expected, key) || optional.has(key));
 }

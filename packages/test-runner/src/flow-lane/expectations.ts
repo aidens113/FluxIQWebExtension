@@ -1,6 +1,6 @@
 import type { AutomationStudioFailureRecord, ExpectedAction, ExpectedExtraction, ExpectedFailure, RunExtractionMeasurement, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
-import { assertExtraction, measureExtraction, type ObservedExtraction } from "../run-expectations/index.js";
+import { assertExtraction, measureExtraction, type ExtractedValueContext, type ObservedExtraction } from "../run-expectations/index.js";
 import type { FlowRunDataset } from "./run-datasets.js";
 import type { PersistedFlowAction } from "./persisted-flow-run.js";
 
@@ -133,6 +133,8 @@ export type FlowExtractionJudgement = {
   nonStringValues: number;
   /** Every step id the workflow's `expected.extracted` names, so an entry that pairs with no step is caught rather than dropped. */
   declaredSteps: readonly string[];
+  /** The run's scenario origin, which the assertion compares against as the measurement did. Never published (`flowExtractionSnapshot`). */
+  comparison: ExtractedValueContext;
 };
 
 /**
@@ -163,8 +165,11 @@ export function judgeFlowExtraction(input: {
   candidateOrder: ReadonlyMap<string, number>;
   /** Per-node extraction durations, summed from the run's attempts on that node. */
   durationsByNode: ReadonlyMap<string, number>;
+  /** Where the run's scenario was served from: a root-relative expected URL resolves against it (`extractedValueMatches`). */
+  scenarioOrigin: string;
 }): FlowExtractionJudgement {
   const expected = input.expected ?? [];
+  const comparison: ExtractedValueContext = { scenarioOrigin: input.scenarioOrigin };
   const extractSteps = input.script.flatMap((step, stepIndex) => (step.operation === "extract" ? [{ step, stepIndex }] : []));
   const ordered = orderDatasetsByCandidate(input.datasets, input.candidateOrder);
   const steps = extractSteps.map(({ step, stepIndex }, position): FlowExtractionStep => {
@@ -182,7 +187,7 @@ export function judgeFlowExtraction(input: {
         // what the expectation asked for, including the pages this lane could
         // not observe, so `expectedPages` keeps one side of a comparison the
         // other side is missing. Narrowing is for the assertion alone.
-        ...measureExtraction(declared[0], dataset?.records ?? [], observed),
+        ...measureExtraction(declared[0], dataset?.records ?? [], observed, comparison),
       },
     };
   });
@@ -194,6 +199,7 @@ export function judgeFlowExtraction(input: {
     unpairedDatasets: Math.max(0, ordered.length - extractSteps.length),
     nonStringValues: input.datasets.reduce((sum, dataset) => sum + dataset.nonStringValues, 0),
     declaredSteps: [...new Set(expected.map((entry) => entry.step))],
+    comparison,
   };
 }
 
@@ -233,7 +239,7 @@ export function assertFlowExtraction(judgement: FlowExtractionJudgement): void {
         details: { stepId: step.stepId, stepIndex: step.stepIndex, expectedRecords: step.measurement.expectedRecords },
       });
     }
-    assertExtraction(step.entries, step.stepId, step.dataset.records, step.observed);
+    assertExtraction(step.entries, step.stepId, step.dataset.records, step.observed, judgement.comparison);
   }
 }
 

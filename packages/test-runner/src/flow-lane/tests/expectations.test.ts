@@ -76,8 +76,36 @@ const dataset = (nodeId: string, records: Array<Record<string, string | null>>, 
 /** A Flow holding one extract node per recorded extract step, which is what an approved Flow of that recording has. */
 const extractingFlowOf = (steps: number) => new Map([["node.open", "web.dom.click"], ...Array.from({ length: steps }, (_value, index) => [`node.extract.${index}`, "web.dom.extract_list"] as const)]);
 
+const scenarioOrigin = "http://127.0.0.1:4310";
+
 const judge = (expected: ExpectedExtraction[] | undefined, steps: string[], datasets: FlowRunDataset[], actionTypes = extractingFlow) =>
-  judgeFlowExtraction({ expected, script: script(...steps), datasets, actionTypes, candidateOrder, durationsByNode: new Map([["node.extract", 40]]) });
+  judgeFlowExtraction({ expected, script: script(...steps), datasets, actionTypes, candidateOrder, durationsByNode: new Map([["node.extract", 40]]), scenarioOrigin });
+
+/**
+ * A Flow whose extraction reads a link's resolved address stores it on the
+ * run's own port, which a fixture cannot write down. The lane resolves the
+ * fixture's root-relative href against the run's origin, in the measurement
+ * it publishes and in the assertion it then makes, and nowhere else.
+ */
+test("a same-origin absolute URL matches the root-relative href expected, in the measurement and the assertion, and never another origin", () => {
+  const expected = [{ name: "Alpha", url: "/scenarios/catalog/products/alpha" }, { name: "Beta", url: "/scenarios/catalog/products/beta" }];
+  const onOrigin = (origin: string) => expected.map((record) => ({ ...record, url: `${origin}${record.url}` }));
+
+  const judged = judge([{ step: "read-catalog", count: 2, records: expected }], ["read-catalog"], [dataset("node.extract", onOrigin(scenarioOrigin))]);
+  assert.equal(judged.measurements[0]?.matchedRecords, 2);
+  assertFlowExtraction(judged);
+
+  const elsewhere = judge([{ step: "read-catalog", count: 2, records: expected }], ["read-catalog"], [dataset("node.extract", onOrigin("http://127.0.0.1:4311"))]);
+  assert.equal(elsewhere.measurements[0]?.matchedRecords, 0);
+  assert.throws(() => assertFlowExtraction(elsewhere), /record 0 does not match/);
+
+  // An expected absolute URL is compared as written, even on the run's own origin.
+  const absolute = onOrigin(scenarioOrigin);
+  assertFlowExtraction(judge([{ step: "read-catalog", records: absolute }], ["read-catalog"], [dataset("node.extract", absolute)]));
+  const rootRelative = judge([{ step: "read-catalog", records: absolute }], ["read-catalog"], [dataset("node.extract", expected)]);
+  assert.equal(rootRelative.measurements[0]?.matchedRecords, 0);
+  assert.throws(() => assertFlowExtraction(rootRelative), /record 0 does not match/);
+});
 
 test("a step's records are compared against the dataset Core stored for it, and its measurement states the basis", () => {
   const page = [{ name: "Alpha" }, { name: "Beta" }];

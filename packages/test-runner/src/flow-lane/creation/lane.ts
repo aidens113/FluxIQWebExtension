@@ -124,7 +124,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   }, bounds);
   const { judgement } = request;
   // Judged before the publish and never throwing, so a Flow whose records are wrong is still published with its measurement.
-  const extraction = judgement.judgeBy === "expected-dataset" ? judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes }) : null;
+  const extraction = judgement.judgeBy === "expected-dataset" ? judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin: input.scenarioOrigin }) : null;
   const oracleHeld = extraction ? createdFlowDatasetHolds(extraction) : await input.checkFinalState();
   const observation = flowLaneObservation({
     flowCreated: true,
