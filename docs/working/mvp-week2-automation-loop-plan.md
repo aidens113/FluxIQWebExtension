@@ -114,31 +114,20 @@ flight: `w2-creation-extraction-gap` (can creation emit extraction and
 navigation?) and `w2-live-campaign-catalog` (instruction catalog, campaign runner).
 
 **Next steps, in order:**
-1. `w2-live-explore-create-repair` (live): drive the persistent demo pipeline
-   (`demo:llm:explore` -> apply -> baseline -> adapt -> apply -> validate) end
-   to end against DeepSeek, fixing what breaks.
-2. `w2-lab-live-create-flow` (code, no live calls): a Lab `--llm-task
-   create-flow` lane so creation can be tested live, isolated, per scenario.
-3. `w2-grant-survives-bad-reply` (Core): a bad reply or transient provider
-   error spends a call instead of revoking the grant.
-4. Scraping in created Flows (`reports/w2-creation-extraction-gap.md`: today a
-   created Flow cannot scrape). In flight: `w2-extract-node-dataset` (items
-   1-3, web domain), `w2-bootstrap-structured-params` (items 2-3, Core),
-   `w2-detect-repeating-structure-tool` (item 4). Queued: item 5, handle
-   resolution in Core `binding.ts` and `service.ts`, after the grant and tool
-   workers land. Later: item 7, following every link.
-5. Then live creation across several scenarios, and live repair on
-   `identity-drift --variant renamed-redesign` (a correct repair there is a
-   change proposal naming the renamed Save; the run itself still fails
-   `target_not_found` because `adapt` proposes and does not retry).
-6. Found live: an applied created Flow's Subflow graphs are saved without their
-   canonical index, so the first view of one moves the dependency digest and
-   makes the Flow un-validatable and un-revertable. Fix assigned to
-   `w2-bootstrap-survives-and-resolves`; audit every other graph write without
-   an index afterwards.
-7. Integration cleanups: `live-patch.ts` policy required; Core settings save
-   accepting no `maxCalls`; stale PIN comment in `runtime-session-grant.ts`;
-   `registerAutomationStudioApi` ignoring `identityAccess`; `pnpm docs:reference`.
+1. Created Flows: `w2-plan-handle-identity` (created nodes carry the element
+   identity the resolver needs), then rerun live creation and the campaign
+   (`pnpm lab:campaign`, create and repair tasks).
+2. The shared back half, per `reports/w2-back-half-design.md` section 8: wave 1
+   now (C-1+C-3, C-2, C-4, W-1, W-2, L-1); C-5 and W-4 after C-1; wave 2 once
+   `live-patch.ts`, `recovery/annotation/**` and `service/**` land (C-6..C-10);
+   wave 3 (C-11 insert-path, C-12 extend mode for non-blank Flows, C-13 docs);
+   Lab L-2..L-5.
+3. In flight: `w2-renamed-repair-rejected`, `w2-run-detail-annotation-loss`,
+   `w2-campaign-repair-tasks`. After them: resume the live pipeline worker for
+   explore -> run -> repair on shared code, and the one-character
+   `xpathFor` id-anchor fix in the extension.
+4. Before pushing: full checks in both repositories; Core docs for today's
+   grant, guard, handle and index changes; `pnpm docs:reference` in Core.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -412,6 +401,128 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-16 — An approved repair now changes what a recorded step clicks
+- Agent: `w2-typed-apply-gates`, integrated by the supervisor as Core
+  `c0b04be`.
+- A recorded step (`builtin.policy.action`) dispatches its recorded payload, so
+  a repair written beside it had no effect. The typed store now writes it into
+  `parameters.target`, rolls back exactly, and refuses every apply without the
+  promotion gates. The web domain already prefers `parameters.target` over the
+  recorded selector (`domain/src/output-nodes/targets/targets.ts`, supervisor
+  read). The same gap remains in the file-based applier
+  (`service/adaptations/patches.ts:57`) and in the trial rerun
+  (`live-patch.ts:~528`); C-6 now owns both, sharing one moved helper.
+- Validation: `npx tsc --noEmit -p packages/fluxiq` -> exit 0 (after the
+  supervisor added the gates argument at `service.ts:4798` and widened a
+  catalog test helper's literal type); `vitest run` on the store, the new
+  policy-action test and `catalog.test.ts` -> "3 passed", "42 passed";
+  `node scripts/structure-audit.mjs` -> "passed (152 warning(s), 320
+  baselined)".
+- Dispatched: C-7 (exploration packets reach the repair request and target
+  check), Core docs for today's changes, and `w2-created-scrape-fields` (the
+  campaign's first two scraping tasks built navigate -> `extract_list`, found
+  all 8 records and missed name, price, rating and url in some of them:
+  `run-mu4wwkbc-df6cfe60`, `run-mu4wyfaw-001d0bcc`; no recovery was attempted
+  because extraction repair is fail-closed until W-3). That worker edits
+  nothing here until the campaign's `finishedAt` is set. Held until the
+  campaign ends, because each campaign run rebuilds this checkout: W-3, L-5,
+  L-2.
+- Also landed: the `swallowed-failure` audit rule (Core `42bd90a`, mirrored
+  here; report `w2-audit-swallowed-writes.md`), 61 and 94 existing instances
+  baselined. Validation: `pnpm structure:test` -> "# pass 162", "# fail 0" in
+  both repositories; the 12 mirrored files `cmp` identical; a supervisor probe
+  file with `await work().catch(() => undefined)` and `catch {}` failed the
+  Core audit ("2 failures are silently dropped, at lines 2, 3") and was
+  removed; this repository's audit -> "passed (60 warning(s), 122
+  baselined)" after the index was regenerated.
+- Not verified: recording-definition nodes drop an applied `parameters.target`
+  when materialized (`service/recordings/candidate-definitions.ts:86`);
+  recorded Flows use `builtin.policy.action` and are unaffected.
+
+### 2026-09-16 — A Flow built live from an instruction passes its goal
+- Agent: `w2-live-creation-debug` (live), verified by the supervisor; Core
+  `8409ca2`, this repository `269e351`.
+- Why the created plans failed: the page evidence names elements by `target`,
+  so the model wrote handles into each node's `target` parameter, and the web
+  domain accepted a handle only under `selector`; every created step kept a
+  guessed selector. Plan resolution now accepts a handle under `target`,
+  `element` or `selector` and replaces a guessed literal. Rename tasks built a
+  Flow that only cleared the field because "rename" and "save" ranked no node;
+  they now prefer typing and clicking. A refused build lists each decision
+  with its refusing code.
+- Validation: supervisor-read `test-runs/run-mu4vs7j1-aca950d7`
+  (`evaluation.json`, `snapshots/live-llm.json`, `snapshots/flow-lane.json`):
+  verdict `passed`, oracle `passed`, executed start -> `web.dom.type` ->
+  `web.dom.select` -> `web.dom.click` -> end, build `proposed`, 4,659 tokens,
+  $0.0024926, redaction `passed`. First campaign
+  (`test-runs/campaigns/2026-09-17T02-00-12-342Z/summary.md`): 2 of 6 form
+  tasks passed, 9 calls, 42,191 tokens, $0.021; the 4 rename failures each
+  built only `web.dom.clear`, fixed after, and each passed when rerun alone
+  (worker report). Core flow-bootstrap 118/118; this repository domain 614/614,
+  test-runner 1097/1097.
+- Also landed today (Core): `cb9c54b` and `fce62f9` (silent reads propagate; a
+  run that fails to start ends failed, releases its grant, and no longer
+  blocks the next run; promotion reads the tier), `2a01e81` (migration 0020,
+  node stamps), `79f0ceb` (promotion by trials and replays), `1d208ed` and
+  this repository `d4e3cc6` (`failure-as-empty` audit rule, 132 and 77
+  instances baselined).
+- Not verified: the full campaign (running now, all 36 creation and 14 repair
+  tasks); scraping created live.
+
+### 2026-09-16 — Created Flow runs every step; plans then refused under iteration
+- Agent: supervisor, live, against a clean Core worktree; repair, catalog,
+  identity and back-half workers integrated (Core `f09d18a`, `aab40c1`,
+  `a719531`, `b90dd43`, `2ae5894`; this repository `ec19ed0`, `6f006e5`,
+  `06ead88`, `c356174`).
+- Validation: live `pnpm lab run instruction-only-form --live-llm --llm-task
+  create-flow --instruction-task instruction-only-form-submit ...`
+  -> Core `6be4698` with created-node identity: `run-mu4u2qui-969f0f76`, build
+  `proposed`, one call, 4,389 tokens, $0.00234212; the created Flow ran all
+  steps (type, click, click) with no error, but the scenario's playback goal
+  failed -- the plan field is a `<select>` and no select node was used.
+  -> Core `2ae5894` with the catalog fix: `run-mu4v1zqq-f2af9f06`, build
+  `failed`, `flow_bootstrap.evidence_unusable_decision`, 4 decisions, 1
+  inspect, 14,574 tokens, $0.00774312; redaction `passed` on both. The Lab kept
+  no plan issue codes. Live repair: `run-mu4tlmls-f7ac6101` passed
+  (`repaired`), with the recorded Flow's failed action identified by output id
+  and the model told the repairable parameter is `element`.
+- Suites at integration: Core flow-bootstrap plan 36/36, override tests 46/46,
+  change records and executor 316/316; this repository domain 613/613,
+  test-runner 1092/1093 (the sanitizer test, then fixed and 1096/1096),
+  scenario-lab 242/242, extension 652/652.
+- Not verified: a created Flow that passes its goal -- `w2-live-creation-debug`
+  is iterating on it live; the campaign has not been run.
+
+### 2026-09-16 — Live creation targets the real element; back half designed
+- Agent: supervisor; workers `w2-bootstrap-survives-and-resolves`,
+  `w2-extension-selectors-and-bundle-guard`, `w2-back-half-design`.
+- Changed: Core `6be4698` (creation iterates, fed-back plans, handle
+  resolution call site, apply indexes Subflow graphs, token cap follows the
+  grant; `service.ts` baseline 6434 -> 6422); this repository `f39499b`
+  (unique selectors, a browser-bundle check in `pnpm check`, the web output
+  bundle registers its parameter contracts).
+- Validation: supervisor-run. Core creation tests `vitest run
+  .../llm/harness-options .../llm/tests/unusable-decision.test.ts
+  .../loop-limits .../flow-bootstrap/tests/generation-failure.test.ts
+  .../tests/deepseek-bootstrap-exploration.test.ts .../tests/service-bootstrap`
+  -> "Tests 194 passed (194)". Domain -> "# pass 577"; extension unit -> "#
+  pass 649"; extension check exit 0. Live: `pnpm lab run instruction-only-form
+  --live-llm --llm-task create-flow --instruction-task
+  instruction-only-form-submit --llm-max-calls 26 ... --llm-max-run-tokens
+  600000` with `FLUXIQ_CORE_ROOT` at a clean `6be4698` worktree ->
+  `run-mu4t20d1-93b60760`: build `proposed`, one call, 3,924 in / 465 out,
+  $0.00234036, one inspect; a 5-node Flow (one type, two clicks) whose type
+  selector was the real `[data-testid="instruction-name"]` from its handle;
+  the run then failed at that step, `web.target.not_found`, "scoring 0.17 with
+  nothing the recording named agreeing"; redaction `passed`.
+- Why it failed: the extension's resolver scores a target against a recorded
+  node's identity, and a created node carries none. `w2-plan-handle-identity`
+  fills it from the element the model was shown.
+- Back half: `reports/w2-back-half-design.md` gives one pipeline for all three
+  entry points (trial, verdict, save, apply, continue, replay, promote), 23
+  briefs by file, and defects D-1 to D-6. Dispatched now: C-1+C-3, C-2, C-4,
+  W-1, W-2, L-1 (L-6 folded into `w2-campaign-repair-tasks`).
 
 ### 2026-09-16 — First live repair applied and replayed without the model
 - Agent: `w2-live-explore-create-repair` (live), reported to the supervisor;
