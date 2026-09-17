@@ -123,6 +123,16 @@ the build, malformed record-output or handle placement); six refusal tasks
 proposed a substitute control instead of refusing; four tasks never started.
 Later campaigns run from the isolated pair (`pnpm lab:pair`).
 
+**Resuming after 2026-09-17:** every worker dispatched that day landed and is
+committed; no worker is in flight. The user asked to pause before anything
+else for a review of the version-control policy, so **do not push** until he
+has given it. The first measurement after that is a full campaign from the
+pair (`pnpm lab:pair --ext <rev> --core <rev>`, then the printed environment
+plus `DEEPSEEK_API_KEY` read from the main checkout's `.env.local`), with the
+campaign's repair tasks switched to `--llm-task repair` (diff in
+`reports/w2-l2-repair-lane.md`). The last full campaign was 15 of 50 and
+predates every fix below.
+
 **Next steps, in order:**
 1. In flight (Core): C-6 trial and judge, now also the recorded-step target in
    the trial rerun and the file-based applier; C-7 exploration packets reach
@@ -270,6 +280,40 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-17 — A Flow is written as plain lines, and the day's work is committed
+- Agent: `w2-easy-model-output` (Core `1be6c9e`), plus the supervisor's
+  integration of the web-side batch (`4f4efde`, `0578da7`, `2991188`).
+- Building a Flow meant 48 required keys across 17 nested objects (1,110
+  bytes for "type a name, press submit"); it is now 8 lines and 344 bytes.
+  Core derives the schema version, keys, ids, versions, the output action,
+  the edges between consecutive steps, the dataset id, the record schema and
+  path, and writes a declared default onto the created node. `step <label>:`
+  names a step, `on <port>: go to <label>` branches, `subflow <label>: … end`
+  is a named block; `run subflow` had to become a Router rule, because the
+  plan contract has no subflow-call node (open question for the user). The
+  nested plan is still accepted. The reply stays a JSON envelope whose
+  `result` is one string, so the only escape left is a line break.
+- Validation: in `F:/fxlab/verify-core` at `25bea03` plus only these files,
+  `npx tsc --noEmit -p packages/fluxiq` exit 0, `structure-audit` passed
+  (159 warnings, 361 baselined), and `vitest` over flow-bootstrap, llm,
+  service-adaptation and recovery from inside `packages/fluxiq` -> "71
+  passed", "871 passed". The web-side batch was verified in
+  `F:/fxlab/verify-ext` against a Core built from committed code only:
+  domain check exit 0, "# pass 663", extension "# pass 678", test-runner
+  "1141 passed", lab "# pass 74", audit passed.
+- Found by that batch check, and fixed: `domain/src/tests/domain.test.ts`
+  called Core's harness without declaring this domain's denied evidence keys,
+  and addressed its fixture elements by `selector`, which Core now refuses to
+  carry. The fixture addresses elements by handle, as a real packet does.
+  Also `llm-diagnosis.test.ts` expected the old 2,400-byte failure share; the
+  intended value is 3,000.
+- State at the pause: both repositories clean, both audits pass, **nothing
+  pushed** — Core 29 and this repository 40 commits ahead of `origin/dev`.
+  Verification worktrees are set up and reusable: `F:/fxlab/verify-core` and
+  `F:/fxlab/verify-ext`, whose `node_modules` are junctions to the main
+  checkouts except `domain/node_modules/fluxiq`, which points at
+  `verify-core` so the domain compiles against committed Core only.
 
 ### 2026-09-17 — The loop may decline, a repair may look, and a step refuses the wrong record
 - Agents: `w2-repair-refuses` (Core `a830217`), `w2-repair-sees-more` (Core
