@@ -64,9 +64,25 @@ export type LlmExecutionProfile = {
 };
 
 export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
-  maxInputTokens: 8_000,
-  maxOutputTokens: 2_000,
-  maxTotalTokensPerRequest: 10_000,
+  // Sized to the model's real context window, not to a number someone picked.
+  // deepseek-chat carries 64k, so these are what the provider actually allows
+  // less room for the reply.
+  //
+  // They used to be 8k in, 2k out, 10k per request, and that was the single
+  // biggest blocker measured on 2026-09-17. Describing a real page costs
+  // tokens: across thirty-six live creation tasks, the input guard fired
+  // before the request was ever sent on the slice holding an infinite feed, a
+  // multi-tab order lookup, an auth gate and an admin console with a
+  // virtualised list -- that slice scored zero of six while the slice of small
+  // forms scored six of seven. The grant ends on that error, so those runs
+  // produced no Flow at all and the page shapes went untested. An empty table
+  // tripped it too, which is how little headroom 8k left.
+  //
+  // What bounds a run is cost, the per-run token budget and the deadline --
+  // never a per-request ceiling that makes a real page impossible to describe.
+  maxInputTokens: 48_000,
+  maxOutputTokens: 8_000,
+  maxTotalTokensPerRequest: 56_000,
   // What an iterating run declares when the operator names no call count:
   // Core's `AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS` -- a
   // diagnosis, a patch, and the exploration's own default ceiling of 24

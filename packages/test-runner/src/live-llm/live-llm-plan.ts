@@ -23,7 +23,8 @@ const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, expl
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */
-const CORE_MAX_TOKENS = 50_000;
+/** Core's per-request ceiling, which is deepseek-chat's own 64k context. */
+const CORE_MAX_TOKENS = 64_000;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;
 /** Core's ceiling on a grant's total estimated cost (`MAX_TOTAL_COST_USD`), whatever its call count. */
