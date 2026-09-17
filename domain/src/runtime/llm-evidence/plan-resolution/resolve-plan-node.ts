@@ -7,6 +7,17 @@
 // - a `selector` parameter written `{ "handle": "target.N" }` -- optionally with
 //   the `location` of the page whose packet issued it -- becomes the selector
 //   the runtime kept behind that handle (`target-packets.ts`);
+// - so does the node's `target` or `element` parameter written the same way.
+//   Every element node lists `target` (the adapted target Core writes back on
+//   dispatch) and `element` (who the element is), and the packet names each
+//   element by its `target`, so that is where a model puts the handle: live,
+//   `target` on every node of every plan (`run-mu4vk93o-5f6675d7`), and
+//   `element` on two plans of the next campaign. Either resolves into
+//   `selector` and `element` exactly as a `selector` handle does, and a
+//   `target` handle's key is dropped, so Core derives the adapted target from
+//   them as it does for a recorded node. A node that names handles in several
+//   of these slots must name one element with them, or it is refused as
+//   `ambiguous`;
 // - the extraction node's `extractList` written `{ "handle": "extraction.N" }`
 //   -- optionally with `minItems` and `maxItems` -- becomes the
 //   `web.dom.extract_list` request the detection tool kept behind it
@@ -20,15 +31,17 @@
 // (`element-identity.ts`). Without it Core reads a type node's `text` as the
 // element's identity and the page refuses the right control. The handle is the
 // authority on that identity, so an `element` the model wrote beside a handle
-// is replaced; beside a literal selector it is the model's own and stays.
+// is replaced; beside a literal selector it is the model's own and stays. A
+// literal selector the model wrote beside a `target` handle is replaced the
+// same way: the model was never shown one, so it can only be a guess.
 //
 // Nothing is guessed. A node with no handle is `unchanged` -- a literal
 // selector the model wrote stays exactly as it wrote it and is never reported
 // as resolved. A handle anywhere else, of the wrong kind for its slot, in the
 // wrong shape, unknown to this project and Flow, let go by the bounded store,
-// naming different controls on different pages, or whose selector the page
-// gave to several controls at once, refuses the whole node with a named code,
-// and nothing of it is resolved.
+// naming different controls on different pages or in the node's slots, or
+// whose selector the page gave to several controls at once, refuses the whole
+// node with a named code, and nothing of it is resolved.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestValue } from "../../../actions/extraction";
@@ -87,6 +100,19 @@ const ELEMENT_NODE_IDS: ReadonlySet<string> = new Set(
     .map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 
+/**
+ * The parameters of an element node a target handle may be written in, in the
+ * order their resolutions are read: its `selector`, its `target` (the adapted
+ * target every such node lists), and its `element`.
+ */
+const TARGET_SLOTS = ["selector", "target", "element"] as const;
+
+/** Whether `key` names the element of this node, so a target handle there is one to resolve. */
+function isTargetSlot(key: string, nodeDefinitionId: string): boolean {
+  if (!SELECTOR_NODE_IDS.has(nodeDefinitionId) || !(TARGET_SLOTS as readonly string[]).includes(key)) return false;
+  return key !== "element" || ELEMENT_NODE_IDS.has(nodeDefinitionId);
+}
+
 /** The one node an extraction handle may name a request for. */
 const EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
@@ -104,7 +130,7 @@ export function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, 
   const issues = new Set<WebPlanHandleIssueCode>();
   const replaced = new Map<string, Resolved>();
   for (const [key, value] of Object.entries(input.parameters)) {
-    const slot = key === "selector" && SELECTOR_NODE_IDS.has(input.nodeDefinitionId)
+    const slot = isTargetSlot(key, input.nodeDefinitionId)
       ? "target"
       : key === "extractList" && input.nodeDefinitionId === EXTRACT_LIST_NODE_ID ? "extraction" : undefined;
     // Outside a handle slot, and inside one below its top, a recognisable
@@ -120,13 +146,26 @@ export function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, 
   if (issues.size > 0) return refused(issues);
   if (replaced.size === 0) return { status: "unchanged" };
 
+  // Slots naming the element must all name the same one; which of two the node acts on is not this resolver's to pick.
+  const named = TARGET_SLOTS.flatMap((slot) => replaced.get(slot) ?? []);
+  const element = named[0];
+  if (element && named.some((other) => other.value !== element.value || (other.frameId ?? 0) !== (element.frameId ?? 0))) {
+    return refused(new Set<WebPlanHandleIssueCode>(["web.handle.ambiguous"]));
+  }
+
   const frameId = handleFrame([...replaced.values()]);
   const declared = declaredFrame(input.parameters.browserFrameId);
   if (frameId === "mixed" || (declared !== undefined && declared !== (frameId ?? 0))) return refused(new Set<WebPlanHandleIssueCode>(["web.handle.frame_mismatch"]));
 
   const parameters: JsonObject = {};
-  for (const [key, value] of Object.entries(input.parameters)) parameters[key] = replaced.get(key)?.value ?? value;
-  const identity = replaced.get("selector")?.element;
+  for (const [key, value] of Object.entries(input.parameters)) {
+    // A `target` handle was where the element was named, not an adapted target
+    // to keep; an `element` handle is written as the identity below.
+    if ((key === "target" || key === "element") && replaced.has(key)) continue;
+    parameters[key] = replaced.get(key)?.value ?? value;
+  }
+  if (element) parameters.selector = element.value;
+  const identity = element?.element;
   if (identity !== undefined && ELEMENT_NODE_IDS.has(input.nodeDefinitionId)) parameters.element = identity;
   if (frameId !== undefined && frameId !== 0) parameters.browserFrameId = frameId;
   return { status: "resolved", parameters };

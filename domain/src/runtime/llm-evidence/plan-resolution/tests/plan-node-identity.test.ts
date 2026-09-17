@@ -14,7 +14,8 @@
 // - pages that give a bare handle the same selector but describe it
 //   differently carry only what they agree on, rather than a guess at one;
 // - the handle decides the identity: an `element` the model wrote beside a
-//   handle is replaced, and one beside a literal selector is left alone.
+//   handle is replaced, one beside a literal selector is left alone, and a
+//   handle written as the element names it like any other slot.
 //
 // Whether the page's own resolver then accepts the right element and refuses
 // a wrong one is the extension's to prove (`content/identity/`); the domain may
@@ -215,10 +216,17 @@ test("the handle decides the identity: a model-written element beside it is repl
     runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: "#literal", element: claimed } }),
     { status: "unchanged" }
   );
-  // A handle written into the element is still misplaced, not an identity.
+  // A handle written into the element names the element, never an identity to
+  // keep: the identity is still the handle's, and it must be the element the
+  // selector's handle names.
+  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: { handle: "target.2" } }).element, {
+    tagName: "button",
+    accessibleName: "Submit",
+    selector: submit.selector
+  });
   assert.deepEqual(
     runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: { handle: "target.2" }, element: { handle: "target.1" } } }),
-    { status: "refused", issueCodes: ["web.handle.misplaced"] }
+    { status: "refused", issueCodes: ["web.handle.ambiguous"] }
   );
   // A resolved identity is the caller's own copy: changing it changes nothing the store holds.
   const first = resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });

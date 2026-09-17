@@ -26,6 +26,12 @@ const PROPOSAL_POLL_MS = 1_000;
 /** The shape of a Core or domain identifier, such as `web.recovery.inspect` or `web.action.rejected.no_progress`. */
 const VOCABULARY_ID = /^[a-z][a-z0-9_-]*(?:[.:][a-z0-9_-]+)*$/u;
 const MAX_VOCABULARY_ID_LENGTH = 96;
+/**
+ * Core's own namespace. A step under it is a decision that called no tool --
+ * Core records a refused plan as `core.decision_unusable`, with the first code
+ * that refused it -- so it is kept as a step and never listed as a tool.
+ */
+const CORE_DECISION_STEP_PREFIX = "core.";
 
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
@@ -39,6 +45,7 @@ export type CreatedFlowBuildControl = {
 export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) => Promise<void>; requestTimeoutMs?: number; deadlineMs?: number; pollMs?: number };
 
 export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null }>;
+/** One decision the build's exploration made, in order: the tool it called, or Core's name for a decision that called none, and the code it came to. */
 export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
 export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
 
@@ -51,6 +58,11 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   `unknown` when the build outlived its request and no proposal appeared.
  * - `failure.code`: Core's own closed code for a refusal, or a `lab.` code
  *   for a refusal this lane made of Core's answer.
+ * - `failure.issueCodes`: the codes Core says refused the last plan the model
+ *   completed -- validation's or the domain's -- when it names any. Codes
+ *   only; the plan paths and page content they refer to are never kept.
+ * - `evidenceLoop.steps`: every decision of a refused build, in order, as
+ *   Core recorded it; `toolIds` are the tools among them.
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
  */
@@ -61,7 +73,7 @@ export type CreatedFlowBuild = Readonly<{
   providerInvocation: "attempted" | "not_attempted" | "unknown";
   accounting: CreatedFlowBuildAccounting | null;
   evidenceLoop: CreatedFlowBuildEvidenceLoop | null;
-  failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null }> | null;
+  failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[] }> | null;
   recoveredAfterTimeout: boolean;
   durationMs: number;
 }>;
@@ -153,6 +165,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
   const diagnostic = parseAutomationStudioFlowBootstrapFailureDiagnostic(payload.diagnostic);
   if (!diagnostic) return failed({ code: `lab.generation_http_${envelope.status}`, stage: null, httpStatus: envelope.status }, "unknown", durationMs);
   const loop = diagnostic.evidenceLoop;
+  const issueCodes = [...new Set((diagnostic.issueCodes ?? []).filter(isVocabulary))];
   const steps = loop?.steps?.flatMap((step): CreatedFlowBuildStep[] => {
     if (!isVocabulary(step.toolId)) return [];
     return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
@@ -163,8 +176,8 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     providerCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: [...new Set((steps ?? []).map((step) => step.toolId))].sort(), steps: steps ?? null } : null,
-    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status },
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null } : null,
+    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}) },
     recoveredAfterTimeout: false,
     durationMs,
   });
@@ -185,8 +198,9 @@ function accountingOf(value: { provider?: string; model?: string; inputTokens?: 
   };
 }
 
+/** The distinct tool ids among `values`, sorted: identifiers only, and none of Core's own decision steps. */
 function vocabulary(values: readonly string[]): string[] {
-  return [...new Set(values.filter(isVocabulary))].sort();
+  return [...new Set(values.filter((value) => isVocabulary(value) && !value.startsWith(CORE_DECISION_STEP_PREFIX)))].sort();
 }
 
 function isVocabulary(value: string): boolean {

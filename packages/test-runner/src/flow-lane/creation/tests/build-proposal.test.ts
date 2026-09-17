@@ -82,6 +82,45 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
   assert.deepEqual(early.record.failure, { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 });
 });
 
+test("a build stopped on refused plans keeps what refused them, decision by decision, and no tool list of Core's own steps", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_unusable_decision",
+    stage: "provider_output_validation",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    accounting: { requestId: "evidence.two", estimatedInputTokens: 9_000, provider: "deepseek", model: "deepseek-chat", inputTokens: 13_000, outputTokens: 1_500, totalTokens: 14_500, estimatedCostUsd: 0.008 },
+    evidenceLoop: {
+      iterationCount: 3,
+      decisionCount: 4,
+      toolCallCount: 1,
+      evidenceBytes: 4_300,
+      steps: [
+        { toolId: "web.inspect_current_page", resultCode: "web.inspect.succeeded" },
+        { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+        { toolId: "core.decision_unusable", resultCode: "bootstrap.invalid_parameter_value" },
+        { toolId: "core.decision_unusable" },
+      ],
+    },
+    issueCodes: ["bootstrap.invalid_parameter_value", "web.handle.unknown"],
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.evidence_unusable_decision", stage: "provider_output_validation", httpStatus: 400, issueCodes: ["bootstrap.invalid_parameter_value", "web.handle.unknown"] });
+  assert.deepEqual(record.evidenceLoop, {
+    decisionCount: 4,
+    toolCallCount: 1,
+    evidenceBytes: 4_300,
+    // Core's own decision steps are decisions, not tools the build called.
+    toolIds: ["web.inspect_current_page"],
+    steps: [
+      { toolId: "web.inspect_current_page", resultCode: "web.inspect.succeeded" },
+      { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+      { toolId: "core.decision_unusable", resultCode: "bootstrap.invalid_parameter_value" },
+      { toolId: "core.decision_unusable" },
+    ],
+  });
+});
+
 test("a refusal Core's parser does not accept keeps only its HTTP status, and a malformed success is a refusal too", async () => {
   const unparsed = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "made.up", detail: "page text that must not travel" } } } });
   assert.deepEqual(unparsed.record.failure, { code: "lab.generation_http_400", stage: null, httpStatus: 400 });

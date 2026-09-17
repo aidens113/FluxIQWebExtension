@@ -32,6 +32,7 @@ import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
 const TYPE_NODE = webAutomationOutputNodeId("web.dom.type");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
+const SELECT_NODE = webAutomationOutputNodeId("web.dom.select");
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const NAVIGATE_NODE = webAutomationOutputNodeId("web.browser.navigate");
 const SNAPSHOT_NODE = webAutomationOutputNodeId("web.dom.capture_snapshot");
@@ -94,6 +95,44 @@ test("a selector handle becomes the selector the exploration was shown, which th
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
   // A node already naming the top frame keeps doing so.
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), { status: "resolved", parameters: { selector: "#submit", browserFrameId: 0, element: SUBMIT_IDENTITY } });
+});
+
+test("a target handle under the node's `target` or `element` parameter names its element as one under `selector` does", async () => {
+  // The live refusal this exists for (`run-mu4vk93o-5f6675d7`): every web
+  // element node lists a `target` parameter, the evidence names each element by
+  // its `target`, and the model wrote the handle there on all three nodes. The
+  // resolver accepted it only under `selector`, so each plan was refused
+  // `web.handle.misplaced` and nothing was built.
+  const planField: JsonObject = { tagName: "select", selector: 'select[name="plan"]', accessibleName: "Plan", attributes: { name: "plan" } };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit, planField] }));
+  await inspect(runtime);
+
+  assert.deepEqual(resolve(runtime, TYPE_NODE, { target: { handle: "target.1" }, text: "Ada" }), {
+    status: "resolved",
+    parameters: { selector: NAME_SELECTOR, text: "Ada", element: NAME_IDENTITY }
+  });
+  const selected = resolve(runtime, SELECT_NODE, { target: { handle: "target.3", location: FORM_URL }, value: "team" });
+  assert.equal(selected.status, "resolved");
+  assert.equal(selected.status === "resolved" && selected.parameters.selector, 'select[name="plan"]');
+  assert.equal(selected.status === "resolved" && selected.parameters.value, "team");
+  assert.equal(selected.status === "resolved" && "target" in selected.parameters, false, "the handle's slot does not stay behind as an adapted target");
+  // The handle is the authority on the element: a selector the model wrote beside it is replaced, as its `element` is.
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { target: { handle: "target.2", location: FORM_URL }, selector: "button.guessed-submit" }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  // Both slots may name the element, only if they name the same one.
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { target: { handle: "target.2" }, selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { target: { handle: "target.1" }, selector: { handle: "target.2" } }), refusedWith("web.handle.ambiguous"));
+  // `element` names the element too, and was refused live on its own and beside a `selector` handle (the campaign after `run-mu4vs7j1-aca950d7`).
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { element: { handle: "target.2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(resolve(runtime, TYPE_NODE, { element: { handle: "target.1" }, target: { handle: "target.2" }, text: "Ada" }), refusedWith("web.handle.ambiguous"));
+  // It is a handle slot like `selector`, judged the same way.
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { target: { handle: "target.9" } }), refusedWith("web.handle.unknown"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { element: { handle: "extraction.1" } }), refusedWith("web.handle.misplaced"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { target: { handle: "extraction.1" } }), refusedWith("web.handle.misplaced"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { target: { handle: "target.2", extra: true } }), refusedWith("web.handle.malformed"));
+  // Only on a node that has an element to name; and an adapted target that names no handle is not this resolver's.
+  assert.deepEqual(resolve(runtime, NAVIGATE_NODE, { url: "https://example.test/", target: { handle: "target.1" } }), refusedWith("web.handle.misplaced"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: "#submit", target: { kind: "element", fingerprint: { tagName: "button" } } }), { status: "unchanged" });
 });
 
 test("a node with no handle is unchanged, and a literal selector is never passed off as resolved", async () => {
