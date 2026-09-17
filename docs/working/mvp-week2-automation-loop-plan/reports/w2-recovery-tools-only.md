@@ -144,13 +144,37 @@ I isolated my own and say so.
   354 baselined)`, exit 0.
 - `FLUXIQ_TEST_ENV_FILES=none npx vitest run AS/runtime --no-file-parallelism`
   (wider than the brief asked, to catch a regression outside the two suites):
-  **started and still running when I finished** — it had produced no summary
-  after roughly 25 minutes with file parallelism off, on a machine also running
-  another worker. I did not start a second heavy run beside it. Its result is
-  unknown; treat it as not run. What bounds the risk it was covering: the
-  exploration has exactly one production caller,
-  `recovery/annotation/annotate.ts:264`, and `annotate.test.ts` (16 tests) is in
-  the suite that passed.
+  **148 files, 145 passed / 3 failed; 1589 tests, 1585 passed / 3 failed / 1
+  skipped**, 451s. It finished after I had written the first version of this
+  report, which is why the note above it was rewritten.
+  - The one failure whose detail survived in the captured output is
+    `runtime/tests/service-flows/tests/representation.test.ts:392`, *seeds a
+    rerun from the failed attempt as the run executed it...*: it expected
+    `runtimePatchAttempts` with `traceStatus: "succeeded"` and got
+    `traceStatus: "not-run"`, `preflightOk: false`, and the issue *"The recovery
+    plan allows no wait retry for this failure."* That is the other worker's
+    `recovery/plan.ts` and live-patch work — a patch the recovery plan now
+    refuses to allow — and nothing in it touches the exploration's tool list.
+  - **A second wide run, taken to attribute the rest, disagreed with the
+    first: 5 failed across 4 files, not 3 across 3.** That disagreement is
+    itself the finding. The four extra failures were bare `Error: Test timed
+    out in 5000ms.` with no assertion diff, in
+    `service-adaptation/tests/failed-start.test.ts` (2),
+    `service-flows/tests/flow-map.test.ts` and
+    `service-flows/tests/instruction-readiness.test.ts` — none of which touches
+    harness options or the recovery exploration.
+  - **Rerun quietly, three of those four pass**: `failed-start.test.ts` 8/8 and
+    `flow-map.test.ts` 2/2. That is the machine's known fault plus load from
+    another worker, not a defect.
+  - `instruction-readiness.test.ts` also passes alone, in **4591ms against a
+    5000ms budget**. It is a committed file nobody has modified; it simply has
+    ~400ms of headroom and loses it whenever the machine is busy. Worth
+    resizing, by whoever owns it.
+  - `representation.test.ts` **reproduces on a quiet rerun**, so it is real and
+    it is the other worker's. Not mine, and not related: the exploration's
+    offered tool list appears nowhere in it.
+  - Net: **no failure in either wide run is attributable to this change**, and
+    the two suites that cover it are 115/115.
 
 **This repository**
 
@@ -203,7 +227,6 @@ I isolated my own and say so.
   package does not currently type-check because of them, so a whole-repository
   gate would report their state, not mine. The gates must be rerun once that
   worker's changes land.
-- **The wider Core `AS/runtime` suite** — started, never finished; see above.
 - **What the live web domain now sees.** The Core fix removes
   `web.inspect_current_page`, `web.navigate_same_origin`, `web.reveal_safe` and
   `web.detect_repeating_structure` from a recovery's offered list by
