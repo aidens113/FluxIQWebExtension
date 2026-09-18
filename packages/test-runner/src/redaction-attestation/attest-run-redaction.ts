@@ -31,8 +31,8 @@ export type RunRedactionScopeSummary = { name: string; scannedFiles: number; sca
  * - `failed`: a scope held a declared literal, or the scan could not read all of
  *   what it was given (an unreadable, oversize, reparse-point or over-limit
  *   entry, or an `unscanned-store`: a SQLite store file or database it could not
- *   copy or read in full, one over a ceiling, or a `-wal` or `-journal` with no
- *   database beside it). The second is a failure too, because an attestation
+ *   copy or read in full, or a `-wal` or `-journal` with no database beside it;
+ *   a store has no size ceiling). The second is a failure too, because an attestation
  *   that could not look has not attested absence.
  *
  * `findings` are what fail the run, as `security.redaction`. `advisories` are the
@@ -62,18 +62,13 @@ const RUN_LIMITS = SECRET_LEAK_ATTESTATION_RUN_LIMITS;
 
 /**
  * How many entries one scan of a bounded scope is given: few enough that that
- * many entries at the largest ceiling any one of them can claim still fit the
- * total ceiling, and under the scanner's 32 approved paths. A SQLite store is
- * bounded by `maxStoreBytes`, not `maxFileBytes`, so the divisor is the larger
- * of the two; otherwise one chunk of stores could exceed the total and fail a
- * healthy run closed. So no scan's count or byte-search total trips on how much
- * the run wrote; a single entry over its own ceiling still fails closed. The
- * copies of the databases the scan reads cell by cell count against the same
- * total, and an entry that is a `-wal` or `-journal` also copies the database it
- * belongs to, which may not be an entry: those copies can still reach the total,
- * as an `unscanned-store` finding.
+ * many text files at the per-file ceiling still fit the total ceiling, and under
+ * the scanner's 32 approved paths. So no scan's count or text total trips on how
+ * much the run wrote; a single file over the per-file ceiling still fails
+ * closed. A SQLite store counts against neither ceiling, since it is streamed and
+ * never decoded, so however many stores a chunk holds cannot push it over.
  */
-const ENTRIES_PER_BOUNDED_SCAN = Math.floor(RUN_LIMITS.maxTotalBytes / Math.max(RUN_LIMITS.maxFileBytes, RUN_LIMITS.maxStoreBytes));
+const ENTRIES_PER_BOUNDED_SCAN = Math.floor(RUN_LIMITS.maxTotalBytes / RUN_LIMITS.maxFileBytes);
 
 /**
  * How far before `writtenSince` a file's time still counts as written since: a

@@ -1,31 +1,32 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdtemp, open, readdir, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { readSqliteStores } from "./sqlite-store-reader/index.js";
 
+/**
+ * The scan's ceilings. Every byte ceiling here bounds text: `maxFileBytes` is the
+ * most one text file may hold, since it is decoded whole as UTF-8 and run through
+ * the credential regexes, and `maxTotalBytes` is the most text one scan decodes.
+ * A SQLite store has no byte ceiling at all, because it is never held in memory:
+ * its bytes are searched in fixed-size chunks, it is staged with `copyFile`, and
+ * its cells are searched inside SQLite (`sqlite-store-reader/`). A size ceiling on
+ * a store bounded nothing but the answer, and each one set from an observed size
+ * failed the next larger healthy run: 8 MiB failed a 10.02 MiB read-only run, and
+ * the 32 MiB that replaced it failed an 85.5 MiB state-changing one. A store the
+ * scan cannot actually read still fails closed, as `unscanned-store`.
+ */
 export const SECRET_LEAK_ATTESTATION_DEFAULT_LIMITS = Object.freeze({
-  maxFiles: 2_000, maxFileBytes: 1_048_576, maxStoreBytes: 8_388_608, maxTotalBytes: 16_777_216, maxDepth: 16, maxApprovedPaths: 32,
+  maxFiles: 2_000, maxFileBytes: 1_048_576, maxTotalBytes: 16_777_216, maxDepth: 16, maxApprovedPaths: 32,
 });
-export type SecretLeakAttestationLimits = { maxFiles: number; maxFileBytes: number; maxStoreBytes: number; maxTotalBytes: number; maxDepth: number; maxApprovedPaths: number };
+export type SecretLeakAttestationLimits = { maxFiles: number; maxFileBytes: number; maxTotalBytes: number; maxDepth: number; maxApprovedPaths: number };
 /**
  * The ceilings a Lab run's scans use, and the demo setup scan with them. A run
- * bundle, an isolated workspace and Core's SQLite databases outgrow the defaults,
- * which are sized for one result file. `maxApprovedPaths` stays at its default.
- *
- * `maxStoreBytes` is 32 MiB because a store is not read the way a text file is.
- * `maxFileBytes` bounds what the scan decodes as UTF-8 and runs its four
- * credential regexes over; a store is never decoded, only searched byte for byte
- * in three encodings and copied for a cell read, which measured 68 ms for the
- * 10.02 MiB `global.sqlite` one live `social-scheduler-week-ahead` run left
- * behind on 2026-09-18. Charging a store to the text budget failed that run, and
- * every run like it, as `unscanned-store` on a store nothing was wrong with. The
- * ceiling stays because the scan must still fail closed on a store it cannot
- * hold: 32 MiB is a little over three times the largest store a healthy run has
- * produced, and three stores at it still fit `maxTotalBytes`.
+ * bundle and an isolated workspace carry more text than the defaults, which are
+ * sized for one result file. `maxApprovedPaths` stays at its default.
  */
 export const SECRET_LEAK_ATTESTATION_RUN_LIMITS = Object.freeze({
-  maxFiles: 10_000, maxFileBytes: 8_388_608, maxStoreBytes: 33_554_432, maxTotalBytes: 67_108_864, maxDepth: 32,
+  maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32,
 }) satisfies Partial<SecretLeakAttestationLimits>;
 const ABSOLUTE_LIMITS: Readonly<SecretLeakAttestationLimits> = Object.freeze({ ...SECRET_LEAK_ATTESTATION_RUN_LIMITS, maxApprovedPaths: 128 });
 
@@ -56,13 +57,14 @@ const binaryExtensions = new Set([
 // each store file belongs to is also read cell by cell (`stageDatabase`). A store
 // the scan cannot read in full, or a database the reader cannot read, is an
 // `unscanned-store` finding. Known by name, or by the header of a database, WAL
-// or journal file.
+// or journal file, which is read before any text ceiling is applied, so a store
+// under any name is streamed rather than refused as oversize text.
 //
-// A file named as a store is bounded by `maxStoreBytes` rather than
-// `maxFileBytes`, in `visit` and in `stageDatabase`: nothing about it is decoded
-// as text or run through the credential regexes that `maxFileBytes` budgets for.
-// A store found only by its header keeps the text ceiling, because its size is
-// judged before its first byte is read and its name claims to be text.
+// A store is searched `STORE_SEARCH_CHUNK_BYTES` at a time (`searchStoreFile`),
+// so memory stays the same whatever its size, and none of `maxFileBytes` or
+// `maxTotalBytes` applies to it: they budget the text the scan decodes, and a
+// store is never decoded.
+const STORE_SEARCH_CHUNK_BYTES = 1_048_576;
 const sqliteStoreName = /\.(?:db|sqlite3?)(?:-(?:wal|shm|journal))?$/iu;
 const sqliteSidecar = /-(?:wal|shm|journal)$/iu;
 const sqliteHeaders = [
@@ -83,10 +85,12 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
   const storedLiteral = storeEncodings(input.secretLiteral);
   const root = path.resolve(input.workspaceRoot);
   const findings = new Map<string, Set<SecretLeakFindingCategory>>();
-  let scannedFiles = 0; let scannedBytes = 0; let skippedBinaryFiles = 0; let visitedEntries = 0;
+  // `scannedBytes` is every byte searched, stores included; `textBytes` is the
+  // share decoded as text, which alone counts against `maxTotalBytes`.
+  let scannedFiles = 0; let scannedBytes = 0; let textBytes = 0; let skippedBinaryFiles = 0; let visitedEntries = 0;
   const databases: Array<{ relative: string; copy: string }> = [];
   const judgedDatabases = new Set<string>();
-  let stagingDirectory: string | undefined; let stagedBytes = 0;
+  let stagingDirectory: string | undefined;
 
   const addFinding = (relativePath: string, category: SecretLeakFindingCategory): void => {
     const safePath = sanitizePath(relativePath, input.secretLiteral);
@@ -151,20 +155,19 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
     const extension = path.extname(absolute).toLowerCase();
     if (binaryExtensions.has(extension)) { skippedBinaryFiles += 1; return; }
     const namedStore = sqliteStoreName.test(path.basename(absolute));
-    const unscanned = (category: SecretLeakFindingCategory): void => addFinding(relative, namedStore ? "unscanned-store" : category);
-    if (scannedFiles >= limits.maxFiles) { unscanned("file-limit"); return; }
-    if (metadata.size > (namedStore ? limits.maxStoreBytes : limits.maxFileBytes)) { unscanned("oversize-text"); return; }
-    if (scannedBytes + metadata.size > limits.maxTotalBytes) { unscanned("byte-limit"); return; }
+    if (scannedFiles >= limits.maxFiles) { addFinding(relative, namedStore ? "unscanned-store" : "file-limit"); return; }
+    let store = namedStore;
+    if (!store) {
+      try { store = await hasSqliteHeader(absolute); }
+      catch { addFinding(relative, "unreadable-text"); return; }
+    }
+    if (store) { await scanStore(absolute, relative); return; }
+    if (metadata.size > limits.maxFileBytes) { addFinding(relative, "oversize-text"); return; }
+    if (textBytes + metadata.size > limits.maxTotalBytes) { addFinding(relative, "byte-limit"); return; }
 
     let bytes: Buffer;
     try { bytes = await readFile(absolute); }
-    catch { unscanned("unreadable-text"); return; }
-    if (namedStore || sqliteHeaders.some(header => bytes.subarray(0, header.length).equals(header))) {
-      scannedFiles += 1; scannedBytes += bytes.byteLength;
-      if (storedLiteral.some(encoded => bytes.includes(encoded))) addFinding(relative, "secret-literal");
-      await stageDatabase(absolute, relative, bytes.byteLength);
-      return;
-    }
+    catch { addFinding(relative, "unreadable-text"); return; }
     if (bytes.includes(0)) {
       if (textExtensions.has(extension)) addFinding(relative, "unreadable-text"); else skippedBinaryFiles += 1;
       return;
@@ -177,8 +180,22 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
       return;
     }
 
-    scannedFiles += 1; scannedBytes += bytes.byteLength;
+    scannedFiles += 1; scannedBytes += bytes.byteLength; textBytes += bytes.byteLength;
     for (const category of detectViolations(contents, input.secretLiteral)) addFinding(relative, category);
+  }
+
+  /**
+   * Searches one store file for the literal and stages its database for the cell
+   * read. A file the search cannot read to its end is `unscanned-store`: absence
+   * is attested only for bytes that were actually searched.
+   */
+  async function scanStore(absolute: string, relative: string): Promise<void> {
+    let searched: { found: boolean; bytes: number };
+    try { searched = await searchStoreFile(absolute, storedLiteral); }
+    catch { addFinding(relative, "unscanned-store"); return; }
+    scannedFiles += 1; scannedBytes += searched.bytes;
+    if (searched.found) addFinding(relative, "secret-literal");
+    await stageDatabase(absolute, relative, searched.bytes);
   }
 
   /**
@@ -192,8 +209,9 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
    * suffix names, even when that one is not among the approved paths: a bounded
    * scan given only the log a run wrote still reads the rows in it. A `-wal` or
    * `-journal` holding bytes with no database beside it cannot be read as rows.
-   * That, and a database with a file that is a link, over `maxStoreBytes`,
-   * over the total ceiling or unreadable, is an `unscanned-store` finding.
+   * That, and a database with a file that is a link, not a regular file, or one
+   * the copy cannot read, is an `unscanned-store` finding. There is no size
+   * ceiling: `copyFile` never holds the file in this process's memory.
    */
   async function stageDatabase(absolute: string, relative: string, size: number): Promise<void> {
     const suffix = sqliteSidecar.exec(path.basename(absolute))?.[0] ?? "";
@@ -202,7 +220,6 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
     const key = process.platform === "win32" ? database.toLowerCase() : database;
     if (judgedDatabases.has(key)) return;
     const parts: string[] = [];
-    let bytes = 0;
     for (const part of ["", "-wal", "-journal"]) {
       let metadata;
       try { metadata = await lstat(database + part); }
@@ -215,18 +232,16 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
         }
         judgedDatabases.add(key); addFinding(databaseRelative, "unscanned-store"); return;
       }
-      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > limits.maxStoreBytes) {
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
         judgedDatabases.add(key); addFinding(databaseRelative, "unscanned-store"); return;
       }
-      parts.push(part); bytes += metadata.size;
+      parts.push(part);
     }
     judgedDatabases.add(key);
-    if (stagedBytes + bytes > limits.maxTotalBytes) { addFinding(databaseRelative, "unscanned-store"); return; }
-    stagedBytes += bytes;
     try {
       stagingDirectory ??= await mkdtemp(path.join(os.tmpdir(), "fluxiq-store-read-"));
       const copy = path.join(stagingDirectory, `${databases.length}.sqlite`);
-      for (const part of parts) await writeFile(copy + part, await readFile(database + part));
+      for (const part of parts) await copyFile(database + part, copy + part);
       databases.push({ relative: databaseRelative, copy });
     } catch { addFinding(databaseRelative, "unscanned-store"); }
   }
@@ -279,11 +294,45 @@ function resolveLimits(overrides: SecretLeakAttestationInput["limits"]): SecretL
     if (!Number.isSafeInteger(value) || value < 1 || value > ABSOLUTE_LIMITS[key]) throw new Error("Secret attestation limits are invalid");
   }
   if (limits.maxTotalBytes < limits.maxFileBytes) throw new Error("Secret attestation total bytes must cover one file");
-  // A store is read whole or not at all, and its bytes and its staged copy both
-  // count against the total, so a store ceiling the total cannot hold would fail
-  // every scan that met it.
-  if (limits.maxTotalBytes < limits.maxStoreBytes) throw new Error("Secret attestation total bytes must cover one store");
   return limits;
+}
+/** Whether a file begins with a SQLite database, write-ahead log or journal header. Reads only those first bytes. */
+async function hasSqliteHeader(file: string): Promise<boolean> {
+  const longest = Math.max(...sqliteHeaders.map(header => header.length));
+  const handle = await open(file, "r");
+  try {
+    const head = Buffer.alloc(longest);
+    const { bytesRead } = await handle.read(head, 0, longest, 0);
+    return sqliteHeaders.some(header => bytesRead >= header.length && head.subarray(0, header.length).equals(header));
+  } finally {
+    await handle.close();
+  }
+}
+/**
+ * Searches a file for any of `needles`, `STORE_SEARCH_CHUNK_BYTES` at a time, and
+ * says how many bytes it read. Each chunk is searched together with the last
+ * `longest needle - 1` bytes of the one before, so a needle a chunk boundary cuts
+ * is still found, and memory is one chunk whatever the file's size. It reads to
+ * the end even after a match, so `bytes` is the file's whole length.
+ */
+async function searchStoreFile(file: string, needles: readonly Buffer[]): Promise<{ found: boolean; bytes: number }> {
+  const overlap = Math.max(...needles.map(needle => needle.length)) - 1;
+  const buffer = Buffer.alloc(overlap + STORE_SEARCH_CHUNK_BYTES);
+  const handle = await open(file, "r");
+  try {
+    let carried = 0; let bytes = 0; let found = false;
+    for (;;) {
+      const { bytesRead } = await handle.read(buffer, carried, STORE_SEARCH_CHUNK_BYTES, null);
+      if (bytesRead === 0) return { found, bytes };
+      bytes += bytesRead;
+      const filled = carried + bytesRead;
+      if (!found) found = needles.some(needle => buffer.subarray(0, filled).includes(needle));
+      carried = Math.min(overlap, filled);
+      buffer.copyWithin(0, filled - carried, filled);
+    }
+  } finally {
+    await handle.close();
+  }
 }
 function normalizeApprovedPath(value: string): string | undefined {
   if (typeof value !== "string" || value.length === 0 || value.length > 512 || value.includes("\\") || value.includes("\0") || path.isAbsolute(value)) return undefined;
