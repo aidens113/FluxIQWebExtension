@@ -43,46 +43,50 @@ reports. One finding from those investigations is still open: flow bootstrap
 refuses any flow that is not blank, so the "improve an existing flow" entry
 point cannot reuse it unchanged.
 
-**Live DeepSeek replies since 2026-09-16 (`run-mu4nxysj-3234c535`).** Before
-that no live run had received one: the adapter refused every recovery request
-pre-send (fixed `5300d47`), and earlier reports had read "gate invoked" as
-"provider reached". Read live results call by call from
-`snapshots/live-llm.json`, never from the verdict. The user's standing rule
-holds: nothing is demonstrated until it runs against the real key.
+**Read live results call by call** from `snapshots/live-llm.json` and each
+run's `evaluation.json`, never from the verdict: a run reporting `passed` while
+its oracle says `failed` was the commonest defect found on 2026-09-17.
 
 **The two scoping reports describe `ee25ac9`, not HEAD.** Five briefs drawn from
 them sent workers at defects already fixed; re-verify any file:line they give.
 
-**2.4 is built, and two live fail-opens were closed on the way.** A recovery
-whose required evidence was never looked at reported as verified and resumable,
-on both sides at once: Core's `trial.ts` read the host's `passed` and never
-`checkedConditionCount`, and the browser's `absent` with no selector answered
-"the banner is gone" with nothing queried. `flow-change/resume.ts` now decides
-`resumable` from the checks and never from the outcome, fail-closed on any
-unknown check. **Nothing consumes `resumable` yet**, so a run does not stop on
-it — the next brief is a caller that refuses to continue.
+**Where the goal stands, measured live on 2026-09-17 (Core `cf176fe`, here
+`b0f801d`).** Creation now acts and narrows: `social-scheduler-week-ahead`
+returns 14 of 280 via `navigate, select, select, extract_list`;
+`property-listings-no-matches` returns 0 of 288 via `navigate, select, select,
+click, extract_list`; the unfiltered control `whole-queue` still returns 280 of
+280. Before that day's fixes every built Flow was `navigate -> extract_list`,
+across ~290 live calls not one interaction was authored, and nine narrowing jobs
+returned the whole table while reporting success. Repair works end to end:
+explores, proposes, passes. Only those three creation tasks have been re-run
+since the fixes; the rest of the realistic corpus has not.
 
-**2.5 is built except for wiring.** A learned recovery is real inserted nodes
-(`insert_deterministic_path`) rather than a write nothing read. Its gating was
-the defect that mattered: three hand-written gate lists let a kind that inserts
-executable nodes pass all three, and they are now one compile-checked record
-(`runtime/service/adaptations/gates.ts`). The exploration reducer collapses the
-canonical sequence to `Correct Click -> Wait` by taking the earliest matching
-moment, not the latest.
+**Why creation could not act, which the first diagnosis got wrong.** Core
+accepted `click`/`select`/`type` all along. Four prompt texts told the model it
+may not act; the element ranker's "primary control" named no form control, so on
+a 280-row page the packet held 18 post links and no selects; the 8,000-byte
+evidence window evicted the page on the decision that writes the Flow; and the
+node catalog offered nothing that could act. Positional `target.N` handles also
+renumbered between captures. All fixed (`reports/w2-authoring-contract.md`,
+`reports/w2-narrowing.md`).
 
-**The live blocker: 2.3's trace carries no state digest and no action input**,
-so the reducer cannot be switched on. The digest that exists digests the
-evidence a step returned rather than the state, and never reaches the trace; the
-action value is discarded after signing. **Decided:** the runner records a
-caller-supplied state digest and the input per step, because the alternative is
-two records of one run that disagree. In flight as t005.
+**Built and landed:** 2.4 resume point with two live fail-opens closed; 2.5
+deterministic-path patch, gated by a compile-checked record
+(`runtime/service/adaptations/gates.ts`); exploration reduction wired to a
+per-step state digest (t005); 2.6 replay recorder (t007); a run that refuses to
+continue on `resumable: false` and resumes from the failed node (t006); result
+verification on `loop_verification`, fail-closed. Token limits sit at the
+model's 64k context and are derived from one constant in every place that held a
+copy — ten of them — and the confirmation threshold is ten calls, derived.
 
-**X6's real shape** is an `extractList` parameter-override re-issue path.
-`webAutomationExtractListDispatch` never reads `target`, so a repaired
-extract-list target lands where nothing reads it; restoring the old
-compatibility fails 6 tests.
-
-**Not started:** a caller that honours `resumable`, 2.6, 2.7, 2.8, 2.9, X6.
+**Open, known:** the replay recorder has no production caller, so `established`
+is unreachable live; the element packet now floods with row checkboxes, so a job
+needing a page BUTTON (retry failed posts) still cannot see one — one example per
+repeating control is the fix; `security.redaction` caps verdicts on runs whose
+workspace holds `.fluxiq/global.sqlite` as an `unscanned-store`, a false failure
+on 16 runs; per-row enrichment cannot be judged, because the judge compares only
+a run's first dataset. **Not started:** 2.9, X6 (an `extractList`
+parameter-override path, not a target-map entry).
 
 **The fixed call limit was the defect, not a constraint to design around (user
 decision, 2026-09-16).** An adaptation iterates while it is making progress and
@@ -134,22 +138,16 @@ repair tasks on `--llm-task repair` (`reports/w2-l2-repair-lane.md`). The last
 full campaign was 15 of 50 and predates every fix since.
 
 **Next steps, in order:**
-1. 2.4's resume point: extend `decideAutomationStudioChangeVerdict` with
-   `resumable` and a `resumeFrom` that survives an `unverifiable` verdict.
-2. Rerun the campaign from the pair, then W-3 extraction repair, L-5 fixtures,
-   L-2 repair lane, the `xpathFor` id-anchor fix; then C-9 to C-13 (extend mode
-   for non-blank Flows), L-3, L-4, per `reports/w2-back-half-design.md` §8.
-   Rerun the campaign after each batch.
-3. Then 2.6, 2.7, 2.8, 2.9 and X6, X6 being an `extractList` parameter-override
-   re-issue path rather than a target-map entry.
-4. Queued, no owner: a declared fixture secret shorter than the scan's
-   8-character minimum should be recorded unattested with its reason rather
-   than failing the run (`packages/test-runner/src/redaction-attestation/
-   scenario-redaction-literals.ts:42`), while a machine-supplied short value
-   still refuses; reshape the card-secret refusal task into a Flow that builds
-   and whose run is refused; W-3b with C-11; Core `llm-flow-bootstrap.md`.
-5. Before pushing: full checks in both repositories; `pnpm docs:reference` in
-   Core.
+1. Re-run the whole realistic corpus live (social, property, directory, support
+   desk, order operations) now that creation acts and narrows; the three proven
+   tasks are the only evidence so far.
+2. Show one example per repeating control in the element packet, so buttons
+   survive a page of row checkboxes.
+3. Give the replay recorder a production caller; decide whether a recorded
+   replay moves an adaptation out of `testing`.
+4. Fix the `unscanned-store` false failure; make the judge compare a named
+   dataset so per-row enrichment is measurable.
+5. 2.9 measurement lane, then X6.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
