@@ -264,3 +264,16 @@ test("compare takes two bench reports, or one report with --halves", () => {
   assert.throws(() => parseLabCommand(["compare", "bench-a", "bench-b", "--sequential", "--sequential"]), /only be specified once/);
   assert.throws(() => parseLabCommand(["compare", "bench-a", "bench-b", "--verbose"]), /Unknown option/);
 });
+
+test("replay names the persistent workspace, the saved Flow and the task that judges it, and takes no target", () => {
+  assert.deepEqual(
+    parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay", "--flow", "flow.c1542a11", "--instruction-task", "social-scheduler-week-ahead", "--seed", "171"]),
+    { command: "replay", scenarioId: "social-scheduler", workspace: "t019-replay", flowId: "flow.c1542a11", instructionTaskId: "social-scheduler-week-ahead", seed: 171 },
+  );
+  assert.deepEqual(parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay", "--flow", "flow.c1542a11"]), { command: "replay", scenarioId: "social-scheduler", workspace: "t019-replay", flowId: "flow.c1542a11" });
+  assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--flow", "flow.c1542a11"]), /requires --workspace/);
+  assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay"]), /requires --flow/);
+  assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay", "--flow", "flow.c1542a11", "--target", "isolated"]), /Unknown option: --target/);
+  assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "../escape", "--flow", "flow.c1542a11"]), /--workspace/);
+  assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay", "--flow", "flow.c1542a11", "--instruction-task", "Not_Kebab"]), /kebab-case/);
+});

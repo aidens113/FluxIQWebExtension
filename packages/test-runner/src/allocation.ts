@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:net";
-import { lstat, mkdir, rm } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
@@ -23,6 +23,13 @@ export type PersistentRunAllocation = RunAllocation & {
   workspaceName: string;
   workspaceRoot: string;
   sessionRoot: string;
+  /**
+   * Whether `scenarioPort` is the port the workspace had already recorded.
+   * `false` on a workspace's first invocation, and whenever the recorded port
+   * could not be bound and a new one was recorded in its place: a Flow saved
+   * against the previous address then no longer reaches the fixture.
+   */
+  scenarioPortRetained: boolean;
 };
 
 const SAFE_WORKSPACE_NAME = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u;
@@ -82,6 +89,7 @@ export async function allocatePersistentRun(baseDir: string, workspaceName: stri
   const coreWorkspaceDir = directChild(sessionRoot, "core-workspace", "Core workspace escaped its session");
   const webWorkspaceDir = path.join(coreWorkspaceDir, "apps", "web");
   const logsDir = directChild(sessionRoot, "logs", "Logs directory escaped its session");
+  const scenarioPortPath = directChild(workspaceRoot, "scenario-port.json", "Persistent scenario port record escaped its workspace");
 
   await ensureOwnedDirectory(resolvedBase);
   await ensureOwnedDirectory(persistentRoot);
@@ -100,7 +108,7 @@ export async function allocatePersistentRun(baseDir: string, workspaceName: stri
     sessionCreated = true;
     await Promise.all([logsDir, webWorkspaceDir].map(directory => mkdir(directory, { recursive: true })));
 
-    const [scenarioPort, webPort, gatewayPort] = await allocateDistinctPorts(3);
+    const { scenarioPort, webPort, gatewayPort, scenarioPortRetained } = await allocateWorkspacePorts(scenarioPortPath);
     return {
       runId,
       runRoot: sessionRoot,
@@ -110,13 +118,14 @@ export async function allocatePersistentRun(baseDir: string, workspaceName: stri
       coreWorkspaceDir,
       webWorkspaceDir,
       logsDir,
-      scenarioPort: scenarioPort!,
-      webPort: webPort!,
-      gatewayPort: gatewayPort!,
+      scenarioPort,
+      webPort,
+      gatewayPort,
       controllerToken: randomBytes(32).toString("base64url"),
       workspaceName,
       workspaceRoot,
       sessionRoot,
+      scenarioPortRetained,
     };
   } catch (error) {
     if (sessionCreated) await rm(sessionRoot, { recursive: true, force: true });
@@ -173,11 +182,77 @@ async function allocateDistinctPorts(count: number): Promise<number[]> {
   }
 }
 
-async function listenOnLoopback(): Promise<Server> {
+/**
+ * A persistent workspace's ports, its Scenario Lab port kept from one
+ * invocation to the next.
+ *
+ * A Flow saved in the workspace goes to an absolute address: a created Flow's
+ * first node is a `web.browser.navigate` whose `url` is the page the build
+ * explored, port included (`domain/src/output-nodes/payloads.ts`). Serving the
+ * fixture on a fresh port each invocation sent every later run of that Flow to
+ * a closed port, so nothing saved in a workspace could be replayed. A real
+ * site keeps its address between runs, and the workspace's fixture now does
+ * too: the port is recorded in `scenario-port.json` the first time and bound
+ * again after that, the demo workspace's rule (`demo-workspace/scenario-lab.ts`).
+ * The FluxIQ web and gateway ports stay fresh, as nothing saved names them.
+ *
+ * A recorded port another process now holds is replaced rather than failing
+ * the invocation, and `scenarioPortRetained` says so.
+ */
+async function allocateWorkspacePorts(portPath: string): Promise<{ scenarioPort: number; webPort: number; gatewayPort: number; scenarioPortRetained: boolean }> {
+  const recorded = await readRecordedScenarioPort(portPath);
+  const servers: Server[] = [];
+  try {
+    const retained = recorded === undefined ? undefined : await listenOnLoopback(recorded).catch(portUnavailable);
+    servers.push(retained ?? await listenOnLoopback(), await listenOnLoopback(), await listenOnLoopback());
+    const [scenarioPort, webPort, gatewayPort] = servers.map(server => portOf(server)) as [number, number, number];
+    if (!retained) await writeRecordedScenarioPort(portPath, scenarioPort);
+    return { scenarioPort, webPort, gatewayPort, scenarioPortRetained: retained !== undefined };
+  } finally {
+    await Promise.all(servers.map(server => new Promise<void>(resolve => server.close(() => resolve()))));
+  }
+}
+
+/** The recorded port, `undefined` when none is recorded. A record that is not one this module writes fails closed. */
+async function readRecordedScenarioPort(portPath: string): Promise<number | undefined> {
+  let text: string;
+  try { text = await readFile(portPath, "utf8"); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return undefined;
+    throw error;
+  }
+  const parsed = JSON.parse(text) as { schemaVersion?: unknown; port?: unknown };
+  if (parsed.schemaVersion !== "0.1" || !Number.isInteger(parsed.port) || Number(parsed.port) < 1024 || Number(parsed.port) > 65_535) {
+    throw new Error("The persistent workspace's scenario-port.json is not a valid port record");
+  }
+  return Number(parsed.port);
+}
+
+/** Written beside the record and renamed over it, so a reader never sees half a record. */
+async function writeRecordedScenarioPort(portPath: string, port: number): Promise<void> {
+  const temporary = `${portPath}.${randomBytes(6).toString("hex")}.tmp`;
+  try {
+    await writeFile(temporary, `${JSON.stringify({ schemaVersion: "0.1", port }, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await hardenWindowsPrivatePath(temporary, "file");
+    await rename(temporary, portPath);
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(/* best-effort: the failed write's own error is the one reported */ () => undefined);
+    throw error;
+  }
+}
+
+/** A recorded port another process now holds, or one this user may not bind, is absent; any other failure is not. */
+function portUnavailable(error: unknown): undefined {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  if (code === "EADDRINUSE" || code === "EACCES") return undefined;
+  throw error;
+}
+
+async function listenOnLoopback(port = 0): Promise<Server> {
   const server = createServer();
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve());
+    server.listen(port, "127.0.0.1", () => resolve());
   });
   return server;
 }
