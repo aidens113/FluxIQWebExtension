@@ -174,8 +174,10 @@ The browser suite and the four facility target modes must not be conflated:
    executed, recorded, panel-verified, and removed.
 5. The explicit `persistent-isolated` target starts and owns local FluxIQ just
    like ordinary isolation, but retains a named workspace's `.fluxiq` data and
-   Chromium profile between finite invocations. Ports, processes, the Core web
-   copy, and process logs remain unique to each invocation.
+   Chromium profile between finite invocations. Processes, the FluxIQ web and
+   gateway ports, the Core web copy, and process logs remain unique to each
+   invocation; the Scenario Lab port is kept, so a Flow saved in the workspace
+   can be [replayed later](#replaying-a-saved-flow).
 
 On the `isolated` and `persistent-isolated` targets a run takes one of two
 lanes. The recording lane, the default, drives the manifest's recording script
@@ -331,6 +333,7 @@ pnpm lab run basic-form --target persistent-isolated --workspace regression-main
   |     +-- fluxiq-root/.fluxiq/                       projects, recordings, runs
   |     +-- browser-profile/                           Chromium and extension state
   |     +-- .identity/credentials.json                 owner-protected test identity
+  |     +-- scenario-port.json                         the fixture's port, kept between invocations
   |     +-- .sessions/<run-id>/                        removed after this invocation
   |           +-- logs/                                copied before cleanup, also when startup fails
   +-- <core>/.tmp/core-web-build/<key>/                production build shared by every run of that Core
@@ -345,8 +348,22 @@ timeout, or handled interruption. It never deletes the stable workspace as a
 cleanup shortcut. Different workspace names remain independent.
 
 Sequential commands using the same name start fresh supervised processes and
-allocate new ports, while seeing the same `.fluxiq` database, browser profile,
-projects, recordings, trusted-client state, and run history. Sanitized run
+allocate new FluxIQ web and gateway ports, while seeing the same `.fluxiq`
+database, browser profile, projects, recordings, trusted-client state, and run
+history.
+
+The Scenario Lab port is the exception: it is recorded in the workspace's
+`scenario-port.json` on first use and bound again by every later invocation, the
+demo workspace's rule. A Flow saved in the workspace goes to an absolute address
+-- a created Flow's first node is a `web.browser.navigate` whose `url` is the
+page its build explored, port included -- so a fixture served on a fresh port
+each time left every saved Flow navigating to a closed port, and nothing saved in
+a workspace could be replayed (measured 2026-09-18: `replay-mu7f5a3r-22085770`,
+a Flow saved against port 60600 replayed against a fixture on 61538, failed its
+navigate step and matched 0 of 14 records). A recorded port another process
+now holds is replaced and recorded, and the allocation reports
+`scenarioPortRetained: false`: Flows saved against the old address then no
+longer reach the fixture. A record the runner did not write fails closed. Sanitized run
 metadata and reports contain the target mode and workspace name, never an
 absolute workspace path, credentials, cookies, controller tokens, recorded
 values, or database contents.
@@ -500,7 +517,7 @@ pnpm lab run basic-form --target persistent-isolated --workspace regression-main
 
 Both invocations retain the same local FluxIQ and browser state, but publish
 independent evidence bundles and run with separate session directories and
-ports. Environment configuration is equivalent:
+FluxIQ ports; the fixture keeps its port. Environment configuration is equivalent:
 
 ```dotenv
 FLUXIQ_TEST_TARGET=persistent-isolated
@@ -513,6 +530,47 @@ owns its local Core instance. Unlike `existing`, it may safely manage that
 instance's process lifecycle. Unlike disposable `isolated` and `clone`, it
 retains local state. Unlike `demo:record`/`demo:run`, it uses the ordinary
 scenario runner and produces a new attested evidence bundle per invocation.
+
+### Replaying a saved Flow
+
+A Flow the created-Flow lane builds is run once, in the invocation that built
+it, and on the `isolated` target the FluxIQ install it was saved in is deleted
+when that run ends. `lab replay` is the proof that what was saved is reusable:
+a later, separate invocation on the persistent workspace the Flow was saved in
+runs it exactly as saved, with no model anywhere, and judges it the way the task
+that built it is judged.
+
+```bash
+# Build: a live create-flow run on the persistent target (the only target that keeps the Flow).
+FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=persistent-isolated FLUXIQ_TEST_PERSISTENT_WORKSPACE=<name> pnpm lab:campaign <task-id>
+# Replay: no provider key in the environment.
+FLUXIQ_TEST_ENV_FILES=none pnpm lab replay <scenario> --workspace <name> --flow <flow-id> --instruction-task <task-id>
+```
+
+A replay makes "no model" true rather than observing it:
+
+- it refuses to start when its own environment holds any provider credential
+  variable (`PROVIDER_SECRET_ENVIRONMENT_VARIABLES`), naming the variable;
+- it deletes every `llm` Secret Key the workspace's Core holds -- a live build
+  installed one there -- and fails if one survives;
+- it runs the Flow with no execution grant, so `runPersistedFlow` asks Core for
+  `adaptiveMode: "deterministic"` and Core's provider resolver returns no
+  provider at all (Core `programs/_shared/runtime.ts`, `bindLlmExecutionProvider`).
+
+It then requires Core's own record of the run to show zero provider calls, zero
+interventions and zero harness activations, the saved Flow's content hash to be
+unchanged, and the task's judgement to hold: for a dataset task, every expected
+record matched. The result is written to `<runs>/replays/<replay-id>.json` and
+printed: the workspace, project and Flow ids, the content hash before and after,
+the saved navigation origins against the origin served, the model block above,
+the run's action types and statuses, the extraction measurements
+(`matchedRecords` against `expectedRecords`), and each stored dataset's row
+count and SHA-256, so two replays can be shown to have stored the same rows in
+the same order. It holds counts, ids, origins and digests, never page content.
+
+The flow id is the one the build's `snapshots/flow-lane.json` names. A build
+whose run failed after the Flow was applied still saved it; its id is then in
+the workspace's project, which `lab replay` checks before it starts anything.
 
 ### Reusable self-recording demo workspace
 
@@ -1274,19 +1332,18 @@ the Lab's on-disk proof that the recorder withheld what
 - **Other binaries**, files with a known binary extension such as images,
   video, archives, fonts and executables, are skipped and counted.
 - **Limits** are `SECRET_LEAK_ATTESTATION_RUN_LIMITS`: 10,000 files, 8 MiB per
-  text file, 32 MiB per SQLite store, 64 MiB per scan, and depth 32. Anything
+  text file, 64 MiB of text per scan, and depth 32, and no byte ceiling on a
+  SQLite store, which is streamed rather than held in memory. Anything
   the scan could not read, including an entry over a limit, is a finding,
   because a scan that could not look has not attested absence.
 
-  A store has its own ceiling because it is not read the way a text file is.
-  `maxFileBytes` bounds what the scan decodes as UTF-8 and runs its credential
-  regexes over; a store is never decoded, only searched byte for byte and copied
-  for the cell read. Charging a store to the text budget is what failed the live
-  corpus of 2026-09-18: a healthy run left a 10.02 MiB `.fluxiq/global.sqlite`,
-  the scan refused to read it on size alone, and every run in that corpus carried
-  one `unscanned-store` finding on a store nothing was wrong with. A store past
-  `maxStoreBytes` is still a finding, so a store the scan genuinely cannot hold
-  still fails the run closed.
+  A store has no size ceiling because a ceiling bounded only the answer: 8 MiB
+  failed a healthy 10.02 MiB run, and the 32 MiB that replaced it failed a
+  completed state-changing run whose store was 85.5 MiB. The byte search reads a
+  store 1 MiB at a time with an overlap, the staging copy is `copyFile`, and the
+  cell search runs inside SQLite, so memory does not grow with the store. A store
+  the scan cannot read (unopenable, malformed, an orphan log, a link) is still an
+  `unscanned-store` finding, and the reader is still killed after 120 s.
 
 A finding fails the run as `security.redaction`, and replaces the run's failure
 category only when the run had otherwise passed. The result holds counts, scope

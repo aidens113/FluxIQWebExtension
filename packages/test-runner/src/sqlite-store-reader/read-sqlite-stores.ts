@@ -16,8 +16,10 @@ export type SqliteStoreReadInput = { databaseFiles: readonly string[]; literal: 
 
 /**
  * How long one reader process may run before it is killed and every database it
- * was given counts as unreadable. At the scanner's absolute ceilings it is given
- * at most 64 MB of stores.
+ * was given counts as unreadable. It bounds time, not size: the search runs
+ * inside SQLite one cell at a time, so a store's size costs the reader time and
+ * never memory, and a store too large to search in this long is one the scan
+ * genuinely could not read, which fails closed.
  */
 const READER_TIMEOUT_MS = 120_000;
 
@@ -29,35 +31,45 @@ const READER_OUTPUT_LIMIT_BYTES = 1_048_576;
  * files from stdin and prints only one outcome per file, never a cell, a
  * message or the literal.
  *
- * Every ordinary table is read with `SELECT *`, `sqlite_schema` included. A
- * virtual table (`rootpage` 0) has no b-tree in the file: what it stores is in
- * its shadow tables, which are ordinary tables and read like any other. It is
- * not read itself, because this Node's SQLite has no FTS5 or R*Tree module and
- * Core's project database declares both. Integers are read as `bigint`, so a
- * value past 2^53 does not fail the read.
+ * Every ordinary table is searched, `sqlite_schema` included, by one query that
+ * SQLite runs over every row: `instr` over each column cast to a blob, against
+ * the literal in UTF-8, UTF-16LE and UTF-16BE. Casting text to a blob yields it
+ * in the database's own encoding, so that finds a text cell whatever the
+ * database's encoding, and a blob cell holding the literal in any of the three.
+ * SQLite assembles a value its overflow pages have split before `instr` sees it,
+ * so a literal a byte search cannot see is found too. No row, cell or integer
+ * ever comes back into this process: only whether any row matched. So the
+ * reader's memory does not grow with the store, which is what lets the scan read
+ * a store of any size instead of refusing one past a byte ceiling.
+ *
+ * A virtual table (`rootpage` 0) has no b-tree in the file: what it stores is in
+ * its shadow tables, which are ordinary tables and searched like any other. It is
+ * not searched itself, because this Node's SQLite has no FTS5 or R*Tree module
+ * and Core's project database declares both. Columns come from `table_xinfo`, so
+ * a stored generated column is searched too. Anything SQLite cannot read, a
+ * malformed page included, throws, and the database is `unreadable`.
  */
 const CELL_READER = String.raw`"use strict";
 const { readFileSync, statSync } = require("node:fs");
 const { DatabaseSync } = require("node:sqlite");
 const request = JSON.parse(readFileSync(0, "utf8"));
 const utf16le = Buffer.from(request.literal, "utf16le");
-const encodings = [Buffer.from(request.literal, "utf8"), utf16le, Buffer.from(utf16le).swap16()];
-const holdsLiteral = value => typeof value === "string"
-  ? value.includes(request.literal)
-  : value instanceof Uint8Array && encodings.some(encoded => Buffer.from(value.buffer, value.byteOffset, value.byteLength).includes(encoded));
+const encodings = { utf8: Buffer.from(request.literal, "utf8"), utf16le, utf16be: Buffer.from(utf16le).swap16() };
+const quote = name => '"' + String(name).replaceAll('"', '""') + '"';
+const holdsLiteral = (database, table) => {
+  const columns = database.prepare("PRAGMA table_xinfo(" + quote(table) + ")").all().map(column => quote(column.name));
+  if (!columns.length) throw new Error("a table with no columns cannot be searched");
+  const matches = columns.flatMap(column => ["utf8", "utf16le", "utf16be"].map(encoding => "instr(CAST(" + column + " AS BLOB), :" + encoding + ") > 0"));
+  return database.prepare("SELECT 1 AS found FROM " + quote(table) + " WHERE " + matches.join(" OR ") + " LIMIT 1").get(encodings) !== undefined;
+};
 const outcomes = request.databaseFiles.map(file => {
   let database;
   try {
     if (!statSync(file).isFile()) return "unreadable";
     database = new DatabaseSync(file);
     const tables = database.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND rootpage <> 0").all().map(row => row.name);
-    let found = false;
-    for (const table of ["sqlite_schema", ...tables]) {
-      const statement = database.prepare('SELECT * FROM "' + String(table).replaceAll('"', '""') + '"');
-      statement.setReadBigInts(true);
-      for (const row of statement.all()) if (Object.values(row).some(holdsLiteral)) found = true;
-    }
-    return found ? "holds-literal" : "clean";
+    for (const table of ["sqlite_schema", ...tables]) if (holdsLiteral(database, table)) return "holds-literal";
+    return "clean";
   } catch {
     return "unreadable";
   } finally {
