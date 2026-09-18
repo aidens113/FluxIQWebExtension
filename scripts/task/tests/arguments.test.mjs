@@ -51,3 +51,16 @@ test("a value flag takes its value, and refuses to swallow the next flag", () =>
 test("no command at all is refused", () => {
   assert.throws(() => parseTaskArguments([]), /Name a command/u);
 });
+
+test("sync-core takes a revision and may be told to move under running processes, and nothing else", () => {
+  const parsed = parseTaskArguments(["sync-core", "--to", "main", "--allow-running", "--dry-run"]);
+  assert.equal(parsed.command, "sync-core");
+  assert.equal(parsed.values.to, "main");
+  assert.equal(parsed.flags["allow-running"], true);
+  assert.equal(parsed.flags["dry-run"], true);
+  assert.throws(() => parseTaskArguments(["sync-core", "--worktree"]), /not an option of "sync-core".*belongs to "start"/u);
+});
+
+test("start may be told to move the shared Core under running processes", () => {
+  assert.equal(parseTaskArguments(["start", "x", "--worktree", "--allow-running"]).flags["allow-running"], true);
+});

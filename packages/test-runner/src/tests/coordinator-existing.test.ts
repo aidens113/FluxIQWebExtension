@@ -169,7 +169,7 @@ test("an isolated startup failure hands every process log to the caller before r
   let copied: Record<string, string> | undefined;
   try {
     await assert.rejects(startTopology({
-      repositoryRoot, fluxiqRepositoryRoot, runsDirectory, coreWebBuildRunsDirectory: visibleRunsDirectory, runId: "failed-run", target: { mode: "isolated" }, prepareHost: false, scenarioEntrypoint, hostModulePath,
+      repositoryRoot, fluxiqRepositoryRoot, runsDirectory, coreWebBuildCacheRoot: path.join(visibleRunsDirectory, ".core-web-build"), runId: "failed-run", target: { mode: "isolated" }, prepareHost: false, scenarioEntrypoint, hostModulePath,
       copyStartupFailureLogs: async logsDirectory => {
         copied = {};
         for (const name of (await readdir(logsDirectory)).sort()) copied[name] = await readFile(path.join(logsDirectory, name), "utf8");
@@ -180,10 +180,10 @@ test("an isolated startup failure hands every process log to the caller before r
         await new Promise(resolve => setTimeout(resolve, 50));
         throw readinessFailure;
       },
-      prepareCoreWebBuild: async buildOptions => { buildRunsDirectories.push(buildOptions.runsDirectory); return build; },
+      prepareCoreWebBuild: async buildOptions => { buildRunsDirectories.push(buildOptions.cacheRoot ?? "(the Core's own)"); return build; },
     }), (error: unknown) => error === readinessFailure);
 
-    assert.deepEqual(buildRunsDirectories, [visibleRunsDirectory], "the Core web build is shared below the user-visible runs directory, not the per-run .work area");
+    assert.deepEqual(buildRunsDirectories, [path.join(visibleRunsDirectory, ".core-web-build")], "the caller's cache root reaches the build, so a run can still be pointed at a cache of its own");
     assert.deepEqual(Object.keys(copied ?? {}), ["core.log", "scenario-lab.log"], "every process log reached the caller");
     assert.match(copied?.["core.log"] ?? "", /\[stdout\] core output/u);
     assert.match(copied?.["scenario-lab.log"] ?? "", /\[stdout\] scenario lab output/u);
@@ -203,7 +203,7 @@ test("an isolated startup failure hands every process log to the caller before r
 test("lab run sends a startup failure's process logs through the bundle's own log copy", async () => {
   const source = await readFile(path.resolve(import.meta.dirname, "..", "..", "src", "run-scenario.ts"), "utf8");
   assert.match(source, /topology = await startTopology\(\{[^\n]*\bcopyStartupFailureLogs: logsDirectory => copyProcessLogs\(bundle, logsDirectory\)/u);
-  assert.match(source, /topology = await startTopology\(\{[^\n]*\brunsDirectory: topologyRunsDirectory, coreWebBuildRunsDirectory: options\.runsDirectory,/u, "every mode shares one Core web build below lab run's own runs directory");
+  assert.doesNotMatch(source, /coreWebBuildRunsDirectory/u, "the Core web build cache belongs to the Core, not to one run's runs directory: worktrees sharing a Core each had a cache and a lock of their own, and each built it");
   assert.match(source, /async function copyProcessLogs\(bundle: EvidenceBundle, logsDir: string\)/u, "the same redacting copy a run that started uses");
 });
 

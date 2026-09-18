@@ -4,9 +4,13 @@
 // with a boundary that can be reverted whole, and thrown away without leaving
 // anything behind if it goes wrong.
 //
-//   pnpm task start <slug> [--worktree] [--core] [--base DIR] [--from BRANCH]
+//   pnpm task start <slug> [--worktree] [--core] [--base DIR] [--from BRANCH] [--allow-running]
 //     --core branches FluxIQ Core under the same name, so one id names the unit
 //     of work in both histories; finish that side with Core's own pnpm task.
+//     Without --core, a --worktree task moves the shared Core to Core's dev.
+//   pnpm task sync-core [--to REV] [--allow-running]
+//     run inside a task worktree: move the shared Core it builds against to
+//     Core's dev (or REV), when Core has moved on since the worktree opened.
 //   pnpm task finish <id> [title words...] [--skip-checks] [--allow-running]
 //   pnpm task abandon <id> [--force] [--allow-running]
 //   pnpm task list

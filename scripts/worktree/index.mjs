@@ -20,20 +20,30 @@
 // find what is running inside one; `disposable-root.mjs` decides whether a
 // path may be deleted at all; `core-sibling.mjs` finds and proves the Core
 // beside a worktree; `create.mjs`, `remove.mjs` and `env-local.mjs` are the
-// lifecycle itself; `progress-note.mjs` is how a long step says it is running.
+// lifecycle itself, `install-worktree.mjs` is how either side is installed and
+// `installed-lockfile.mjs` reads back what an install actually used; `move-plan.mjs` decides what moving a worktree nobody edits to
+// another commit involves, `apply-move.mjs` carries it out, and
+// `shared-core-move.mjs` decides whether the Core flat task worktrees share
+// may be moved up to Core's `dev`; `progress-note.mjs` is how a long step
+// says it is running.
 
-export { buildCore, coreDistPaths, CORE_PACKAGES } from "./core-build.mjs";
+export { applyMove } from "./apply-move.mjs";
+export { buildCore, coreDistPaths, fullCoreDistPaths, CORE_PACKAGES, FULL_CORE_PACKAGES } from "./core-build.mjs";
 export { checkoutRepository } from "./checkout-repository.mjs";
 export { resolveCoreSibling } from "./core-sibling.mjs";
 export { createWorktree } from "./create.mjs";
 export { assertDisposable } from "./disposable-root.mjs";
 export { copyEnvLocal } from "./env-local.mjs";
-export { runGit } from "./git-command.mjs";
+export { gitAnsweredNo, runGit } from "./git-command.mjs";
+export { installWorktree } from "./install-worktree.mjs";
+export { installedLockfile } from "./installed-lockfile.mjs";
 export { clearMarker, readMarker, writeMarker } from "./markers.mjs";
+export { planSideMove } from "./move-plan.mjs";
 export { pathInside, samePath } from "./path-identity.mjs";
 export { runPnpm } from "./pnpm-command.mjs";
 export { listProcesses } from "./process-list.mjs";
 export { processesUsingRoots } from "./processes-using-roots.mjs";
 export { noteProgress } from "./progress-note.mjs";
 export { removeWorktree } from "./remove.mjs";
+export { planSharedCoreMove } from "./shared-core-move.mjs";
 export { readSideState } from "./side-state.mjs";

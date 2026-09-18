@@ -4,14 +4,15 @@ import { RunnerFailure } from "../failure.js";
 import type { ProcessSpec, ProcessSupervisor } from "../process-supervisor.js";
 import { acquireWorkspaceOperationLock, type WorkspaceOperationLock, type WorkspaceOperationLockOptions } from "../workspace-lock.js";
 import { coreWebBuildEnvironment } from "./build-environment.js";
+import { coreWebBuildCacheRoot } from "./cache-root.js";
 import { collectCoreWebBuildInputs } from "./inputs.js";
 import { coreWebBuildKey } from "./key.js";
+import { insideNodeModules } from "./node-modules-root.js";
+import { coreWebBuildPathBudget, WINDOWS_PATH_LIMIT, type CoreWebBuildPathBudget } from "./path-budget.js";
 import { markBuildComplete, newBuildAttemptName, publishBuildAttempt, readBuildId, readPublishedCoreWebBuild } from "./publication.js";
 import type { CoreWebBuild, CoreWebBuildInputs } from "./types.js";
 import { prepareWebWorkspace } from "./workspace.js";
 
-/** The cache's directory below a runs directory; the leading dot keeps run and bundle enumeration away from it. */
-const CACHE_DIRECTORY_NAME = ".core-web-build";
 const BUILD_PROCESS_NAME = "core-web-build";
 /** The one-off build's own bound. No earlier bound is widened: the build step did not exist before. */
 const BUILD_TIMEOUT_MS = 600_000;
@@ -27,8 +28,12 @@ const LOCK_SETTLE_MS = 10_000;
 
 export type CoreWebBuildOptions = {
   fluxiqRepositoryRoot: string;
-  /** The runs directory whose `.core-web-build/<key>/` holds the cache. */
-  runsDirectory: string;
+  /**
+   * Where published builds are cached. Defaults to the one place every checkout
+   * of this Core agrees on (`cache-root.ts`), which is what lets worktrees
+   * sharing a Core share one build and one lock.
+   */
+  cacheRoot?: string;
   /** Owns the build child, so a run's cleanup stops a build it started. */
   supervisor: ProcessSupervisor;
   /** Where the build's output goes, when this caller is the one that builds. */
@@ -41,6 +46,14 @@ export type CoreWebBuildDependencies = {
   stageWorkspace: (fluxiqRepositoryRoot: string, webDirectory: string) => Promise<unknown>;
   runBuild: (supervisor: ProcessSupervisor, spec: ProcessSpec, timeoutMs: number) => Promise<void>;
   lock: WorkspaceOperationLockOptions;
+  /**
+   * Whether the cache root leaves room for the build. A collaborator because
+   * the deepest path is measured from a REAL Next build, and the tests about
+   * locking and publication fake the build and run below whatever
+   * `os.tmpdir()` is on the machine -- 84 characters here, which the real
+   * budget rightly refuses. Path length has tests of its own.
+   */
+  pathBudget: (cacheRoot: string) => CoreWebBuildPathBudget;
   buildTimeoutMs: number;
   waitTimeoutMs: number;
   lockSettleMs: number;
@@ -52,6 +65,7 @@ const defaultDependencies: CoreWebBuildDependencies = {
   stageWorkspace: prepareWebWorkspace,
   runBuild: (supervisor, spec, timeoutMs) => supervisor.run(spec, timeoutMs),
   lock: {},
+  pathBudget: cacheRoot => coreWebBuildPathBudget(cacheRoot),
   buildTimeoutMs: BUILD_TIMEOUT_MS,
   waitTimeoutMs: WAIT_TIMEOUT_MS,
   lockSettleMs: LOCK_SETTLE_MS,
@@ -63,7 +77,7 @@ type LockAttempt = { lock: WorkspaceOperationLock } | { busy: true } | { unreada
 /**
  * Returns the published production build of Core's web panel for the current
  * Core inputs, building it first when none is published. Concurrent callers
- * sharing a runs directory build once: one takes the key's create-only lock,
+ * sharing a Core build once, wherever their runs directories are: one takes the key's create-only lock,
  * which is reclaimed only from a verifiably dead owner, and the rest wait for
  * its publication. Every failure is a closed `RunnerFailure`; the build's own
  * output stays in its log.
@@ -71,9 +85,21 @@ type LockAttempt = { lock: WorkspaceOperationLock } | { busy: true } | { unreada
 export async function prepareCoreWebBuild(options: CoreWebBuildOptions, overrides: Partial<CoreWebBuildDependencies> = {}): Promise<CoreWebBuild> {
   const dependencies: CoreWebBuildDependencies = { ...defaultDependencies, ...overrides };
   try {
+    // Asked first, before Core is even hashed: a cache root too long for this
+    // filesystem cannot hold the build whatever the inputs are, and the point
+    // of asking is to answer in a sentence about path length rather than as a
+    // Turbopack internal error partway through a build.
+    const cacheRoot = options.cacheRoot ? path.resolve(options.cacheRoot) : coreWebBuildCacheRoot(options.fluxiqRepositoryRoot);
+    if (insideNodeModules(cacheRoot)) {
+      throw new RunnerFailure("environment.missing", `The Core web build cache ${cacheRoot} is inside a node_modules directory, where Turbopack cannot build Core's web panel: its build worker aborts with exit 3221225501. Point FLUXIQ_CORE_WEB_BUILD_CACHE at a directory outside node_modules, or unset it to use the Core's own .tmp/core-web-build.`, { details: { process: BUILD_PROCESS_NAME, cacheRoot } });
+    }
+    const budget = dependencies.pathBudget(cacheRoot);
+    if (!budget.fits) {
+      throw new RunnerFailure("environment.missing", `The Core web build cache path is too long for this filesystem: ${cacheRoot} is ${budget.root} characters and the deepest file Next writes below it needs ${budget.longest}, over the ${WINDOWS_PATH_LIMIT}-character limit. Point FLUXIQ_CORE_WEB_BUILD_CACHE at a short directory (for example F:\\fxcache) -- at most ${budget.allowed} characters.`, { details: { process: BUILD_PROCESS_NAME, cacheRoot, ...budget } });
+    }
     const { inputs, nextExecutable } = await dependencies.collectInputs(options.fluxiqRepositoryRoot);
     const key = coreWebBuildKey(inputs);
-    const keyDirectory = path.join(path.resolve(options.runsDirectory), CACHE_DIRECTORY_NAME, key);
+    const keyDirectory = path.join(cacheRoot, key);
     await mkdir(keyDirectory, { recursive: true });
     const deadline = Date.now() + dependencies.waitTimeoutMs;
     let unreadableSince: number | undefined;

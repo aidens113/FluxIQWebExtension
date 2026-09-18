@@ -4,6 +4,14 @@
 
 import { parseLabResult, parseRunnerRefusal } from "./output.mjs";
 
+/**
+ * The one signature that is a classified failure rather than a bare crash: the
+ * Lab ran and said a facility failed to start. The memory fault can cause that,
+ * but so can a real defect, and only a repetition tells them apart
+ * (`attempt-failure.mjs`).
+ */
+export const STARTUP_FAILURE = "process.startup facility failure";
+
 const PNPM_OWN_CODE = /[\\/]pnpm(?:[\\/][\d.]+)?[\\/](?:dist|bin|lib)[\\/][^\s:'"]*\.c?js/iu;
 const JS_ERROR = /\b(?:SyntaxError|TypeError|ReferenceError|RangeError)\b/u;
 
@@ -18,7 +26,7 @@ export function ramFaultSignature(attempt) {
   const result = parseLabResult(attempt.stdout);
   if (result && result.failureCategory !== "process.startup") return null;
   const output = `${attempt.stdout}\n${attempt.stderr}`;
-  if ((result?.failureCategory ?? parseRunnerRefusal(attempt.stderr)?.category) === "process.startup") return "process.startup facility failure";
+  if ((result?.failureCategory ?? parseRunnerRefusal(attempt.stderr)?.category) === "process.startup") return STARTUP_FAILURE;
   if (attempt.code === 3221225477 || attempt.code === -1073741819 || /(?<![\d-])(?:3221225477|-1073741819)(?!\d)/u.test(output)) return "exit 3221225477 (access violation)";
   if (attempt.code === 139 || attempt.signal === "SIGSEGV" || /segmentation fault/iu.test(output)) return "segmentation fault";
   if (PNPM_OWN_CODE.test(output) && JS_ERROR.test(output)) return "error inside pnpm's own code";

@@ -227,7 +227,7 @@ pnpm lab run <scenario-id>
   |     +-- fluxiq-root/.fluxiq/       isolated Core data
   |     +-- browser-profile/           fresh persistent Chromium profile
   |     +-- logs/                      copied before cleanup, also when startup fails
-  +-- test-runs/.core-web-build/<key>/  production build shared by every mode
+  +-- <core>/.tmp/core-web-build/<key>/  production build shared by every run of that Core
   +-- test-runs/<run-id>/              finalized attested evidence bundle
   |
   +-- scenario lab    http://127.0.0.1:<random>
@@ -251,12 +251,31 @@ development server also compiles each route on its first request and makes
 requests wait on its file watcher; under shared load that stalled Core
 readiness and the first authenticated request of isolated runs.
 
-Every mode shares one build cache, `.core-web-build/<key>/`, below the
-user-visible runs directory: `test-runs`, or `FLUXIQ_TEST_RUNS_DIR` when it is
-set. An `isolated` or `clone` topology allocates its runs below `test-runs/.work`,
-so `lab run` passes its own runs directory to the topology as
-`coreWebBuildRunsDirectory`. `persistent-isolated` runs and the demo commands
-already work from that directory. The key is a
+Every run of one Core shares one build cache, `<core>/.tmp/core-web-build/<key>/`,
+whichever worktree or runs directory the run starts from. It used to sit below
+each run's runs directory, which made it one cache and one lock per worktree:
+task worktrees that share a detached Core each built the web panel at once.
+Beside the Core, the existing create-only lock makes exactly one of them build
+and the rest wait for its publication. `FLUXIQ_CORE_WEB_BUILD_CACHE` points it
+somewhere else.
+
+The location has to satisfy four things at once. It must not run through any
+`node_modules` directory: Turbopack treats such a project as third-party code
+and its build worker aborts within seconds with exit 3221225501 (0xC000001D),
+which was measured by building the same Core with only the cache root changed,
+and which a campaign then reported four times as this machine's memory fault. A
+cache root inside `node_modules` is refused before anything is staged. It must
+be shared by every worktree that links that Core, fit the path budget below, and
+be ignored by Core's git, because `pnpm task sync-core` refuses a Core with
+untracked files; Core's `.gitignore` already ignores `.tmp/`, and nothing in
+Core scans it.
+
+On Windows the cache root must also leave room for the deepest file Next writes
+below it, 178 characters measured on a real build, inside the 259-character path
+limit; a root longer than 80 characters is refused before anything is staged,
+with a message naming both numbers. Below a worktree's `test-runs`, a task slug
+three characters longer than its neighbour's was enough to fail every build as
+a Turbopack internal error; beside the Core, the slug is not in the path. The key is a
 SHA-256 over Core's `HEAD`; the content of the `apps/web` files the build copies
 and of Core's `tsconfig.base.json`; the content of `packages/fluxiq/dist`,
 `packages/contracts/dist`, and `packages/client-gateway-websocket/dist`; the
@@ -317,7 +336,7 @@ pnpm lab run basic-form --target persistent-isolated --workspace regression-main
   |     +-- scenario-port.json                         the fixture's port, kept between invocations
   |     +-- .sessions/<run-id>/                        removed after this invocation
   |           +-- logs/                                copied before cleanup, also when startup fails
-  +-- test-runs/.core-web-build/<key>/                 production build shared by runs
+  +-- <core>/.tmp/core-web-build/<key>/                production build shared by every run of that Core
   +-- test-runs/<run-id>/                              finalized evidence bundle
 ```
 
@@ -670,7 +689,7 @@ its SQL viewport index when a generated graph is replaced.
 
 All four demo commands lock and reuse the exact `FLUXIQ_DEMO_RUN_DIR`. Each invocation
 starts and stops its own Core web process, served with `next start` from the
-shared production build in `.core-web-build/<key>/` below `FLUXIQ_TEST_RUNS_DIR`
+shared production build in the Core's `.tmp/core-web-build/<key>/`
 (see [Core web panel production build](#core-web-panel-production-build)),
 while retaining `fluxiq-root/.fluxiq`; each invocation's session directory
 lives under `.sessions` and is removed after shutdown. The directory also contains `workspace.json`, a protected
