@@ -312,3 +312,26 @@ function exitChild(child: FakeChild, code: number): void {
   Object.defineProperty(child, "exitCode", { value: code, writable: true, configurable: true });
   child.emit("exit", code, null);
 }
+
+test("a cache root inside node_modules is refused before Core is read, staged or built, and the refusal says why", async () => {
+  // The first default for the Core-scoped cache was <core>/node_modules/.core-web-build.
+  // Every Turbopack build there died with exit 3221225501 and nothing else in
+  // its log, and a campaign reported it four times as this machine's RAM fault.
+  const touched: string[] = [];
+  const root = await mkdtemp(path.join(os.tmpdir(), "core-web-build-nm-"));
+  try {
+    await assert.rejects(prepareCoreWebBuild(
+      { fluxiqRepositoryRoot: path.join(root, "core"), cacheRoot: path.join(root, "node_modules", "cwb"), supervisor: new ProcessSupervisor(), logPath: path.join(root, "build.log") },
+      {
+        collectInputs: async () => { touched.push("inputs"); return { inputs, nextExecutable: "next" }; },
+        stageWorkspace: async () => { touched.push("stage"); },
+        runBuild: async () => { touched.push("build"); },
+        pathBudget: cacheRoot => ({ fits: true, root: cacheRoot.length, allowed: Number.MAX_SAFE_INTEGER, longest: cacheRoot.length }),
+      },
+    ), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /inside a node_modules directory/u.test(error.message) && /exit 3221225501/u.test(error.message));
+    assert.deepEqual(touched, []);
+    await assert.rejects(stat(path.join(root, "node_modules")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});

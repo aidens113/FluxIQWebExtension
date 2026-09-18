@@ -7,6 +7,7 @@ import { coreWebBuildEnvironment } from "./build-environment.js";
 import { coreWebBuildCacheRoot } from "./cache-root.js";
 import { collectCoreWebBuildInputs } from "./inputs.js";
 import { coreWebBuildKey } from "./key.js";
+import { insideNodeModules } from "./node-modules-root.js";
 import { coreWebBuildPathBudget, WINDOWS_PATH_LIMIT, type CoreWebBuildPathBudget } from "./path-budget.js";
 import { markBuildComplete, newBuildAttemptName, publishBuildAttempt, readBuildId, readPublishedCoreWebBuild } from "./publication.js";
 import type { CoreWebBuild, CoreWebBuildInputs } from "./types.js";
@@ -89,6 +90,9 @@ export async function prepareCoreWebBuild(options: CoreWebBuildOptions, override
     // of asking is to answer in a sentence about path length rather than as a
     // Turbopack internal error partway through a build.
     const cacheRoot = options.cacheRoot ? path.resolve(options.cacheRoot) : coreWebBuildCacheRoot(options.fluxiqRepositoryRoot);
+    if (insideNodeModules(cacheRoot)) {
+      throw new RunnerFailure("environment.missing", `The Core web build cache ${cacheRoot} is inside a node_modules directory, where Turbopack cannot build Core's web panel: its build worker aborts with exit 3221225501. Point FLUXIQ_CORE_WEB_BUILD_CACHE at a directory outside node_modules, or unset it to use the Core's own .tmp/core-web-build.`, { details: { process: BUILD_PROCESS_NAME, cacheRoot } });
+    }
     const budget = dependencies.pathBudget(cacheRoot);
     if (!budget.fits) {
       throw new RunnerFailure("environment.missing", `The Core web build cache path is too long for this filesystem: ${cacheRoot} is ${budget.root} characters and the deepest file Next writes below it needs ${budget.longest}, over the ${WINDOWS_PATH_LIMIT}-character limit. Point FLUXIQ_CORE_WEB_BUILD_CACHE at a short directory (for example F:\\fxcache) -- at most ${budget.allowed} characters.`, { details: { process: BUILD_PROCESS_NAME, cacheRoot, ...budget } });

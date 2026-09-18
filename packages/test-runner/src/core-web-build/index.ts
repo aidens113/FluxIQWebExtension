@@ -7,6 +7,7 @@
 export { coreWebBuildCacheRoot } from "./cache-root.js";
 export { collectCoreWebBuildInputs, type CollectedCoreWebBuildInputs } from "./inputs.js";
 export { coreWebBuildKey } from "./key.js";
+export { insideNodeModules } from "./node-modules-root.js";
 export { coreWebBuildPathBudget, type CoreWebBuildPathBudget } from "./path-budget.js";
 export { prepareCoreWebBuild, type CoreWebBuildDependencies, type CoreWebBuildOptions } from "./prepare.js";
 export { coreWebServerProcessSpec, type CoreWebServerProcessInput } from "./server-process.js";
