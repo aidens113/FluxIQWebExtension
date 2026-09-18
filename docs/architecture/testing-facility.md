@@ -1274,19 +1274,18 @@ the Lab's on-disk proof that the recorder withheld what
 - **Other binaries**, files with a known binary extension such as images,
   video, archives, fonts and executables, are skipped and counted.
 - **Limits** are `SECRET_LEAK_ATTESTATION_RUN_LIMITS`: 10,000 files, 8 MiB per
-  text file, 32 MiB per SQLite store, 64 MiB per scan, and depth 32. Anything
+  text file, 64 MiB of text per scan, and depth 32, and no byte ceiling on a
+  SQLite store, which is streamed rather than held in memory. Anything
   the scan could not read, including an entry over a limit, is a finding,
   because a scan that could not look has not attested absence.
 
-  A store has its own ceiling because it is not read the way a text file is.
-  `maxFileBytes` bounds what the scan decodes as UTF-8 and runs its credential
-  regexes over; a store is never decoded, only searched byte for byte and copied
-  for the cell read. Charging a store to the text budget is what failed the live
-  corpus of 2026-09-18: a healthy run left a 10.02 MiB `.fluxiq/global.sqlite`,
-  the scan refused to read it on size alone, and every run in that corpus carried
-  one `unscanned-store` finding on a store nothing was wrong with. A store past
-  `maxStoreBytes` is still a finding, so a store the scan genuinely cannot hold
-  still fails the run closed.
+  A store has no size ceiling because a ceiling bounded only the answer: 8 MiB
+  failed a healthy 10.02 MiB run, and the 32 MiB that replaced it failed a
+  completed state-changing run whose store was 85.5 MiB. The byte search reads a
+  store 1 MiB at a time with an overlap, the staging copy is `copyFile`, and the
+  cell search runs inside SQLite, so memory does not grow with the store. A store
+  the scan cannot read (unopenable, malformed, an orphan log, a link) is still an
+  `unscanned-store` finding, and the reader is still killed after 120 s.
 
 A finding fails the run as `security.redaction`, and replaces the run's failure
 category only when the run had otherwise passed. The result holds counts, scope
