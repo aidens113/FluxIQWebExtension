@@ -22,18 +22,14 @@ and 2.5-2.9 with file:line evidence. Path prefix: `AS/` is Core's
 `packages/fluxiq/src/programs/automation-studio/`.
 
 **Standing direction on what the model must emit (user, 2026-09-17):** make it
-as easy as possible to produce. Required fields carry intent; Core derives
-versions, keys, linear edges, ids and defaults. A reply is normalized before
-validation, which then stays strict and fail-closed. His words: the model
-"shouldnt have to output perfect json with a million different perfectly
-formatted attributes". Built as `w2-easy-model-output`.
+as easy as possible to produce — required fields carry intent, Core derives
+versions, keys, edges, ids and defaults, and a reply is normalized before a
+strict, fail-closed validation. Built as `w2-easy-model-output`.
 
 **Give a worker its own worktree, not the shared tree.** `pnpm task start <slug>
---worktree --core` provisions an isolated pair in ~50s. A shared run reports
-other workers' state: on 2026-09-17 that produced three different whole-suite
-results in a row, none of them real. Run Core tests from inside
-`packages/fluxiq`, never the repository root, or they take vitest's 5,000 ms
-default instead of the configured 15,000 ms.
+--worktree --core` provisions an isolated pair in ~50s; a shared run reports
+other workers' state. Run Core tests from inside `packages/fluxiq`, never the
+repository root, or they take vitest's 5,000 ms default, not 15,000 ms.
 
 **Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, supervisor-verified and
 pushed in both repositories.** What each established is archived in
