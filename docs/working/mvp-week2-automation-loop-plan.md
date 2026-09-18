@@ -61,14 +61,10 @@ returned the whole table while reporting success. Repair works end to end:
 explores, proposes, passes. Only those three creation tasks have been re-run
 since the fixes; the rest of the realistic corpus has not.
 
-**Why creation could not act, which the first diagnosis got wrong.** Core
-accepted `click`/`select`/`type` all along. Four prompt texts told the model it
-may not act; the element ranker's "primary control" named no form control, so on
-a 280-row page the packet held 18 post links and no selects; the 8,000-byte
-evidence window evicted the page on the decision that writes the Flow; and the
-node catalog offered nothing that could act. Positional `target.N` handles also
-renumbered between captures. All fixed (`reports/w2-authoring-contract.md`,
-`reports/w2-narrowing.md`).
+**Why creation could not act** (`reports/w2-authoring-contract.md`,
+`w2-narrowing.md`): not a missing contract — the prompt forbade acting, the ranker
+hid form controls, and the evidence window evicted the page before the Flow was
+written. The first diagnosis blamed Core and was wrong.
 
 **Built and landed:** 2.4 resume point with two live fail-opens closed; 2.5
 deterministic-path patch, gated by a compile-checked record
@@ -79,13 +75,28 @@ verification on `loop_verification`, fail-closed. Token limits sit at the
 model's 64k context and are derived from one constant in every place that held a
 copy — ten of them — and the confirmation threshold is ten calls, derived.
 
-**Open, known:** the replay recorder has no production caller, so `established`
-is unreachable live; the element packet now floods with row checkboxes, so a job
-needing a page BUTTON (retry failed posts) still cannot see one — one example per
-repeating control is the fix; `security.redaction` caps verdicts on runs whose
-workspace holds `.fluxiq/global.sqlite` as an `unscanned-store`, a false failure
-on 16 runs; per-row enrichment cannot be judged, because the judge compares only
-a run's first dataset. **Not started:** 2.9, X6 (an `extractList`
+**Open, known — from the first full live corpus, 2026-09-18.** 4 of 36 creation
+tasks passed across the six realistic fixtures (`reports/w2-corpus-{a,b,c,d}.md`,
+~$0.78 of real calls). Narrowing now works where the controls are selects: Kelford
+collects the right 57 homes over 6 pages, scheduler 14 of 14, SLA reads 12 of 12.
+What blocks the rest, each in flight in its own worktree:
+- **Exploration may not press a plain button or tick a checkbox** — reveal only
+  presses disclosures, tabs and menu items, and `safety.ts` matches "order" against
+  selectors. No state-changing job changed a page, on any fixture (t011).
+- **Script-handled links are judged as failed clicks**: a link with an `href`
+  whose navigation the page cancels, loading rows in place, fails
+  `output_not_observed` — 4 of 4 company-directory Flows (t010).
+- **Repeated row controls flood the element packet**, pushing out page buttons
+  (t009).
+- **7 false successes** — records with empty required fields, or wrong rows —
+  because result verification returns `performed: false` when playback has no
+  provider, and a created Flow's playback has none (t012).
+- A dialog opened during build-time exploration stayed open into playback, twice.
+- Also seen, unowned: `home-facts` generation HTTP 400 (2 of 2); a 64 KB
+  bootstrap evidence ceiling spent by seven navigations; `evidence_tool_failed`
+  bundles do not record which tool failed; the replay recorder has no production
+  caller; `unscanned-store` false redaction failures persist.
+**Not started:** 2.9, X6 (an `extractList`
 parameter-override path, not a target-map entry).
 
 **The fixed call limit was the defect, not a constraint to design around (user
@@ -137,17 +148,8 @@ environment plus `DEEPSEEK_API_KEY` from the main checkout's `.env.local`), with
 repair tasks on `--llm-task repair` (`reports/w2-l2-repair-lane.md`). The last
 full campaign was 15 of 50 and predates every fix since.
 
-**Next steps, in order:**
-1. Re-run the whole realistic corpus live (social, property, directory, support
-   desk, order operations) now that creation acts and narrows; the three proven
-   tasks are the only evidence so far.
-2. Show one example per repeating control in the element packet, so buttons
-   survive a page of row checkboxes.
-3. Give the replay recorder a production caller; decide whether a recorded
-   replay moves an adaptation out of `testing`.
-4. Fix the `unscanned-store` false failure; make the judge compare a named
-   dataset so per-row enrichment is measurable.
-5. 2.9 measurement lane, then X6.
+**Next steps, in order:** land t009 to t012 once each proves itself live; re-run
+the corpus; then the unowned items above; then 2.9 and X6.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -271,6 +273,20 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-18 — First full live corpus run on the realistic fixtures
+- Agent: supervisor, four live campaign workers
+- Changed: reports only (`reports/w2-corpus-a.md` to `-d.md`)
+- Why: the three tasks proven after creation learned to act were the only
+  evidence; this measured the other thirty-six.
+- Validation: real DeepSeek, isolated target, each slice probed first. A 1/9,
+  B 0/9, C 1/8, D 2/10. Reported and oracle verdicts agreed on every directory
+  run and disagreed on seven runs elsewhere, all reporting `passed`. No
+  `ENOENT` races once Core was rebuilt; `--no-build` fails on a fresh Lab
+  instance, and a stale Core build stopped the first dispatch through the guard
+  built for it.
+- Outcome: Accepted as measurement
+- Follow-up: t009 to t012, and the unowned items in Current State.
 
 ### 2026-09-17 — Phase 2.4 built, two live fail-opens closed, 2.5 built unwired
 - Agent: supervisor, tasks t003 and t004, five workers

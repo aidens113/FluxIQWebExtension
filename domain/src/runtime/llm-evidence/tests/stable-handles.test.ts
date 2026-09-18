@@ -98,3 +98,58 @@ test("another page numbers from the start, because handles never mean anything a
   page = { url: OTHER_URL, elements: [search] };
   assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.1"]);
 });
+
+// A row control's selector is positional: row one's checkbox is
+// `tr:nth-of-type(1) > td:nth-of-type(1) > input` whichever post is in row one.
+// Filtering the social scheduler's queue puts another post there, and keyed by
+// the selector alone the first post's number went to the second post's
+// checkbox. The snapshot now shows one row per repeated control
+// (`apps/extension/src/content/repeat-exemplars.ts`), and that row is the first
+// one -- the row a filter replaces -- so the record rides in the address too.
+const ROW_ONE_CHECKBOX = '[data-testid="queue-rows"] > tr:nth-of-type(1) > td:nth-of-type(1) > input';
+
+function rowOneCheckbox(key: string, slot: string): JsonObject {
+  return {
+    tagName: "input",
+    inputType: "checkbox",
+    selector: ROW_ONE_CHECKBOX,
+    accessibleName: `Select the post for ${slot}`,
+    repeatCount: 280,
+    context: { tablePosition: { row: 2, column: 1 }, record: { keyAttribute: "data-post-id", key } }
+  };
+}
+
+const retry: JsonObject = { tagName: "button", selector: "#retry", visibleText: "Retry" };
+
+test("a row control whose row now holds another record is given a number of its own", async () => {
+  let elements = [retry, rowOneCheckbox("pst_a", "Mon 21 Sep 2026, 09:00")];
+  const runtime = runtimeOver(() => ({ url: PAGE_URL, elements }));
+  assert.deepEqual(await inspect(runtime), [
+    { target: "target.1", name: "Retry" },
+    { target: "target.2", name: "Select the post for Mon 21 Sep 2026, 09:00" }
+  ]);
+
+  // The queue is filtered: another post is in row one, at the same selector.
+  elements = [retry, rowOneCheckbox("pst_b", "Mon 21 Sep 2026, 06:00")];
+  assert.deepEqual(await inspect(runtime), [
+    { target: "target.1", name: "Retry" },
+    { target: "target.3", name: "Select the post for Mon 21 Sep 2026, 06:00" }
+  ], "the second post's checkbox is not handed the first post's number");
+  assert.equal(selectorFor(runtime, "target.2"), undefined, "the first post's number now resolves to nothing, not to the second post");
+  assert.equal(selectorFor(runtime, "target.3"), ROW_ONE_CHECKBOX);
+
+  // The filter is cleared and the first post is back in row one: it has its own number back.
+  elements = [retry, rowOneCheckbox("pst_a", "Mon 21 Sep 2026, 09:00")];
+  assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.1", "target.2"]);
+  assert.equal(selectorFor(runtime, "target.2"), ROW_ONE_CHECKBOX);
+});
+
+test("a row control that stays in its record keeps its number, as every other control does", async () => {
+  let elements = [retry, rowOneCheckbox("pst_a", "Mon 21 Sep 2026, 09:00")];
+  const runtime = runtimeOver(() => ({ url: PAGE_URL, elements }));
+  await inspect(runtime);
+  // The bulk bar comes and goes above the table; the row does not change.
+  elements = [rowOneCheckbox("pst_a", "Mon 21 Sep 2026, 09:00")];
+  assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.2"]);
+  assert.equal(selectorFor(runtime, "target.2"), ROW_ONE_CHECKBOX);
+});

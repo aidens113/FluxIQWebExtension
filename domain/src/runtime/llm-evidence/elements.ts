@@ -70,13 +70,33 @@ export type WebLlmEvidenceElement = {
   item?: { index: number; total: number };
   /** Position inside a table. */
   cell?: { row: number; column: number; header?: string };
+  /**
+   * This element is one example of this many of its kind: the same control,
+   * link or cell in every row of one repeated list or table. The others are
+   * listed after every distinct element, or not at all once the packet is
+   * full, so a page of 280 rows shows its own buttons and one row checkbox
+   * rather than 37 row checkboxes. A particular row's control is reached by
+   * narrowing the page -- a search, a filter -- until it is listed, and is then
+   * addressed by its own handle. Counted by the page
+   * (`apps/extension/src/content/repeat-exemplars.ts`).
+   */
+  repeats?: number;
 };
 
 /** A packet element with its selector put back, which only domain code ever holds. */
 export type ResolvedWebLlmEvidenceElement = WebLlmEvidenceElement & { selector: string };
 
-/** One described element: what the packet carries, and the selector that stays behind. */
-export type DescribedEvidenceElement = { element: WebLlmEvidenceElement; selector: string };
+/**
+ * One described element: what the packet carries, and what stays behind -- the
+ * selector that addresses it, and the record it sits in where the page repeats
+ * one. Neither leaves the domain.
+ */
+export type DescribedEvidenceElement = { element: WebLlmEvidenceElement; selector: string; record: string | undefined };
+
+/** More rows than a page holds; the bound only stops a hostile number reaching the packet. */
+const MAX_REPEATS = 100_000;
+/** Separates a record address's parts: a unit separator, which page keys and text do not use. */
+const RECORD_ADDRESS_SEPARATOR = String.fromCharCode(31);
 
 /** What the sanitizer needs from the page to describe one element. */
 export type EvidenceElementContext = {
@@ -122,6 +142,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : undefined;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== undefined && context.focusedSelector === addressed.selector ? true : undefined;
+  const repeats = boundedCount(raw.repeatCount, MAX_REPEATS);
 
   const element = present<WebLlmEvidenceElement>({
     target: context.target,
@@ -145,9 +166,34 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     landmark: placement.landmark,
     heading: placement.heading,
     item: placement.item,
-    cell: placement.cell
+    cell: placement.cell,
+    // One is not a run: a count of one says nothing the element does not.
+    repeats: repeats !== undefined && repeats > 1 ? repeats : undefined
   });
-  return { element, selector: addressed.selector };
+  return { element, selector: addressed.selector, record: recordAddress(raw.context) };
+}
+
+/**
+ * Which record -- row, list item, card -- the element sits in, as the page
+ * identified it (`apps/extension/src/content/identity/record.ts`): by the
+ * per-instance key the author wrote, with the attribute it came from, or by
+ * the record's own words where there is none.
+ *
+ * It is part of the element's address rather than of its description, and is
+ * never published. A row control's selector is usually positional --
+ * `[data-testid="queue-rows"] > tr:nth-of-type(1) > td:nth-of-type(1) > input`
+ * on the social scheduler -- and filtering the queue puts another post in row
+ * one. The selector alone would then hand the first post's handle to the
+ * second post's checkbox (`stable-handles.ts`); with the record beside it, the
+ * second post's checkbox is a different address and gets a number of its own.
+ */
+function recordAddress(context: unknown): string | undefined {
+  if (!isJsonRecord(context) || !isJsonRecord(context.record)) return undefined;
+  const record = context.record;
+  const key = boundedText(record.key, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+  if (key) return ["key", boundedText(record.keyAttribute, WEB_LLM_EVIDENCE_BOUNDS.attribute) ?? "", key].join(RECORD_ADDRESS_SEPARATOR);
+  const text = boundedText(record.text, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+  return text ? ["text", text].join(RECORD_ADDRESS_SEPARATOR) : undefined;
 }
 
 /** A tag whose value the page would let an automation type into. */
