@@ -23,6 +23,12 @@ import { keyboardFormsScenario } from "./scenarios/keyboard-forms/index.js";
 import { storefrontCheckoutScenario } from "./scenarios/storefront-checkout/index.js";
 import { adminConsoleScenario } from "./scenarios/admin-console/index.js";
 import { memberDirectoryScenario } from "./scenarios/member-directory/index.js";
+import { supportDeskScenario } from "./scenarios/support-desk/index.js";
+import { orderOperationsScenario } from "./scenarios/order-operations/index.js";
+import { propertyListingsScenario } from "./scenarios/property-listings/index.js";
+import { companyDirectoryScenario } from "./scenarios/company-directory/index.js";
+import { socialSchedulerScenario } from "./scenarios/social-scheduler/index.js";
+import { socialInboxScenario } from "./scenarios/social-inbox/index.js";
 import type { ScenarioDefinition, ScenarioId } from "./types.js";
 import type { WebScenario } from "@fluxiq-web-extension/test-contracts";
 
@@ -52,6 +58,12 @@ const registry = new Map<ScenarioId, ScenarioDefinition>([
   [storefrontCheckoutScenario.id, storefrontCheckoutScenario],
   [adminConsoleScenario.id, adminConsoleScenario],
   [memberDirectoryScenario.id, memberDirectoryScenario],
+  [supportDeskScenario.id, supportDeskScenario],
+  [orderOperationsScenario.id, orderOperationsScenario],
+  [propertyListingsScenario.id, propertyListingsScenario],
+  [companyDirectoryScenario.id, companyDirectoryScenario],
+  [socialSchedulerScenario.id, socialSchedulerScenario],
+  [socialInboxScenario.id, socialInboxScenario],
 ]);
 
 export function getScenario(id: string): ScenarioDefinition | undefined {

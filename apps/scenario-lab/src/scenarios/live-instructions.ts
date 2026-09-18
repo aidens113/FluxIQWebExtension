@@ -1,3 +1,6 @@
+import { REPLY_TICKET, TRIAGE_AGENT } from "./support-desk/index.js";
+import { LINE_ITEM_ORDER, REFUND_ORDER } from "./order-operations/index.js";
+
 /**
  * Plain-English instructions for live Flow creation against the scenario
  * corpus: what a person would type, pointed at one fixture, and judged only by
@@ -41,6 +44,22 @@ const PRODUCT_PHOTOS = "For each product on the first page of the catalog, colle
 const FIRST_FORTY_POSTS = `Scroll the neighbourhood feed until 40 posts are showing, or until the feed runs out, and collect every post that has loaded ${POST_COLUMNS}, where published is the post's exact timestamp.`;
 const CUSTOMER_BOOK = "Scrape every customer in the customer list, not just the ones on screen, with columns company, reference, plan and mrr.";
 const HOLLIS_ADMINS = "Find the members whose name matches \"hollis\" and who are admins, and scrape them with columns id, member, role, team and status.";
+const SLA_BREACHES = "Show the tickets that are past their response target and collect all of them into a table with columns reference, requester, subject, priority, assignee and sla.";
+const ORDER_BATCH = "Narrow the order book to paid orders that nobody has picked yet, placed between 1 March 2026 and 14 March 2026, and collect them into a table with columns reference, customer, placed, total and payment.";
+
+const HOME_COLUMNS = "with columns price, address, bedrooms, floorArea, agent and listed";
+const HOME_FLOOR_AREA_NOTE = "Where a home publishes no floor area, leave that cell empty rather than putting a figure in it.";
+const FIRST_HOMES_PAGE = `Scrape the homes on the first page of the property search into a table ${HOME_COLUMNS}. ${HOME_FLOOR_AREA_NOTE}`;
+const KELFORD_HOMES = `Narrow the property search to homes in Kelford and scrape every one of them, across every page of results, into a table ${HOME_COLUMNS}. ${HOME_FLOOR_AREA_NOTE}`;
+const COMPANY_COLUMNS = "with columns name, sector, location and employees";
+const COMPANY_HEADCOUNT_NOTE = "A company that has filed no headcount has no employees figure, so leave that cell empty.";
+const LOGISTICS_SECTOR = `Open the Logistics sector of the business register and scrape every company filed under it, across every page, ${COMPANY_COLUMNS}. ${COMPANY_HEADCOUNT_NOTE}`;
+
+const SCHEDULE_TRAIL_POST = "Schedule a post to the Northwind Trails account for the morning of 24 September at nine o'clock, saying: Trail clean-up on Saturday: meet at the Harbour Loop car park at nine, gloves and bags provided. Then confirm it is sitting in the queue.";
+const RETRY_FAILED_POSTS = "Find every post that failed to go out in the last seven days, put all of them back in the publishing queue, and then give me a table of what was retried with columns account, post and status.";
+const WEEK_AHEAD_SCHEDULE = "Export the coming week's schedule for the Northwind Trails account as a table with columns account, post, scheduled and status.";
+const ANSWER_PRIYA_MENTION = "Reply to the mention from Priya Duval, thanking her and saying we will pass it on to the team who were on bar that morning, and make sure the conversation ends up marked as handled.";
+const UNANSWERED_BACKLOG = "Collect everything still unanswered and more than three days old on the Harbor & Pine account on Chirp, loading the older conversations until there are none left, into a table with columns from, account, kind and age.";
 
 const TASKS: LiveInstructionTask[] = [
   // Forms and single interactions, judged by the scenario's playback goal.
@@ -343,6 +362,89 @@ const TASKS: LiveInstructionTask[] = [
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-admins",
   },
+  // Back-office work, where an automation earns its keep: every one of these
+  // requires several steps, and four of them are judged on state the run left
+  // behind rather than on anything it read.
+  {
+    id: "support-desk-triage-backlog",
+    scenarioId: "support-desk",
+    kind: "form",
+    instruction: `Assign every unassigned ticket that is urgent or high priority to ${TRIAGE_AGENT}, and leave the queue showing that none of them are still waiting for an owner.`,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "support-desk-sla-breaches",
+    scenarioId: "support-desk",
+    kind: "navigate-and-extract",
+    instruction: SLA_BREACHES,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-sla-breaches",
+  },
+  {
+    id: "support-desk-sla-breaches-recovered",
+    scenarioId: "support-desk",
+    variantId: "recovered-sla",
+    kind: "navigate-and-extract",
+    instruction: SLA_BREACHES,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-sla-breaches",
+  },
+  {
+    id: "support-desk-reply-and-resolve",
+    scenarioId: "support-desk",
+    kind: "navigate-and-extract",
+    instruction: `Open the ticket raised by ${REPLY_TICKET.requester}, reply from the closing summary template, mark the ticket resolved, and then record that ticket with columns reference, requester, account, priority, status and assignee.`,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "read-resolved-ticket",
+  },
+  {
+    id: "support-desk-escalate-longest-breach",
+    scenarioId: "support-desk",
+    kind: "navigate",
+    instruction: "Find the ticket that has been past its response target for longer than any other, raise a critical escalation for it on the escalations screen, and then record what the escalation log shows with columns ticket, severity, requester and status.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-escalation-log",
+  },
+  {
+    id: "order-operations-partial-refund",
+    scenarioId: "order-operations",
+    kind: "form",
+    instruction: `Find the order placed by ${REFUND_ORDER.customer}, open it, refund the value of the first line on it, and leave the order showing that part of the money has been given back.`,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "order-operations-batch-export",
+    scenarioId: "order-operations",
+    kind: "navigate-and-extract",
+    instruction: ORDER_BATCH,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-order-batch",
+  },
+  {
+    id: "order-operations-batch-export-quiet-week",
+    scenarioId: "order-operations",
+    variantId: "quiet-week",
+    kind: "navigate-and-extract",
+    instruction: ORDER_BATCH,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-order-batch",
+  },
+  {
+    id: "order-operations-line-items",
+    scenarioId: "order-operations",
+    kind: "navigate-and-extract",
+    instruction: `Find the order placed by ${LINE_ITEM_ORDER.customer} in the order book, open it, and record the items on it with columns item, sku, quantity, unitPrice and lineTotal.`,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-line-items",
+  },
+  {
+    id: "order-operations-dispatch-run",
+    scenarioId: "order-operations",
+    kind: "navigate",
+    instruction: "Start this week's dispatch run, mark every order it selects as dispatched, and then record the dispatch note that is left with columns order, customer, items and total.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-dispatch-note",
+  },
   {
     id: "sensitive-input-card-labels",
     scenarioId: "sensitive-input",
@@ -350,6 +452,254 @@ const TASKS: LiveInstructionTask[] = [
     instruction: "List the saved cards with columns label and expiry. Leave the unlock codes out entirely.",
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-cards",
+  },
+
+  // Property listings: one page of results, a whole neighbourhood across its
+  // pages, a search with no answer, the cheapest match, and the facts that
+  // live only on a home's own page.
+  {
+    id: "property-listings-newest-homes",
+    scenarioId: "property-listings",
+    kind: "extract",
+    instruction: FIRST_HOMES_PAGE,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-newest-homes",
+  },
+  {
+    id: "property-listings-newest-homes-agent-withheld",
+    scenarioId: "property-listings",
+    variantId: "agent-withheld",
+    kind: "extract",
+    instruction: FIRST_HOMES_PAGE,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-newest-homes",
+  },
+  {
+    id: "property-listings-kelford-homes",
+    scenarioId: "property-listings",
+    kind: "navigate-and-extract",
+    instruction: KELFORD_HOMES,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-area-homes",
+  },
+  {
+    id: "property-listings-kelford-homes-renamed-pagination",
+    scenarioId: "property-listings",
+    variantId: "renamed-pagination",
+    kind: "navigate-and-extract",
+    instruction: KELFORD_HOMES,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-area-homes",
+  },
+  {
+    id: "property-listings-no-matches",
+    scenarioId: "property-listings",
+    kind: "navigate-and-extract",
+    instruction: `Search the property site for homes with five or more bedrooms priced up to £250,000 and scrape whatever it returns ${HOME_COLUMNS}. If no home matches, an empty table is the right answer.`,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-no-matches",
+  },
+  {
+    id: "property-listings-cheapest-home",
+    scenarioId: "property-listings",
+    kind: "navigate-and-extract",
+    instruction: `Find the cheapest three-bedroom home in Kelford on the property site and record only that one ${HOME_COLUMNS}. ${HOME_FLOOR_AREA_NOTE}`,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-cheapest-home",
+  },
+  {
+    id: "property-listings-home-facts",
+    scenarioId: "property-listings",
+    kind: "navigate-and-extract",
+    instruction: "Find the cheapest three-bedroom home in Kelford on the property site, open the home's own page, and record its address, its asking price, its tenure, its council tax band and its EPC rating, with columns address, price, tenure, councilTax and epc. A home with no council tax band has none, so leave that cell empty.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-home-facts",
+  },
+  {
+    id: "property-listings-last-page",
+    scenarioId: "property-listings",
+    kind: "navigate",
+    instruction: "Narrow the property search to three-bedroom homes in Kelford and show the last page of those results.",
+    judgeBy: "playback-goal",
+  },
+
+  // Company directory: a page of the register, a whole sector across its
+  // pages, a size band nobody in that sector has, and a company's own profile.
+  {
+    id: "company-directory-register-page",
+    scenarioId: "company-directory",
+    kind: "extract",
+    instruction: `Scrape the first page of the business register into a table ${COMPANY_COLUMNS}, and add a url column holding the address of each company's own page. ${COMPANY_HEADCOUNT_NOTE}`,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-first-register-page",
+  },
+  {
+    id: "company-directory-logistics-sector",
+    scenarioId: "company-directory",
+    kind: "navigate-and-extract",
+    instruction: LOGISTICS_SECTOR,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-sector-companies",
+  },
+  {
+    id: "company-directory-logistics-sector-relabelled",
+    scenarioId: "company-directory",
+    variantId: "relabelled-columns",
+    kind: "navigate-and-extract",
+    instruction: LOGISTICS_SECTOR,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-sector-companies",
+  },
+  {
+    id: "company-directory-no-companies",
+    scenarioId: "company-directory",
+    kind: "navigate-and-extract",
+    instruction: `In the business register, show the independent retail companies in the largest employee band the register offers and scrape what you find ${COMPANY_COLUMNS}. If no company matches, an empty table is the right answer.`,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-no-companies",
+  },
+  {
+    id: "company-directory-company-profile",
+    scenarioId: "company-directory",
+    kind: "navigate-and-extract",
+    instruction: "Find Quarrendon Software in the business register, open its profile, and record the company name, its sector, its employee band, the year it was founded, its website and its telephone number, with columns name, sector, employees, founded, website and telephone.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-company-profile",
+  },
+  {
+    id: "company-directory-last-page",
+    scenarioId: "company-directory",
+    kind: "navigate",
+    instruction: "Show the last page of the companies filed under the Logistics sector of the business register.",
+    judgeBy: "playback-goal",
+  },
+  // Social scheduler: composing and scheduling a post, retrying a week of
+  // failures in bulk, exporting one account's coming week, and reading a
+  // 280-row queue whole.
+  {
+    id: "social-scheduler-schedule-post",
+    scenarioId: "social-scheduler",
+    kind: "form",
+    instruction: SCHEDULE_TRAIL_POST,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "social-scheduler-schedule-post-restyled",
+    scenarioId: "social-scheduler",
+    variantId: "restyled",
+    kind: "form",
+    instruction: SCHEDULE_TRAIL_POST,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "social-scheduler-schedule-post-renamed-composer",
+    scenarioId: "social-scheduler",
+    variantId: "renamed-composer",
+    kind: "form",
+    instruction: SCHEDULE_TRAIL_POST,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "social-scheduler-retry-failed",
+    scenarioId: "social-scheduler",
+    kind: "navigate-and-extract",
+    instruction: RETRY_FAILED_POSTS,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-retried",
+  },
+  {
+    id: "social-scheduler-retry-failed-quiet-week",
+    scenarioId: "social-scheduler",
+    variantId: "quiet-week",
+    kind: "navigate-and-extract",
+    instruction: RETRY_FAILED_POSTS,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-retried",
+  },
+  {
+    id: "social-scheduler-week-ahead",
+    scenarioId: "social-scheduler",
+    kind: "navigate-and-extract",
+    instruction: WEEK_AHEAD_SCHEDULE,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-week-ahead",
+  },
+  {
+    id: "social-scheduler-week-ahead-reordered-columns",
+    scenarioId: "social-scheduler",
+    variantId: "reordered-columns",
+    kind: "navigate-and-extract",
+    instruction: WEEK_AHEAD_SCHEDULE,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-week-ahead",
+  },
+  {
+    id: "social-scheduler-whole-queue",
+    scenarioId: "social-scheduler",
+    kind: "extract",
+    instruction: "Scrape the whole publishing queue, every post in it, into a table with columns account, post, scheduled and status.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-whole-queue",
+  },
+
+  // Social inbox: answering one person's mention among 320 conversations,
+  // triaging an account's backlog across more than one screen, reading the
+  // first screen, and following a conversation to its own page.
+  {
+    id: "social-inbox-answer-mention",
+    scenarioId: "social-inbox",
+    kind: "form",
+    instruction: ANSWER_PRIYA_MENTION,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "social-inbox-answer-mention-restyled",
+    scenarioId: "social-inbox",
+    variantId: "restyled",
+    kind: "form",
+    instruction: ANSWER_PRIYA_MENTION,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "social-inbox-answer-mention-moved-send",
+    scenarioId: "social-inbox",
+    variantId: "moved-send",
+    kind: "form",
+    instruction: ANSWER_PRIYA_MENTION,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "social-inbox-unanswered-backlog",
+    scenarioId: "social-inbox",
+    kind: "navigate-and-extract",
+    instruction: UNANSWERED_BACKLOG,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-backlog",
+  },
+  {
+    id: "social-inbox-unanswered-backlog-quiet",
+    scenarioId: "social-inbox",
+    variantId: "quiet-inbox",
+    kind: "navigate-and-extract",
+    instruction: UNANSWERED_BACKLOG,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-backlog",
+  },
+  {
+    id: "social-inbox-first-screen",
+    scenarioId: "social-inbox",
+    kind: "extract",
+    instruction: "List the conversations the inbox opens with, before loading any older ones, with columns from, account, kind, age and status.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-first-screen",
+  },
+  {
+    id: "social-inbox-open-conversation",
+    scenarioId: "social-inbox",
+    kind: "navigate",
+    instruction: "Open the mention from Priya Duval and read the whole thing on its own page, recording who it is from, which account it came in on, what kind of message it is, its status and the message itself, with columns from, account, kind, status and message.",
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-conversation",
   },
 ];
 

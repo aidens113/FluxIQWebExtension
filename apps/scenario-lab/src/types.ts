@@ -7,6 +7,12 @@ export const scenarioIds = [
   "storefront-checkout",
   "admin-console",
   "member-directory",
+  "support-desk",
+  "order-operations",
+  "property-listings",
+  "company-directory",
+  "social-scheduler",
+  "social-inbox",
 ] as const;
 
 export type ScenarioId = (typeof scenarioIds)[number];

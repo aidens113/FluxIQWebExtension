@@ -1,3 +1,5 @@
+import { buildClassNames } from "../../build-classes.js";
+
 /**
  * The directory's class names, the way a CSS-in-JS build emits them.
  *
@@ -42,17 +44,7 @@ export function buildMarkerText(build: string): string {
 
 /** Every class name for one build: the same roles, entirely different hashes. */
 export function directoryClasses(build: string): DirectoryClasses {
-  return Object.fromEntries(CLASS_ROLES.map((role) => [role, `css-${hash(`${build}:${role}`)}`])) as DirectoryClasses;
-}
-
-/** FNV-1a in base 36: seven characters, indistinguishable from an emotion or styled-components build. */
-function hash(text: string): string {
-  let value = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    value ^= text.charCodeAt(index);
-    value = Math.imul(value, 0x01000193) >>> 0;
-  }
-  return value.toString(36).padStart(7, "0").slice(0, 7);
+  return buildClassNames(build, CLASS_ROLES);
 }
 
 /**
