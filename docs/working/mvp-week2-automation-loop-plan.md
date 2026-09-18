@@ -84,7 +84,13 @@ model turn) is built on its branch but NOT landed: it showed no benefit live and
 no exploration tool can type into a field yet.
 
 **Open, for the next session, in priority order:**
-1. Re-run the corpus as the Week 2 measurement once t011 lands.
+1. Land t011 (branch committed; press asks Core's permission live, nothing
+   commits). Both proofs failed: the model declares `create_new` for opening a
+   form while Core reads the instruction as `send_or_publish` (reconcile, and
+   word the press so showing is `[]`); plan steps need Core's `isReferenceShape`
+   (`plan-node-handles.ts` ~:79) to accept a consequence declaration; a 30 s
+   `run-runtime-session` timeout was still seen in the created lane after t022.
+   Then re-run the corpus as the Week 2 measurement.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
