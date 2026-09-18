@@ -44,6 +44,7 @@ import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { webAutomationOutputNodeId } from "../output-nodes";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
 import { sanitizeWebLlmSnapshot } from "./llm-evidence";
+import { WEB_AUTOMATION_ROUTE_STATE_PATHS, webAutomationRouteState } from "./route-state";
 
 /**
  * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
@@ -77,7 +78,7 @@ const WEB_AUTOMATION_OUTPUT_IDS: ReadonlySet<string> = new Set(WEB_AUTOMATION_AC
 const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 
 /** What this host can answer, in Core's capability vocabulary. */
-const HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"] as const);
+const HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation", "route-state"] as const);
 
 export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway): WebAutomationHostRuntimeBoundary {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
@@ -108,6 +109,19 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       const stateSnapshotId = `web.state.${captures}`;
       return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary };
     },
+    // What a Router's `state.*` conditions test, observed on the page the run
+    // stands on before any step runs, and what a Flow build is shown so it can
+    // write them. It is the evidence packet projected, never more of the page.
+    async observeRouteState() {
+      const result = await gateway.dispatch({
+        outputId: SNAPSHOT_OUTPUT_ID,
+        payload: {},
+        metadata: { source: HOST_RUNTIME_SOURCE, domainId: WEB_AUTOMATION_DOMAIN_ID, point: "route" }
+      });
+      if (!result.ok) throw new Error(result.error ?? "The web route state was not captured.");
+      return webAutomationRouteState(sanitizeWebLlmSnapshot(actionSnapshot(result.payload)));
+    },
+    routeStatePaths: WEB_AUTOMATION_ROUTE_STATE_PATHS,
     inspectStateDiff(input) {
       if (input.before?.summary === undefined || input.after?.summary === undefined) {
         throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
