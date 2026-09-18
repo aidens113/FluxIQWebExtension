@@ -8,6 +8,7 @@ import { runActionStatus } from "../run-manifest/index.js";
 import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
+import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
 
 /**
  * A timed-out synchronous Core run can keep executing after its HTTP client has
@@ -215,6 +216,8 @@ export type PersistedFlowRunOutcome = {
    * duration can be attributed to the dataset its node wrote.
    */
   extractionDurationsByNode: Map<string, number>;
+  /** Which route the run's Router took and each rule's reason; `null` for a run no Router decided. */
+  route: FlowRunRoute | null;
   /**
    * Set only when Core failed the run, every attempt succeeded, and at least one
    * of the Flow's action nodes was never attempted: the run stopped early rather
@@ -396,6 +399,7 @@ function outcomeFromDetail(
     extracted: datasets,
     extractedNonStringValues: datasets.reduce((sum, dataset) => sum + dataset.nonStringValues, 0),
     extractionDurationsByNode: detail.durationsByNode,
+    route: readFlowRunRoute(detail.runDetail),
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
   };

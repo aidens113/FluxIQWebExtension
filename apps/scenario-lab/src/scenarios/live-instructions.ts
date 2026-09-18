@@ -58,6 +58,7 @@ const LOGISTICS_SECTOR = `Open the Logistics sector of the business register and
 const SCHEDULE_TRAIL_POST = "Schedule a post to the Northwind Trails account for the morning of 24 September at nine o'clock, saying: Trail clean-up on Saturday: meet at the Harbour Loop car park at nine, gloves and bags provided. Then confirm it is sitting in the queue.";
 const RETRY_FAILED_POSTS = "Find every post that failed to go out in the last seven days, put all of them back in the publishing queue, and then give me a table of what was retried with columns account, post and status.";
 const WEEK_AHEAD_SCHEDULE = "Export the coming week's schedule for the Northwind Trails account as a table with columns account, post, scheduled and status.";
+const WEEK_AHEAD_PAST_ANNOUNCEMENTS = `${WEEK_AHEAD_SCHEDULE} After an update the console sometimes opens with a What's new announcement in front of the queue: when one is showing, close it first; when none is, go straight to the queue.`;
 const ANSWER_PRIYA_MENTION = "Reply to the mention from Priya Duval, thanking her and saying we will pass it on to the team who were on bar that morning, and make sure the conversation ends up marked as handled.";
 const UNANSWERED_BACKLOG = "Collect everything still unanswered and more than three days old on the Harbor & Pine account on Chirp, loading the older conversations until there are none left, into a table with columns from, account, kind and age.";
 
@@ -630,6 +631,26 @@ const TASKS: LiveInstructionTask[] = [
     variantId: "reordered-columns",
     kind: "navigate-and-extract",
     instruction: WEEK_AHEAD_SCHEDULE,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-week-ahead",
+  },
+  // The same export when the console may open with an announcement in front of
+  // the queue. One Flow has to handle both openings, so the pair is built from
+  // the same instruction: with the announcement showing, and without.
+  {
+    id: "social-scheduler-week-ahead-whats-new",
+    scenarioId: "social-scheduler",
+    variantId: "whats-new",
+    kind: "navigate-and-extract",
+    instruction: WEEK_AHEAD_PAST_ANNOUNCEMENTS,
+    judgeBy: "expected-dataset",
+    expectedDatasetId: "extract-week-ahead",
+  },
+  {
+    id: "social-scheduler-week-ahead-no-announcement",
+    scenarioId: "social-scheduler",
+    kind: "navigate-and-extract",
+    instruction: WEEK_AHEAD_PAST_ANNOUNCEMENTS,
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-week-ahead",
   },
