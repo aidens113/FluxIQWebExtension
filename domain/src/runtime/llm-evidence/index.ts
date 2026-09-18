@@ -49,6 +49,7 @@ export {
   type WebLlmStructureField,
   type WebLlmStructurePaginationMode
 } from "./structure";
+export { webLlmStateDigest } from "./state-digest";
 export { validateWebRuntimeTargetOverrideEvidence } from "./target-override";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,
@@ -75,5 +76,6 @@ export {
   bindWebAutomationLlmEvidenceRuntime,
   createWebAutomationLlmEvidenceRuntime,
   type WebAutomationLlmEvidenceRuntime,
-  type WebLlmFailureEvidenceRequest
+  type WebLlmFailureEvidenceRequest,
+  type WebLlmStateDigestRequest
 } from "./tools";
