@@ -61,19 +61,13 @@ returned the whole table while reporting success. Repair works end to end:
 explores, proposes, passes. Only those three creation tasks have been re-run
 since the fixes; the rest of the realistic corpus has not.
 
-**Why creation could not act** (`reports/w2-authoring-contract.md`,
-`w2-narrowing.md`): not a missing contract — the prompt forbade acting, the ranker
-hid form controls, and the evidence window evicted the page before the Flow was
-written. The first diagnosis blamed Core and was wrong.
-
-**Built and landed:** 2.4 resume point with two live fail-opens closed; 2.5
-deterministic-path patch, gated by a compile-checked record
-(`runtime/service/adaptations/gates.ts`); exploration reduction wired to a
-per-step state digest (t005); 2.6 replay recorder (t007); a run that refuses to
-continue on `resumable: false` and resumes from the failed node (t006); result
-verification on `loop_verification`, fail-closed. Token limits sit at the
-model's 64k context and are derived from one constant in every place that held a
-copy — ten of them — and the confirmation threshold is ten calls, derived.
+**Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
+deterministic-path patch gated by a compile-checked record
+(`runtime/service/adaptations/gates.ts`); exploration reduction on a per-step
+state digest (t005); 2.6 replay recorder (t007); a run that refuses to continue
+on `resumable: false` and resumes from the failed node (t006); fail-closed
+result verification on `loop_verification`. Token limits derive from one
+constant sized to the model's 64k context, in all ten places that held a copy.
 
 **Open, known — from the first full live corpus, 2026-09-18.** 4 of 36 creation
 tasks passed across the six realistic fixtures (`reports/w2-corpus-{a,b,c,d}.md`,
@@ -102,30 +96,22 @@ parameter-override path, not a target-map entry).
 **The fixed call limit was the defect, not a constraint to design around (user
 decision, 2026-09-16).** An adaptation iterates while it is making progress and
 stops on a guard that means something: the per-run cost ceiling, the token
-budget, the recovery deadline, or a no-progress guard for a loop repeating
-itself or returning no new evidence. A call ceiling survives only as a
-far-away, configurable backstop, never as a per-mode constant; starving the loop
-of calls is not how cost is controlled. The generalizable lesson, missed for
-most of a day: when a designed-in limit keeps generating blockers, the limit is
-the defect. Report it as such instead of engineering workarounds inside it.
+budget, the recovery deadline, or a no-progress guard. A call ceiling survives
+only as a far-away, configurable backstop, never a per-mode constant; starving
+the loop of calls is not how cost is controlled. The generalizable lesson: when
+a designed-in limit keeps generating blockers, the limit is the defect — report
+it as such instead of engineering workarounds inside it.
 
 **The exploration runs in production, as of 2026-09-16**, wired through
 `AS/runtime/recovery/annotation/` with four negative probes proving it is
 load-bearing (`reports/w2-3-bounded-exploration.md`).
 
-**Two silent-no-protection defects were closed, and one of them was live.**
-`deniedEvidenceKeys` is required and fail-closed, which exposed that Flow
-Bootstrap never forwarded the bound domain's declared keys at all; it is
-forwarded now and never defaulted, because a `?? []` there restores the hole.
-The structured diagnosis reads `response.diagnosis` and refuses a
-diagnosis-shaped key in `response.metadata`, by field name and never by value.
-
-**The `llm` / `recovery` module cycle is now a build failure, not a comment.**
-`runtime/llm` may not import a value out of `runtime/recovery`; type-only
-imports stay legal because they are erased and cannot cause the fault. Verified
-by the supervisor reintroducing the exact cycle, observing the audit fail with
-a message naming the three ways out, and reverting. The shared values live in
-the new `runtime/loop-limits/`, which neither directory owns.
+**Two silent-no-protection defects are closed:** `deniedEvidenceKeys` is
+required and fail-closed, which exposed that Flow Bootstrap never forwarded the
+bound domain's keys at all (a `?? []` there restores the hole); the structured
+diagnosis refuses a diagnosis-shaped key in `response.metadata`, by field name.
+**The `llm` / `recovery` value cycle is a build failure**, verified by
+reintroducing it; the shared values live in `runtime/loop-limits/`.
 
 **Concurrency is five workers, not nine.** Nine heavy workers crashed this
 machine twice; the memory fault makes that a real limit, not caution.
@@ -134,21 +120,38 @@ machine twice; the memory fault makes that a real limit, not caution.
 we have at least basic automation able to be created & repaired by simply
 pointing the instructions at a demo, and having it explore and auto-create
 flows", across "lots of different demos". **Runs serving that goal need no
-per-run approval**, reinforced 2026-09-17. The last full campaign finished 15 of
-50 — forms 6/6, extraction 4/14, navigate-and-extract 1/16, repair 4/14 — and
-its run id and three scraping failure modes are in that day's ledger entry.
-Later campaigns run from the isolated pair (`pnpm lab:pair`).
+per-run approval**, reinforced 2026-09-17. The 2026-09-17 push hold is
+discharged; its policy is `agent-git-workflow-plan.md`, built and pushed.
 
-**The 2026-09-17 hold is discharged.** It asked that nothing be pushed until
-the user reviewed the version-control policy; that policy is
-`agent-git-workflow-plan.md`, now built, driven end to end and pushed, so the
-hold no longer applies. The next measurement is a full campaign from the
-isolated pair (`pnpm lab:pair --ext <rev> --core <rev>`, then the printed
-environment plus `DEEPSEEK_API_KEY` from the main checkout's `.env.local`), with
-repair tasks on `--llm-task repair` (`reports/w2-l2-repair-lane.md`). The last
-full campaign was 15 of 50 and predates every fix since.
+**Live first, one problem at a time (user, 2026-09-18).** "LIVE TESTING FIRST,
+unit tests absolute last after you think everything is working properly", and
+fix one problem at a time rather than "running the entire suite every single
+time you make a change". A brief therefore orders the work: reproduce with one
+live task, change the code, re-run that same task live until it is right, then
+run unit tests, `pnpm check` and the suites as a regression net. The corpus
+measures where the product stands when a fix is believed finished; it is never
+the development loop.
 
-**Next steps, in order:** land t009 to t012 once each proves itself live; re-run
+**Worktree Lab runs failed all week for two boring reasons, both now fixed
+(supervisor, 2026-09-18).** `F:xwork\!FluxIQ` is one shared Core that every
+sibling task worktree builds against, and it sat detached 11 commits behind Core
+`dev`, so the domain asked a Core predating the fixes for what it did not have —
+surfacing as `environment.missing`, Core exiting 1, and a week of "undiagnosed
+worktree fault". Moving it to Core `dev` and rebuilding cleared it; t013 makes
+that correct by construction. The second cause was the briefs': they ran
+`pnpm lab:campaign` without the `FLUXIQ_TEST_ENV_FILES=none
+FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` prefix, giving
+`FLUXIQ_TEST_PROJECT_ID is required`, and gave a fresh instance `--no-build`
+when it had nothing built to skip to.
+
+**A crash ended the 2026-09-18 session mid-flight; nothing was lost.** t009 is
+merged (`76903aa`), the evidence-ceiling fix landed (`0f156db`), both main trees
+are clean. The four unfinished fixes survive as uncommitted work in their
+worktrees and are resumed, not restarted: t010 committed and unit-proven, t011
+part-written, t012 substantial Core work, t013 substantial script work, t014
+not started.
+
+**Next steps, in order:** land t010 to t014 once each proves itself live; re-run
 the corpus; then the unowned items above; then 2.9 and X6.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
