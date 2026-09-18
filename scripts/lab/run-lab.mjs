@@ -16,6 +16,8 @@ import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { withBuildLock } from "./build-lock.mjs";
 import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core-build-watch.mjs";
+import { coreBuildStaleness } from "./core-build-stale.mjs";
+import { scanCoreSources } from "./core-build-staleness.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 
 const args = process.argv.slice(2);
@@ -42,6 +44,25 @@ if (loadsCore) {
   note({ lab: "core-build", state: guard.status, root: guard.scan.root, files: guard.scan.files, newest: iso(guard.scan.newestMs), waitedMs: guard.waitedMs });
   if (guard.status === "timed-out") {
     note({ lab: "core-build", state: "proceeding-anyway", why: `FluxIQ Core's build output was still changing after ${Math.round(timeoutMs / 1000)}s. Running regardless; if this run fails on a missing module under ${guard.scan.root}, that is why.` });
+  }
+
+  // The quiescence guard above asks whether Core is changing under this run. It
+  // cannot see the opposite problem: a Core whose build is OLDER than its
+  // source, which looks quieter than a fresh one. The Lab runs Core's compiled
+  // output, so that run tests the previous build and reports the answer as the
+  // product's. On 2026-09-17 that cost three campaign slices -- thirty live
+  // tasks, zero provider calls -- against a ceiling that had been raised in
+  // source hours earlier.
+  const staleness = coreBuildStaleness(await scanCoreSources(coreRoot), guard.scan);
+  if (staleness.stale) {
+    note({ lab: "core-build", state: "stale", root: coreRoot, behindMs: staleness.behindMs, why: staleness.message });
+    if (process.env.FLUXIQ_LAB_ALLOW_STALE_CORE !== "1") {
+      process.stderr.write(`${staleness.message}
+Rebuild with: pnpm --filter fluxiq build (in ${coreRoot}). Set FLUXIQ_LAB_ALLOW_STALE_CORE=1 to run anyway.
+`);
+      process.exit(1);
+    }
+    note({ lab: "core-build", state: "stale-allowed", why: "FLUXIQ_LAB_ALLOW_STALE_CORE=1 was set, so this run proceeds against a build older than Core's source." });
   }
 }
 
