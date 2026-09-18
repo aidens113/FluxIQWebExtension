@@ -94,31 +94,38 @@ test("searches a SQLite store and its sidecars for the literal in each text enco
 });
 
 test("a store the scan cannot read in full, or whose rows cannot be read, is an unscanned-store finding, not only a count", async t => {
-  // `maxFileBytes` is deliberately far below every store here: a store is bounded
-  // by `maxStoreBytes`, so `a-read.sqlite` is read although the text ceiling is 8
-  // bytes, and only `b-oversize.sqlite` is over the ceiling that governs it.
+  // Both text ceilings are 8 bytes, far below every store here: a store has no size
+  // ceiling, so each one is searched to its end, and only what cannot be read as a
+  // database is a finding.
   const root = await workspace(t);
   const store = path.join(root, "store");
   await mkdir(store, { recursive: true });
   createSqliteDatabases([{ file: path.join(store, "a-read.sqlite"), pageSize: 512, statements: ["CREATE TABLE notes(body TEXT)", "INSERT INTO notes VALUES ('clean')"] }]);
+  createSqliteDatabases([{ file: path.join(store, "c-malformed.sqlite"), pageSize: 512, statements: ["CREATE TABLE notes(body TEXT)", ...Array.from({ length: 40 }, () => "INSERT INTO notes VALUES (hex(randomblob(400)))")] }]);
   const readable = (await stat(path.join(store, "a-read.sqlite"))).size;
+  // A database cut short: its header promises pages that are no longer there.
+  const whole = await readFile(path.join(store, "c-malformed.sqlite"));
+  const malformed = whole.subarray(0, Math.floor(whole.length / 2));
+  await writeFile(path.join(store, "c-malformed.sqlite"), malformed);
+  const zeroes = Buffer.alloc(readable + 176);
   const notADatabase = Buffer.from("not a database, only text", "utf8");
   const orphanLog = Buffer.alloc(64, 1);
-  await writeFile(path.join(store, "b-oversize.sqlite"), Buffer.alloc(readable + 176));
-  await writeFile(path.join(store, "c-over-budget.sqlite-wal"), Buffer.alloc(300));
+  await writeFile(path.join(store, "b-zero-filled.sqlite"), zeroes);
   await writeFile(path.join(store, "d-not-a-database.sqlite"), notADatabase);
   // A write-ahead log whose database is gone holds bytes no reader can turn into rows.
   await writeFile(path.join(store, "e-orphan.sqlite-wal"), orphanLog);
 
   const report = await attestWorkspaceSecretAbsence({
-    workspaceRoot: root, secretLiteral: sentinel, approvedRelativePaths: ["store"], limits: { maxFileBytes: 8, maxStoreBytes: readable + 76, maxTotalBytes: readable + 276 },
+    workspaceRoot: root, secretLiteral: sentinel, approvedRelativePaths: ["store"], limits: { maxFileBytes: 8, maxTotalBytes: 8 },
   });
 
   assert.deepEqual(report, {
-    status: "failed", scannedFiles: 3, scannedBytes: readable + notADatabase.byteLength + orphanLog.byteLength, skippedBinaryFiles: 0, findingCount: 4,
+    status: "failed", scannedFiles: 5,
+    scannedBytes: readable + zeroes.byteLength + malformed.byteLength + notADatabase.byteLength + orphanLog.byteLength,
+    skippedBinaryFiles: 0, findingCount: 4,
     findings: [
-      { path: "store/b-oversize.sqlite", categories: ["unscanned-store"] },
-      { path: "store/c-over-budget.sqlite-wal", categories: ["unscanned-store"] },
+      { path: "store/b-zero-filled.sqlite", categories: ["unscanned-store"] },
+      { path: "store/c-malformed.sqlite", categories: ["unscanned-store"] },
       { path: "store/d-not-a-database.sqlite", categories: ["unscanned-store"] },
       { path: "store/e-orphan.sqlite-wal", categories: ["unscanned-store"] },
     ],
@@ -133,31 +140,33 @@ test("a store the scan cannot read in full, or whose rows cannot be read, is an 
  * text budget alone. Every run in that corpus carried the same finding, and every
  * agent reading them was told to ignore it.
  *
- * A store that size is now bounded by `maxStoreBytes`, so it is read. What this
- * test holds is the other half: reading it must still catch a leak. The store is
- * built past `maxFileBytes` at the ceilings a Lab run actually uses, with a
- * synthetic secret in an uncheckpointed log that never reached the database file,
- * so finding it in the database takes both changed ceilings -- `visit` admitting
- * the oversize store, and `stageDatabase` copying it with its log for the cell
- * read.
+ * The 32 MiB store ceiling that replaced it failed the next larger healthy run:
+ * a completed state-changing `social-scheduler-schedule-post` left an 85.5 MiB
+ * (89,636,864-byte) store. A store now has no size ceiling at all, and is searched
+ * in chunks and inside SQLite rather than held in memory. What this test holds is
+ * the other half: reading a store that large must still catch a leak. The store is
+ * built past that 85.5 MiB, and past the 64 MiB total, at the ceilings a Lab run
+ * actually uses, with a synthetic secret in an uncheckpointed log that never
+ * reached the database file, so finding it in the database takes the staged copy
+ * and the cell read.
  */
-test("a synthetic secret in a store past the text ceiling is still found, at the ceilings a Lab run uses", async t => {
+test("a synthetic secret in a store larger than any completed run has left is still found, at the ceilings a Lab run uses", async t => {
   const root = await workspace(t);
   const store = path.join(root, "store");
   await mkdir(store, { recursive: true });
   const database = path.join(store, "global.sqlite");
-  // Nine rows of a megabyte of hex each, generated inside the fixture writer, carry
-  // the database past `maxFileBytes` without sending nine megabytes to it.
+  // Ninety rows of a megabyte of hex each, generated inside the fixture writer,
+  // carry the database past 85.5 MiB without sending ninety megabytes to it.
   const megabyte = "INSERT INTO notes(body) VALUES (hex(randomblob(524288)))";
   createSqliteDatabases([{
     file: database, journal: "wal",
-    statements: [notesTable, ...Array.from({ length: 9 }, () => megabyte)],
+    statements: [notesTable, ...Array.from({ length: 90 }, () => megabyte)],
     rows: [note("planted " + sentinel + " leak")],
   }]);
   const size = (await stat(database)).size;
   const logSize = (await stat(database + "-wal")).size;
-  assert.equal(size > SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxFileBytes, true, `the store must pass the text ceiling, was ${size}`);
-  assert.equal(size <= SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxStoreBytes, true, `the store must fit the store ceiling, was ${size}`);
+  assert.equal(size > 89_636_864, true, `the store must pass the largest store a completed run has left, was ${size}`);
+  assert.equal(size > SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxTotalBytes, true, `the store must pass the text total, was ${size}`);
   // The secret never reached the database file, so only the cell read can find it there.
   assert.equal((await readFile(database)).includes(sentinel), false);
 
@@ -219,7 +228,7 @@ test("fails closed on missing, escaping, oversized, and excessive approved paths
     workspaceRoot: root,
     secretLiteral: sentinel,
     approvedRelativePaths: ["missing.log", "../outside.log", "evidence/oversize.log", "evidence/nul.log", "extra.log"],
-    limits: { maxFileBytes: 8, maxStoreBytes: 8, maxTotalBytes: 8, maxApprovedPaths: 4 },
+    limits: { maxFileBytes: 8, maxTotalBytes: 8, maxApprovedPaths: 4 },
   });
   assert.equal(report.status, "failed");
   const categories = new Set(report.findings.flatMap(finding => finding.categories));

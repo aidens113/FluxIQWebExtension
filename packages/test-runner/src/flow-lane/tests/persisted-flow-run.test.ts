@@ -55,11 +55,81 @@ test("the run id is reported the moment Core names it, before anything reads the
   assert.deepEqual(identified, ["run.one", "read"]);
 
   identified.length = 0;
-  const live = control({ ...unreadable, runPersistedFlow: async () => { identified.push("run"); return { session: { runId: "run.live", status: "failed" } }; } });
+  const live = control(unreadable);
   await assert.rejects(executeRecordedFlowRun(live.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" }, onRunIdentified: (runId) => identified.push(runId) }), /run detail unavailable/u);
-  // A live run starts no session of its own, so its id arrives with the run.
-  assert.deepEqual(identified, ["run", "run.live", "read"]);
+  // A live run names the session it is about to create, so its id is known
+  // before the run starts, and before the request that runs it can fail.
+  assert.equal(identified.length, 2);
+  assert.match(identified[0]!, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
+  assert.equal(identified[1], "read");
   assert.deepEqual(live.calls, ["select"]);
+});
+
+// 2026-09-18: a created Flow's playback carries a verify_result grant, so one
+// request runs the Flow and waits for the model's verdict. It outlasted the
+// 30-second bound in four units; the id came only in the reply, so nothing
+// could be read back and every one failed as environment.missing.
+test("a granted run whose request timed out is read back by the id it named, and only once its verdict is recorded", async () => {
+  const timeout = new RunnerFailure("environment.missing", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "control.request", timeoutMs: 30_000 } });
+  const sent: Record<string, unknown>[] = [];
+  const reads: string[] = [];
+  const unjudged = { summary: { status: "succeeded" }, actionAttempts: [attempt()], interventions: [] };
+  const judged = { ...unjudged, metadata: { resultVerification: { status: "refuted", performed: true, verdict: "does_not_answer" } }, summary: { status: "failed" } };
+  const sequence = [
+    { summary: { status: "running" }, actionAttempts: [], interventions: [] },
+    unjudged,
+    judged,
+  ];
+  let named = "";
+  const { client } = control({
+    automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+      if (endpoint === "run-runtime-session") { sent.push(payload); named = String(payload.newRunId); throw timeout; }
+      reads.push(String(payload.runId));
+      const next = sequence.shift() ?? judged;
+      return { runDetail: { ...next, summary: { runId: named, ...next.summary } } };
+    },
+  });
+  const clock = { value: 0 };
+  const outcome = await executeRecordedFlowRun(
+    client,
+    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "verify_result" } },
+    {},
+    { now: () => clock.value, sleep: async ms => { clock.value += ms; } },
+  );
+  // The request named a fresh session and carried the grant, and nothing a grant is refused.
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.newRunId, named);
+  assert.equal(sent[0]!.runId, undefined);
+  assert.equal(sent[0]!.llmExecutionGrantId, "llm-grant:test");
+  assert.equal(sent[0]!.runIntent, "verify_result");
+  assert.equal(sent[0]!.idempotencyKey, undefined);
+  assert.equal(sent[0]!.authorizedDomainIds, undefined);
+  // It was read back by that id, past a "succeeded" whose verdict was not in
+  // yet, to the verdict that overturned it: a pass read one poll early would
+  // have been a wrong result reported as passed.
+  assert.ok(reads.length >= 3 && reads.every((runId) => runId === named));
+  assert.equal(outcome.runId, named);
+  assert.equal(outcome.status, "failed");
+});
+
+test("a deterministic run's timeout still ends at its first terminal read, and a granted abort keeps the short window", async () => {
+  const abort = new RunnerFailure("runtime.behavior", "FluxIQ HTTP operation was interrupted", { details: { bounded: "abort" } });
+  const { client } = control({
+    automationStudioCall: async (endpoint: string) => {
+      if (endpoint === "run-runtime-session") throw abort;
+      return { runDetail: { summary: { runId: "unused", status: "running" }, actionAttempts: [], interventions: [] } };
+    },
+  });
+  const clock = { value: 0 };
+  // Every read reports a different run id, so the read never settles and the
+  // wait runs to its deadline; what is measured is how long that deadline is.
+  await assert.rejects(executeRecordedFlowRun(
+    client,
+    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "verify_result" } },
+    {},
+    { now: () => clock.value, sleep: async ms => { clock.value += ms; } },
+  ), /interrupted/u);
+  assert.ok(clock.value <= 90_000, `an abort waited ${clock.value} ms`);
 });
 
 test("a failed Flow is a result, not a runner fault: the structured failure survives to be asserted", async () => {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS } from "fluxiq/automation-studio";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
@@ -20,11 +21,35 @@ import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
 const TERMINAL_DETAIL_WAIT_MS = 90_000;
 const TERMINAL_DETAIL_POLL_MS = 250;
 
+/**
+ * How long a granted run is read back for after its request timed out: Core's
+ * own lease on a claimed grant, the backstop Core uses to end a granted run
+ * that never said it had finished. It is the only whole-run deadline Core
+ * defines, so it is the run's own deadline rather than a guess at one. The poll
+ * ends as soon as the run settles; this bounds only a run that never does.
+ *
+ * Why a granted run needs more than the 90 seconds above: since t012, a created
+ * Flow's playback carries a `verify_result` grant, so the single request that
+ * runs it also waits for the model to judge the result. On 2026-09-18 that
+ * outlasted the 30-second request bound in four units, and because the run's id
+ * arrived only in the reply, nothing could be read back and every one of them
+ * failed as `environment.missing`.
+ */
+const GRANTED_RUN_WAIT_MS = AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS;
+const GRANTED_RUN_POLL_MS = 1_000;
+
 export type PersistedFlowTerminalWait = {
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   timeoutMs?: number;
   intervalMs?: number;
+  /**
+   * Whether a `succeeded` run is only finished once Core has recorded the
+   * verdict on its result. True for a granted run: Core publishes the status
+   * its steps earned first and judges the result afterwards, so a read in
+   * between sees a pass the verdict may still overturn.
+   */
+  awaitVerdict?: boolean;
 };
 
 /** The Core calls a Flow run makes; `ExistingFluxIQControlClient` satisfies it. */
@@ -252,38 +277,66 @@ export async function executeRecordedFlowRun(
   const domainId = input.domainId ?? LAB_PROJECT_DOMAIN_ID;
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const inputs = input.inputs ?? {};
-  // A live provider run must create its own session: Core revokes the grant and
-  // refuses the run outright when it is handed a run id it did not start, an
-  // authorized domain, or an idempotency key. So the two-step start-then-run
-  // the deterministic lane uses collapses into one call here, and the run id
-  // comes back from the run rather than going into it.
+  // Every run's id is known before it executes, so a request cut short can
+  // still be read back. A deterministic run is started first and runs under
+  // that session. A live provider run must create its own session -- Core
+  // revokes the grant and refuses the run when it is handed a session it did
+  // not create, an authorized domain, or an idempotency key -- so it names the
+  // session it is about to create instead (Core
+  // `runtime/service/runtime-session/requested-run-id.ts`).
   const started = input.llmExecution ? undefined : await control.startPersistedFlow({ projectId: input.projectId, flowId: input.flowId, inputs, authorizedDomainIds: [domainId], ...bounds });
-  const runId = started?.runId;
-  if (!input.llmExecution && !runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
-  if (runId) input.onRunIdentified?.(runId);
+  const runId = input.llmExecution ? randomUUID() : started?.runId;
+  if (!runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
+  input.onRunIdentified?.(runId);
   let sessionStatus = "unknown";
-  let executedRunId = runId;
   try {
-    const result = await control.runPersistedFlow(input.llmExecution
-      ? { projectId: input.projectId, flowId: input.flowId, inputs, llmExecution: input.llmExecution, ...bounds }
-      : { projectId: input.projectId, flowId: input.flowId, runId: runId!, inputs, authorizedDomainIds: [domainId], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds });
-    sessionStatus = result.session.status;
-    executedRunId = result.session.runId;
-    if (executedRunId && executedRunId !== runId) input.onRunIdentified?.(executedRunId);
-    if (runId !== undefined && result.session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it started");
-    if (!executedRunId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
+    const session = input.llmExecution
+      ? await runGrantedFlow(control, { projectId: input.projectId, flowId: input.flowId, inputs, llmExecution: input.llmExecution, newRunId: runId }, bounds)
+      : (await control.runPersistedFlow({ projectId: input.projectId, flowId: input.flowId, runId, inputs, authorizedDomainIds: [domainId], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds })).session;
+    sessionStatus = session.status;
+    if (session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it was asked to");
   } catch (error) {
     // Only a bounded request can have left Core executing after the client went
     // away. An arbitrary runner failure is not evidence that a run completed.
-    // A run whose id Core never returned left nothing to read back, so the
-    // bounded-failure recovery below has nothing to recover and the original
-    // failure stands.
-    if (!isBoundedHttpFailure(error) || !executedRunId) throw error;
-    const detail = await awaitTerminalRunDetail(control, input.projectId, executedRunId, input.actionTypes ?? new Map(), error, terminalWait);
-    return outcomeFromDetail(executedRunId, detail, await terminalReadsOf(control, { projectId: input.projectId, runId: executedRunId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+    if (!isBoundedHttpFailure(error)) throw error;
+    // A granted run that outlasted its request is read back for as long as
+    // Core would let it keep running, and is finished only once its result's
+    // verdict is recorded. A caller's own abort keeps the short window: it is
+    // somebody stopping the run, not the run taking long.
+    const granted = input.llmExecution !== undefined;
+    const timedOut = granted && error instanceof RunnerFailure && error.details?.bounded === "timeout";
+    const wait: PersistedFlowTerminalWait = { ...(timedOut ? { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: GRANTED_RUN_POLL_MS } : {}), awaitVerdict: granted, ...terminalWait };
+    const detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), error, wait);
+    return outcomeFromDetail(runId, detail, await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
   }
-  const detail = await readRunDetail(control, input.projectId, executedRunId!, bounds, input.actionTypes ?? new Map());
-  return outcomeFromDetail(executedRunId!, detail, await terminalReadsOf(control, { projectId: input.projectId, runId: executedRunId!, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+  const detail = await readRunDetail(control, input.projectId, runId, bounds, input.actionTypes ?? new Map());
+  return outcomeFromDetail(runId, detail, await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+}
+
+/**
+ * Runs a Flow under an LLM grant, as a new session with the id the caller chose.
+ *
+ * This goes through `automationStudioCall` rather than the control client's
+ * `runPersistedFlow` only because that client builds its payload from a fixed
+ * list of fields and `existing-fluxiq-control.ts` belongs to another unit of
+ * work while this one is open. The payload is the one that method sends for a
+ * granted run, plus `newRunId`; once that file is free, `newRunId` belongs in
+ * its `runPersistedFlow` and this function should go.
+ */
+async function runGrantedFlow(
+  control: PersistedFlowRunControl,
+  input: { projectId: string; flowId: string; inputs: Record<string, unknown>; llmExecution: PersistedFlowLlmExecution; newRunId: string },
+  bounds: FluxIQHttpOptions,
+): Promise<{ runId: string; status: string }> {
+  const payload = asRecord(await control.automationStudioCall("run-runtime-session", {
+    projectId: input.projectId, flowId: input.flowId, newRunId: input.newRunId, inputs: input.inputs,
+    adaptiveMode: "manual_approval", authorizedExternalSideEffects: false,
+    runIntent: input.llmExecution.purpose, llmExecutionGrantId: input.llmExecution.grantId,
+  }, bounds), "run runtime payload");
+  const session = asRecord(payload.runtimeSession, "runtimeSession");
+  if (typeof session.runId !== "string" || typeof session.status !== "string") throw new RunnerFailure("runtime.behavior", "FluxIQ returned a runtime session without a run id or a status");
+  if (session.flowId !== input.flowId) throw new RunnerFailure("runtime.behavior", "FluxIQ ran a different Flow than the one requested");
+  return { runId: session.runId, status: session.status };
 }
 
 type TerminalReads = { datasets: FlowRunDataset[]; harnessRecovery: RunHarnessRecovery };
@@ -369,7 +422,7 @@ async function awaitTerminalRunDetail(
     const remaining = deadline - now();
     try {
       const detail = await readRunDetail(control, projectId, runId, { timeoutMs: Math.min(30_000, remaining) }, actionTypes);
-      if (terminalRunStatus(detail.summaryStatus) && detail.actions.length > 0) return detail;
+      if (terminalRunStatus(detail.summaryStatus) && detail.actions.length > 0 && (!wait.awaitVerdict || verdictSettled(detail))) return detail;
     } catch {
       // The original timeout/abort remains authoritative until exact terminal
       // evidence arrives; a diagnostic read must never replace it.
@@ -382,6 +435,19 @@ async function awaitTerminalRunDetail(
 
 function terminalRunStatus(status: string | undefined): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+/**
+ * Whether a run's status can still change. Core writes a finished run's status
+ * as its steps earned it, then judges the result and may rewrite a `succeeded`
+ * to `failed`; the verdict and the final status are saved together (Core
+ * `result-verification/run-outcome.ts`). So a `succeeded` run with no verdict
+ * recorded yet is not finished, and one read at that moment would report a
+ * pass the verdict was about to take away. A run that failed is never judged,
+ * so its status is final as soon as it is written.
+ */
+function verdictSettled(detail: { summaryStatus: string | undefined; resultVerification: PersistedResultVerification }): boolean {
+  return detail.summaryStatus !== "succeeded" || detail.resultVerification !== null;
 }
 
 /**
