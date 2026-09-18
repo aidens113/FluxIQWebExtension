@@ -7,5 +7,6 @@ export { labEnvironment } from "./environment.mjs";
 export { fixtureSecretEnvironment } from "./fixture-secrets.mjs";
 export { parseLabResult, parseRunnerRefusal } from "./output.mjs";
 export { DEFAULT_PROFILES } from "./profiles.mjs";
-export { ramFaultSignature } from "./ram-fault.mjs";
+export { ramFaultSignature, STARTUP_FAILURE } from "./ram-fault.mjs";
+export { describeAttemptFailure } from "./attempt-failure.mjs";
 export { runNode, spawnLab } from "./spawn.mjs";
