@@ -134,7 +134,7 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     const credentials = options.target.credentials;
     topology = await startTopology({
       repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot,
-      runsDirectory: options.runsDirectory, coreWebBuildRunsDirectory: options.runsDirectory, runId: replayId,
+      runsDirectory: options.runsDirectory, runId: replayId,
       seed: options.seed ?? scenario.seed, target: options.target,
       scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath,
       ...(labPaths.hostPrebuilt ? { prepareHost: false } : {}), bootstrapIdentity: true,
