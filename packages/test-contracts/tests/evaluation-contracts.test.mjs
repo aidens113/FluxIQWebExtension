@@ -254,6 +254,26 @@ test("false failure and false success are derivable from the oracle and FluxIQ v
   assert.deepEqual([falseFailure, falseSuccess, flowRun()].map(classify), ["false-failure", "false-success", "agreed"]);
 });
 
+test("a run whose result nobody judged is neither a pass nor a false success", () => {
+  // Measured live on 2026-09-18: a created Flow returned ten rows of which not
+  // one was right, every step succeeded, no model was ever asked whether the
+  // result answered the request, and the run read `passed`. FluxIQ can now say
+  // the third thing, and neither accuracy rate may count it.
+  const unjudged = { ...flowRun(), oracleVerdict: "failed", reportedVerdict: "unverified", automationFailureReported: null };
+  assert.equal(validateRunEvaluation(unjudged).valid, true);
+  // It reported no failure, so it must carry no failure record.
+  rejects({ ...unjudged, automationFailureReported: { category: "timeout" } }, "a failure record on a run that reported no failure");
+  // A run that created no Flow reported nothing at all, not an unjudged result.
+  rejects({ ...flowRun(), flowCreated: false, reportedVerdict: "unverified", automationFailureReported: null, actions: [] }, "an unjudged result without a Flow");
+  // The fixture oracle always reaches a verdict or is not consulted, so it may
+  // never borrow the word.
+  rejects({ ...flowRun(), oracleVerdict: "unverified" }, "an unverified fixture oracle");
+  // Neither rate: it is a false success only when FluxIQ said the run passed.
+  const classify = (run) => run.oracleVerdict === "passed" && run.reportedVerdict === "failed" ? "false-failure"
+    : run.oracleVerdict === "failed" && run.reportedVerdict === "passed" ? "false-success" : "agreed";
+  assert.equal(classify(unjudged), "agreed");
+});
+
 test("the automation failure and the test-rig failure use separate taxonomies", () => {
   assert.deepEqual(issuesOf({ ...flowRun(), automationFailureReported: { category: "action.targeting" } }), ["$.automationFailureReported.category"]);
   assert.deepEqual(issuesOf({ ...flowRun(), automationFailureExpected: { category: "runtime.behavior" } }), ["$.automationFailureExpected.category"]);

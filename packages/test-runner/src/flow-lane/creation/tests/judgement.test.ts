@@ -37,7 +37,7 @@ async function catalogTask(taskId: string) {
 /** A run that stored `records` in one dataset, from the Flow's one extract node. */
 function runStoring(records: readonly ExtractionRecord[]): PersistedFlowRunOutcome {
   return {
-    runId: "run.created", status: "succeeded", actions: [], failure: null, harnessActivations: 0,
+    runId: "run.created", status: "succeeded", actions: [], failure: null, harnessActivations: 0, resultVerification: "confirmed",
     harnessRecovery: { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] },
     extracted: [{ datasetId: "dataset.created", nodeIds: ["node.extract"], records: [...records], recordCount: records.length, storeTruncated: false, invalidCount: 0, nonStringValues: 0, pages: 1 }],
     extractedNonStringValues: 0,
