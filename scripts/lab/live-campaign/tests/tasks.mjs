@@ -15,4 +15,6 @@ export const REPAIRS = Object.freeze([
 ]);
 
 /** The limits a repair run carries by default, stated here rather than imported so a changed default fails a test. */
-export const REPAIR_LIMIT_ARGS = ["--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-run-tokens", "600000", "--llm-max-calls", "26", "--llm-max-cost-usd", "0.25"];
+export const REPAIR_LIMIT_ARGS = ["--llm-max-input-tokens", "48000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "56000", "--llm-max-run-tokens", "600000", "--llm-max-calls", "26", "--llm-max-cost-usd", "0.25"];
+/** A creation task now carries the same headroom, less the call ceiling a build does not need. */
+export const CREATE_LIMIT_ARGS = ["--llm-max-input-tokens", "48000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "56000", "--llm-max-run-tokens", "600000", "--llm-max-cost-usd", "0.25"];

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { labRunArguments, parseCampaignArgs } from "../index.mjs";
-import { CATALOG, REPAIR_LIMIT_ARGS, REPAIRS } from "./tasks.mjs";
+import { CATALOG, REPAIR_LIMIT_ARGS, CREATE_LIMIT_ARGS, REPAIRS } from "./tasks.mjs";
 
 test("each repair task becomes one adapt run of the recorded Flow, with the live limits unless they are given after --", () => {
   assert.deepEqual(labRunArguments(REPAIRS[0], parseCampaignArgs([])), [
@@ -34,7 +34,7 @@ test("each task becomes one create-flow Lab run naming its scenario, variant and
   assert.deepEqual(labRunArguments(CATALOG[2], options), [
     "run", "data-table", "--variant", "column-reorder",
     "--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat",
-    "--llm-task", "create-flow", "--instruction-task", "table-read-reordered", "--target", "persistent-isolated",
+    "--llm-task", "create-flow", "--instruction-task", "table-read-reordered", ...CREATE_LIMIT_ARGS, "--target", "persistent-isolated",
   ]);
   assert.equal(labRunArguments(CATALOG[0], options).includes("--variant"), false);
 });

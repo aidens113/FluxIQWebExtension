@@ -92,8 +92,8 @@ test("the command line: a dry run prints commands and runs nothing", () => withT
   assert.equal(dry.code, 0, dry.stderr);
   const commands = dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#"));
   assert.deepEqual(commands, [
-    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read",
-    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read-reordered",
+    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
+    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
   ]);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });
@@ -109,7 +109,9 @@ test("the command line: a live campaign spawns the Lab once per task and writes 
   const live = await runCli(["form-goal", "table-read", "--", "--llm-max-cost-usd", "0.1"], env);
   assert.equal(live.code, 0, live.stderr);
   const invocations = (await readFile(path.join(directory, "invocations.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-  assert.deepEqual(invocations.map(({ args }) => args.at(-3)), ["form-goal", "table-read"]);
+  // By name, not by position: a creation run now carries its token limits after
+  // the instruction task, so counting back from the end names a limit instead.
+  assert.deepEqual(invocations.map(({ args }) => args[args.indexOf("--instruction-task") + 1]), ["form-goal", "table-read"]);
   assert.deepEqual(invocations.map(({ args }) => args.slice(-2)), [["--llm-max-cost-usd", "0.1"], ["--llm-max-cost-usd", "0.1"]]);
   assert.deepEqual(invocations.map(({ concurrency }) => concurrency), ["1", "1"]);
 
