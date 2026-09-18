@@ -2,6 +2,10 @@
 // resolves to, what is uncommitted, which lockfile the target commit holds,
 // and what was last installed and built there.
 //
+// What was installed is pnpm's own record rather than this repository's marker
+// (`installed-lockfile.mjs` says why); what was built is the marker, because
+// nothing else on disk records which commit produced `dist`.
+//
 // `root` and `target` are the whole of what a caller needs to ask the
 // question. The options are what a particular caller labels the answer with
 // and what it also wants measured: a Lab pair names its two sides and tells
@@ -10,6 +14,7 @@
 
 import { realpath, stat } from "node:fs/promises";
 import { runGit } from "./git-command.mjs";
+import { installedLockfile } from "./installed-lockfile.mjs";
 import { readMarker } from "./markers.mjs";
 import { samePath } from "./path-identity.mjs";
 
@@ -39,7 +44,7 @@ export async function readSideState(root, target, options = {}) {
     target: resolved,
     dirtyLines: status.split(/\r?\n/u).filter((line) => line.trim() !== ""),
     targetLock,
-    installedLock: await readMarker(root, "install"),
+    installedLock: await installedLockfile(root),
     buildable,
     builtCommit: buildable ? await readMarker(root, "build") : null,
     distPresent: presence.every(Boolean),

@@ -106,10 +106,22 @@ export const extractionMeasurementStatuses = ["judged", "not_run", "not_expected
 export type ExtractionMeasurementStatus = (typeof extractionMeasurementStatuses)[number];
 
 /**
+ * The members of an `ExpectedExtraction` a run can declare and then not judge,
+ * because nothing in that run reported the value they would be compared
+ * against.
+ *
+ * They are a closed vocabulary rather than free text for the reason `status`
+ * is: a measurement carries no string a page could have supplied (D6), and a
+ * name from this list cannot be one.
+ */
+export const extractionUnjudgedMembers = ["pages", "truncated"] as const;
+export type ExtractionUnjudgedMember = (typeof extractionUnjudgedMembers)[number];
+
+/**
  * One extraction step of a run, measured. **Counts and flags only** (D6): no
  * step id, field name, selector, or page value ever enters it, so an
- * evaluation can be shared without carrying what a page showed. `status` is
- * the one string, and it is a closed vocabulary.
+ * evaluation can be shared without carrying what a page showed. `status` and
+ * `unjudged` are the only strings, and both are closed vocabularies.
  *
  * `recordsListed`, `countStated`, and `comparedRecords` say what the step's
  * numbers are worth, and no reader of `matchedRecords` may skip them. An
@@ -144,6 +156,43 @@ export type RunExtractionMeasurement = {
   comparedRecords: number;
   /** Compared records equal to the expected record at their position, so 0 whenever `comparedRecords` is 0. */
   matchedRecords: number;
+  /**
+   * Expected records equal to **some** observed record when position is set
+   * aside, each observed record answering at most one expected one.
+   *
+   * It exists because `matchedRecords` alone cannot tell a wrong answer from a
+   * right answer in the wrong order, and those are different defects with
+   * different fixes. `company-directory-logistics-sector` returned 40 records
+   * and matched 35, and nothing in the run said whether five companies were
+   * read wrongly or forty were read rightly and five moved. This is that
+   * missing half of the comparison: equal to `matchedRecords` when order is
+   * not the difference, and larger by exactly the records that only moved.
+   *
+   * The verdict stays positional (`assertExtraction`). This is measured beside
+   * it, never instead of it: an expectation that lists records lists them in
+   * the page's order, and a fixture that means "the ten newest homes" means
+   * the order too.
+   *
+   * It never exceeds `comparedRecords` and is never below `matchedRecords`: a
+   * match at its own position is a match in any order. `null` when the
+   * producer did not measure it, as in every evaluation written before it was
+   * defined.
+   */
+  matchedInAnyOrder: number | null;
+  /**
+   * Members the expectation declared that this run reported nothing for, so
+   * they were declared and **not judged** -- `[]` when everything declared was
+   * judged, and `null` when the producer did not state it.
+   *
+   * A declared expectation that is quietly skipped is worse than one that was
+   * never written, because the evaluation reads as a full judgement. The Flow
+   * lane cannot observe the pages an extraction followed, so a fixture
+   * declaring `pages: 3` had that expectation dropped and said so nowhere in
+   * `evaluation.json`: `expectedPages: 3` with `pagesFollowed: null` is the
+   * same shape as a lane that simply did not report, and a reader could not
+   * tell "not compared" from "not stated".
+   */
+  unjudged: ExtractionUnjudgedMember[] | null;
   expectedFields: number;
   /** Expected fields the observed records carried. */
   presentFields: number;
@@ -246,6 +295,12 @@ export type RunEvaluation = {
    * Flow ran (the recording lane, and a Flow-lane run that built no Flow) and
    * every evaluation written before the field was defined. A run that needed
    * no recovery states `attempted: false`, never `null`.
+   *
+   * A failed run whose recovery never started says why in `refusalCode`, Core's
+   * gate code: the Flow's settings refused the model, its training budget was
+   * spent, or a deterministic answer must come first. Without it, "recovery was
+   * not allowed to start" and "recovery was not needed" were the same
+   * `attempted: false`.
    *
    * The field was reserved in schema 0.3, so defining it changes no version:
    * a 0.3 evaluation holding `null` reads exactly as before.

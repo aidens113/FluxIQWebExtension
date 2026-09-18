@@ -26,6 +26,17 @@ export type RunHarnessRecovery = {
   adaptationIds: string[];
   /** The change proposals the run created (Core's `runDetail.changeProposalIds`). */
   changeProposalIds: string[];
+  /**
+   * Why recovery was not attempted, as Core's gate code (`runDetail.metadata.llmGate.code`):
+   * `llm.gate.training_mode` when the Flow's settings do not allow LLM
+   * intervention, `llm.gate.training_budget_exhausted`, or
+   * `llm.gate.<prior action>` when a deterministic answer must come first
+   * (`known_recovery`, `reroute`, `known_adaptation`, `manual_intervention`).
+   * A code, never Core's sentence. `null` when recovery was attempted or Core
+   * recorded no refusal, which is a run that did not fail. Absent in a record
+   * written before the field existed, which says nothing either way.
+   */
+  refusalCode?: string | null;
 };
 
 /**

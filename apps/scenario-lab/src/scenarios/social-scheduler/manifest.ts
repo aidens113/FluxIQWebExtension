@@ -58,6 +58,8 @@ const listed = (posts: readonly QueuedPost[]) => ({ id: "rows-listed", subject: 
 const shown = (count: number, total: number) => ({ id: "rows-shown", subject: "result-count", predicate: "text", value: resultCountText(count, total) });
 const buildIs = (build: string) => ({ id: "build-marker", subject: "build-marker", predicate: "text", value: buildMarkerText(build) });
 const unfiltered = { id: "no-filters", subject: "filter-summary", predicate: "exists", value: false };
+const announcementShowing = { id: "whats-new-showing", subject: "whats-new", predicate: "visible", value: true };
+const announcementClosed = { id: "whats-new-closed", subject: "whats-new", predicate: "exists", value: false };
 const composerClosed = { id: "composer-closed", subject: "composer", predicate: "visible", value: false };
 /**
  * Two controls on the page carry the accessible name "Search": the top bar's
@@ -221,6 +223,15 @@ export const socialSchedulerManifest = createScenarioManifest({
           pageFacts: [queueStats(BASELINE), listed(BASELINE)],
           extracted: [{ step: "extract-week-ahead", count: WEEK_AHEAD.length, records: queueRecords(WEEK_AHEAD) }],
           finalState: [shown(WEEK_AHEAD.length, QUEUE_SIZE), queueStats(BASELINE)],
+        },
+      }, {
+        id: "whats-new",
+        description: "An update shipped, and the console opens with a What's new announcement in front of the queue. Until it is closed the console behind it is inert, so no filter can be chosen and nothing can be pressed; closed, the page is the baseline. A Flow that ignores the announcement cannot narrow the queue, and one that always closes it fails on a visit where none is showing: the job has two situations to start in, and only a Flow that tells them apart passes both.",
+        arm: { operation: "set-mode", payload: { mode: "whats-new" } },
+        expected: {
+          pageFacts: [announcementShowing, queueStats(BASELINE), listed(BASELINE)],
+          extracted: [{ step: "extract-week-ahead", count: WEEK_AHEAD.length, records: queueRecords(WEEK_AHEAD) }],
+          finalState: [announcementClosed, shown(WEEK_AHEAD.length, QUEUE_SIZE), queueStats(BASELINE)],
         },
       }],
     },

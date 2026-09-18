@@ -129,3 +129,47 @@ test("each Lab run gets its own scenario's fixture secrets, and a refusal's reas
     delete process.env[machineOnly];
   }
 }));
+
+// On 2026-09-18 a web build that could never succeed was retried three times,
+// then a fourth in a rerun, each reported as this machine's RAM fault.
+test("a startup failure that comes back identical is deterministic: it stops retrying and is never called a RAM fault", () => withTemp(async (directory) => {
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const startupAttempt = async (name) => {
+    const runPath = path.join(directory, name);
+    await mkdir(runPath, { recursive: true });
+    await writeFile(path.join(runPath, "summary.json"), JSON.stringify({ firstFailure: { summary: "Core web panel production build did not succeed" } }));
+    return attempt({ code: 1, stdout: resultLine({ runId: name, verdict: "failed", failureCategory: "process.startup", path: runPath, evaluation: { failureCategory: "process.startup", facilityFailure: { boundary: "finalized-bundle", stage: "scenario.execute", reason: "unclassified" } } }) });
+  };
+  const scripted = [await startupAttempt("run-1"), await startupAttempt("run-2"), await startupAttempt("run-3")];
+  let runs = 0;
+  const lines = [];
+  const summary = await runCampaign({
+    tasks: CATALOG.slice(0, 1), options: { ...parseCampaignArgs(["--all", "--max-attempts", "3"]) },
+    outputDir: path.join(directory, "campaigns", "c"), execute: async () => { runs += 1; return scripted.shift(); },
+    readBundle: async () => ({ evaluation: null, run: null, liveLlm: null, flowLane: null }), log: (line) => lines.push(line),
+  });
+  const [row] = summary.tasks;
+  assert.equal(runs, 2, "one retry to tell a hardware fault from a real one, and no more");
+  assert.deepEqual(row.ramFaults, [], "neither attempt was the hardware");
+  assert.equal(row.repeatedFailure, "process.startup: Core web panel production build did not succeed");
+  assert.equal(row.failureCategory, "process.startup");
+  assert.ok(lines.some((line) => /failed exactly as attempt 1 did \(process\.startup: Core web panel production build did not succeed\)\. .*deterministic, not this machine's memory fault/u.test(line)));
+  assert.ok(!lines.some((line) => line.includes("RAM-fault signature")));
+  const markdown = await readFile(path.join(directory, "campaigns", "c", "summary.md"), "utf8");
+  assert.match(markdown, /2 \(same failure every time, deterministic: process\.startup: Core web panel production build did not succeed\)/u);
+}));
+
+test("a startup failure that does not come back is retried as a possible memory fault, and the run that follows stands", () => withTemp(async (directory) => {
+  const runPath = path.join(directory, "run-ok");
+  const scripted = [
+    attempt({ code: 1, stdout: resultLine({ runId: "run-s", verdict: "failed", failureCategory: "process.startup", path: path.join(directory, "absent") }) }),
+    attempt({ stdout: resultLine({ runId: "run-ok", path: runPath }) }),
+  ];
+  const summary = await runCampaign({
+    tasks: CATALOG.slice(0, 1), options: { ...parseCampaignArgs(["--all", "--max-attempts", "3"]) },
+    outputDir: path.join(directory, "campaigns", "c"), execute: async () => scripted.shift(),
+    readBundle: async () => ({ evaluation: { flowCreated: true, oracleVerdict: "passed", actions: [], extraction: null }, run: null, flowLane: null, liveLlm: null }), log: () => {},
+  });
+  const [row] = summary.tasks;
+  assert.deepEqual([row.verdict, row.attempts, row.ramFaults, row.repeatedFailure], ["passed", 2, ["process.startup facility failure"], null]);
+}));

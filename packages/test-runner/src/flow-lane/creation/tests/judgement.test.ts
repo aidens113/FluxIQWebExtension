@@ -42,6 +42,7 @@ function runStoring(records: readonly ExtractionRecord[]): PersistedFlowRunOutco
     extracted: [{ datasetId: "dataset.created", nodeIds: ["node.extract"], records: [...records], recordCount: records.length, storeTruncated: false, invalidCount: 0, nonStringValues: 0, pages: 1 }],
     extractedNonStringValues: 0,
     extractionDurationsByNode: new Map(),
+    route: null,
   };
 }
 

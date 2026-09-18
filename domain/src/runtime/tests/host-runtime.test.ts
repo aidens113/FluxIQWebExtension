@@ -191,9 +191,28 @@ test("the diff never lists more than the bound, and its counts stay exact", () =
 
 test("the boundary declares what it can answer, including the expectation seam", () => {
   const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
-  assert.deepEqual([...boundary.capabilities], ["state-snapshot", "state-diff", "expectation-evaluation"]);
+  assert.deepEqual([...boundary.capabilities], ["state-snapshot", "state-diff", "expectation-evaluation", "route-state"]);
   assert.equal(typeof boundary.expectationEvaluator, "function");
   assert.equal(typeof boundary.inspectStateDiff, "function");
+});
+
+test("the route state a Router tests is the sanitized packet projected: location, dialog and control names, never a value or a query", async () => {
+  const snapshot = pageSnapshot("https://shop.test/queue?token=leaked-token", ["#got-it"], {
+    title: "Queue · Cadence",
+    evidence: { dialogs: { open: [{ role: "dialog", label: "What's new in Cadence", modal: true }] } }
+  });
+  (snapshot.interactiveElements as JsonObject[]).push({ tagName: "input", selector: "#card", inputType: "text", value: "4111111111111111" });
+  const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded", result: { snapshot } } }]);
+  const boundary = createWebAutomationHostRuntime(seam);
+  const state = await boundary.observeRouteState!({ projectId: "project.one", flowId: "flow.one" });
+  assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
+  const page = (state as { page: Record<string, unknown> }).page;
+  assert.equal(page.path, "/queue");
+  assert.equal(page.location, "https://shop.test/queue");
+  assert.equal(page.dialog, "What's new in Cadence");
+  assert.equal(typeof page.controls, "string");
+  assert.doesNotMatch(JSON.stringify(state), /leaked-token|4111111111111111|#got-it|#card/u);
+  assert.deepEqual(boundary.routeStatePaths?.map((entry) => entry.path), ["state.page.path", "state.page.location", "state.page.title", "state.page.dialog", "state.page.blockedBy", "state.page.controls"]);
 });
 
 test("the boundary's expectation evaluator judges conditions through the same gateway", async () => {

@@ -40,7 +40,7 @@ export type TopologyOptions = {
    * isolated topology's own runs directory is the per-run `.work` area.
    * Defaults to `runsDirectory`.
    */
-  coreWebBuildRunsDirectory?: string;
+  coreWebBuildCacheRoot?: string;
 };
 
 export type RunningTopology = {
@@ -111,11 +111,13 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       });
     }
     await requirePaths([hostModulePath]);
-    // Core serves a production build shared by every run and every mode below
-    // one runs directory; a development server compiles on demand and waits on
-    // its file watcher, which stalled readiness and first requests under load.
+    // Core serves a production build shared by every run and every mode that
+    // uses this Core, wherever their runs directories are (`core-web-build/`);
+    // a development server compiles on demand and waits on its file watcher,
+    // which stalled readiness and first requests under load.
     const coreWebBuild = await (dependencies.prepareCoreWebBuild ?? prepareCoreWebBuild)({
-      fluxiqRepositoryRoot, runsDirectory: options.coreWebBuildRunsDirectory ?? runsDirectory, supervisor, logPath: processLogPath(allocation.logsDir, "core-web-build"),
+      fluxiqRepositoryRoot, supervisor, logPath: processLogPath(allocation.logsDir, "core-web-build"),
+      ...(options.coreWebBuildCacheRoot ? { cacheRoot: options.coreWebBuildCacheRoot } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
     supervisor.start({

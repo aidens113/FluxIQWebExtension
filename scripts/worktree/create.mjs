@@ -10,8 +10,11 @@
 // How it is added depends on what the task is for. A task that only builds
 // against Core takes it detached: that Core is shared by every task beside it,
 // so it is moved to a commit and never developed on, and a branch there would
-// belong to no one task. A task that CHANGES Core -- which is the nested layout,
-// and the only reason to pay for a Core worktree of its own -- takes `coreBranch`
+// belong to no one task. A shared Core that is already there is left where it
+// is; keeping it at Core's `dev` is the caller's job (`shared-core-move.mjs`),
+// because moving it touches every task beside it and has refusals of its own.
+// A task that CHANGES Core -- which is the nested layout, and the only reason
+// to pay for a Core worktree of its own -- takes `coreBranch`
 // instead and gets a real branch, so the Core side of the work has the same
 // merge boundary, the same revert, and the same `Task:` trailer as this side.
 // Both sides of such a task carry ONE id, allocated here and passed to Core, so
@@ -19,11 +22,7 @@
 //
 // Both sides are then installed, Core first, because the extension side's
 // install is what creates `domain/node_modules/fluxiq` and it can only link a
-// Core that is already there. The install runs offline first: everything a
-// known lockfile needs is in the store already, and an offline install neither
-// waits on the network nor picks up something published since. A failure means
-// the store is genuinely missing a package, so it is retried online rather
-// than treated as fatal.
+// Core that is already there (`install-worktree.mjs` says how each is installed).
 //
 // Finally the link is followed to a real path and required to land inside that
 // sibling. Nothing before it proves that: pnpm can leave an older directory in
@@ -51,10 +50,8 @@ import { checkoutRepository } from "./checkout-repository.mjs";
 import { resolveCoreSibling } from "./core-sibling.mjs";
 import { runGit } from "./git-command.mjs";
 import { pathInside } from "./path-identity.mjs";
-import { runPnpm } from "./pnpm-command.mjs";
+import { installWorktree } from "./install-worktree.mjs";
 import { noteProgress } from "./progress-note.mjs";
-
-const INSTALL = ["install", "--frozen-lockfile", "--config.confirm-modules-purge=false"];
 
 /**
  * @param {{
@@ -107,14 +104,8 @@ export async function createWorktree({ repositoryRoot, branch, root, startPoint,
   return { root, branch, startPoint: start, coreRoot: core.root, coreCreated: !found.present, coreBranch: found.present ? null : coreBranch ?? null, linkTarget: target };
 }
 
-async function install(root, env, note, side) {
-  note({ step: "install", side, root, offline: true });
-  try {
-    await runPnpm(root, [...INSTALL, "--offline"], { env });
-  } catch (error) {
-    note({ step: "install", side, root, offline: false, why: `the offline install failed, so the store may lack a package: ${error instanceof Error ? error.message : String(error)}` });
-    await runPnpm(root, INSTALL, { env });
-  }
+function install(root, env, note, side) {
+  return installWorktree(root, { env, note, side });
 }
 
 async function exists(target) {

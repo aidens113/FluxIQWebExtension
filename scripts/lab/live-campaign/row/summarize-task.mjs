@@ -22,7 +22,10 @@ export function summarizeTask(task, attempts, final, bundle) {
   const automationFailure = evaluation?.automationFailureReported ?? run?.automationFailure ?? null;
   const declaredFailure = evaluation?.automationFailureExpected ?? null;
   const oracleVerdict = evaluation?.oracleVerdict ?? result?.observation?.oracleVerdict ?? null;
-  const providerCalls = liveLlm?.observed?.calls ?? evaluation?.llm?.calls ?? null;
+  // A created Flow's repair is counted beside its build in the same record the row's tokens and dollars come from;
+  // `evaluation.llm.calls`, the fallback, already counts both.
+  const observedCalls = liveLlm?.observed?.calls;
+  const providerCalls = typeof observedCalls === "number" ? observedCalls + (liveLlm?.repair?.observed?.calls ?? 0) : evaluation?.llm?.calls ?? null;
   const repairing = task.kind === "repair";
   const repair = repairing ? repairOutcome(recovery, providerCalls, flowLane) : null;
   let judgement;
@@ -53,6 +56,8 @@ export function summarizeTask(task, attempts, final, bundle) {
     exitCode: final.code,
     attempts: attempts.length,
     ramFaults: attempts.map((attempt) => attempt.ramFault).filter(Boolean),
+    /** A classified failure that came back identical on retry: deterministic, and never a RAM fault. */
+    repeatedFailure: attempts.find((attempt) => attempt.repeatedFailure)?.repeatedFailure ?? null,
     flowCreated: evaluation?.flowCreated ?? result?.observation?.flowCreated ?? (flowLane?.flowId ? true : null),
     actionTypes: distinct((evaluation?.actions ?? run?.actions ?? flowLane?.actions ?? []).map((action) => action.actionType)),
     createdFlowShape: createdFlowShape(flowLane),

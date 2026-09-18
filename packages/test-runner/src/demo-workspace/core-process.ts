@@ -69,7 +69,6 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
     await ensureDemoIdentity(config);
     const coreWebBuild = await prepareCoreWebBuild({
       fluxiqRepositoryRoot: config.fluxiqRepositoryRoot,
-      runsDirectory: config.runsDirectory,
       supervisor,
       logPath: processLogPath(logsDirectory, `${sessionId}-core-web-build`),
     });

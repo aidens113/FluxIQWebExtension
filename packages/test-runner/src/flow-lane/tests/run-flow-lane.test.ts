@@ -559,7 +559,7 @@ test("the lane publishes what Core's recovery did, and a run that needed none sa
     changeProposalIds: [],
   };
   const raw = { interventions: [{ interventionId: "intervention.diagnosis", prompt: "PRIVATE-PROMPT" }, { interventionId: "intervention.patch", response: "PRIVATE-RESPONSE" }], adaptationIds: [adaptationId] };
-  const recovered = { attempted: true, interventions: [{ kind: "diagnosis", validationOk: true, validationCodes: [] }, { kind: "runtime_patch", validationOk: true, validationCodes: [] }], runtimePatchAttempts: parsed.runtimePatchAttempts, adaptationIds: [adaptationId], changeProposalIds: [] };
+  const recovered = { attempted: true, interventions: [{ kind: "diagnosis", validationOk: true, validationCodes: [] }, { kind: "runtime_patch", validationOk: true, validationCodes: [] }], runtimePatchAttempts: parsed.runtimePatchAttempts, adaptationIds: [adaptationId], changeProposalIds: [], refusalCode: null };
 
   const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, recovery: { raw, parsed } });
   const evidence: FlowLaneEvidence[] = [];
@@ -577,7 +577,7 @@ test("the lane publishes what Core's recovery did, and a run that needed none sa
   const quietEvidence: FlowLaneEvidence[] = [];
   await runLane(quiet, quietEvidence);
   assert.deepEqual(quiet.recoveryReads, [], "a provider-free run's detail recorded nothing to recover, so nothing more is read");
-  const none = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+  const none = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: null };
   assert.deepEqual(flowLaneSnapshot(quietEvidence[0]!).harnessRecovery, none);
   assert.deepEqual(quietEvidence[0]?.observation.harnessRecovery, none);
   assert.equal(quietEvidence[0]?.observation.reportedVerdict, "passed");

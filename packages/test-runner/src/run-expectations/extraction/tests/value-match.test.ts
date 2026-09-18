@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractedValueMatches } from "../extracted-value-match.js";
+import { extractedValueMatches } from "../value-match.js";
 
 const run = { scenarioOrigin: "http://127.0.0.1:4100" };
 const expectedHref = "/scenarios/product-catalog/products/desk-lamp";

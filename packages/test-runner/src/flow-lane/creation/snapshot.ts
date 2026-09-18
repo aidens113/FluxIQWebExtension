@@ -33,6 +33,10 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     harnessActivations: evidence.run.harnessActivations,
     failure: evidence.run.failure,
     stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
+    // Which route the Router took, and each rule's verdict and reason. Ids and
+    // Core's matcher reasons only: a reason names the path and the test, never
+    // a value the host observed.
+    route: evidence.run.route,
     harnessRecovery: evidence.run.harnessRecovery,
     oracleVerdict: evidence.observation.oracleVerdict,
     extraction: evidence.extraction ? flowExtractionSnapshot(evidence.extraction) : null,

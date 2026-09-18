@@ -123,7 +123,7 @@ test("the recording lane's own extraction measurements reach a single run and no
 /** One judged extract step, as `runExtractionMeasurements` publishes it: counts and flags only. */
 const MEASURED: RunEvaluation["extraction"] = [{
   stepIndex: 1, status: "judged", expectedRecords: 23, observedRecords: 23, recordsListed: true, countStated: true,
-  comparedRecords: 23, matchedRecords: 23, expectedFields: 92, presentFields: 92, unexpectedFields: 0,
+  comparedRecords: 23, matchedRecords: 23, matchedInAnyOrder: 23, unjudged: [], expectedFields: 92, presentFields: 92, unexpectedFields: 0,
   expectedPages: 3, pagesFollowed: 3, truncated: false, durationMs: 1_400, nonStringValues: 0,
 }];
 

@@ -45,7 +45,7 @@ export async function readHarnessRecovery(
   runDetail: Readonly<Record<string, unknown>>,
   bounds: FluxIQHttpOptions,
 ): Promise<RunHarnessRecovery> {
-  if (!recoveryRecorded(runDetail)) return { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+  if (!recoveryRecorded(runDetail)) return conforming({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: gateRefusalCode(runDetail) });
   const detail = await control.getRunDetail(scope.projectId, scope.runId, bounds);
   const interventions = (detail.interventions ?? []).map((item) => ({ kind: item.kind, validationOk: item.validationOk ?? null, validationCodes: [...(item.validationCodes ?? [])] }));
   const refusals = targetOverrideRefusalCases(runDetail);
@@ -61,7 +61,22 @@ export async function readHarnessRecovery(
   const adaptationIds = identifiers(detail.adaptationIds ?? [], "runDetail.adaptationIds");
   const changeProposalIds = identifiers(detail.changeProposalIds ?? [], "runDetail.changeProposalIds");
   const attempted = interventions.length + runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
-  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds });
+  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, refusalCode: attempted ? null : gateRefusalCode(runDetail) });
+}
+
+/**
+ * Why Core's recovery never started, as its gate's code, or `null` when the
+ * gate recorded no refusal. Core writes `llmGate: { invoked: false, code,
+ * reason }` at each early return; `reason` is Core's sentence and stays behind,
+ * and `code` is taken as written, so the contract, not this read, decides
+ * whether it is code-shaped -- a sentence in its place fails the read by path.
+ */
+function gateRefusalCode(runDetail: Readonly<Record<string, unknown>>): string | null {
+  const metadata = runDetail.metadata;
+  const gate = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).llmGate : undefined;
+  if (!gate || typeof gate !== "object" || Array.isArray(gate)) return null;
+  const { invoked, code } = gate as Record<string, unknown>;
+  return invoked === false && code !== undefined ? code as string : null;
 }
 
 /**
