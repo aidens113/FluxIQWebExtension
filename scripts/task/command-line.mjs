@@ -10,6 +10,7 @@ import { finishTask } from "./finish.mjs";
 import { listTasks } from "./list.mjs";
 import { pruneTasks } from "./prune.mjs";
 import { startTask } from "./start.mjs";
+import { syncSharedCore } from "./sync-core.mjs";
 
 // Which commands exist is command-options.mjs's to say, and parseTaskArguments
 // already refuses anything else -- checking it twice is how the two lists come
@@ -31,6 +32,12 @@ export async function runTaskCommandLine({ argv, repositoryRoot, coreRepositoryR
   // which is precisely the material no single task owns any more.
   if (command === "prune") {
     return { command, ...await pruneTasks({ ...shared, base: values.base, days: values.days === undefined ? undefined : Number(values.days) }) };
+  }
+
+  // Like prune it takes no id: it moves the Core this checkout builds against,
+  // which is shared by every task beside it rather than owned by one.
+  if (command === "sync-core") {
+    return { command, ...await syncSharedCore({ ...shared, to: values.to ?? "dev" }) };
   }
 
   if (command === "start") {

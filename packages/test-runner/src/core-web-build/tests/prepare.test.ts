@@ -40,7 +40,8 @@ type Harness = {
 
 async function withHarness(run: (harness: Harness) => Promise<void>): Promise<void> {
   const root = await mkdtemp(path.join(os.tmpdir(), "core-web-build-prepare-"));
-  const keyDirectory = path.join(root, "runs", ".core-web-build", key);
+  const cacheRoot = path.join(root, "runs", ".core-web-build");
+  const keyDirectory = path.join(cacheRoot, key);
   const nextExecutable = path.join(root, "core", "next");
   const logPath = path.join(root, "build.log");
   const builds: ProcessSpec[] = [];
@@ -48,6 +49,9 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
   const withoutBuild: Partial<CoreWebBuildDependencies> = {
     collectInputs: async () => ({ inputs, nextExecutable }),
     stageWorkspace: async (_core, webDirectory) => writeText(path.join(webDirectory, "package.json"), "{}\n"),
+    // These exercise the lock and the publication below os.tmpdir(); the real
+    // path budget is tested in path-budget.test.ts and would refuse that root.
+    pathBudget: (cacheRoot: string) => ({ fits: true, root: cacheRoot.length, allowed: Number.MAX_SAFE_INTEGER, longest: cacheRoot.length }),
     pollIntervalMs: 5,
     waitTimeoutMs: 10_000,
     lockSettleMs: 2_000,
@@ -58,7 +62,7 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
     await delay(25);
     await writeText(path.join(spec.cwd, ".next", "BUILD_ID"), `build-${builds.length}\n`);
   };
-  const options = (supervisor: ProcessSupervisor) => ({ fluxiqRepositoryRoot: path.join(root, "core"), runsDirectory: path.join(root, "runs"), supervisor, logPath });
+  const options = (supervisor: ProcessSupervisor) => ({ fluxiqRepositoryRoot: path.join(root, "core"), cacheRoot, supervisor, logPath });
   try {
     await run({
       keyDirectory, lockPath: path.join(keyDirectory, ".operation.lock"), nextExecutable, logPath, builds,
