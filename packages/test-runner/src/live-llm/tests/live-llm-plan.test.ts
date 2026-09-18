@@ -3,11 +3,17 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   DEFAULT_LLM_LAB_BUDGET,
+  LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
   LLM_LAB_MAX_CALLS_PER_RUN,
   LLM_LAB_SCHEMA_VERSION,
   type LlmExecutionProfile,
   type LlmTaskKind,
 } from "@fluxiq-web-extension/test-contracts";
+import {
+  AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS,
+  AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS,
+  AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
+} from "fluxiq/automation-studio";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
 
@@ -42,6 +48,18 @@ function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<L
     budget: { ...DEFAULT_LLM_LAB_BUDGET, ...budget },
   };
 }
+
+/**
+ * Core's own numbers, imported rather than copied. This file used to carry the
+ * confirmation threshold as the literal 100_000, in step with a Lab plan that
+ * carried the same literal -- so the two agreed with each other and with
+ * nothing else. Core had moved to ten *full* requests, and because the plan's
+ * number is sent on every grant request, the stale copy overrode Core rather
+ * than merely lagging it. Nothing below writes a token count down.
+ */
+const CORE_THRESHOLD = AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
+const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
+const DEFAULT_CALLS = DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
 
 test("a diagnose profile plans exactly one authorized provider call, whatever cap was typed", () => {
   for (const maxCallsPerRun of [1, 2, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, LLM_LAB_MAX_CALLS_PER_RUN]) {
@@ -101,12 +119,17 @@ test("repair plans the iterating explore_and_adapt grant, and adapt stays the na
 });
 
 test("create-flow plans the web panel's iterating build_and_adapt grant, with the operator's call count and Core's default run budget", () => {
-  const byDefault = planLiveLlmExecution(profile({ task: "create-flow" }, { maxOutputTokens: 4_000, maxTotalTokensPerRequest: 12_000 }));
+  // The whole per-request triple comes from the shared budget. Overriding the
+  // output and total limits alone left the input limit at the default, and
+  // input plus output may not exceed the total, so the profile was refused.
+  const byDefault = planLiveLlmExecution(profile({ task: "create-flow" }));
   assert.equal(byDefault.purpose, "build_and_adapt");
   assert.equal(byDefault.task, "create-flow");
   // Core's own iterating default, not a one-call build.
-  assert.equal(byDefault.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
-  assert.equal(byDefault.maxTotalTokensPerRun, 100_000);
+  assert.equal(byDefault.maxCalls, DEFAULT_CALLS);
+  // Twenty-six full requests is far past Core's threshold, so the default run
+  // budget is the threshold itself.
+  assert.equal(byDefault.maxTotalTokensPerRun, CORE_THRESHOLD);
   assert.equal(byDefault.highTokenConfirmation.required, false);
   assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
   // A build grant is never one a Flow run carries: the Flow lane's type has no room for it.
@@ -115,46 +138,52 @@ test("create-flow plans the web panel's iterating build_and_adapt grant, with th
 });
 
 test("without --llm-max-run-tokens the run token budget is Core's default, so a default adapt run needs no confirmation", () => {
-  // 26 calls at 10,000 tokens could use 260,000; Core's default budget holds the run to 100,000.
+  // Twenty-six calls at the per-request ceiling could use twenty-six times it;
+  // Core's default budget holds the run down to its confirmation threshold,
+  // which is ten full requests.
   const byDefault = planLiveLlmExecution(profile({ task: "adapt" }));
-  assert.equal(byDefault.maxTotalTokensPerRun, 100_000);
+  const exposure = PER_REQUEST * DEFAULT_CALLS;
+  assert.equal(byDefault.maxTotalTokensPerRun, CORE_THRESHOLD);
   assert.deepEqual(
     { required: byDefault.highTokenConfirmation.required, authorizedTokens: byDefault.highTokenConfirmation.authorizedTokens, threshold: byDefault.highTokenConfirmation.threshold },
-    { required: false, authorizedTokens: 100_000, threshold: 100_000 },
+    { required: false, authorizedTokens: CORE_THRESHOLD, threshold: CORE_THRESHOLD },
   );
-  assert.match(byDefault.highTokenConfirmation.reason, /budget of 100000 \(Core's default: the smaller of --llm-max-total-tokens 10000 x 26 authorized call\(s\) = 260000 and 100000\) is within Core's 100000-token confirmation threshold/u);
+  assert.match(byDefault.highTokenConfirmation.reason, new RegExp(`budget of ${CORE_THRESHOLD} \\(Core's default: the smaller of --llm-max-total-tokens ${PER_REQUEST} x ${DEFAULT_CALLS} authorized call\\(s\\) = ${exposure} and ${CORE_THRESHOLD}\\) is within Core's ${CORE_THRESHOLD}-token confirmation threshold`, "u"));
   // Fewer calls than the threshold covers: the budget is what those calls could use.
-  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 3 })).maxTotalTokensPerRun, 30_000);
-  assert.equal(planLiveLlmExecution(profile()).maxTotalTokensPerRun, 10_000);
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 3 })).maxTotalTokensPerRun, PER_REQUEST * 3);
+  assert.equal(planLiveLlmExecution(profile()).maxTotalTokensPerRun, PER_REQUEST);
 });
 
 test("Core's high-token confirmation is planned exactly when the run token budget exceeds its threshold", () => {
-  const atThreshold = planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: 100_000 }));
-  assert.equal(atThreshold.maxTotalTokensPerRun, 100_000);
+  const atThreshold = planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: CORE_THRESHOLD }));
+  assert.equal(atThreshold.maxTotalTokensPerRun, CORE_THRESHOLD);
   assert.equal(atThreshold.highTokenConfirmation.required, false);
-  assert.match(atThreshold.highTokenConfirmation.reason, /budget of 100000 \(--llm-max-run-tokens 100000\) is within/u);
+  assert.match(atThreshold.highTokenConfirmation.reason, new RegExp(`budget of ${CORE_THRESHOLD} \\(--llm-max-run-tokens ${CORE_THRESHOLD}\\) is within`, "u"));
 
-  const above = planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: 100_001 }));
-  assert.equal(above.maxTotalTokensPerRun, 100_001);
+  const above = planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: CORE_THRESHOLD + 1 }));
+  assert.equal(above.maxTotalTokensPerRun, CORE_THRESHOLD + 1);
   assert.equal(above.highTokenConfirmation.required, true);
-  assert.equal(above.highTokenConfirmation.authorizedTokens, 100_001);
-  assert.match(above.highTokenConfirmation.reason, /budget of 100001 \(--llm-max-run-tokens 100001\) is above Core's 100000-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation/u);
+  assert.equal(above.highTokenConfirmation.authorizedTokens, CORE_THRESHOLD + 1);
+  assert.match(above.highTokenConfirmation.reason, new RegExp(`budget of ${CORE_THRESHOLD + 1} \\(--llm-max-run-tokens ${CORE_THRESHOLD + 1}\\) is above Core's ${CORE_THRESHOLD}-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation`, "u"));
 
-  // Calls alone never trigger it: 64 calls at the default budget still need none.
-  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 64 })).highTokenConfirmation.required, false);
+  // Calls alone never trigger it: even Core's backstop of calls, at the default
+  // per-request budget, is held to the threshold and so needs no confirmation.
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).highTokenConfirmation.required, false);
 });
 
 test("a run token budget only moves down: held to what the authorized calls could use, refused below one request", () => {
   const held = planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 2, maxTotalTokensPerRun: 500_000 }));
-  assert.equal(held.maxTotalTokensPerRun, 20_000);
+  assert.equal(held.maxTotalTokensPerRun, PER_REQUEST * 2);
   assert.equal(held.highTokenConfirmation.required, false);
-  assert.match(held.highTokenConfirmation.reason, /--llm-max-run-tokens 500000, held to --llm-max-total-tokens 10000 x 2 authorized call\(s\) = 20000/u);
+  assert.match(held.highTokenConfirmation.reason, new RegExp(`--llm-max-run-tokens 500000, held to --llm-max-total-tokens ${PER_REQUEST} x 2 authorized call\\(s\\) = ${PER_REQUEST * 2}`, "u"));
   // A diagnosis makes one call however high the typed budget, so one request is all it can spend.
   const diagnosis = planLiveLlmExecution(profile({}, { maxCallsPerRun: 64, maxInputTokens: 40_000, maxOutputTokens: 10_000, maxTotalTokensPerRequest: 50_000, maxTotalTokensPerRun: 3_000_000 }));
   assert.equal(diagnosis.maxTotalTokensPerRun, 50_000);
   assert.equal(diagnosis.highTokenConfirmation.required, false);
-  assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: 9_999 })), /--llm-max-run-tokens 9999 must be a whole number of at least --llm-max-total-tokens 10000/u);
-  assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: 10_000.5 })), /--llm-max-run-tokens 10000\.5 must be a whole number/u);
+  // The floor a run budget may never sit below is one whole request, which is
+  // now the per-request ceiling itself rather than the 10,000 it once was.
+  assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), new RegExp(`--llm-max-run-tokens ${PER_REQUEST - 1} must be a whole number of at least --llm-max-total-tokens ${PER_REQUEST}`, "u"));
+  assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST + 0.5 })), new RegExp(`--llm-max-run-tokens ${PER_REQUEST}\\.5 must be a whole number`, "u"));
 });
 
 test("the default 30s timeout is clamped down to Core's 25s ceiling, never up", () => {
@@ -189,22 +218,35 @@ test("an unsupported provider, model, task or retry count is refused", () => {
 });
 
 test("token limits are held inside Core's ceiling and must add up", () => {
-  assert.throws(() => planLiveLlmExecution(profile({}, { maxInputTokens: 60_000 })), /--llm-max-input-tokens 60000 must be a whole number between 1 and 50000/u);
+  // One token past Core's per-request ceiling, which is deepseek-chat's own 64k
+  // context. The number comes from the contract rather than being written down,
+  // so a plan that stopped agreeing with it fails here instead of passing.
+  const overCeiling = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1;
+  assert.throws(() => planLiveLlmExecution(profile({}, { maxInputTokens: overCeiling })), new RegExp(`--llm-max-input-tokens ${overCeiling} must be a whole number between 1 and ${LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST}`, "u"));
   assert.throws(() => planLiveLlmExecution(profile({}, { maxInputTokens: 9_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 })), /exceeds --llm-max-total-tokens/u);
 });
 
-test("the call and token numbers the Lab mirrors are Core's own", async () => {
-  // Core's built output can lag its source, so the source is what this reads:
-  // it is what the next Core build will enforce.
+test("the call, token and cost numbers the Lab mirrors are Core's own", async () => {
+  // This is the drift detector, and it did its job: it caught the Lab
+  // overriding Core's confirmation threshold with a stale 100_000. But it did
+  // so by parsing Core's source for a plain number, and that stopped working
+  // the moment Core derived the threshold from its per-call limit instead of
+  // writing it down -- the check then failed with "no longer a plain numeric
+  // constant" rather than with the difference it had actually found.
+  //
+  // So everything Core exports is imported here instead. An import cannot be
+  // defeated by a change of expression, and cannot drift.
+  assert.equal(AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS, LLM_LAB_MAX_CALLS_PER_RUN);
+  assert.equal(AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
+  assert.equal(AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, planLiveLlmExecution(profile()).highTokenConfirmation.threshold);
+  // Core's ceiling on a grant's total cost, which a backstop-sized plan reaches,
+  // is the one number here Core does not export -- so it is still read from
+  // Core's source, where it is still a plain numeric constant. Reading the
+  // source rather than the build is deliberate: the build can lag it, and a Lab
+  // run against a Core build older than Core's source is refused outright
+  // (`scripts/lab/core-build-stale.mjs`).
   const source = await readFile(new URL("../../../src/programs/automation-studio/runtime/llm/execution-grants.ts", import.meta.resolve("fluxiq/automation-studio")), "utf8");
-  const constant = (name: string): number => {
-    const match = new RegExp(`^(?:export )?const ${name} = ([0-9_.]+);`, "mu").exec(source);
-    assert.ok(match?.[1], `${name} is no longer a plain numeric constant in Core's execution-grants.ts`);
-    return Number(match[1].replaceAll("_", ""));
-  };
-  assert.equal(constant("AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS"), LLM_LAB_MAX_CALLS_PER_RUN);
-  assert.equal(constant("AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS"), DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
-  assert.equal(constant("AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD"), planLiveLlmExecution(profile()).highTokenConfirmation.threshold);
-  // Not exported by Core: the ceiling on a grant's total cost, which a 64-call plan reaches.
-  assert.equal(constant("MAX_TOTAL_COST_USD"), planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 64 })).maxTotalEstimatedCostUsd);
+  const totalCost = /^const MAX_TOTAL_COST_USD = ([0-9_.]+);/mu.exec(source);
+  assert.ok(totalCost?.[1], "MAX_TOTAL_COST_USD is no longer a plain numeric constant in Core's execution-grants.ts");
+  assert.equal(Number(totalCost[1].replaceAll("_", "")), planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd);
 });

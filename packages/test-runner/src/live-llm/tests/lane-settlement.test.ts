@@ -31,6 +31,15 @@ const PROFILE: LlmExecutionProfile = {
   budget: { ...DEFAULT_LLM_LAB_BUDGET },
 };
 
+/**
+ * The run token budget this profile is granted -- Core's default -- and an
+ * overspend one request past it. Both are taken from the plan rather than
+ * written down: the budget moved from 100,000 to ten full requests, and a
+ * literal overspend would simply have stopped breaching.
+ */
+const RUN_TOKEN_BUDGET = planLiveLlmExecution(PROFILE).maxTotalTokensPerRun;
+const OVERSPENT_TOKENS = RUN_TOKEN_BUDGET + DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
+
 const call = (taskKind: string, sequence: number): ExistingRunProviderCall => ({
   sequence, requestId: `llm.request.${taskKind}`, taskKind, stage: "gather", allowance: taskKind === "evidence_tool_decision" ? "exploration" : "run",
   promptVersion: "v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, validationCodes: [],
@@ -157,12 +166,12 @@ test("a lane that fails after Core ran the Flow still leaves its provider calls 
 });
 
 test("a failed lane whose run broke its budget fails on the budget, not on what the automation did", async () => {
-  const { settlement, snapshot } = await harness({ detail: async () => failedRunDetail(150_000) });
+  const { settlement, snapshot } = await harness({ detail: async () => failedRunDetail(OVERSPENT_TOKENS) });
   await assert.rejects(
     runLaneWithLiveLlmSettlement(settlement, async (identified) => { identified("run-failed"); throw unexpectedFailure; }),
-    (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && /the run used 150000 total tokens against its run token budget of 100000/u.test(error.message),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${OVERSPENT_TOKENS} total tokens against its run token budget of ${RUN_TOKEN_BUDGET}`, "u").test(error.message),
   );
-  assert.equal(snapshot()?.observed.accounting.totalTokens, 150_000, "the breach's evidence is written first");
+  assert.equal(snapshot()?.observed.accounting.totalTokens, OVERSPENT_TOKENS, "the breach's evidence is written first");
 });
 
 test("a failed lane whose run cannot be read, or was never named, still leaves a snapshot that says so", async () => {
@@ -199,7 +208,7 @@ test("a finished lane is settled from its own run, once, and its settlement's re
   assert.equal(finished.published.length, 1);
 
   // An overspend found by the ordinary settlement is not read again, nor replaced.
-  const overspent = await harness({ detail: async () => failedRunDetail(150_000) });
+  const overspent = await harness({ detail: async () => failedRunDetail(OVERSPENT_TOKENS) });
   await assert.rejects(
     runLaneWithLiveLlmSettlement(overspent.settlement, async () => ({ run: { runId: "run-failed" } })),
     (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget",

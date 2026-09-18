@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DEFAULT_LLM_LAB_BUDGET, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST } from "@fluxiq-web-extension/test-contracts";
 import { expandMatrix, parseLabCommand } from "../commands.js";
 
 test("parses finite run options", () => assert.deepEqual(parseLabCommand(["run", "basic-form", "--seed", "7", "--evidence", "events"]), { command: "run", scenarioId: "basic-form", seed: 7, evidence: "events" }));
@@ -60,10 +61,9 @@ test("parses explicit live LLM mode with conservative defaults", () => {
     scenarioNetworkPolicy: "loopback-only",
     providerEgressPolicy: "core-trusted-provider-only", externalSideEffects: false, approvalMode: "manual",
     retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1,
-    budget: {
-      maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000,
-      maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
-    },
+    // The shared default budget, spread rather than restated. This pinned
+    // 8,000 / 2,000 / 10,000 and had to be rewritten the moment it moved.
+    budget: { ...DEFAULT_LLM_LAB_BUDGET },
   });
 });
 
@@ -129,8 +129,11 @@ test("live LLM CLI fails closed without opt-in or required non-secret identity",
 
 test("live LLM CLI rejects unsafe budgets and multi-run matrices", () => {
   const base = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "diagnose"];
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-total-tokens", "50001"]), /50000/);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-input-tokens", "9000"]), /must cover/);
+  // One token past the absolute per-request ceiling, and an input limit the
+  // default output limit can no longer fit beside it inside the total. Both
+  // were fixed numbers that the contract quietly grew past.
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-total-tokens", String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1)]), new RegExp(String(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST)));
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-input-tokens", String(DEFAULT_LLM_LAB_BUDGET.maxInputTokens + 1)]), /must cover/);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "65"]), /from 1 to 64/);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.26"]), /0.25/);
   const lowerCost = parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.10"]);

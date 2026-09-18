@@ -5,7 +5,7 @@
 // limit below is at or inside the profile's own, so a cap the operator typed
 // can only ever bind harder, never less.
 
-import { LLM_LAB_MAX_CALLS_PER_RUN, type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 
 /**
@@ -23,8 +23,8 @@ const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, expl
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */
-/** Core's per-request ceiling, which is deepseek-chat's own 64k context. */
-const CORE_MAX_TOKENS = 64_000;
+/** Core's per-request ceiling, which is deepseek-chat's own 64k context. Derived: a tenth copy of this number is how the previous nine happened. */
+const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;
 /** Core's ceiling on a grant's total estimated cost (`MAX_TOTAL_COST_USD`), whatever its call count. */
@@ -36,8 +36,20 @@ const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
  * whose run token budget (`maxTotalTokensPerRun`) is above this only when the
  * request confirms the exposure, and it also caps the budget Core chooses when a
  * request names none.
+ *
+ * Derived, because a literal here does not merely drift -- it overrides. This
+ * plan's number is sent on every grant request and Core honours a caller-named
+ * budget, so while this said 100_000 Core's own default could never reach a Lab
+ * run. Core's arithmetic at the current call size: a 100_000 pot, one call's
+ * worth held as the patch reserve, and an exploration decision needing another
+ * call's worth leaves ZERO decisions. Every Lab run without an explicit
+ * `--llm-max-run-tokens` therefore reintroduced, inside the Lab, precisely the
+ * regression the Core change was made to remove -- and the campaigns hid it by
+ * passing their own larger budget.
+ *
+ * Ten full requests, which is what Core means by the threshold.
  */
-const CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD = 100_000;
+const CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10;
 
 export type LiveLlmPlan = {
   profileId: string;
@@ -151,8 +163,8 @@ function runTokenBudget(declared: number | undefined, perCall: number, calls: nu
   const exposureText = `--llm-max-total-tokens ${perCall} x ${calls} authorized call(s) = ${exposure}`;
   if (declared === undefined) {
     // Core's formula, exactly. The outer `max` cannot bind here, since a
-    // request is at most 50,000 tokens, but a copy that differs is a copy that
-    // will drift.
+    // request is at most one per-request ceiling, but a copy that differs is a
+    // copy that will drift -- and this one did, silently overriding Core.
     return {
       tokens: Math.max(perCall, Math.min(exposure, CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD)),
       source: `Core's default: the smaller of ${exposureText} and ${CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD}`,

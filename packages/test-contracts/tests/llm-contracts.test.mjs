@@ -30,11 +30,20 @@ const liveProfile = {
 };
 
 test("exports conservative defaults and a non-overridable request ceiling", () => {
-  assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 50_000);
+  // Sized to deepseek-chat's own 64k context rather than to a number chosen
+  // here. At 8,000 input tokens a real page could not be described at all:
+  // measured across thirty-six live creation tasks, the guard fired before the
+  // request was ever sent on every realistic page in the corpus.
+  assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 64_000);
   assert.deepEqual(DEFAULT_LLM_LAB_BUDGET, {
-    maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000,
+    maxInputTokens: 48_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 56_000,
     maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
+  // The default request must fit under the ceiling, which is the relationship
+  // that actually matters and which seven separate copies of these numbers kept
+  // breaking.
+  assert.ok(DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest <= LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST);
+  assert.ok(DEFAULT_LLM_LAB_BUDGET.maxInputTokens + DEFAULT_LLM_LAB_BUDGET.maxOutputTokens <= DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest);
   assert.equal("maxTotalTokensPerRun" in DEFAULT_LLM_LAB_BUDGET, false);
   const dry = createDeterministicDryLlmProfile();
   assert.equal(dry.mode, "deterministic-dry");
@@ -79,7 +88,10 @@ test("the call ceiling is Core's runaway backstop, not a per-task count", () => 
 });
 
 test("a run token budget is optional, covers one request, and fits the calls declared", () => {
-  const budget = { ...liveProfile.budget, maxCallsPerRun: 26, maxTotalTokensPerRequest: 10_000 };
+  // The per-request triple is set together. Overriding only the total while
+  // inheriting the default's 48,000 input would make every case below invalid
+  // for an unrelated reason -- input plus output may not exceed the total.
+  const budget = { ...liveProfile.budget, maxCallsPerRun: 26, maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 };
   for (const maxTotalTokensPerRun of [10_000, 100_000, 100_001, 260_000]) {
     assert.equal(validateLlmExecutionProfile({ ...liveProfile, task: "adapt", budget: { ...budget, maxTotalTokensPerRun } }).valid, true, `maxTotalTokensPerRun ${maxTotalTokensPerRun}`);
   }

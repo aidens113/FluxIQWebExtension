@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
@@ -16,6 +17,10 @@ import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
  * not must say that too. These drive one run end to end against a fake Core:
  * authorize, settle, and read back `snapshots/live-llm.json`.
  */
+
+/** Core's own threshold and the shared per-request budget, imported rather than copied. */
+const CORE_THRESHOLD = AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
+const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 
 const CREDENTIAL = { name: "DEEPSEEK_API_KEY", source: "test", value: "test-provider-credential-value" };
 
@@ -114,24 +119,26 @@ test("a default adapt run records that it sent no high-token confirmation, and w
   assert.deepEqual(execution, { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" });
   assert.equal("highTokenConfirmation" in (core.issueRequests[0] ?? {}), false);
   assert.equal(snapshot.authorized.maxCalls, 26);
-  assert.equal(snapshot.authorized.maxTotalTokensPerRun, 100_000);
-  assert.equal(snapshot.granted.maxTotalTokensPerRun, 100_000);
+  assert.equal(snapshot.authorized.maxTotalTokensPerRun, CORE_THRESHOLD);
+  assert.equal(snapshot.granted.maxTotalTokensPerRun, CORE_THRESHOLD);
   assert.equal(snapshot.highTokenConfirmation.sent, false);
-  assert.equal(snapshot.highTokenConfirmation.authorizedTokens, 100_000);
-  assert.equal(snapshot.highTokenConfirmation.threshold, 100_000);
-  assert.match(snapshot.highTokenConfirmation.reason, /within Core's 100000-token confirmation threshold; no confirmation is needed/u);
+  assert.equal(snapshot.highTokenConfirmation.authorizedTokens, CORE_THRESHOLD);
+  assert.equal(snapshot.highTokenConfirmation.threshold, CORE_THRESHOLD);
+  assert.match(snapshot.highTokenConfirmation.reason, new RegExp(`within Core's ${CORE_THRESHOLD}-token confirmation threshold; no confirmation is needed`, "u"));
   assert.equal(snapshot.exploration.source, "absent");
   assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
   assert.equal(run.usage.calls, 3);
 });
 
 test("a run whose typed token budget is above the threshold records that it sent the confirmation, and why", async () => {
-  const { core, snapshot } = await runOnce({ maxTotalTokensPerRun: 150_000 });
+  // One full request past Core's threshold, so the confirmation is required.
+  const aboveThreshold = CORE_THRESHOLD + PER_REQUEST;
+  const { core, snapshot } = await runOnce({ maxTotalTokensPerRun: aboveThreshold });
   assert.equal(core.issueRequests[0]?.highTokenConfirmation, true);
   assert.equal(snapshot.highTokenConfirmation.sent, true);
-  assert.equal(snapshot.highTokenConfirmation.authorizedTokens, 150_000);
-  assert.match(snapshot.highTokenConfirmation.reason, /--llm-max-run-tokens 150000\) is above Core's 100000-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation/u);
-  assert.equal(snapshot.declared.maxTotalTokensPerRun, 150_000);
+  assert.equal(snapshot.highTokenConfirmation.authorizedTokens, aboveThreshold);
+  assert.match(snapshot.highTokenConfirmation.reason, new RegExp(`--llm-max-run-tokens ${aboveThreshold}\\) is above Core's ${CORE_THRESHOLD}-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation`, "u"));
+  assert.equal(snapshot.declared.maxTotalTokensPerRun, aboveThreshold);
 });
 
 async function noKeyRepository(t: test.TestContext): Promise<string> {
@@ -190,7 +197,10 @@ const proposedBuild: CreatedFlowBuild = {
 
 async function settleBuildOnce(build: CreatedFlowBuild) {
   const core = fakeCore();
-  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxOutputTokens: 4_000, maxTotalTokensPerRequest: 12_000 }), task: "create-flow" }), CREDENTIAL);
+  // The whole per-request triple is the shared budget's. Overriding only the
+  // output and total limits left the input limit at the default, and input plus
+  // output may not exceed the total, so every build below was refused unrun.
+  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   const grant = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: unknown }> = [];
   const published: Record<string, unknown>[] = [];
@@ -230,8 +240,10 @@ test("a build that reached no provider fails the run closed, after its evidence 
 });
 
 test("a build over its run budget, over its call count, or run on another model fails the run", async () => {
-  const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: 120_000 } });
-  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && /the run used 120000 total tokens against its run token budget of 100000/u.test(error.message));
+  // One request past the run token budget, which for a default build is Core's threshold.
+  const overspend = CORE_THRESHOLD + PER_REQUEST;
+  const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: overspend } });
+  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${overspend} total tokens against its run token budget of ${CORE_THRESHOLD}`, "u").test(error.message));
   const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
   await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });

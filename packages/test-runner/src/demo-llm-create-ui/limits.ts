@@ -1,3 +1,4 @@
+import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
 // The bounded LLM profiles this Testing Lab is allowed to spend, and the Flow
 // Settings fields that carry them into the panel. Every number is a ceiling a
 // live run is measured against, so the profiles are frozen and the settings
@@ -20,18 +21,31 @@ export const FIRST_LIVE_CREATION_LIMITS = Object.freeze({
 // lease once claimed (Core's `AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`).
 // The panel issues the grant with the claim window as its TTL.
 export const EVIDENCE_GUIDED_CREATION_LIMITS = Object.freeze({
-  provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000,
-  maxTotalTokens: 12_000, maxTotalTokensPerRun: 100_000, timeoutSeconds: 45,
+  // Live: published as the provider budget an exploration actually runs under.
+  // It carried 8,000 in / 12,000 per request and a 100,000 run budget, which is
+  // the exact size measured as unable to describe a realistic page -- and a run
+  // budget that leaves no exploration decision affordable once the patch
+  // reserve is held. Both follow the shared budget now.
+  provider: "deepseek", model: "deepseek-chat",
+  maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
+  maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
+  maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
   grantClaimWindowSeconds: 60, runLeaseSeconds: 600,
   maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0,
 });
 // The Flow Settings an exploration Flow is given.
+// 8,000 input tokens is the exact size measured, across thirty-six live
+// creation tasks, as unable to describe any realistic page in the corpus: the
+// guard fired before the request was ever sent and the run built nothing. These
+// follow the shared budget rather than repeating numbers of their own.
 export const EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS = Object.freeze({
-  provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000,
-  maxTotalTokens: 12_000, timeoutSeconds: 25,
+  provider: "deepseek", model: "deepseek-chat",
+  maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
+  maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25,
   maxEstimatedCostUsd: 0.25, providerRetries: 0,
 });
-export const LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD = 100_000;
+/** Ten full requests, derived for the reason live-llm-plan.ts records: a literal here overrides Core rather than mirroring it. */
+export const LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10;
 // Mirrors the panel's `WEBSITE_EXPLORATION_COMMAND_TIMEOUT_MS`: the grant may be
 // claimed at the end of its claim window, then runs its whole lease, and the
 // answer still has to come back.

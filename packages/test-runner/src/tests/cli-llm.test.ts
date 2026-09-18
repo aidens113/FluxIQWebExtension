@@ -108,7 +108,10 @@ test("a create-flow run fails closed before anything starts: no credential, or a
 test("a create-flow dry run resolves the task, plans the build grant and starts nothing", async (t) => {
   const lab = await stubLab(t);
   const env = { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY };
-  const result = await captureCli(["run", "product-catalog", "--variant", "text-variant", ...CREATE_FLOW, "--instruction-task", "catalog-reworded", "--llm-max-output-tokens", "4000", "--llm-max-total-tokens", "12000", "--dry-run"], env);
+  // The whole per-request triple is typed, never two thirds of it: an input
+  // limit left at the default while the total is lowered is refused, because
+  // input plus output may not exceed the total.
+  const result = await captureCli(["run", "product-catalog", "--variant", "text-variant", ...CREATE_FLOW, "--instruction-task", "catalog-reworded", "--llm-max-input-tokens", "40000", "--llm-max-output-tokens", "6000", "--llm-max-total-tokens", "46000", "--dry-run"], env);
   assert.equal(result.code, 0, result.stderr);
   const printed = JSON.parse(result.stdout) as Record<string, any>;
   assert.equal(printed.status, "ready");
@@ -120,7 +123,7 @@ test("a create-flow dry run resolves the task, plans the build grant and starts 
   assert.deepEqual(printed.request.judgement, { judgeBy: "expected-dataset", stepId: "extract-page-one", stepIndex: 1 });
   assert.equal(printed.live.purpose, "build_and_adapt");
   assert.equal(printed.live.authorized.maxCalls, 26);
-  assert.deepEqual(printed.live.authorized.tokenLimits, { maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000 });
+  assert.deepEqual(printed.live.authorized.tokenLimits, { maxInputTokens: 40_000, maxOutputTokens: 6_000, maxTotalTokens: 46_000 });
   assert.deepEqual(printed.live.credentialSource, { name: "DEEPSEEK_API_KEY", from: "the process environment" });
   assert.equal(result.stdout.includes(DUMMY_KEY), false, "the dry run printed the credential");
   assert.equal(result.stdout.includes("Scrape"), false, "the dry run printed the instruction");
