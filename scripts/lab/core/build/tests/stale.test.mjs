@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { coreBuildStaleness } from "../core-build-stale.mjs";
+import { coreBuildStaleness } from "../index.mjs";
 
 test("a build newer than its source is not stale", () => {
   const verdict = coreBuildStaleness({ newestMs: 1_000, newestPath: "src/a.ts" }, { newestMs: 2_000, newestPath: "dist/a.js" });
@@ -39,7 +39,7 @@ test("a Core test file is not a source the build ships, so it cannot make a buil
   const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
   const os = await import("node:os");
   const path = await import("node:path");
-  const { scanCoreSources } = await import("../core-build-staleness.mjs");
+  const { scanCoreSources } = await import("../staleness.mjs");
 
   const root = await mkdtemp(path.join(os.tmpdir(), "core-src-"));
   await mkdir(path.join(root, "packages", "fluxiq", "src", "tests"), { recursive: true });

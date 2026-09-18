@@ -15,9 +15,9 @@ import { spawn } from "node:child_process";
 import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { withBuildLock } from "./build-lock.mjs";
-import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core-build-watch.mjs";
-import { coreBuildStaleness } from "./core-build-stale.mjs";
-import { scanCoreSources } from "./core-build-staleness.mjs";
+import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core/index.mjs";
+import { coreBuildStaleness } from "./core/index.mjs";
+import { scanCoreSources } from "./core/index.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 
 const args = process.argv.slice(2);

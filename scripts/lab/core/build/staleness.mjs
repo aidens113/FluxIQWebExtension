@@ -9,7 +9,7 @@
 // ceiling. Zero provider calls, zero tokens, and three reports whose real
 // subject was the build rather than the product.
 //
-// `core-build-watch.mjs` could not catch it. It watches Core's OUTPUT, to keep
+// `build-watch.mjs` could not catch it. It watches Core's OUTPUT, to keep
 // a rebuild from deleting modules a run is importing, and by that measure a
 // stale build looks perfectly quiet -- quieter than a fresh one. The two guards
 // are complementary: that one asks "is Core changing under me?", this one asks

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { coreOutputChange, coreRepositoryRoot, scanCoreOutput, waitForQuietCoreOutput } from "../core-build-watch.mjs";
+import { coreOutputChange, coreRepositoryRoot, scanCoreOutput, waitForQuietCoreOutput } from "../index.mjs";
 
 const REPO = path.resolve("F:/repo");
 
