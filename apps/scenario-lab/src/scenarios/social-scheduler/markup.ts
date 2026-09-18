@@ -44,7 +44,8 @@ export function renderSchedulerPage(state: SchedulerState, context: RenderContex
   const build = state.mode === "restyled" ? SCHEDULER_BUILDS.restyled : SCHEDULER_BUILDS.baseline;
   const css = schedulerClasses(build);
   const posts = orderedQueue(applyChanges(queuePostsFor(state.mode), state.retried, state.composed));
-  const body = `<div class="${css.app}">
+  const announcing = state.mode === "whats-new";
+  const body = `<div class="${css.app}"${announcing ? " inert" : ""}>
 ${sidebar(css)}
 <div class="${css.main}">
 ${topbar(css)}
@@ -65,10 +66,28 @@ ${toolbarMarkup(css)}
 </div>
 </div>
 <div class="${css.toastRegion}" data-testid="toast-region" aria-live="polite"></div>
+${announcing ? announcementMarkup(css) : ""}
 <style>${schedulerStylesheet(css)}</style>`;
   const script = `${fixtureClient(context.runToken, "social-scheduler")}
 ${schedulerClientScript(css)}`;
   return page("Queue · Cadence", body, script);
+}
+
+/**
+ * The What's new announcement an update ships with. It is a real modal: the
+ * console behind it carries `inert` until the announcement is closed, so
+ * nothing on the queue can be chosen, typed into or pressed while it stands --
+ * which is what a person meets, and what the extension's actionability check
+ * refuses. Got it, or Escape, closes it and leaves the baseline page.
+ */
+function announcementMarkup(css: SchedulerClasses): string {
+  return `<div class="${css.scrim}" data-testid="whats-new-scrim">
+<div class="${css.dialog}" role="dialog" aria-modal="true" aria-labelledby="whats-new-title" data-testid="whats-new">
+<p class="${css.dialogHead}" id="whats-new-title">What's new in Cadence</p>
+<div class="${css.dialogBody}"><p>Bulk retry now keeps your filters, and the queue remembers the columns you sort by. Close this to get back to your queue.</p></div>
+<div class="${css.dialogFoot}"><button class="${css.button} ${css.buttonPrimary}" type="button" data-action="dismiss-whats-new">Got it</button></div>
+</div>
+</div>`;
 }
 
 /** One design-system glyph. Every icon on the page is one path, drawn in the current colour, hidden from the accessibility tree. */

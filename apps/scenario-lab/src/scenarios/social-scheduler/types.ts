@@ -16,8 +16,13 @@
  *   follows the header survives and a read that counts cells does not.
  * - `quiet-week` -- a calmer week: three posts failed in the last seven days
  *   rather than ten, so the same retry job has a different answer.
+ * - `whats-new` -- an update shipped, and the console opens with a What's new
+ *   announcement in front of the queue. Until it is closed the console behind
+ *   it is inert; once closed, the page is the baseline. The same job now has
+ *   two situations it can start in, and only a Flow that tells them apart
+ *   passes both.
  */
-export const schedulerModes = ["baseline", "restyled", "renamed-composer", "reordered-columns", "quiet-week"] as const;
+export const schedulerModes = ["baseline", "restyled", "renamed-composer", "reordered-columns", "quiet-week", "whats-new"] as const;
 
 export type SchedulerMode = (typeof schedulerModes)[number];
 

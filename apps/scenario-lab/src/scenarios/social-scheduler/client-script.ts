@@ -209,6 +209,17 @@ toolbar.addEventListener('click', (event) => {
 for (const button of document.querySelectorAll('[data-action="import"], [data-action="connect"]')) {
   button.addEventListener('click', () => showToast('Ask a workspace owner to connect or import accounts.'));
 }
+
+const announcement = document.querySelector('[data-testid="whats-new-scrim"]');
+if (announcement) {
+  const closeAnnouncement = () => {
+    if (!announcement.isConnected) return;
+    announcement.remove();
+    document.querySelector('.' + css.app).removeAttribute('inert');
+  };
+  announcement.querySelector('[data-action="dismiss-whats-new"]').addEventListener('click', closeAnnouncement);
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeAnnouncement(); });
+}
 `;
 
 /**

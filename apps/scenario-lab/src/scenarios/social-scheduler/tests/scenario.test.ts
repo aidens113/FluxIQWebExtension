@@ -63,7 +63,7 @@ function readColumns(html: string, columns: readonly string[]): Array<Record<str
   return rows.map((cells) => Object.fromEntries(indexes.map(([column, index]) => [column.toLowerCase(), cells[index] ?? ""])));
 }
 
-test("the manifest is a valid scenario with four workflows and four variants, each arming one mode", () => {
+test("the manifest is a valid scenario with four workflows and five variants, each arming one mode", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
   assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["retry-failed", "week-ahead", "whole-queue"]);
@@ -73,10 +73,13 @@ test("the manifest is a valid scenario with four workflows and four variants, ea
       { id: "renamed-composer", arm: { operation: "set-mode", payload: { mode: "renamed-composer" } } },
     ],
     [{ id: "quiet-week", arm: { operation: "set-mode", payload: { mode: "quiet-week" } } }],
-    [{ id: "reordered-columns", arm: { operation: "set-mode", payload: { mode: "reordered-columns" } } }],
+    [
+      { id: "reordered-columns", arm: { operation: "set-mode", payload: { mode: "reordered-columns" } } },
+      { id: "whats-new", arm: { operation: "set-mode", payload: { mode: "whats-new" } } },
+    ],
     [],
   ]);
-  assert.equal(selections().length, 8);
+  assert.equal(selections().length, 9);
   for (const selection of selections()) {
     const { expected } = resolveScenarioWorkflow(manifest, selection);
     assert.ok((expected.finalState ?? []).length > 0, label(selection));
@@ -231,6 +234,20 @@ test("a retry moves only failures into the queue, and arming clears what a run d
   assert.deepEqual(apply(state, "retry-posts", { ids: "not-an-array" }).retried, state.retried);
   assert.deepEqual(apply(state, "no-such-operation", { ids: failed }), state);
   assert.deepEqual(apply(state, "set-mode", { mode: "not-a-mode" }), state);
+});
+
+test("whats-new stands an announcement in front of an inert console and changes nothing else", () => {
+  const baseline = markupOf(render("baseline"));
+  const announcing = markupOf(render("whats-new"));
+  assert.equal(occurrences(baseline, `data-testid="whats-new"`), 0);
+  assert.equal(occurrences(announcing, `data-testid="whats-new"`), 1);
+  assert.match(announcing, /role="dialog" aria-modal="true" aria-labelledby="whats-new-title"/u);
+  assert.ok(announcing.includes(`<div class="${baselineCss.app}" inert>`), "the console behind the announcement is inert");
+  assert.ok(announcing.includes(`data-action="dismiss-whats-new">Got it</button>`));
+  assert.deepEqual(readColumns(announcing, ["Account", "Post", "Scheduled", "Status"]), readColumns(baseline, ["Account", "Post", "Scheduled", "Status"]));
+  assert.deepEqual(queueCounts(queuePostsFor("whats-new")), queueCounts(queuePostsFor("baseline")));
+  const script = render("whats-new").slice(render("whats-new").indexOf("<script"));
+  assert.ok(script.includes("removeAttribute('inert')"), "closing the announcement gives the console back");
 });
 
 test("quiet-week thins only the week's failures", () => {

@@ -22,7 +22,7 @@ import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import type { PersistentRunAllocation } from "../allocation.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "../coordinator.js";
 import { classifyRunnerFailure, RunnerFailure } from "../failure.js";
-import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, executeRecordedFlowRun, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, resetScenarioLab, resolveCreatedFlowSecrets, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
+import { createdFlowActionTypes, createdFlowDatasetHolds, createdFlowSecretInputs, executeRecordedFlowRun, judgeCreatedFlowDataset, loadCreatedFlowRequest, readFlowNodes, resetScenarioLab, resolveCreatedFlowSecrets, type FlowRunRoute, type PersistedFlowRunOutcome } from "../flow-lane/index.js";
 import { armScenarioVariant } from "../lab-control/index.js";
 import { resolveLabPaths } from "../lab-instance/index.js";
 import { finalStateFacts } from "../lane-rules/index.js";
@@ -83,7 +83,7 @@ export type SavedFlowReplayResult = Readonly<{
   task: Readonly<{ taskId: string; scenarioId: string; workflowId: string | null; variantId: string | null; judgeBy: string; stepId: string | null }> | null;
   address: Readonly<{ scenarioOrigin: string | null; scenarioPortRetained: boolean | null; savedNavigationOrigins: readonly string[]; servedAtSavedAddress: boolean | null }>;
   model: ReplayModelAccounting;
-  run: Readonly<{ runtimeRunId: string; status: string; actions: readonly Readonly<{ actionType: string; status: string }>[]; failure: Readonly<{ category: string; code?: string }> | null }> | null;
+  run: Readonly<{ runtimeRunId: string; status: string; actions: readonly Readonly<{ actionType: string; status: string }>[]; failure: Readonly<{ category: string; code?: string }> | null; route: FlowRunRoute | null }> | null;
   /** Counts only, per judged extract step: `matchedRecords` against `expectedRecords` is the answer. */
   extraction: readonly Readonly<Record<string, unknown>>[] | null;
   /**
@@ -154,7 +154,11 @@ export async function replaySavedFlow(options: SavedFlowReplayOptions): Promise<
     const nodes = await readFlowNodes(control, { projectId, flowId: options.flowId });
     const actionTypes = createdFlowActionTypes(nodes, options.flowId);
     state.origins = savedNavigationOrigins(nodes, actionTypes);
-    state.servedAtSavedAddress = state.origins.length > 0 && state.origins.every(origin => origin === new URL(scenarioOrigin).origin);
+    // A Flow that navigates nowhere starts on the page the run starts on -- which
+    // is what a Router deciding on the observed start page needs -- so it has no
+    // saved address to be wrong about. The replay loads the fixture's start page
+    // before running it, as the lane that built it did.
+    state.servedAtSavedAddress = state.origins.every(origin => origin === new URL(scenarioOrigin).origin);
     // Run regardless, so what an unreachable address does to the Flow is observed rather than assumed.
     if (!state.servedAtSavedAddress) reasons.push("the saved Flow navigates to an address this invocation does not serve the fixture at");
     const secretInputs = createdFlowSecretInputs({ scenarioId: request.task.scenarioId, secrets: resolveCreatedFlowSecrets(scenario, workflow, options.environment), workflow, nodes });
@@ -217,6 +221,8 @@ function resultOf(input: { replayId: string; resultPath: string; options: SavedF
       runtimeRunId: run.runId, status: run.status,
       actions: run.actions.map(action => ({ actionType: action.actionType, status: action.status })),
       failure: run.failure ? { category: run.failure.category, ...(run.failure.code === undefined ? {} : { code: run.failure.code }) } : null,
+      // Which route the saved Flow's Router took on this rendering, and why: ids and Core's matcher reasons, no observed values.
+      route: run.route,
     } : null,
     extraction: state.extraction,
     datasets: run ? run.extracted.map(dataset => ({ records: dataset.records.length, sha256: rowsDigest(dataset.records) })) : null,
