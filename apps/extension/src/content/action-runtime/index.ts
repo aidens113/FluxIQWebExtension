@@ -14,6 +14,7 @@ export type { CheckableStateOutcome } from "./checkable-state";
 export type { DialogControl, ObservedDialog } from "./dialog-control";
 export type { ExtractedElementValue } from "./extract";
 export type { FileInputOutcome } from "./file-input";
+export type { InPlaceEffect, InPlaceEffectWatch } from "./in-place-effect";
 export type { KeyboardCapability, KeyPressOutcome } from "./keyboard";
 export type { ResolvedTarget } from "./resolve-target";
 export type { WaitConditionOutcome, WaitConditionRequest } from "./wait-conditions";
