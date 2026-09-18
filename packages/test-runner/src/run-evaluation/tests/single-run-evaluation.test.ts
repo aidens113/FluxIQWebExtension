@@ -92,7 +92,7 @@ test("a Flow-lane run reports the persisted Core run, not the recording lane's p
   const observation = flowLaneObservation({
     flowCreated: true, oracleVerdict: "passed", automationFailureExpected: null,
     run: {
-      runId: "core-run.1", status: "succeeded", harnessActivations: 2, harnessRecovery: RECOVERED, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
+      runId: "core-run.1", status: "succeeded", harnessActivations: 2, harnessRecovery: RECOVERED, failure: null, resultVerification: "confirmed", extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
       actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }],
     },
   });
@@ -144,7 +144,7 @@ const TWO_PACKETS = {
 
 const createdFlow = flowLaneObservation({
   flowCreated: true, oracleVerdict: "passed", automationFailureExpected: null,
-  run: { runId: "core-run.1", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(), actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }] },
+  run: { runId: "core-run.1", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, resultVerification: "confirmed", extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(), actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }] },
 });
 
 /** The same run as the bench's Flow lane evaluates it, from the finalized bundle at `bundlePath`. `input()` closes on its `final` event, sequence 17. */

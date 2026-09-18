@@ -18,8 +18,16 @@ import { RunnerFailure } from "../failure.js";
  * accepts (`AUTOMATION_STUDIO_RUNTIME_SESSION_GRANT_PURPOSES`);
  * `build_and_adapt` is a person asking for a new Flow, and only a Flow build
  * accepts it.
+ *
+ * `verify_result` is never a *plan's* purpose -- no `--llm-task` maps to it,
+ * and `purposeOf` never returns it. It is the purpose of a second grant a lane
+ * takes out alongside its own, so that the finished run's result can be judged
+ * at all: a run carrying no grant makes no provider call, so Core's
+ * verification records that nobody judged the result rather than a verdict,
+ * and the run keeps the `succeeded` its steps earned. One call, and the run
+ * itself stays exactly as deterministic as it was without it.
  */
-const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true, build_and_adapt: true } as const;
+const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true, build_and_adapt: true, verify_result: false } as const;
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */

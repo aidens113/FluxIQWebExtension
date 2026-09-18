@@ -7,7 +7,7 @@ import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
 
 const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRunOutcome => ({
-  runId: "run.one", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
+  runId: "run.one", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, resultVerification: "confirmed", extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
   actions: [{ actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), durationMs: 12, failure: null }],
   ...overrides,
 });
@@ -50,6 +50,29 @@ test("the recording lane's probe observation reads FluxIQ's verdict from the act
     assert.equal(unknown.automationFailureReported, null);
     assert.equal(unknown.extraction, null, "a lane that ran no script measured nothing");
   }
+});
+
+test("a Flow whose result nobody judged reports neither passed nor failed", () => {
+  // Measured live on 2026-09-18: a created Flow returned ten rows of which not
+  // one was right, every step succeeded, the playback carried no grant so no
+  // model was ever asked, and the run read `passed`. Core now says which of
+  // those happened, and the lane reports it rather than a pass.
+  const unjudged = flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", run: run({ resultVerification: "unverified" }), automationFailureExpected: null });
+  assert.equal(unjudged.reportedVerdict, "unverified");
+  assert.equal(unjudged.automationFailureReported, null, "nobody judged the result, so there is no failure to categorize");
+  assertRunEvaluation(evaluationFrom(unjudged));
+
+  // A Flow that stored no record set had nothing to judge; its steps are the
+  // whole account, and calling that unverified would report a missing
+  // judgement of a thing there was nothing to judge.
+  assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run({ resultVerification: "no_result" }), automationFailureExpected: null }).reportedVerdict, "passed");
+  // A Core that records nothing at all is not Core saying nobody judged it.
+  assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run({ resultVerification: null }), automationFailureExpected: null }).reportedVerdict, "passed");
+  // Core fails the session it refutes, so this is belt and braces.
+  const refuted = flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", run: run({ resultVerification: "refuted" }), automationFailureExpected: null });
+  assert.equal(refuted.reportedVerdict, "failed");
+  assert.deepEqual(refuted.automationFailureReported, { category: "ambiguous_or_unknown" });
+  assertRunEvaluation(evaluationFrom(refuted));
 });
 
 test("a Flow that ran clean reports passed with no failure", () => {

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { RunnerFailure } from "../failure.js";
 import { certifyDemoLlmSetupArtifacts } from "../demo-llm-attestation.js";
+import { SECRET_LEAK_ATTESTATION_RUN_LIMITS } from "../secret-leak-attestation.js";
 import { createSqliteDatabases } from "../sqlite-store-reader/tests/sqlite-fixtures.js";
 
 const sentinel = "synthetic-deepseek-setup-sentinel-123456";
@@ -67,11 +68,35 @@ test("scans Core databases and a -wal over the default 1 MiB, and over the defau
   assert.equal(JSON.stringify(result).includes(sentinel), false);
 });
 
-test("still fails setup on a Core database over the Lab run's 8 MiB per-file ceiling, which the scan cannot read", async t => {
+/**
+ * The size a live run really produces. On 2026-09-18 one
+ * `social-scheduler-week-ahead` run left a 10.02 MiB `.fluxiq/global.sqlite`, and
+ * charging it to the 8 MiB text ceiling failed that run, and every run like it, as
+ * `unscanned-store` on a store nothing was wrong with. A store is bounded by
+ * `maxStoreBytes` instead, so a store this size is read rather than refused.
+ */
+test("scans a Core database past the 8 MiB text ceiling, the size a live run leaves behind", async t => {
+  const root = await demoWorkspace(t);
+  const database = path.join(root, "fluxiq-root", ".fluxiq", "global.sqlite");
+  createSqliteDatabases([{ file: database, statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(10500000))"] }]);
+  const size = (await stat(database)).size;
+  assert.ok(size > 8 * MIB, `the store is past the text ceiling: ${size}`);
+  assert.ok(size <= SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxStoreBytes, `the store is inside the store ceiling: ${size}`);
+
+  const result = await certifyDemoLlmSetupArtifacts({ workspaceRoot: root, secretLiteral: sentinel });
+
+  assert.equal(result.findingCount, 0);
+  assert.ok(result.scannedBytes >= size, `every store byte was searched: ${result.scannedBytes} of at least ${size}`);
+});
+
+test("still fails setup on a Core database over the Lab run's store ceiling, which the scan cannot read", async t => {
   const root = await demoWorkspace(t);
   const database = path.join(root, "fluxiq-root", ".fluxiq", "project.sqlite");
-  createSqliteDatabases([{ file: database, statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(8500000))"] }]);
-  assert.ok((await stat(database)).size > 8 * MIB);
+  // Past `maxStoreBytes`, taken from the constant so raising that ceiling without
+  // reading this test cannot quietly turn the fail-closed case into a pass.
+  const past = SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxStoreBytes + MIB;
+  createSqliteDatabases([{ file: database, statements: [BLOB_TABLE, `INSERT INTO blobs VALUES (zeroblob(${past}))`] }]);
+  assert.ok((await stat(database)).size > SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxStoreBytes);
   await assert.rejects(
     certifyDemoLlmSetupArtifacts({ workspaceRoot: root, secretLiteral: sentinel }),
     error => error instanceof RunnerFailure

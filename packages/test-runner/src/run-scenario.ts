@@ -337,6 +337,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
+        // The one call that judges the finished run's result. Without it the
+        // playback carries no grant, Core has nobody to ask, and a Flow whose
+        // rows are wrong reports `passed` on its steps alone.
+        authorizeVerification: live.verificationAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
         ...flowRunHooks(activeTopology, async evidence => {
           await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence));

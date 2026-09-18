@@ -11,7 +11,7 @@ import type { DeclaredSecret } from "../declared-secrets.js";
 import { assertFlowFailure, type FlowExtractionJudgement } from "../expectations.js";
 import { readFlowNodes } from "../flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "../lane-observation.js";
-import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
+import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
@@ -41,6 +41,19 @@ export type CreatedFlowLaneInput = {
   secrets: readonly DeclaredSecret[];
   /** Installs the key, pins the Flow's settings and issues the `build_and_adapt` grant, against the Flow as it then stands. */
   authorizeBuild: (flowId: string) => Promise<{ grantId: string }>;
+  /**
+   * Issues the `verify_result` grant the playback carries, immediately before
+   * it runs. Absent, the Flow is played back with no grant at all, Core has
+   * nobody to ask whether the result answers the request, and the run reports
+   * whatever its steps earned -- which is how a created Flow that returned ten
+   * rows, none of them right, reported `passed` on 2026-09-18.
+   *
+   * It does not make the playback adaptive. Core runs a `verify_result`
+   * session with `invokeLlm` off, so the Flow executes exactly as it did
+   * without the grant, and the one call it buys happens after the run has
+   * finished.
+   */
+  authorizeVerification?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   /**
    * Publishes what the build spent and holds it to its caps, throwing on a
    * breach or on a build that reached no provider. Called once, before the
@@ -80,12 +93,16 @@ export type CreatedFlowLaneEvidence = Readonly<{
  * Creates a blank Flow, presents the task's rendering, has FluxIQ explore it
  * and propose a Flow for the task's instruction, settles the build, approves
  * and applies the proposal, resets the fixture, presents the page again, runs
- * the created Flow without a provider, and judges it: by the stored records
- * for a dataset task, by the scenario's playback goal otherwise.
+ * the created Flow, and judges it: by the stored records for a dataset task,
+ * by the scenario's playback goal otherwise.
  *
- * The run is deterministic. The build is the live part; a created Flow that
- * then needs the model to succeed has not been created well, and a later lane
- * repairs it under its own grant.
+ * The run itself is still deterministic. The build is the live part; a created
+ * Flow that then needs the model to succeed has not been created well, and a
+ * later lane repairs it under its own grant. What the run now carries is a
+ * `verify_result` grant, which buys no intervention during the run and exactly
+ * one question after it: does what came back answer what was asked? Without
+ * it, Core records that nobody judged the result and the run keeps its
+ * `succeeded`, which is indistinguishable from a result that was right.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence> {
   const bounds = input.bounds ?? {};
@@ -113,10 +130,14 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   // Exploration may have acted on the page; the Flow is judged on state it produced itself.
   await resetScenarioLab(input.scenarioOrigin, input.runToken, input.fetchLab);
   await input.prepareFlowPage();
+  // Last, because Core binds the grant to the Flow's saved settings and expires
+  // it within the minute: nothing slow may come between this and the run.
+  const llmExecution = input.authorizeVerification ? await input.authorizeVerification(flowId) : undefined;
   const run = await executeRecordedFlowRun(input.control, {
     projectId,
     flowId,
     facilityRunId,
+    ...(llmExecution ? { llmExecution } : {}),
     ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
     actionTypes,
     // Each declared value once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.

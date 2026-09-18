@@ -219,7 +219,8 @@ export type RunExtractionMeasurement = {
  *   accuracy compares their categories.
  *
  * False failure is `oracleVerdict: "passed"` with `reportedVerdict: "failed"`;
- * false success is the inverse.
+ * false success is the inverse. A `reportedVerdict` of `unverified` is neither:
+ * FluxIQ reported no judgement of the result at all.
  */
 export type RunEvaluation = {
   schemaVersion: typeof EVALUATION_SCHEMA_VERSION;
@@ -243,8 +244,23 @@ export type RunEvaluation = {
   flowCreated: boolean | null;
   /** The fixture oracle's verdict (final state against `expected`); `null` when it was not consulted. */
   oracleVerdict: "passed" | "failed" | null;
-  /** What FluxIQ reported for the run; `null` when nothing ran. */
-  reportedVerdict: "passed" | "failed" | null;
+  /**
+   * What FluxIQ reported for the run; `null` when nothing ran.
+   *
+   * `unverified` is neither: the run's steps all succeeded and its result was
+   * never judged, because the run reached no model to judge it with. It is a
+   * third outcome rather than a `passed` because a result nobody checked is
+   * not a result that was right -- seven live runs on 2026-09-18 returned the
+   * wrong records and reported `passed` on their steps alone -- and rather
+   * than a `failed` because a deterministic replay of a saved Flow with no
+   * model is how most automations run, and failing them all for the absence of
+   * a judgement would break working automations to make a point.
+   *
+   * It counts as neither a false success nor a false failure: the bench's
+   * accuracy rates take it in their denominator and never as a hit, which is
+   * exactly what "nobody knows" should do to a measured rate.
+   */
+  reportedVerdict: "passed" | "failed" | "unverified" | null;
   /** Present exactly when `reportedVerdict` is `failed`; `ambiguous_or_unknown` when FluxIQ gave no category. */
   automationFailureReported: { category: AutomationStudioAdaptiveFailureClass; code?: string } | null;
   automationFailureExpected: ExpectedFailure | null;
