@@ -89,6 +89,14 @@ export type WebLlmSnapshotBinding = {
   evidence: WebLlmPageEvidence;
   /** Opaque handle to the selector that addresses it. The packet carries the keys; only this map carries the values. */
   selectors: Map<string, string>;
+  /**
+   * Opaque handle to the record -- row, list item, card -- its element sits in,
+   * for the elements the page placed in one (`elements.ts` `recordAddress`).
+   * Like the selectors it never leaves the domain: it is the half of an
+   * element's address that a positional row selector cannot carry, and
+   * `stable-handles.ts` keys on both.
+   */
+  records: Map<string, string>;
 };
 
 export type WebLlmSanitizeOptions = {
@@ -127,6 +135,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
 
   const elements: WebLlmEvidenceElement[] = [];
   const selectors = new Map<string, string>();
+  const records = new Map<string, string>();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
     const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
@@ -134,6 +143,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     elements.push(described.element);
     // The one place a selector is written down, and it is not the packet.
     selectors.set(described.element.target, described.selector);
+    if (described.record !== undefined) records.set(described.element.target, described.record);
   }
 
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id): id is number => id !== undefined))].sort((left, right) => left - right);
@@ -173,8 +183,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     repairParameters: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
-  trimToBudget(evidence, selectors, maxEvidenceBytes);
-  return { evidence, selectors };
+  trimToBudget(evidence, [selectors, records], maxEvidenceBytes);
+  return { evidence, selectors, records };
 }
 
 /**
@@ -223,15 +233,19 @@ type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading
  * The two flags are written before the size is re-measured, so the bytes they
  * cost are inside the budget rather than pushing the packet over it after the
  * last check. Neither is droppable: they describe the trimming.
+ *
+ * `addresses` are the binding's handle-keyed maps -- the selectors and the
+ * records -- and a popped element leaves every one of them, so no map names a
+ * handle the packet no longer carries.
  */
-function trimToBudget(evidence: WebLlmPageEvidence, selectors: Map<string, string>, maxEvidenceBytes: number): void {
+function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map<string, string>>, maxEvidenceBytes: number): void {
   const markBudgetTruncated = (): void => {
     evidence.truncated = true;
     evidence.budgetTruncated = true;
   };
   const popElement = (): void => {
     const removed = evidence.elements.pop();
-    if (removed) selectors.delete(removed.target);
+    if (removed) for (const address of addresses) address.delete(removed.target);
     // A handle that named a popped element would point at nothing, so the mark
     // becomes the honest one. `budgetTruncated`, set on the same line, is what
     // separates "the trim cut it" from "it left the page".

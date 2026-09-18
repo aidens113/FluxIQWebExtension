@@ -298,3 +298,28 @@ function failurePage(): Record<string, unknown> {
     ],
   };
 }
+
+// The binding's second handle-keyed map. A trimmed element must leave it as it
+// leaves the selectors, or `stable-handles.ts` would read a record for a handle
+// the packet no longer carries.
+test("the records an element's address carries are kept for exactly the handles the packet keeps", () => {
+  const row = (index: number): Record<string, unknown> => ({
+    tagName: "button",
+    selector: `#rows > tr:nth-of-type(${index}) > td > button`,
+    accessibleName: `Reply to conversation ${index}`,
+    context: { record: { keyAttribute: "data-conversation-id", key: `cnv_${index}` } }
+  });
+  const page = { url: "https://fixture.test/inbox", title: "Inbox", interactiveElements: [{ tagName: "button", selector: "#compose", name: "Compose" }, ...[1, 2, 3, 4, 5, 6].map(row)] };
+
+  const whole = sanitizeWebLlmSnapshotWithBindings(page, { maxEvidenceBytes: 12_000 });
+  assert.equal(whole.records.has("target.1"), false, "the compose button sits in no record");
+  assert.deepEqual([...whole.records.keys()], ["target.2", "target.3", "target.4", "target.5", "target.6", "target.7"]);
+  assert.notEqual(whole.records.get("target.2"), whole.records.get("target.3"));
+
+  const trimmed = sanitizeWebLlmSnapshotWithBindings(page, { maxEvidenceBytes: 600 });
+  assert.equal(trimmed.evidence.budgetTruncated, true);
+  const kept = new Set(trimmed.evidence.elements.map((element) => element.target));
+  assert.ok(kept.size < 7, `the trim removed nothing (${kept.size} kept)`);
+  assert.deepEqual([...trimmed.records.keys()].filter((handle) => !kept.has(handle)), []);
+  assert.deepEqual([...trimmed.selectors.keys()].filter((handle) => !kept.has(handle)), []);
+});

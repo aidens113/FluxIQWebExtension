@@ -47,7 +47,7 @@ export { corroboratesExactly } from "./corroboration";
 export { elementContext, landmarkRole } from "./context";
 export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
-export { agreesWithRecordedRecord, recordIdentity } from "./record";
+export { agreesWithRecordedRecord, isRecordElement, recordIdentity } from "./record";
 export { reportableText } from "./reportable-text";
 export { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidate, scoreTargetCandidates } from "./score";
 export { TARGET_VETO_FLOOR, vetoCandidate, vetoExactMatch } from "./veto";

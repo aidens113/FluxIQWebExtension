@@ -225,6 +225,15 @@ export type DomElementDescriptor = {
   changed?: boolean | undefined;
   /** The element is among those most recently interacted with, by a person or by an action. */
   recentlyInteracted?: boolean | undefined;
+  /**
+   * How many elements of this one's kind the snapshot held, this one included:
+   * the same control, link or cell in every row of one repeated list or table
+   * (`content/repeat-exemplars.ts`). Present only on the member ranked among
+   * the page's distinct elements -- the exemplar -- and only when there are at
+   * least two; every other member is ranked after all of them. Snapshot-scoped,
+   * like the two flags above: it counts what one capture held.
+   */
+  repeatCount?: number | undefined;
 };
 
 /**
@@ -293,13 +302,15 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  * - `changed` and `recentlyInteracted` are snapshot-scoped (Phase 1.4): they
  *   say how one capture of a frame differs from the one before it, which is not
  *   a fact about the element a recorded event names.
+ * - `repeatCount` is snapshot-scoped too: it counts how many rows one capture
+ *   held, which a replay of the recorded control neither needs nor can check.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
  * so a field added to the descriptor stops the producer compiling until it is
  * either carried or named here.
  */
-type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted";
+type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted" | "repeatCount";
 
 /**
  * The recorded element's identity as it crosses the client gateway.

@@ -88,3 +88,48 @@ test("an element's accessible name reaches the packet under the field the extens
   assert.equal(sanitizedEvidenceElement({ tagName: "button", selector: "#a", name: "Apply" }, CONTEXT)?.element.name, "Apply");
   assert.equal(sanitizedEvidenceElement({ tagName: "button", selector: "#b", name: "stale", accessibleName: "Current" }, CONTEXT)?.element.name, "Current");
 });
+
+// One example per repeating control (`apps/extension/src/content/repeat-exemplars.ts`).
+// The page counts the run and puts the count on the exemplar; the packet
+// carries it under its own word, so a model shown one row checkbox knows it
+// stands for 280.
+test("a run's size reaches the packet as `repeats`, and a count that says nothing does not", () => {
+  const exemplar = (repeatCount: unknown) => sanitizedEvidenceElement({
+    tagName: "input",
+    selector: '[data-testid="queue-rows"] > tr:nth-of-type(1) > td:nth-of-type(1) > input',
+    inputType: "checkbox",
+    accessibleName: "Select the post for Mon 21 Sep 2026, 09:00",
+    repeatCount
+  }, CONTEXT)?.element.repeats;
+  assert.equal(exemplar(280), 280);
+  assert.equal(exemplar(2), 2);
+  // One is not a run, and a count the page could not have taken is not a count.
+  for (const nothing of [undefined, 1, 0, -3, 2.5, "280", 1_000_000]) assert.equal(exemplar(nothing), undefined, String(nothing));
+});
+
+// The record is half of a row control's address, and it stays on the domain's
+// side of the boundary with the selector: `stable-handles.ts` keys on both.
+test("the record an element sits in is handed back beside the selector, never inside the element", () => {
+  const keyed = sanitizedEvidenceElement({
+    tagName: "button",
+    selector: '[data-testid="queue-rows"] > tr:nth-of-type(1) > td:nth-of-type(6) > button',
+    accessibleName: "Post actions",
+    context: { tablePosition: { row: 2, column: 6, columnHeader: "Actions" }, record: { keyAttribute: "data-post-id", key: "pst_7d3c9d" } }
+  }, CONTEXT);
+  const worded = sanitizedEvidenceElement({
+    tagName: "button",
+    selector: "ul > li:nth-of-type(3) > button",
+    accessibleName: "Reply",
+    context: { record: { text: "Priya Raman asked about the harbour loop" } }
+  }, CONTEXT);
+  const unplaced = sanitizedEvidenceElement({ tagName: "button", selector: "#save", accessibleName: "Save" }, CONTEXT);
+
+  assert.ok(keyed?.record?.includes("pst_7d3c9d") && keyed.record.includes("data-post-id"));
+  assert.ok(worded?.record?.includes("Priya Raman asked about the harbour loop"));
+  assert.notEqual(keyed?.record, worded?.record);
+  assert.equal(unplaced?.record, undefined, "a control in no record has none to add to its address");
+  for (const element of [keyed?.element, worded?.element]) {
+    const serialized = JSON.stringify(element);
+    assert.doesNotMatch(serialized, /pst_7d3c9d|data-post-id|harbour loop|"record"/u);
+  }
+});
