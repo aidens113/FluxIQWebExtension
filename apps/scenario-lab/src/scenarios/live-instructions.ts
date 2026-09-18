@@ -29,6 +29,13 @@ export type LiveInstructionTask = {
   instruction: string;
   judgeBy: "playback-goal" | "expected-dataset";
   expectedDatasetId?: string;
+  /**
+   * Arms `variantId` for the created Flow's playback only. The build explores
+   * the unarmed page, and the Flow then meets the variant, the way a Flow
+   * meets a site that changed after it was made. Such a row succeeds only
+   * when its run repairs the drift, so it is the "created and repaired" row.
+   */
+  variantArmedAfterBuild?: true;
 };
 
 const PRODUCT_COLUMNS = "with columns name, price, rating and url";
@@ -104,6 +111,15 @@ const TASKS: LiveInstructionTask[] = [
     id: "identity-drift-rename-redesigned-save",
     scenarioId: "identity-drift",
     variantId: "renamed-redesign",
+    kind: "form",
+    instruction: RENAME_WORKSPACE,
+    judgeBy: "playback-goal",
+  },
+  {
+    id: "identity-drift-rename-redesigned-after-creation",
+    scenarioId: "identity-drift",
+    variantId: "renamed-redesign",
+    variantArmedAfterBuild: true,
     kind: "form",
     instruction: RENAME_WORKSPACE,
     judgeBy: "playback-goal",

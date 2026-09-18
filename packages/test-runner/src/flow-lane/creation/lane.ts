@@ -2,7 +2,8 @@
 // task rather than from a recording, then run and judged on the isolated
 // target like any other Flow-lane run. The lane owns neither the credential nor
 // Core's grant vocabulary; a live run hands it `authorizeBuild` and
-// `settleBuild`, and the lane decides only when each is used.
+// `settleBuild` for the build, and `authorizeRun` and `settleRun` for the
+// repair its playback may make, and the lane decides only when each is used.
 
 import type { ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
@@ -11,7 +12,7 @@ import type { DeclaredSecret } from "../declared-secrets.js";
 import { assertFlowFailure, type FlowExtractionJudgement } from "../expectations.js";
 import { readFlowNodes } from "../flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "../lane-observation.js";
-import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
+import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
@@ -21,6 +22,15 @@ import { assertCreatedFlowDataset, createdFlowDatasetHolds, judgeCreatedFlowData
 import type { CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
+
+/**
+ * How long a granted run's request may wait. A granted run answers only once
+ * Core's recovery has finished, which can take minutes, and Core names no run
+ * until it answers, so a request abandoned at the client's default 30 seconds
+ * leaves nothing to read back or settle. This is the control client's own
+ * ceiling (`http-control/index.ts`); a caller's explicit bound still wins.
+ */
+const GRANTED_RUN_TIMEOUT_MS = 300_000;
 
 /** The Core calls the lane makes; `ExistingFluxIQControlClient` satisfies it. */
 export type CreatedFlowLaneControl = PersistedFlowRunControl & CreatedFlowBuildControl & CreatedFlowReviewControl;
@@ -49,12 +59,27 @@ export type CreatedFlowLaneInput = {
    */
   settleBuild: (build: CreatedFlowBuild) => Promise<void>;
   /**
+   * Issues the proposal-only repair grant the created Flow's playback runs
+   * under, against the Flow as the review left it. With it, a Flow that fails
+   * is diagnosed and repaired, and every change is held as a proposal awaiting
+   * approval. Absent, the playback carries no grant and runs as
+   * deterministically as it always has.
+   */
+  authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
+  /**
+   * Publishes what the repair spent and holds it to its caps. Called once the
+   * granted run ends, before anything is judged, and also when the run
+   * throws, with whatever run id Core had named by then.
+   */
+  settleRun?: (runId: string | undefined) => Promise<void>;
+  /**
    * Presents the task's rendering: arms its variant, if any, loads the
    * scenario's start page and checks the armed facts. Called before the build,
    * so FluxIQ explores the page the Flow will meet, and again after the
-   * fixture's state is reset, before the run.
+   * fixture's state is reset, before the run. `moment` says which: a task
+   * whose variant is armed after the build is explored unarmed.
    */
-  prepareFlowPage: () => Promise<void>;
+  prepareFlowPage: (moment: "build" | "playback") => Promise<void>;
   /** Records what the Flow did, before any expectation is judged. */
   recordEvidence: (evidence: CreatedFlowLaneEvidence) => Promise<void>;
   /** The fixture oracle for a task judged by its playback goal. Not consulted for a dataset task. */
@@ -80,12 +105,15 @@ export type CreatedFlowLaneEvidence = Readonly<{
  * Creates a blank Flow, presents the task's rendering, has FluxIQ explore it
  * and propose a Flow for the task's instruction, settles the build, approves
  * and applies the proposal, resets the fixture, presents the page again, runs
- * the created Flow without a provider, and judges it: by the stored records
- * for a dataset task, by the scenario's playback goal otherwise.
+ * the created Flow, and judges it: by the stored records for a dataset task,
+ * by the scenario's playback goal otherwise.
  *
- * The run is deterministic. The build is the live part; a created Flow that
- * then needs the model to succeed has not been created well, and a later lane
- * repairs it under its own grant.
+ * With `authorizeRun`, the run carries a proposal-only repair grant, so a
+ * created Flow that fails is diagnosed and repaired in the same run, the way
+ * the product promises -- "created and repaired" -- rather than refused for
+ * want of a model. Its repair is only ever proposed: the Flow judged here is
+ * the Flow the build made, and a proposal waits for a person's approval.
+ * Without `authorizeRun` the run is deterministic, as it always was.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence> {
   const bounds = input.bounds ?? {};
@@ -94,7 +122,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
     throw new RunnerFailure("fixture.invalid", "The created-Flow lane was handed a workflow other than the one its task resolved to");
   }
   const flowId = await createBlankCreationFlow(input.control, { projectId, name: `Lab created flow ${facilityRunId}`, authorizationPin }, bounds);
-  await input.prepareFlowPage();
+  await input.prepareFlowPage("build");
   const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, authorize: input.authorizeBuild }, bounds, input.buildWait);
   await input.settleBuild(build);
   if (build.outcome !== "proposed" || build.adaptationId === null) {
@@ -112,16 +140,34 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   const secretInputs = createdFlowSecretInputs({ scenarioId: request.task.scenarioId, secrets: input.secrets, workflow, nodes });
   // Exploration may have acted on the page; the Flow is judged on state it produced itself.
   await resetScenarioLab(input.scenarioOrigin, input.runToken, input.fetchLab);
-  await input.prepareFlowPage();
-  const run = await executeRecordedFlowRun(input.control, {
-    projectId,
-    flowId,
-    facilityRunId,
-    ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
-    actionTypes,
-    // Each declared value once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
-    inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId },
-  }, bounds);
+  await input.prepareFlowPage("playback");
+  // Immediately before the run: Core expires the grant within the minute.
+  const llmExecution = input.authorizeRun ? await input.authorizeRun(flowId) : undefined;
+  let identifiedRunId: string | undefined;
+  let run: PersistedFlowRunOutcome;
+  try {
+    run = await executeRecordedFlowRun(input.control, {
+      projectId,
+      flowId,
+      facilityRunId,
+      ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
+      actionTypes,
+      ...(llmExecution ? { llmExecution } : {}),
+      onRunIdentified: (runId) => { identifiedRunId = runId; },
+      // Each declared value once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
+      inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId },
+    }, llmExecution ? { ...bounds, timeoutMs: bounds.timeoutMs ?? GRANTED_RUN_TIMEOUT_MS } : bounds);
+  } catch (error) {
+    // A repair that ran and then failed to be read back was still paid for. An
+    // overspend outranks the lane's own failure; a settlement that could not
+    // write its record must not hide why the lane failed.
+    if (llmExecution && input.settleRun) {
+      const breach = await input.settleRun(identifiedRunId).then(() => undefined, (settlement: unknown) => settlement);
+      if (breach instanceof RunnerFailure) throw breach;
+    }
+    throw error;
+  }
+  if (llmExecution && input.settleRun) await input.settleRun(run.runId);
   const { judgement } = request;
   // Judged before the publish and never throwing, so a Flow whose records are wrong is still published with its measurement.
   const extraction = judgement.judgeBy === "expected-dataset" ? judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin: input.scenarioOrigin }) : null;

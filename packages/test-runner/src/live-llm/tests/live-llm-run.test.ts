@@ -249,3 +249,56 @@ test("a build over its run budget, over its call count, or run on another model 
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });
   await assert.rejects(otherModel.settle(), /Core's Flow build ran on deepseek\/deepseek-reasoner, not the authorized deepseek\/deepseek-chat/u);
 });
+
+// A created Flow's playback runs under its own grant, so a Flow that fails is
+// repaired rather than refused for want of a model. The grant is proposal-only
+// and bound by the same caps as the build; its spend is settled beside the
+// build's, never folded into it.
+test("a create-flow run repairs the Flow it built under a proposal-only diagnose_and_adapt grant, and settles that spend beside the build", async () => {
+  const { core, run, written, published, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  const execution = await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  assert.deepEqual(execution, { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" });
+  const request = core.issueRequests[1];
+  assert.equal(request?.purpose, "diagnose_and_adapt");
+  for (const cap of ["maxCalls", "maxTotalTokensPerRun", "maxEstimatedCostUsd", "timeoutMs"]) assert.equal(request?.[cap], core.issueRequests[0]?.[cap], `the repair asks for no more ${cap} than the build`);
+
+  await run.settleRepair({ getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
+  assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
+  assert.equal(snapshot.repair.purpose, "diagnose_and_adapt");
+  assert.equal(snapshot.repair.runId, "run-1");
+  assert.equal(snapshot.repair.observed.calls, 3);
+  assert.equal(snapshot.repair.observed.observedCalls.length, 3);
+  assert.deepEqual(published.at(-1), { repair: { calls: 3, interventions: 3, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true } } });
+  assert.equal(run.usage.calls, 5 + 3, "the evaluation counts every call the run paid for");
+  assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
+});
+
+test("only a create-flow run has a repair grant, and a repair that cannot be read back is recorded, not raised", async () => {
+  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  await assert.rejects(adapt.repairAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /Only a create-flow run repairs the Flow it built/u);
+
+  const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const unreadable = { getRunDetail: async (): Promise<ExistingRunDetail> => { throw new Error("gone"); }, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) };
+  await run.settleRepair(unreadable, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined);
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  assert.deepEqual({ observed: snapshot.repair.observed, settlement: snapshot.repair.settlement }, { observed: null, settlement: "run_detail_unreadable" });
+  assert.equal(run.usage.calls, 5);
+});
+
+test("a repair over its run budget fails the run, after its spend is written", async () => {
+  const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const overspent: ExistingRunDetail = { ...detail, llmAccounting: { ...detail.llmAccounting!, calls: 27 } };
+  await assert.rejects(
+    run.settleRepair({ getRunDetail: async () => overspent, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined),
+    (error: unknown) => error instanceof RunnerFailure,
+  );
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  assert.equal(snapshot.repair.observed.calls, 27, "the overspend is on record before the run fails");
+});

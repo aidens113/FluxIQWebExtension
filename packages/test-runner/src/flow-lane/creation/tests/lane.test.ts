@@ -3,6 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
 import type { DeclaredSecret } from "../../declared-secrets.js";
+import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
 import type { LabResetFetch } from "../../reset-scenario-lab.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
 import { runCreatedFlowLane, type CreatedFlowLaneEvidence } from "../lane.js";
@@ -24,6 +25,8 @@ type LaneOptions = {
   finalStateHolds?: boolean;
   secrets?: readonly DeclaredSecret[];
   settle?: (build: CreatedFlowBuild) => Promise<void>;
+  authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
+  settleRun?: (runId: string | undefined) => Promise<void>;
 };
 
 async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneOptions = {}) {
@@ -44,6 +47,8 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     secrets: options.secrets ?? [],
     authorizeBuild: async () => { core.calls.push("authorize"); return { grantId: "llm-grant:build" }; },
     settleBuild: async (build) => { core.calls.push("settle"); settled.push(build); await options.settle?.(build); },
+    ...(options.authorizeRun ? { authorizeRun: options.authorizeRun } : {}),
+    ...(options.settleRun ? { settleRun: options.settleRun } : {}),
     prepareFlowPage: async () => { core.calls.push("prepare"); },
     recordEvidence: async (published) => { core.calls.push("publish"); evidence.push(published); },
     checkFinalState: async () => { core.calls.push("oracle"); return options.finalStateHolds ?? true; },
@@ -186,4 +191,45 @@ test("the lane refuses what it cannot build or run honestly, before the step it 
   const unchanged = fakeCreationCore({ appliedMutationCount: 0 });
   await assert.rejects((await runLane(unchanged)).run, /reported no change to the Flow/u);
   assert.equal(unchanged.calls.at(-1), "apply", "nothing is read or run after an apply that changed nothing");
+});
+
+// With a repair grant the created Flow's playback is a live run: it starts its
+// own session under the grant, and what it spent is settled before anything is
+// judged. Without one it is the deterministic run the first test pins, "start"
+// and all, which is what keeps a replay with no grant exactly as it was.
+test("a created Flow's playback runs under the repair grant it was given, and its spend is settled before anything is judged", async () => {
+  const core = fakeCreationCore();
+  const granted: unknown[] = [];
+  const runPersistedFlow = core.control.runPersistedFlow.bind(core.control);
+  core.control.runPersistedFlow = async (input) => { granted.push(input.llmExecution ?? null); return await runPersistedFlow(input); };
+  const settledRuns: Array<string | undefined> = [];
+  const { run } = await runLane(core, {
+    authorizeRun: async (flowId) => { core.calls.push(`authorize-run:${flowId}`); return { grantId: "llm-grant:repair", purpose: "diagnose_and_adapt" }; },
+    settleRun: async (runId) => { core.calls.push("settle-run"); settledRuns.push(runId); },
+  });
+  await run;
+  assert.deepEqual(granted, [{ grantId: "llm-grant:repair", purpose: "diagnose_and_adapt" }]);
+  assert.deepEqual(settledRuns, ["run.created"]);
+  // Issued once the page is presented and immediately before the run; a granted run starts no session of its own beforehand.
+  assert.deepEqual(core.calls.slice(core.calls.indexOf("reset:/__control/reset")), [
+    "reset:/__control/reset", "prepare", `authorize-run:${FLOW_ID}`, "select-context", "run", "get-flow-run-detail", "get-run-dataset-page", "settle-run", "publish",
+  ]);
+});
+
+test("a repair run that throws is still settled, and an overspend outranks the run's own failure", async () => {
+  const failing = () => {
+    const core = fakeCreationCore();
+    core.control.runPersistedFlow = async () => { core.calls.push("run"); throw new Error("the run broke"); };
+    return core;
+  };
+  const settledRuns: Array<string | undefined> = [];
+  const grant = async (): Promise<PersistedFlowLlmExecution> => ({ grantId: "llm-grant:repair", purpose: "diagnose_and_adapt" });
+  const plain = await runLane(failing(), { authorizeRun: grant, settleRun: async (runId) => { settledRuns.push(runId); } });
+  await assert.rejects(plain.run, /the run broke/u);
+  assert.deepEqual(settledRuns, [undefined], "Core named no run before the call failed, and the settlement is told so");
+  const breach = new RunnerFailure("runtime.behavior", "the repair spent past its budget");
+  const breached = await runLane(failing(), { authorizeRun: grant, settleRun: async () => { throw breach; } });
+  await assert.rejects(breached.run, (error: unknown) => error === breach);
+  const unwritable = await runLane(failing(), { authorizeRun: grant, settleRun: async () => { throw new Error("disk full"); } });
+  await assert.rejects(unwritable.run, /the run broke/u, "a settlement that could not write its record does not hide why the lane failed");
 });

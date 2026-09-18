@@ -58,12 +58,28 @@ export async function beginLiveLlmRun(input: {
   return new LiveLlmRun(plan, credential);
 }
 
+/**
+ * The purpose a created Flow's repair grant carries: `diagnose_and_adapt`,
+ * which iterates, may gather evidence, and holds its target override to a
+ * proposal it never executes (`patches.ts`). `explore_and_adapt` was tried
+ * first and cannot serve: it tries its repair live, a granted run may never
+ * authorize an external side effect, so an override on a Save button is
+ * refused at preflight (`runtime_patch.side_effect_not_authorized`,
+ * run-mu7gfuph-a57c6b18) and nothing is proposed at all.
+ */
+const CREATED_FLOW_REPAIR_PURPOSE = "diagnose_and_adapt" satisfies PersistedFlowLlmExecution["purpose"];
+
 export class LiveLlmRun {
   private observed: LiveLlmObservedUsage | undefined;
   /** The grant Core issued for this run, and what its request sent; `undefined` before that. */
   private grant: LiveLlmExecutionGrant | undefined;
   /** What the bounded exploration did, read at settlement; `undefined` before that. */
   private exploration: LiveLlmExplorationRecord | undefined;
+  /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
+  private buildRecord: CreatedFlowBuild | undefined;
+  /** The repair grant a created Flow's playback ran under, and what that run spent; `undefined` before each. */
+  private repairGrant: LiveLlmExecutionGrant | undefined;
+  private repairObserved: LiveLlmObservedUsage | undefined;
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
 
@@ -102,9 +118,26 @@ export class LiveLlmRun {
     return [this.credential.value];
   }
 
-  /** What the evaluation records. `calls` stays 0 until the run has settled. */
+  /**
+   * What the evaluation records: every provider call this run paid for, the
+   * build's and a created Flow's repair alike. `calls` stays 0 until the run
+   * has settled.
+   */
   get usage(): LlmUsage {
-    return { mode: "live", profileId: this.plan.profileId, calls: this.observed?.calls ?? 0 };
+    return { mode: "live", profileId: this.plan.profileId, calls: (this.observed?.calls ?? 0) + (this.repairObserved?.calls ?? 0) };
+  }
+
+  /**
+   * The grant a created Flow's playback runs under: this run's own bounds,
+   * with `diagnose_and_adapt` in place of the build's purpose. That purpose
+   * may gather evidence from the live page and propose one target override,
+   * which Core holds as a proposal awaiting approval and never executes (its
+   * policy's `proposalMode` is `manual` under this grant, and a granted run is
+   * never retried on an applied patch). The operator's caps bind it exactly as
+   * they bind the build, so asking for the repair widens no limit.
+   */
+  private get repairPlan(): LiveLlmPlan {
+    return { ...this.plan, task: "repair", purpose: CREATED_FLOW_REPAIR_PURPOSE };
   }
 
   /**
@@ -152,7 +185,8 @@ export class LiveLlmRun {
     return async (flowId: string) => {
       const { purpose } = this.plan;
       if (purpose === "build_and_adapt") throw new RunnerFailure("fixture.invalid", "A build_and_adapt grant authorizes a Flow build, never a Flow run");
-      const authorization = await this.authorize(control, core, flowId);
+      const authorization = await this.authorize(control, core, flowId, this.plan);
+      this.grant = authorization.grant;
       return { grantId: authorization.grant.grantId, purpose };
     };
   }
@@ -165,8 +199,29 @@ export class LiveLlmRun {
   buildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<{ grantId: string }> {
     return async (flowId: string) => {
       if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} grant cannot authorize a Flow build`);
-      const authorization = await this.authorize(control, core, flowId);
+      const authorization = await this.authorize(control, core, flowId, this.plan);
+      this.grant = authorization.grant;
       return { grantId: authorization.grant.grantId };
+    };
+  }
+
+  /**
+   * The created-Flow lane's repair hook: the grant its playback runs under, so
+   * a created Flow that fails is diagnosed and repaired like any other rather
+   * than refused for want of a model. Called once the review has applied the
+   * build and just before the run, because Core binds a grant to the Flow as
+   * it then stands and expires it within the minute.
+   *
+   * Only a `create-flow` run has one. A replay issues no grant, so it stays
+   * exactly as deterministic as before.
+   */
+  repairAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
+    return async (flowId: string) => {
+      if (!this.createsFlow) throw new RunnerFailure("fixture.invalid", `Only a create-flow run repairs the Flow it built; a ${this.plan.task} run authorizes its Flow through the Flow lane`);
+      const plan = this.repairPlan;
+      const authorization = await this.authorize(control, core, flowId, plan);
+      this.repairGrant = authorization.grant;
+      return { grantId: authorization.grant.grantId, purpose: CREATED_FLOW_REPAIR_PURPOSE };
     };
   }
 
@@ -193,6 +248,7 @@ export class LiveLlmRun {
    * A build Core says ran on another provider or model fails here too.
    */
   async settleBuild(build: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
+    this.buildRecord = build;
     await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build });
     const { provider, model } = build.accounting ?? {};
     if ((provider != null && provider !== this.plan.provider) || (model != null && model !== this.plan.model)) {
@@ -200,18 +256,55 @@ export class LiveLlmRun {
     }
   }
 
-  private async authorize(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials, flowId: string): Promise<LiveLlmAuthorization> {
+  /**
+   * What a created Flow's repair spent, settled however its run ended. The
+   * lane calls this before it judges anything, and on a throw, so a repair
+   * whose Flow still failed -- the ordinary case -- is accounted all the same.
+   *
+   * The snapshot keeps it beside the build, never folded into it: `repair`
+   * holds the purpose, what Core granted and the run's own per-call record,
+   * and the campaign sums the two only where it reports a row's spend. A run
+   * detail that cannot be read is recorded as such and raises nothing; an
+   * overspend is raised, as it is for every live run. Reaching no provider is
+   * not a failure here: a repair Core refused before diagnosis calls nothing,
+   * and says why in the run's recovery record.
+   */
+  async settleRepair(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
+    if (!this.repairGrant || this.repairObserved) return;
+    const plan = this.repairPlan;
+    const grant = this.repairGrant;
+    let observed: LiveLlmObservedUsage | undefined;
+    try {
+      if (input.runId) observed = liveLlmObservedUsage(await control.getRunDetail(input.projectId, input.runId));
+    } catch {
+      observed = undefined;
+    }
+    if (input.runId) this.exploration = await readLiveLlmExploration(control, { projectId: input.projectId, runId: input.runId });
+    const repair = {
+      purpose: plan.purpose,
+      runId: input.runId ?? null,
+      granted: { maxCalls: grant.maxCalls, maxTotalTokensPerRun: grant.maxTotalTokensPerRun, maxEstimatedCostUsd: grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: grant.maxTotalEstimatedCostUsd, timeoutMs: grant.timeoutMs },
+      observed: observed ?? null,
+      ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
+    };
+    await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair });
+    if (!observed) return;
+    this.repairObserved = observed;
+    await publish({ repair: usageSummary(observed) });
+    assertLiveLlmBudgetHeld(plan, observed);
+  }
+
+  private async authorize(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials, flowId: string, plan: LiveLlmPlan): Promise<LiveLlmAuthorization> {
     if (!core.projectId) throw new RunnerFailure("environment.missing", "A live LLM run needs the project its Core created, and this topology published none");
     if (!core.authorizationPassword) throw new RunnerFailure("environment.missing", "A live LLM run needs the account password its Core was bootstrapped with, and this topology published none");
     const authorization = await authorizeFlowLiveLlmExecution(control, {
       projectId: core.projectId,
       flowId,
-      plan: this.plan,
+      plan,
       credentialValue: this.credential.value,
       authorizationPassword: core.authorizationPassword,
       ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}),
     });
-    this.grant = authorization.grant;
     return authorization;
   }
 

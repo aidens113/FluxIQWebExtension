@@ -69,9 +69,10 @@ const RECOVERED: RunHarnessRecovery = {
   ],
   adaptationIds: [ADAPTATION_ID],
   changeProposalIds: [PROPOSAL_ID],
+  refusalCode: null,
 };
 
-const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: null };
 
 function json(payload: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json", ...headers } });
@@ -240,4 +241,53 @@ test("a recovery the parser admits but the contract refuses fails before it reac
       && error.message.includes("harnessRecovery.interventions[0].validationCodes[0]")
       && !error.message.includes("Not A Code"),
   );
+});
+
+// A failed run whose recovery never started used to read exactly like a run
+// that needed none: `attempted: false` and nothing else. Core's gate says why at
+// each early return (`annotate.ts`), as a sentence and as a code; the record
+// keeps the code, which the contract checks is a code, and never the sentence.
+test("a recovery Core's gate refused says why, by the gate's code and never its sentence", async (t) => {
+  const refused = (gate: Record<string, unknown>) => () => ({ summary: { ...summary, status: "failed", interventionCount: 0, adaptationCount: 0 }, routeDecisions: [], subflows: [], actionAttempts: [attempt], interventions: [], metadata: { llmGate: gate } });
+  const { control, calls, serve } = await core(t);
+  for (const code of ["llm.gate.training_mode", "llm.gate.training_budget_exhausted", "llm.gate.manual_intervention"]) {
+    serve(refused({ invoked: false, code, reason: "PRIVATE-ISSUE: Core's sentence for why" }));
+    const outcome = await run(control);
+    assert.deepEqual(outcome.harnessRecovery, { ...NO_RECOVERY, refusalCode: code }, code);
+    assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail"], `${code}: a refused recovery costs no second read`);
+    assert.equal(JSON.stringify(snapshotOf(outcome).harnessRecovery).includes("PRIVATE-ISSUE"), false, `${code}: the sentence stays behind`);
+    assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+  }
+  // A gate that ran the model states no refusal, whatever else it recorded.
+  serve(refused({ invoked: true, code: "llm.gate.training_mode" }));
+  assert.equal((await run(control)).harnessRecovery?.refusalCode, null);
+  // A sentence where the code belongs fails the read by its path.
+  serve(refused({ invoked: false, code: "Current training mode or settings do not allow LLM intervention." }));
+  await assert.rejects(run(control), (error: unknown) => error instanceof RunnerFailure && error.message.includes("harnessRecovery.refusalCode"));
+});
+
+// A model that answers "there is nothing to repair" leaves Core's declined
+// receipt: `kind: "no_repair"`, a closed `declinedReason`, and Core's sentence as
+// its issue. It was read as `runtime_patch.preflight_rejected` -- Core refusing
+// a repair the model proposed -- which is the opposite of what happened.
+test("a repair the model declined reads as a decline with its reason, never as a preflight rejection", async (t) => {
+  const declined = (declinedReason: unknown) => () => ({
+    summary: { ...summary, status: "failed", interventionCount: 2, adaptationCount: 0 }, routeDecisions: [], subflows: [], actionAttempts: [attempt],
+    interventions: [
+      { interventionId: "intervention.diagnosis", kind: "diagnosis", validation: { ok: true, issues: [] }, createdAt: 1_100 },
+      { interventionId: "intervention.patch", kind: "runtime_patch", validation: { ok: true, issues: [] }, createdAt: 1_200 },
+    ],
+    metadata: { runtimePatchAttempts: [{ kind: "no_repair", executed: false, preflightOk: false, declinedReason, issues: ["The model was asked for a repair and declined: what the step acted on is gone, and nothing takes its place (control_gone)."], traceStatus: "not-run" }] },
+  });
+  const { control, serve } = await core(t);
+  serve(declined("control_gone"));
+  const outcome = await run(control);
+  assert.deepEqual(outcome.harnessRecovery?.runtimePatchAttempts, [
+    { kind: "no_repair", proposalOnly: null, executed: false, preflightOk: false, issueCodes: ["runtime_patch.declined.control_gone"], adaptationCreated: false, changeProposalCreated: false },
+  ]);
+  assert.equal(outcome.harnessRecovery?.attempted, true, "the model was asked, so recovery was attempted");
+  assert.equal(JSON.stringify(outcome.harnessRecovery).includes("nothing takes its place"), false, "Core's sentence stays behind");
+  // A reason that is not one of Core's words still reads as a decline, and carries nothing of itself.
+  serve(declined("Nothing Here Could Be Repaired"));
+  assert.deepEqual((await run(control)).harnessRecovery?.runtimePatchAttempts[0]?.issueCodes, ["runtime_patch.declined"]);
 });
