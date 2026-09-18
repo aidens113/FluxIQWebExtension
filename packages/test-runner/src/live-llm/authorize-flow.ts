@@ -6,7 +6,7 @@
 
 import { issueLiveLlmExecutionGrant, type LiveLlmExecutionGrant, type LiveLlmGrantControl } from "./execution-grant.js";
 import { configureFlowLiveLlmExecution, type LiveLlmFlowSettingsControl } from "./flow-settings.js";
-import type { LiveLlmPlan } from "./live-llm-plan.js";
+import type { LiveLlmPlan, LiveLlmPurpose } from "./live-llm-plan.js";
 import { ensureLiveLlmSecretKey, type LiveLlmSecretKeyControl } from "./secret-key.js";
 
 export type LiveLlmAuthorizationControl = LiveLlmSecretKeyControl & LiveLlmFlowSettingsControl & LiveLlmGrantControl & {
@@ -29,6 +29,13 @@ export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizatio
   credentialValue: string;
   authorizationPassword: string;
   authorizationPin?: string;
+  /**
+   * Takes the grant out for a purpose other than the plan's, against the same
+   * key and the same saved Flow settings. `verify_result` is the one use: the
+   * call that judges a finished run's result needs a grant a runtime session
+   * accepts, and a `build_and_adapt` plan's is not one.
+   */
+  grantOverride?: { purpose: LiveLlmPurpose; maxCalls: number };
 }): Promise<LiveLlmAuthorization> {
   const key = await ensureLiveLlmSecretKey(control, {
     secretValue: input.credentialValue,
@@ -43,6 +50,12 @@ export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizatio
   // is refused with a 400 on a Flow that is configured perfectly.
   if (key.created) await control.reauthenticate();
   await configureFlowLiveLlmExecution(control, { projectId: input.projectId, flowId: input.flowId, plan: input.plan, secretKeyId: key.id });
-  const grant = await issueLiveLlmExecutionGrant(control, { projectId: input.projectId, flowId: input.flowId, secretKeyId: key.id, plan: input.plan });
+  const grant = await issueLiveLlmExecutionGrant(control, {
+    projectId: input.projectId,
+    flowId: input.flowId,
+    secretKeyId: key.id,
+    plan: input.plan,
+    ...(input.grantOverride ? { override: input.grantOverride } : {})
+  });
   return Object.freeze({ grant, secretKeyId: key.id, secretKeyName: key.name });
 }

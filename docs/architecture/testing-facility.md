@@ -938,7 +938,7 @@ Each recording-script step is then driven through Playwright as trusted input
 while the extension records. An `extract` step's records are asserted against
 `expected.extracted` as the step runs, and what the step read is kept before it
 is judged and published as one counts-only measurement per extract step in the
-run's `evaluation.json` (`run-expectations/extraction-measurements.ts`): the
+run's `evaluation.json` (`run-expectations/extraction/measurements.ts`): the
 records compared, the fields that carried a value, the pages the read followed,
 whether it truncated, and how long it took. A step whose records did not match
 is measured too, which is the measurement worth having; a step an expectation
@@ -1264,9 +1264,19 @@ the Lab's on-disk proof that the recorder withheld what
 - **Other binaries**, files with a known binary extension such as images,
   video, archives, fonts and executables, are skipped and counted.
 - **Limits** are `SECRET_LEAK_ATTESTATION_RUN_LIMITS`: 10,000 files, 8 MiB per
-  file, 64 MiB per scan, and depth 32. Anything the scan could not read,
-  including an entry over a limit, is a finding, because a scan that could not
-  look has not attested absence.
+  text file, 32 MiB per SQLite store, 64 MiB per scan, and depth 32. Anything
+  the scan could not read, including an entry over a limit, is a finding,
+  because a scan that could not look has not attested absence.
+
+  A store has its own ceiling because it is not read the way a text file is.
+  `maxFileBytes` bounds what the scan decodes as UTF-8 and runs its credential
+  regexes over; a store is never decoded, only searched byte for byte and copied
+  for the cell read. Charging a store to the text budget is what failed the live
+  corpus of 2026-09-18: a healthy run left a 10.02 MiB `.fluxiq/global.sqlite`,
+  the scan refused to read it on size alone, and every run in that corpus carried
+  one `unscanned-store` finding on a store nothing was wrong with. A store past
+  `maxStoreBytes` is still a finding, so a store the scan genuinely cannot hold
+  still fails the run closed.
 
 A finding fails the run as `security.redaction`, and replaces the run's failure
 category only when the run had otherwise passed. The result holds counts, scope

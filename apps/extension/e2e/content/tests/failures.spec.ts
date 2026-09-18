@@ -250,7 +250,7 @@ test.describe("on navigation", () => {
         code: WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED,
         retryable: true,
         stage: "verification",
-        actual: "the click was prevented and the location did not change"
+        actual: "the page prevented the navigation, and in 5000 ms neither its address nor its content changed"
       }
     });
     // The URL rides with the failure: the domain reads it off the result to

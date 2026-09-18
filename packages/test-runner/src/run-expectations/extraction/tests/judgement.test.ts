@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RunnerFailure } from "../../failure.js";
-import { assertExtraction, measureExtraction } from "../extraction.js";
+import { RunnerFailure } from "../../../failure.js";
+import { assertExtraction, measureExtraction } from "../judgement.js";
 
 const records = [{ name: "Kettle", price: "$25.00" }, { name: "Lamp", price: "$40.00" }];
 const nothingReported = { nonStringValues: 0 };
@@ -65,6 +65,8 @@ test("records and non-optional fields are measured positionally, and what the st
   const observed = [{ name: "Kettle", price: "$25.00" }, { name: "Lamp", price: "$41.00" }];
   assert.deepEqual(measureExtraction({ step: "read", records }, observed, { pagesRead: 2, truncated: false, durationMs: 1_200, nonStringValues: 3 }), {
     expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false, comparedRecords: 2, matchedRecords: 1,
+    // One record differs in a value, so it is not the same record read out of order either.
+    matchedInAnyOrder: 1, unjudged: [],
     expectedFields: 4, presentFields: 4, unexpectedFields: 0,
     expectedPages: null, pagesFollowed: 2, truncated: false, durationMs: 1_200, nonStringValues: 3,
   });
@@ -76,6 +78,8 @@ test("a count-only entry compares nothing, so it reports no comparison and no ma
   // rather than read the right count as two perfect records (x5f).
   assert.deepEqual(measureExtraction({ step: "read", count: 2 }, records, nothingReported), {
     expectedRecords: 2, observedRecords: 2, recordsListed: false, countStated: true, comparedRecords: 0, matchedRecords: 0,
+    // Nothing was compared, so nothing matched in any order either.
+    matchedInAnyOrder: 0, unjudged: [],
     expectedFields: 0, presentFields: 0, unexpectedFields: 0,
     expectedPages: null, pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0,
   });

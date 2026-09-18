@@ -32,8 +32,16 @@ export type PersistedFlowTerminalWait = {
  * of the flags a deterministic run uses -- a pre-started run id, an authorized
  * domain, an idempotency key -- so a run holding one takes a different path
  * through `executeRecordedFlowRun` rather than adding a flag to the usual one.
+ *
+ * `verify_result` is the purpose a run carries when the model is to judge its
+ * result and nothing else: Core runs it with `invokeLlm` off, so the run stays
+ * deterministic and the grant buys exactly the one call that asks whether what
+ * came back answers what was asked. Giving up the three flags costs such a run
+ * nothing that it used: the authorized domain gates only cross-scope Flow
+ * calls, and the pre-started run id and idempotency key exist for a two-step
+ * start the grant path does not take.
  */
-export type PersistedFlowLlmExecution = { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" | "explore_and_adapt" };
+export type PersistedFlowLlmExecution = { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" | "explore_and_adapt" | "verify_result" };
 
 export type PersistedFlowRunControl = HarnessRecoveryControl & {
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
@@ -134,10 +142,29 @@ type ScoredTargetResolutionStatus = Exclude<AutomationNodeTargetResolution["stat
  */
 const SCORED_TARGET_RESOLUTION_STATUSES: { readonly [Status in ScoredTargetResolutionStatus]: true } = { matched: true, no_match: true, below_confidence: true };
 
+/**
+ * Where Core left the run's result: its own `resultVerification.status`
+ * (`runtime/result-verification/verification-status.ts`).
+ *
+ * `confirmed` and `refuted` are judgements. `unverified` is the one that had
+ * to become visible: there was a result, and nobody judged it, because the run
+ * reached no model. Core leaves such a run's status as its steps earned it --
+ * failing every deterministic replay for the absence of a judgement would
+ * break working automations -- so the word is the only thing that separates a
+ * result that was checked from one that merely did not fail. `no_result` is a
+ * run that stored no record set and therefore had nothing to judge.
+ *
+ * `null` where Core recorded no verification at all, which is a different fact
+ * again: not "nobody judged it" but "nothing says whether anyone did".
+ */
+export type PersistedResultVerification = "confirmed" | "refuted" | "unverified" | "no_result" | null;
+
 export type PersistedFlowRunOutcome = {
   runId: string;
   status: "succeeded" | "failed" | "cancelled" | "unknown";
   actions: PersistedFlowAction[];
+  /** Core's own account of whether the result was judged, and how it came out. */
+  resultVerification: PersistedResultVerification;
   /** The first structured failure Core recorded, read from its `failure` field. `null` when none was recorded. */
   failure: AutomationStudioFailureRecord | null;
   /** LLM interventions Core recorded for the run. Week 1 runs provider-free, so this must stay 0. */
@@ -309,6 +336,7 @@ function outcomeFromDetail(
     runId,
     status,
     actions,
+    resultVerification: detail.resultVerification,
     failure,
     harnessActivations: detail.harnessActivations,
     harnessRecovery,
@@ -377,7 +405,7 @@ async function readRunDetail(
   runId: string,
   bounds: FluxIQHttpOptions,
   actionTypes: ReadonlyMap<string, string>,
-): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number; datasets: RunDatasetSummary[]; durationsByNode: Map<string, number>; runDetail: Readonly<Record<string, unknown>> }> {
+): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number; datasets: RunDatasetSummary[]; durationsByNode: Map<string, number>; resultVerification: PersistedResultVerification; runDetail: Readonly<Record<string, unknown>> }> {
   const payload = asRecord(await control.automationStudioCall("get-flow-run-detail", { projectId, runId }, bounds), "run detail payload");
   const detail = asRecord(payload.runDetail, "runDetail");
   const summary = asRecord(detail.summary, "runDetail.summary");
@@ -389,7 +417,24 @@ async function readRunDetail(
   const actions = attempts.map((attempt) => flowAction(attempt, actionTypes));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
   const attemptNodeIds = attempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
-  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts), runDetail: detail };
+  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts), resultVerification: resultVerificationOf(detail), runDetail: detail };
+}
+
+/**
+ * Core's `metadata.resultVerification.status`, or `null` when the run detail
+ * carries none.
+ *
+ * Only the four words Core writes are read. An unknown one is `null` rather
+ * than passed through, because this value decides whether a run reads as
+ * confirmed, and a word this runner does not understand is not a confirmation.
+ */
+function resultVerificationOf(detail: Record<string, unknown>): PersistedResultVerification {
+  const metadata = detail.metadata;
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) return null;
+  const verification = (metadata as Record<string, unknown>).resultVerification;
+  if (typeof verification !== "object" || verification === null || Array.isArray(verification)) return null;
+  const status = (verification as Record<string, unknown>).status;
+  return status === "confirmed" || status === "refuted" || status === "unverified" || status === "no_result" ? status : null;
 }
 
 /**

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
 import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry } from "fluxiq/io";
@@ -244,6 +244,17 @@ const evidencePage = {
 };
 const evidencePageBytes = Buffer.byteLength(JSON.stringify(evidencePage), "utf8");
 assert.equal(evidencePageBytes >= 6_500 && evidencePageBytes <= 7_488, true, `max-window evidence bytes ${evidencePageBytes}`);
+// The evidence request's limits, sized against Core's own per-request ceiling
+// rather than repeating a number. This test once pinned 8,000 input tokens --
+// the eleventh copy of a ceiling measured on 2026-09-17 as unable to describe any
+// realistic page -- and it failed the moment the element packet legitimately
+// grew to show every page button. What it guards is that the request fits the
+// limits it declares, so it asserts against those, not against a literal.
+const EVIDENCE_TOKEN_LIMITS = {
+  maxInputTokens: AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST - 16_000,
+  maxOutputTokens: 8_000,
+  maxTotalTokens: AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST - 8_000
+};
 const evidenceDryRun = await runAutomationStudioLlmHarness({
   ...bootstrapHarnessInput,
   taskKind: "evidence_tool_decision",
@@ -259,15 +270,15 @@ const evidenceDryRun = await runAutomationStudioLlmHarness({
     decisionSchema: buildAutomationStudioLlmEvidenceLoopDecisionSchema(evidenceTools, evidenceCompletionSchema, true),
     canComplete: true
   },
-  tokenLimits: { maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000 },
+  tokenLimits: EVIDENCE_TOKEN_LIMITS,
   timeoutMs: 25_000,
   dryRun: true
 });
 const evidenceDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(evidenceDryRun.request);
 assert.equal((evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length ?? 0) > 0, true);
 assert.deepEqual(evidenceDryRun.request.context.flowBootstrap?.catalogSelection.missingRequiredTerms, []);
-assert.equal(evidenceDeepSeekBodyTokens <= 8_000, true, `evidence DeepSeek input estimate ${evidenceDeepSeekBodyTokens}; catalog ${evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length} entries, ${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.usedBytes}/${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.byteBudget} bytes`);
-assert.equal(evidenceDeepSeekBodyTokens + 4_000 <= 12_000, true);
+assert.equal(evidenceDeepSeekBodyTokens <= EVIDENCE_TOKEN_LIMITS.maxInputTokens, true, `evidence DeepSeek input estimate ${evidenceDeepSeekBodyTokens}; catalog ${evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length} entries, ${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.usedBytes}/${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.byteBudget} bytes`);
+assert.equal(evidenceDeepSeekBodyTokens + EVIDENCE_TOKEN_LIMITS.maxOutputTokens <= EVIDENCE_TOKEN_LIMITS.maxTotalTokens, true);
 const selectedBootstrapActions = new Set(bootstrapContext.nodeCatalog.flatMap((entry) => entry.outputAction?.fixed ? [entry.outputAction.fixed] : []));
 for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}/${bootstrapContext.catalogSelection.byteBudget}`);
 assert.equal(["web.dom.wait_for_text", "web.dom.wait_for_selector", "web.dom.extract"].some((action) => selectedBootstrapActions.has(action)), true, "bootstrap catalog omitted a verify/assert equivalent");

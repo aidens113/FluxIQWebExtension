@@ -27,7 +27,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
@@ -337,8 +337,15 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
+        // The one call that judges the finished run's result. Without it the
+        // playback carries no grant, Core has nobody to ask, and a Flow whose
+        // rows are wrong reports `passed` on its steps alone.
+        authorizeVerification: live.verificationAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
-        ...flowRunHooks(activeTopology, async evidence => { await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence)); }),
+        ...flowRunHooks(activeTopology, async evidence => {
+          await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence));
+          await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
+        }),
       });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
     } else {
@@ -423,7 +430,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           ...(live ? { authorizeLiveLlm: live.authorizer(control, activeTopology) } : {}),
           // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
           flowDispatchStarting: at => { discardWindowUntil = at; },
-          ...flowRunHooks(activeTopology, async evidence => { await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence)); }),
+          ...flowRunHooks(activeTopology, async evidence => {
+            await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));
+            await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
+          }),
         }));
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });

@@ -95,10 +95,22 @@ export const extractionMeasurementStatuses = ["judged", "not_run", "not_expected
 export type ExtractionMeasurementStatus = (typeof extractionMeasurementStatuses)[number];
 
 /**
+ * The members of an `ExpectedExtraction` a run can declare and then not judge,
+ * because nothing in that run reported the value they would be compared
+ * against.
+ *
+ * They are a closed vocabulary rather than free text for the reason `status`
+ * is: a measurement carries no string a page could have supplied (D6), and a
+ * name from this list cannot be one.
+ */
+export const extractionUnjudgedMembers = ["pages", "truncated"] as const;
+export type ExtractionUnjudgedMember = (typeof extractionUnjudgedMembers)[number];
+
+/**
  * One extraction step of a run, measured. **Counts and flags only** (D6): no
  * step id, field name, selector, or page value ever enters it, so an
- * evaluation can be shared without carrying what a page showed. `status` is
- * the one string, and it is a closed vocabulary.
+ * evaluation can be shared without carrying what a page showed. `status` and
+ * `unjudged` are the only strings, and both are closed vocabularies.
  *
  * `recordsListed`, `countStated`, and `comparedRecords` say what the step's
  * numbers are worth, and no reader of `matchedRecords` may skip them. An
@@ -133,6 +145,43 @@ export type RunExtractionMeasurement = {
   comparedRecords: number;
   /** Compared records equal to the expected record at their position, so 0 whenever `comparedRecords` is 0. */
   matchedRecords: number;
+  /**
+   * Expected records equal to **some** observed record when position is set
+   * aside, each observed record answering at most one expected one.
+   *
+   * It exists because `matchedRecords` alone cannot tell a wrong answer from a
+   * right answer in the wrong order, and those are different defects with
+   * different fixes. `company-directory-logistics-sector` returned 40 records
+   * and matched 35, and nothing in the run said whether five companies were
+   * read wrongly or forty were read rightly and five moved. This is that
+   * missing half of the comparison: equal to `matchedRecords` when order is
+   * not the difference, and larger by exactly the records that only moved.
+   *
+   * The verdict stays positional (`assertExtraction`). This is measured beside
+   * it, never instead of it: an expectation that lists records lists them in
+   * the page's order, and a fixture that means "the ten newest homes" means
+   * the order too.
+   *
+   * It never exceeds `comparedRecords` and is never below `matchedRecords`: a
+   * match at its own position is a match in any order. `null` when the
+   * producer did not measure it, as in every evaluation written before it was
+   * defined.
+   */
+  matchedInAnyOrder: number | null;
+  /**
+   * Members the expectation declared that this run reported nothing for, so
+   * they were declared and **not judged** -- `[]` when everything declared was
+   * judged, and `null` when the producer did not state it.
+   *
+   * A declared expectation that is quietly skipped is worse than one that was
+   * never written, because the evaluation reads as a full judgement. The Flow
+   * lane cannot observe the pages an extraction followed, so a fixture
+   * declaring `pages: 3` had that expectation dropped and said so nowhere in
+   * `evaluation.json`: `expectedPages: 3` with `pagesFollowed: null` is the
+   * same shape as a lane that simply did not report, and a reader could not
+   * tell "not compared" from "not stated".
+   */
+  unjudged: ExtractionUnjudgedMember[] | null;
   expectedFields: number;
   /** Expected fields the observed records carried. */
   presentFields: number;
@@ -170,7 +219,8 @@ export type RunExtractionMeasurement = {
  *   accuracy compares their categories.
  *
  * False failure is `oracleVerdict: "passed"` with `reportedVerdict: "failed"`;
- * false success is the inverse.
+ * false success is the inverse. A `reportedVerdict` of `unverified` is neither:
+ * FluxIQ reported no judgement of the result at all.
  */
 export type RunEvaluation = {
   schemaVersion: typeof EVALUATION_SCHEMA_VERSION;
@@ -194,8 +244,23 @@ export type RunEvaluation = {
   flowCreated: boolean | null;
   /** The fixture oracle's verdict (final state against `expected`); `null` when it was not consulted. */
   oracleVerdict: "passed" | "failed" | null;
-  /** What FluxIQ reported for the run; `null` when nothing ran. */
-  reportedVerdict: "passed" | "failed" | null;
+  /**
+   * What FluxIQ reported for the run; `null` when nothing ran.
+   *
+   * `unverified` is neither: the run's steps all succeeded and its result was
+   * never judged, because the run reached no model to judge it with. It is a
+   * third outcome rather than a `passed` because a result nobody checked is
+   * not a result that was right -- seven live runs on 2026-09-18 returned the
+   * wrong records and reported `passed` on their steps alone -- and rather
+   * than a `failed` because a deterministic replay of a saved Flow with no
+   * model is how most automations run, and failing them all for the absence of
+   * a judgement would break working automations to make a point.
+   *
+   * It counts as neither a false success nor a false failure: the bench's
+   * accuracy rates take it in their denominator and never as a hit, which is
+   * exactly what "nobody knows" should do to a measured rate.
+   */
+  reportedVerdict: "passed" | "failed" | "unverified" | null;
   /** Present exactly when `reportedVerdict` is `failed`; `ambiguous_or_unknown` when FluxIQ gave no category. */
   automationFailureReported: { category: AutomationStudioAdaptiveFailureClass; code?: string } | null;
   automationFailureExpected: ExpectedFailure | null;

@@ -7,7 +7,7 @@ import { benchExtractionMetrics } from "../extraction-metrics.js";
 const measurement = (fields: Partial<RunExtractionMeasurement> = {}): RunExtractionMeasurement => ({
   stepIndex: 1, status: "judged", expectedRecords: 0, observedRecords: 0, recordsListed: false, countStated: false,
   comparedRecords: 0, matchedRecords: 0, expectedFields: 0, presentFields: 0, unexpectedFields: 0,
-  expectedPages: null, pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0, ...fields,
+  matchedInAnyOrder: 0, unjudged: [], expectedPages: null, pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0, ...fields,
 });
 
 /** A step whose expectation listed its records, so its values were compared. */
