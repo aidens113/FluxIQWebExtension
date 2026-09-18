@@ -27,7 +27,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
@@ -175,7 +175,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, coreWebBuildRunsDirectory: options.runsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -342,10 +342,13 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
-        // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model.
+        // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
         authorizeRun: live.repairAuthorizer(control, activeTopology),
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
-        ...flowRunHooks(activeTopology, async evidence => { await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence)); }),
+        ...flowRunHooks(activeTopology, async evidence => {
+          await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence));
+          await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
+        }),
       });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
     } else {
@@ -430,7 +433,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           ...(live ? { authorizeLiveLlm: live.authorizer(control, activeTopology) } : {}),
           // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
           flowDispatchStarting: at => { discardWindowUntil = at; },
-          ...flowRunHooks(activeTopology, async evidence => { await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence)); }),
+          ...flowRunHooks(activeTopology, async evidence => {
+            await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));
+            await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
+          }),
         }));
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });

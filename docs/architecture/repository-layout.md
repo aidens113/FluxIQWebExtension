@@ -522,6 +522,47 @@ existing one, which is the right trade when nothing is using it.
 same sense, but it holds evidence bundles somebody may still want to read and a
 `persistent-isolated` topology whose whole point is that it survives.
 
+### Keeping the Shared Core Current
+
+The shared Core is detached at whatever commit it was given when the first task
+beside it opened, and nothing moves it again on its own. Core's `dev` moves
+whenever a Core task merges and this repository's `dev` moves with it, so a
+worktree opened earlier ends up asking an older Core for behaviour it lacks. On
+2026-09-18 it was eleven commits behind: its per-request token ceiling was
+50,000 where the campaign asks for 56,000, and every worktree Lab run failed as
+Core exiting 1 and `environment.missing`.
+
+```bash
+pnpm task sync-core --dry-run      # decide everything, change nothing
+pnpm task sync-core                # move it to Core's dev, then build it fully
+pnpm task sync-core --to <rev>     # or to another revision
+```
+
+It moves the Core this checkout's `domain/package.json` actually links, never a
+configured one, and builds it with Core's own full `build` (the three libraries
+and the web panel), so every worktree beside it gets a usable Core. It refuses,
+before changing anything:
+
+- a Core on a branch -- the main Core, or a Core-paired task's own;
+- a Core with uncommitted or untracked changes;
+- a Core whose commit no branch or tag contains, which the move would strand;
+- any change while a process is running inside the Core or inside any worktree
+  that shares it, naming them. `--allow-running` overrides only this one.
+
+Whether a step is needed is read from what is on disk: pnpm's own
+`node_modules/.pnpm/lock.yaml` for the install, and a build marker or missing
+output for the build. A Core already at its target costs well under a second
+and asks nobody. `pnpm task start --worktree` runs the same move before it
+creates anything.
+
+The Lab refuses to start against a Core that is detached and behind `dev`,
+naming the commit count and `pnpm task sync-core`, rather than failing later as
+`environment.missing` (`scripts/lab/core/commit/`). That check lives in the Lab
+rather than in `pnpm task`, because a worktree's Core is right when the worktree
+opens and goes wrong afterwards, when nothing in `pnpm task` runs. The Lab's
+checkout pair pins Core on purpose and waives it with
+`FLUXIQ_LAB_ALLOW_BEHIND_CORE=1`.
+
 ## Panel Commands
 
 `pnpm dev` builds the web panel host, runs repository-local FluxIQ setup, and

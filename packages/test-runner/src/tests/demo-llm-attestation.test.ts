@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { RunnerFailure } from "../failure.js";
 import { certifyDemoLlmSetupArtifacts } from "../demo-llm-attestation.js";
+import { SECRET_LEAK_ATTESTATION_RUN_LIMITS } from "../secret-leak-attestation.js";
 import { createSqliteDatabases } from "../sqlite-store-reader/tests/sqlite-fixtures.js";
 
 const sentinel = "synthetic-deepseek-setup-sentinel-123456";
@@ -67,11 +68,32 @@ test("scans Core databases and a -wal over the default 1 MiB, and over the defau
   assert.equal(JSON.stringify(result).includes(sentinel), false);
 });
 
-test("still fails setup on a Core database over the Lab run's 8 MiB per-file ceiling, which the scan cannot read", async t => {
+/**
+ * The size a live run really produces. On 2026-09-18 one
+ * `social-scheduler-week-ahead` run left a 10.02 MiB `.fluxiq/global.sqlite`, and
+ * charging it to the 8 MiB text ceiling failed that run, and every run like it, as
+ * `unscanned-store` on a store nothing was wrong with, and a completed
+ * state-changing run has since left 85.5 MiB. A store has no size ceiling, so one
+ * past the 64 MiB text total is read rather than refused.
+ */
+test("scans a Core database past both text ceilings, the size a completed run leaves behind", async t => {
+  const root = await demoWorkspace(t);
+  const database = path.join(root, "fluxiq-root", ".fluxiq", "global.sqlite");
+  createSqliteDatabases([{ file: database, statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(70000000))"] }]);
+  const size = (await stat(database)).size;
+  assert.ok(size > SECRET_LEAK_ATTESTATION_RUN_LIMITS.maxTotalBytes, `the store is past the text total: ${size}`);
+
+  const result = await certifyDemoLlmSetupArtifacts({ workspaceRoot: root, secretLiteral: sentinel });
+
+  assert.equal(result.findingCount, 0);
+  assert.ok(result.scannedBytes >= size, `every store byte was searched: ${result.scannedBytes} of at least ${size}`);
+});
+
+test("still fails setup on a Core database the scan cannot read", async t => {
   const root = await demoWorkspace(t);
   const database = path.join(root, "fluxiq-root", ".fluxiq", "project.sqlite");
-  createSqliteDatabases([{ file: database, statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(8500000))"] }]);
-  assert.ok((await stat(database)).size > 8 * MIB);
+  // Named as a store, but no reader can open it: absence cannot be attested.
+  await writeFile(database, Buffer.alloc(2 * MIB));
   await assert.rejects(
     certifyDemoLlmSetupArtifacts({ workspaceRoot: root, secretLiteral: sentinel }),
     error => error instanceof RunnerFailure

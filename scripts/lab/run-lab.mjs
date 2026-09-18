@@ -17,6 +17,7 @@ import path from "node:path";
 import { withBuildLock } from "./build-lock.mjs";
 import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core/index.mjs";
 import { coreBuildStaleness } from "./core/index.mjs";
+import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { scanCoreSources } from "./core/index.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
 
@@ -34,6 +35,35 @@ const loadsCore = !READ_ONLY_COMMANDS.has(args[0] ?? "");
 let coreBefore = null;
 if (loadsCore) {
   const coreRoot = coreRepositoryRoot(process.env, repositoryRoot);
+
+  // Asked before the quiescence wait, which can hold a run for ten minutes:
+  // a Core on the wrong COMMIT is wrong however quiet and however well built
+  // it is, and waiting to say so wastes the one thing this check saves.
+  //
+  // This is the Lab's question rather than `pnpm task`'s, although `pnpm task
+  // sync-core` is what fixes it. A worktree's Core is right when the worktree
+  // is opened and goes wrong later, when Core's `dev` moves and this
+  // repository's `dev` moves with it; `pnpm task` does not run again in
+  // between, so a refusal there cannot catch the case that actually happens.
+  // The Lab entry point does run, immediately before Core is loaded, and it
+  // already asks the other two questions about the Core it is about to use.
+  //
+  // It refuses rather than warns because a warning is what this failure
+  // already had: three worktree runs printed their way to "environment.missing"
+  // and were written off as an undiagnosed worktree fault.
+  const commit = await readCoreCommit(coreRoot, process.env.FLUXIQ_LAB_CORE_BRANCH?.trim() || "dev");
+  const behind = commit === null ? { stale: false } : coreCommitStaleness(commit);
+  if (behind.stale) {
+    note({ lab: "core-commit", state: "behind", root: coreRoot, behind: behind.behind, head: commit.head, target: commit.target, why: behind.message });
+    if (process.env.FLUXIQ_LAB_ALLOW_BEHIND_CORE !== "1") {
+      process.stderr.write(`${behind.message}
+Set FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 to run against it anyway.
+`);
+      process.exit(1);
+    }
+    note({ lab: "core-commit", state: "behind-allowed", why: "FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 was set, so this run proceeds against a Core behind the branch it is measured from." });
+  }
+
   const quietMs = positiveInteger(process.env.FLUXIQ_LAB_CORE_QUIET_MS, DEFAULT_QUIET_MS);
   const timeoutMs = positiveInteger(process.env.FLUXIQ_LAB_CORE_WAIT_TIMEOUT_MS, DEFAULT_WAIT_TIMEOUT_MS);
   const guard = await waitForQuietCoreOutput(coreRoot, {

@@ -200,8 +200,20 @@ test("the lane refuses what it cannot build or run honestly, before the step it 
 test("a created Flow's playback runs under the repair grant it was given, and its spend is settled before anything is judged", async () => {
   const core = fakeCreationCore();
   const granted: unknown[] = [];
-  const runPersistedFlow = core.control.runPersistedFlow.bind(core.control);
-  core.control.runPersistedFlow = async (input) => { granted.push(input.llmExecution ?? null); return await runPersistedFlow(input); };
+  const named: string[] = [];
+  const call = core.control.automationStudioCall.bind(core.control);
+  // A granted run is its own session, under an id the runner names first (`runGrantedFlow`).
+  core.control.automationStudioCall = async (endpoint, payload, ...rest) => {
+    // The fake's reads describe `run.created`; served here as the run the runner named.
+    if (endpoint !== "run-runtime-session") {
+      const answer = await call(endpoint, payload, ...rest);
+      return named[0] ? JSON.parse(JSON.stringify(answer).replaceAll('"run.created"', JSON.stringify(named[0]))) : answer;
+    }
+    core.calls.push("run");
+    granted.push({ grantId: payload.llmExecutionGrantId, purpose: payload.runIntent });
+    named.push(String(payload.newRunId));
+    return { runtimeSession: { runId: payload.newRunId, status: "succeeded", flowId: FLOW_ID } };
+  };
   const settledRuns: Array<string | undefined> = [];
   const { run } = await runLane(core, {
     authorizeRun: async (flowId) => { core.calls.push(`authorize-run:${flowId}`); return { grantId: "llm-grant:repair", purpose: "diagnose_and_adapt" }; },
@@ -209,7 +221,7 @@ test("a created Flow's playback runs under the repair grant it was given, and it
   });
   await run;
   assert.deepEqual(granted, [{ grantId: "llm-grant:repair", purpose: "diagnose_and_adapt" }]);
-  assert.deepEqual(settledRuns, ["run.created"]);
+  assert.deepEqual(settledRuns, named, "the repair is settled from the run it ran as");
   // Issued once the page is presented and immediately before the run; a granted run starts no session of its own beforehand.
   assert.deepEqual(core.calls.slice(core.calls.indexOf("reset:/__control/reset")), [
     "reset:/__control/reset", "prepare", `authorize-run:${FLOW_ID}`, "select-context", "run", "get-flow-run-detail", "get-run-dataset-page", "settle-run", "publish",
@@ -219,14 +231,19 @@ test("a created Flow's playback runs under the repair grant it was given, and it
 test("a repair run that throws is still settled, and an overspend outranks the run's own failure", async () => {
   const failing = () => {
     const core = fakeCreationCore();
-    core.control.runPersistedFlow = async () => { core.calls.push("run"); throw new Error("the run broke"); };
+    const call = core.control.automationStudioCall.bind(core.control);
+    core.control.automationStudioCall = async (endpoint, payload, ...rest) => {
+      if (endpoint === "run-runtime-session") throw new Error("the run broke");
+      return await call(endpoint, payload, ...rest);
+    };
     return core;
   };
   const settledRuns: Array<string | undefined> = [];
   const grant = async (): Promise<PersistedFlowLlmExecution> => ({ grantId: "llm-grant:repair", purpose: "diagnose_and_adapt" });
   const plain = await runLane(failing(), { authorizeRun: grant, settleRun: async (runId) => { settledRuns.push(runId); } });
   await assert.rejects(plain.run, /the run broke/u);
-  assert.deepEqual(settledRuns, [undefined], "Core named no run before the call failed, and the settlement is told so");
+  assert.equal(settledRuns.length, 1);
+  assert.equal(typeof settledRuns[0], "string", "the run was named before the call failed, so its spend is read from that run");
   const breach = new RunnerFailure("runtime.behavior", "the repair spent past its budget");
   const breached = await runLane(failing(), { authorizeRun: grant, settleRun: async () => { throw breach; } });
   await assert.rejects(breached.run, (error: unknown) => error === breach);

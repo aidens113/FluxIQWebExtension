@@ -13,7 +13,11 @@ export function renderSummaryMarkdown(summary) {
   // fault.
   const reportedOf = (row) => (row.declaredFailure && row.declaredFailure === row.automationFailure ? `as declared: ${row.automationFailure}` : row.automationFailure);
   const failureOf = (row) => [row.failureCategory, row.runnerMessage, reportedOf(row)].filter(Boolean).join("; ");
-  const attemptsOf = (row) => (row.ramFaults.length > 0 ? `${row.attempts} (${row.ramFaults.join(", ")})` : row.attempts);
+  // A failure that came back identical is named as deterministic, so nobody
+  // reads a repeat of the same defect as the machine's memory fault.
+  const attemptsOf = (row) => (row.repeatedFailure
+    ? `${row.attempts} (same failure every time, deterministic: ${row.repeatedFailure})`
+    : row.ramFaults.length > 0 ? `${row.attempts} (${row.ramFaults.join(", ")})` : row.attempts);
   const spent = (value, row) => value ?? (row.spendSource === "not recorded" ? "not recorded" : null);
   const nodesOf = ({ createdFlowShape: shape }) => (shape ? `${shape.nodeCount ?? "?"} nodes${Object.keys(shape.nodeTypes).length > 0 ? `: ${Object.entries(shape.nodeTypes).map(([name, n]) => `${name} ×${n}`).join(", ")}` : ""}` : null);
   const creations = summary.tasks.filter((row) => row.kind !== "repair");

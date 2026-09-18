@@ -21,6 +21,7 @@ export * from "./demo-workspace.js";
 export * from "./demo-operation-status.js";
 export * from "./process-supervisor.js";
 export * from "./run-scenario.js";
+export * from "./saved-flow-replay/index.js";
 export * from "./scenarios.js";
 export * from "./scenario-assertions.js";
 export * from "./target-config.js";

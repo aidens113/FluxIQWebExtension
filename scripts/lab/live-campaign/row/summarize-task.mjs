@@ -56,6 +56,8 @@ export function summarizeTask(task, attempts, final, bundle) {
     exitCode: final.code,
     attempts: attempts.length,
     ramFaults: attempts.map((attempt) => attempt.ramFault).filter(Boolean),
+    /** A classified failure that came back identical on retry: deterministic, and never a RAM fault. */
+    repeatedFailure: attempts.find((attempt) => attempt.repeatedFailure)?.repeatedFailure ?? null,
     flowCreated: evaluation?.flowCreated ?? result?.observation?.flowCreated ?? (flowLane?.flowId ? true : null),
     actionTypes: distinct((evaluation?.actions ?? run?.actions ?? flowLane?.actions ?? []).map((action) => action.actionType)),
     createdFlowShape: createdFlowShape(flowLane),

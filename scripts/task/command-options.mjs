@@ -11,9 +11,10 @@
 // commands exist, so the two can never disagree about what `pnpm task` accepts.
 
 export const COMMAND_OPTIONS = {
-  start: { flags: ["worktree", "core", "dry-run"], values: ["base", "from"] },
+  start: { flags: ["worktree", "core", "allow-running", "dry-run"], values: ["base", "from"] },
   finish: { flags: ["skip-checks", "allow-running", "dry-run"], values: [] },
   abandon: { flags: ["force", "allow-running", "dry-run"], values: [] },
   list: { flags: [], values: [] },
-  prune: { flags: ["allow-running", "dry-run"], values: ["base", "days"] }
+  prune: { flags: ["allow-running", "dry-run"], values: ["base", "days"] },
+  "sync-core": { flags: ["allow-running", "dry-run"], values: ["to"] }
 };

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assertRunEvaluation, type ExpectedExtraction, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { runExtractionMeasurements, type ExtractionStepRead } from "../extraction-measurements.js";
+import { runExtractionMeasurements, type ExtractionStepRead } from "../measurements.js";
 
 const records = [{ name: "Kettle", price: "$25.00" }, { name: "Lamp", price: "$40.00" }];
 

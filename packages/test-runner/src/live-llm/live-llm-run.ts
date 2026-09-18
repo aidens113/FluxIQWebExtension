@@ -212,8 +212,10 @@ export class LiveLlmRun {
    * build and just before the run, because Core binds a grant to the Flow as
    * it then stands and expires it within the minute.
    *
-   * Only a `create-flow` run has one. A replay issues no grant, so it stays
-   * exactly as deterministic as before.
+   * The same grant is what lets the run's result be judged: `diagnose_and_adapt`
+   * covers Core's `loop_verification`, so a created Flow's playback needs no
+   * separate `verify_result` grant. Only a `create-flow` run has one. A replay
+   * issues no grant, so it stays exactly as deterministic as before.
    */
   repairAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
     return async (flowId: string) => {
@@ -305,6 +307,9 @@ export class LiveLlmRun {
       authorizationPassword: core.authorizationPassword,
       ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}),
     });
+    // Never sets `this.grant`: the build's grant is recorded by the authorizer
+    // that issued it, and a created Flow's repair grant goes to `repairGrant`,
+    // so the grant the snapshot reports is never replaced by a later one.
     return authorization;
   }
 

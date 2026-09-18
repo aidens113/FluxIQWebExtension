@@ -23,15 +23,6 @@ import type { CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
 
-/**
- * How long a granted run's request may wait. A granted run answers only once
- * Core's recovery has finished, which can take minutes, and Core names no run
- * until it answers, so a request abandoned at the client's default 30 seconds
- * leaves nothing to read back or settle. This is the control client's own
- * ceiling (`http-control/index.ts`); a caller's explicit bound still wins.
- */
-const GRANTED_RUN_TIMEOUT_MS = 300_000;
-
 /** The Core calls the lane makes; `ExistingFluxIQControlClient` satisfies it. */
 export type CreatedFlowLaneControl = PersistedFlowRunControl & CreatedFlowBuildControl & CreatedFlowReviewControl;
 
@@ -61,9 +52,9 @@ export type CreatedFlowLaneInput = {
   /**
    * Issues the proposal-only repair grant the created Flow's playback runs
    * under, against the Flow as the review left it. With it, a Flow that fails
-   * is diagnosed and repaired, and every change is held as a proposal awaiting
-   * approval. Absent, the playback carries no grant and runs as
-   * deterministically as it always has.
+   * is diagnosed and repaired, every change is held as a proposal awaiting
+   * approval, and the run's result is judged once it ends. Absent, the
+   * playback carries no grant and runs as deterministically as it always has.
    */
   authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   /**
@@ -108,12 +99,17 @@ export type CreatedFlowLaneEvidence = Readonly<{
  * the created Flow, and judges it: by the stored records for a dataset task,
  * by the scenario's playback goal otherwise.
  *
- * With `authorizeRun`, the run carries a proposal-only repair grant, so a
- * created Flow that fails is diagnosed and repaired in the same run, the way
- * the product promises -- "created and repaired" -- rather than refused for
- * want of a model. Its repair is only ever proposed: the Flow judged here is
- * the Flow the build made, and a proposal waits for a person's approval.
- * Without `authorizeRun` the run is deterministic, as it always was.
+ * With `authorizeRun`, the run carries one proposal-only repair grant
+ * (`diagnose_and_adapt`), and that grant does two jobs. A created Flow that
+ * fails is diagnosed and repaired in the same run, the way the product
+ * promises -- "created and repaired" -- rather than refused for want of a
+ * model; its repair is only ever proposed, so the Flow judged here is the Flow
+ * the build made, and a proposal waits for a person's approval. And the run's
+ * result is judged afterwards: the grant covers Core's `loop_verification`, so
+ * Core asks whether what came back answers what was asked, rather than
+ * recording that nobody judged it and keeping a `succeeded` that is
+ * indistinguishable from a right answer. Without `authorizeRun` the run is
+ * deterministic and unjudged, as it always was.
  */
 export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence> {
   const bounds = input.bounds ?? {};
@@ -156,7 +152,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
       onRunIdentified: (runId) => { identifiedRunId = runId; },
       // Each declared value once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
       inputs: { ...secretInputs, scenarioId: request.task.scenarioId, facilityRunId },
-    }, llmExecution ? { ...bounds, timeoutMs: bounds.timeoutMs ?? GRANTED_RUN_TIMEOUT_MS } : bounds);
+    }, bounds);
   } catch (error) {
     // A repair that ran and then failed to be read back was still paid for. An
     // overspend outranks the lane's own failure; a settlement that could not

@@ -5,7 +5,7 @@ import { renderPairInstructions } from "../instructions.mjs";
 
 test("the campaign environment names the pair's Core with forward slashes and isolates the build", () => {
   const environment = campaignEnvironment({ coreRoot: "F:\\fxlab\\!FluxIQ", instance: "lab-pair" });
-  assert.deepEqual(environment, { FLUXIQ_CORE_ROOT: "F:/fxlab/!FluxIQ", FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_INSTANCE: "lab-pair", npm_config_workspace_concurrency: "1" });
+  assert.deepEqual(environment, { FLUXIQ_CORE_ROOT: "F:/fxlab/!FluxIQ", FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_INSTANCE: "lab-pair", FLUXIQ_LAB_ALLOW_BEHIND_CORE: "1", npm_config_workspace_concurrency: "1" });
   assert.ok(Object.isFrozen(environment));
 });
 
@@ -14,7 +14,7 @@ test("the instructions quote every value for bash and say where the provider key
   const text = renderPairInstructions({ extRoot: "F:\\fxlab\\lab-ext", environment, providerKey: { name: "DEEPSEEK_API_KEY", found: true, source: "the process environment" } });
   const lines = text.split("\n");
   assert.ok(lines.includes("cd 'F:/fxlab/lab-ext'"));
-  assert.ok(lines.includes("export FLUXIQ_CORE_ROOT='F:/fxlab/!FluxIQ' FLUXIQ_TEST_ENV_FILES='none' FLUXIQ_LAB_INSTANCE='lab-pair' npm_config_workspace_concurrency='1'"));
+  assert.ok(lines.includes("export FLUXIQ_CORE_ROOT='F:/fxlab/!FluxIQ' FLUXIQ_TEST_ENV_FILES='none' FLUXIQ_LAB_INSTANCE='lab-pair' FLUXIQ_LAB_ALLOW_BEHIND_CORE='1' npm_config_workspace_concurrency='1'"));
   // By absolute path, so the campaign stays visible to the in-use check between tasks.
   assert.ok(lines.includes("node 'F:/fxlab/lab-ext/scripts/lab/live-campaign.mjs' --all --max-attempts 4 -- <lab options>"));
   assert.ok(lines.some((line) => line.startsWith("node 'F:/fxlab/lab-ext/scripts/lab/run-lab.mjs' run basic-form --target isolated")));
