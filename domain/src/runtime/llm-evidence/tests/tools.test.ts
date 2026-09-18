@@ -320,15 +320,15 @@ test("presses any observed control, refuses only a handle it never showed, and n
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
-  const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } });
+  const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
   assert.deepEqual({ kind: applied.kind, effectApplied: applied.effectApplied, resultCode: applied.resultCode }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded" });
   assert.deepEqual(actionTypes, [
     "web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot",
   ]);
   assert.deepEqual(actionParameters, [{ selector: "#details" }]);
-  const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.2" } });
-  const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.3" } });
-  const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.40" } });
+  const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.2", consequences: [] } });
+  const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.3", consequences: [] } });
+  const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.40", consequences: [] } });
   // A submit and a generic action are pressed like anything else. This fake page
   // does not change under them, so each reports no progress -- but each was
   // pressed, which the old rule refused on its own judgement.
@@ -368,7 +368,7 @@ test("keeps an opaque press target bound to the returned element when fresh snap
   const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
   const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
   assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", text: "Details", controlType: "button", revealKind: "disclosure", expanded: false });
-  const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } });
+  const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
   assert.equal(revealed.effectApplied, true);
   assert.deepEqual(parameters, [{ selector: "#details" }]);
 });
@@ -384,7 +384,7 @@ test("reports a successful press with unchanged parsed evidence as no progress",
         : { status: "succeeded" };
     },
   });
-  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } });
+  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
   assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress" }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
   assert.deepEqual(actionTypes, ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
 });
@@ -397,7 +397,7 @@ test("keeps gateway action, disconnect, and malformed snapshot failures fatal", 
       ? { status: "succeeded", payload: { snapshot: { url: "https://example.test/", interactiveElements: [{ tagName: "button", selector: "#safe", attributes: { type: "button", "aria-expanded": "false" } }] } } }
       : { status: "failed", error: "private gateway detail" },
   });
-  await assert.rejects(failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } }), /interaction failed/u);
+  await assert.rejects(failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } }), /interaction failed/u);
   const disconnected = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) });
   await assert.rejects(disconnected.executeTool({ ...base, callId: "call.disconnect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /exactly one/u);
   const malformed = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => ["session.one"], executeAction: async () => ({ status: "succeeded", payload: {} }) });

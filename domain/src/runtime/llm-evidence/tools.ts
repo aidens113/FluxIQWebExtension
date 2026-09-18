@@ -20,6 +20,7 @@ import type {
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
 } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
@@ -207,8 +208,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_PRESS_TOOL_ID,
-        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself.",
-        inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
+        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new -- or [] when it only changes what is shown. A lasting press the instruction did not ask for is not made: it is put to the person.",
+        inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
         effect: "mutate",
       },
       {
@@ -250,7 +251,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_PRESS_TOOL_ID) {
-          exactToolKeys(input.value, ["target"]);
+          exactToolKeys(input.value, ["target", "consequences"]);
           const target = boundedTargetHandle(input.value.target);
           const current = stable(input, await captureEvidence(gateway, sessionId, input, input.signal));
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
@@ -258,7 +259,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           // with the runtime recovery option so the two cannot drift.
           const snapshot = await pressControl({
             gateway, sessionId, request: input, current, element,
-            restamp: (binding) => retain(stable(input, binding))
+            restamp: (binding) => retain(stable(input, binding)),
+            consequences: input.value.consequences
           });
           shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);

@@ -86,7 +86,7 @@ test("presses the control it is asked to, whatever it says, and retains only wha
   const { registry, commands, retained } = registeredWith();
   await execute(registry, "web.recovery.inspect", {});
 
-  const pressed = await run(registry, "web.recovery.press", { target: "target.2" });
+  const pressed = await run(registry, "web.recovery.press", { target: "target.2", consequences: [] });
 
   assert.equal((pressed as { resultCode: string }).resultCode, "web.action.succeeded");
   assert.equal((pressed as { effectApplied: boolean }).effectApplied, true);
@@ -104,7 +104,7 @@ test("refuses a target handle before this exploration has shown any packet, and 
   const { registry, commands } = registeredWith();
 
   for (const optionId of ["web.recovery.press", "web.recovery.detect_repeating_structure"]) {
-    const refused = await run(registry, optionId, { target: "target.1" });
+    const refused = await run(registry, optionId, optionId === "web.recovery.press" ? { target: "target.1", consequences: [] } : { target: "target.1" });
     assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved" }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" }, optionId);
   }
   assert.equal(commands.includes("web.dom.click"), false);

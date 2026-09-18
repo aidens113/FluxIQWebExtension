@@ -263,7 +263,7 @@ test("a handle is this project and Flow's alone, and a reveal's recapture is wha
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }, { projectId: "project.two" }), refusedAt("web.handle.unknown", "selector"));
 
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), refusedAt("web.handle.unknown", "selector"));
-  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } });
+  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
   assert.equal(revealed.resultCode, "web.action.succeeded");
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR, element: NAME_IDENTITY } });
 });

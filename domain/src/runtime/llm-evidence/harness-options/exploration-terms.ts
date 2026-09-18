@@ -29,12 +29,12 @@ import { webLlmToolRejectionResultCode } from "../vocabulary";
  * raises the code, so it is gone from the vocabulary too rather than left as a
  * refusal waiting for someone to reuse.
  *
- * TODO(permission seam): a press whose lasting consequence the run is not
- * permitted to take belongs here, classified as Core's
- * `operator_approval_required` so its outcome is `user_intervention_required`
- * and the person is asked. It needs Core to carry a request with it, and to
- * offer the same outcome on the authoring path, which today reads no refusal
- * classification at all. Not approximated here.
+ * `permission_required` is left unclassified on purpose. It means Core's own
+ * permission check said no (`../permission.ts`), and Core has already raised
+ * the request and knows the stop; classifying it here as
+ * `operator_approval_required` would report the same request twice, and Core
+ * reads a domain classifier that returns that reason as
+ * `destructive_action_refused`.
  *
  * Anything this
  * function does not classify is ordinary feedback -- the model is told no and

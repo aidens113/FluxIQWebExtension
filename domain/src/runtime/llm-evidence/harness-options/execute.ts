@@ -110,7 +110,8 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       return toolExecution(shown(input, await capture(context, input)).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_PRESS_OPTION_ID]: run(async (input) => {
-      const target = targetHandle(input.request.value);
+      exactKeys(input.request.value, ["target", "consequences"]);
+      const target = handleIn(input.request.value);
       const observed = shownPacket(input);
       const current = await capture(context, input);
       const element = currentElementForReturnedTarget(observed, current, target);
@@ -122,7 +123,8 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         element,
         // The recovery options number each capture as it comes; only authoring
         // holds handles stable across captures of one page.
-        restamp: (binding) => binding
+        restamp: (binding) => binding,
+        consequences: input.request.value.consequences
       });
       return toolExecution(shown(input, pressed).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
     }),
@@ -183,7 +185,8 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
       toolId: execution.optionId,
       value: execution.value,
       maxEvidenceBytes: execution.maxEvidenceBytes,
-      signal: execution.signal
+      signal: execution.signal,
+      permission: execution.permission
     })
   };
 }
@@ -205,6 +208,11 @@ function boundedWait(value: JsonObject): number {
 
 function targetHandle(value: JsonObject): string {
   exactKeys(value, ["target"]);
+  return handleIn(value);
+}
+
+/** The `target` handle in an input whose keys were already checked. */
+function handleIn(value: JsonObject): string {
   const target = value.target;
   if (typeof target !== "string" || !/^target\.[1-9][0-9]?$/u.test(target)) recoverable("invalid_input");
   return target;

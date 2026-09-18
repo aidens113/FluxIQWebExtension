@@ -187,7 +187,7 @@ async function dismissedDialog(): Promise<{ runtime: WebAutomationLlmEvidenceRun
   const failure = await failurePacket(runtime);
   const recovery = exploration(runtime);
   const inspected = await recovery.call("web.recovery.inspect", {});
-  await recovery.call("web.recovery.press", { target: handleNamed(inspected, "Close") });
+  await recovery.call("web.recovery.press", { target: handleNamed(inspected, "Close"), consequences: [] });
   return { runtime, failure, explored: recovery.explored };
 }
 

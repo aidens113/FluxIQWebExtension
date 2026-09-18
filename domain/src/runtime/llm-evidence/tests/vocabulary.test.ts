@@ -66,7 +66,7 @@ test("every result code the runtime actually emits is one the published set cont
     (await runtime.executeTool({ ...base, callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/start" } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/" } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: 1 } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.9" } })).resultCode,
+    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.9", consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode,
   ];
   assert.deepEqual(emitted, [

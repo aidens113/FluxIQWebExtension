@@ -51,11 +51,14 @@ control looks like: the user's instruction is the authority. Until 2026-09-18
 it accepted only semantic disclosures and view controls and refused any
 control whose label -- or selector -- carried a committing word, which left a
 plain "New post" button and every row control of an order-management site
-unpressable. A press whose consequence lasts (purchase, delete, edit of
-existing data) is to be gated by a permission the run carries and, when the run
-lacks it, escalated to the person; that contract belongs to Core and is marked
-as a seam in `domain/src/runtime/llm-evidence/press.ts`. Until it lands, the
-press is made. A checkbox press is pressed back once the page has been read,
+unpressable. A press, or a Flow step, whose consequence lasts is asked of
+Core's permission check first (`domain/src/runtime/llm-evidence/permission.ts`).
+The model declares what its own action does in Core's classes -- `move_money`,
+`delete`, `send_or_publish`, `modify_existing`, `create_new` -- on the press's
+`consequences` input or on the step's target handle, and Core answers from the
+person's grant and from what his instruction asks for. A refusal ends the build
+with Core's permission request for the person; FluxIQ judges no control by how
+it looks. A checkbox press is pressed back once the page has been read,
 so exploration leaves the page as it found it. Form filling and option selection
 are deliberately absent from the authoring tool catalog. Parsed evidence
 already contains the control metadata and bounded options needed to propose
