@@ -36,7 +36,7 @@ import {
 } from "../capture";
 import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
-import { currentElementForReturnedTarget, safeRevealElement } from "../reveal";
+import { currentElementForReturnedTarget, pressToReveal } from "../reveal";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
 import { recoverable, RecoverableToolRejection, toolRejection } from "../tool-rejection";
@@ -114,10 +114,21 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       const observed = shownPacket(input);
       const current = await capture(context, input);
       const element = currentElementForReturnedTarget(observed, current, target);
-      // The reveal allowlist is narrower than the action ladder and stays as it
-      // is: a disclosure, a tab, a menu item, and nothing else.
-      if (!safeRevealElement(element)) recoverable("target_unsafe");
-      return await clickAndReport(context, input, current, element.selector, shown);
+      // Exactly what the authoring reveal may press, through the same module:
+      // a press that only reveals, never one that commits. Two copies of that
+      // rule would be two rules, and this one runs mid-failure on a live
+      // account, where the wrong press is somebody's real money.
+      const revealed = await pressToReveal({
+        gateway: context.gateway,
+        sessionId: input.sessionId,
+        request: input.request,
+        current,
+        element,
+        // The recovery options number each capture as it comes; only authoring
+        // holds handles stable across captures of one page.
+        restamp: (binding) => binding
+      });
+      return toolExecution(shown(input, revealed).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
     }),
     [WEB_RECOVERY_ACT_OPTION_ID]: run(async (input) => {
       const target = targetHandle(input.request.value);

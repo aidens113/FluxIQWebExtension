@@ -11,10 +11,18 @@
 // The rungs, in the order they are applied and for the reason given:
 //
 // 1. **Wording that commits.** Submit, delete, remove, pay, send, publish and
-//    their relatives, read from the name, the visible text and the selector
-//    together. First, because a control whose own label says it commits is
-//    refused whatever else is true of it -- including a "Delete" styled as a
-//    plain button inside a dialog, which every later rung would wave through.
+//    their relatives, read from the words the control says to a person and
+//    decided by `../control-intent/wording.ts`, which the reveal tools ask too,
+//    so the two refuse the same words the same way. First, because a control
+//    whose own label says it commits is refused whatever else is true of it --
+//    including a "Delete" styled as a plain button inside a dialog, which every
+//    later rung would wave through.
+//
+//    It reads the label and never the selector. A selector is this domain's
+//    address for an element, assembled from the test ids of every ancestor
+//    above it, and reading it made an order-management fixture impossible to
+//    explore: every row sits under `[data-testid="order-rows"]`, so the word
+//    "order" refused every control in the table.
 // 2. **A control that submits.** `type="submit"`, an input of that type, or a
 //    submit role. Structural, not verbal: an unlabelled submit button carries
 //    no committing word to catch at rung 1.
@@ -34,16 +42,10 @@
 //
 // Nothing here consults a fingerprint, a score or a recorded element.
 
+import { webControlWording } from "../control-intent";
 import type { ResolvedWebLlmEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence } from "../sanitize";
 import type { WebLlmToolRejectionCode } from "../tool-rejection";
-
-/**
- * Wording that means the control commits something. Wider than the reveal
- * tool's list, because this option may reach controls that are not disclosures:
- * it adds the words for saving, applying, approving and transferring.
- */
-export const WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purchase|buy|pay|checkout|order|transfer|withdraw|delete|remove|destroy|erase|discard|reset|revoke|unsubscribe|send|publish|post|upload|sign|accept)\b/iu;
 
 /** Wording that means the control puts something away without committing it. */
 export const WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
@@ -88,8 +90,9 @@ const ACTIONABLE_TAGS = new Set(["button", "summary"]);
  * the decision rested on. A refusal carries the rung, never the element.
  */
 export function webRecoverySafeActionVerdict(element: ResolvedWebLlmEvidenceElement, page: WebLlmPageEvidence): WebRecoveryActionVerdict {
-  const identity = [element.name, element.text, element.selector].filter(Boolean).join(" ");
-  if (WEB_RECOVERY_COMMITTING_WORDS.test(identity)) return { ok: false, code: "target_unsafe", rung: "committing_wording" };
+  // A command given to the page, whatever it is: this option never presses a
+  // link, so a label is read as an instruction rather than as a destination.
+  if (webControlWording(element, "command") === "commits") return { ok: false, code: "target_unsafe", rung: "committing_wording" };
   if (element.controlType === "submit" || element.inputType === "submit" || element.role === "submit") {
     return { ok: false, code: "target_unsafe", rung: "submit_control" };
   }

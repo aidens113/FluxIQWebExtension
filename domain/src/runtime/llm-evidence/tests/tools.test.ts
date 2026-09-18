@@ -99,12 +99,19 @@ test("binds from the production host seam and selects the sole trusted web clien
   const inspectDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_INSPECT_TOOL_ID)?.description ?? "";
   assert.match(inspectDescription, /copy that handle exactly into the step's target/u);
   const revealDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_REVEAL_TOOL_ID)?.description ?? "";
-  assert.match(revealDescription, /otherwise unavailable page structure/u);
-  assert.match(revealDescription, /Form entry, option selection, submission/u);
+  // What may be pressed, named by what it does rather than by the handful of
+  // ARIA shapes the tool used to accept. A live slice across three fixtures
+  // built nothing that changed a page: the composer behind "New post" was
+  // refused as unsafe, so the model never saw the form it had to fill.
+  assert.match(revealDescription, /structure that exists only after a press/u);
+  assert.match(revealDescription, /the fields behind a New post, Compose, Reply or Edit button/u);
+  assert.match(revealDescription, /a row's Select checkbox/u);
+  // And what may not, named by what it does to somebody's account.
+  assert.match(revealDescription, /Send, Save, Submit, Delete, Confirm, Refund/u);
   // The restriction is on exploring, not on the Flow. Four live campaign slices
   // built nothing that acted, having read this description as a statement about
   // what a Flow may contain; it now says which it is.
-  assert.match(revealDescription, /that bounds exploring only, not the Flow you author/u);
+  assert.match(revealDescription, /That bounds exploring only, not the Flow you author/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     title: "Form",

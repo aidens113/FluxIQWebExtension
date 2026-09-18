@@ -12,7 +12,6 @@ export {
 export { WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";
 export {
   webRecoverySafeActionVerdict,
-  WEB_RECOVERY_COMMITTING_WORDS,
   WEB_RECOVERY_DISMISSAL_WORDS,
   type WebRecoveryActionSignal,
   type WebRecoveryActionVerdict,

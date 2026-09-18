@@ -75,7 +75,7 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
     },
     {
       toolId: WEB_RECOVERY_REVEAL_OPTION_ID,
-      description: "Reveal otherwise unavailable page structure through an observed disclosure, tab, menu item, or tree item by copying its opaque target handle exactly. Form entry, option selection, submission, and generic action buttons are unavailable.",
+      description: "Press an observed control that only changes what is on screen, by copying its opaque target handle exactly: a disclosure, a tab, a row menu, a button that opens a form or a panel, a row's Select checkbox, an in-site link. A control that changes stored state is refused -- Send, Save, Submit, Delete, Confirm, Refund, a form submit, a control in a dialog. A ticked row is unticked after.",
       inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
       effect: "mutate",
       availability: DOMAIN_SCOPE,

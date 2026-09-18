@@ -2,8 +2,8 @@
 // and the post-failure capture the runtime diagnosis path calls.
 //
 // Four tools. Three in increasing order of what they are allowed to do: inspect
-// observes, navigate moves within the page's own origin, reveal uncovers
-// structure through one narrowly safe interaction. The fourth, detect, observes
+// observes, navigate moves within the page's own origin, reveal presses one
+// control that only changes what is visible. The fourth, detect, observes
 // too: it finds the repeating structure a scraping step needs and hands back an
 // opaque extraction handle for it (`structure/`). Everything they return is a
 // sanitized packet; everything they refuse returns a bare code. Form entry,
@@ -22,7 +22,6 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
 import {
-  actAndCapture,
   assertActive,
   captureEvidence,
   selectSession,
@@ -46,7 +45,7 @@ import {
 } from "./plan-resolution";
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
-import { currentElementForReturnedTarget, safeRevealElement } from "./reveal";
+import { currentElementForReturnedTarget, pressToReveal } from "./reveal";
 import { createWebLlmStableTargetHandles } from "./stable-handles";
 import {
   createWebLlmExtractionHandles,
@@ -206,7 +205,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_REVEAL_TOOL_ID,
-        description: "Reveal otherwise unavailable page structure through an observed semantic disclosure, tab, menu item, or tree item by copying its opaque target handle exactly. Use only when the missing structure is required to author the requested Flow. Form entry, option selection, submission, generic action buttons, and unrelated exploration are unavailable; that bounds exploring only, not the Flow you author. Recaptures the page after success.",
+        description: "Press an observed control to see structure that exists only after a press: the fields behind a New post, Compose, Reply or Edit button, a disclosure, a tab, a row menu, a row's Select checkbox, an in-site link. Copy its opaque handle exactly. Anything that changes stored state is refused -- Send, Save, Submit, Delete, Confirm, Refund, a form submit, a control in a dialog -- and stays refused. That bounds exploring only, not the Flow you author. A ticked row is unticked after.",
         inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "mutate",
       },
@@ -253,9 +252,13 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           const target = boundedTargetHandle(input.value.target);
           const current = stable(input, await captureEvidence(gateway, sessionId, input, input.signal));
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
-          if (!safeRevealElement(element)) recoverable("target_unsafe");
-          const snapshot = retain(stable(input, await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal)));
-          if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
+          // What may be pressed, the press, and the tidying afterwards all live
+          // in `./reveal.ts`, shared with the runtime recovery option so the two
+          // cannot come to disagree about what exploring may do to a page.
+          const snapshot = await pressToReveal({
+            gateway, sessionId, request: input, current, element,
+            restamp: (binding) => retain(stable(input, binding))
+          });
           shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }

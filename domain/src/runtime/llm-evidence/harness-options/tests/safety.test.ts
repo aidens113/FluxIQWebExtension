@@ -10,7 +10,7 @@ import { webRecoverySafeActionVerdict, type WebRecoverySafetyRung } from "../saf
 const REFUSALS: Array<[string, Partial<ResolvedWebLlmEvidenceElement>, WebRecoverySafetyRung]> = [
   ["a button whose name says it deletes", { name: "Delete account", role: "button" }, "committing_wording"],
   ["a button whose visible text says it pays", { text: "Pay now", role: "button" }, "committing_wording"],
-  ["a button whose selector says it submits", { selector: "#submit-order", name: "Continue", role: "button" }, "committing_wording"],
+  ["a named button nothing corroborates, whatever its selector says", { selector: "#submit-order", name: "Continue", role: "button" }, "unidentified_without_corroboration"],
   ["a delete styled as an ordinary dialog button", { name: "Delete", role: "button", landmark: "dialog" }, "committing_wording"],
   ["an unlabelled submit control", { tag: "input", controlType: "submit" }, "submit_control"],
   ["an unlabelled submit input type", { tag: "input", inputType: "submit" }, "submit_control"],
@@ -70,6 +70,25 @@ test("refuses a delete that took the place of the recorded control, however alik
 
   assert.equal(webRecoverySafeActionVerdict(element(recorded), context).ok, true);
   assert.deepEqual(webRecoverySafeActionVerdict(element(replacement), context), { ok: false, code: "target_unsafe", rung: "committing_wording" });
+});
+
+// The selector is this domain's address for an element, assembled from the test
+// ids of every ancestor above it. Reading it made an order-management fixture
+// impossible to explore: every row sits under `[data-testid="order-rows"]`, so
+// the word "order" refused every control in the table, on the one kind of site
+// where orders are the job. The label is what a person reads; the selector is
+// not something the page says to anybody.
+test("reads the label and never the selector, so a word in an ancestor's test id refuses nothing", () => {
+  const context = page({ dialogs: [{ role: "dialog", modal: true }] });
+  const inTheOrdersTable = { tag: "button", name: "Close", landmark: "dialog", selector: `[data-testid="order-rows"] tr:nth-child(1) button` };
+
+  assert.equal(webRecoverySafeActionVerdict(element(inTheOrdersTable), context).ok, true);
+  // And the same control, still under that selector, refused the moment its own
+  // label commits.
+  assert.deepEqual(
+    webRecoverySafeActionVerdict(element({ ...inTheOrdersTable, name: "Cancel order" }), context),
+    { ok: false, code: "target_unsafe", rung: "committing_wording" }
+  );
 });
 
 test("every committing word is refused on the same rung, so none of them depends on where it appears", () => {
