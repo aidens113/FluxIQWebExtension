@@ -49,9 +49,17 @@ function liveCore(recovery: Recovery) {
   const attempt = recovery === "none" ? undefined : patchAttempt(recovery);
   const proposed = recovery === "proposed-save" || recovery === "proposed-discard";
   const candidates = [{ candidateId: "candidate.0", outputId: "web.dom.type" }, { candidateId: "candidate.1", outputId: "web.dom.click" }];
+  const grantedRunIds: string[] = [];
   const control: FlowLaneControl = {
     automationStudioCall: async (endpoint, payload) => {
       calls.push(endpoint);
+      // A granted run names its own id before it starts, and Core runs it under that id.
+      if (endpoint === "run-runtime-session") {
+        const request = payload as Record<string, unknown>;
+        calls.push(`run:${String(request.runIntent ?? "none")}`);
+        grantedRunIds.push(String(request.newRunId));
+        return { runtimeSession: { runId: String(request.newRunId), flowId: String(request.flowId), status: "failed" } };
+      }
       if (endpoint === "list-recordings") return { recordings: [{ recordingId: "recording.one", startedAt: 0, endedAt: 1, metadata: { summaryOnly: true, eventCount: 2 } }] };
       if (endpoint === "create-recording-flow-proposals") return { proposals: [{ proposalId: "proposal.one", recordingId: "recording.one", status: "proposed", generatedAt: 1, mapper: { id: "web-recording-actions", version: "0.1" }, candidates }], issues: [] };
       if (endpoint === "review-recording-flow-proposal") return { proposal: { proposalId: "proposal.one", status: "approved", candidates, review: { decision: "approved", destination: { kind: "flow", flowId: "flow.new", created: true } } }, flow: { flowId: "flow.new" } };
@@ -64,7 +72,7 @@ function liveCore(recovery: Recovery) {
       if (endpoint === "list-flow-subflows") return { subflows: [] };
       if (endpoint === "get-flow-run-detail") {
         return { runDetail: {
-          summary: { runId: "run.live", status: "failed" },
+          summary: { runId: grantedRunIds[grantedRunIds.length - 1] ?? "run.live", status: "failed" },
           actionAttempts: [
             { attemptId: "attempt.type", nodeId: "recorded.type", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20 },
             { attemptId: "attempt.save", nodeId: "recorded.save", definitionId: "builtin.policy.action", order: 2, status: "failed", startedAt: 30, finishedAt: 40, failure: NOT_FOUND },
@@ -94,7 +102,7 @@ function liveCore(recovery: Recovery) {
       changeProposalIds: proposed ? [PROPOSAL_ID] : [],
     }),
   };
-  return { control, calls, adaptationReads };
+  return { control, calls, adaptationReads, grantedRunIds };
 }
 
 async function runLiveLane(recovery: Recovery, options: { purpose?: PersistedFlowLlmExecution["purpose"]; expectation?: FlowRepairExpectation | null } = {}) {
@@ -135,7 +143,7 @@ async function runLiveLane(recovery: Recovery, options: { purpose?: PersistedFlo
 test("a proposal naming the renamed Save passes a proposal-only run that ended target_not_found", async () => {
   const { outcome, evidence, identified, calls, adaptationReads } = await runLiveLane("proposed-save");
   assert.ok("value" in outcome, `the lane failed: ${"error" in outcome ? String(outcome.error) : ""}`);
-  assert.deepEqual(identified, ["run.live"]);
+  assertRunIdNamedFirst(identified);
   assert.ok(calls.includes("run:diagnose_and_adapt"));
   assert.deepEqual(adaptationReads, [{ projectId: "project.lab", flowId: "flow.new", adaptationId: ADAPTATION_ID }]);
   assert.deepEqual(outcome.value.repair, { verdict: "repaired", patchKind: "temporary_target_override", proposals: 1, mismatchedFields: [], refusalCodes: [] });
@@ -152,7 +160,7 @@ test("a refused override fails the run on its repair, after the judgement and th
   assert.ok("error" in outcome);
   assert.ok(outcome.error instanceof RunnerFailure && outcome.error.category === "runtime.behavior");
   assert.equal((outcome.error as Error).message, "The live repair was not the declared one: Core refused it (runtime_patch.target_override_rejected, runtime_patch.target_override_rejected.action_not_repairable)");
-  assert.deepEqual(identified, ["run.live"], "the run id was reported before the lane failed");
+  assertRunIdNamedFirst(identified, "the run id was reported before the lane failed");
   assert.deepEqual(adaptationReads, []);
   assert.equal(evidence.length, 1);
   assert.deepEqual(flowLaneSnapshot(evidence[0]!).repair, {
@@ -182,3 +190,9 @@ test("no repair is judged for a grant that cannot propose one, or a run with not
     assert.deepEqual(adaptationReads, [], name);
   }
 });
+
+/** A granted run's id is named by the runner before the run starts, a lowercase UUID Core then runs under. */
+function assertRunIdNamedFirst(identified: readonly string[], message?: string): void {
+  assert.equal(identified.length, 1, message);
+  assert.match(identified[0]!, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u, message);
+}
