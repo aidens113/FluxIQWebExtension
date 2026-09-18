@@ -46,16 +46,18 @@ its oracle says `failed` was the commonest defect found on 2026-09-17.
 **The two scoping reports describe `ee25ac9`, not HEAD.** Five briefs drawn from
 them sent workers at defects already fixed; re-verify any file:line they give.
 
-**Where the goal stands, measured live on 2026-09-17 (Core `cf176fe`, here
-`b0f801d`).** Creation now acts and narrows: `social-scheduler-week-ahead`
-returns 14 of 280 via `navigate, select, select, extract_list`;
-`property-listings-no-matches` returns 0 of 288 via `navigate, select, select,
-click, extract_list`; the unfiltered control `whole-queue` still returns 280 of
-280. Before that day's fixes every built Flow was `navigate -> extract_list`,
-across ~290 live calls not one interaction was authored, and nine narrowing jobs
-returned the whole table while reporting success. Repair works end to end:
-explores, proposes, passes. Only those three creation tasks have been re-run
-since the fixes; the rest of the realistic corpus has not.
+**Where the goal stands, 2026-09-18 end of day (Core `80a8495`, here `20abce8`).**
+The user's measure of success is a created Flow replayed later with NO model
+producing the right answer; exploration counts for nothing. Proven live today:
+a Flow built from the week-ahead instruction was saved and replayed five times in
+separate invocations with no key, no grant and no provider — 14/14 records,
+byte-identical output (`pnpm lab replay`, t019). Routing proven the same way: one
+saved Flow took the announcement route when a dialog was present and the main
+route when not, 14/14 both (t020). A created Flow that broke after the site
+changed was repaired — the right target override proposed and held `pending`,
+never applied, $0.004 (t016). Four jobs are fully correct on the realistic
+corpus; the last full corpus (4 of 36) predates every fix below and has not been
+re-run.
 
 **Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
 deterministic-path patch gated by a compile-checked record
@@ -65,29 +67,49 @@ on `resumable: false` and resumes from the failed node (t006); fail-closed
 result verification on `loop_verification`. Token limits derive from one
 constant sized to the model's 64k context, in all ten places that held a copy.
 
-**Open, known — from the first full live corpus, 2026-09-18.** 4 of 36 creation
-tasks passed across the six realistic fixtures (`reports/w2-corpus-{a,b,c,d}.md`,
-~$0.78 of real calls). Narrowing now works where the controls are selects: Kelford
-collects the right 57 homes over 6 pages, scheduler 14 of 14, SLA reads 12 of 12.
-What blocks the rest, each in flight in its own worktree:
-- **Exploration may not press a plain button or tick a checkbox** — reveal only
-  presses disclosures, tabs and menu items, and `safety.ts` matches "order" against
-  selectors. No state-changing job changed a page, on any fixture (t011).
-- **Script-handled links are judged as failed clicks**: a link with an `href`
-  whose navigation the page cancels, loading rows in place, fails
-  `output_not_observed` — 4 of 4 company-directory Flows (t010).
-- **Repeated row controls flood the element packet**, pushing out page buttons
-  (t009).
-- **7 false successes** — records with empty required fields, or wrong rows —
-  because result verification returns `performed: false` when playback has no
-  provider, and a created Flow's playback has none (t012).
-- A dialog opened during build-time exploration stayed open into playback, twice.
-- Also seen, unowned: `home-facts` generation HTTP 400 (2 of 2); a 64 KB
-  bootstrap evidence ceiling spent by seven navigations; `evidence_tool_failed`
-  bundles do not record which tool failed; the replay recorder has no production
-  caller; `unscanned-store` false redaction failures persist.
-**Not started:** 2.9, X6 (an `extractList`
-parameter-override path, not a target-map entry).
+**Landed and pushed 2026-09-18:** t010 in-place link clicks; t014/t023 the
+redaction scan reads the run's own store at any size (no leak ever existed; the
+check failed only runs that worked); t012 a created Flow's result is judged, and
+an unjudged run reports `unverified`; t015 extraction mismatches recorded field
+by field; t013 shared Core kept current, its web build cache outside
+`node_modules` (inside it crashed 4/4 as an illegal instruction), repeats no
+longer blamed on RAM; t019 save-and-replay; t022 a run names its own id first, so
+a granted run is read back after a timeout (fixed a regression t012 caused);
+t018 permission contract in Core, the instruction itself a grant; t020 routing
+and subflows the model can author, with context; t016 created-Flow repair.
+
+**In flight / held:** t011 (safety classification removed) lands only with its
+press wired to t018's permission seam — being wired now. t021 (many actions per
+model turn) is built on its branch but NOT landed: it showed no benefit live and
+no exploration tool can type into a field yet.
+
+**Open, for the next session, in priority order:**
+1. Re-run the corpus as the Week 2 measurement once t011 lands.
+2. The model result check disagrees with itself on identical input at
+   temperature 0. Designed fix (t022 report): a single "does not answer" triggers
+   one repeat; disagreement records `unverified`, never pass or fail.
+3. Repair editing structure (t020 piece 3): repair returns a revised Flow script,
+   Core shows the person a DIFF; closes "a Flow missing a step can only be
+   declined". Designed in `reports/w2-routing-and-subflows.md`, not built.
+4. Recovery path does not yet receive the permitted set (t018 report).
+5. Under `explore_and_adapt`, a repair needing a side effect is dropped rather
+   than proposed (`recovery/annotation/patches.ts:142`); it should become a
+   permission request.
+6. Core stores each action's full page snapshot 4-5 times in one session
+   document rewritten every step (85.5 MiB stores; t023 report).
+7. Core's `targetResolution: unresolved_no_candidates` is a constant on every web
+   action and is fed to the repair model as `failed_target` (t017 report: fix at
+   `io-policy.ts:242`, then lift the browser's real resolution in
+   `conversions.ts`).
+8. The model can mark every extract field optional and disarm Core's
+   required-field check (`record-output.ts:73`); an empty cell reads `""` not
+   missing (the 5 wrong company rows).
+9. A structure-audit rule: this repository may import, never define, Core's
+   `AutomationStudio*` names. The test-runner build never clears stale `dist`,
+   so moved tests keep running (hit twice).
+10. Batching follow-ups (t021): a fill-field exploration tool, the domain sending
+    `targetsUnchanged`, then a fair before/after.
+**Not started:** 2.9, X6, the third entry point (improving an existing Flow).
 
 **The fixed call limit was the defect, not a constraint to design around (user
 decision, 2026-09-16).** An adaptation iterates while it is making progress and
@@ -97,17 +119,6 @@ only as a far-away, configurable backstop, never a per-mode constant; starving
 the loop of calls is not how cost is controlled. The generalizable lesson: when
 a designed-in limit keeps generating blockers, the limit is the defect — report
 it as such instead of engineering workarounds inside it.
-
-**The exploration runs in production, as of 2026-09-16**, wired through
-`AS/runtime/recovery/annotation/` with four negative probes proving it is
-load-bearing (`reports/w2-3-bounded-exploration.md`).
-
-**Two silent-no-protection defects are closed:** `deniedEvidenceKeys` is
-required and fail-closed, which exposed that Flow Bootstrap never forwarded the
-bound domain's keys at all (a `?? []` there restores the hole); the structured
-diagnosis refuses a diagnosis-shaped key in `response.metadata`, by field name.
-**The `llm` / `recovery` value cycle is a build failure**, verified by
-reintroducing it; the shared values live in `runtime/loop-limits/`.
 
 **Concurrency is five workers, not nine.** Nine heavy workers crashed this
 machine twice; the memory fault makes that a real limit, not caution.
@@ -128,27 +139,13 @@ run unit tests, `pnpm check` and the suites as a regression net. The corpus
 measures where the product stands when a fix is believed finished; it is never
 the development loop.
 
-**Worktree Lab runs failed all week for two boring reasons, both now fixed
-(supervisor, 2026-09-18).** `F:xwork\!FluxIQ` is one shared Core that every
-sibling task worktree builds against, and it sat detached 11 commits behind Core
-`dev`, so the domain asked a Core predating the fixes for what it did not have —
-surfacing as `environment.missing`, Core exiting 1, and a week of "undiagnosed
-worktree fault". Moving it to Core `dev` and rebuilding cleared it; t013 makes
-that correct by construction. The second cause was the briefs': they ran
-`pnpm lab:campaign` without the `FLUXIQ_TEST_ENV_FILES=none
-FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` prefix, giving
-`FLUXIQ_TEST_PROJECT_ID is required`, and gave a fresh instance `--no-build`
-when it had nothing built to skip to.
+**Worktree Lab runs:** `pnpm task start` keeps the shared Core current and the
+Lab refuses a stale one (t013). Always pass `FLUXIQ_TEST_ENV_FILES=none
+FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` and export the key from
+`.env.local`; never `--no-build` on a fresh instance.
 
-**A crash ended the 2026-09-18 session mid-flight; nothing was lost.** t009 is
-merged (`76903aa`), the evidence-ceiling fix landed (`0f156db`), both main trees
-are clean. The four unfinished fixes survive as uncommitted work in their
-worktrees and are resumed, not restarted: t010 committed and unit-proven, t011
-part-written, t012 substantial Core work, t013 substantial script work, t014
-not started.
-
-**Next steps, in order:** land t010 to t014 once each proves itself live; re-run
-the corpus; then the unowned items above; then 2.9 and X6.
+**Next steps:** land t011 with the permission seam wired; re-run the corpus;
+then the open list above, in order.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -272,6 +269,38 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-18 — Save, replay, route and repair, with no model in the replay
+- Agents: supervisor, plus t013, t015, t016, t018, t019, t020, t022, t023
+  landed; t011 held for the permission seam; t021 built and not landed.
+- Why: the user set the measure of success — a created Flow replayed with no
+  model and producing the right answer — and asked that the model route, create
+  and edit subflows with context, that FluxIQ ask for permission rather than
+  refuse, and that live testing come first.
+- Found: no Flow from any campaign could ever have been replayed (the isolated
+  target deleted it, the persistent one refused to run it, and a saved navigate
+  step pointed at a port that moved every run); model-written route rules had no
+  condition, so the first always won, and the router read page state from inputs
+  no real run passes; created Flows were never repaired because Core dropped the
+  requested intervention mode and the Lab played them back with no grant; t012's
+  verification call pushed runs past a 30-second request and lost their result.
+- Integration, by the supervisor: resolved conflicts in `service.ts` (routing
+  wraps the decision, permissions wrap tool execution, both kept),
+  `evaluation-validation.ts`, and t019's replay against t013's moved build cache;
+  fixed Core's purpose-count test and the repair lane's fake Core for t022.
+  Merged the Core half of t016 before its downstream half had passed, by chaining
+  with `;`; caught it, rebuilt, re-merged, pushed nothing in between.
+- Validation: `pnpm lab replay social-scheduler --workspace t019-replay --flow
+  flow.c1542a11-...` with no provider variable set -> passed, 14/14, 0 calls,
+  dataset sha256 `23782055ca89...` identical to four earlier replays;
+  `pnpm lab replay ... --flow flow.9c8f4386-...` on two renderings -> 14/14 each,
+  different routes, 0 calls (t020); live `run-mu7gjreo` and `run-mu7hke99` ->
+  override proposed, proposal `pending`, adaptation `draft` (t016);
+  `social-scheduler-week-ahead` after t022 -> passed 14/14, verdict `confirmed`;
+  every merge ran `pnpm check` -> passed in both repositories; `pnpm --filter
+  @fluxiq-web-extension/test-runner test` after a clean `dist` -> 1189/1189.
+- Not verified: approving and applying a repair then replaying it; the recovery
+  path's permission wiring; any web UI; a full corpus since these fixes.
 
 ### 2026-09-18 — The instruments were lying: clicks, the security check, and success itself
 - Agents: supervisor, plus `t010` click-landing-in-place, `t014` unscanned-store,
