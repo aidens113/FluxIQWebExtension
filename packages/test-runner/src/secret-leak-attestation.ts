@@ -5,16 +5,27 @@ import path from "node:path";
 import { readSqliteStores } from "./sqlite-store-reader/index.js";
 
 export const SECRET_LEAK_ATTESTATION_DEFAULT_LIMITS = Object.freeze({
-  maxFiles: 2_000, maxFileBytes: 1_048_576, maxTotalBytes: 16_777_216, maxDepth: 16, maxApprovedPaths: 32,
+  maxFiles: 2_000, maxFileBytes: 1_048_576, maxStoreBytes: 8_388_608, maxTotalBytes: 16_777_216, maxDepth: 16, maxApprovedPaths: 32,
 });
-export type SecretLeakAttestationLimits = { maxFiles: number; maxFileBytes: number; maxTotalBytes: number; maxDepth: number; maxApprovedPaths: number };
+export type SecretLeakAttestationLimits = { maxFiles: number; maxFileBytes: number; maxStoreBytes: number; maxTotalBytes: number; maxDepth: number; maxApprovedPaths: number };
 /**
  * The ceilings a Lab run's scans use, and the demo setup scan with them. A run
  * bundle, an isolated workspace and Core's SQLite databases outgrow the defaults,
  * which are sized for one result file. `maxApprovedPaths` stays at its default.
+ *
+ * `maxStoreBytes` is 32 MiB because a store is not read the way a text file is.
+ * `maxFileBytes` bounds what the scan decodes as UTF-8 and runs its four
+ * credential regexes over; a store is never decoded, only searched byte for byte
+ * in three encodings and copied for a cell read, which measured 68 ms for the
+ * 10.02 MiB `global.sqlite` one live `social-scheduler-week-ahead` run left
+ * behind on 2026-09-18. Charging a store to the text budget failed that run, and
+ * every run like it, as `unscanned-store` on a store nothing was wrong with. The
+ * ceiling stays because the scan must still fail closed on a store it cannot
+ * hold: 32 MiB is a little over three times the largest store a healthy run has
+ * produced, and three stores at it still fit `maxTotalBytes`.
  */
 export const SECRET_LEAK_ATTESTATION_RUN_LIMITS = Object.freeze({
-  maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32,
+  maxFiles: 10_000, maxFileBytes: 8_388_608, maxStoreBytes: 33_554_432, maxTotalBytes: 67_108_864, maxDepth: 32,
 }) satisfies Partial<SecretLeakAttestationLimits>;
 const ABSOLUTE_LIMITS: Readonly<SecretLeakAttestationLimits> = Object.freeze({ ...SECRET_LEAK_ATTESTATION_RUN_LIMITS, maxApprovedPaths: 128 });
 
@@ -46,6 +57,12 @@ const binaryExtensions = new Set([
 // the scan cannot read in full, or a database the reader cannot read, is an
 // `unscanned-store` finding. Known by name, or by the header of a database, WAL
 // or journal file.
+//
+// A file named as a store is bounded by `maxStoreBytes` rather than
+// `maxFileBytes`, in `visit` and in `stageDatabase`: nothing about it is decoded
+// as text or run through the credential regexes that `maxFileBytes` budgets for.
+// A store found only by its header keeps the text ceiling, because its size is
+// judged before its first byte is read and its name claims to be text.
 const sqliteStoreName = /\.(?:db|sqlite3?)(?:-(?:wal|shm|journal))?$/iu;
 const sqliteSidecar = /-(?:wal|shm|journal)$/iu;
 const sqliteHeaders = [
@@ -136,7 +153,7 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
     const namedStore = sqliteStoreName.test(path.basename(absolute));
     const unscanned = (category: SecretLeakFindingCategory): void => addFinding(relative, namedStore ? "unscanned-store" : category);
     if (scannedFiles >= limits.maxFiles) { unscanned("file-limit"); return; }
-    if (metadata.size > limits.maxFileBytes) { unscanned("oversize-text"); return; }
+    if (metadata.size > (namedStore ? limits.maxStoreBytes : limits.maxFileBytes)) { unscanned("oversize-text"); return; }
     if (scannedBytes + metadata.size > limits.maxTotalBytes) { unscanned("byte-limit"); return; }
 
     let bytes: Buffer;
@@ -175,7 +192,7 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
    * suffix names, even when that one is not among the approved paths: a bounded
    * scan given only the log a run wrote still reads the rows in it. A `-wal` or
    * `-journal` holding bytes with no database beside it cannot be read as rows.
-   * That, and a database with a file that is a link, over the per-file ceiling,
+   * That, and a database with a file that is a link, over `maxStoreBytes`,
    * over the total ceiling or unreadable, is an `unscanned-store` finding.
    */
   async function stageDatabase(absolute: string, relative: string, size: number): Promise<void> {
@@ -198,7 +215,7 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
         }
         judgedDatabases.add(key); addFinding(databaseRelative, "unscanned-store"); return;
       }
-      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > limits.maxFileBytes) {
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > limits.maxStoreBytes) {
         judgedDatabases.add(key); addFinding(databaseRelative, "unscanned-store"); return;
       }
       parts.push(part); bytes += metadata.size;
@@ -262,6 +279,10 @@ function resolveLimits(overrides: SecretLeakAttestationInput["limits"]): SecretL
     if (!Number.isSafeInteger(value) || value < 1 || value > ABSOLUTE_LIMITS[key]) throw new Error("Secret attestation limits are invalid");
   }
   if (limits.maxTotalBytes < limits.maxFileBytes) throw new Error("Secret attestation total bytes must cover one file");
+  // A store is read whole or not at all, and its bytes and its staged copy both
+  // count against the total, so a store ceiling the total cannot hold would fail
+  // every scan that met it.
+  if (limits.maxTotalBytes < limits.maxStoreBytes) throw new Error("Secret attestation total bytes must cover one store");
   return limits;
 }
 function normalizeApprovedPath(value: string): string | undefined {
