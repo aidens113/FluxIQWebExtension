@@ -35,6 +35,7 @@ import {
   hasVisualMedia,
   isActionableElement,
   isInteractableUiElement,
+  isPageControlElement,
   isPrimaryControlElement,
   isSemanticTextElement,
   isSensitiveFormControl,
@@ -233,15 +234,25 @@ function shouldIncludeSnapshotElement(element: Element): boolean {
       : hasElementPresentation(element);
 }
 
+/**
+ * Coarse relevance, applied before the priority score. A bucket says what an
+ * element is for; the score only orders within one.
+ *
+ * The page's own controls come before its links (`isPageControlElement` says
+ * why). A button satisfies both tests and the first one wins, so it stays with
+ * the fields it applies; what falls through to the primary-control bucket is
+ * links, summaries, menu items and tabs.
+ */
 function snapshotElementBucket(element: Element): number {
   if (isEventBackedElement(element)) return 0;
-  if (isPrimaryControlElement(element)) return 1;
-  if (isInteractableUiElement(element)) return 2;
-  if (isSemanticTextElement(element)) return 3;
-  if (meaningfulText(directVisibleText(element))) return 4;
-  if (hasVisualMedia(element)) return 5;
-  if (meaningfulText(visibleText(element))) return 6;
-  return 7;
+  if (isPageControlElement(element)) return 1;
+  if (isPrimaryControlElement(element)) return 2;
+  if (isInteractableUiElement(element)) return 3;
+  if (isSemanticTextElement(element)) return 4;
+  if (meaningfulText(directVisibleText(element))) return 5;
+  if (hasVisualMedia(element)) return 6;
+  if (meaningfulText(visibleText(element))) return 7;
+  return 8;
 }
 
 function hasMeaningfulInteractableIdentity(element: Element): boolean {

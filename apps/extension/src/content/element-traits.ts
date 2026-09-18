@@ -38,7 +38,57 @@ export function isInteractableUiElement(element: Element): boolean {
     element.hasAttribute("aria-selected");
 }
 
-/** The controls a snapshot should rank first: buttons, links, menu items, tabs. */
+/**
+ * The controls this page's own state is changed through: its form fields, and
+ * the buttons and widgets that operate them.
+ *
+ * Ranked above every other control because a bounded snapshot has to describe
+ * the controls nothing else can describe. A long list of links is one
+ * repeating structure, and structure detection already hands it over as a
+ * single extraction handle; the one `<select>` that narrows that list is
+ * described nowhere else, so losing it loses the only way to narrow the page.
+ *
+ * It was being lost. `isPrimaryControlElement` ranks `a` and `button` first
+ * and names no form control at all, so on a page whose list is long enough the
+ * links alone fill the element budget. Measured on the social scheduler's
+ * 280-row queue (`run-mu6edfgv-dd2b6d8d`): of 4,636 elements the evidence
+ * packet carried 18, every one of them a post link from the same column, and
+ * not one of the three filter selects. The model authored exactly the right
+ * narrowing Flow -- choose the account, choose the week, apply, read what is
+ * left -- and had no handle to name any of the three controls with, so it
+ * wrote the only handle it had for all of them and the whole build was
+ * refused. The same page's filters are what the job depends on.
+ *
+ * A button belongs here rather than below: it is what applies a form, and a
+ * form whose fields are described without the control that submits them is not
+ * usable either.
+ */
+export function isPageControlElement(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.getAttribute("role")?.toLowerCase();
+  return tagName === "select" ||
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "button" ||
+    tagName === "summary" ||
+    role === "button" ||
+    role === "checkbox" ||
+    role === "radio" ||
+    role === "switch" ||
+    role === "combobox" ||
+    role === "listbox" ||
+    role === "textbox" ||
+    role === "searchbox" ||
+    role === "spinbutton" ||
+    role === "slider" ||
+    element instanceof HTMLElement && element.isContentEditable;
+}
+
+/**
+ * The controls a page's navigation and commands are built from: buttons,
+ * links, menu items, tabs. A snapshot ranks these ahead of its text and media,
+ * and behind the controls above, which a button also satisfies.
+ */
 export function isPrimaryControlElement(element: Element): boolean {
   const tagName = element.tagName.toLowerCase();
   const role = element.getAttribute("role")?.toLowerCase();
