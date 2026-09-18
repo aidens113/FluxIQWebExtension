@@ -143,6 +143,35 @@ than one cap it is named for the cap instead.
 
 `elements.truncated` in the state projection is the summary of the first two.
 
+## Repeated Controls
+
+A page built from a repeated template would otherwise fill the head of the
+element list with the template. On the Lab's 280-row social scheduler the
+packet held three filter selects and a column of row checkboxes, and none of
+the page's own buttons, so the bulk bar's Retry was never shown to a model.
+
+The snapshot therefore keeps one example per repeated control
+([`content/repeat-exemplars.ts`](../../apps/extension/src/content/repeat-exemplars.ts)).
+A run is a record by the rule a replay already checks
+([`identity/record.ts`](../../apps/extension/src/content/identity/record.ts)) —
+`tr`, `li`, `article`, the ARIA row and item roles, or a keyed element — whose
+parent holds at least three of its tag; a kind is one position inside that
+record (the tag and same-tag index at each level, with role and input type).
+The first member keeps its rank and carries the run's size as the descriptor's
+`repeatCount`; every other member is ranked after every distinct element, not
+removed. Two things are exempt: something to act on that is its record's whole
+content, such as a navigation `li > a`, which is a distinct destination; and an
+element a person or an action has just touched. The packet carries the count as the
+element's `repeats`, and a particular row's control is reached by narrowing the
+page until it is listed.
+
+A row control's selector is usually positional, so the domain's stable target
+handles key on the record an element sits in as well as its selector
+([`stable-handles.ts`](../../domain/src/runtime/llm-evidence/stable-handles.ts)).
+The record stays in the binding beside the selector and never reaches the
+packet; another post filtered into row one gets a handle of its own rather than
+the previous post's.
+
 ## Who Reads It
 
 - **The state projection**

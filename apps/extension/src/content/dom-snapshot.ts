@@ -3,7 +3,10 @@
 // touched, then the standard controls, then text and media, then a capped sweep
 // of everything else; each is kept only if it is visible and carries some
 // identity. Ranking puts what the user acted on first, so truncation drops the
-// least useful elements rather than an arbitrary tail.
+// least useful elements rather than an arbitrary tail -- and keeps one example
+// of each control a page repeats row after row, ranking the rest of the run
+// after every distinct element (`repeat-exemplars.ts`), so a many-row page's
+// template cannot crowd its own buttons out of the head of the list.
 //
 // A list of elements is not a picture of a page, so the snapshot also carries
 // `evidence`: the dialogs in front of it, what is covering its controls,
@@ -19,7 +22,7 @@
 // this file, using the same shared rule rather than a second one.
 
 import { compactObject } from "./compact-object";
-import { pageEvidence, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
+import { pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { isEventBackedElement, observedEventElementQueue } from "./event-elements";
 import {
@@ -41,9 +44,10 @@ import {
   isSensitiveFormControl,
   meaningfulText
 } from "./element-traits";
+import { repeatExemplars } from "./repeat-exemplars";
 import { withSelectorMemo } from "./selector";
 import { visualDocumentBounds } from "./visual-bounds";
-import type { DomSnapshot } from "./types";
+import type { DomElementDescriptor, DomSnapshot } from "./types";
 
 const MAX_SNAPSHOT_CANDIDATES = 2_000;
 const MAX_SNAPSHOT_SCAN_ELEMENTS = 50_000;
@@ -172,6 +176,10 @@ function withinSensitiveControl(node: Node | null | undefined): boolean {
  * and the counts taken on the way. The counts are what makes truncation
  * visible: without the pre-filter totals a reader cannot tell a page with forty
  * controls from one with four thousand whose tail was dropped.
+ *
+ * A run's followers sort after everything else before any other rule is
+ * asked, and each run's exemplar carries the run's size as `repeatCount`, so
+ * a reader shown only the head still knows how many rows it stands for.
  */
 function snapshotElements(): { entries: SnapshotElementEntry[]; counts: SnapshotElementCounts } {
   const seen = new Set<Element>();
@@ -182,15 +190,37 @@ function snapshotElements(): { entries: SnapshotElementEntry[]; counts: Snapshot
     seen.add(element);
     included.push(element);
   }
+  const repeats = repeatExemplars(included, touchedElements());
+  const followerRank = (element: Element): number => (repeats.followers.has(element) ? 1 : 0);
   const entries = included
     .sort((left, right) =>
+      followerRank(left) - followerRank(right) ||
       snapshotElementBucket(left) - snapshotElementBucket(right) ||
       elementPriority(right) - elementPriority(left) ||
       documentOrder(left, right)
     )
     .slice(0, MAX_SNAPSHOT_CANDIDATES)
-    .map((element) => ({ element, descriptor: describeElement(element) }));
+    .map((element) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element)) }));
   return { entries, counts: { scanned, candidates: candidates.length, matched: included.length } };
+}
+
+/**
+ * What a person or an action has just touched: the recorder's event queue and
+ * the runtime interaction ledger. A run never ranks one of these behind its
+ * exemplar -- the element an action just acted on is what a reader looks for
+ * next.
+ */
+function touchedElements(): ReadonlySet<Element> {
+  const touched = new Set<Element>(recentlyInteractedElements());
+  for (const element of observedEventElementQueue) touched.add(element);
+  return touched;
+}
+
+/** The element's descriptor, and, for a run's exemplar, how many elements the run holds. */
+function snapshotDescriptor(element: Element, repeatCount: number | undefined): DomElementDescriptor {
+  const descriptor = describeElement(element);
+  if (repeatCount !== undefined) descriptor.repeatCount = repeatCount;
+  return descriptor;
 }
 
 function snapshotCandidateElements(): { candidates: Element[]; scanned: number } {
