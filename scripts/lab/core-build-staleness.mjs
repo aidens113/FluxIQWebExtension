@@ -23,7 +23,17 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
-const SKIPPED = new Set(["node_modules", "dist", ".next", ".git", ".turbo"]);
+const SKIPPED = new Set(["node_modules", "dist", ".next", ".git", ".turbo", "tests"]);
+
+/**
+ * A test file is not compiled into `dist`, so its mtime says nothing about
+ * whether the build matches what the Lab will run. Counting it would block
+ * every campaign the moment anyone touched a Core test -- which is exactly what
+ * happens while a worker is fixing assertions beside a running campaign.
+ */
+function shippedSource(name) {
+  return !name.endsWith(".test.ts") && !name.endsWith(".test.mts") && !name.endsWith(".test.js");
+}
 
 /**
  * @param {string} coreRoot
@@ -59,7 +69,7 @@ async function walk(directory, found) {
       if (!SKIPPED.has(entry.name)) await walk(target, found);
       continue;
     }
-    if (!entry.isFile()) continue;
+    if (!entry.isFile() || !shippedSource(entry.name)) continue;
     let stats;
     try {
       stats = await stat(target);

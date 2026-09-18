@@ -32,3 +32,21 @@ test("a build behind by under a minute still refuses, and says so readably", () 
   assert.equal(verdict.stale, true);
   assert.match(verdict.message, /less than a minute/u);
 });
+
+test("a Core test file is not a source the build ships, so it cannot make a build stale", async () => {
+  // Otherwise touching any Core test blocks every campaign, which is precisely
+  // what happens while somebody is fixing assertions beside a running one.
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { scanCoreSources } = await import("../core-build-staleness.mjs");
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "core-src-"));
+  await mkdir(path.join(root, "packages", "fluxiq", "src", "tests"), { recursive: true });
+  await writeFile(path.join(root, "packages", "fluxiq", "src", "shipped.ts"), "export const a = 1;\n");
+  await writeFile(path.join(root, "packages", "fluxiq", "src", "beside.test.ts"), "// not shipped\n");
+  await writeFile(path.join(root, "packages", "fluxiq", "src", "tests", "inside.ts"), "// not shipped\n");
+
+  const scan = await scanCoreSources(root);
+  assert.match(scan.newestPath ?? "", /shipped\.ts$/u);
+});
