@@ -20,6 +20,9 @@
 // site. The reason is not lost, and each row asserts where it went -- the
 // record's `actual` reads `"<reason>: <what was observed>"`, so `disabled`,
 // `covered` and `hidden` are still told apart by a reader and by these rows.
+//
+// A link is held to more than the hit test, and its rows are in
+// click-link.spec.ts.
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "../index.js";
@@ -79,18 +82,6 @@ async function coverViewport(page: Page): Promise<void> {
   });
 }
 
-/** Appends a link to the fixture's `<main>`, optionally one whose own handler cancels the click. */
-async function addLink(page: Page, testId: string, fragment: string, swallow = false): Promise<void> {
-  await page.evaluate(({ id, hash, cancel }) => {
-    const link = document.createElement("a");
-    link.dataset.testid = id;
-    link.href = hash;
-    link.textContent = `Go to ${hash}`;
-    if (cancel) link.addEventListener("click", (event) => event.preventDefault());
-    document.querySelector("main")?.append(link);
-  }, { id: testId, hash: fragment, cancel: swallow });
-}
-
 test.describe("on basic-form", () => {
   test("the gesture is the sequence a press makes, not a bare click event", async ({ openHarness, page }) => {
     const harness = await openHarness("basic-form");
@@ -134,34 +125,6 @@ test.describe("on basic-form", () => {
     expect(reply).toMatchObject({ status: "succeeded" });
     expect(await harness.recordedEvents()).toEqual([]);
     await expect(page.locator(RESULT)).toHaveText("Not submitted");
-  });
-
-  test("a link click observes that the navigation it names began", async ({ openHarness, page }) => {
-    const harness = await openHarness("basic-form");
-    await addLink(page, "hash-link", "#done");
-    const reply = await harness.runAction({ commandId: "click-link", actionType: "web.dom.click", selector: '[data-testid="hash-link"]' });
-    expect(reply).toMatchObject({
-      status: "succeeded",
-      validation: { status: "passed", expected: `navigation to ${harness.url}#done begins`, actual: `the page navigated to ${harness.url}#done` }
-    });
-    expect(reply.failure).toBeUndefined();
-    await expect(page).toHaveURL(`${harness.url}#done`);
-  });
-
-  test("a link whose handler swallows the click reports output_not_observed, not success", async ({ openHarness, page }) => {
-    const harness = await openHarness("basic-form");
-    await addLink(page, "dead-link", "#never", true);
-    const reply = await harness.runAction({ commandId: "click-dead-link", actionType: "web.dom.click", selector: '[data-testid="dead-link"]' });
-    expect(reply).toMatchObject({
-      status: "failed",
-      validation: {
-        status: "failed",
-        expected: `navigation to ${harness.url}#never begins`,
-        actual: "the click was prevented and the location did not change"
-      },
-      failure: { category: "output_not_observed", code: "web.validation.output_not_observed", retryable: true, stage: "verification" }
-    });
-    expect(page.url()).toBe(harness.url);
   });
 });
 

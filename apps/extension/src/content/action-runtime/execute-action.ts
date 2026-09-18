@@ -20,6 +20,7 @@ import { setInputFiles } from "./file-input";
 import { dialogControl } from "./dialog-control";
 import { evaluateAssertion } from "./assertion-evaluation";
 import { waitForCondition } from "./wait-conditions";
+import { watchInPlaceEffect } from "./in-place-effect";
 import { actionFailure, actionNotImplemented, actionRejected, actionTimedOut, success } from "./results";
 
 export async function executeAction(action: BrowserActionCommand): Promise<BrowserActionResult> {
@@ -40,6 +41,7 @@ export async function executeAction(action: BrowserActionCommand): Promise<Brows
     dialogControl,
     evaluateAssertion,
     waitForCondition,
+    watchInPlaceEffect,
     success,
     failure: actionFailure,
     rejected: actionRejected,
