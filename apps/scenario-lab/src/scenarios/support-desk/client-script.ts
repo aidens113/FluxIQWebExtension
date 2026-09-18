@@ -59,10 +59,18 @@ function el(tag, className, attributes = {}, text) {
   return node;
 }
 
+/**
+ * The first element of a markup fragment.
+ *
+ * Parsed inside a template, not a div. A table row set as a div's innerHTML is
+ * dropped outright by the HTML parser -- there is no table for it to sit in --
+ * so the empty-queue row came back as nothing at all. A template's contents are
+ * parsed in the one insertion mode that keeps table fragments whole.
+ */
 function fromHtml(html) {
-  const holder = document.createElement('div');
-  holder.innerHTML = html;
-  return holder.firstElementChild;
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  return template.content.firstElementChild;
 }
 
 const tbody = document.querySelector('[data-testid="ticket-rows"]');
