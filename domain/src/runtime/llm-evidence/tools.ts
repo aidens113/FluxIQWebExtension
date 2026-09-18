@@ -2,13 +2,15 @@
 // and the post-failure capture the runtime diagnosis path calls.
 //
 // Four tools. Three in increasing order of what they are allowed to do: inspect
-// observes, navigate moves within the page's own origin, reveal presses one
-// control that only changes what is visible. The fourth, detect, observes
+// observes, navigate moves within the page's own origin, press presses one
+// observed control. The fourth, detect, observes
 // too: it finds the repeating structure a scraping step needs and hands back an
 // opaque extraction handle for it (`structure/`). Everything they return is a
-// sanitized packet; everything they refuse returns a bare code. Form entry,
-// option selection and submission are deliberately absent -- authoring a Flow
-// never requires the model to drive the page.
+// sanitized packet; everything they refuse returns a bare code. Form entry and
+// option selection are deliberately absent -- authoring a Flow never requires
+// the model to fill the page in. Press refuses nothing on its own judgement of
+// what a control looks like; see `./press.ts` for why, and for the seam where
+// a lasting press will ask the person for permission once Core carries it.
 
 import type { FluxIQ } from "fluxiq";
 import type {
@@ -45,7 +47,7 @@ import {
 } from "./plan-resolution";
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
-import { currentElementForReturnedTarget, pressToReveal } from "./reveal";
+import { currentElementForReturnedTarget, pressControl } from "./press";
 import { createWebLlmStableTargetHandles } from "./stable-handles";
 import {
   createWebLlmExtractionHandles,
@@ -70,7 +72,7 @@ import {
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
-  WEB_LLM_REVEAL_TOOL_ID
+  WEB_LLM_PRESS_TOOL_ID
 } from "./vocabulary";
 
 const TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
@@ -141,13 +143,13 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   const targetPackets = createWebLlmTargetPackets();
   // A handle keeps naming the control it named across recaptures of one page
   // (see ./stable-handles.ts). Every authoring capture goes through it, including
-  // the ones the model is not shown, so a reveal's before-and-after comparison
+  // the ones the model is not shown, so a press's before-and-after comparison
   // and its target binding read the same numbering as the packet.
   const stableHandles = createWebLlmStableTargetHandles();
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
-  // (`retain`), for the next reveal or detection, and for resolving the plan.
+  // (`retain`), for the next press or detection, and for resolving the plan.
   const shown = (input: WebLlmEvidenceToolRequest, sessionId: string, snapshot: WebLlmSnapshotBinding): void => {
     returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
     targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
@@ -204,8 +206,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         effect: "mutate",
       },
       {
-        toolId: WEB_LLM_REVEAL_TOOL_ID,
-        description: "Press an observed control to see structure that exists only after a press: the fields behind a New post, Compose, Reply or Edit button, a disclosure, a tab, a row menu, a row's Select checkbox, an in-site link. Copy its opaque handle exactly. Anything that changes stored state is refused -- Send, Save, Submit, Delete, Confirm, Refund, a form submit, a control in a dialog -- and stays refused. That bounds exploring only, not the Flow you author. A ticked row is unticked after.",
+        toolId: WEB_LLM_PRESS_TOOL_ID,
+        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself.",
         inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "mutate",
       },
@@ -247,15 +249,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
-        if (input.toolId === WEB_LLM_REVEAL_TOOL_ID) {
+        if (input.toolId === WEB_LLM_PRESS_TOOL_ID) {
           exactToolKeys(input.value, ["target"]);
           const target = boundedTargetHandle(input.value.target);
           const current = stable(input, await captureEvidence(gateway, sessionId, input, input.signal));
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
-          // What may be pressed, the press, and the tidying afterwards all live
-          // in `./reveal.ts`, shared with the runtime recovery option so the two
-          // cannot come to disagree about what exploring may do to a page.
-          const snapshot = await pressToReveal({
+          // The press and the tidying afterwards live in `./press.ts`, shared
+          // with the runtime recovery option so the two cannot drift.
+          const snapshot = await pressControl({
             gateway, sessionId, request: input, current, element,
             restamp: (binding) => retain(stable(input, binding))
           });

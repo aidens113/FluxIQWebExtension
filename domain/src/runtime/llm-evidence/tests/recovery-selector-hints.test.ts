@@ -187,14 +187,14 @@ async function dismissedDialog(): Promise<{ runtime: WebAutomationLlmEvidenceRun
   const failure = await failurePacket(runtime);
   const recovery = exploration(runtime);
   const inspected = await recovery.call("web.recovery.inspect", {});
-  await recovery.call("web.recovery.act_safe", { target: handleNamed(inspected, "Close") });
+  await recovery.call("web.recovery.press", { target: handleNamed(inspected, "Close") });
   return { runtime, failure, explored: recovery.explored };
 }
 
 test("a repair naming a control only the exploration revealed resolves with the selector behind that handle", async () => {
   const { runtime, explored } = await dismissedDialog();
   const revealed = explored[1]!;
-  assert.equal(revealed.toolId, "web.recovery.act_safe");
+  assert.equal(revealed.toolId, "web.recovery.press");
 
   const target = resolvedTarget(askAsCore(runtime, explored, `${revealed.evidenceId}:${handleNamed(revealed.packet, "Apply changes")}`));
 

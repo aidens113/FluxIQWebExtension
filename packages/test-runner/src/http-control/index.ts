@@ -167,7 +167,7 @@ export class FluxIQControlClient {
       headers: { cookie, ...(body === undefined ? {} : { "content-type": "application/json" }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal,
-    }));
+    }), path);
     if ((response.status === 401 || response.status === 403) && retryAuthentication && this.credentials) {
       await this.freshLogin(this.credentials, this.loginOptions.sessionCache, bounds);
       return this.authenticatedResponse(path, body, method, bounds, category, false, operationStage);
@@ -185,20 +185,29 @@ export function isBoundedHttpFailure(error: unknown): boolean {
   return error instanceof RunnerFailure && (error.details?.bounded === "timeout" || error.details?.bounded === "abort");
 }
 
-async function boundedFetch(operationStage: FluxIQHttpOperationStage, category: RunnerFailureCategory, options: FluxIQHttpOptions, operation: (signal: AbortSignal) => Promise<Response>): Promise<Response> {
+/**
+ * One bounded request. `path` is the Core route it went to -- this module's own
+ * constant, never page or user data -- and rides on every bounded failure, so a
+ * timeout says which request timed out. It did not until 2026-09-18, when a
+ * created Flow's playback failed "FluxIQ HTTP operation timed out" twice and
+ * nothing recorded which of six requests it was.
+ */
+async function boundedFetch(operationStage: FluxIQHttpOperationStage, category: RunnerFailureCategory, options: FluxIQHttpOptions, operation: (signal: AbortSignal) => Promise<Response>, path?: string): Promise<Response> {
   const timeoutMs = boundedTimeout(options.timeoutMs);
   const controller = new AbortController();
-  const abort = () => controller.abort(new RunnerFailure(category, "FluxIQ HTTP operation was interrupted", { details: { bounded: "abort", operationStage } }));
+  // The route only: a query string can carry a caller's value, and a route cannot.
+  const where = path === undefined ? {} : { path: path.split("?")[0]! };
+  const abort = () => controller.abort(new RunnerFailure(category, "FluxIQ HTTP operation was interrupted", { details: { bounded: "abort", operationStage, ...where } }));
   if (options.signal?.aborted) abort();
   else options.signal?.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(() => controller.abort(new RunnerFailure(category, "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage, timeoutMs } })), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new RunnerFailure(category, "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage, timeoutMs, ...where } })), timeoutMs);
   try {
     return await operation(controller.signal);
   } catch (error) {
     if (controller.signal.aborted) throw controller.signal.reason;
     const transportCode = boundedTransportCode(error);
     throw new RunnerFailure(category, "FluxIQ HTTP transport failed", {
-      details: { operationStage, transportCategory: "network", ...(transportCode ? { transportCode } : {}) },
+      details: { operationStage, transportCategory: "network", ...(transportCode ? { transportCode } : {}), ...where },
     });
   } finally {
     clearTimeout(timer);

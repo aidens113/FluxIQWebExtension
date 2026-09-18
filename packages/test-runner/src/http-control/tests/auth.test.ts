@@ -125,12 +125,14 @@ test("startup control transports preserve fixed stages and bounded codes without
   };
   t.after(() => { globalThis.fetch = originalFetch; });
 
-  const assertClosed = async (operation: () => Promise<unknown>, category: string, operationStage: string) => {
+  // `path` is the Core route the request went to, the client's own constant:
+  // it names which request failed and carries nothing from the error or page.
+  const assertClosed = async (operation: () => Promise<unknown>, category: string, operationStage: string, path?: string) => {
     await assert.rejects(operation, (error: unknown) => {
       assert.ok(error instanceof RunnerFailure);
       assert.equal(error.category, category);
       assert.equal(error.message, "FluxIQ HTTP transport failed");
-      assert.deepEqual(error.details, { operationStage, transportCategory: "network", transportCode: "ECONNRESET" });
+      assert.deepEqual(error.details, { operationStage, transportCategory: "network", transportCode: "ECONNRESET", ...(path ? { path } : {}) });
       assert.equal(error.cause, undefined);
       const persisted = JSON.stringify({ message: error.message, category: error.category, details: error.details });
       assert.equal(persisted.includes(rawSentinel), false);
@@ -148,10 +150,29 @@ test("startup control transports preserve fixed stages and bounded codes without
   await control.login(credentials);
   failingPath = "create-project";
   failedFetchCalls = 0;
-  await assertClosed(() => control.createProject({ name: rawSentinel, authorizationPin: credentials.pin }), "recording.persistence", "project.create");
+  await assertClosed(() => control.createProject({ name: rawSentinel, authorizationPin: credentials.pin }), "recording.persistence", "project.create", "/api/programs/automation-studio/create-project");
   assert.equal(failedFetchCalls, 1, "non-idempotent project creation is never retried after a transport rejection");
   failingPath = "automation-studio-context";
-  await assertClosed(() => control.selectProject("private-project"), "process.startup", "project.select");
+  await assertClosed(() => control.selectProject("private-project"), "process.startup", "project.select", "/api/client-gateway/automation-studio-context");
+});
+
+test("a timed-out request names the Core route it went to, and never the query string", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    if (String(input).endsWith("/api/auth/login")) return new Response("{}", { status: 200, headers: { "set-cookie": "fluxiq_session=timeout; Max-Age=3600" } });
+    return await new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const control = new FluxIQControlClient("http://127.0.0.1:1");
+  await control.login(credentials);
+
+  await assert.rejects(() => control.createProject({ name: "project", domainId: "private-domain-value" }, { timeoutMs: 5 }), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.message, "FluxIQ HTTP operation timed out");
+    assert.deepEqual(error.details, { bounded: "timeout", operationStage: "project.create", timeoutMs: 5, path: "/api/programs/automation-studio/create-project" });
+    assert.equal(JSON.stringify(error.details).includes("private-domain-value"), false);
+    return true;
+  });
 });
 
 test("the durable HTTP failure projector carries only closed transport fields", () => {

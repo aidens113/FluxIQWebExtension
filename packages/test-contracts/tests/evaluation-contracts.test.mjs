@@ -205,6 +205,19 @@ test("facility failures use only the closed diagnostic vocabulary", () => {
   rejects(facilityRun({ boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.transport", operationStage: "control.request", causeCode: "ERR_MODULE_NOT_FOUND" }), "module code paired as HTTP transport");
 });
 
+// The Core route an http.* failure went to. A created Flow's playback timed out
+// twice on 2026-09-18 and nothing recorded which request it was; the route is
+// the runner's own constant, so it is carried -- and nothing but a route is.
+test("an http failure may name its Core route, and only a route, and only for http", () => {
+  const timeout = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.timeout", operationStage: "control.request", timeoutMs: 30_000 };
+  assert.equal(validateRunEvaluation(facilityRun({ ...timeout, endpoint: "/api/programs/automation-studio/run-runtime-session" })).valid, true);
+  assert.equal(validateRunEvaluation(facilityRun({ boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.abort", operationStage: "project.select", endpoint: "/api/client-gateway/automation-studio-context" })).valid, true);
+  for (const endpoint of ["RAW_SENTINEL", "/private/path", "/api/programs/automation-studio/create-project?domainId=private", "/api/UPPER", "https://example.test/api/x", 42]) {
+    rejects(facilityRun({ ...timeout, endpoint }), `endpoint ${String(endpoint)}`);
+  }
+  rejects(facilityRun({ boundary: "no-final-bundle", stage: "scenario.load", reason: "path.missing", causeCode: "ENOENT", endpoint: "/api/programs/automation-studio/get-flow" }), "endpoint on a non-http failure");
+});
+
 test("facility diagnostics reject raw shapes, unknown values, and invalid pairings", () => {
   const base = facilityRun().facilityFailure;
   for (const mutation of [

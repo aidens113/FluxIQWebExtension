@@ -331,7 +331,7 @@ test("the evidence-step sanitizer admits exactly the tools and result codes the 
     { toolId: "web.fill_safe", effectApplied: false, resultCode: "web.action.succeeded" },
     { toolId: "web.select_safe", effectApplied: false, resultCode: "web.action.succeeded" },
     { toolId: "web.inspect_current_page", effectApplied: false, resultCode: "action.recoverable" },
-    { toolId: "web.reveal_safe", effectApplied: false, resultCode: "web.action.rejected.private-reason" },
+    { toolId: "web.press_control", effectApplied: false, resultCode: "web.action.rejected.private-reason" },
   ];
   const refused = await readSanitizedGenerationFailure(failure(dropped));
   assert.equal(refused.parsed, true);

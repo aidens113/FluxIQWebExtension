@@ -208,7 +208,11 @@ export function actionableEvidenceElement(element: WebLlmEvidenceElement): boole
   return ["button", "link", "checkbox", "radio", "option", "switch", "tab", "menuitem", "treeitem"].includes(element.role ?? "");
 }
 
-/** Which disclosure the element is, if any: the only interactions the reveal tool may drive. */
+/**
+ * Which disclosure or view switch the element is, if any. A description for the
+ * model, nothing more: it once decided what the reveal tool would press, and
+ * nothing is decided from it now (see `./press.ts`).
+ */
 export function semanticRevealKind(tag: string, role: string | undefined, attributes: Record<string, unknown>): "disclosure" | "view" | undefined {
   if (role === "tab" || role === "menuitem" || role === "treeitem") return "view";
   if (tag === "summary") return "disclosure";

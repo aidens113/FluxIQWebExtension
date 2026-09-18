@@ -42,6 +42,26 @@ test("known readiness and HTTP failures map to their exact closed shapes", () =>
   });
 });
 
+test("a bounded HTTP failure carries the Core route it went to, and drops anything that is not one", () => {
+  const timedOut = (path: string) => new RunnerFailure("environment.missing", "FluxIQ HTTP operation timed out", {
+    details: { bounded: "timeout", operationStage: "control.request", timeoutMs: 30_000, path },
+  });
+  assert.deepEqual(projectFacilityFailure(timedOut("/api/programs/automation-studio/run-runtime-session"), "finalized-bundle", "scenario.execute"), {
+    boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.timeout", operationStage: "control.request", timeoutMs: 30_000,
+    endpoint: "/api/programs/automation-studio/run-runtime-session",
+  });
+  for (const path of [SENTINEL, `/api/${SENTINEL}?q=${SENTINEL}`, `/private/${SENTINEL}`]) {
+    const projected = projectFacilityFailure(timedOut(path), "finalized-bundle", "scenario.execute");
+    assert.equal("endpoint" in projected, false, path);
+    assert.equal(JSON.stringify(projected).includes(SENTINEL), false, path);
+  }
+  assert.deepEqual(projectFacilityFailure(new RunnerFailure("gateway.pairing", "FluxIQ HTTP transport failed", {
+    details: { operationStage: "control.request", transportCategory: "network", transportCode: "ECONNRESET", path: "/api/client-gateway/snapshot" },
+  }), "finalized-bundle", "scenario.execute"), {
+    boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.transport", operationStage: "control.request", causeCode: "ECONNRESET", endpoint: "/api/client-gateway/snapshot",
+  });
+});
+
 test("module and path causes share the classifier's bounded allowlist", () => {
   const projected = (code: string) => projectFacilityFailure(Object.assign(new Error(SENTINEL), { code }), "no-final-bundle", "scenario.load");
   assert.deepEqual(projected("ERR_MODULE_NOT_FOUND"), { boundary: "no-final-bundle", stage: "scenario.load", reason: "module.missing", causeCode: "ERR_MODULE_NOT_FOUND" });

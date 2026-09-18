@@ -1,4 +1,5 @@
 import {
+  FACILITY_FAILURE_ENDPOINT_PATTERN,
   facilityFailureCauseCodes,
   facilityFailureOperationStages,
   type FacilityFailureBoundary,
@@ -35,7 +36,7 @@ export function projectFacilityFailure(
   if (transport) {
     const operationStage = operationStageOf(transport.operationStage, false);
     const causeCode = causeCodeOf(transport.transportCode);
-    if (operationStage) return frozen({ boundary, stage, reason: "http.transport", operationStage, ...(causeCode ? { causeCode } : {}) });
+    if (operationStage) return frozen({ boundary, stage, reason: "http.transport", operationStage, ...(causeCode ? { causeCode } : {}), ...endpointOf(error instanceof RunnerFailure ? error.details?.path : undefined) });
   }
 
   const boundedHttp = boundedHttpFailure(error);
@@ -55,20 +56,25 @@ export function projectFacilityFailure(
   return frozen({ boundary, stage, reason: "unclassified" });
 }
 
-function boundedHttpFailure(error: unknown): Pick<FacilityFailureDiagnostic, "reason" | "operationStage" | "timeoutMs"> | undefined {
+function boundedHttpFailure(error: unknown): Pick<FacilityFailureDiagnostic, "reason" | "operationStage" | "timeoutMs" | "endpoint"> | undefined {
   if (!(error instanceof RunnerFailure)) return undefined;
   try {
     const details = error.details;
     const operationStage = operationStageOf(details?.operationStage, false);
     if (!operationStage) return undefined;
-    if (error.message === "FluxIQ HTTP operation was interrupted" && details?.bounded === "abort") return { reason: "http.abort", operationStage };
+    if (error.message === "FluxIQ HTTP operation was interrupted" && details?.bounded === "abort") return { reason: "http.abort", operationStage, ...endpointOf(details?.path) };
     const timeoutMs = timeoutOf(details?.timeoutMs);
     return error.message === "FluxIQ HTTP operation timed out" && details?.bounded === "timeout" && timeoutMs !== undefined
-      ? { reason: "http.timeout", operationStage, timeoutMs }
+      ? { reason: "http.timeout", operationStage, timeoutMs, ...endpointOf(details?.path) }
       : undefined;
   } catch {
     return undefined;
   }
+}
+
+/** The Core route a bounded HTTP failure went to, when it is one; anything else is left out rather than carried. */
+function endpointOf(value: unknown): { endpoint?: string } {
+  return typeof value === "string" && FACILITY_FAILURE_ENDPOINT_PATTERN.test(value) ? { endpoint: value } : {};
 }
 
 function operationStageOf(value: unknown, readiness: boolean): FacilityFailureOperationStage | undefined {

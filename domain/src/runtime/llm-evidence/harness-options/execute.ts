@@ -1,15 +1,17 @@
 // What each runtime harness option actually does to the page.
 //
-// Six actions, in increasing order of what they are allowed to do: inspect
-// observes; detect observes the repeating structure a scrape reads, exactly as
-// the authoring detection does (`../structure/`); wait observes again after a
-// bounded pause; reveal uncovers structure through one narrowly safe
-// disclosure; act dismisses or switches a view through the semantic ladder in
-// `safety.ts`; navigate moves, but only where Core's scope policy says it may.
-// Form entry, option selection and submission are absent here as they are
-// absent from the authoring tools, and for a stronger reason: this runs while a
-// real workflow is mid-failure, so a wrong click is a side effect on somebody's
-// live account.
+// Five actions: inspect observes; detect observes the repeating structure a
+// scrape reads, exactly as the authoring detection does (`../structure/`);
+// wait observes again after a bounded pause; press presses one observed
+// control, through the same `../press.ts` the authoring tool uses; navigate
+// moves, but only where Core's scope policy says it may. Form entry and option
+// selection are absent here as they are from the authoring tools.
+//
+// Press refuses nothing on its own judgement of what a control looks like.
+// This runs while a real workflow is mid-failure, on somebody's live account,
+// which is exactly why the answer to a lasting press is permission carried by
+// Core and put to the person -- not a word list here. That seam is marked in
+// `../press.ts`; until Core carries it, press presses.
 //
 // A target handle is bound only through a packet this exploration returned,
 // never through a capture the model was not shown. Every packet returned is
@@ -36,20 +38,18 @@ import {
 } from "../capture";
 import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
-import { currentElementForReturnedTarget, pressToReveal } from "../reveal";
+import { currentElementForReturnedTarget, pressControl } from "../press";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
 import { recoverable, RecoverableToolRejection, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE } from "../vocabulary";
 import { webAutomationExplorationScope } from "./exploration-terms";
-import { webRecoverySafeActionVerdict } from "./safety";
 import {
-  WEB_RECOVERY_ACT_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
-  WEB_RECOVERY_REVEAL_OPTION_ID,
+  WEB_RECOVERY_PRESS_OPTION_ID,
   WEB_RECOVERY_WAIT_OPTION_ID,
   type WebRecoveryHarnessOptionId
 } from "./vocabulary";
@@ -109,16 +109,12 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       exactKeys(input.request.value, []);
       return toolExecution(shown(input, await capture(context, input)).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
-    [WEB_RECOVERY_REVEAL_OPTION_ID]: run(async (input) => {
+    [WEB_RECOVERY_PRESS_OPTION_ID]: run(async (input) => {
       const target = targetHandle(input.request.value);
       const observed = shownPacket(input);
       const current = await capture(context, input);
       const element = currentElementForReturnedTarget(observed, current, target);
-      // Exactly what the authoring reveal may press, through the same module:
-      // a press that only reveals, never one that commits. Two copies of that
-      // rule would be two rules, and this one runs mid-failure on a live
-      // account, where the wrong press is somebody's real money.
-      const revealed = await pressToReveal({
+      const pressed = await pressControl({
         gateway: context.gateway,
         sessionId: input.sessionId,
         request: input.request,
@@ -128,16 +124,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         // holds handles stable across captures of one page.
         restamp: (binding) => binding
       });
-      return toolExecution(shown(input, revealed).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
-    }),
-    [WEB_RECOVERY_ACT_OPTION_ID]: run(async (input) => {
-      const target = targetHandle(input.request.value);
-      const observed = shownPacket(input);
-      const current = await capture(context, input);
-      const element = currentElementForReturnedTarget(observed, current, target);
-      const verdict = webRecoverySafeActionVerdict(element, current.evidence);
-      if (!verdict.ok) recoverable(verdict.code);
-      return await clickAndReport(context, input, current, element.selector, shown);
+      return toolExecution(shown(input, pressed).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
     }),
     // The authoring detection, bound through this exploration's packets and
     // keeping its handle in the runtime's store. It returns a structure packet,
@@ -203,18 +190,6 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
 
 async function capture(context: WebRecoveryHarnessContext, input: Handled): Promise<WebLlmSnapshotBinding> {
   return await captureEvidence(context.gateway, input.sessionId, input.request, input.request.signal);
-}
-
-async function clickAndReport(
-  context: WebRecoveryHarnessContext,
-  input: Handled,
-  current: WebLlmSnapshotBinding,
-  selector: string,
-  shown: (input: Handled, binding: WebLlmSnapshotBinding) => WebLlmSnapshotBinding
-): Promise<WebLlmEvidenceToolExecution> {
-  const after = await actAndCapture(context.gateway, input.sessionId, input.request, "web.dom.click", { selector }, current, input.request.signal);
-  if (sameEvidence(current, after)) recoverable("no_progress");
-  return toolExecution(shown(input, after).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
 }
 
 function sameEvidence(left: WebLlmSnapshotBinding, right: WebLlmSnapshotBinding): boolean {

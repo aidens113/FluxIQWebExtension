@@ -123,7 +123,7 @@ function generationFailureCodeForStage(stage: AutomationStudioFlowBootstrapFailu
   });
   return codes[stage] ?? "generation.http-unknown";
 }
-// Sanitizer allowlists, read from the domain instead of restated: `WEB_LLM_EVIDENCE_TOOL_IDS` is what `getEvidenceTools()` offers and `WEB_LLM_EVIDENCE_RESULT_CODES` the two successes plus one per rejection reason, both exported from `domain/src/runtime/llm-evidence/vocabulary.ts`. A tool or code added there is admitted here with no edit; while these were hand-kept they had already lost `web.reveal_safe` and `web.action.rejected.no_progress`, silently dropping every step from those paths.
+// Sanitizer allowlists, read from the domain instead of restated: `WEB_LLM_EVIDENCE_TOOL_IDS` is what `getEvidenceTools()` offers and `WEB_LLM_EVIDENCE_RESULT_CODES` the two successes plus one per rejection reason, both exported from `domain/src/runtime/llm-evidence/vocabulary.ts`. A tool or code added there is admitted here with no edit; while these were hand-kept they had already lost `web.reveal_safe` (now `web.press_control`) and `web.action.rejected.no_progress`, silently dropping every step from those paths.
 const WEB_EVIDENCE = Object.freeze({ toolIds: new Set<string>(WEB_LLM_EVIDENCE_TOOL_IDS), resultCodes: new Set<string>(WEB_LLM_EVIDENCE_RESULT_CODES) });
 function sanitizeEvidenceSteps(steps: ReadonlyArray<{ toolId: string; effectApplied?: boolean; resultCode?: string }>): NonNullable<SanitizedGenerationFailure["evidenceSteps"]> {
   return Object.freeze(steps.flatMap(step => WEB_EVIDENCE.toolIds.has(step.toolId) && (step.resultCode === undefined || WEB_EVIDENCE.resultCodes.has(step.resultCode))
