@@ -627,12 +627,26 @@ function runLlmGate(value: JsonRecord): ExistingRunLlmGate {
   const code = bounded(value.code, "code", 128);
   return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}) };
 }
+/**
+ * Core's receipt for a repair the model declined (`automationStudioDeclinedRepairAttempt`):
+ * `kind: "no_repair"` and one of Core's closed reasons as `declinedReason`.
+ * Its issue is Core's sentence for the decline, which matches none of the
+ * patterns below, so it was read as `runtime_patch.preflight_rejected` -- Core
+ * refusing a repair the model proposed, the opposite of what happened. It is
+ * read as the decline it is, by the reason's word and never the sentence.
+ */
+const DECLINED_REPAIR_KIND = "no_repair";
+const DECLINED_REASON = /^[a-z]+(?:_[a-z]+)*$/u;
+const DECLINED_REASON_MAX_LENGTH = 64;
+function declinedRepairCode(reason: unknown): string {
+  return typeof reason === "string" && reason.length <= DECLINED_REASON_MAX_LENGTH && DECLINED_REASON.test(reason) ? `runtime_patch.declined.${reason}` : "runtime_patch.declined";
+}
 function runtimePatchAttempt(value: unknown, at: string): ExistingRuntimePatchAttempt {
   const item = record(value, at);
-  const recognizedKinds = ["temporary_action_sequence", "temporary_wait_retry", "temporary_target_override", "temporary_recovery_subflow_call", "temporary_reroute", "runtime_patch_response"];
+  const recognizedKinds = ["temporary_action_sequence", "temporary_wait_retry", "temporary_target_override", "temporary_recovery_subflow_call", "temporary_reroute", "runtime_patch_response", DECLINED_REPAIR_KIND];
   const kind = typeof item.kind === "string" && recognizedKinds.includes(item.kind) ? item.kind : undefined;
   const issues = item.issues === undefined ? [] : stringArray(item.issues, `${at}.issues`);
-  const issueCodes = issues.map(issue => {
+  const issueCodes = kind === DECLINED_REPAIR_KIND ? [declinedRepairCode(item.declinedReason)] : issues.map(issue => {
     if (/target node|targetNodeId/i.test(issue)) return "runtime_patch.target_node_invalid";
     if (/target override|action target/i.test(issue)) return "runtime_patch.target_override_rejected";
     if (/exactly one runtime patch/i.test(issue)) return "runtime_patch.patch_count_invalid";

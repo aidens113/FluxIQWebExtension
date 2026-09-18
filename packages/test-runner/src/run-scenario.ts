@@ -248,15 +248,19 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
     // What either Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
-      prepareFlowPage: async () => {
-        if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
+      prepareFlowPage: async (moment?: "build" | "playback") => {
+        // A task whose variant is armed after the build has FluxIQ explore the unarmed page, and its Flow meet the variant:
+        // the site changes after the Flow was made. The fixture starts unarmed, so the build's page is simply not armed,
+        // and the armed facts are not checked against a page that was not armed.
+        const unarmedBuild = moment === "build" && creation?.task.variantArmedAfterBuild === true;
+        if (workflow.variant && !unarmedBuild) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
         // Runs before every Flow run and every exploration. The reset and any arm are server-side, and the tab still shows
         // wherever the recording or the exploration ended, so it is loaded again: unarmed, or the Flow starts on that last
         // page; armed, or a drift variant is judged against a page that never drifted. Load the entry point, not a reload.
         await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
         // The rendering the Flow meets is now on screen. Check the armed facts here (none for an unarmed run), so
         // "the fixture did not arm as declared" cannot arrive disguised as "the generated Flow failed".
-        await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
+        if (!unarmedBuild) await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
       },
       recordEvidence: async (evidence: E) => {
         // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:
@@ -331,17 +335,16 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     } else if (creation) {
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
-      const control = topology.control; const activeTopology = topology;
+      const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
-        // The one call that judges the finished run's result. Without it the
-        // playback carries no grant, Core has nobody to ask, and a Flow whose
-        // rows are wrong reports `passed` on its steps alone.
-        authorizeVerification: live.verificationAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
+        // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
+        authorizeRun: live.repairAuthorizer(control, activeTopology),
+        settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
         ...flowRunHooks(activeTopology, async evidence => {
           await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence));
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);

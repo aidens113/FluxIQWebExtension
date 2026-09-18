@@ -11,7 +11,7 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode"] as const satisfies readonly (keyof RunHarnessRecovery)[];
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
 const patchFlagKeys = ["proposalOnly", "executed", "preflightOk"] as const;
 const patchOutcomeKeys = ["adaptationCreated", "changeProposalCreated"] as const;
@@ -56,6 +56,11 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
     const recorded = [value.interventions, value.runtimePatchAttempts, value.adaptationIds, value.changeProposalIds].some((list) => Array.isArray(list) && list.length > 0);
     if (value.attempted === true && !recorded) add(issues, "$.attempted", "must be false when Core recorded no intervention, patch attempt, adaptation or change proposal");
     if (value.attempted === false && recorded) add(issues, "$.attempted", "must be true when Core recorded any intervention, patch attempt, adaptation or change proposal");
+    // Absent in a record written before the field existed; a code otherwise, and only for a recovery that did not happen.
+    if (value.refusalCode !== undefined && value.refusalCode !== null) {
+      checkCode(value.refusalCode, "$.refusalCode", issues);
+      if (value.attempted === true) add(issues, "$.refusalCode", "must be null when recovery was attempted");
+    }
   }
   return result(input, issues);
 }

@@ -285,6 +285,12 @@ export type RunEvaluation = {
    * every evaluation written before the field was defined. A run that needed
    * no recovery states `attempted: false`, never `null`.
    *
+   * A failed run whose recovery never started says why in `refusalCode`, Core's
+   * gate code: the Flow's settings refused the model, its training budget was
+   * spent, or a deterministic answer must come first. Without it, "recovery was
+   * not allowed to start" and "recovery was not needed" were the same
+   * `attempted: false`.
+   *
    * The field was reserved in schema 0.3, so defining it changes no version:
    * a 0.3 evaluation holding `null` reads exactly as before.
    */
