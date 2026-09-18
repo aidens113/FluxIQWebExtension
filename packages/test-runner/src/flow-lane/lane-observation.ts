@@ -155,13 +155,38 @@ export function selectLaneObservation(input: {
   return input.recordingLane();
 }
 
+/**
+ * What FluxIQ reported for the run: its steps, and then whether anyone judged
+ * what they produced.
+ *
+ * A run whose steps did not all succeed is `failed`, as it always was. A run
+ * whose steps succeeded is only `passed` when Core also says its result was
+ * judged and answered the request. Core recording `unverified` means the run
+ * stored a result and reached no model to judge it, and that must not read as
+ * a pass: on 2026-09-18 a created Flow returned ten rows of which not one was
+ * right, every step succeeded, no model was asked, and the run read `passed`.
+ *
+ * `no_result` stays `passed`. A Flow that stores no records -- one that signs
+ * in, or presses something -- has no result of this kind, and its steps are
+ * the whole account of whether it worked; calling it unverified would report
+ * a missing judgement of a thing there was nothing to judge. `refuted` cannot
+ * normally reach here, because Core fails the session it refutes, and is
+ * mapped to `failed` rather than trusted to arrive that way.
+ *
+ * A run carrying no verification at all is `passed`: nothing claims a
+ * judgement was skipped, which is a different fact from Core saying so, and
+ * reading it as unverified would relabel every run against a Core that records
+ * none.
+ */
 function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedVerdict"] {
-  return run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded") && !run.failure ? "passed" : "failed";
+  if (!(run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded") && !run.failure)) return "failed";
+  if (run.resultVerification === "refuted") return "failed";
+  return run.resultVerification === "unverified" ? "unverified" : "passed";
 }
 
-/** A failed run always carries a category; `ambiguous_or_unknown` when Core recorded no structured record. */
+/** A failed run always carries a category; `ambiguous_or_unknown` when Core recorded no structured record. A run nobody judged reported no failure to categorize. */
 function reportedFailure(run: PersistedFlowRunOutcome): RunEvaluation["automationFailureReported"] {
-  if (reportedVerdict(run) === "passed") return null;
+  if (reportedVerdict(run) !== "failed") return null;
   const record: AutomationStudioFailureRecord | null = run.failure;
   if (!record) return { category: "ambiguous_or_unknown" };
   return { category: record.category, ...(record.code === undefined ? {} : { code: record.code }) };

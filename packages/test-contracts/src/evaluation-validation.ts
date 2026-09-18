@@ -33,6 +33,14 @@ const extractionCountKeys = [
 const extractionFlagKeys = ["recordsListed", "countStated"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "expectedPages", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const automationVerdicts = ["passed", "failed"] as const;
+/**
+ * What FluxIQ may report, which is the oracle's vocabulary plus the one word
+ * the oracle can never say: `unverified`, for a run whose steps succeeded and
+ * whose result nobody judged. The fixture oracle always reaches a verdict or is
+ * not consulted, so widening `automationVerdicts` itself would let an oracle
+ * claim it too.
+ */
+const reportedVerdicts = [...automationVerdicts, "unverified"] as const;
 const moduleCauseCodes = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"] as const;
 const httpTransportCauseCodes = ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"] as const;
 
@@ -124,7 +132,7 @@ function checkRunOutcome(value: JsonObject, issues: ValidationIssue[]): void {
   else if (value.lane === "flow" && flowCreated === null) add(issues, "$.flowCreated", "must be a boolean on the flow lane");
   else if (value.lane === "recording" && flowCreated !== null) add(issues, "$.flowCreated", "must be null on the recording lane, which creates no Flow");
   nullableVerdict(value.oracleVerdict, "$.oracleVerdict", issues);
-  nullableVerdict(value.reportedVerdict, "$.reportedVerdict", issues);
+  nullableEnum(value.reportedVerdict, reportedVerdicts, "$.reportedVerdict", issues);
   if (flowCreated === false && value.reportedVerdict !== null) add(issues, "$.reportedVerdict", "must be null when no Flow was created");
   checkAutomationFailure(value.automationFailureReported, "$.automationFailureReported", issues);
   checkAutomationFailure(value.automationFailureExpected, "$.automationFailureExpected", issues);
@@ -290,7 +298,10 @@ function normalizeLegacyRunEvaluation(input: unknown): unknown {
 }
 
 function nullableVerdict(input: unknown, path: string, issues: ValidationIssue[]): void {
-  if (input !== null && (typeof input !== "string" || !(automationVerdicts as readonly string[]).includes(input))) add(issues, path, `must be null or one of ${automationVerdicts.join(", ")}`);
+  nullableEnum(input, automationVerdicts, path, issues);
+}
+function nullableEnum(input: unknown, allowed: readonly string[], path: string, issues: ValidationIssue[]): void {
+  if (input !== null && (typeof input !== "string" || !allowed.includes(input))) add(issues, path, `must be null or one of ${allowed.join(", ")}`);
 }
 function checkAutomationFailure(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (input === null) return;
