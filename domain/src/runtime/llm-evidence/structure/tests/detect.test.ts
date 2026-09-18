@@ -226,10 +226,15 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
 
   // An element in a child frame is detected in that frame, and the handle remembers it.
+  // The handle is read out of the packet rather than assumed: a page keeps a
+  // control's number across recaptures and never hands it to another, so a
+  // control this page has not addressed before takes the next number it has
+  // not spent, whatever position it is in (see ../../stable-handles.ts).
   page = withElements(captured("product-catalog-largest"), [link(7)]);
-  await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const framedPacket = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const framedHandle = (framedPacket.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
   commands.length = 0;
-  const framed = await detect(runtime, { target: "target.1" });
+  const framed = await detect(runtime, { target: framedHandle });
   assert.equal(framed.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
   assert.deepEqual(commands[1], { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' }, browserFrameId: 7 } });
   const binding = runtime.resolveExtractionHandle({ ...SCOPE, handle: (framed.evidence as WebLlmRepeatingStructure).extraction });

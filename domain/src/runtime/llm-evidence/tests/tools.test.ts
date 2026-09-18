@@ -92,9 +92,19 @@ test("binds from the production host seam and selects the sole trusted web clien
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
+  // A live build authored the right narrowing steps and named each control by a
+  // handle it had invented from the Flow-script example, so every one was refused
+  // web.handle.malformed. The extraction handle went in correctly, because the
+  // detection tool states its shape; inspect now states this one the same way.
+  const inspectDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_INSPECT_TOOL_ID)?.description ?? "";
+  assert.match(inspectDescription, /copy that handle exactly into the step's target/u);
   const revealDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_REVEAL_TOOL_ID)?.description ?? "";
   assert.match(revealDescription, /otherwise unavailable page structure/u);
   assert.match(revealDescription, /Form entry, option selection, submission/u);
+  // The restriction is on exploring, not on the Flow. Four live campaign slices
+  // built nothing that acted, having read this description as a statement about
+  // what a Flow may contain; it now says which it is.
+  assert.match(revealDescription, /that bounds exploring only, not the Flow you author/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     title: "Form",

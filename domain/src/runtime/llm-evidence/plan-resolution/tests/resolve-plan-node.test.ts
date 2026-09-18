@@ -217,10 +217,15 @@ test("handles are resolved per page: a recapture replaces a page, pages that dis
   let page: Page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#first", visibleText: "First" }] };
   const runtime = runtimeOver(() => page);
   await inspect(runtime);
-  // A recapture of the same page is the model's new view of it.
+  // A recapture of the same page is the model's new view of it -- but a
+  // control it does not still hold is not quietly replaced by whatever now
+  // stands where it stood. #first is gone, so its handle names nothing, and
+  // #renamed is a control this page has not addressed before, so it is given a
+  // number the page has never spent (see stable-handles.ts).
   page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
   // Another page agreeing on the handle leaves it resolvable bare.
   page = { url: "https://example.test/b", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
@@ -232,7 +237,7 @@ test("handles are resolved per page: a recapture replaces a page, pages that dis
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedAt("web.handle.ambiguous", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/never" } }), refusedAt("web.handle.unknown", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/c" } }), refusedAt("web.handle.unknown", "selector"));
 
@@ -241,7 +246,7 @@ test("handles are resolved per page: a recapture replaces a page, pages that dis
     page = { url: `https://example.test/more/${index}`, elements: [{ tagName: "button", selector: "#other", visibleText: "Other" }] };
     await inspect(runtime);
   }
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), refusedAt("web.handle.stale", "selector"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/a" } }), refusedAt("web.handle.stale", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedAt("web.handle.stale", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#other", "button", "Other"));
 });
@@ -311,9 +316,30 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.frame_mismatch",
     "web.handle.unknown_field",
     "web.handle.extraction_required",
+    "web.handle.wrong_control",
     EXTRACTION_HINT,
     TARGET_HINT
   ]);
+});
+
+test("a handle naming a control this step cannot act on refuses the node here, not on the page", async () => {
+  // Live, a created Flow chose an option in a button and the run failed at
+  // verification with "expected a select element to choose value 5 in, actual
+  // the target is a <button>" (`run-mu6cedna-3dd46e49`). The packet named both
+  // controls' tags, so the mistake was correctable while the evidence was
+  // still in front of the model.
+  const chooser: JsonObject = { tagName: "select", selector: "#band", accessibleName: "Price band" };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [submit, chooser] }));
+  await inspect(runtime);
+  assert.deepEqual(resolve(runtime, SELECT_NODE, { selector: { handle: "target.1" }, value: "5" }), refusedAt("web.handle.wrong_control", "selector"));
+  assert.deepEqual(resolve(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "5" }), {
+    status: "resolved",
+    parameters: { selector: "#band", value: "5", element: { tagName: "select", accessibleName: "Price band", selector: "#band" } }
+  });
+  // Entering text into something that can never hold any is refused the same way.
+  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector"));
+  // A click names no kind of control, so nothing here constrains it.
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
 });
 
 test("a selector the page gave to several controls is refused rather than acted on at the first of them", async () => {

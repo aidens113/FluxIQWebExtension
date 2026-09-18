@@ -81,6 +81,14 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.frame_mismatch",
   "web.handle.unknown_field",
   "web.handle.extraction_required",
+  // The handle names a real control, and it is not a control this step can act
+  // on: a choice step handed a button, an entry step handed a link. Refused
+  // here rather than at run time, where it arrives as
+  // `web.validation.output_not_observed` with the Flow already built and the
+  // evidence long gone (`run-mu6cedna-3dd46e49`: "expected a select element to
+  // choose value 5 in, actual the target is a <button>"). Only a contradiction
+  // the registered output itself would refuse is counted.
+  "web.handle.wrong_control",
   // The extraction node's `extractList` as `{ handle, fields?, paginate? }`, as its description spells out.
   "web.handle.expected.extract_list.handle_fields_paginate",
   // An element node's `selector` as `{ handle, location? }`.
@@ -157,6 +165,30 @@ function isTargetSlot(key: string, nodeDefinitionId: string): boolean {
 /** The one node an extraction handle may name a request for. */
 const EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
+/** Choosing an option is `HTMLSelectElement` behaviour, and the output refuses anything else outright. */
+const SELECT_NODE_ID = webAutomationOutputNodeId("web.dom.select");
+/** Entering and clearing text need an editable control. */
+const TEXT_ENTRY_NODE_IDS: ReadonlySet<string> = new Set([webAutomationOutputNodeId("web.dom.type"), webAutomationOutputNodeId("web.dom.clear")]);
+/** Tags that are positively not editable. Anything unrecognised is left alone: this refuses what is known wrong, never what is merely unfamiliar. */
+const NEVER_EDITABLE_TAGS: ReadonlySet<string> = new Set(["select", "button", "a", "option", "img"]);
+
+/**
+ * Whether the element the handle names is one this step's output would refuse.
+ *
+ * The evidence packet names each element's tag, so a step that chooses an
+ * option and names a button is a mistake the model made with the answer in
+ * front of it -- and one that used to reach a built Flow and fail on the page,
+ * long after the packet that would have corrected it was gone. Only a
+ * contradiction the registered output itself enforces counts, so this can
+ * refuse nothing the run would have accepted.
+ */
+function actsOnTheWrongControl(nodeDefinitionId: string, identity: JsonObject | undefined): boolean {
+  const tagName = typeof identity?.tagName === "string" ? identity.tagName.toLowerCase() : undefined;
+  if (tagName === undefined) return false;
+  if (nodeDefinitionId === SELECT_NODE_ID) return tagName !== "select";
+  return TEXT_ENTRY_NODE_IDS.has(nodeDefinitionId) && NEVER_EDITABLE_TAGS.has(tagName);
+}
+
 type Scope = { projectId: string; flowId: string };
 type Resolved = { value: JsonValue; frameId: number | undefined; element: JsonObject | undefined };
 /** One reason a node was refused, the kind of handle it is about, and where. */
@@ -217,6 +249,10 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const element = named[0]?.resolved;
   const disagreeing = named.find(({ resolved }) => resolved.value !== element?.value || (resolved.frameId ?? 0) !== (element?.frameId ?? 0));
   if (disagreeing) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [disagreeing.slot] }] };
+  const firstNamed = named[0];
+  if (firstNamed && actsOnTheWrongControl(nodeDefinitionId, element?.element)) {
+    return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot] }] };
+  }
 
   const frameId = handleFrame([...replaced.values()]);
   const declared = declaredFrame(parameters.browserFrameId);

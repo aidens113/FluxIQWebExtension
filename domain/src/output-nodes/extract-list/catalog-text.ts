@@ -75,9 +75,21 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
 ].join(" ");
 
-/** One request the page would run: a paginated product list. */
+/**
+ * One request the page would run: a paginated product list.
+ *
+ * It names `minItems` as well, although 1 is the default and the value is
+ * therefore the same request. Core reads a parameter's example as the
+ * declaration of which keys belong inside that parameter
+ * (`flow-bootstrap/authoring/matching.ts`), so a key the example omits is one
+ * a model writing it beside `extractList` is refused for. `minItems` is the
+ * key a Flow needs whenever the correct answer may be no rows at all, which is
+ * every filtered read, and the campaign of 2026-09-17 had two such tasks return
+ * whole unfiltered lists.
+ */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   item: "li.product",
   fields: { name: ".name", price: ".price", url: "a@href" },
-  paginate: { mode: "next", next: "a.next", maxPages: 5 }
+  paginate: { mode: "next", next: "a.next", maxPages: 5 },
+  minItems: 1
 };
