@@ -95,8 +95,28 @@ async function existingAutomationTab(): Promise<number | undefined> {
   }
 }
 
+/**
+ * Drives the tab to the URL, and reloads it when that is where it already is.
+ *
+ * Chrome ignores a `tabs.update` to the address the tab already shows, so a
+ * navigation to the current page did nothing at all: the Flow inherited
+ * whatever the last thing to touch that tab had left on it. That is how a
+ * dialog opened while the Flow was being authored was still up when the Flow
+ * ran and blocked its first step -- the tab was never reloaded between the
+ * two, because the Flow's opening navigate named the page the tab was on.
+ *
+ * A navigation means "be on this page", not "be on this page unless you
+ * already are", so the same address is a reload rather than a no-op. Anything
+ * a previous step put on the page goes with it, which is what a Flow author
+ * writing a navigation asks for.
+ */
 async function updateTabUrl(tabId: number, url: string): Promise<void> {
-  await chrome.tabs.update(tabId, { url, active: true });
+  if (await readTabUrl(tabId) === url) {
+    await chrome.tabs.update(tabId, { active: true });
+    await chrome.tabs.reload(tabId);
+  } else {
+    await chrome.tabs.update(tabId, { url, active: true });
+  }
   await waitForTabReady(tabId);
 }
 
