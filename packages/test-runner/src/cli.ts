@@ -13,6 +13,7 @@ import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { runInteractiveSession } from "./interactive-session.js";
 import { runScenario } from "./run-scenario.js";
+import { replaySavedFlow } from "./saved-flow-replay/index.js";
 import { loadScenarioManifests } from "./scenarios.js";
 import { loadTestEnvironment, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "./target-config.js";
 
@@ -41,6 +42,12 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       const status = command.operation === "status" ? await cache.status(scope) : await cache.clear(scope);
       process.stdout.write(`${JSON.stringify({ command: `clone-cache.${command.operation}`, ...status, ...(command.operation === "refresh" ? { effect: "invalidated; refresh occurs on the next clone run" } : {}) })}\n`);
       return 0;
+    }
+    if (command.command === "replay") {
+      const target = resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: command.workspace, env: resolvedEnvironment });
+      if (target.mode !== "persistent-isolated") throw new Error("replay runs on the persistent workspace the Flow was saved in");
+      const result = await replaySavedFlow({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, flowId: command.flowId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.seed === undefined ? {} : { seed: command.seed }), target, environment: resolvedEnvironment, credentialSources: [env, resolvedEnvironment] });
+      process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     if (command.command === "inspect") { process.stdout.write(`${JSON.stringify(await inspectRun(runsDirectory, command.runId))}\n`); return 0; }
     if (command.command === "compare") {

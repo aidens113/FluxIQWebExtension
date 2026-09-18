@@ -18,4 +18,5 @@ export { DEFAULT_BASE_NAME, resolveTaskRoots } from "./roots.mjs";
 export { findScratchRoots } from "./scratch-roots.mjs";
 export { staleDirectories } from "./stale-directories.mjs";
 export { startTask } from "./start.mjs";
+export { syncSharedCore } from "./sync-core.mjs";
 export { nextTaskId } from "./task-id.mjs";

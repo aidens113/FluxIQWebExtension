@@ -10,18 +10,10 @@ import { withoutProviderSecrets } from "../../provider-secret-environment.mjs";
 import { repositoryRoot } from "../lab-instance.mjs";
 import { PAIR_USAGE, parsePairArgs } from "./arguments.mjs";
 import { campaignEnvironment } from "./campaign-environment.mjs";
-import { buildCore, clearMarker, coreDistPaths, pathInside, processesUsingRoots, readSideState, runGit, runPnpm, samePath, writeMarker } from "../../worktree/index.mjs";
+import { applyMove, coreDistPaths, pathInside, planSideMove, processesUsingRoots, readSideState, runGit, samePath } from "../../worktree/index.mjs";
 import { renderPairInstructions } from "./instructions.mjs";
-import { planSideMove } from "./move-plan.mjs";
 import { providerKeySource } from "./provider-key.mjs";
 import { resolvePairRoots } from "./roots.mjs";
-
-/**
- * The Core packages a Lab run reads from `dist`, in Core's own build order
- * (its root `build` script). Core's web panel is not here: the Lab builds it
- * itself, into a cache keyed by these packages' output.
- */
-const INSTALL = ["install", "--frozen-lockfile", "--config.confirm-modules-purge=false"];
 
 /** Runs `pnpm lab:pair` for `argv` and sets the process exit code. */
 export function runPairCommandLine(argv) {
@@ -62,32 +54,11 @@ async function pairCommand(argv) {
   return 0;
 }
 
-async function applyPlan(plan) {
+// The checkout, install and build are `applyMove`'s, shared with the task
+// lifecycle's move of the shared Core, so the two cannot drift apart.
+function applyPlan(plan) {
   const env = { ...withoutProviderSecrets(process.env), npm_config_workspace_concurrency: "1" };
-  if (plan.checkout) {
-    note({ state: "checkout", side: plan.side, root: plan.root, from: plan.from, to: plan.to });
-    await runGit(plan.root, ["checkout", "--detach", plan.to]);
-  }
-  if (plan.install) {
-    await clearMarker(plan.root, "install");
-    await install(plan, env);
-    await writeMarker(plan.root, "install", plan.targetLock);
-  }
-  if (plan.build) {
-    await clearMarker(plan.root, "build");
-    await buildCore(plan.root, { env, note: (line) => note({ state: "build", side: plan.side, commit: plan.to, ...line }) });
-    await writeMarker(plan.root, "build", plan.to);
-  }
-}
-
-async function install(plan, env) {
-  note({ state: "install", side: plan.side, root: plan.root, lockfile: plan.targetLock, offline: true });
-  try {
-    await runPnpm(plan.root, [...INSTALL, "--offline"], { env });
-  } catch (error) {
-    note({ state: "install", side: plan.side, root: plan.root, offline: false, why: `the offline install failed, so the store may lack a package: ${error instanceof Error ? error.message : String(error)}` });
-    await runPnpm(plan.root, INSTALL, { env });
-  }
+  return applyMove(plan, { env, note });
 }
 
 async function requireWorktreeOfThisRepository(extRoot) {

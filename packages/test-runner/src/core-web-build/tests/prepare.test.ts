@@ -40,7 +40,8 @@ type Harness = {
 
 async function withHarness(run: (harness: Harness) => Promise<void>): Promise<void> {
   const root = await mkdtemp(path.join(os.tmpdir(), "core-web-build-prepare-"));
-  const keyDirectory = path.join(root, "runs", ".core-web-build", key);
+  const cacheRoot = path.join(root, "runs", ".core-web-build");
+  const keyDirectory = path.join(cacheRoot, key);
   const nextExecutable = path.join(root, "core", "next");
   const logPath = path.join(root, "build.log");
   const builds: ProcessSpec[] = [];
@@ -48,6 +49,9 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
   const withoutBuild: Partial<CoreWebBuildDependencies> = {
     collectInputs: async () => ({ inputs, nextExecutable }),
     stageWorkspace: async (_core, webDirectory) => writeText(path.join(webDirectory, "package.json"), "{}\n"),
+    // These exercise the lock and the publication below os.tmpdir(); the real
+    // path budget is tested in path-budget.test.ts and would refuse that root.
+    pathBudget: (cacheRoot: string) => ({ fits: true, root: cacheRoot.length, allowed: Number.MAX_SAFE_INTEGER, longest: cacheRoot.length }),
     pollIntervalMs: 5,
     waitTimeoutMs: 10_000,
     lockSettleMs: 2_000,
@@ -58,7 +62,7 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
     await delay(25);
     await writeText(path.join(spec.cwd, ".next", "BUILD_ID"), `build-${builds.length}\n`);
   };
-  const options = (supervisor: ProcessSupervisor) => ({ fluxiqRepositoryRoot: path.join(root, "core"), runsDirectory: path.join(root, "runs"), supervisor, logPath });
+  const options = (supervisor: ProcessSupervisor) => ({ fluxiqRepositoryRoot: path.join(root, "core"), cacheRoot, supervisor, logPath });
   try {
     await run({
       keyDirectory, lockPath: path.join(keyDirectory, ".operation.lock"), nextExecutable, logPath, builds,
@@ -308,3 +312,26 @@ function exitChild(child: FakeChild, code: number): void {
   Object.defineProperty(child, "exitCode", { value: code, writable: true, configurable: true });
   child.emit("exit", code, null);
 }
+
+test("a cache root inside node_modules is refused before Core is read, staged or built, and the refusal says why", async () => {
+  // The first default for the Core-scoped cache was <core>/node_modules/.core-web-build.
+  // Every Turbopack build there died with exit 3221225501 and nothing else in
+  // its log, and a campaign reported it four times as this machine's RAM fault.
+  const touched: string[] = [];
+  const root = await mkdtemp(path.join(os.tmpdir(), "core-web-build-nm-"));
+  try {
+    await assert.rejects(prepareCoreWebBuild(
+      { fluxiqRepositoryRoot: path.join(root, "core"), cacheRoot: path.join(root, "node_modules", "cwb"), supervisor: new ProcessSupervisor(), logPath: path.join(root, "build.log") },
+      {
+        collectInputs: async () => { touched.push("inputs"); return { inputs, nextExecutable: "next" }; },
+        stageWorkspace: async () => { touched.push("stage"); },
+        runBuild: async () => { touched.push("build"); },
+        pathBudget: cacheRoot => ({ fits: true, root: cacheRoot.length, allowed: Number.MAX_SAFE_INTEGER, longest: cacheRoot.length }),
+      },
+    ), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /inside a node_modules directory/u.test(error.message) && /exit 3221225501/u.test(error.message));
+    assert.deepEqual(touched, []);
+    await assert.rejects(stat(path.join(root, "node_modules")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
