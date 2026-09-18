@@ -36,10 +36,15 @@ const flowRun = () => ({
   llm: disabledLlm, extraction: null, ...week2,
 });
 // A paginated list extraction step, judged: 24 of 24 expected records read over three pages, every one of them compared, every expected field present.
-const measurement = (overrides = {}) => ({
-  stepIndex: 2, status: "judged", expectedRecords: 24, observedRecords: 24, recordsListed: true, countStated: true, comparedRecords: 24, matchedRecords: 24,
-  expectedFields: 3, presentFields: 3, unexpectedFields: 0, expectedPages: 3, pagesFollowed: 3, truncated: false, durationMs: 412.5, nonStringValues: 0, ...overrides,
-});
+const measurement = (overrides = {}) => {
+  const measured = {
+    stepIndex: 2, status: "judged", expectedRecords: 24, observedRecords: 24, recordsListed: true, countStated: true, comparedRecords: 24, matchedRecords: 24,
+    unjudged: [], expectedFields: 3, presentFields: 3, unexpectedFields: 0, expectedPages: 3, pagesFollowed: 3, truncated: false, durationMs: 412.5, nonStringValues: 0, ...overrides,
+  };
+  // The order-insensitive count follows the positional one unless a test
+  // states it, so a test about another member does not have to restate it.
+  return Object.hasOwn(overrides, "matchedInAnyOrder") ? measured : { ...measured, matchedInAnyOrder: measured.matchedRecords };
+};
 const extractionRun = (measurements = [measurement()]) => ({ ...flowRun(), extraction: measurements });
 // A card number: the kind of page value D6 keeps out of every evaluation.
 const PLANTED = "4242424242424242";
@@ -64,7 +69,7 @@ test("run evaluations write schema 0.3 while CandidateComparison remains 0.1", (
   assert.equal(CANDIDATE_COMPARISON_SCHEMA_VERSION, "0.1");
   assert.doesNotThrow(() => assertRunEvaluation(flowRun()));
   // Schema 0.3 carries one counts-only measurement per extraction step, and round-trips.
-  const notRun = measurement({ stepIndex: 5, status: "not_run", observedRecords: 0, comparedRecords: 0, matchedRecords: 0, presentFields: 0, pagesFollowed: null, truncated: null, durationMs: null });
+  const notRun = measurement({ stepIndex: 5, status: "not_run", observedRecords: 0, comparedRecords: 0, matchedRecords: 0, matchedInAnyOrder: 0, unjudged: ["pages"], presentFields: 0, pagesFollowed: null, truncated: null, durationMs: null });
   const measured = extractionRun([measurement(), notRun]);
   assert.doesNotThrow(() => assertRunEvaluation(measured));
   assert.deepEqual(parseRunEvaluationJson(JSON.stringify(measured)), measured);
@@ -102,7 +107,7 @@ test("a string planted anywhere in an extraction measurement is refused as a pag
   const refusedAsString = (value, path) => messagesAt(value, path).some((message) => message.startsWith("must not be a string"));
   for (const key of [
     "stepIndex", "expectedRecords", "observedRecords", "recordsListed", "countStated", "comparedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields",
-    "expectedPages", "pagesFollowed", "truncated", "durationMs", "nonStringValues", "status",
+    "expectedPages", "pagesFollowed", "truncated", "durationMs", "nonStringValues", "status", "matchedInAnyOrder", "unjudged",
   ]) {
     const run = extractionRun([measurement(), measurement({ stepIndex: 3, [key]: PLANTED })]);
     assert.equal(validateRunEvaluation(run).valid, false, key);
@@ -126,9 +131,10 @@ test("extraction counts are bounded: matched records by expected and observed on
   assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 15, comparedRecords: 15, matchedRecords: 15 })])).valid, true);
   assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 30, matchedRecords: 24, unexpectedFields: 2 })])).valid, true);
   // More matched records than expected, though no more than observed. A Set: the compared bound refuses the same member, and one member refused twice is still one defect.
-  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ observedRecords: 30, matchedRecords: 25 })]))), new Set(["$.extraction[0].matchedRecords"]));
+  // Both counts are then over the compared bound, which is two wrong numbers rather than one member refused twice.
+  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ observedRecords: 30, matchedRecords: 25 })]))), new Set(["$.extraction[0].matchedRecords", "$.extraction[0].matchedInAnyOrder"]));
   // More matched records than observed, though no more than expected.
-  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ observedRecords: 15, comparedRecords: 15, matchedRecords: 16 })]))), new Set(["$.extraction[0].matchedRecords"]));
+  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ observedRecords: 15, comparedRecords: 15, matchedRecords: 16 })]))), new Set(["$.extraction[0].matchedRecords", "$.extraction[0].matchedInAnyOrder"]));
   assert.deepEqual(issuesOf(extractionRun([measurement({ presentFields: 4 })])), ["$.extraction[0].presentFields"]);
   for (const [label, override] of Object.entries({
     "negative step": { stepIndex: -1 },
@@ -160,11 +166,12 @@ test("a step that compared nothing has no matches to pool: a count-only measurem
   });
   assert.equal(validateRunEvaluation(extractionRun([countOnly])).valid, true);
   // The shape that scored a false 1.0: every counted record claimed as a match.
-  assert.deepEqual(issuesOf(extractionRun([{ ...countOnly, matchedRecords: 1000 }])), ["$.extraction[0].matchedRecords"]);
+  // `matchedInAnyOrder` stays 0 here, so the claim also contradicts itself: a positional match is a match in any order.
+  assert.deepEqual(issuesOf(extractionRun([{ ...countOnly, matchedRecords: 1000 }])), ["$.extraction[0].matchedRecords", "$.extraction[0].matchedInAnyOrder"]);
   // A comparison claimed where the expectation listed no record to compare against.
   assert.deepEqual(issuesOf(extractionRun([{ ...countOnly, comparedRecords: 1000 }])), ["$.extraction[0].comparedRecords"]);
   assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ comparedRecords: 25 })]))), new Set(["$.extraction[0].comparedRecords"]));
-  assert.deepEqual(issuesOf(extractionRun([measurement({ comparedRecords: 20, matchedRecords: 21 })])), ["$.extraction[0].matchedRecords"]);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ comparedRecords: 20, matchedRecords: 21 })])), ["$.extraction[0].matchedRecords", "$.extraction[0].matchedInAnyOrder"]);
   for (const [label, override] of Object.entries({
     "recordsListed as a number": { recordsListed: 1 },
     "countStated as a number": { countStated: 0 },
@@ -413,4 +420,32 @@ test("harnessRecovery carries kinds, codes, identifiers and flags, never text", 
     for (const message of validateRunEvaluation(evaluation).issues) assert.equal(message.message.includes(PLANTED), false, "a refusal never quotes the value it refused");
   }
   assert.deepEqual(messagesAt({ ...flowRun(), harnessRecovery: "recovered" }, "$.harnessRecovery"), ["must be an object"]);
+});
+
+test("a measurement states what it compared out of order and what it never judged, and refuses to contradict itself", () => {
+  // The two members exist because `matchedRecords` alone cannot tell a wrong
+  // answer from a right answer in the wrong order, and because a declared
+  // `pages` the lane could not observe was dropped with nothing saying so.
+  assert.deepEqual(issuesOf(extractionRun([measurement({ matchedRecords: 19, matchedInAnyOrder: 24 })])), []);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ unjudged: ["pages", "truncated"] })])), []);
+  // A match at its own position is a match in any order, so fewer is a contradiction.
+  assert.deepEqual(issuesOf(extractionRun([measurement({ matchedRecords: 24, matchedInAnyOrder: 23 })])), ["$.extraction[0].matchedInAnyOrder"]);
+  // And only a compared record can be matched at all.
+  assert.deepEqual(issuesOf(extractionRun([measurement({ comparedRecords: 20, matchedRecords: 20, matchedInAnyOrder: 24, expectedRecords: 24, observedRecords: 20 })])), ["$.extraction[0].matchedInAnyOrder"]);
+  // `unjudged` is a closed vocabulary with no repeats: a free string there would be the page value D6 refuses.
+  assert.deepEqual(issuesOf(extractionRun([measurement({ unjudged: ["records"] })])), ["$.extraction[0].unjudged", "$.extraction[0].unjudged[0]"]);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ unjudged: ["pages", "pages"] })])), ["$.extraction[0].unjudged"]);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ unjudged: [PLANTED] })])), ["$.extraction[0].unjudged", "$.extraction[0].unjudged[0]"]);
+});
+
+test("a 0.3 measurement written before the two members reads as stating neither, never as having judged everything", () => {
+  const older = extractionRun([without(without(measurement(), "matchedInAnyOrder"), "unjudged")]);
+  const read = parseRunEvaluationJson(JSON.stringify(older));
+  assert.equal(read.extraction[0].matchedInAnyOrder, null);
+  // `null`, not `[]`: that producer did not record what it left unjudged, and
+  // `[]` would be the exact false reassurance the member was added to remove.
+  assert.equal(read.extraction[0].unjudged, null);
+  assert.throws(() => assertRunEvaluation(older), ContractValidationError);
+  // A current producer states both, so its evaluation is returned as itself.
+  assert.doesNotThrow(() => assertRunEvaluation(extractionRun()));
 });

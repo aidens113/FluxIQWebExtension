@@ -134,7 +134,7 @@ test("a Flow-lane run reports the lane's own observation, not an inference over 
         lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
         automationFailureReported: null, automationFailureExpected: null, harnessActivations: 2,
         actions: [{ actionType: "web.dom.click", durationMs: 210 }, { actionType: "web.dom.type", durationMs: 340 }],
-        extraction: [{ stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: true, comparedRecords: 2, matchedRecords: 2, expectedFields: 2, presentFields: 2, unexpectedFields: 0, expectedPages: null, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 0 }],
+        extraction: [{ stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: true, comparedRecords: 2, matchedRecords: 2, matchedInAnyOrder: 2, unjudged: [], expectedFields: 2, presentFields: 2, unexpectedFields: 0, expectedPages: null, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 0 }],
       },
     },
   }));

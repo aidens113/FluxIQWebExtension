@@ -134,7 +134,7 @@ function rateOverSteps(pooled: { count: number; total: number }, population: rea
  * Only a step whose expectation listed records names a field at all, so a
  * count-only step contributes nothing to either side and cannot dilute the
  * rate. A field is present when the record carried a **value** for it: a field
- * restored as `null` carried none (`run-expectations/extraction.ts`,
+ * restored as `null` carried none (`run-expectations/extraction/judgement.ts`,
  * `carriesField`), which is what keeps this from reading 1.000 on the Flow
  * lane, where Core's stored schema guarantees every key.
  */

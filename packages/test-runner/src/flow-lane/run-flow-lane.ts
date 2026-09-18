@@ -7,6 +7,7 @@ import { assertFlowActions, assertFlowExtraction, assertFlowFailure, judgeFlowEx
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
+import { extractionMismatchReport, extractionStepMismatches, type ExtractionDisclosureRule, type ExtractionMismatchReport } from "../run-expectations/index.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { assertFlowRepair, judgeFlowRepair, type FlowRepairExpectation, type FlowRepairJudgement } from "./repair/index.js";
@@ -280,6 +281,53 @@ export function flowExtractionSnapshot(judgement: FlowExtractionJudgement) {
       datasetPages: step.dataset?.pages ?? null,
     })),
   };
+}
+
+/**
+ * The same judgement as `snapshots/extraction-mismatches.json` states it: for
+ * each step that did not match, which record positions differed and what the
+ * two sides held at the expectation's own fields.
+ *
+ * It is a second artifact rather than a block of the lane snapshot because the
+ * two have opposite boundaries. `flowLaneSnapshot` promises counts, closed
+ * names and Core's identifiers and no page text, and that promise is worth
+ * more than one more block; this file exists to carry the values and states
+ * its own limits and every withholding in its `policy` and `disclosure`
+ * (`run-expectations/extraction/mismatches.ts`).
+ *
+ * `disclosure` is the run's, decided from the scenario rather than from the
+ * records: a fixture that declares replay secrets has a secret on its page by
+ * construction, so its observed values are withheld and said to be.
+ */
+export function flowExtractionMismatches(judgement: FlowExtractionJudgement, disclosure: ExtractionDisclosureRule): ExtractionMismatchReport {
+  return extractionMismatchReport(judgement.steps.map((step) => extractionStepMismatches({
+    stepIndex: step.stepIndex, stepId: step.stepId,
+    // The narrowed entry: `pages` and `truncated` were removed because this
+    // lane cannot observe them, and neither names a record or a field, so the
+    // records compared here are the declared ones either way.
+    entry: step.entries[0], records: step.dataset?.records ?? [],
+    disclosure, context: judgement.comparison,
+  })));
+}
+
+/**
+ * Writes that report, and writes nothing when every record matched: an
+ * artifact that is always present says nothing by being present, and a reader
+ * who finds this file knows before opening it that something did not match.
+ *
+ * The disclosure rule is read off the scenario rather than off the records. A
+ * fixture that declares replay secrets has a secret on its page by
+ * construction, so its observed values are withheld and the artifact says so.
+ */
+export async function writeFlowExtractionMismatches(
+  bundle: { writeStructured(bundlePath: string, value: unknown): Promise<unknown> },
+  scenario: Pick<WebScenario, "secrets">,
+  judgement: FlowExtractionJudgement | null,
+): Promise<void> {
+  if (!judgement) return;
+  const report = flowExtractionMismatches(judgement, scenario.secrets?.length ? "scenario-declares-secrets" : "fixture-page");
+  if (report.steps.length === 0) return;
+  await bundle.writeStructured("snapshots/extraction-mismatches.json", report);
 }
 
 function recordedCandidateOrder(nodes: readonly FlowNodeRecord[], actionTypes: ReadonlyMap<string, string>, proposal: RecordingFlowProposal, flowId: string): Map<string, number> {

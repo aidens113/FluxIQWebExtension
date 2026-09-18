@@ -929,7 +929,7 @@ Each recording-script step is then driven through Playwright as trusted input
 while the extension records. An `extract` step's records are asserted against
 `expected.extracted` as the step runs, and what the step read is kept before it
 is judged and published as one counts-only measurement per extract step in the
-run's `evaluation.json` (`run-expectations/extraction-measurements.ts`): the
+run's `evaluation.json` (`run-expectations/extraction/measurements.ts`): the
 records compared, the fields that carried a value, the pages the read followed,
 whether it truncated, and how long it took. A step whose records did not match
 is measured too, which is the measurement worth having; a step an expectation
