@@ -16,6 +16,7 @@ import type {
   DialogControl,
   ExtractedElementValue,
   FileInputOutcome,
+  InPlaceEffectWatch,
   KeyboardCapability,
   ResolvedTarget,
   WaitConditionOutcome,
@@ -75,6 +76,12 @@ export type ContentActionDependencies = {
   evaluateAssertion(request: WebAutomationAssertRequest, target: AssertionTarget): Promise<AssertionOutcome>;
   /** Waits for visible, enabled, absent, a URL, or the page to go quiet. */
   waitForCondition(request: WaitConditionRequest): Promise<WaitConditionOutcome>;
+  /**
+   * Starts watching a link's document, from the moment of the press, for the
+   * answer a page gives a link click it handles in script: a new address, or
+   * changed content. Made just before the press; `settle` reads the answer.
+   */
+  watchInPlaceEffect(link: Element): InPlaceEffectWatch;
 
   /** Succeeds, or fails with `output_not_observed` when the validation did not hold. */
   success(
