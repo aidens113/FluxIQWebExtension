@@ -129,7 +129,7 @@ test("the Flow lane's extraction measurements travel on the observation, and a r
   const measurement: RunExtractionMeasurement = {
     stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false,
     comparedRecords: 2, matchedRecords: 2, expectedFields: 2, presentFields: 2, unexpectedFields: 0,
-    expectedPages: 3, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 0,
+    matchedInAnyOrder: 2, unjudged: ["pages"], expectedPages: 3, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 0,
   };
   const judged = flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run(), automationFailureExpected: null, extraction: [measurement] });
   assert.deepEqual(judged.extraction, [measurement]);

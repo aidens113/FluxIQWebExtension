@@ -1,5 +1,5 @@
 import {
-  EVALUATION_SCHEMA_VERSION, evaluationLanes, extractionMeasurementStatuses, facilityFailureBoundaries, facilityFailureCauseCodes,
+  EVALUATION_SCHEMA_VERSION, evaluationLanes, extractionMeasurementStatuses, extractionUnjudgedMembers, facilityFailureBoundaries, facilityFailureCauseCodes,
   facilityFailureOperationStages, facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
   type CandidateComparison, type LlmUsage, type RunEvaluation, type RunExtractionMeasurement,
 } from "./evaluation.js";
@@ -31,7 +31,7 @@ const extractionCountKeys = [
 ] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 /** What the expectation offered, which decides which rate a step may enter at all. */
 const extractionFlagKeys = ["recordsListed", "countStated"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
-const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "expectedPages", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
+const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "matchedInAnyOrder", "unjudged", "expectedPages", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const automationVerdicts = ["passed", "failed"] as const;
 const moduleCauseCodes = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"] as const;
 const httpTransportCauseCodes = ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"] as const;
@@ -196,20 +196,38 @@ function checkExtraction(input: unknown, path: string, issues: ValidationIssue[]
 }
 
 /**
- * One extraction step's measurement. A string is refused wherever it appears,
- * except a closed `status`, before any other check: a string is the only way a
- * page value, field name, or step id could reach an evaluation (D6), so its
- * refusal must not depend on it landing in a member that also checks a type.
+ * The members that may hold a string, each with the closed vocabulary its
+ * string must come from. Every other member is refused a string outright.
+ */
+const extractionClosedVocabularies: Readonly<Record<string, readonly string[]>> = {
+  status: extractionMeasurementStatuses,
+  unjudged: extractionUnjudgedMembers,
+};
+
+/**
+ * One extraction step's measurement. A string is refused wherever it appears
+ * -- including inside an array -- unless it is a member of that key's closed
+ * vocabulary, and the refusal comes before any other check: a string is the
+ * only way a page value, field name, or step id could reach an evaluation
+ * (D6), so its refusal must not depend on it landing in a member that also
+ * checks a type. The array case is checked because `unjudged` is the first
+ * member to carry strings in one, and a guard that looked only at the top
+ * level would have let any array of page text through.
  */
 function checkExtractionMeasurement(input: unknown, path: string, issues: ValidationIssue[]): void {
   const value = object(input, path, issues); if (!value) return;
   for (const [key, member] of Object.entries(value)) {
-    const closedStatus = key === "status" && (extractionMeasurementStatuses as readonly unknown[]).includes(member);
-    if (typeof member === "string" && !closedStatus) add(issues, `${path}.${key}`, "must not be a string: an extraction measurement carries counts and flags only, never a page value (D6)");
+    const closed = extractionClosedVocabularies[key];
+    const strings = typeof member === "string" ? [member] : Array.isArray(member) ? member.filter((item): item is string => typeof item === "string") : [];
+    for (const found of strings) {
+      if (!closed?.includes(found)) add(issues, `${path}.${key}`, "must not be a string: an extraction measurement carries counts, flags and closed names only, never a page value (D6)");
+    }
   }
   keys(value, extractionMeasurementKeys, path, issues);
   for (const key of extractionCountKeys) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   enumeration(value.status, extractionMeasurementStatuses, `${path}.status`, issues);
+  checkExtractionUnjudged(value.unjudged, `${path}.unjudged`, issues);
+  if (value.matchedInAnyOrder !== null) finite(value.matchedInAnyOrder, `${path}.matchedInAnyOrder`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.expectedPages !== null) finite(value.expectedPages, `${path}.expectedPages`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.pagesFollowed !== null) finite(value.pagesFollowed, `${path}.pagesFollowed`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.truncated !== null && typeof value.truncated !== "boolean") add(issues, `${path}.truncated`, "must be a boolean or null");
@@ -232,6 +250,33 @@ function checkExtractionMeasurement(input: unknown, path: string, issues: Valida
     if (value.recordsListed === false && comparedRecords > 0) add(issues, `${path}.comparedRecords`, "must be 0 when the expectation listed no records: nothing was there to compare against");
   }
   if (typeof presentFields === "number" && typeof expectedFields === "number" && presentFields > expectedFields) add(issues, `${path}.presentFields`, "must not exceed expectedFields");
+  checkMatchedInAnyOrder(value, issues, path);
+}
+
+/**
+ * The order-insensitive match against the positional one. A record that
+ * matched at its own position matched in any order too, so a producer
+ * reporting fewer of them has measured one of the two wrongly -- which is the
+ * confusion the member exists to remove, and so exactly the confusion that
+ * must not be allowed back in through a stated number.
+ */
+function checkMatchedInAnyOrder(value: JsonObject, issues: ValidationIssue[], path: string): void {
+  const { matchedInAnyOrder, matchedRecords, comparedRecords } = value;
+  if (typeof matchedInAnyOrder !== "number") return;
+  if (typeof matchedRecords === "number" && matchedInAnyOrder < matchedRecords) add(issues, `${path}.matchedInAnyOrder`, "must not be below matchedRecords: a record matched at its own position is matched in any order");
+  if (typeof comparedRecords === "number" && matchedInAnyOrder > comparedRecords) add(issues, `${path}.matchedInAnyOrder`, "must not exceed comparedRecords: only a compared record can be matched");
+}
+
+/**
+ * The members declared and not judged: `null` when the producer did not state
+ * them, otherwise a set of closed names with no repeats. A repeat would make
+ * the list read as two unjudged expectations where the entry declared one.
+ */
+function checkExtractionUnjudged(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (input === null) return;
+  if (!Array.isArray(input)) { add(issues, path, "must be null or an array of declared-but-unjudged member names"); return; }
+  array(input, path, issues, (entry, at, found) => enumeration(entry, extractionUnjudgedMembers, at, found));
+  if (new Set(input).size !== input.length) add(issues, path, "must not name the same member twice");
 }
 
 function checkFacilityFailure(input: unknown, path: string, issues: ValidationIssue[]): void {
@@ -283,10 +328,34 @@ function checkFacilityFailurePairing(value: JsonObject, issues: ValidationIssue[
  * old version stating a member it never had is not normalized, and fails.
  */
 function normalizeLegacyRunEvaluation(input: unknown): unknown {
+  return normalizeLegacyExtractionMeasurements(normalizeLegacySchema(input));
+}
+
+function normalizeLegacySchema(input: unknown): unknown {
   if (!isObject(input) || "extraction" in input) return input;
   if (input.schemaVersion === "0.2") return { ...input, schemaVersion: EVALUATION_SCHEMA_VERSION, extraction: null };
   if (input.schemaVersion === "0.1" && !("facilityFailure" in input)) return { ...input, schemaVersion: EVALUATION_SCHEMA_VERSION, facilityFailure: null, extraction: null };
   return input;
+}
+
+/**
+ * A measurement written before `matchedInAnyOrder` and `unjudged` existed,
+ * read as one that states neither.
+ *
+ * `null` rather than a filled-in value, and `null` rather than `[]`: that
+ * producer did not compare in any order and did not record what it left
+ * unjudged, so the honest reading is "not stated". Writing `0` would claim
+ * nothing matched out of order, and `[]` would claim everything declared was
+ * judged -- the second being the exact false reassurance these members were
+ * added to remove, which normalization must not manufacture. Unchanged input
+ * is returned as itself, so `assertRunEvaluation`'s identity check still
+ * separates a current evaluation from a normalized one.
+ */
+function normalizeLegacyExtractionMeasurements(input: unknown): unknown {
+  if (!isObject(input) || !Array.isArray(input.extraction)) return input;
+  const stale = input.extraction.filter(isRecord).some((measurement) => !("matchedInAnyOrder" in measurement) || !("unjudged" in measurement));
+  if (!stale) return input;
+  return { ...input, extraction: input.extraction.map((measurement) => (isRecord(measurement) ? { matchedInAnyOrder: null, unjudged: null, ...measurement } : measurement)) };
 }
 
 function nullableVerdict(input: unknown, path: string, issues: ValidationIssue[]): void {

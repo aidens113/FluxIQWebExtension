@@ -15,7 +15,7 @@
 // judge must not be able to enter a rate.
 
 import type { ExpectedExtraction, RunExtractionMeasurement, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { measureExtraction, type ExtractionRecord, type ObservedExtraction } from "./extraction.js";
+import { measureExtraction, type ExtractionRecord, type ObservedExtraction } from "./judgement.js";
 
 /** What one extract step read: FluxIQ's records, and the read's own account of itself. */
 export type ExtractionStepRead = {

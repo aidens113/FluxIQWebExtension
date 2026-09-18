@@ -1,6 +1,6 @@
-import type { ExpectedExtraction, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
-import { RunnerFailure } from "../failure.js";
-import { extractedValueMatches, type ExtractedValueContext } from "./extracted-value-match.js";
+import type { ExpectedExtraction, ExtractionUnjudgedMember, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import { RunnerFailure } from "../../failure.js";
+import { extractedValueMatches, type ExtractedValueContext } from "./value-match.js";
 
 /** One record: each field's value, or `null` where the item held no value for it, as `ExpectedExtraction` spells it. */
 export type ExtractionRecord = Record<string, string | null>;
@@ -36,7 +36,10 @@ const NOTHING_REPORTED: ObservedExtraction = { nonStringValues: 0 };
  * the page showed.
  *
  * Matching is positional, as `assertExtraction` has always compared, and the
- * two share `matchesRecord` so a measurement and an assertion cannot disagree.
+ * two share `matchesExtractionRecord` so a measurement and an assertion cannot
+ * disagree. `matchedInAnyOrder` is measured beside it from the same pairing:
+ * the positional count alone cannot tell a wrong answer from a right answer in
+ * the wrong order, and those are different defects.
  * `context` is the run's, and lets a record's same-origin absolute URL match a
  * root-relative expected one (`extractedValueMatches`); without it every value
  * is compared exactly.
@@ -74,6 +77,7 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
   let expectedRecords = 0;
   let comparedRecords = 0;
   let matchedRecords = 0;
+  let matchedInAnyOrder = 0;
   let expectedFields = 0;
   let presentFields = 0;
   let unexpectedFields = 0;
@@ -82,10 +86,12 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
     if (expected) {
       const named = new Set([...expected.flatMap((record) => Object.keys(record)), ...optional]);
       comparedRecords = Math.min(expected.length, records.length);
+      const pairing = extractionRecordPairing(expected, records, optional, context);
+      matchedInAnyOrder = pairing.filter((at) => at !== undefined).length;
       for (let position = 0; position < comparedRecords; position += 1) {
         const wanted = expected[position]!;
         const actual = records[position]!;
-        if (matchesRecord(wanted, actual, optional, context)) matchedRecords += 1;
+        if (pairing[position] === position) matchedRecords += 1;
         for (const key of Object.keys(wanted)) {
           if (optional.has(key)) continue;
           expectedFields += 1;
@@ -98,7 +104,12 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
   return {
     expectedRecords, observedRecords: records.length,
     recordsListed: expected !== undefined, countStated: entry?.count !== undefined,
-    comparedRecords, matchedRecords,
+    comparedRecords, matchedRecords, matchedInAnyOrder,
+    // What the entry declared that this run reported nothing for. It is the
+    // same question `assertExtraction` refuses an unjudgeable entry on, asked
+    // of the measurement so the evaluation states the gap instead of leaving
+    // `expectedPages` beside a null `pagesFollowed` for a reader to guess at.
+    unjudged: entry ? unjudgeableFields(entry, observed) : [],
     expectedFields, presentFields, unexpectedFields,
     // The declared pages, so a pagination accuracy has both sides of its
     // comparison. Null when the entry declared none, and independent of
@@ -181,10 +192,51 @@ export function assertExtraction(expected: readonly ExpectedExtraction[] | undef
       throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} record ${index} carried no value for ${missing.length} required field(s) no optionalFields entry names`, { details: { stepId, index, missingFields: missing } });
     }
     if (measured.matchedRecords !== entry.records.length) {
-      const index = entry.records.findIndex((wanted, position) => !matchesRecord(wanted, records[position]!, optional, context));
+      const index = entry.records.findIndex((wanted, position) => !matchesExtractionRecord(wanted, records[position]!, optional, context));
       throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} record ${index} does not match`, { details: { stepId, index, expected: entry.records[index], actual: records[index] } });
     }
   }
+}
+
+/**
+ * Which observed record answers each expected one when position is set aside:
+ * `pairing[i]` is the position of the observed record that matches
+ * `expected[i]`, or `undefined` when none is left that does. Each observed
+ * record answers at most one expected record, so a list holding a value twice
+ * cannot match it twice.
+ *
+ * Positional matches are taken first and never given away, which is what makes
+ * the count this produces at least the positional one -- a record matched at
+ * its own position is matched in any order, and a pairing that could report
+ * fewer would reintroduce exactly the confusion it exists to remove. The rest
+ * is a first-fit pass, which is the maximum matching for record equality: a
+ * record that could answer two expected records answers whichever asks first,
+ * and the other is answered by any of its own equals or by none.
+ *
+ * It is not a key match. `ExpectedExtraction` declares no key, and inventing
+ * one would silently change what every fixture asserts; this compares whole
+ * records exactly as the positional judgement does, and only disregards where
+ * they sit.
+ */
+export function extractionRecordPairing(expected: readonly ExtractionRecord[], records: readonly ExtractionRecord[], optional: ReadonlySet<string>, context: ExtractedValueContext | undefined): Array<number | undefined> {
+  const pairing: Array<number | undefined> = new Array(expected.length).fill(undefined);
+  const taken = new Set<number>();
+  const compared = Math.min(expected.length, records.length);
+  for (let position = 0; position < compared; position += 1) {
+    if (!matchesExtractionRecord(expected[position]!, records[position]!, optional, context)) continue;
+    pairing[position] = position;
+    taken.add(position);
+  }
+  for (let position = 0; position < expected.length; position += 1) {
+    if (pairing[position] !== undefined) continue;
+    for (let at = 0; at < records.length; at += 1) {
+      if (taken.has(at) || !matchesExtractionRecord(expected[position]!, records[at]!, optional, context)) continue;
+      pairing[position] = at;
+      taken.add(at);
+      break;
+    }
+  }
+  return pairing;
 }
 
 /**
@@ -193,8 +245,8 @@ export function assertExtraction(expected: readonly ExpectedExtraction[] | undef
  * `truncated`. Empty for an entry stating neither, which is every entry the
  * pinned three-argument callers can judge in full today.
  */
-function unjudgeableFields(entry: ExpectedExtraction, observed: ObservedExtraction): string[] {
-  const fields: string[] = [];
+function unjudgeableFields(entry: ExpectedExtraction, observed: ObservedExtraction): ExtractionUnjudgedMember[] {
+  const fields: ExtractionUnjudgedMember[] = [];
   if (entry.pages !== undefined && observed.pagesRead === undefined) fields.push("pages");
   if (entry.truncated !== undefined && observed.truncated === undefined) fields.push("truncated");
   return fields;
@@ -223,14 +275,16 @@ function carriesField(actual: ExtractionRecord, key: string, expected: string | 
 }
 
 /**
- * One record against one expectation. Every expected field must be present
+ * One record against one expectation. Exported because the mismatch detail
+ * must decide "differs" by the same rule the verdict does (`mismatches.ts`).
+ * Every expected field must be present
  * with an equal value, and every observed field must be one the expectation
  * holds, unless `optionalFields` names it: a field may then be absent from
  * either side. With no optional field this is equality of both the key set
  * and every value, where equal is `extractedValueMatches`: exact, except that
  * a same-origin absolute URL equals a root-relative expected one.
  */
-function matchesRecord(expected: ExtractionRecord, actual: ExtractionRecord, optional: ReadonlySet<string>, context: ExtractedValueContext | undefined): boolean {
+export function matchesExtractionRecord(expected: ExtractionRecord, actual: ExtractionRecord, optional: ReadonlySet<string>, context: ExtractedValueContext | undefined): boolean {
   for (const key of Object.keys(expected)) {
     if (!Object.hasOwn(actual, key)) { if (!optional.has(key)) return false; continue; }
     if (!extractedValueMatches(expected[key] as string | null, actual[key] as string | null, context)) return false;
