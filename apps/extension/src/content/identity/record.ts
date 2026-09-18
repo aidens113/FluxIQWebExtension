@@ -163,11 +163,23 @@ export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, e
   return recordText(record) === recorded.text;
 }
 
+/**
+ * Whether the element is one instance of a repeated thing by the rule above:
+ * record-shaped markup or ARIA, or a per-instance identifier attribute.
+ *
+ * Exported for the snapshot's ranking (`../repeat-exemplars.ts`), which asks
+ * the same question for a different reason -- which controls are one per row --
+ * and must not answer it by a second rule.
+ */
+export function isRecordElement(element: Element): boolean {
+  return matchesSelector(element, RECORD_SELECTOR) || recordKey(element) !== undefined;
+}
+
 /** The nearest record at or above the element. The element itself counts: a recorded click on a row *is* the row. */
 function enclosingRecord(element: Element): Element | undefined {
   let current: Element | null = element;
   for (let depth = 0; current && depth < MAX_RECORD_DEPTH; depth += 1) {
-    if (matchesSelector(current, RECORD_SELECTOR) || recordKey(current)) return current;
+    if (isRecordElement(current)) return current;
     current = current.parentElement;
   }
   return undefined;

@@ -15,7 +15,7 @@ import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached } from "./budg
 import { liveLlmBuildUsage } from "./build-usage.js";
 import type { LiveLlmExecutionGrant } from "./execution-grant.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
-import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
+import { planLiveLlmExecution, type LiveLlmPlan, type LiveLlmPurpose } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 
@@ -171,6 +171,32 @@ export class LiveLlmRun {
   }
 
   /**
+   * The grant that lets a finished run's result be judged, and nothing else.
+   *
+   * A created Flow is played back deterministically on purpose: a Flow that
+   * needs the model to succeed has not been built well. But a run carrying no
+   * grant makes no provider call at all, so Core's result verification has
+   * nobody to ask, records that the result was never judged, and leaves the
+   * run reporting the `succeeded` its steps earned. Measured live on
+   * 2026-09-18, that is how a created Flow returned ten rows of which not one
+   * matched and the Lab still read `passed`.
+   *
+   * `verify_result` authorizes exactly the one `loop_verification` call and
+   * nothing a recovery could spend a grant on: Core turns `invokeLlm` off for
+   * the run itself, so the playback stays as deterministic as it was.
+   *
+   * It is taken out immediately before the run, like the Flow lane's own,
+   * because Core binds a grant to the Flow's saved settings and expires it
+   * within the minute.
+   */
+  verificationAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
+    return async (flowId: string) => {
+      const authorization = await this.authorize(control, core, flowId, { purpose: "verify_result", maxCalls: 1 });
+      return { grantId: authorization.grant.grantId, purpose: "verify_result" };
+    };
+  }
+
+  /**
    * Reads what the run spent, publishes it, and holds it to its caps.
    *
    * The accounting is written before either check, so a run that overspent or
@@ -200,7 +226,12 @@ export class LiveLlmRun {
     }
   }
 
-  private async authorize(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials, flowId: string): Promise<LiveLlmAuthorization> {
+  private async authorize(
+    control: LiveLlmAuthorizationControl,
+    core: LiveLlmRunCredentials,
+    flowId: string,
+    grantOverride?: { purpose: LiveLlmPurpose; maxCalls: number }
+  ): Promise<LiveLlmAuthorization> {
     if (!core.projectId) throw new RunnerFailure("environment.missing", "A live LLM run needs the project its Core created, and this topology published none");
     if (!core.authorizationPassword) throw new RunnerFailure("environment.missing", "A live LLM run needs the account password its Core was bootstrapped with, and this topology published none");
     const authorization = await authorizeFlowLiveLlmExecution(control, {
@@ -210,8 +241,12 @@ export class LiveLlmRun {
       credentialValue: this.credential.value,
       authorizationPassword: core.authorizationPassword,
       ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}),
+      ...(grantOverride ? { grantOverride } : {}),
     });
-    this.grant = authorization.grant;
+    // The run's own grant is what the snapshot reports and what an unfinished
+    // settlement looks for, so a second grant taken out for a different purpose
+    // does not replace it.
+    if (!grantOverride) this.grant = authorization.grant;
     return authorization;
   }
 

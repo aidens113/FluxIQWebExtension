@@ -25,6 +25,11 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     flowShape: evidence.shape,
     runtimeRunId: evidence.run.runId,
     status: evidence.run.status,
+    // Core's own word for whether the result was judged, and how it came out.
+    // Without it a bundle records a `succeeded` run and nothing that says
+    // whether anyone checked what it produced.
+    resultVerification: evidence.run.resultVerification,
+    reportedVerdict: evidence.observation.reportedVerdict,
     harnessActivations: evidence.run.harnessActivations,
     failure: evidence.run.failure,
     stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,

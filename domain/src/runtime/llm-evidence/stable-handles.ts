@@ -107,16 +107,31 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
 
 /**
  * Each described element's address on its page: the frame and selector that
- * name it, and which occurrence it is where a page gave one selector to several
- * elements. A shared selector is refused at resolution
+ * name it, the record it sits in, and which occurrence it is where a page gave
+ * one selector to several elements. A shared selector is refused at resolution
  * (`plan-resolution/target-packets.ts`), so the occurrence exists to keep two
  * such elements from claiming one number, not to make either resolvable.
+ *
+ * The record is there because a row control's selector is positional. On the
+ * social scheduler the first row's checkbox is
+ * `[data-testid="queue-rows"] > tr:nth-of-type(1) > td:nth-of-type(1) > input`
+ * whichever post is in row one, and filtering the queue changes which post
+ * that is. Keyed by the selector alone, the checkbox the model was shown for
+ * "Mon 21 Sep 2026, 09:00" kept its number after a filter and named
+ * "Mon 21 Sep 2026, 06:00" instead -- a handle meaning two controls in two
+ * captures, which this module exists to prevent. It mattered more once the
+ * snapshot began showing one row per repeated control
+ * (`apps/extension/src/content/repeat-exemplars.ts`), because that row is the
+ * first one, whose post is the one a filter replaces. With the record beside
+ * the selector, another post in the same row is another address, so it gets a
+ * number of its own and the old number is left to resolve to nothing.
  */
 function addressesOf(binding: WebLlmSnapshotBinding): string[] {
   const seen = new Map<string, number>();
   return binding.evidence.elements.map((element) => {
     const selector = binding.selectors.get(element.target) ?? "";
-    const base = `${element.frameId ?? 0}\0${selector}`;
+    const record = binding.records.get(element.target) ?? "";
+    const base = `${element.frameId ?? 0}\0${selector}\0${record}`;
     const occurrence = seen.get(base) ?? 0;
     seen.set(base, occurrence + 1);
     return `${base}\0${occurrence}`;
@@ -140,15 +155,18 @@ function nextNumber(spent: ReadonlySet<number>, takenHere: ReadonlySet<number>):
  */
 function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): WebLlmSnapshotBinding {
   const selectors = new Map<string, string>();
+  const records = new Map<string, string>();
   const renamed = new Map<string, string>();
   const elements = binding.evidence.elements.map((element, index) => {
     const target = assigned[index] ?? element.target;
     renamed.set(element.target, target);
     const selector = binding.selectors.get(element.target);
     if (selector !== undefined) selectors.set(target, selector);
+    const record = binding.records.get(element.target);
+    if (record !== undefined) records.set(target, record);
     return { ...element, target };
   });
   const evidence: WebLlmPageEvidence = { ...binding.evidence, elements };
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;
-  return { evidence, selectors };
+  return { evidence, selectors, records };
 }

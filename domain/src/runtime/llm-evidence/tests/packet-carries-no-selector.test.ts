@@ -34,7 +34,17 @@ const SELECTORS = [
   "#spinner",
   "#cart",
   "//button[@id='legacy']",
+  "#lines > tr:nth-of-type(1) > td:nth-of-type(4) > button",
+  "#notes > li:nth-of-type(1) > button",
 ];
+
+/**
+ * The records two row controls sit in, as the page identified them: a key and
+ * the attribute it came from, and a row's own words. They are half of each
+ * element's address, kept in the binding beside the selector, and none of them
+ * may reach the packet either.
+ */
+const ROW_RECORD = ["data-line-id", "line_7d3c9d", "Gift wrap requested for the second parcel"];
 
 /**
  * Every key a packet element may carry, written out rather than derived, so
@@ -44,6 +54,10 @@ const ALLOWED_ELEMENT_KEYS = new Set([
   "target", "tag", "frameId", "role", "name", "text", "inputType", "controlType",
   "hasValue", "selectedValue", "href", "options", "revealKind", "expanded",
   "focused", "recent", "changed", "form", "landmark", "heading", "item", "cell",
+  // How many rows a repeated control's example stands for: a count the page
+  // took, never a way to reach one of them. The record behind the row stays in
+  // the binding (`ROW_RECORD` above).
+  "repeats",
 ]);
 
 /** Every key the whole packet may carry, at any depth. */
@@ -78,6 +92,15 @@ function realisticSnapshot(): Record<string, unknown> {
       { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3" } },
       { tagName: "a", selector: "//button[@id='legacy']", visibleText: "Legacy checkout", href: "/legacy" },
       { tagName: "input", selector: "#card-number", name: "Card number", inputType: "text", attributes: { autocomplete: "billing cc-number" } },
+      // One example of a control every order line repeats, and the row it is in.
+      {
+        tagName: "button", selector: "#lines > tr:nth-of-type(1) > td:nth-of-type(4) > button", accessibleName: "Line actions", repeatCount: 12,
+        context: { tablePosition: { row: 2, column: 4, columnHeader: "Actions" }, record: { keyAttribute: "data-line-id", key: "line_7d3c9d" } },
+      },
+      {
+        tagName: "button", selector: "#notes > li:nth-of-type(1) > button", accessibleName: "Dismiss note", repeatCount: 3,
+        context: { listPosition: { index: 1, total: 3 }, record: { text: "Gift wrap requested for the second parcel" } },
+      },
     ],
     // The page items sit under `evidence`, in the producer's own shape: that is
     // where `apps/extension/src/content/evidence/` writes them.
@@ -121,6 +144,10 @@ test("no selector from a realistic page survives into the packet", () => {
   }
   // And no key by any of the names a locator has ever travelled under.
   assert.doesNotMatch(serialized, /"(?:selector|selectors|xpath|queryPath|css|locator|cssSelector|path)"/u);
+  // The row controls arrived, counted, and the rows they sit in did not.
+  assert.deepEqual(evidence.elements.filter((element) => element.repeats !== undefined).map((element) => [element.name, element.repeats]), [["Line actions", 12], ["Dismiss note", 3]]);
+  for (const part of ROW_RECORD) assert.equal(serialized.includes(part), false, part);
+  assert.doesNotMatch(serialized, /"(?:record|records|key|keyAttribute)"/u);
 
   // The guarantee that outlives this file: every key the packet carries,
   // anywhere in it, is one somebody wrote down here. A field added later --
@@ -178,4 +205,13 @@ test("every element is named by an opaque handle, and by nothing else that could
   assert.equal(evidence.elements.some((element) => element.frameId === 3), true);
   // The sensitive control is not in either half.
   assert.equal([...selectors.values()].includes("#card-number"), false);
+});
+
+test("the rows two repeated controls sit in are kept on the domain's side, beside their selectors", () => {
+  const { evidence, records } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot(), { maxEvidenceBytes: 12_000 });
+  const handleOf = (name: string): string => evidence.elements.find((element) => element.name === name)?.target ?? "";
+  // Only the two controls that sit in a row have a record, and each keeps its own.
+  assert.deepEqual([...records.keys()], [handleOf("Line actions"), handleOf("Dismiss note")]);
+  assert.ok(records.get(handleOf("Line actions"))?.includes("line_7d3c9d"));
+  assert.ok(records.get(handleOf("Dismiss note"))?.includes("Gift wrap requested for the second parcel"));
 });

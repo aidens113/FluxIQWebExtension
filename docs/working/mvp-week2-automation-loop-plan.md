@@ -22,18 +22,14 @@ and 2.5-2.9 with file:line evidence. Path prefix: `AS/` is Core's
 `packages/fluxiq/src/programs/automation-studio/`.
 
 **Standing direction on what the model must emit (user, 2026-09-17):** make it
-as easy as possible to produce. Required fields carry intent; Core derives
-versions, keys, linear edges, ids and defaults. A reply is normalized before
-validation, which then stays strict and fail-closed. His words: the model
-"shouldnt have to output perfect json with a million different perfectly
-formatted attributes". Built as `w2-easy-model-output`.
+as easy as possible to produce — required fields carry intent, Core derives
+versions, keys, edges, ids and defaults, and a reply is normalized before a
+strict, fail-closed validation. Built as `w2-easy-model-output`.
 
 **Give a worker its own worktree, not the shared tree.** `pnpm task start <slug>
---worktree --core` provisions an isolated pair in ~50s. A shared run reports
-other workers' state: on 2026-09-17 that produced three different whole-suite
-results in a row, none of them real. Run Core tests from inside
-`packages/fluxiq`, never the repository root, or they take vitest's 5,000 ms
-default instead of the configured 15,000 ms.
+--worktree --core` provisions an isolated pair in ~50s; a shared run reports
+other workers' state. Run Core tests from inside `packages/fluxiq`, never the
+repository root, or they take vitest's 5,000 ms default, not 15,000 ms.
 
 **Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, supervisor-verified and
 pushed in both repositories.** What each established is archived in
@@ -61,60 +57,57 @@ returned the whole table while reporting success. Repair works end to end:
 explores, proposes, passes. Only those three creation tasks have been re-run
 since the fixes; the rest of the realistic corpus has not.
 
-**Why creation could not act, which the first diagnosis got wrong.** Core
-accepted `click`/`select`/`type` all along. Four prompt texts told the model it
-may not act; the element ranker's "primary control" named no form control, so on
-a 280-row page the packet held 18 post links and no selects; the 8,000-byte
-evidence window evicted the page on the decision that writes the Flow; and the
-node catalog offered nothing that could act. Positional `target.N` handles also
-renumbered between captures. All fixed (`reports/w2-authoring-contract.md`,
-`reports/w2-narrowing.md`).
+**Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
+deterministic-path patch gated by a compile-checked record
+(`runtime/service/adaptations/gates.ts`); exploration reduction on a per-step
+state digest (t005); 2.6 replay recorder (t007); a run that refuses to continue
+on `resumable: false` and resumes from the failed node (t006); fail-closed
+result verification on `loop_verification`. Token limits derive from one
+constant sized to the model's 64k context, in all ten places that held a copy.
 
-**Built and landed:** 2.4 resume point with two live fail-opens closed; 2.5
-deterministic-path patch, gated by a compile-checked record
-(`runtime/service/adaptations/gates.ts`); exploration reduction wired to a
-per-step state digest (t005); 2.6 replay recorder (t007); a run that refuses to
-continue on `resumable: false` and resumes from the failed node (t006); result
-verification on `loop_verification`, fail-closed. Token limits sit at the
-model's 64k context and are derived from one constant in every place that held a
-copy — ten of them — and the confirmation threshold is ten calls, derived.
-
-**Open, known:** the replay recorder has no production caller, so `established`
-is unreachable live; the element packet now floods with row checkboxes, so a job
-needing a page BUTTON (retry failed posts) still cannot see one — one example per
-repeating control is the fix; `security.redaction` caps verdicts on runs whose
-workspace holds `.fluxiq/global.sqlite` as an `unscanned-store`, a false failure
-on 16 runs; per-row enrichment cannot be judged, because the judge compares only
-a run's first dataset. **Not started:** 2.9, X6 (an `extractList`
+**Open, known — from the first full live corpus, 2026-09-18.** 4 of 36 creation
+tasks passed across the six realistic fixtures (`reports/w2-corpus-{a,b,c,d}.md`,
+~$0.78 of real calls). Narrowing now works where the controls are selects: Kelford
+collects the right 57 homes over 6 pages, scheduler 14 of 14, SLA reads 12 of 12.
+What blocks the rest, each in flight in its own worktree:
+- **Exploration may not press a plain button or tick a checkbox** — reveal only
+  presses disclosures, tabs and menu items, and `safety.ts` matches "order" against
+  selectors. No state-changing job changed a page, on any fixture (t011).
+- **Script-handled links are judged as failed clicks**: a link with an `href`
+  whose navigation the page cancels, loading rows in place, fails
+  `output_not_observed` — 4 of 4 company-directory Flows (t010).
+- **Repeated row controls flood the element packet**, pushing out page buttons
+  (t009).
+- **7 false successes** — records with empty required fields, or wrong rows —
+  because result verification returns `performed: false` when playback has no
+  provider, and a created Flow's playback has none (t012).
+- A dialog opened during build-time exploration stayed open into playback, twice.
+- Also seen, unowned: `home-facts` generation HTTP 400 (2 of 2); a 64 KB
+  bootstrap evidence ceiling spent by seven navigations; `evidence_tool_failed`
+  bundles do not record which tool failed; the replay recorder has no production
+  caller; `unscanned-store` false redaction failures persist.
+**Not started:** 2.9, X6 (an `extractList`
 parameter-override path, not a target-map entry).
 
 **The fixed call limit was the defect, not a constraint to design around (user
 decision, 2026-09-16).** An adaptation iterates while it is making progress and
 stops on a guard that means something: the per-run cost ceiling, the token
-budget, the recovery deadline, or a no-progress guard for a loop repeating
-itself or returning no new evidence. A call ceiling survives only as a
-far-away, configurable backstop, never as a per-mode constant; starving the loop
-of calls is not how cost is controlled. The generalizable lesson, missed for
-most of a day: when a designed-in limit keeps generating blockers, the limit is
-the defect. Report it as such instead of engineering workarounds inside it.
+budget, the recovery deadline, or a no-progress guard. A call ceiling survives
+only as a far-away, configurable backstop, never a per-mode constant; starving
+the loop of calls is not how cost is controlled. The generalizable lesson: when
+a designed-in limit keeps generating blockers, the limit is the defect — report
+it as such instead of engineering workarounds inside it.
 
 **The exploration runs in production, as of 2026-09-16**, wired through
 `AS/runtime/recovery/annotation/` with four negative probes proving it is
 load-bearing (`reports/w2-3-bounded-exploration.md`).
 
-**Two silent-no-protection defects were closed, and one of them was live.**
-`deniedEvidenceKeys` is required and fail-closed, which exposed that Flow
-Bootstrap never forwarded the bound domain's declared keys at all; it is
-forwarded now and never defaulted, because a `?? []` there restores the hole.
-The structured diagnosis reads `response.diagnosis` and refuses a
-diagnosis-shaped key in `response.metadata`, by field name and never by value.
-
-**The `llm` / `recovery` module cycle is now a build failure, not a comment.**
-`runtime/llm` may not import a value out of `runtime/recovery`; type-only
-imports stay legal because they are erased and cannot cause the fault. Verified
-by the supervisor reintroducing the exact cycle, observing the audit fail with
-a message naming the three ways out, and reverting. The shared values live in
-the new `runtime/loop-limits/`, which neither directory owns.
+**Two silent-no-protection defects are closed:** `deniedEvidenceKeys` is
+required and fail-closed, which exposed that Flow Bootstrap never forwarded the
+bound domain's keys at all (a `?? []` there restores the hole); the structured
+diagnosis refuses a diagnosis-shaped key in `response.metadata`, by field name.
+**The `llm` / `recovery` value cycle is a build failure**, verified by
+reintroducing it; the shared values live in `runtime/loop-limits/`.
 
 **Concurrency is five workers, not nine.** Nine heavy workers crashed this
 machine twice; the memory fault makes that a real limit, not caution.
@@ -123,31 +116,39 @@ machine twice; the memory fault makes that a real limit, not caution.
 we have at least basic automation able to be created & repaired by simply
 pointing the instructions at a demo, and having it explore and auto-create
 flows", across "lots of different demos". **Runs serving that goal need no
-per-run approval**, reinforced 2026-09-17. The last full campaign finished 15 of
-50 — forms 6/6, extraction 4/14, navigate-and-extract 1/16, repair 4/14 — and
-its run id and three scraping failure modes are in that day's ledger entry.
-Later campaigns run from the isolated pair (`pnpm lab:pair`).
+per-run approval**, reinforced 2026-09-17. The 2026-09-17 push hold is
+discharged; its policy is `agent-git-workflow-plan.md`, built and pushed.
 
-**The 2026-09-17 hold is discharged.** It asked that nothing be pushed until
-the user reviewed the version-control policy; that policy is
-`agent-git-workflow-plan.md`, now built, driven end to end and pushed, so the
-hold no longer applies. The next measurement is a full campaign from the
-isolated pair (`pnpm lab:pair --ext <rev> --core <rev>`, then the printed
-environment plus `DEEPSEEK_API_KEY` from the main checkout's `.env.local`), with
-repair tasks on `--llm-task repair` (`reports/w2-l2-repair-lane.md`). The last
-full campaign was 15 of 50 and predates every fix since.
+**Live first, one problem at a time (user, 2026-09-18).** "LIVE TESTING FIRST,
+unit tests absolute last after you think everything is working properly", and
+fix one problem at a time rather than "running the entire suite every single
+time you make a change". A brief therefore orders the work: reproduce with one
+live task, change the code, re-run that same task live until it is right, then
+run unit tests, `pnpm check` and the suites as a regression net. The corpus
+measures where the product stands when a fix is believed finished; it is never
+the development loop.
 
-**Next steps, in order:**
-1. Re-run the whole realistic corpus live (social, property, directory, support
-   desk, order operations) now that creation acts and narrows; the three proven
-   tasks are the only evidence so far.
-2. Show one example per repeating control in the element packet, so buttons
-   survive a page of row checkboxes.
-3. Give the replay recorder a production caller; decide whether a recorded
-   replay moves an adaptation out of `testing`.
-4. Fix the `unscanned-store` false failure; make the judge compare a named
-   dataset so per-row enrichment is measurable.
-5. 2.9 measurement lane, then X6.
+**Worktree Lab runs failed all week for two boring reasons, both now fixed
+(supervisor, 2026-09-18).** `F:xwork\!FluxIQ` is one shared Core that every
+sibling task worktree builds against, and it sat detached 11 commits behind Core
+`dev`, so the domain asked a Core predating the fixes for what it did not have —
+surfacing as `environment.missing`, Core exiting 1, and a week of "undiagnosed
+worktree fault". Moving it to Core `dev` and rebuilding cleared it; t013 makes
+that correct by construction. The second cause was the briefs': they ran
+`pnpm lab:campaign` without the `FLUXIQ_TEST_ENV_FILES=none
+FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` prefix, giving
+`FLUXIQ_TEST_PROJECT_ID is required`, and gave a fresh instance `--no-build`
+when it had nothing built to skip to.
+
+**A crash ended the 2026-09-18 session mid-flight; nothing was lost.** t009 is
+merged (`76903aa`), the evidence-ceiling fix landed (`0f156db`), both main trees
+are clean. The four unfinished fixes survive as uncommitted work in their
+worktrees and are resumed, not restarted: t010 committed and unit-proven, t011
+part-written, t012 substantial Core work, t013 substantial script work, t014
+not started.
+
+**Next steps, in order:** land t010 to t014 once each proves itself live; re-run
+the corpus; then the unowned items above; then 2.9 and X6.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -271,6 +272,95 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-18 — The instruments were lying: clicks, the security check, and success itself
+- Agents: supervisor, plus `t010` click-landing-in-place, `t014` unscanned-store,
+  `t012` result-required-fields, with `t011`, `t013`, `t015`, `t016`, `t017` in
+  flight at the time of writing.
+- Why: the first full live corpus scored 4 of 36, and the reports behind it were
+  full of findings marked "inferred, not observed". Several of the day's
+  blockers turned out to be FluxIQ's own instruments reporting something untrue,
+  not the product failing.
+- **A link click is judged by what the page did (t010, merged `d697f3f`).** The
+  company-directory sector links carry an `href` whose navigation the page
+  cancels, loading rows in place as most modern sites do, and every one of the
+  four built Flows was failed at its first click with `output_not_observed`. A
+  click now passes on a navigation, a history-API address change, or content
+  changing in the way the click implies, and a click that changed nothing still
+  fails. Validation: live, real DeepSeek, `company-directory-no-companies`
+  **passed** and `logistics-sector` narrowed 320 rows to exactly 40; then
+  extension 686/686, content harness 303/303, `pnpm check` exit 0.
+- **The security check was refusing the run's own store (t014, merged
+  `ab98466`).** `.fluxiq/global.sqlite` is 10.02 MiB against an 8 MiB per-file
+  text budget, so it was never read and was reported as `unscanned-store`. There
+  was no leak: the declared literal is the real provider key and it is absent
+  from the store by a raw byte search in three encodings and a cell-by-cell read.
+  The check failed loudest exactly where the product worked, because only runs
+  that built a Flow and extracted records crossed 8 MiB. A store now has its own
+  ceiling, still fails closed past it, and a planted secret in an uncheckpointed
+  write-ahead log is still found. Validation: live before `failed
+  security.redaction`, after **passed, 0 findings**, 19 files / 13,297,679 B,
+  extraction 14/14 records and 56/56 fields; test-runner 1143/1143; `pnpm check`
+  exit 0. The blanket "ignore binary stores" non-fix was applied as a mutation
+  and four tests failed.
+- **Success is no longer reported over wrong results (t012).** Result
+  verification returned `performed: false` whenever playback had no provider,
+  and a created Flow's playback has none, so the check built for this never ran.
+  A created Flow's run now obtains a verdict, and a run nobody judged reports
+  `unverified` — in the denominator, a hit in neither column, so it cannot
+  become a false success. Validation: live, baseline `run-mu7c7df9` reported
+  `passed` against an oracle `failed`; after, two runs report `failed` with
+  `resultVerification: "refuted"` on identical output (10 records, 0 matched).
+  Core result-verification 48/48, llm 347/347, `tsc --noEmit` exit 0.
+- **The brief's premise was wrong and the worker checked it.** These runs were
+  described as returning rows with required fields empty. They were not:
+  `invalidRows: 0`, `totalRowsMissingRequired: 0`. The rows were the right
+  count and shape with wrong values. The deterministic required-field check is a
+  fail-closed backstop that caught nothing today.
+- **Open, found by that work:** the model writes the Flow and the Flow declares
+  which fields are required (`domain/src/output-nodes/extract-list/record-output.ts:73`,
+  `required: spec?.required !== false`), so a model that marks every field
+  optional disarms Core's free check. Core may only hold a Flow to what it
+  declares, so the weakness is in the extraction authoring contract here.
+- **Environment, three causes of a week of misattributed failures.** The shared
+  Core at `F:xwork\!FluxIQ` sat eleven commits behind Core `dev` and had only
+  its library built, not the web panel, so sibling worktrees raced to build it.
+  And Windows MAX_PATH breaks Core's web-panel build when run artifacts sit
+  inside a worktree: the slug `t015-extraction-mismatch-detail` is three
+  characters longer than `t010-click-landing-in-place`, which was itself within
+  three characters of the limit. All of it surfaced as "Core web panel
+  production build did not succeed". Workaround in use:
+  `FLUXIQ_TEST_RUNS_DIR='F:
+15'`. Owned by t013.
+- Validation: `pnpm lab:campaign company-directory-logistics-sector company-directory-no-companies`
+  (live, isolated) -> `no-companies` **passed**, `logistics-sector` 40 of 40
+  observed and 35 matched; `pnpm --filter @fluxiq-web-extension/extension test`
+  -> 686/686; `test:content` -> 303 passed; `pnpm task finish t010` and
+  `pnpm task finish t014` each ran `pnpm check` -> passed. `pnpm --filter
+  @fluxiq-web-extension/test-runner test` -> 1143/1143. `pnpm lab:campaign
+  social-scheduler-week-ahead` before -> `failed security.redaction`, after ->
+  **passed, 0 findings**. `pnpm lab:campaign property-listings-newest-homes`
+  before -> reported `passed` / oracle `failed`, after -> reported `failed`
+  twice. `pnpm check` in `F:xwork	012\!FluxIQWebExtension` -> exit 0.
+  `npx vitest run .../modes.test.ts .../scale-pages.test.ts` alone -> 7/7 in 43 s.
+- **Not the RAM fault:** Core's `service-flows/tests/scale-pages.test.ts` takes
+  14,515 ms against the configured 15,000 ms timeout, a 485 ms margin, so it
+  fails under any concurrent load. It and `service-adaptation/tests/modes.test.ts`
+  pass alone, 7/7 in 43 s.
+
+### 2026-09-18 — First full live corpus run on the realistic fixtures
+- Agent: supervisor, four live campaign workers
+- Changed: reports only (`reports/w2-corpus-a.md` to `-d.md`)
+- Why: the three tasks proven after creation learned to act were the only
+  evidence; this measured the other thirty-six.
+- Validation: real DeepSeek, isolated target, each slice probed first. A 1/9,
+  B 0/9, C 1/8, D 2/10. Reported and oracle verdicts agreed on every directory
+  run and disagreed on seven runs elsewhere, all reporting `passed`. No
+  `ENOENT` races once Core was rebuilt; `--no-build` fails on a fresh Lab
+  instance, and a stale Core build stopped the first dispatch through the guard
+  built for it.
+- Outcome: Accepted as measurement
+- Follow-up: t009 to t012, and the unowned items in Current State.
 
 ### 2026-09-17 — Phase 2.4 built, two live fail-opens closed, 2.5 built unwired
 - Agent: supervisor, tasks t003 and t004, five workers
@@ -458,291 +548,9 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   machine supplied it; the card-secret refusal task needs reshaping into a
   Flow that builds and whose run is refused.
 
-### 2026-09-16 — A created scraper reads every field
-- Agent: `w2-created-scrape-fields` (`d9d23e3`), verified by the supervisor.
-- Cause: the resolver accepted only a bare extraction handle (7 columns
-  under the page's names, plus pagination), and the node text showed only
-  literal CSS, so the model guessed selectors that matched every card and no
-  field. The handle now takes a column map, a page switch and a location;
-  literal extraction after a detection is refused; handle refusals name the
-  accepted slot and the position. `reveal_safe` refuses feed scrolling by
-  design (`reveal.ts:17-27`); detection carries scroll pagination.
-- Live: `run-mu4yk4u1-60a1c3a4` extracted 8/8 records and 32/32 fields
-  (before: no fields), but matched 0 records, most likely an absolute `url`
-  against a root-relative fixture. Supervisor decision: the Lab judge
-  resolves a root-relative expected URL against the scenario origin
-  (`w2-judge-same-origin-urls`). Core wording diffs went to
-  `w2-creation-loop-keeps-going` (also: a record output that passes plan
-  validation failed at run time as `record_output.invalid`); the detection
-  tool's description line went to W-3a.
-- Validation: verified alone in `F:/fxlab/verify-ext` (a worktree at
-  `5d96ba2` plus only this worker's files; `node_modules` and
-  `domain/node_modules` joined from the main checkout, so Core is its built
-  `dist`): `pnpm --filter @fluxiq-web-extension/domain check` -> exit 0;
-  `... domain test` -> "# tests 624", "# pass 624", "# fail 0". The 44
-  `domain/.test-build` bundles committed are that worktree's output, not the
-  main checkout's, which other workers' runs had rewritten.
-
-### 2026-09-16 — First full live campaign: forms pass, scraping and refusals do not
-- Agent: supervisor; `pnpm lab:campaign --all --max-attempts 4` from this
-  checkout against Core `8409ca2` (`F:/fxlab/lab-core`), DeepSeek.
-- Validation: supervisor-read
-  `test-runs/campaigns/2026-09-17T02-23-20-255Z/summary.json`: totals
-  `{"tasks":50,"passed":18,"succeeded":15,"failed":28,"noResult":4,
-  "providerCalls":123,"reportedTokens":638885,"reportedCostUsd":0.3071662}`;
-  by kind form 6/6, extract 4/14, navigate-and-extract 1/16, repair 4/14.
-  Failure codes: `web.validation.output_not_observed` 9,
-  `evidence_unusable_decision` 7, `evidence_duplicate_tool_request` 7,
-  `evidence_duplicate_call` 1, `environment.missing` 5,
-  `web.target.not_found` 3, `web.navigation.unexpected` 2,
-  `web.target.ambiguous` 1.
-- Repair: the renamed-Save repair and three refusals (locked record,
-  blocking offer, blocked popup) succeeded. Six refusal tasks produced a
-  target-override proposal instead of refusing (not executed): the loop
-  guesses a substitute control. Four tasks never started
-  (`environment.missing`, reason lost by the runner); one failed before the
-  model was consulted. The supervisor's mid-run report that the
-  save-and-exit refusal passed was wrong: its run verdict passed and its
-  judgement failed.
-- Dispatched: `w2-repair-refuses`, `w2-w3a-recovery-detection` (W-3 split:
-  detection in recovery and retained selector hints now; extraction-repair
-  resolution after `w2-created-scrape-fields`), `w2-campaign-tasks-start`.
-  Held for a slot: L-2, the `xpathFor` fix. Next campaign runs from the pair.
-
-### 2026-09-16 — Trial and judge, exploration reaches repair, campaign pair
-- Agents: C-6 (`w2-c6-trial.md`, Core `8329477`), C-7
-  (`w2-c7-exploration-handoff.md`, Core `a8ce814`), `w2-lab-pair`
-  (`scripts/lab/pair.mjs`, `F:/fxlab/lab-ext` + `F:/fxlab/!FluxIQ`).
-- C-6: a change is trialled against the failed attempt and judged per node
-  by the flow-change verdict, with the run's remaining steps rather than 50.
-  The trial rerun and the file-based applier now use the shared
-  `actionTargetParameterValues`, so every path repairs a recorded step.
-  Open: the executor must expose remaining steps (C-9 passes them);
-  `verifiesState` is not wired yet; `live-patch.ts` is 744/800, so C-11
-  splits it into `runtime/live-patch/` first.
-- C-7: the patch request carries the explored packets and the target check
-  accepts their handles, written `explored.N:<handle>` because the domain
-  numbers handles per packet (accepted by the supervisor). Found: the
-  provider's pre-send check skips the explored slot, and exploration's own
-  requests do not apply the domain's denied keys (older); both dispatched as
-  C-7b. The domain's recovery options never `retain` selectors, so explored
-  repairs resolve by fingerprint only (added to W-3).
-- Validation: each change was verified alone in a clean Core worktree
-  (`F:/fxlab/verify-core`, HEAD plus only that worker's files, the main
-  checkout's `node_modules` joined in). C-6: `npx tsc --noEmit -p
-  packages/fluxiq` -> exit 0; `vitest run` service-adaptation
-  `--no-file-parallelism` -> "12 passed"; flow-change, live-patch, store,
-  policy-action and recovery -> "27 passed", "435 passed". In parallel the
-  service tests timed out at 5 s under load, a different set each time. C-7:
-  tsc exit 0; recovery, llm and service-adaptation serially -> "52 passed",
-  "595 passed". Pair: `node --test "scripts/lab/pair/tests/*.test.mjs"` ->
-  "# pass 37"; `pnpm lab:test` -> "# pass 67"; non-live `basic-form` from the
-  pair passed (`run-mu4xja1g-acac85a7`, worker-reported).
-- Campaigns from the pair: export the four variables `pnpm lab:pair` prints
-  and `DEEPSEEK_API_KEY` from the main checkout's `.env.local` into the
-  process, never copying the file; summaries land under
-  `F:/fxlab/lab-ext/test-runs/instances/lab-pair/campaigns/`.
-- Found: a fresh Windows checkout of Core fails its own `working-docs` audit
-  rule (index stale), seen in `F:/fxlab/verify-core` and the pair. Fixed
-  (Core `6964d63`, here `7c763e5`, report `w2-audit-line-endings.md`): the
-  rule compared the CRLF checkout byte for byte with its LF index.
-  Validation: `node scripts/structure-audit.mjs` in `verify-core` with a CRLF
-  README -> "passed (153 warning(s), 355 baselined)"; `pnpm structure:test`
-  -> "# pass 166", "# fail 0" in both repositories; `cmp` of both files
-  identical across the three trees.
-
-### 2026-09-16 — An approved repair now changes what a recorded step clicks
-- Agent: `w2-typed-apply-gates`, integrated by the supervisor as Core
-  `c0b04be`.
-- A recorded step (`builtin.policy.action`) dispatches its recorded payload, so
-  a repair written beside it had no effect. The typed store now writes it into
-  `parameters.target`, rolls back exactly, and refuses every apply without the
-  promotion gates. The web domain already prefers `parameters.target` over the
-  recorded selector (`domain/src/output-nodes/targets/targets.ts`, supervisor
-  read). The same gap remains in the file-based applier
-  (`service/adaptations/patches.ts:57`) and in the trial rerun
-  (`live-patch.ts:~528`); C-6 now owns both, sharing one moved helper.
-- Validation: `npx tsc --noEmit -p packages/fluxiq` -> exit 0 (after the
-  supervisor added the gates argument at `service.ts:4798` and widened a
-  catalog test helper's literal type); `vitest run` on the store, the new
-  policy-action test and `catalog.test.ts` -> "3 passed", "42 passed";
-  `node scripts/structure-audit.mjs` -> "passed (152 warning(s), 320
-  baselined)".
-- Dispatched: C-7 (exploration packets reach the repair request and target
-  check), Core docs for today's changes, and `w2-created-scrape-fields` (the
-  campaign's first two scraping tasks built navigate -> `extract_list`, found
-  all 8 records and missed name, price, rating and url in some of them:
-  `run-mu4wwkbc-df6cfe60`, `run-mu4wyfaw-001d0bcc`; no recovery was attempted
-  because extraction repair is fail-closed until W-3). That worker edits
-  nothing here until the campaign's `finishedAt` is set. Later, from the
-  campaign's next eleven rows (1 of 11 scraping tasks passed):
-  `w2-creation-loop-keeps-going` (Core; `run-mu4xder7-e00d5bf0`,
-  `run-mu4xeh1g-de1433bb`, `run-mu4x6p3f-f7f8b450` ended on a repeated detect
-  request; `run-mu4xatjs-12a5a5c7`, `run-mu4x5m2p-a4a4a29d` on three unusable
-  plans: `record_output.*`, `web.handle.misplaced`/`malformed`), the handle
-  half added to `w2-created-scrape-fields`, and `w2-lab-pair`. Held until the
-  campaign ends, because each campaign run rebuilds this checkout: W-3, L-5,
-  L-2.
-- Also landed: the `swallowed-failure` audit rule (Core `42bd90a`, mirrored
-  here; report `w2-audit-swallowed-writes.md`), 61 and 94 existing instances
-  baselined. Validation: `pnpm structure:test` -> "# pass 162", "# fail 0" in
-  both repositories; the 12 mirrored files `cmp` identical; a supervisor probe
-  file with `await work().catch(() => undefined)` and `catch {}` failed the
-  Core audit ("2 failures are silently dropped, at lines 2, 3") and was
-  removed; this repository's audit -> "passed (60 warning(s), 122
-  baselined)" after the index was regenerated.
-- Core docs (`a32fdc9`, report `w2-core-docs-loop-changes.md`): grants,
-  guards, per-call records, plan handles, catalog reservation, refusal
-  reasons, gated typed applies, migration 0020. Validation: Core
-  `structure-audit.mjs --rule docs-links` -> "passed (0 warning(s), 0
-  baselined)"; supervisor checked the handle bounds against
-  `plan-node-handles.ts` (64, 16, `MAX_LOCATION_LENGTH = 2_048`) and the
-  review action's `classification: "authoring"` (`api/handlers/runs.ts:135`).
-  Recheck after C-6: the "at most 50 steps" lines and the typed-store-only
-  `parameters.target` wording. `evaluateBootstrapAdaptationApplyGates` is
-  still uncalled by design; C-12 wires it.
-- Not verified: recording-definition nodes drop an applied `parameters.target`
-  when materialized (`service/recordings/candidate-definitions.ts:86`);
-  recorded Flows use `builtin.policy.action` and are unaffected.
-
-### 2026-09-16 — A Flow built live from an instruction passes its goal
-- Agent: `w2-live-creation-debug` (live), verified by the supervisor; Core
-  `8409ca2`, this repository `269e351`.
-- Why the created plans failed: the page evidence names elements by `target`,
-  so the model wrote handles into each node's `target` parameter, and the web
-  domain accepted a handle only under `selector`; every created step kept a
-  guessed selector. Plan resolution now accepts a handle under `target`,
-  `element` or `selector` and replaces a guessed literal. Rename tasks built a
-  Flow that only cleared the field because "rename" and "save" ranked no node;
-  they now prefer typing and clicking. A refused build lists each decision
-  with its refusing code.
-- Validation: supervisor-read `test-runs/run-mu4vs7j1-aca950d7`
-  (`evaluation.json`, `snapshots/live-llm.json`, `snapshots/flow-lane.json`):
-  verdict `passed`, oracle `passed`, executed start -> `web.dom.type` ->
-  `web.dom.select` -> `web.dom.click` -> end, build `proposed`, 4,659 tokens,
-  $0.0024926, redaction `passed`. First campaign
-  (`test-runs/campaigns/2026-09-17T02-00-12-342Z/summary.md`): 2 of 6 form
-  tasks passed, 9 calls, 42,191 tokens, $0.021; the 4 rename failures each
-  built only `web.dom.clear`, fixed after, and each passed when rerun alone
-  (worker report). Core flow-bootstrap 118/118; this repository domain 614/614,
-  test-runner 1097/1097.
-- Also landed today (Core): `cb9c54b` and `fce62f9` (silent reads propagate; a
-  run that fails to start ends failed, releases its grant, and no longer
-  blocks the next run; promotion reads the tier), `2a01e81` (migration 0020,
-  node stamps), `79f0ceb` (promotion by trials and replays), `1d208ed` and
-  this repository `d4e3cc6` (`failure-as-empty` audit rule, 132 and 77
-  instances baselined).
-- Not verified: the full campaign (running now, all 36 creation and 14 repair
-  tasks); scraping created live.
-
-### 2026-09-16 — Created Flow runs every step; plans then refused under iteration
-- Agent: supervisor, live, against a clean Core worktree; repair, catalog,
-  identity and back-half workers integrated (Core `f09d18a`, `aab40c1`,
-  `a719531`, `b90dd43`, `2ae5894`; this repository `ec19ed0`, `6f006e5`,
-  `06ead88`, `c356174`).
-- Validation: live `pnpm lab run instruction-only-form --live-llm --llm-task
-  create-flow --instruction-task instruction-only-form-submit ...`
-  -> Core `6be4698` with created-node identity: `run-mu4u2qui-969f0f76`, build
-  `proposed`, one call, 4,389 tokens, $0.00234212; the created Flow ran all
-  steps (type, click, click) with no error, but the scenario's playback goal
-  failed -- the plan field is a `<select>` and no select node was used.
-  -> Core `2ae5894` with the catalog fix: `run-mu4v1zqq-f2af9f06`, build
-  `failed`, `flow_bootstrap.evidence_unusable_decision`, 4 decisions, 1
-  inspect, 14,574 tokens, $0.00774312; redaction `passed` on both. The Lab kept
-  no plan issue codes. Live repair: `run-mu4tlmls-f7ac6101` passed
-  (`repaired`), with the recorded Flow's failed action identified by output id
-  and the model told the repairable parameter is `element`.
-- Suites at integration: Core flow-bootstrap plan 36/36, override tests 46/46,
-  change records and executor 316/316; this repository domain 613/613,
-  test-runner 1092/1093 (the sanitizer test, then fixed and 1096/1096),
-  scenario-lab 242/242, extension 652/652.
-- Not verified: a created Flow that passes its goal -- `w2-live-creation-debug`
-  is iterating on it live; the campaign has not been run.
-
-### 2026-09-16 — Live creation targets the real element; back half designed
-- Agent: supervisor; workers `w2-bootstrap-survives-and-resolves`,
-  `w2-extension-selectors-and-bundle-guard`, `w2-back-half-design`.
-- Changed: Core `6be4698` (creation iterates, fed-back plans, handle
-  resolution call site, apply indexes Subflow graphs, token cap follows the
-  grant; `service.ts` baseline 6434 -> 6422); this repository `f39499b`
-  (unique selectors, a browser-bundle check in `pnpm check`, the web output
-  bundle registers its parameter contracts).
-- Validation: supervisor-run. Core creation tests `vitest run
-  .../llm/harness-options .../llm/tests/unusable-decision.test.ts
-  .../loop-limits .../flow-bootstrap/tests/generation-failure.test.ts
-  .../tests/deepseek-bootstrap-exploration.test.ts .../tests/service-bootstrap`
-  -> "Tests 194 passed (194)". Domain -> "# pass 577"; extension unit -> "#
-  pass 649"; extension check exit 0. Live: `pnpm lab run instruction-only-form
-  --live-llm --llm-task create-flow --instruction-task
-  instruction-only-form-submit --llm-max-calls 26 ... --llm-max-run-tokens
-  600000` with `FLUXIQ_CORE_ROOT` at a clean `6be4698` worktree ->
-  `run-mu4t20d1-93b60760`: build `proposed`, one call, 3,924 in / 465 out,
-  $0.00234036, one inspect; a 5-node Flow (one type, two clicks) whose type
-  selector was the real `[data-testid="instruction-name"]` from its handle;
-  the run then failed at that step, `web.target.not_found`, "scoring 0.17 with
-  nothing the recording named agreeing"; redaction `passed`.
-- Why it failed: the extension's resolver scores a target against a recorded
-  node's identity, and a created node carries none. `w2-plan-handle-identity`
-  fills it from the element the model was shown.
-- Back half: `reports/w2-back-half-design.md` gives one pipeline for all three
-  entry points (trial, verdict, save, apply, continue, replay, promote), 23
-  briefs by file, and defects D-1 to D-6. Dispatched now: C-1+C-3, C-2, C-4,
-  W-1, W-2, L-1 (L-6 folded into `w2-campaign-repair-tasks`).
-
-### 2026-09-16 — First live repair applied and replayed without the model
-- Agent: `w2-live-explore-create-repair` (live), reported to the supervisor;
-  Core was `fcc5423` plus the private `applyFlowBootstrapAdaptation` index fix
-  in an uncommitted worktree, so this result rests on that fix until it lands.
-- What happened, on the demo pipeline's recording-derived Flow: the page
-  drifted; DeepSeek diagnosed (3,205 tokens) and returned a patch (3,163
-  tokens); Core resolved the target to a `target.N` handle; a proposal was
-  created, reviewed, **applied**, and the Flow was **replayed without the
-  model**. That is fail -> diagnose -> repair -> apply -> deterministic re-run,
-  live, once.
-- Then the whole lane in one invocation, 17:22, `pnpm demo:llm:adapt:focused`
-  (same private Core): two DeepSeek calls (diagnosis 2,924 in / 407 out, patch
-  3,016 / 229), approved, applied, post-apply validation succeeded, final
-  replay `abf586e0` with **0 provider calls**, safety passed, leak attestation
-  passed. An operator revert of an applied repair also worked (17:19).
-- Validation: from the worker's report only; to be rerun by the supervisor on
-  shared code once the index fix lands.
-- Found: **silent loss of run audit.** After that apply and replay, and two
-  Core restarts, both earlier runs' stored details lost `llmGate`,
-  `runtimeAdaptationContext`, `trainingMode`, `runtimePatchAttempts` and
-  `summary.tokenUsage`; the remaining shape equals a detail rebuilt from the
-  raw session. Candidate: an unreadable run index treated as empty and every
-  run re-saved. Assigned to `w2-run-detail-annotation-loss`.
-
-### 2026-09-16 — Live Lab creation and live repair on a repairable drift
-- Agent: supervisor, against a clean Core worktree at `59dbb22`
-  (`FLUXIQ_CORE_ROOT=F:/fxlab/lab-core`, never committed).
-- Why: the campaign's first live runs through the new Lab creation lane and
-  on `identity-drift --variant renamed-redesign`.
-- Validation: `pnpm lab run instruction-only-form --live-llm --llm-task
-  create-flow --instruction-task instruction-only-form-submit
-  --llm-max-output-tokens 4000 --llm-max-total-tokens 12000` ->
-  `run-mu4rmgsm-5e9d930f`, one DeepSeek call, 3,822 in / 469 out, $0.00230076,
-  build `failed`, `flow_bootstrap.evidence_completion_plan_invalid`, stage
-  `provider_output_validation`, `evidenceLoop: null`, no issue codes;
-  redaction `passed`. `pnpm lab run identity-drift --variant renamed-redesign
-  --flow --live-llm --llm-task adapt ...` -> `run-mu4rpka7-845d919a`: a
-  validated diagnosis and a validated `runtime_patch` reply proposing a
-  `temporary_target_override`, refused at preflight with
-  `runtime_patch.target_override_rejected`; no change proposal; redaction
-  `passed`; `snapshots/live-llm.json` **not written** because the Flow lane
-  threw first.
-- Not verified: why the correct override was refused (the domain check accepts
-  it when called directly) -- `w2-renamed-repair-rejected`; why the plan was
-  invalid -- `w2-bootstrap-survives-and-resolves` now feeds invalid plans back
-  to the model and records their issue codes.
-- Also found and fixed by the supervisor: the extension build broke because
-  `domain/src/output-nodes/extract-list/dispatch.ts` value-imported the whole
-  `fluxiq/automation-studio` entry point, which reaches `node:crypto`; it now
-  imports from `fluxiq/automation-studio/nodes`. `pnpm --filter
-  @fluxiq-web-extension/extension test:e2e:build` -> exit 0.
-
-Entries from the first live DeepSeek reply through the binding-contract
-integration (2026-09-16, early) are archived in
+Entries dated 2026-09-16 are archived in
+[archive/ledger-2026-09-16.md](./mvp-week2-automation-loop-plan/archive/ledger-2026-09-16.md),
+and the earliest of that day in
 [archive/ledger-2026-09-16-early.md](./mvp-week2-automation-loop-plan/archive/ledger-2026-09-16-early.md).
 
 Entries dated 2026-09-15 and earlier are archived in
