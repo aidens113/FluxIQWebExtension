@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-20. Live creation and the downstream exploration-state reducer are proven; field entry, truthful unchanged-target evidence, and optional multi-action exploration are next.
+Status detail: Executing 2026-09-20. Live creation, exploration-state reduction, and field-entry continuity are proven; optional multi-action exploration is under live comparison, with concurrent lanes planned but not started.
 Created: 2026-09-15
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -70,15 +70,17 @@ right disclosure; Core reported an intact state chain and reduced the four
 steps to the one replayable press. t021's multi-action work remains stale;
 reconcile it only after field entry and truthful `targetsUnchanged` evidence.
 
-**In progress 2026-09-20 (t026):** authoring and recovery exploration now
-declare one inferred field-entry option for text controls and selects. The
-authoring path reports `targetsUnchanged: true` only when every previously
-shown handle still maps to the same selector at the same location; navigation
-and recovery stay conservative. A focused Chromium run on `social-scheduler`
-opened the composer, then entered post text, account, date, and time through the
-real content action path. Opening the modal truthfully invalidated old targets;
-all four field entries preserved them. Optional multi-action output remains the
-next task after t026 is integrated.
+**In progress 2026-09-20 (t027):** t026 is integrated. A focused Chromium A/B
+performed the same six actions while optional multi-action output reduced
+provider decisions from six to three. One real-provider run entered all four
+fields, then stopped on permission when the model attempted a lasting press
+during exploration; a later retry hit a transient generation HTTP 400, and the
+next retry was stopped at the user's request. The experiment remains
+uncommitted and unmerged. Concurrent worker execution is specified in
+[the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
+same-code configuration, isolated worktrees/services/profiles/stores, at most
+two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
+full gates only after live behavior passes.
 
 **Open, for the next session, in priority order:**
 1. Add field entry and truthful `targetsUnchanged`, then reconcile t021's
