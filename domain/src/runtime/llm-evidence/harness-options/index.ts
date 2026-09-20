@@ -1,4 +1,4 @@
-// The web domain's runtime harness options: the five actions Core's exploration
+// The web domain's runtime harness options: the six actions Core's exploration
 // loop may take on a page, registered into Core's registry rather than built
 // into Core. There is no safety ladder here any more: FluxIQ does not refuse a
 // control on its own judgement of what it looks like. What stops a lasting act
@@ -14,6 +14,7 @@ export { WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./exec
 export { webAutomationExplorationRefusalClassifier, webAutomationExplorationScope } from "./exploration-terms";
 export {
   WEB_RECOVERY_DETECT_OPTION_ID,
+  WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
   WEB_RECOVERY_HARNESS_OPTION_IDS,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,

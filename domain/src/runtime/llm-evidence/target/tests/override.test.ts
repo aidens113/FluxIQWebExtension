@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence } from "..";
-import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
+import { sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence } from "../..";
+import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import type { AutomationStudioRuntimeTargetOverrideTarget } from "fluxiq/automation-studio";
 
 const target = (handles: Record<string, string>): AutomationStudioRuntimeTargetOverrideTarget => ({ handles });

@@ -2,7 +2,7 @@
 //
 // Decision L14 says exploration is a Core capability and an imported domain
 // **extends** the Core set rather than replacing it. This is that extension:
-// five declarations in Core's own option shape, scoped to this domain, pinned
+// six declarations in Core's own option shape, scoped to this domain, pinned
 // to the stages where exploring is what the loop is meant to be doing, and
 // handed to the registry as a bundle. Core does not learn what a page is; it
 // learns that this domain offers five actions, what each one costs in side
@@ -46,6 +46,7 @@ import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
 import { webRecoveryHarnessImplementations, WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";
 import {
   WEB_RECOVERY_DETECT_OPTION_ID,
+  WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_PRESS_OPTION_ID,
@@ -79,6 +80,15 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
       toolId: WEB_RECOVERY_PRESS_OPTION_ID,
       description: "Press an observed control by copying its opaque target handle exactly, then capture the page it produces: a button, a link, a tab, a menu, a disclosure, a checkbox. A checkbox is pressed again afterwards, so the page is left as it was found. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
       inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
+      effect: "mutate",
+      availability: DOMAIN_SCOPE,
+      safety: { sideEffect: "mutate" },
+      stages: [...EXPLORATION_STAGES]
+    },
+    {
+      toolId: WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
+      description: "Enter a value into an observed text field or select by copying its opaque target handle exactly, then capture the page it produces. Use it to test the failing workflow's form behavior; the returned evidence never contains the entered text or any raw field value.",
+      inputSchema: { type: "object", required: ["target", "value"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, value: { type: "string", maxLength: WEB_LLM_EVIDENCE_BOUNDS.text } }, additionalProperties: false },
       effect: "mutate",
       availability: DOMAIN_SCOPE,
       safety: { sideEffect: "mutate" },

@@ -13,6 +13,7 @@ import {
   webLlmToolRejectionResultCode,
   WEB_LLM_ACTION_RESULT_CODE,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_ENTER_FIELD_TOOL_ID,
   WEB_LLM_EVIDENCE_RESULT_CODES,
   WEB_LLM_EVIDENCE_TOOL_IDS,
   WEB_LLM_INSPECT_RESULT_CODE,
@@ -37,7 +38,7 @@ const gatewayFor = (url: string): WebLlmEvidenceGateway => ({
 test("the published tool ids are exactly the tools the runtime offers, in order", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
   assert.deepEqual(runtime.tools.map((tool) => tool.toolId), [...WEB_LLM_EVIDENCE_TOOL_IDS]);
-  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, WEB_LLM_ENTER_FIELD_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
   assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.detect_repeating_structure"), true);
   assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.press_control"), true);
   assert.equal(new Set(WEB_LLM_EVIDENCE_TOOL_IDS).size, WEB_LLM_EVIDENCE_TOOL_IDS.length);

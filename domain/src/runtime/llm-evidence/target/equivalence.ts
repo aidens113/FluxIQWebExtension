@@ -42,11 +42,11 @@
 // other three.
 
 import type { JsonObject } from "fluxiq/core";
-import type { WebAutomationElementFingerprint } from "../../actions/types";
-import { adaptedTargetSupersedesRecording, elementFingerprint, objectValue } from "../../output-nodes/targets";
-import { type WebLlmEvidenceElement } from "./elements";
-import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
-import { elementFillsRepairableParameter, type WebRepairableParameterRole } from "./repairable-parameters";
+import type { WebAutomationElementFingerprint } from "../../../actions/types";
+import { adaptedTargetSupersedesRecording, elementFingerprint, objectValue } from "../../../output-nodes/targets";
+import { type WebLlmEvidenceElement } from "../elements";
+import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
+import { elementFillsRepairableParameter, type WebRepairableParameterRole } from "../repairable-parameters";
 import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
 
 /** What the failed node addressed, as Core carries it: the recorded element, the target, or both. */

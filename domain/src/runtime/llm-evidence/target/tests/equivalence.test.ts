@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateWebRuntimeTargetOverrideEvidence } from "..";
-import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
-import type { WebLlmPageEvidence } from "../sanitize";
+import { validateWebRuntimeTargetOverrideEvidence } from "../..";
+import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
+import type { WebLlmPageEvidence } from "../../sanitize";
 import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 
