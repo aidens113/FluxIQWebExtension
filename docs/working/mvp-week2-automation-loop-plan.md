@@ -43,22 +43,6 @@ point cannot reuse it unchanged.
 run's `evaluation.json`, never from the verdict: a run reporting `passed` while
 its oracle says `failed` was the commonest defect found on 2026-09-17.
 
-**The two scoping reports describe `ee25ac9`, not HEAD.** Five briefs drawn from
-them sent workers at defects already fixed; re-verify any file:line they give.
-
-**Where the goal stands, 2026-09-18 end of day (Core `80a8495`, here `20abce8`).**
-The user's measure of success is a created Flow replayed later with NO model
-producing the right answer; exploration counts for nothing. Proven live today:
-a Flow built from the week-ahead instruction was saved and replayed five times in
-separate invocations with no key, no grant and no provider — 14/14 records,
-byte-identical output (`pnpm lab replay`, t019). Routing proven the same way: one
-saved Flow took the announcement route when a dialog was present and the main
-route when not, 14/14 both (t020). A created Flow that broke after the site
-changed was repaired — the right target override proposed and held `pending`,
-never applied, $0.004 (t016). Four jobs are fully correct on the realistic
-corpus; the last full corpus (4 of 36) predates every fix below and has not been
-re-run.
-
 **Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
 deterministic-path patch gated by a compile-checked record
 (`runtime/service/adaptations/gates.ts`); Core's exploration-reduction seam;
@@ -127,9 +111,6 @@ the loop of calls is not how cost is controlled. The generalizable lesson: when
 a designed-in limit keeps generating blockers, the limit is the defect — report
 it as such instead of engineering workarounds inside it.
 
-**Concurrency is five workers, not nine.** Nine heavy workers crashed this
-machine twice; the memory fault makes that a real limit, not caution.
-
 **Live-testing campaign (user direction, 2026-09-16):** "get to a point where
 we have at least basic automation able to be created & repaired by simply
 pointing the instructions at a demo, and having it explore and auto-create
@@ -157,11 +138,6 @@ exploration output to live testing after t011's permission path works, along
 with the missing field-entry option and `targetsUnchanged` signal needed for a
 fair measurement. Audit every other open task branch against `dev`; bring only
 coherent, still-needed work into the live sequence, with its own focused proof.
-
-**Worktree Lab runs:** `pnpm task start` keeps the shared Core current and the
-Lab refuses a stale one (t013). Always pass `FLUXIQ_TEST_ENV_FILES=none
-FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` and export the key from
-`.env.local`; never `--no-build` on a fresh instance.
 
 **Next steps:** finish paired t024; port t005; add field entry and
 `targetsUnchanged`; reconcile t021's optional multi-action output and exercise
@@ -432,7 +408,7 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   result verification uses total stored rows for its provider-free branch, and
   records `no_result` only when both stored and refused row counts are zero.
   All-refused output remains a deterministic Core failure.
-- Live validation: `run-muabdpmu-6c1f639d` returned normally in 160,663 ms,
+- Validation: live `run-muabdpmu-6c1f639d` returned normally in 160,663 ms,
   performed 9 actions, used 3 creation calls and 0 recovery calls, skipped
   instruction/provider resolution after summarizing one empty dataset shell,
   persisted `resultVerification: "no_result"`, and completed both runtime and
