@@ -342,6 +342,25 @@ Current briefs live in the reports named by the Work Ledger.
   coherent fix, and the same single-scenario live proof; no secret/page output
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-missing-result-verification.md`
 
+### Brief: w2-t024-project-database-lifetime
+- Repository: paired task t024, FluxIQ Core implementation with downstream live proof
+- Task: make the smallest coherent project-database pool lifetime change that
+  prevents a durable run-detail save from stalling during close/reopen races;
+  then rerun only `social-scheduler-schedule-post` live. Do not begin with tests.
+- Required reads: this document's Current State;
+  `reports/w2-t011-missing-result-verification.md`; Core
+  `storage/project/database.ts`, its direct pool users, and only its focused test
+- Owns (may edit): Core `packages/fluxiq/src/programs/automation-studio/storage/project/database.ts`,
+  its directly owned focused test if live behavior succeeds, and downstream
+  `reports/w2-t024-project-database-lifetime.md`
+- Must not touch: other Core/extension source, existing reports/working docs,
+  task t011, commits or pushes; no corpus or full suite
+- Definition of done: fix pool lifetime; same live scenario reaches terminal
+  playback plus durable `resultVerification.status: no_result` and fixture
+  oracle, or records the next precise blocker; only then run the narrowest
+  pool/type check
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-project-database-lifetime.md`
+
 ## Validation
 
 - Every step: the test and mutation targets its report names, rerun by the
