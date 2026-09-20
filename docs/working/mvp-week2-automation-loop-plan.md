@@ -401,7 +401,8 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   intact state chain, and one replayable reduced press. The wrong panel was
   closed and the right panel visible at the end.
 - Validation: `pnpm --filter @fluxiq-web-extension/extension test:content --
-  exploration-state-digest.spec.ts --workers=1` -> 1 passed; only afterwards,
+  exploration-state/tests/live-state-digest.spec.ts --workers=1` -> 1 passed;
+  only afterwards,
   domain and extension checks passed and the isolated state-digest unit file
   passed 7/7. No full suite was run during iteration.
 - Outcome: Accepted for task integration. Detailed evidence is in

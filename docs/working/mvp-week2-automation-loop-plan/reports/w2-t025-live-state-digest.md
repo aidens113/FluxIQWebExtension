@@ -36,7 +36,7 @@ one, then completes. Observed assertions:
 - the wrong panel is closed and the right panel visible in Chromium.
 
 Command: `pnpm --filter @fluxiq-web-extension/extension test:content --
-exploration-state-digest.spec.ts --workers=1` -> 1 passed (574 ms test body).
+exploration-state/tests/live-state-digest.spec.ts --workers=1` -> 1 passed.
 
 ## Post-live checks
 

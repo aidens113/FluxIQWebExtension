@@ -22,7 +22,7 @@ import {
   WEB_RECOVERY_PRESS_OPTION_ID,
   type WebLlmEvidenceGateway
 } from "@fluxiq-web-extension/domain";
-import { expect, test } from "../index.js";
+import { expect, test } from "../../../index.js";
 
 const PROJECT_ID = "project.live-state-digest";
 const FLOW_ID = "flow.live-state-digest";
