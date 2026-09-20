@@ -266,6 +266,8 @@ Current briefs live in the reports named by the Work Ledger.
   `domain/src/runtime/llm-evidence/{permission,press}.ts`; the live instruction
   and Lab command paths already named by the report
 - Owns (may edit): the t011 worktree's browser-domain files listed above and
+  `domain/src/runtime/llm-evidence/tools.ts`,
+  `domain/src/runtime/llm-evidence/harness-options/options.ts`, and
   `reports/w2-t011-live-permission-resume.md`
 - Must not touch: FluxIQ Core source; shared `dev` checkout; other reports;
   tests until the live scenario behaves correctly; commits or pushes
@@ -306,6 +308,39 @@ Current briefs live in the reports named by the Work Ledger.
   `integrate-live`, `superseded/close`, or `hold`, dependencies, overlap risks,
   and the narrow first live proof; explicitly assess t021 batching
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-open-branch-live-audit.md`
+
+### Brief: w2-t011-created-run-timeout
+- Repository: this repository and FluxIQ Core, read-only
+- Task: diagnose why live run `run-mua7yzln-7c8d0a9d` still exhausted the
+  granted-run read-back window despite t022's `newRunId` path. Inspect the run
+  bundle call-by-call and the current request/read-back implementation; do not
+  expose page data or secrets and do not implement yet.
+- Required reads: this document's Current State; `reports/w2-run-timeout.md`;
+  the run's `evaluation.json`, `snapshots/live-llm.json`, and bounded lifecycle
+  events; `flow-lane/{persisted-flow-run,creation/lane}.ts`; Core requested-run
+  id and runtime-session/result-verification paths
+- Owns (may edit): only `reports/w2-t011-created-run-timeout.md` in the t011
+  extension worktree
+- Must not touch: source, tests, other reports/working docs, commits or pushes
+- Definition of done: exact failed stage and timeline, whether the named run
+  exists and its terminal/verdict state, root cause with file:line evidence,
+  smallest fix location, and one focused live rerun command
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-created-run-timeout.md`
+
+### Brief: w2-t011-missing-result-verification
+- Repository: this repository and FluxIQ Core, read-only
+- Task: diagnose live run `run-mua8g4li-6a746736`, whose named playback is
+  durably `succeeded` with 9/9 actions but no result-verification record while
+  the runner waits. Determine why the verification call was skipped or stuck.
+- Required reads: the bounded run bundle/project status; t012/t022 reports;
+  current execution-grant issuance, `result-verification/`, runtime-session
+  completion, and downstream settlement/read-back paths
+- Owns (may edit): only `reports/w2-t011-missing-result-verification.md` in the
+  t011 extension worktree
+- Must not touch: source, tests, other reports/working docs, commits or pushes
+- Definition of done: exact gate/call state with file:line evidence, smallest
+  coherent fix, and the same single-scenario live proof; no secret/page output
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-missing-result-verification.md`
 
 ## Validation
 
