@@ -3,9 +3,8 @@
 // here.
 //
 // Both are domain meaning Core deliberately does not hold. Core cannot
-// interpret `web.action.rejected.target_unsafe`, and must never learn to: the
-// refusal is a statement about a browser control, and Core has no browser in
-// it. Core likewise holds the scope policy and compares opaque strings without
+// interpret `web.action.rejected.cross_origin`, and must never learn to: the
+// refusal is a statement about a browser page, and Core has no browser in it. Core likewise holds the scope policy and compares opaque strings without
 // ever learning that this domain spells a scope as an origin, which is exactly
 // what lets a domain with no pages use the same policy for its own idea of
 // where it is. So the translations live here, in the domain that owns the
@@ -22,7 +21,22 @@ import { webLlmToolRejectionResultCode } from "../vocabulary";
 /**
  * This domain's refusals, in Core's vocabulary.
  *
- * Only the two that are genuinely terminal are classified. Anything this
+ * Only the scope refusals are classified, because only they are genuinely
+ * terminal. There used to be a third, `target_unsafe` as
+ * `destructive_action_refused`, raised when this domain judged from a
+ * control's shape or wording -- and at first from its selector -- that it must
+ * not be pressed. That judgement is gone (see `../press.ts`), and nothing
+ * raises the code, so it is gone from the vocabulary too rather than left as a
+ * refusal waiting for someone to reuse.
+ *
+ * `permission_required` is left unclassified on purpose. It means Core's own
+ * permission check said no (`../permission.ts`), and Core has already raised
+ * the request and knows the stop; classifying it here as
+ * `operator_approval_required` would report the same request twice, and Core
+ * reads a domain classifier that returns that reason as
+ * `destructive_action_refused`.
+ *
+ * Anything this
  * function does not classify is ordinary feedback -- the model is told no and
  * tries something else -- which is the default, because a refusal that ends the
  * whole exploration is the exception. The rest -- `invalid_input`,
@@ -40,7 +54,7 @@ import { webLlmToolRejectionResultCode } from "../vocabulary";
  *   target or another page, so it is an answer rather than a stop. Core's stop
  *   vocabulary has no reason it would fit, and forcing it into
  *   `destructive_action_refused` would end an exploration that was never
- *   unsafe. The inspect and act options never raise it; the sanitizer drops a
+ *   unsafe. The inspect and press options never raise it; the sanitizer drops a
  *   secret-bearing control before the model can name it.
  * - `no_repeating_structure` is detection saying the page has no readable list
  *   there, which is an answer, not a stop.
@@ -50,7 +64,6 @@ import { webLlmToolRejectionResultCode } from "../vocabulary";
  * than in an exploration that quietly found nothing.
  */
 export function webAutomationExplorationRefusalClassifier(resultCode: string): AutomationStudioExplorationStopReason | undefined {
-  if (resultCode === webLlmToolRejectionResultCode("target_unsafe")) return "destructive_action_refused";
   if (resultCode === webLlmToolRejectionResultCode("out_of_scope") || resultCode === webLlmToolRejectionResultCode("cross_origin")) return "out_of_scope_refused";
   return undefined;
 }

@@ -1,5 +1,5 @@
 import {
-  EVALUATION_SCHEMA_VERSION, evaluationLanes, extractionMeasurementStatuses, extractionUnjudgedMembers, facilityFailureBoundaries, facilityFailureCauseCodes,
+  EVALUATION_SCHEMA_VERSION, evaluationLanes, FACILITY_FAILURE_ENDPOINT_PATTERN, extractionMeasurementStatuses, extractionUnjudgedMembers, facilityFailureBoundaries, facilityFailureCauseCodes,
   facilityFailureOperationStages, facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
   type CandidateComparison, type LlmUsage, type RunEvaluation, type RunExtractionMeasurement,
 } from "./evaluation.js";
@@ -290,7 +290,7 @@ function checkExtractionUnjudged(input: unknown, path: string, issues: Validatio
 function checkFacilityFailure(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (input === null || input === undefined) return;
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["boundary", "stage", "reason", "operationStage", "causeCode", "timeoutMs"], path, issues);
+  keys(value, ["boundary", "stage", "reason", "operationStage", "causeCode", "timeoutMs", "endpoint"], path, issues);
   enumeration(value.boundary, facilityFailureBoundaries, `${path}.boundary`, issues);
   enumeration(value.stage, facilityFailureStages, `${path}.stage`, issues);
   enumeration(value.reason, facilityFailureReasons, `${path}.reason`, issues);
@@ -312,6 +312,8 @@ function checkFacilityReasonDetails(value: JsonObject, path: string, issues: Val
   if (value.reason === "http.timeout" && (!httpStage || !hasTimeout || causeCode !== undefined)) add(issues, path, "http.timeout requires an HTTP operationStage and timeoutMs only");
   if (value.reason === "http.abort" && (!httpStage || hasTimeout || causeCode !== undefined)) add(issues, path, "http.abort requires only an HTTP operationStage");
   if (value.reason === "http.transport" && (!httpStage || hasTimeout || !transportCode)) add(issues, path, "http.transport requires an HTTP operationStage and optional transport causeCode");
+  if (value.endpoint !== undefined && (typeof value.endpoint !== "string" || !FACILITY_FAILURE_ENDPOINT_PATTERN.test(value.endpoint))) add(issues, `${path}.endpoint`, "must be a Core API route");
+  if (value.endpoint !== undefined && !(value.reason === "http.timeout" || value.reason === "http.abort" || value.reason === "http.transport")) add(issues, `${path}.endpoint`, "is only for an http.* failure");
   if (value.reason === "module.missing" && (!moduleCode || operationStage !== undefined || hasTimeout)) add(issues, path, "module.missing requires only an allowlisted module causeCode");
   if (value.reason === "path.missing" && (causeCode !== "ENOENT" || operationStage !== undefined || hasTimeout)) add(issues, path, "path.missing requires only causeCode ENOENT");
   if (value.reason === "path.denied" && (causeCode !== "EACCES" && causeCode !== "EPERM" || operationStage !== undefined || hasTimeout)) add(issues, path, "path.denied requires only causeCode EACCES or EPERM");

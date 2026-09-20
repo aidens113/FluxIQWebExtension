@@ -34,7 +34,7 @@ import {
   type WebLlmEvidenceToolRequest
 } from "../capture";
 import { present } from "../present";
-import { observedElement } from "../reveal";
+import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
 import { recoverable, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";

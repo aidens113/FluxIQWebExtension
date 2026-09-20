@@ -68,6 +68,7 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
         return { flow: options.blankFlow ?? { flowId: FLOW_ID, projectId: PROJECT_ID, nodes: [], edges: [], metadata: { flowRepresentationKind: "orchestration" } } };
       }
       if (endpoint === "list-flow-subflows") return { subflows: applied ? [{ subflowId: "subflow.one", graphFlowId: GRAPH_FLOW_ID }] : [] };
+      if (endpoint === "get-flow-adaptation") return { adaptation: { instructedConsequences: [] } };
       if (endpoint === "get-flow-router") return { router: applied ? { routerId: "router.one" } : null };
       if (endpoint === "save-flow-generation-instruction") {
         instructionRequests.push(payload);

@@ -1,6 +1,6 @@
 // The drift guard. `packages/test-runner` filters its sanitized diagnostic by
 // these two sets, and while they were hand-maintained on the consumer's side
-// both had drifted: `web.reveal_safe` was missing from the tool allowlist, so
+// both had drifted: `web.reveal_safe` (now `web.press_control`) was missing from the tool allowlist, so
 // every reveal step was silently dropped, and
 // `web.action.rejected.no_progress` was missing from the result codes. These
 // rows compare each published set against what the runtime actually offers and
@@ -18,7 +18,7 @@ import {
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
-  WEB_LLM_REVEAL_TOOL_ID,
+  WEB_LLM_PRESS_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   WEB_LLM_TOOL_REJECTION_CODES,
   type WebLlmEvidenceGateway
@@ -37,9 +37,9 @@ const gatewayFor = (url: string): WebLlmEvidenceGateway => ({
 test("the published tool ids are exactly the tools the runtime offers, in order", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
   assert.deepEqual(runtime.tools.map((tool) => tool.toolId), [...WEB_LLM_EVIDENCE_TOOL_IDS]);
-  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
   assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.detect_repeating_structure"), true);
-  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.reveal_safe"), true);
+  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.press_control"), true);
   assert.equal(new Set(WEB_LLM_EVIDENCE_TOOL_IDS).size, WEB_LLM_EVIDENCE_TOOL_IDS.length);
 });
 
@@ -66,7 +66,7 @@ test("every result code the runtime actually emits is one the published set cont
     (await runtime.executeTool({ ...base, callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/start" } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/" } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: 1 } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.9" } })).resultCode,
+    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.9", consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode,
   ];
   assert.deepEqual(emitted, [
