@@ -351,7 +351,9 @@ Current briefs live in the reports named by the Work Ledger.
   `reports/w2-t011-missing-result-verification.md`; Core
   `storage/project/database.ts`, its direct pool users, and only its focused test
 - Owns (may edit): Core `packages/fluxiq/src/programs/automation-studio/storage/project/database.ts`,
-  its directly owned focused test if live behavior succeeds, and downstream
+  temporary env-gated stage markers in Core `runtime/service.ts` and
+  `runtime/result-verification/run-outcome.ts` (removed before handoff), its
+  directly owned focused test if live behavior succeeds, and downstream
   `reports/w2-t024-project-database-lifetime.md`
 - Must not touch: other Core/extension source, existing reports/working docs,
   task t011, commits or pushes; no corpus or full suite
