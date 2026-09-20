@@ -145,6 +145,18 @@ run unit tests, `pnpm check` and the suites as a regression net. The corpus
 measures where the product stands when a fix is believed finished; it is never
 the development loop.
 
+**Reaffirmed by the user, 2026-09-20.** Resume t011 from its preserved
+worktree. Live reproduction and same-scenario reruns come before unit tests;
+do not run the full suite after each change. The first target remains the
+schedule-post permission mismatch, followed by the created-lane timeout only
+after that scenario behaves correctly.
+
+**Live integration direction, 2026-09-20.** Add t021's optional multi-action
+exploration output to live testing after t011's permission path works, along
+with the missing field-entry option and `targetsUnchanged` signal needed for a
+fair measurement. Audit every other open task branch against `dev`; bring only
+coherent, still-needed work into the live sequence, with its own focused proof.
+
 **Worktree Lab runs:** `pnpm task start` keeps the shared Core current and the
 Lab refuses a stale one (t013). Always pass `FLUXIQ_TEST_ENV_FILES=none
 FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` and export the key from
@@ -242,6 +254,93 @@ gating it.
 Dispatched briefs whose work has landed are archived in
 [archive/settled-worker-briefs.md](./mvp-week2-automation-loop-plan/archive/settled-worker-briefs.md).
 Current briefs live in the reports named by the Work Ledger.
+
+### Brief: w2-t011-live-permission-resume
+- Repository: this repository, with read-only inspection of FluxIQ Core
+- Task: resume t011 by reproducing `schedule-post` live, then make the smallest
+  browser-domain prompt/contract change needed so opening/showing/ticking a
+  control declares `[]`; rerun the same live scenario until its next real
+  blocker is established. Do not start with unit tests or run the corpus.
+- Required reads: this document's Current State; `reports/w2-reveal-not-commit.md`;
+  `domain/src/runtime/llm-evidence/harness-options/{exploration-terms,vocabulary}.ts`;
+  `domain/src/runtime/llm-evidence/{permission,press}.ts`; the live instruction
+  and Lab command paths already named by the report
+- Owns (may edit): the t011 worktree's browser-domain files listed above and
+  `domain/src/runtime/llm-evidence/tools.ts`,
+  `domain/src/runtime/llm-evidence/harness-options/options.ts`, and
+  `reports/w2-t011-live-permission-resume.md`
+- Must not touch: FluxIQ Core source; shared `dev` checkout; other reports;
+  tests until the live scenario behaves correctly; commits or pushes
+- Definition of done: one pre-change live run inspected call-by-call; smallest
+  focused change; same live scenario rerun and inspected; narrow tests only
+  after live success or a precisely evidenced next blocker
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-live-permission-resume.md`
+
+### Brief: w2-t011-core-permission-seams
+- Repository: FluxIQ Core, read-only
+- Task: trace the existing instruction-derived permission comparison and the
+  plan-node handle parser to identify the smallest domain-neutral changes for
+  consequence reconciliation and Flow-step declarations. Do not implement,
+  build, or test while the live baseline is still running.
+- Required reads: downstream Current State and `reports/{w2-permission-request,w2-reveal-not-commit}.md`;
+  Core `runtime/action-permissions/`; `runtime/llm/harness-options/plan-node-handles.ts`;
+  the immediate callers that consume parsed plan handles
+- Owns (may edit): only
+  `reports/w2-t011-core-permission-seams.md` in the t011 extension worktree
+- Must not touch: any Core source, any other report, either working document,
+  test files, commits or pushes
+- Definition of done: exact data-flow and file:line evidence; proposed minimal
+  compatibility behavior; risks and one focused live proof for each seam
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-core-permission-seams.md`
+
+### Brief: w2-open-branch-live-audit
+- Repository: this repository; paired Core branches read-only where present
+- Task: audit every open task branch against current `dev`, its existing report,
+  and current landed code. Identify which unmerged changes are still needed for
+  live Week 2 testing, which are already superseded, and which must remain held.
+- Required reads: this document's Current State; `pnpm task list`; each open
+  branch's commits/diff stat; only the report directly associated with that task
+- Owns (may edit): only
+  `reports/w2-open-branch-live-audit.md` in the shared `dev` checkout
+- Must not touch: source, tests, other reports or working documents, task
+  branches/worktrees, Core source, commits or pushes
+- Definition of done: one evidence-backed row per open branch with disposition
+  `integrate-live`, `superseded/close`, or `hold`, dependencies, overlap risks,
+  and the narrow first live proof; explicitly assess t021 batching
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-open-branch-live-audit.md`
+
+### Brief: w2-t011-created-run-timeout
+- Repository: this repository and FluxIQ Core, read-only
+- Task: diagnose why live run `run-mua7yzln-7c8d0a9d` still exhausted the
+  granted-run read-back window despite t022's `newRunId` path. Inspect the run
+  bundle call-by-call and the current request/read-back implementation; do not
+  expose page data or secrets and do not implement yet.
+- Required reads: this document's Current State; `reports/w2-run-timeout.md`;
+  the run's `evaluation.json`, `snapshots/live-llm.json`, and bounded lifecycle
+  events; `flow-lane/{persisted-flow-run,creation/lane}.ts`; Core requested-run
+  id and runtime-session/result-verification paths
+- Owns (may edit): only `reports/w2-t011-created-run-timeout.md` in the t011
+  extension worktree
+- Must not touch: source, tests, other reports/working docs, commits or pushes
+- Definition of done: exact failed stage and timeline, whether the named run
+  exists and its terminal/verdict state, root cause with file:line evidence,
+  smallest fix location, and one focused live rerun command
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-created-run-timeout.md`
+
+### Brief: w2-t011-missing-result-verification
+- Repository: this repository and FluxIQ Core, read-only
+- Task: diagnose live run `run-mua8g4li-6a746736`, whose named playback is
+  durably `succeeded` with 9/9 actions but no result-verification record while
+  the runner waits. Determine why the verification call was skipped or stuck.
+- Required reads: the bounded run bundle/project status; t012/t022 reports;
+  current execution-grant issuance, `result-verification/`, runtime-session
+  completion, and downstream settlement/read-back paths
+- Owns (may edit): only `reports/w2-t011-missing-result-verification.md` in the
+  t011 extension worktree
+- Must not touch: source, tests, other reports/working docs, commits or pushes
+- Definition of done: exact gate/call state with file:line evidence, smallest
+  coherent fix, and the same single-scenario live proof; no secret/page output
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-missing-result-verification.md`
 
 ## Validation
 
