@@ -84,6 +84,12 @@ export type ExistingFlowAdaptation = ExistingFlowAdaptationSummary & {
     toolCallCount: number;
     evidenceBytes: number;
     toolIds: string[];
+    batchDecisions?: Array<{
+      decision: number;
+      actionCount: number;
+      actions: Array<{ ordinal: number; resultCode: string | null }>;
+      stopCode: string | null;
+    }>;
   };
 };
 export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string };
@@ -424,6 +430,25 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
   const auditEvents = phase9?.auditEvents === undefined ? [] : array(phase9.auditEvents, `${at}.metadata.phase9.auditEvents`);
   const createdAudit = auditEvents.map((value, index) => record(value, `${at}.metadata.phase9.auditEvents[${index}]`)).find((event) => event.eventType === "created");
   const auditDetail = optionalRecord(createdAudit?.detail, `${at}.metadata.phase9.created.detail`);
+  const batchDecisions = auditDetail?.batchDecisions === undefined ? undefined : array(auditDetail.batchDecisions, `${at}.metadata.phase9.created.detail.batchDecisions`).map((value, index) => {
+    const batch = record(value, `${at}.metadata.phase9.created.detail.batchDecisions[${index}]`);
+    const decision = integer(batch.decision, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].decision`);
+    const actionCount = integer(batch.actionCount, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].actionCount`);
+    const actions = array(batch.actions, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].actions`).map((value, actionIndex) => {
+      const action = record(value, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].actions[${actionIndex}]`);
+      const ordinal = integer(action.ordinal, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].actions[${actionIndex}].ordinal`);
+      const resultCode = action.resultCode === null ? null : text(action.resultCode, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].actions[${actionIndex}].resultCode`);
+      if (ordinal < 1 || ordinal > actionCount || (resultCode !== null && !/^[a-z0-9_.:-]{1,100}$/iu.test(resultCode))) invalid(`${at}.metadata.phase9 created batch action is invalid`);
+      return { ordinal, resultCode };
+    });
+    const stopCode = batch.stopCode === null ? null : text(batch.stopCode, `${at}.metadata.phase9.created.detail.batchDecisions[${index}].stopCode`);
+    if (decision < 1 || actionCount < 2 || actionCount > 16 || actions.length < 1 || actions.length > actionCount
+      || new Set(actions.map((action) => action.ordinal)).size !== actions.length
+      || (stopCode !== null && !/^llm_evidence_loop\.batch\.(?:action_refused|effect_not_applied|targets_may_have_changed|action_limit|batch_limit)$/u.test(stopCode))) {
+      invalid(`${at}.metadata.phase9 created batch decision is invalid`);
+    }
+    return { decision, actionCount, actions, stopCode };
+  });
   const evidenceLoop = auditDetail?.evidenceGuided === true ? {
     ...(auditDetail.providerCallCount === undefined ? {} : { providerCallCount: integer(auditDetail.providerCallCount, `${at}.metadata.phase9.created.detail.providerCallCount`) }),
     ...(auditDetail.decisionCount === undefined ? {} : { decisionCount: integer(auditDetail.decisionCount, `${at}.metadata.phase9.created.detail.decisionCount`) }),
@@ -432,6 +457,7 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
     toolCallCount: integer(auditDetail.toolCallCount, `${at}.metadata.phase9.created.detail.toolCallCount`),
     evidenceBytes: integer(auditDetail.evidenceBytes, `${at}.metadata.phase9.created.detail.evidenceBytes`),
     toolIds: stringArray(auditDetail.toolIds, `${at}.metadata.phase9.created.detail.toolIds`),
+    ...(batchDecisions === undefined ? {} : { batchDecisions }),
   } : undefined;
   if (evidenceLoop && (
     (evidenceLoop.providerCallCount === undefined) !== (evidenceLoop.decisionCount === undefined)
@@ -443,6 +469,9 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
     || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.iterationCount < evidenceLoop.providerCallCount || evidenceLoop.iterationCount > evidenceLoop.providerCallCount + 1))
     || evidenceLoop.toolCallCount > 16 || evidenceLoop.toolCallCount > evidenceLoop.iterationCount
     || evidenceLoop.evidenceBytes > 7_340_032 || evidenceLoop.toolIds.length > 16
+    || (evidenceLoop.batchDecisions !== undefined && (evidenceLoop.batchDecisions.length > (evidenceLoop.decisionCount ?? LLM_LAB_MAX_CALLS_PER_RUN)
+      || new Set(evidenceLoop.batchDecisions.map((batch) => batch.decision)).size !== evidenceLoop.batchDecisions.length
+      || evidenceLoop.batchDecisions.some((batch) => batch.decision > (evidenceLoop.decisionCount ?? LLM_LAB_MAX_CALLS_PER_RUN))))
   )) invalid(`${at}.metadata.phase9 created evidence audit exceeded its bounded contract`);
   const patchKinds = item.patch === undefined ? undefined : array(item.patch, `${at}.patch`).map((value, index) => text(record(value, `${at}.patch[${index}]`).kind, `${at}.patch[${index}].kind`));
   const validationStatuses = item.validationResults === undefined ? [] : array(item.validationResults, `${at}.validationResults`).map((value, index) => enumeration(record(value, `${at}.validationResults[${index}]`).status, ["succeeded", "failed"] as const, `${at}.validationResults[${index}].status`));

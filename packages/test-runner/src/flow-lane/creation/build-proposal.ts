@@ -46,8 +46,22 @@ export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) =>
 
 export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null }>;
 /** One decision the build's exploration made, in order: the tool it called, or Core's name for a decision that called none, and the code it came to. */
-export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
-export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
+export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string; batch?: CreatedFlowBuildBatchAction }>;
+export type CreatedFlowBuildBatchAction = Readonly<{ decision: number; ordinal: number; actionCount: number; stopCode: string | null }>;
+export type CreatedFlowBuildBatchDecision = Readonly<{
+  decision: number;
+  actionCount: number;
+  actions: ReadonlyArray<Readonly<{ ordinal: number; resultCode: string | null }>>;
+  stopCode: string | null;
+}>;
+export type CreatedFlowBuildEvidenceLoop = Readonly<{
+  decisionCount: number | null;
+  toolCallCount: number;
+  evidenceBytes: number;
+  toolIds: readonly string[];
+  steps: readonly CreatedFlowBuildStep[] | null;
+  batchDecisions?: readonly CreatedFlowBuildBatchDecision[];
+}>;
 
 /**
  * - `providerCalls`: the calls Core counted, from the proposal's evidence-loop
@@ -166,7 +180,7 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
     // A proposal cannot exist without a provider's answer.
     providerInvocation: "attempted" as const,
     accounting: detail.accounting ? accountingOf(detail.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: null } : null,
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: null, batchDecisions: batchDecisionsOf(loop.batchDecisions ?? []) } : null,
     recoveredAfterTimeout,
     durationMs,
     instructedConsequences: await instructedConsequencesOf(control, input, adaptationId),
@@ -190,7 +204,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
   const issueCodes = [...new Set((diagnostic.issueCodes ?? []).filter(isVocabulary))];
   const steps = loop?.steps?.flatMap((step): CreatedFlowBuildStep[] => {
     if (!isVocabulary(step.toolId)) return [];
-    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
+    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}), ...(step.batch ? { batch: { decision: step.batch.decision, ordinal: step.batch.position, actionCount: step.batch.size, stopCode: step.batch.stoppedBy ? `llm_evidence_loop.batch.${step.batch.stoppedBy}` : null } } : {}) }];
   });
   return Object.freeze({
     outcome: "failed",
@@ -198,7 +212,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     providerCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null } : null,
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null, batchDecisions: batchDecisionsFromSteps(steps ?? []) } : null,
     failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}) },
     recoveredAfterTimeout: false,
     durationMs,
@@ -225,6 +239,33 @@ function accountingOf(value: { provider?: string; model?: string; inputTokens?: 
 /** The distinct tool ids among `values`, sorted: identifiers only, and none of Core's own decision steps. */
 function vocabulary(values: readonly string[]): string[] {
   return [...new Set(values.filter((value) => isVocabulary(value) && !value.startsWith(CORE_DECISION_STEP_PREFIX)))].sort();
+}
+
+function batchDecisionsOf(values: readonly CreatedFlowBuildBatchDecision[]): CreatedFlowBuildBatchDecision[] {
+  return values.map((batch) => ({
+    decision: batch.decision,
+    actionCount: batch.actionCount,
+    actions: batch.actions.map((action) => ({ ordinal: action.ordinal, resultCode: action.resultCode })),
+    stopCode: batch.stopCode,
+  }));
+}
+
+function batchDecisionsFromSteps(steps: readonly CreatedFlowBuildStep[]): CreatedFlowBuildBatchDecision[] {
+  const batches: CreatedFlowBuildBatchDecision[] = [];
+  for (const step of steps) {
+    if (!step.batch) continue;
+    const previous = batches.at(-1);
+    if (!previous || previous.decision !== step.batch.decision) {
+      batches.push({ decision: step.batch.decision, actionCount: step.batch.actionCount, actions: [{ ordinal: step.batch.ordinal, resultCode: step.resultCode ?? null }], stopCode: step.batch.stopCode });
+      continue;
+    }
+    batches[batches.length - 1] = {
+      ...previous,
+      actions: [...previous.actions, { ordinal: step.batch.ordinal, resultCode: step.resultCode ?? null }],
+      stopCode: step.batch.stopCode ?? previous.stopCode,
+    };
+  }
+  return batches;
 }
 
 function isVocabulary(value: string): boolean {
