@@ -342,6 +342,45 @@ Current briefs live in the reports named by the Work Ledger.
   coherent fix, and the same single-scenario live proof; no secret/page output
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-missing-result-verification.md`
 
+### Brief: w2-t024-project-database-lifetime
+- Repository: paired task t024, FluxIQ Core implementation with downstream live proof
+- Task: make the smallest coherent project-database pool lifetime change that
+  prevents a durable run-detail save from stalling during close/reopen races;
+  then rerun only `social-scheduler-schedule-post` live. Do not begin with tests.
+- Required reads: this document's Current State;
+  `reports/w2-t011-missing-result-verification.md`; Core
+  `storage/project/database.ts`, its direct pool users, and only its focused test
+- Owns (may edit): Core `packages/fluxiq/src/programs/automation-studio/storage/project/database.ts`,
+  temporary env-gated stage markers in Core `runtime/service.ts` and
+  `runtime/result-verification/run-outcome.ts` (removed before handoff), its
+  directly owned focused test if live behavior succeeds, and downstream
+  `reports/w2-t024-project-database-lifetime.md`
+- Must not touch: other Core/extension source, existing reports/working docs,
+  task t011, commits or pushes; no corpus or full suite
+- Definition of done: fix pool lifetime; same live scenario reaches terminal
+  playback plus durable `resultVerification.status: no_result` and fixture
+  oracle, or records the next precise blocker; only then run the narrowest
+  pool/type check
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-project-database-lifetime.md`
+
+### Brief: w2-t024-post-success-await-trace
+- Repository: paired task t024, both sides read-only
+- Task: while the current t024 schedule-post run remains live, trace the exact
+  unresolved await after its 9/9 successful playback. Distinguish run-detail
+  save, store release, session write, dataset listing, and verification entry
+  using closed lifecycle/SQLite/process evidence; reassess the pool hypothesis.
+- Required reads: Current State; t024 pool brief and t011 missing-verification
+  report; Core service post-success path, typed run-detail writer/repository,
+  database pool, result-verification ports; bounded live run state
+- Owns (may edit): only `reports/w2-t024-post-success-await-trace.md` in the
+  t024 extension worktree
+- Must not touch: source, tests, other reports/working docs, processes, commits
+  or pushes; no page data, secrets, build, unit suite, or new live run
+- Definition of done: name the exact unresolved promise or narrow it to the
+  smallest instrumentable boundary, explain why the first fix failed, and give
+  the next one-change live experiment
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-post-success-await-trace.md`
+
 ## Validation
 
 - Every step: the test and mutation targets its report names, rerun by the
