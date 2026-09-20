@@ -36,7 +36,7 @@ const CORE_DECISION_STEP_PREFIX = "core.";
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
-  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
+  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true; maxActionsPerDecision?: 1 | 16 }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
   listFlowAdaptations(projectId: string, flowId: string, status?: string): Promise<ExistingFlowAdaptationSummary[]>;
   getFlowAdaptation(projectId: string, flowId: string, adaptationId: string): Promise<ExistingFlowAdaptation>;
 };
@@ -105,21 +105,21 @@ export type CreatedFlowPermissionRequest = Readonly<{
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string }> },
+  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string; maxActionsPerDecision?: 1 | 16 }> },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
   const now = wait.now ?? Date.now;
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
-  const { grantId } = await input.authorize(input.flowId);
+  const { grantId, maxActionsPerDecision } = await input.authorize(input.flowId);
   // Core's evidence tools act on the one connected client, in this project's context.
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const startedAt = now();
   let envelope: FlowBootstrapGenerationEnvelope;
   try {
     envelope = await control.generateFlowBootstrapAdaptation(
-      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true },
+      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true, ...(maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision }) },
       { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {

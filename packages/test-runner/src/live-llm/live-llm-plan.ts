@@ -65,6 +65,8 @@ export type LiveLlmPlan = {
   model: "deepseek-chat";
   task: LlmTaskKind;
   purpose: LiveLlmPurpose;
+  /** Flow Bootstrap evidence decisions are single-action at `1` and batch-enabled at `16`. */
+  maxActionsPerDecision?: 1 | 16;
   /**
    * The grant's call count. One for a purpose that does not iterate; otherwise
    * exactly the operator's `--llm-max-calls`, which is never above Core's
@@ -115,11 +117,14 @@ export type LiveLlmPlan = {
  * provider: a profile that cannot be executed within its own stated bounds
  * fails before a run starts and before a key is read.
  */
-export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan {
+export function planLiveLlmExecution(profile: LlmExecutionProfile, maxActionsPerDecision?: 1 | 16): LiveLlmPlan {
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
   if (profile.provider !== "deepseek") throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; Core resolves only deepseek`);
   if (profile.model !== "deepseek-chat") throw refusal(`--llm-model ${describe(profile.model)} is unsupported; Core resolves only deepseek-chat`);
   const purpose = purposeOf(profile.task);
+  if (maxActionsPerDecision !== undefined && profile.task !== "create-flow") {
+    throw refusal("--llm-max-actions-per-decision requires --llm-task create-flow");
+  }
   const budget = profile.budget;
   if (budget.maxRetries !== 0) throw refusal(`--llm-max-retries ${budget.maxRetries} is unsupported; a live provider run permits no retries`);
   // The operator's number is checked whatever the purpose, so a cap outside
@@ -146,6 +151,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
     model: "deepseek-chat",
     task: profile.task,
     purpose,
+    ...(maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision }),
     maxCalls,
     tokenLimits,
     maxTotalTokensPerRun: runTokens.tokens,

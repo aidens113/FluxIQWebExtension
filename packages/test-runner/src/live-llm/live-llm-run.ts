@@ -44,12 +44,13 @@ type LiveLlmPublish = (details: Record<string, unknown>) => Promise<unknown>;
  */
 export async function beginLiveLlmRun(input: {
   profile: LlmExecutionProfile;
+  maxActionsPerDecision?: 1 | 16;
   repositoryRoot: string;
   environment: NodeJS.ProcessEnv;
   flowLane: boolean;
   targetMode: string;
 }): Promise<LiveLlmRun> {
-  const plan = planLiveLlmExecution(input.profile);
+  const plan = planLiveLlmExecution(input.profile, input.maxActionsPerDecision);
   assertLaneFlag(plan, input.flowLane);
   if (input.targetMode !== "isolated" && input.targetMode !== "persistent-isolated") {
     throw new RunnerFailure("fixture.invalid", `A live LLM run needs a Core this runner owns, and the ${input.targetMode} target's is not; use --target isolated or persistent-isolated`);
@@ -163,6 +164,7 @@ export class LiveLlmRun {
       model: plan.model,
       task: plan.task,
       purpose: plan.purpose,
+      maxActionsPerDecision: plan.maxActionsPerDecision ?? null,
       authorized: {
         maxCalls: plan.maxCalls,
         tokenLimits: plan.tokenLimits,
@@ -196,12 +198,12 @@ export class LiveLlmRun {
    * exists and its instruction is saved, just before the build, because Core
    * binds the grant to the Flow as it then stands.
    */
-  buildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<{ grantId: string }> {
+  buildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<{ grantId: string; maxActionsPerDecision?: 1 | 16 }> {
     return async (flowId: string) => {
       if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} grant cannot authorize a Flow build`);
       const authorization = await this.authorize(control, core, flowId, this.plan);
       this.grant = authorization.grant;
-      return { grantId: authorization.grant.grantId };
+      return { grantId: authorization.grant.grantId, ...(this.plan.maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision: this.plan.maxActionsPerDecision }) };
     };
   }
 
@@ -375,6 +377,7 @@ export class LiveLlmRun {
       model: this.plan.model,
       task: this.plan.task,
       purpose: this.plan.purpose,
+      maxActionsPerDecision: this.plan.maxActionsPerDecision ?? null,
       credentialSource: { name: this.credential.name, from: this.credential.source },
       authorized: {
         maxCalls: this.plan.maxCalls,

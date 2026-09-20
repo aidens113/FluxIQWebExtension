@@ -41,7 +41,7 @@ export type CreatedFlowLaneInput = {
   /** The declared secrets the task's workflow needs (`resolveCreatedFlowSecrets`); the runner also adds their values to the evidence redaction list. */
   secrets: readonly DeclaredSecret[];
   /** Installs the key, pins the Flow's settings and issues the `build_and_adapt` grant, against the Flow as it then stands. */
-  authorizeBuild: (flowId: string) => Promise<{ grantId: string }>;
+  authorizeBuild: (flowId: string) => Promise<{ grantId: string; maxActionsPerDecision?: 1 | 16 }>;
   /**
    * Publishes what the build spent and holds it to its caps, throwing on a
    * breach or on a build that reached no provider. Called once, before the

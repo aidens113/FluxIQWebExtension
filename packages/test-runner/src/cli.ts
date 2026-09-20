@@ -95,7 +95,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // Before the run, so an unexecutable profile or an absent credential is a
       // refusal an operator can read, rather than a sanitized facility failure
       // reported from inside a run that had already started a browser.
-      const live = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: command.flowLane === true, targetMode: target.mode }) : undefined;
+      const live = command.llm ? await beginLiveLlmRun({ profile: command.llm, ...(command.llmMaxActionsPerDecision === undefined ? {} : { maxActionsPerDecision: command.llmMaxActionsPerDecision }), repositoryRoot, environment: resolvedEnvironment, flowLane: command.flowLane === true, targetMode: target.mode }) : undefined;
       // After the live refusals, so a missing key is reported before a missing catalog: the task, its workflow and variant, and what judges it.
       const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
       if (command.dryRun) {

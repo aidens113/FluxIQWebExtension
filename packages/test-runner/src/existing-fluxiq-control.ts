@@ -264,7 +264,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
    * response. The payload is returned unread: the caller parses it with Core's
    * own parser and keeps only what that parser admits.
    */
-  async generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds: FluxIQHttpOptions = {}): Promise<FlowBootstrapGenerationEnvelope> {
+  async generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true; maxActionsPerDecision?: 1 | 16 }, bounds: FluxIQHttpOptions = {}): Promise<FlowBootstrapGenerationEnvelope> {
     const response = await this.authenticatedResponse("/api/programs/automation-studio/generate-flow-bootstrap-adaptation", input, "POST", bounds, "runtime.behavior");
     const body: unknown = await response.json().catch(() => undefined);
     const envelope = body && typeof body === "object" && !Array.isArray(body) ? body as JsonRecord : {};
