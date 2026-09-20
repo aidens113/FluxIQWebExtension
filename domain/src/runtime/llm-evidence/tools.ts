@@ -1,14 +1,13 @@
 // The web-only evidence tools bound into Core's domain-neutral LLM harness,
 // and the post-failure capture the runtime diagnosis path calls.
 //
-// Four tools. Three in increasing order of what they are allowed to do: inspect
-// observes, navigate moves within the page's own origin, press presses one
-// observed control. The fourth, detect, observes
+// Five tools. Inspect and detect observe; navigate moves within the page's own
+// origin; press presses one observed control; enter-field temporarily fills an
+// observed text field or select so the model can see the form respond. Detect
+// observes
 // too: it finds the repeating structure a scraping step needs and hands back an
 // opaque extraction handle for it (`structure/`). Everything they return is a
-// sanitized packet; everything they refuse returns a bare code. Form entry and
-// option selection are deliberately absent -- authoring a Flow never requires
-// the model to fill the page in. Press refuses nothing on its own judgement of
+// sanitized packet; everything they refuse returns a bare code. Press refuses nothing on its own judgement of
 // what a control looks like; see `./press.ts` for why, and for the seam where
 // a lasting press will ask the person for permission once Core carries it.
 
@@ -39,6 +38,7 @@ import {
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
+import { enterWebField } from "./enter-field";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import {
   createWebLlmTargetPackets,
@@ -49,6 +49,7 @@ import {
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmStateDigest } from "./state-digest";
+import { webLlmTargetsUnchanged } from "./target";
 import { currentElementForReturnedTarget, pressControl } from "./press";
 import { createWebLlmStableTargetHandles } from "./stable-handles";
 import {
@@ -64,13 +65,14 @@ import {
   type WebLlmSanitizeOptions,
   type WebLlmSnapshotBinding
 } from "./sanitize";
-import { validateWebRuntimeTargetOverrideEvidence } from "./target-override";
+import { validateWebRuntimeTargetOverrideEvidence } from "./target";
 import { recoverable, RecoverableToolRejection, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
   webLlmToolRejectionResultCode,
   WEB_LLM_ACTION_RESULT_CODE,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_ENTER_FIELD_TOOL_ID,
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
@@ -238,6 +240,12 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         effect: "mutate",
       },
       {
+        toolId: WEB_LLM_ENTER_FIELD_TOOL_ID,
+        description: "Enter a value into an observed text field or select by copying its opaque target handle exactly. Use this only to learn how the page responds while designing the Flow; put the same entry in the Flow itself. The returned packet never contains the entered text or any raw field value.",
+        inputSchema: { type: "object", required: ["target", "value"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, value: { type: "string", maxLength: WEB_LLM_EVIDENCE_BOUNDS.text } }, additionalProperties: false },
+        effect: "mutate",
+      },
+      {
         toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
         description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only. Write the list into the extraction node as extractList: {handle, fields?: {yourKey: \"fieldKey\" | \"fieldKey@attr\"}, paginate?: false, minItems?: 0}. Its count is the whole list: where the Flow returns only part of it, narrow the page first, minItems: 0 where the answer may be no rows.",
         inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
@@ -273,7 +281,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
           const snapshot = retain(stable(input, await captureEvidence(gateway, sessionId, input, input.signal, destination.origin)));
           shown(input, sessionId, snapshot);
-          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
         }
         if (input.toolId === WEB_LLM_PRESS_TOOL_ID) {
           exactToolKeys(input.value, ["target", "consequences"]);
@@ -288,7 +296,20 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
             consequences: input.value.consequences
           });
           shown(input, sessionId, snapshot);
-          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, webLlmTargetsUnchanged(current, snapshot));
+        }
+        if (input.toolId === WEB_LLM_ENTER_FIELD_TOOL_ID) {
+          exactToolKeys(input.value, ["target", "value"]);
+          const target = boundedTargetHandle(input.value.target);
+          const current = stable(input, await captureEvidence(gateway, sessionId, input, input.signal));
+          const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
+          const snapshot = retain(await enterWebField({
+            gateway, sessionId, request: input, current, element,
+            value: input.value.value,
+            restamp: (binding) => stable(input, binding)
+          }));
+          shown(input, sessionId, snapshot);
+          return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, webLlmTargetsUnchanged(current, snapshot));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
           return await detectRepeatingStructure({

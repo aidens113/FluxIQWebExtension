@@ -10,6 +10,7 @@
 export const WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.inspect",
   "web.recovery.press",
+  "web.recovery.enter_field",
   "web.recovery.wait_for_change",
   "web.recovery.navigate_in_scope",
   "web.recovery.detect_repeating_structure"
@@ -22,6 +23,7 @@ export const WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0]
 // in schema and differing only in which controls each refused on its own
 // judgement; with that judgement gone they were the same option twice.
 export const WEB_RECOVERY_PRESS_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
-export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
-export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
-export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+export const WEB_RECOVERY_ENTER_FIELD_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];

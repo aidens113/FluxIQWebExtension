@@ -70,6 +70,16 @@ right disclosure; Core reported an intact state chain and reduced the four
 steps to the one replayable press. t021's multi-action work remains stale;
 reconcile it only after field entry and truthful `targetsUnchanged` evidence.
 
+**In progress 2026-09-20 (t026):** authoring and recovery exploration now
+declare one inferred field-entry option for text controls and selects. The
+authoring path reports `targetsUnchanged: true` only when every previously
+shown handle still maps to the same selector at the same location; navigation
+and recovery stay conservative. A focused Chromium run on `social-scheduler`
+opened the composer, then entered post text, account, date, and time through the
+real content action path. Opening the modal truthfully invalidated old targets;
+all four field entries preserved them. Optional multi-action output remains the
+next task after t026 is integrated.
+
 **Open, for the next session, in priority order:**
 1. Add field entry and truthful `targetsUnchanged`, then reconcile t021's
    optional multi-action output against current `dev` and compare it live.
@@ -389,6 +399,27 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-20 — Live field entry and unchanged-target contract (t026)
+- Agent: supervisor, paired Core/downstream task.
+- Live first: the focused Chromium content-harness scenario opened the real
+  social-scheduler composer and entered its textarea, select, date, and time.
+  The modal-opening press reported unstable targets; every subsequent field
+  entry reported stable targets and the entered text/date/time stayed withheld
+  from their field evidence.
+- Changed: one inferred `enter_field` option now dispatches `web.dom.type` or
+  `web.dom.select`; Core accepts the optional `targetsUnchanged` result member;
+  authoring computes it from same-location handle-to-selector continuity.
+  Recovery emits `false` because its captures do not yet use stable handles.
+- Validation: `pnpm --filter @fluxiq-web-extension/extension test:content --
+  exploration-state/tests/field-entry-target-stability.spec.ts --workers=1`
+  printed 1 passed; `pnpm --filter @fluxiq-web-extension/domain check` passed;
+  the isolated target-stability unit printed 3/3 passed; Core's focused
+  evidence-loop unit printed 23/23 passed; and the serial downstream domain
+  suite printed 690/690 passed. Integration gates remain before merge.
+- Evidence: `reports/w2-t026-field-entry-target-stability.md`.
+- Follow-up: port current t021 batching semantics onto current Core, then run a
+  same-code single-action baseline and multi-action live comparison.
 
 ### 2026-09-20 — Live exploration state reduction works in Chromium
 - Agents: supervisor. Ported t005's one downstream commit onto current `dev`

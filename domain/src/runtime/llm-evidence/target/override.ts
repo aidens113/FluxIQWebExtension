@@ -14,7 +14,7 @@
 // control the failed action acted on, and until 2026-09-17 nothing asked the
 // second question: every refusal task in that day's live repair campaign came
 // back with a proposed target override on a page whose honest answer was that
-// there is nothing to repair. `./target-equivalence.ts` is that question, and
+// there is nothing to repair. `./equivalence.ts` is that question, and
 // what the failed node addressed -- the recording, or the repair that
 // superseded it -- is what Core now passes for it to be answered against.
 //
@@ -39,17 +39,17 @@
 // names one (`webFailedActionDefinitionId`), because a recorded action is
 // Core's generic `builtin.policy.action` whatever its verb.
 
-import { type WebLlmEvidenceElement } from "./elements";
-import { present } from "./present";
+import { type WebLlmEvidenceElement } from "../elements";
+import { present } from "../present";
 import {
   elementFillsRepairableParameter,
   webFailedActionDefinitionId,
   webRepairableParameterFor,
   webRepairableParameters,
   WEB_REPAIRABLE_ELEMENT_PARAMETER
-} from "./repairable-parameters";
-import type { WebLlmPageEvidence } from "./sanitize";
-import { webRepairEquivalenceRefusal } from "./target-equivalence";
+} from "../repairable-parameters";
+import type { WebLlmPageEvidence } from "../sanitize";
+import { webRepairEquivalenceRefusal } from "./equivalence";
 import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,

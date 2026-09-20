@@ -1,11 +1,11 @@
 // What each runtime harness option actually does to the page.
 //
-// Five actions: inspect observes; detect observes the repeating structure a
+// Six actions: inspect observes; detect observes the repeating structure a
 // scrape reads, exactly as the authoring detection does (`../structure/`);
 // wait observes again after a bounded pause; press presses one observed
 // control, through the same `../press.ts` the authoring tool uses; navigate
 // moves, but only where Core's scope policy says it may. Form entry and option
-// selection are absent here as they are from the authoring tools.
+// selection share one inferred field-entry action with authoring.
 //
 // Press refuses nothing on its own judgement of what a control looks like.
 // This runs while a real workflow is mid-failure, on somebody's live account,
@@ -26,6 +26,7 @@
 import type { AutomationStudioExplorationScopePolicy, AutomationStudioHarnessOptionExecution, AutomationStudioHarnessOptionImplementation } from "fluxiq/automation-studio";
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
+import { enterWebField } from "../enter-field";
 import {
   actAndCapture,
   assertActive,
@@ -47,6 +48,7 @@ import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSP
 import { webAutomationExplorationScope } from "./exploration-terms";
 import {
   WEB_RECOVERY_DETECT_OPTION_ID,
+  WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
   WEB_RECOVERY_PRESS_OPTION_ID,
@@ -126,7 +128,29 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         restamp: (binding) => binding,
         consequences: input.request.value.consequences
       });
-      return toolExecution(shown(input, pressed).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+      const snapshot = shown(input, pressed);
+      // Recovery packets intentionally renumber each capture, so they cannot
+      // prove a target from the decision packet kept its meaning across this
+      // action. Stay conservative until recovery adopts stable handles.
+      return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
+    }),
+    [WEB_RECOVERY_ENTER_FIELD_OPTION_ID]: run(async (input) => {
+      exactKeys(input.request.value, ["target", "value"]);
+      const target = handleIn(input.request.value);
+      const observed = shownPacket(input);
+      const current = await capture(context, input);
+      const element = currentElementForReturnedTarget(observed, current, target);
+      const entered = await enterWebField({
+        gateway: context.gateway,
+        sessionId: input.sessionId,
+        request: input.request,
+        current,
+        element,
+        value: input.request.value.value,
+        restamp: (binding) => binding
+      });
+      const snapshot = shown(input, entered);
+      return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
     }),
     // The authoring detection, bound through this exploration's packets and
     // keeping its handle in the runtime's store. It returns a structure packet,
@@ -162,7 +186,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // The recapture asserts it landed in the scope the policy allowed, not in
       // the one it started from: this is the one option permitted to move.
       const moved = await actAndCapture(context.gateway, input.sessionId, input.request, "web.browser.navigate", { url: destination.href }, current, input.request.signal, webAutomationExplorationScope(destination.href));
-      return toolExecution(shown(input, moved).evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+      return toolExecution(shown(input, moved).evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
     })
   };
 }

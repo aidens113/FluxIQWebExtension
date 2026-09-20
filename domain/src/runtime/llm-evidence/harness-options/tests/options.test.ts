@@ -42,7 +42,7 @@ test("hands the model the six tool fields and none of the gate metadata", () => 
     assert.deepEqual(Object.keys(tool).filter((key) => !["toolId", "description", "inputSchema", "effect", "repeatPolicy", "initialObservation"].includes(key)), [], tool.toolId);
   }
   assert.equal(tools.filter((tool) => tool.initialObservation !== undefined).length, 1);
-  assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.navigate_in_scope"]);
+  assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.enter_field", "web.recovery.navigate_in_scope"]);
 });
 
 // Gathering information never requires destroying anything, and the registry

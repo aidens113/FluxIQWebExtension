@@ -50,7 +50,7 @@ export {
   type WebLlmStructurePaginationMode
 } from "./structure";
 export { webLlmStateDigest } from "./state-digest";
-export { validateWebRuntimeTargetOverrideEvidence } from "./target-override";
+export { validateWebRuntimeTargetOverrideEvidence } from "./target";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,
   WEB_LLM_TOOL_RESULT_SCHEMA_VERSION,
@@ -67,6 +67,7 @@ export {
   WEB_LLM_NAVIGATE_TOOL_ID,
   WEB_LLM_PRESS_TOOL_ID,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_ENTER_FIELD_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebLlmEvidenceResultCode,
   type WebLlmEvidenceToolId,

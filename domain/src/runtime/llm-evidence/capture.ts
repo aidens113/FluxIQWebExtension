@@ -38,6 +38,7 @@ export type WebLlmEvidenceToolExecution = {
   kind: "llm_evidence_tool_execution";
   evidence: JsonValue;
   effectApplied: boolean;
+  targetsUnchanged?: boolean;
   resultCode?: string;
 };
 
@@ -68,8 +69,8 @@ export function toolMetadata(input: WebLlmEvidenceToolRequest): JsonObject {
   return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
 }
 
-export function toolExecution(evidence: JsonValue, effectApplied: boolean, resultCode: string): WebLlmEvidenceToolExecution {
-  return { kind: "llm_evidence_tool_execution", evidence, effectApplied, resultCode };
+export function toolExecution(evidence: JsonValue, effectApplied: boolean, resultCode: string, targetsUnchanged?: boolean): WebLlmEvidenceToolExecution {
+  return present<WebLlmEvidenceToolExecution>({ kind: "llm_evidence_tool_execution", evidence, effectApplied, targetsUnchanged, resultCode });
 }
 
 /** Cancellation is fatal, never a recoverable rejection: nothing is left to tell the model. */
