@@ -151,6 +151,12 @@ do not run the full suite after each change. The first target remains the
 schedule-post permission mismatch, followed by the created-lane timeout only
 after that scenario behaves correctly.
 
+**Live integration direction, 2026-09-20.** Add t021's optional multi-action
+exploration output to live testing after t011's permission path works, along
+with the missing field-entry option and `targetsUnchanged` signal needed for a
+fair measurement. Audit every other open task branch against `dev`; bring only
+coherent, still-needed work into the live sequence, with its own focused proof.
+
 **Worktree Lab runs:** `pnpm task start` keeps the shared Core current and the
 Lab refuses a stale one (t013). Always pass `FLUXIQ_TEST_ENV_FILES=none
 FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` and export the key from
@@ -284,6 +290,22 @@ Current briefs live in the reports named by the Work Ledger.
 - Definition of done: exact data-flow and file:line evidence; proposed minimal
   compatibility behavior; risks and one focused live proof for each seam
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-core-permission-seams.md`
+
+### Brief: w2-open-branch-live-audit
+- Repository: this repository; paired Core branches read-only where present
+- Task: audit every open task branch against current `dev`, its existing report,
+  and current landed code. Identify which unmerged changes are still needed for
+  live Week 2 testing, which are already superseded, and which must remain held.
+- Required reads: this document's Current State; `pnpm task list`; each open
+  branch's commits/diff stat; only the report directly associated with that task
+- Owns (may edit): only
+  `reports/w2-open-branch-live-audit.md` in the shared `dev` checkout
+- Must not touch: source, tests, other reports or working documents, task
+  branches/worktrees, Core source, commits or pushes
+- Definition of done: one evidence-backed row per open branch with disposition
+  `integrate-live`, `superseded/close`, or `hold`, dependencies, overlap risks,
+  and the narrow first live proof; explicitly assess t021 batching
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-open-branch-live-audit.md`
 
 ## Validation
 
