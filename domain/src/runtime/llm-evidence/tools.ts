@@ -323,6 +323,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         callId: input.callId,
         toolId: input.toolId,
         value: {},
+        permission: undefined,
         maxEvidenceBytes: undefined,
         signal: input.signal,
       }), input.signal);

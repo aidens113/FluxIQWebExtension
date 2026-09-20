@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-20. Live-first repair of the automation-creation lane is proven through normal runtime-session return; branch reconciliation and the multi-action exploration campaign are next.
+Status detail: Executing 2026-09-20. Live creation and the downstream exploration-state reducer are proven; field entry, truthful unchanged-target evidence, and optional multi-action exploration are next.
 Created: 2026-09-15
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -62,19 +62,17 @@ a granted run is read back after a timeout (fixed a regression t012 caused);
 t018 permission contract in Core, the instruction itself a grant; t020 routing
 and subflows the model can author, with context; t016 created-Flow repair.
 
-**In flight / held:** t024 integrates t011's read-only reveal wording and has
-now proved the schedule-post creation lane live through a normal
-`run-runtime-session` return. The result-verification fix is committed on its
-paired task and awaiting integration. t005's downstream state digest is one
-real unlanded commit and must be ported onto current `dev`. t021's multi-action
-work is uncommitted and stale; reconcile it only after field entry and truthful
-`targetsUnchanged` evidence exist.
+**Completed 2026-09-20:** t024 integrated t011's read-only reveal wording and
+proved the schedule-post creation lane through a normal runtime-session return.
+On its task branch, t025 ported t005's state digest onto current contracts and
+proved it in Chromium: inspect, open the wrong disclosure, close it, open the
+right disclosure; Core reported an intact state chain and reduced the four
+steps to the one replayable press. t021's multi-action work remains stale;
+reconcile it only after field entry and truthful `targetsUnchanged` evidence.
 
 **Open, for the next session, in priority order:**
-1. Integrate paired t024 (including t011). Live `run-muabdpmu-6c1f639d`
-   proved the read-only reveal wording, 9/9 action playback, provider-free
-   `no_result`, and a normal runtime-session return. Then port t005's current
-   downstream state-digest commit instead of merging its stale branch.
+1. Add field entry and truthful `targetsUnchanged`, then reconcile t021's
+   optional multi-action output against current `dev` and compare it live.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
@@ -139,9 +137,9 @@ with the missing field-entry option and `targetsUnchanged` signal needed for a
 fair measurement. Audit every other open task branch against `dev`; bring only
 coherent, still-needed work into the live sequence, with its own focused proof.
 
-**Next steps:** finish paired t024; port t005; add field entry and
-`targetsUnchanged`; reconcile t021's optional multi-action output and exercise
-it live; then use the corpus as the Week 2 measurement.
+**Next steps:** add field entry and `targetsUnchanged`; reconcile t021's
+optional multi-action output and exercise it live; then use the corpus as the
+Week 2 measurement.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -391,6 +389,24 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-20 — Live exploration state reduction works in Chromium
+- Agents: supervisor. Ported t005's one downstream commit onto current `dev`
+  as t025 and reconciled the added `repeats` evidence field plus the explicit
+  permission slot required by the current request contract.
+- Live first: a focused content-harness run used the real Chromium DOM and
+  content-script action/capture path while scripting only provider decisions.
+  It inspected the page, opened and closed a wrong disclosure, opened the right
+  disclosure, and completed with four recorded steps, no digest failures, an
+  intact state chain, and one replayable reduced press. The wrong panel was
+  closed and the right panel visible at the end.
+- Validation: `pnpm --filter @fluxiq-web-extension/extension test:content --
+  exploration-state-digest.spec.ts --workers=1` -> 1 passed; only afterwards,
+  domain and extension checks passed and the isolated state-digest unit file
+  passed 7/7. No full suite was run during iteration.
+- Outcome: Accepted for task integration. Detailed evidence is in
+  `reports/w2-t025-live-state-digest.md`.
+- Follow-up: field entry, truthful `targetsUnchanged`, then t021 batching live.
 
 ### 2026-09-20 — Live creation returns; empty dataset shells no longer deadlock verification
 - Agents: supervisor, `w2-t011-live-permission-resume`,
