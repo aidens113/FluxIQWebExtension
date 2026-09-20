@@ -48,6 +48,7 @@ import {
 } from "./plan-resolution";
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
+import { webLlmStateDigest } from "./state-digest";
 import { currentElementForReturnedTarget, pressControl } from "./press";
 import { createWebLlmStableTargetHandles } from "./stable-handles";
 import {
@@ -94,6 +95,18 @@ export type WebLlmFailureEvidenceRequest = {
   signal?: AbortSignal;
 };
 
+/** One moment Core wants the page's state digested at, named by the action it brackets. */
+export type WebLlmStateDigestRequest = {
+  projectId: string;
+  flowId: string;
+  /** The exploration step's call id, the same one its trace entry carries. */
+  callId: string;
+  toolId: string;
+  /** Whether the action is about to run, or has just run. */
+  phase: "before" | "after";
+  signal?: AbortSignal;
+};
+
 export type WebAutomationLlmEvidenceRuntime = {
   /** Whose options these are. Core scopes the harness-option registry by it, so the slot cannot be bound anonymously. */
   domainId: string;
@@ -105,6 +118,18 @@ export type WebAutomationLlmEvidenceRuntime = {
   /** How Core reads one of this domain's result codes as a refusal, without learning any of them. */
   classifyRefusal: (resultCode: string) => AutomationStudioExplorationStopReason | undefined;
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
+  /**
+   * What the page was at one moment, as the opaque digest Core compares for
+   * equality either side of each exploration action.
+   *
+   * It is the one thing Core's exploration reducer cannot work out for itself:
+   * Core's own digest is of the evidence a step returned, which is what the step
+   * said rather than what the page was. This takes a fresh sanitized capture and
+   * hashes a projection of it (`state-digest.ts`), which is why it widens
+   * nothing -- the input is the same packet the model would have been shown, and
+   * what leaves is a hash of less of it.
+   */
+  captureStateDigest(input: WebLlmStateDigestRequest): Promise<string>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
   validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
   /**
@@ -279,6 +304,30 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         if (error instanceof RecoverableToolRejection) return toolExecution(toolRejection(error.code), false, webLlmToolRejectionResultCode(error.code));
         throw error;
       }
+    },
+    async captureStateDigest(input) {
+      assertActive(input.signal);
+      boundedIdentifier(input.projectId, "projectId");
+      boundedIdentifier(input.flowId, "flowId");
+      boundedIdentifier(input.callId, "callId");
+      const sessionId = selectSession(gateway.eligibleSessionIds());
+      // A fresh capture, sanitized by the one path every packet goes through,
+      // and then thrown away. It is deliberately not `retain`ed and not `shown`:
+      // no model is ever given it, no handle it issues is ever resolvable, and
+      // letting it into the packet windows would age out a packet the model
+      // does read. No expected origin either -- an exploration action may
+      // legitimately move the page, and this has to describe wherever it landed.
+      const snapshot = await captureEvidence(gateway, sessionId, present<WebLlmEvidenceToolRequest>({
+        projectId: input.projectId,
+        flowId: input.flowId,
+        callId: input.callId,
+        toolId: input.toolId,
+        value: {},
+        permission: undefined,
+        maxEvidenceBytes: undefined,
+        signal: input.signal,
+      }), input.signal);
+      return webLlmStateDigest(snapshot.evidence);
     },
     async captureSanitizedFailureEvidence(input) {
       assertActive(input.signal);
