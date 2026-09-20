@@ -7,7 +7,7 @@
 // could act: a handle the model read out of one packet is written into a plan
 // that is resolved against the *newest* packet for that page
 // (`plan-resolution/target-packets.ts`), and an ordinary recapture -- what
-// `web.reveal_safe` does on success, and what a second inspect does -- renumbers
+// `web.press_control` does on success, and what a second inspect does -- renumbers
 // everything after any element that appeared or disappeared.
 //
 // Measured, not supposed. With the page `[banner, beds, band, search]`,
@@ -19,7 +19,7 @@
 // in, actual the target is a <button>` (`run-mu6btt9u-8ba762fd`).
 //
 // Two other readers already defended themselves against exactly this and said
-// so in their own words -- `reveal.ts`'s `currentElementForReturnedTarget` and
+// so in their own words -- `press.ts`'s `currentElementForReturnedTarget` and
 // the detection tool's `boundTarget` both bind a handle through the selector
 // recorded when it was issued. The plan resolver could not, because by then the
 // packet that issued the handle is gone. So the fix belongs where the handle is

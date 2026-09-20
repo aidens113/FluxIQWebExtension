@@ -42,7 +42,7 @@ test("hands the model the six tool fields and none of the gate metadata", () => 
     assert.deepEqual(Object.keys(tool).filter((key) => !["toolId", "description", "inputSchema", "effect", "repeatPolicy", "initialObservation"].includes(key)), [], tool.toolId);
   }
   assert.equal(tools.filter((tool) => tool.initialObservation !== undefined).length, 1);
-  assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.reveal", "web.recovery.act_safe", "web.recovery.navigate_in_scope"]);
+  assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.navigate_in_scope"]);
 });
 
 // Gathering information never requires destroying anything, and the registry
@@ -75,22 +75,25 @@ test("inspects the page, returns a sanitized packet naming elements by opaque ha
   assert.equal(retained[0]!.selectors.get("target.2"), "#delete");
 });
 
-test("dismisses a corroborated control and refuses the destructive one beside it, retaining only what the model was shown", async () => {
+// FluxIQ does not refuse a control on its own judgement of what it looks like.
+// This option used to be two -- `reveal` and `act_safe` -- each with its own
+// list of what it would not press, and "Delete item" here was refused on its
+// wording. The user's instruction is the authority now, and a lasting press is
+// a matter of permission carried by Core and put to the person (the seam is in
+// `../../press.ts`). Until Core carries it, the press is made: pinning that here
+// is what stops a word list being quietly put back in its place.
+test("presses the control it is asked to, whatever it says, and retains only what the model was shown", async () => {
   const { registry, commands, retained } = registeredWith();
   await execute(registry, "web.recovery.inspect", {});
 
-  const refused = await run(registry, "web.recovery.act_safe", { target: "target.2" });
-  assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unsafe" }, effectApplied: false, resultCode: "web.action.rejected.target_unsafe" });
-  assert.equal(commands.includes("web.dom.click"), false);
-  // The capture a refusal took was never shown, so nothing new is retained.
-  assert.equal(retained.length, 1);
+  const pressed = await run(registry, "web.recovery.press", { target: "target.2", consequences: [] });
 
-  const dismissed = await run(registry, "web.recovery.act_safe", { target: "target.1" });
-  assert.equal((dismissed as { resultCode: string }).resultCode, "web.action.succeeded");
-  assert.equal(commands.includes("web.dom.click"), true);
-  // The pre-click capture is not a packet the model saw; the recapture is.
+  assert.equal((pressed as { resultCode: string }).resultCode, "web.action.succeeded");
+  assert.equal((pressed as { effectApplied: boolean }).effectApplied, true);
+  assert.equal(commands.filter((command) => command === "web.dom.click").length, 1);
+  // The pre-press capture is not a packet the model saw; the recapture is.
   assert.equal(retained.length, 2);
-  assert.deepEqual(retained[1]!.evidence, (dismissed as { evidence: unknown }).evidence);
+  assert.deepEqual(retained[1]!.evidence, (pressed as { evidence: unknown }).evidence);
 });
 
 // A handle means something only against a packet this exploration returned.
@@ -100,8 +103,8 @@ test("dismisses a corroborated control and refuses the destructive one beside it
 test("refuses a target handle before this exploration has shown any packet, and clicks nothing", async () => {
   const { registry, commands } = registeredWith();
 
-  for (const optionId of ["web.recovery.act_safe", "web.recovery.reveal", "web.recovery.detect_repeating_structure"]) {
-    const refused = await run(registry, optionId, { target: "target.1" });
+  for (const optionId of ["web.recovery.press", "web.recovery.detect_repeating_structure"]) {
+    const refused = await run(registry, optionId, optionId === "web.recovery.press" ? { target: "target.1", consequences: [] } : { target: "target.1" });
     assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved" }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" }, optionId);
   }
   assert.equal(commands.includes("web.dom.click"), false);
@@ -135,12 +138,15 @@ test("refuses a bounded wait that changed nothing rather than returning the same
 });
 
 // The whole seam in one run: Core's loop, Core's budget, Core's registry, this
-// domain's options, this domain's semantic refusal. A model that asks to click
-// "Delete" ends the exploration in `unsafe_action_blocked` -- not in
-// `budget_exhausted`, and not in an exploration that quietly found nothing.
-test("ends a run that asked for a destructive click in unsafe_action_blocked, through Core's own runner", async () => {
+// domain's options, this domain's one remaining terminal refusal. A model that
+// asks to leave the scope it was given ends the exploration in
+// `unsafe_action_blocked` -- not in `budget_exhausted`, and not in an
+// exploration that quietly found nothing. It used to be a click on "Delete"
+// that ended this way; that refusal is gone, and a lasting press will instead
+// end in `user_intervention_required` once Core can carry what to ask.
+test("ends a run that asked to leave its scope in unsafe_action_blocked, through Core's own runner", async () => {
   const { registry, commands } = registeredWith();
-  const decisions: JsonObject[] = [{ kind: "tool_call", callId: "call.one", toolId: "web.recovery.act_safe", input: { target: "target.2" } }];
+  const decisions: JsonObject[] = [{ kind: "tool_call", callId: "call.one", toolId: "web.recovery.navigate_in_scope", input: { url: "https://other.test/next" } }];
   let index = 0;
 
   const exploration = await runAutomationStudioRuntimeExploration({
@@ -151,13 +157,13 @@ test("ends a run that asked for a destructive click in unsafe_action_blocked, th
   });
 
   assert.equal(exploration.outcome, "unsafe_action_blocked");
-  assert.equal(exploration.stopReason, "destructive_action_refused");
+  assert.equal(exploration.stopReason, "out_of_scope_refused");
   assert.equal(exploration.result, undefined);
   assert.equal(exploration.refusedActions, 1);
   // The initial observation ran, so "it found nothing" would have been a
   // separate and equally wrong answer. It is not the one that came back.
   assert.equal(exploration.observedActions, 1);
-  assert.equal(commands.includes("web.dom.click"), false);
+  assert.equal(commands.includes("web.browser.navigate"), false);
 });
 
 function registered(): AutomationStudioHarnessOptionRegistry {

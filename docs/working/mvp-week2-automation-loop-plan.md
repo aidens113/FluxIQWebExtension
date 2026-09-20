@@ -1,9 +1,9 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-16. Phases D, G, P, SEC, T, H, S and 2.1-2.3 are built, verified and pushed in both repositories; the Testing Lab now reaches the real DeepSeek provider. Phase 2.3 is inert until three worked-out diffs are applied. Loop phases 2.4-2.9 and X6 are not started.
+Status detail: Executing 2026-09-20. Live-first repair of the automation-creation lane is proven through normal runtime-session return; branch reconciliation and the multi-action exploration campaign are next.
 Created: 2026-09-15
-Last updated: 2026-09-15
+Last updated: 2026-09-20
 Owner: Senior supervisor agent
 Scope: Week 2 of the 30-day MVP, Phases 2.1-2.9: the automation loop (standardized adaptation context, diagnosis separated from exploration, bounded harness exploration, recovery success detection, converting exploration into reusable automation, validating, persisting, and resuming adaptations, and proving deterministic reuse), with Testing Lab verification. Phase 2.0, the data extraction foundation, lives in first-class-data-extraction-plan.md.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week2-automation-loop-plan.md`
@@ -43,26 +43,10 @@ point cannot reuse it unchanged.
 run's `evaluation.json`, never from the verdict: a run reporting `passed` while
 its oracle says `failed` was the commonest defect found on 2026-09-17.
 
-**The two scoping reports describe `ee25ac9`, not HEAD.** Five briefs drawn from
-them sent workers at defects already fixed; re-verify any file:line they give.
-
-**Where the goal stands, 2026-09-18 end of day (Core `80a8495`, here `20abce8`).**
-The user's measure of success is a created Flow replayed later with NO model
-producing the right answer; exploration counts for nothing. Proven live today:
-a Flow built from the week-ahead instruction was saved and replayed five times in
-separate invocations with no key, no grant and no provider — 14/14 records,
-byte-identical output (`pnpm lab replay`, t019). Routing proven the same way: one
-saved Flow took the announcement route when a dialog was present and the main
-route when not, 14/14 both (t020). A created Flow that broke after the site
-changed was repaired — the right target override proposed and held `pending`,
-never applied, $0.004 (t016). Four jobs are fully correct on the realistic
-corpus; the last full corpus (4 of 36) predates every fix below and has not been
-re-run.
-
 **Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
 deterministic-path patch gated by a compile-checked record
-(`runtime/service/adaptations/gates.ts`); exploration reduction on a per-step
-state digest (t005); 2.6 replay recorder (t007); a run that refuses to continue
+(`runtime/service/adaptations/gates.ts`); Core's exploration-reduction seam;
+2.6 replay recorder (t007); a run that refuses to continue
 on `resumable: false` and resumes from the failed node (t006); fail-closed
 result verification on `loop_verification`. Token limits derive from one
 constant sized to the model's 64k context, in all ten places that held a copy.
@@ -78,19 +62,19 @@ a granted run is read back after a timeout (fixed a regression t012 caused);
 t018 permission contract in Core, the instruction itself a grant; t020 routing
 and subflows the model can author, with context; t016 created-Flow repair.
 
-**In flight / held:** t011 (safety classification removed) lands only with its
-press wired to t018's permission seam — being wired now. t021 (many actions per
-model turn) is built on its branch but NOT landed: it showed no benefit live and
-no exploration tool can type into a field yet.
+**In flight / held:** t024 integrates t011's read-only reveal wording and has
+now proved the schedule-post creation lane live through a normal
+`run-runtime-session` return. The result-verification fix is committed on its
+paired task and awaiting integration. t005's downstream state digest is one
+real unlanded commit and must be ported onto current `dev`. t021's multi-action
+work is uncommitted and stale; reconcile it only after field entry and truthful
+`targetsUnchanged` evidence exist.
 
 **Open, for the next session, in priority order:**
-1. Land t011 (branch committed; press asks Core's permission live, nothing
-   commits). Both proofs failed: the model declares `create_new` for opening a
-   form while Core reads the instruction as `send_or_publish` (reconcile, and
-   word the press so showing is `[]`); plan steps need Core's `isReferenceShape`
-   (`plan-node-handles.ts` ~:79) to accept a consequence declaration; a 30 s
-   `run-runtime-session` timeout was still seen in the created lane after t022.
-   Then re-run the corpus as the Week 2 measurement.
+1. Integrate paired t024 (including t011). Live `run-muabdpmu-6c1f639d`
+   proved the read-only reveal wording, 9/9 action playback, provider-free
+   `no_result`, and a normal runtime-session return. Then port t005's current
+   downstream state-digest commit instead of merging its stale branch.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
@@ -114,7 +98,8 @@ no exploration tool can type into a field yet.
    `AutomationStudio*` names. The test-runner build never clears stale `dist`,
    so moved tests keep running (hit twice).
 10. Batching follow-ups (t021): a fill-field exploration tool, the domain sending
-    `targetsUnchanged`, then a fair before/after.
+    `targetsUnchanged`, then reconcile optional multi-action output onto current
+    `dev` and run a fair live before/after.
 **Not started:** 2.9, X6, the third entry point (improving an existing Flow).
 
 **The fixed call limit was the defect, not a constraint to design around (user
@@ -125,9 +110,6 @@ only as a far-away, configurable backstop, never a per-mode constant; starving
 the loop of calls is not how cost is controlled. The generalizable lesson: when
 a designed-in limit keeps generating blockers, the limit is the defect — report
 it as such instead of engineering workarounds inside it.
-
-**Concurrency is five workers, not nine.** Nine heavy workers crashed this
-machine twice; the memory fault makes that a real limit, not caution.
 
 **Live-testing campaign (user direction, 2026-09-16):** "get to a point where
 we have at least basic automation able to be created & repaired by simply
@@ -157,13 +139,9 @@ with the missing field-entry option and `targetsUnchanged` signal needed for a
 fair measurement. Audit every other open task branch against `dev`; bring only
 coherent, still-needed work into the live sequence, with its own focused proof.
 
-**Worktree Lab runs:** `pnpm task start` keeps the shared Core current and the
-Lab refuses a stale one (t013). Always pass `FLUXIQ_TEST_ENV_FILES=none
-FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=<id>` and export the key from
-`.env.local`; never `--no-build` on a fresh instance.
-
-**Next steps:** land t011 with the permission seam wired; re-run the corpus;
-then the open list above, in order.
+**Next steps:** finish paired t024; port t005; add field entry and
+`targetsUnchanged`; reconcile t021's optional multi-action output and exercise
+it live; then use the corpus as the Week 2 measurement.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -413,6 +391,32 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-20 — Live creation returns; empty dataset shells no longer deadlock verification
+- Agents: supervisor, `w2-t011-live-permission-resume`,
+  `w2-t024-project-database-lifetime`, and focused read-only trace workers.
+- Why: the schedule-post Flow played back successfully but the Lab timed out
+  waiting for the created runtime session, so no later live campaign could be
+  trusted. The user required same-scenario live iteration before unit suites.
+- Found: the action Flow creates one dataset catalog row with zero stored and
+  zero refused rows. Verification used dataset-count presence to enter provider
+  resolution, revalidating the already-used execution grant and never
+  returning. A first database-pool hypothesis was falsified live. Several
+  reruns also exposed stale Next artifacts; the decisive run used a fresh cache
+  whose source maps contained the new predicates and none of the old gate.
+- Changed: read-only reveal presses are described as declaring no consequences;
+  result verification uses total stored rows for its provider-free branch, and
+  records `no_result` only when both stored and refused row counts are zero.
+  All-refused output remains a deterministic Core failure.
+- Validation: live `run-muabdpmu-6c1f639d` returned normally in 160,663 ms,
+  performed 9 actions, used 3 creation calls and 0 recovery calls, skipped
+  instruction/provider resolution after summarizing one empty dataset shell,
+  persisted `resultVerification: "no_result"`, and completed both runtime and
+  run-detail writes. `pnpm --filter fluxiq build` then passed after temporary
+  tracing was removed. No unit or full suite was run during the live loop.
+- Outcome: Accepted for integration.
+- Follow-up: port t005, then field entry plus `targetsUnchanged`, then reconcile
+  and live-test optional multi-action exploration output from t021.
 
 ### 2026-09-18 — Save, replay, route and repair, with no model in the replay
 - Agents: supervisor, plus t013, t015, t016, t018, t019, t020, t022, t023

@@ -190,6 +190,8 @@ const proposedBuild: CreatedFlowBuild = {
   providerInvocation: "attempted",
   accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 20_000, outputTokens: 3_000, totalTokens: 23_000, estimatedCostUsd: 0.02 },
   evidenceLoop: { decisionCount: 5, toolCallCount: 4, evidenceBytes: 9_000, toolIds: ["web.recovery.inspect"], steps: null },
+  instructedConsequences: [],
+  permissionRequest: null,
   failure: null,
   recoveredAfterTimeout: false,
   durationMs: 40_000,

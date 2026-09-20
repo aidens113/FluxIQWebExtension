@@ -65,6 +65,13 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   Core recorded it; `toolIds` are the tools among them.
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
+ * - `instructedConsequences`: the lasting consequences Core found the person's
+ *   instruction asks for, each with the words it quoted, as stored on the
+ *   proposal. `null` on a refused build, `[]` when the build asked nothing.
+ * - `permissionRequest`: the request Core raised when the build needed a
+ *   lasting consequence nobody allowed (`flow_bootstrap.permission_required`):
+ *   what the action was, the control as the model was shown it, and which
+ *   classes were missing. Core's own payload for the person, cut to those.
  */
 export type CreatedFlowBuild = Readonly<{
   outcome: "proposed" | "failed";
@@ -76,6 +83,19 @@ export type CreatedFlowBuild = Readonly<{
   failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[] }> | null;
   recoveredAfterTimeout: boolean;
   durationMs: number;
+  instructedConsequences: ReadonlyArray<Readonly<{ consequence: string; quote: string }>> | null;
+  permissionRequest: CreatedFlowPermissionRequest | null;
+}>;
+
+export type CreatedFlowPermissionRequest = Readonly<{
+  actionKind: string;
+  verb: string;
+  controlName: string | null;
+  controlKind: string | null;
+  consequences: readonly string[];
+  missing: readonly string[];
+  /** What Core read the person's instruction as asking for, each with the words it quoted. */
+  instructed: ReadonlyArray<Readonly<{ consequence: string; quote: string }>>;
 }>;
 
 /**
@@ -149,6 +169,8 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
     evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: null } : null,
     recoveredAfterTimeout,
     durationMs,
+    instructedConsequences: await instructedConsequencesOf(control, input, adaptationId),
+    permissionRequest: null,
   };
   const problem = detail.status !== "proposed" || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
     : !loop ? "lab.proposal_without_evidence_audit"
@@ -180,11 +202,13 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}) },
     recoveredAfterTimeout: false,
     durationMs,
+    instructedConsequences: null,
+    permissionRequest: diagnostic.permissionRequest ? permissionRequestOf(diagnostic.permissionRequest) : null,
   });
 }
 
 function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {
-  return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs });
+  return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs, instructedConsequences: null, permissionRequest: null });
 }
 
 function accountingOf(value: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number }): CreatedFlowBuildAccounting {
@@ -214,4 +238,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function record(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) throw new RunnerFailure("runtime.behavior", "Core answered the Flow build with a malformed payload");
   return value;
+}
+
+/** Core's request for the person, cut to what the build record needs to show it. */
+function permissionRequestOf(request: { action: { kind: string; verb: string }; control: { name: string | null; kind: string | null }; consequences: readonly string[]; missing: readonly string[]; authority?: { instructed?: ReadonlyArray<{ consequence: string; quote: string }> } }): CreatedFlowPermissionRequest {
+  return Object.freeze({
+    actionKind: request.action.kind,
+    verb: request.action.verb,
+    controlName: request.control.name,
+    controlKind: request.control.kind,
+    consequences: Object.freeze([...request.consequences]),
+    missing: Object.freeze([...request.missing]),
+    instructed: Object.freeze((request.authority?.instructed ?? []).map((entry) => Object.freeze({ consequence: entry.consequence, quote: entry.quote.slice(0, 200) }))),
+  });
+}
+
+/**
+ * The instructed consequences stored on the proposal, read from Core's own
+ * record of it. Only the class and the quoted words are kept: the instruction
+ * id and digest are Core's to check, not the record's to show.
+ */
+async function instructedConsequencesOf(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string }, adaptationId: string): Promise<CreatedFlowBuild["instructedConsequences"]> {
+  const payload = await control.automationStudioCall("get-flow-adaptation", { projectId: input.projectId, flowId: input.flowId, adaptationId });
+  const adaptation = isRecord(payload) && isRecord(payload.adaptation) ? payload.adaptation : undefined;
+  const stored = adaptation?.instructedConsequences;
+  if (!Array.isArray(stored)) return Object.freeze([]);
+  return Object.freeze(stored.flatMap((entry) => isRecord(entry) && typeof entry.consequence === "string" && typeof entry.quote === "string"
+    ? [Object.freeze({ consequence: entry.consequence, quote: entry.quote.slice(0, 200) })]
+    : []));
 }

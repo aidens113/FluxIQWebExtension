@@ -3,7 +3,7 @@
 // only as types, because a consumer outside this package has to enumerate them
 // -- `packages/test-runner` filters its sanitized diagnostic by exactly these
 // sets, and while they were hand-maintained both halves drifted: the tool
-// allowlist omitted `web.reveal_safe`, so every reveal step was silently
+// allowlist omitted `web.reveal_safe` (now `web.press_control`), so every such step was silently
 // dropped, and the result-code list omitted `web.action.rejected.no_progress`.
 //
 // Each vocabulary type is now derived from its value rather than declared
@@ -13,13 +13,13 @@
 import { WEB_LLM_TOOL_REJECTION_CODES, type WebLlmToolRejectionCode } from "./tool-rejection";
 
 /** Every tool `createWebAutomationLlmEvidenceRuntime` offers, in the order it offers them. */
-export const WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"] as const;
+export const WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.press_control", "web.detect_repeating_structure"] as const;
 
 export type WebLlmEvidenceToolId = (typeof WEB_LLM_EVIDENCE_TOOL_IDS)[number];
 
 export const WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 export const WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
-export const WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+export const WEB_LLM_PRESS_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
 export const WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 
 /** An observation succeeded: evidence was captured and nothing on the page moved. */

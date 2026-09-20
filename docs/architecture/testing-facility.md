@@ -33,7 +33,7 @@ explicitly marked untrusted and must not be written to Lab artifacts or logs.
 Production composition uses the same ownership boundary. The web domain binds
 `domain/src/runtime/llm-evidence/` through `registerWebAutomationRuntime`,
 which is called by the web-panel host. Its authoring-time surface exposes
-`web.inspect_current_page`, `web.navigate_same_origin`, and `web.reveal_safe`
+`web.inspect_current_page`, `web.navigate_same_origin`, and `web.press_control`
 to Core's domain-neutral evidence loop. These tools use the
 existing Automation Studio client-gateway action bridge; they
 require exactly one ready, trusted, idle-recorder web extension and fail closed
@@ -45,17 +45,28 @@ the recoverable `no_progress` result without applying an effect. Interaction
 handles remain bound to the selector in the latest evidence returned for that
 session, project, and Flow. A fresh snapshot must still contain that selector
 uniquely at the same location before execution; fresh ordinal ranking cannot
-silently rebind the handle to a different element. Reveal accepts only parsed
-semantic disclosures (`aria-expanded`, `aria-controls`, or `summary`) and view
-controls (`tab`, `menuitem`, or `treeitem`); it rejects generic action,
-submit/purchase, and destructive controls. Form filling and option selection
+silently rebind the handle to a different element. Press presses the control
+the handle names and refuses nothing on FluxIQ's own judgement of what the
+control looks like: the user's instruction is the authority. Until 2026-09-18
+it accepted only semantic disclosures and view controls and refused any
+control whose label -- or selector -- carried a committing word, which left a
+plain "New post" button and every row control of an order-management site
+unpressable. A press, or a Flow step, whose consequence lasts is asked of
+Core's permission check first (`domain/src/runtime/llm-evidence/permission.ts`).
+The model declares what its own action does in Core's classes -- `move_money`,
+`delete`, `send_or_publish`, `modify_existing`, `create_new` -- on the press's
+`consequences` input or on the step's target handle, and Core answers from the
+person's grant and from what his instruction asks for. A refusal ends the build
+with Core's permission request for the person; FluxIQ judges no control by how
+it looks. A checkbox press is pressed back once the page has been read,
+so exploration leaves the page as it found it. Form filling and option selection
 are deliberately absent from the authoring tool catalog. Parsed evidence
 already contains the control metadata and bounded options needed to propose
 those Flow nodes, while executing them would perform the workflow being
 authored instead of discovering structure. Those operations remain available
 as ordinary `web.dom.type` and `web.dom.select` actions in Testing Lab/manual
 runtime control and as generated Flow outputs. Every authoring interaction
-recaptures evidence and rejects an origin change. A reveal whose post-click
+recaptures evidence and rejects an origin change. A press whose post-click
 parsed evidence is unchanged returns recoverable `no_progress` with
 `effectApplied: false`. Expected model-correctable policy/input rejections return only a
 `web-llm-tool-result.v1` object with `ok: false` and an allowlisted code, so

@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { currentAutomationTabId, forgetAutomationTab, latestOpenAutomationTab, setAutomationTab } from "../automation-tab";
+import { currentAutomationTabId, forgetAutomationTab, latestOpenAutomationTab, resolveAutomationTab, setAutomationTab } from "../automation-tab";
 
 function stubOpenTabs(t: TestContext, open: ReadonlySet<number>): void {
   const holder = globalThis as { chrome?: unknown };
@@ -59,4 +59,55 @@ test("the latest open automation tab skips, and forgets, tabs that have closed",
 
   forgetAutomationTab(4);
   assert.equal(await latestOpenAutomationTab(), undefined);
+});
+
+// Chrome ignores a `tabs.update` to the address the tab already shows. A Flow
+// whose opening navigate names the page the tab is already on therefore did
+// nothing at all, and inherited whatever the last thing to touch that tab had
+// left on it -- which is how a dialog opened while the Flow was being authored
+// was still up when the Flow ran, and blocked its first step. A navigation
+// means "be on this page", not "be on this page unless you already are".
+function stubDrivableTab(t: TestContext, tabId: number, url: string): { updates: unknown[]; reloads: number[] } {
+  const holder = globalThis as { chrome?: unknown };
+  const previous = holder.chrome;
+  const updates: unknown[] = [];
+  const reloads: number[] = [];
+  holder.chrome = {
+    tabs: {
+      get: async (asked: number) => {
+        if (asked !== tabId) throw new Error(`No tab with id: ${asked}.`);
+        return { id: tabId, url, status: "complete" };
+      },
+      update: async (_asked: number, properties: unknown) => void updates.push(properties),
+      reload: async (asked: number) => void reloads.push(asked),
+      onUpdated: { addListener: () => undefined, removeListener: () => undefined },
+    },
+  };
+  t.after(() => {
+    holder.chrome = previous;
+  });
+  return { updates, reloads };
+}
+
+test("a navigation to the page the tab already shows reloads it, so nothing is inherited", async (t) => {
+  const driven = stubDrivableTab(t, 7, "https://example.test/queue");
+  forgetAutomationTab();
+  setAutomationTab(7);
+
+  assert.equal(await resolveAutomationTab({ initialUrl: "https://example.test/queue" }), 7);
+
+  assert.deepEqual(driven.reloads, [7]);
+  // Brought forward, but never asked to navigate to where it already is.
+  assert.deepEqual(driven.updates, [{ active: true }]);
+});
+
+test("a navigation somewhere else drives the tab there, and does not reload", async (t) => {
+  const driven = stubDrivableTab(t, 7, "https://example.test/queue");
+  forgetAutomationTab();
+  setAutomationTab(7);
+
+  assert.equal(await resolveAutomationTab({ initialUrl: "https://example.test/orders" }), 7);
+
+  assert.deepEqual(driven.reloads, []);
+  assert.deepEqual(driven.updates, [{ url: "https://example.test/orders", active: true }]);
 });

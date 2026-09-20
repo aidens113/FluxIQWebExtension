@@ -28,7 +28,7 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "out_of_scope",
   "no_progress",
   "target_unobserved",
-  "target_unsafe",
+  "permission_required",
   "sensitive_value",
   "no_repeating_structure"
 ] as const;

@@ -2,13 +2,13 @@
 //
 // Decision L14 says exploration is a Core capability and an imported domain
 // **extends** the Core set rather than replacing it. This is that extension:
-// six declarations in Core's own option shape, scoped to this domain, pinned
+// five declarations in Core's own option shape, scoped to this domain, pinned
 // to the stages where exploring is what the loop is meant to be doing, and
 // handed to the registry as a bundle. Core does not learn what a page is; it
-// learns that this domain offers six actions, what each one costs in side
+// learns that this domain offers five actions, what each one costs in side
 // effects, and when it may be offered.
 //
-// The sixth is structure detection, the same look at a list that creation has
+// The last is structure detection, the same look at a list that creation has
 // (`web.detect_repeating_structure`), under its own id. It cannot share the
 // authoring id: Core folds the runtime's plain tools and these options into
 // one bundle, and a second declaration of one id would replace the authoring
@@ -23,11 +23,12 @@
 // old single `llmEvidenceRuntime` slot could not express at all -- its three
 // tools went to every caller there was.
 //
-// **The three that change the page declare `sideEffect: "mutate"`, and none
+// **The two that change the page declare `sideEffect: "mutate"`, and none
 // declares `destructive`.** The registry never offers a destructive option, so
-// declaring one would be declaring something unreachable; the honest place for
-// the destructive rule is `safety.ts`, where it is a semantic test of a real
-// control rather than a label on a tool.
+// declaring one would be declaring something unreachable. There is no longer a
+// local destructive rule either: the press option presses what it is asked to,
+// and a lasting consequence is a matter of permission, decided by Core -- see
+// the seam in `../press.ts`.
 //
 // **Nothing declares a required runtime capability or permission.** It was
 // tempting, and it would have been the silent-no-protection shape this plan
@@ -35,18 +36,19 @@
 // caller does not supply, and nothing in this repository supplies one today, so
 // every option would have been silently absent and the exploration would have
 // found "nothing to do". When a capability name exists and a host supplies it,
-// it belongs here.
+// it belongs here -- and that is one candidate attachment point for the
+// permission a lasting press will need on this recovery path.
 
 import type { AutomationStudioHarnessOption, AutomationStudioHarnessOptionBundle } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
 import { webRecoveryHarnessImplementations, WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";
 import {
-  WEB_RECOVERY_ACT_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
-  WEB_RECOVERY_REVEAL_OPTION_ID,
+  WEB_RECOVERY_PRESS_OPTION_ID,
   WEB_RECOVERY_WAIT_OPTION_ID
 } from "./vocabulary";
 
@@ -57,7 +59,7 @@ const EXPLORATION_STAGES = ["gather", "iterate"] as const;
 
 const DOMAIN_SCOPE = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID } as const;
 
-/** The six declarations, in the order the registry receives them. */
+/** The five declarations, in the order the registry receives them. */
 export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOption[] {
   return [
     {
@@ -74,18 +76,9 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
       stages: [...EXPLORATION_STAGES]
     },
     {
-      toolId: WEB_RECOVERY_REVEAL_OPTION_ID,
-      description: "Reveal otherwise unavailable page structure through an observed disclosure, tab, menu item, or tree item by copying its opaque target handle exactly. Form entry, option selection, submission, and generic action buttons are unavailable.",
-      inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
-      effect: "mutate",
-      availability: DOMAIN_SCOPE,
-      safety: { sideEffect: "mutate" },
-      stages: [...EXPLORATION_STAGES]
-    },
-    {
-      toolId: WEB_RECOVERY_ACT_OPTION_ID,
-      description: "Dismiss what is covering the page, or switch which view is shown, by copying an observed control's opaque target handle exactly. A control that submits, saves, sends, pays, or deletes is refused, as is one with nothing identifying it that the page does not otherwise corroborate.",
-      inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
+      toolId: WEB_RECOVERY_PRESS_OPTION_ID,
+      description: "Press an observed control by copying its opaque target handle exactly, then capture the page it produces: a button, a link, a tab, a menu, a disclosure, a checkbox. A checkbox is pressed again afterwards, so the page is left as it was found. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
+      inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
       effect: "mutate",
       availability: DOMAIN_SCOPE,
       safety: { sideEffect: "mutate" },

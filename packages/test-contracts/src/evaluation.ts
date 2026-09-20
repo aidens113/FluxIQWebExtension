@@ -60,7 +60,18 @@ export type FacilityFailureDiagnostic = {
   operationStage?: FacilityFailureOperationStage;
   causeCode?: FacilityFailureCauseCode;
   timeoutMs?: number;
+  /**
+   * The Core route an `http.*` failure went to, such as
+   * `/api/programs/automation-studio/run-runtime-session`. A route is the
+   * runner's own constant, never page or user data. Without it a timeout said
+   * only that one of several requests had timed out, and on 2026-09-18 a
+   * created Flow's playback failed that way twice before anyone could say which.
+   */
+  endpoint?: string;
 };
+
+/** What a facility failure's `endpoint` may be: a Core API route and nothing else. */
+export const FACILITY_FAILURE_ENDPOINT_PATTERN = /^\/api\/[a-z0-9][a-z0-9/_-]{0,119}$/u;
 
 /**
  * Lanes a run evaluation comes from. `recording`: the Testing Lab drives the

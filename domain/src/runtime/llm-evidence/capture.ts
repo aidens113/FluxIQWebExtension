@@ -9,6 +9,7 @@
 // sanitize to different budgets, or mark a failed target in one and not the
 // other, without anybody deciding that they should.
 
+import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { present } from "./present";
@@ -48,6 +49,12 @@ export type WebLlmEvidenceToolRequest = {
   value: JsonObject;
   maxEvidenceBytes?: number;
   signal?: AbortSignal;
+  /**
+   * Core's check for an action with a lasting consequence, passed with every
+   * tool call and harness option (`AS/runtime/action-permissions/`). Absent,
+   * any declared consequence is refused rather than taken.
+   */
+  permission?: AutomationStudioActionPermissionCheck;
 };
 
 /** Exactly one connected web client, or nothing: two would make "the page" ambiguous. */
