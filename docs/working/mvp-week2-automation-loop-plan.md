@@ -361,6 +361,24 @@ Current briefs live in the reports named by the Work Ledger.
   pool/type check
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-project-database-lifetime.md`
 
+### Brief: w2-t024-post-success-await-trace
+- Repository: paired task t024, both sides read-only
+- Task: while the current t024 schedule-post run remains live, trace the exact
+  unresolved await after its 9/9 successful playback. Distinguish run-detail
+  save, store release, session write, dataset listing, and verification entry
+  using closed lifecycle/SQLite/process evidence; reassess the pool hypothesis.
+- Required reads: Current State; t024 pool brief and t011 missing-verification
+  report; Core service post-success path, typed run-detail writer/repository,
+  database pool, result-verification ports; bounded live run state
+- Owns (may edit): only `reports/w2-t024-post-success-await-trace.md` in the
+  t024 extension worktree
+- Must not touch: source, tests, other reports/working docs, processes, commits
+  or pushes; no page data, secrets, build, unit suite, or new live run
+- Definition of done: name the exact unresolved promise or narrow it to the
+  smallest instrumentable boundary, explain why the first fix failed, and give
+  the next one-change live experiment
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-post-success-await-trace.md`
+
 ## Validation
 
 - Every step: the test and mutation targets its report names, rerun by the
