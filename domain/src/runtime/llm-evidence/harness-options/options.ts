@@ -77,7 +77,7 @@ export function webAutomationRecoveryHarnessOptions(): AutomationStudioHarnessOp
     },
     {
       toolId: WEB_RECOVERY_PRESS_OPTION_ID,
-      description: "Press an observed control by copying its opaque target handle exactly, then capture the page it produces: a button, a link, a tab, a menu, a disclosure, a checkbox. A checkbox is pressed again afterwards, so the page is left as it was found. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new -- or [] when it only changes what is shown. A lasting press the instruction did not ask for is not made: it is put to the person.",
+      description: "Press an observed control by copying its opaque target handle exactly, then capture the page it produces: a button, a link, a tab, a menu, a disclosure, a checkbox. A checkbox is pressed again afterwards, so the page is left as it was found. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
       inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
       effect: "mutate",
       availability: DOMAIN_SCOPE,
