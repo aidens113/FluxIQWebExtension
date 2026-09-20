@@ -1,276 +1,398 @@
-# w2 — Reveal is not commit: what exploration may press
+# w2 — Exploration presses what it is asked to: the safety rule removed
 
 Worker report. Branch `task/t011-exploration-reveal-safety`, worktree
-`F:\fxwork\t011-exploration-reveal-safety`. Nothing committed.
+`F:\fxwork\t011-exploration-reveal-safety`, base `a08237b` (dev merged by the
+supervisor: includes t009, `0f156db`, t010, t012). Nothing committed by me.
 
 ## Outcome
 
-Partial. The defect is fixed and proven, at the rule and in a live run: the
-exploration gate no longer refuses openers, row checkboxes, row menus or
-in-site links, and it still refuses Send, Save, Delete, Confirm, Refund,
-Dispatch, Assign, Resolve, anything that submits a form, and anything inside an
-open dialog. The `schedule-post` job still does not build a Flow live, but for a
-different reason than it did before, and that reason is recorded below.
+Partial, and for a new reason. Piece 1 of the user's design is done: FluxIQ no
+longer refuses any control on its own judgement of what it looks like, the
+tool is renamed to say what it is, and the page-as-found work stands. Measured
+live on the merged base, **exploration now opens the composer and the build
+proposes a Flow** — the first `schedule-post` build to do so, in 3 and 5
+provider calls.
 
-## What I inherited, and whether I kept it
+The job still does not change the page, because after the build proposes, a
+FluxIQ control request exceeds its 30-second bound — 2 of 2 runs. That happens
+before the Flow runs, in the approve/apply/start sequence, not in exploration.
+Pieces 2 and 3 (permission and escalation) are Core's and were not built.
 
-A previous worker was killed mid-edit. On disk were a rewritten
-`domain/src/runtime/llm-evidence/reveal.ts` and a new, untracked
-`domain/src/runtime/llm-evidence/control-intent/` holding `index.ts`,
-`intent.ts` and `wording.ts`.
+## Live evidence
 
-**I kept all of it**, and it is the larger part of the fix. It was the right
-shape and the tree did not compile only because it was unfinished:
-`safeRevealElement` had grown a second parameter and neither call site had been
-updated, so `pnpm build` failed with two `TS2554` errors. What it had right:
+All runs are `social-scheduler-schedule-post` against real DeepSeek, from the
+worktree, with `DEEPSEEK_API_KEY` exported from `.env.local` (never printed)
+and `FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=isolated
+FLUXIQ_LAB_INSTANCE=t011`. The last two runs also set `FLUXIQ_TEST_RUNS_DIR='F:\r11'`.
 
-- The decision moved out of `reveal.ts` into a module of its own that takes a
-  **packet element**, which carries no selector — so reading a selector is
-  impossible rather than merely discouraged.
-- Three classes of word rather than one list, which is what lets "Post" commit
-  while "New post" opens.
-- One `pressToReveal` shared by the authoring tool and the runtime recovery
-  option, so the two cannot drift.
-- Unticking a row after reading the page it revealed.
+### Before any change (base `3ba6742`)
 
-What I finished or corrected:
+`run-mu7c7sd5-4da03bfd`: no Flow, 4 of 4 reveals refused
+`web.action.rejected.target_unsafe`, then the same call repeated 4 times,
+navigation in circles, `flow_bootstrap.evidence_iteration_limit`. **27 provider
+calls against an authorized 26** — `performance.budget`, $0.1156. **Only this
+baseline hit the call ceiling.** Every run after it stayed far below the ceiling.
 
-1. Wired both call sites (`tools.ts`, `harness-options/execute.ts`) through
-   `pressToReveal`. Until this the tree did not build.
-2. Removed the second selector-reading gate, in
-   `harness-options/safety.ts`, which the inherited work had not touched. Its
-   `WEB_RECOVERY_COMMITTING_WORDS` regex was matched against
-   `[element.name, element.text, element.selector]`. It now asks the same
-   `webControlWording`. The exported regex is deleted, not left for reuse.
-3. Corrected one thing the inherited work had wrong: it read
-   `page.blockedBy` as "a dialog is up" and refused every opener while it was
-   set. `blockedBy` means some ranked control is painted over by something,
-   which a sticky header does on any ordinary dashboard. See "The one
-   correction" below.
-4. Rewrote the reveal tool's description, which is the model's only statement
-   of what the tool is for and still described the old allowlist.
-5. Added the tests.
+### After the reveal/commit rule, still on the stale base
 
-## The reproduction, before any change
+Five runs (`run-mu7cj62r`, `-mu7cojks`, `-mu7ctzm2`, `-mu7cx0s3`, `-mu7dfyht`)
+plus `order-operations-partial-refund` (`run-mu7djnl3`): 5–9 calls each, no
+button/checkbox/link/menu refused, no Flow. Every one ended on the
+**no-progress guard** (`evidence_repeat_without_progress`) or on an unusable
+decision, **not on the call limit**: the model repeated one refused press. A
+structural probe showed why: the packet held 40 elements, **37 of them row
+checkboxes**, and "New post" was **not in it**.
 
-Taken first, at `HEAD`, with the inherited work moved aside so the tree built.
+### After removing the rule, on the merged base
 
-### Live
+| run | calls | build | packet at inspect | after the press | end |
+| --- | --- | --- | --- | --- | --- |
+| `run-mu7e29su-5cfb4cf1` | 3 | **proposed** (26.6 s, $0.0116) | opener present | textarea 0 → **1** | `control.request` timed out at 30 s |
+| `run-mu7e7nq5-21fd6698` | 5 | **proposed** (42.8 s, $0.0201) | opener present | textarea 0 → **1** | `control.request` timed out at 30 s |
 
-`DEEPSEEK_API_KEY` from `.env.local`,
-`FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=isolated FLUXIQ_LAB_INSTANCE=t011
-pnpm lab:campaign social-scheduler-schedule-post`.
+**The packet's shape now**, from the temporary probe (counts and flags only,
+now removed): 40 elements, `repeated: 4` (t009's exemplars are working),
+`select 3, input:checkbox 2, input:search 2, button 9, a 13, label 5, span 6`.
+Row checkboxes went from 37 to 2. `elementsTruncated` and `captureTruncated`
+are still true, but the header survives the cut.
 
-`run-mu7c7sd5-4da03bfd` — `flowCreated: false`, `oracleVerdict: null`,
-`reportedVerdict: null`, 27 provider calls, 256,370 tokens, $0.1156.
+**Is the composer opener present and pressable? Yes, both.**
+`openerPresent: true` on the first inspect of both runs. The model's first
+press was `web.press_control`, and the next packet had `textarea: 1` and
+`button 9 → 12`: the composer opened and its fields reached the model. The
+build then completed with a proposal.
 
-Every single reveal was refused:
+**Is the no-progress guard now the binding constraint? No.** Neither build
+repeated itself. Both proposed. The binding constraint is now the post-build
+timeout.
 
-| tool | result |
-| --- | --- |
-| `web.reveal_safe` ×4 | `web.action.rejected.target_unsafe` ×4 |
-| `web.reveal_safe` ×4 | `llm_evidence_loop.already_answered` (the same call again) |
-| `web.navigate_same_origin` ×8 | succeeded, going in circles |
-| `core.decision_unusable` ×3 | `web.handle.ambiguous` |
+**Where the timeout is.** `facilityFailure: {reason: "http.timeout",
+operationStage: "control.request", timeoutMs: 30000}`, reproduced 2 of 2, so it
+is not the RAM fault. It fires about 36 s after the build settles
+(20:08:14 → 20:08:50 and 20:11:16 → 20:11:54). A timed-out Flow *run* request
+would not surface that fast: `executeRecordedFlowRun` recovers a bounded
+failure by polling the run detail for up to 90 s before rethrowing
+(`packages/test-runner/src/flow-lane/persisted-flow-run.ts:19,262-280,351-378`).
+So the request that hung is one before the run: approve or apply the
+adaptation, `get-flow`, `list-flow-subflows`, `selectExistingContext`, or
+`startPersistedFlow`. I did not narrow it further. Since t012 ("a one-call
+verification grant") is newly under this path on both sides, it is the first
+thing I would check. The failure screenshot shows the queue page as loaded,
+composer closed and still `122 scheduled`, so nothing was committed and no
+page state carried over.
 
-Build ended `flow_bootstrap.evidence_iteration_limit`, and the run then failed
-`performance.budget`: **27 provider calls against an authorized 26**. Recorded
-as a finding, per the standing decision that a fixed call ceiling is itself a
-defect — but note it was the *baseline* that hit it. Every run after the fix
-used 5, 9 and 6 calls, so nothing below is bounded by the ceiling and I did not
-narrow the fix to fit it.
+## What I changed (piece 1)
 
-### At the rule
+**Deleted, not refined**:
 
-Raw snapshot elements shaped exactly as `apps/extension` sends them, taken from
-the fixtures' own markup, through the real sanitizer and the real gate:
+- `domain/src/runtime/llm-evidence/control-intent/` (reveal/commit
+  classification, word classes, and their tests).
+- `harness-options/safety.ts` and its test: the recovery ladder, including
+  `WEB_RECOVERY_COMMITTING_WORDS` and its selector matching.
+- `safeRevealElement` and the `revealKind` allowlist it replaced.
+- The `target_unsafe` rejection code. Nothing raises it any more, and a code
+  classified as `destructive_action_refused` with no raiser was a refusal
+  waiting to be reused as a local substitute for permission.
 
-| control (fixture, line) | packet element | `safeRevealElement` |
-| --- | --- | --- |
-| `New post` (`social-scheduler/markup.ts:54`) | `{tag: "button", name: "New post", controlType: "button"}` | **false** |
-| row checkbox (`social-scheduler/table.ts:98`) | `{tag: "input", name: "Select the post for Tue 09:00", inputType: "checkbox"}` | **false** |
-| order row link | `{tag: "a", name: "ORD-40100", href: …}` | **false** |
-| `Order actions` row menu | `{tag: "button", name: "Order actions", revealKind: "disclosure", expanded: false}` | **false** |
+**Renamed and made plain**:
 
-The first three fail on shape: `revealKind` is `undefined`, so
-`if (element.revealKind !== "disclosure") return false` refuses them. Nothing
-about "New post" says it commits; it was refused for not being a `<summary>`,
-a tab or an `aria-expanded` button. That is why the composer was never opened,
-so the fields the Flow had to fill were never in any packet.
+- `reveal.ts` became `press.ts`. `pressControl` presses what the handle names.
+  It still binds handles through their selectors, still reports `no_progress`
+  on an unchanged page, and still presses a checkbox back once the page has been
+  read. That last step is housekeeping, decided by the fact that a checkbox
+  toggles — it is not a safety judgement.
+- `web.reveal_safe` became **`web.press_control`**
+  (`WEB_LLM_PRESS_TOOL_ID`). Its description says what pressing is for and
+  lists nothing it refuses. It is shorter than before, well inside the evidence
+  request's token ceiling.
+- The recovery options `web.recovery.reveal` and `web.recovery.act_safe` had
+  identical schemas and differed only in their gates. Without the gates they
+  were the same option twice, so they are now **one**, `web.recovery.press`,
+  using the same `pressControl`. The bundle now declares five options.
 
-The fourth is the order-operations defect, and it is worth stating exactly,
-because the word list was **not** the whole story — the selector was:
+**Seams, marked and not approximated.** Each carries a `TODO(permission seam)`
+naming the Core contract:
 
-| control | packet element | selector kept behind | verdict |
-| --- | --- | --- | --- |
-| row menu, renamed | `{tag: "button", name: "Row actions", revealKind: "disclosure"}` | `[data-testid="order-rows"] > tr:nth-child(1) > td:nth-child(8) > button` | **REFUSED** |
-| identical element | `{tag: "button", name: "Row actions", revealKind: "disclosure"}` | `table tbody > tr:nth-child(1) > td:nth-child(8) > button` | ALLOWED |
+- `press.ts` `pressControl`: where a press with a lasting consequence will ask
+  rather than proceed. It names both missing Core pieces: a permission set
+  carried with the run, issued where `authorizeBuild` issues `build_and_adapt`,
+  in consequence classes; and a needs-permission outcome carrying a request.
+- `harness-options/exploration-terms.ts`: where that result will be classified
+  as Core's `operator_approval_required`, whose outcome is
+  `user_intervention_required`.
 
-Two identical packet elements. The only difference is the selector, which the
-model never sees and which this domain assembles from the test ids of every
-ancestor above the element. `\border\b` matches inside `order-rows`, so on an
-order-management site every row control was unsafe. Confirmed at
-`harness-options/safety.ts:46` and `:91-92` as the brief said, and the same
-mistake was in `reveal.ts` itself, whose `COMMITTING_ACTION_WORDS` was tested
-against `[element.selector, element.name, element.text].join(" ")`.
+**Kept, as instructed**: the untick, and the same-URL reload in
+`apps/extension/src/runtime/automation-tab.ts`, already committed with its test.
 
-## The new rule
+**Docs**: `docs/architecture/testing-facility.md` no longer describes the
+allowlist; it describes the plain press, the seam, and the interim behaviour.
+`elements.ts`'s `revealKind` comment no longer claims it bounds what may be
+pressed; it is now only a description in the packet.
 
-`domain/src/runtime/llm-evidence/control-intent/` answers one question: would
-pressing this control **reveal** something or **commit** something? It takes a
-`WebLlmEvidenceElement` — the packet element, which has no `selector` field —
-so the decision cannot reach a selector.
+### Interim exposure — please read
 
-Refusal comes first, then shape:
+Until Core carries permission, **nothing stops a press that commits**. The
+authoring tool and the recovery option will both press Send, Delete, Confirm or
+Refund if the model asks. On the authoring path, the lane resets the fixture
+before the Flow runs, which limits the damage. The recovery path runs
+mid-failure on a live account. Its exposure is bounded only by Core's registry,
+which withholds mutating options from a caller that has not opted in to side
+effects (`allowSideEffectsWithoutPolicy`, or a policy). This follows the user's
+direction — a refusal with no route to the person was the defect — but it is a
+real gap until pieces 2 and 3 land, and I am stating it rather than assuming it
+is understood.
 
-1. Its type submits or resets a form → commits.
-2. Its words commit → commits, whatever shape it has, so a disclosure named
-   "Delete" is still refused.
-3. Otherwise a shape is required. Anything unrecognised is `unclear`, which is
-   refused too: the allowlist is what keeps an unknown button unpressed, and
-   the words are a second line rather than the only one.
-4. A control the page put in a form commits, unless it is a link, or a
-   disclosure or tab that says it is not a submit. A `<button>` with no `type`
-   in a form is a submit button whatever it looks like.
-5. In a dialog, or with a modal one up, only a disclosure, a tab or a
-   dismissal is pressed.
+### Existing Core machinery the Core work should look at
 
-Words are read in three classes, because English uses the same words as nouns
-and as verbs:
+- `domain/src/actions/safety.ts` `WEB_AUTOMATION_ACTION_SAFETY` classifies every
+  *output type* as `safe` or `review`. The manifest's `safety.level` and
+  `requiresApproval` derive from it. That is per action kind (every click is
+  `review`), not per consequence, but it is the existing approval vocabulary.
+- `harness-options/options.ts` notes that an option can declare a required
+  runtime capability or permission, and the registry withholds it when the
+  caller lacks it. That is a candidate attachment point for the permission on
+  the recovery path.
 
-- **Commit anywhere**: `send save delete confirm refund dispatch assign resolve
-  submit pay purchase approve remove revoke unsubscribe retry …`. Nobody labels
-  a control "Bulk delete" unless it deletes.
-- **Commit only as a command's verb, first**: `post order schedule add create
-  share ship start …`. "Post" and "Order now" commit; "New post",
-  "Post actions", "Select order" and "Order details" do not. A label that is
-  the word followed only by nouns for a container of controls — actions,
-  options, details, menu — is naming the container, not giving the command.
-- **Close / Cancel**, which dismiss when they stand alone or name what they put
-  away ("Close composer") and commit when they name a record ("Cancel order",
-  "Close ticket").
+## Findings carried from the earlier report
 
-A link to another page is read differently: its words name where it goes, so a
-noun in first place is expected, and only a word that commits anywhere — in the
-label or in the path, never the host — refuses it.
+- **The refusals, reproduced.** At `HEAD`, "New post" and the row checkbox were
+  refused on shape (`revealKind` undefined), not wording. Two identical packet
+  elements differing only in the hidden selector were refused and allowed
+  respectively, because `\border\b` matched inside `[data-testid="order-rows"]`.
+- **The dialog left open into playback.** The mechanism has three parts:
+  1. Exploration's first `navigate` makes the extension create its own tab
+     (`automation-tab.ts:25-37`).
+  2. The lane's `prepareFlowPage` reloads the Playwright page, not that tab.
+  3. The Flow's opening navigate reuses the tab, and Chrome ignores a
+     `tabs.update` to the URL already shown, so the Flow inherits what
+     exploration left open.
 
-### How it classifies
-
-All seventeen cases below were run through the real sanitizer and the real
-rule. Every one came out as intended.
-
-Revealed: `New post` (opener), `Select the post for …` and `Select all posts`
-(row selection), `Close composer` (dismissal), the `ORD-40100` row link (page
-link), `Order actions` under `[data-testid="order-rows"]` (disclosure),
-`Order details` `<summary>` (disclosure).
-
-Refused: `Send reply`, `Schedule post` (submit), `Delete`, `Confirm refund` in
-a dialog, `Refund`, `Retry failed posts`, `Dispatch run`, `New post` while a
-modal dialog is up (dialog_open), an unlabelled button (unclear), a logout link.
-
-### The one correction to the inherited work
-
-The inherited `dialogIsOpen` was
-`page.dialogs?.some(modal) === true || page.blockedBy !== undefined`, and any
-`opener`, `row_selection` or `page_link` was refused while it held.
-
-`page.blockedBy` is set whenever *any* of the up-to-40 hit-tested controls is
-painted over by anything — a sticky header, a sidebar, a footer
-(`apps/extension/src/content/evidence/overlays.ts:30-50`). On a real dashboard
-that is normal, and reading it as "a dialog is up" would have refused every
-opener on every such page: the same defect in a new place. It is now read only
-where its meaning honestly supports the conclusion — to let a bare "Close"
-through, because there really is something to close — and "a dialog is up"
-means a modal dialog, or the control's own landmark being `dialog`.
-
-## How committing controls stay refused
-
-Both reveal tools now go through one `pressToReveal`, so there is one gate
-rather than two that can drift. `Send`, `Delete`, `Confirm` and `Refund` are
-refused three times over: by the wording rung, by `submit_control` where they
-submit, and by `dialog_open` where they sit in a confirmation dialog. The
-runtime recovery `act` option keeps its own wider ladder and asks the same
-`webControlWording` for its committing rung.
-
-## What I found about the carried-over dialog
-
-The prior observation (`w2-corpus-c.md:131-138`) was a Reply dialog still open
-during playback, with the note "unverified hypothesis: the Flow's navigate
-matched without reloading the page". That hypothesis is right, and the
-mechanism is two things meeting:
-
-1. The lane resets the fixture and calls `prepareFlowPage()` between the build
-   and the run, which does `page.goto(start)` on the **Playwright** scenario
-   page (`packages/test-runner/src/run-scenario.ts:251-259, 747-749`).
-2. But exploration does not necessarily run in that tab. A non-navigation
-   action uses `request.activeTabId`, while a **navigation** resolves through
-   `resolveAutomationTab`, and with nothing driven yet that calls
-   `chrome.tabs.create` — a brand-new tab
-   (`apps/extension/src/runtime/automation-tab.ts:25-37`). From the first
-   `web.navigate_same_origin` onwards, exploration is in the extension's own
-   tab, which `prepareFlowPage` never reloads.
-3. The Flow then opens with a navigate, which reuses that tab and calls
-   `chrome.tabs.update(tabId, { url, active: true })`. **Chrome ignores a
-   `tabs.update` to the address the tab already shows**, so nothing reloaded
-   and the Flow inherited the page exploration had left — dialog open.
-
-Fixed at the root, in `apps/extension/src/runtime/automation-tab.ts`: a
-navigation to the URL the tab is already on now reloads it. A navigation means
-"be on this page", not "be on this page unless you already are", and this is a
-correctness bug for any Flow whose first step navigates to the page the browser
-is already showing, not only for the Lab.
-
-Not papered over in a fixture, and no fixture was touched.
-
-**Not verified.** I did not observe a carried-over dialog myself — the
-`schedule-post` runs never built a Flow to play back, so there was no playback
-to inherit anything. The chain above is read from the code, and the Chrome
-`tabs.update` no-op is the one link I have not demonstrated in this repository.
-
-## Live output after the fix
-
-Same command, same task, three runs.
-
-| run | calls | reveal refusals | ended |
-| --- | --- | --- | --- |
-| `run-mu7cj62r-58da6187` | 5 | 1, on a `<select>` | `evidence_repeat_without_progress` |
-| `run-mu7cojks-e6ee0105` | 9 | 1, on a `<select>` | `evidence_unusable_decision` (`web.handle.wrong_control` ×2) |
-| `run-mu7ctzm2-b96ee2d5` | 6 | 1, on a `<select>` | `evidence_repeat_without_progress` |
-
-The change in kind is the result: **no button, checkbox, link or menu was
-refused in any run after the fix**, against four button refusals in the
-baseline. The one refusal in each run is a `<select>`, and the structural
-diagnostic says why —
-`{"effect":"unclear","tag":"select","revealKind":null,"landmark":"region"}`.
-That refusal is correct: a dropdown is not explored by pressing it, it is
-filled by the Flow. Cost fell from $0.1156 to $0.0128–$0.0276 per attempt.
-
-`flowCreated` is still `false`, and the reason has moved. The model's only
-attempted press is the `<select>`; it never tries "New post". It then repeats
-the identical refused call, and the loop's no-progress guard ends the build.
-Per the coordinator's distinction: **this is the no-progress guard doing its
-job on a model that retries a refused press, not a call-ceiling stop.** Runs
-after the fix used 5, 9 and 6 of 26 authorized calls, so no authorization
-increase is needed for this task.
-
-The remaining blocker is that `target_unsafe` says two different things —
-"this control commits and never will be allowed" and "this control is not
-something a press explores" — and the model cannot tell them apart, so it
-retries. Separating them is a small, bounded change (add one code to
-`WEB_LLM_TOOL_REJECTION_CODES`; the result-code set and the type both derive
-from it, and `webAutomationExplorationRefusalClassifier` should return
-`undefined` for it rather than `destructive_action_refused`, so a correctable
-mistake does not read to Core as a policy stop). I did not make that change:
-it is a wire-vocabulary change that wants its own unit of work.
+  Fixed with a same-URL reload, pinned by a test that mutation fails. In both
+  merged-base runs exploration did not navigate, so this path was not exercised
+  live, and the screenshots show a clean page.
+- **The token ceiling.** The evidence request sat at exactly 8,000 DeepSeek input
+  tokens. The new description is shorter than the original, so this no longer
+  binds here.
 
 ## Commands run and observed results
 
-Filled in below.
+- `DOMAIN_TEST_BUILD_LABEL=t011 pnpm --filter @fluxiq-web-extension/domain test`
+  → `# pass 677 # fail 0`, no entry failed to load.
+- `pnpm --filter @fluxiq-web-extension/extension test` → `# pass 688 # fail 0`.
+- `pnpm --filter @fluxiq-web-extension/test-runner test` → `# pass 1144 # fail 0`
+  (I touched a comment and one test row there, for the rename).
+- `pnpm check` → exit 0; `structure-audit: passed (76 warning(s), 122 baselined)`.
+- Mutation A, a word-list refusal put back in `pressControl` → **6 fail**. Among
+  them: `presses Send reply / Delete order / Confirm / Refund this order / Retry
+  failed orders when asked`, and the recovery option's `presses the control it
+  is asked to, whatever it says`. My first attempt at this mutation survived.
+  The cause was my shell escaping turning the regex into one that matched
+  nothing, not a gap in the tests. The plain-string retry was caught.
+- Mutation B, the old shape allowlist put back → **14 fail**, including `opens
+  the composer behind a plain New post button`.
+- Both mutations reverted; the suite is green again at 677/677.
+- Live: the seven runs in the tables above.
 
 ## Not verified
 
-Filled in below.
+- **Which request times out after the build.** Localised by timing to the
+  pre-run sequence, not to one call.
+- **That any state-changing job now changes the page.** No merged-base run
+  reached playback.
+- **`order-operations-partial-refund` on the merged base.** Not run. I stopped
+  at `schedule-post` as asked, and the post-build timeout would block it the
+  same way.
+- **The recovery `press` option live.** `harnessActivations: 0` throughout.
+- **Chrome's same-URL `tabs.update` no-op.** Read from code; the reload fix is
+  unit-tested, not observed live.
+- **Firefox.** Not exercised.
 
 ## Open questions or contradictions found
 
-Filled in below.
+1. **The next blocker is not mine to fix from here.** A control request after
+   a successful build times out at 30 s, 2 of 2. It needs someone who can see
+   Core's side of approve/apply/start. t012 is the obvious suspect.
+2. **Index state.** Deleting and renaming used `git rm` and `git mv`, so the
+   worktree index already holds staged deletions and one staged rename
+   (`tests/reveal.test.ts` → `tests/press.test.ts`). `press.ts` is untracked.
+   Nothing is committed.
+3. **Interim exposure.** Stated above. It is the user's chosen direction, but
+   it should be a conscious choice to run the recovery path on a live account
+   before Core's permission contract lands.
+
+---
+
+## Follow-up: the post-build timeout, pinned
+
+A second brief: find which control request times out after a proposed build,
+test the t012 verification grant directly, say whether router or subflow
+handling is involved, and stop if the cause is in Core. Same worktree, live
+first, unit tests last. Probes used in the investigation were env-gated, printed
+routes, counts and flags only, and are all removed.
+
+### Outcome
+
+**Pinned: the request that times out is
+`/api/programs/automation-studio/run-runtime-session`**, the call that runs the
+created Flow. It is a **granted** run: since t012 the playback carries a
+one-call `verify_result` grant. It is **slow, not hung**, and **no router or
+subflow is at fault**. **Not a Core defect.**
+
+The cause is the Lab client's default 30 s bound meeting a run that Core
+answers only when it has finished, and that names its run id only in that
+answer. That matches what the sibling t016 found. Their fix, the created lane
+waiting up to the client's 300 s ceiling in `flow-lane/creation/lane.ts`, is on
+their branch, not this one. **This branch still shows the timeout until the two
+merge**; the last live run below shows it, now named.
+
+**Once past the timeout, the job works: the scheduled post was made.** Across
+four runs read to their end, the oracle said `passed` and FluxIQ reported
+`passed`. It is the first state-changing job in this effort to change the page.
+
+**Behind it is a second blocker, in this repository**: the redaction
+attestation fails every completed run, because Core's store is 85.5 MiB against
+a 32 MiB ceiling. Details below.
+
+### Live evidence
+
+`social-scheduler-schedule-post`, `FLUXIQ_TEST_RUNS_DIR='F:\r11'`, merged base.
+
+| run | what was measured | result |
+| --- | --- | --- |
+| `run-mu7ensms-07f96108` | — | `lab.generation_http_400` before the build: 1 call, 0 tokens. Seen once before in corpus-c; did not recur |
+| `run-mu7eqbto-e63bf4ac` | timeout pinned, run read to its end | route `run-runtime-session`, `grantPath: true`, 30 s bound. The run was found and ended `succeeded`: 10 actions, **0 route decisions, 0 subflow entries**, **76.6 s**. Oracle `passed`, reported `passed` |
+| `run-mu7ewcn7-3b0dac0a` | same, again | same route. `succeeded`: 8 actions, **1 route decision, 1 subflow entry**, **62.6 s**. Oracle `passed` |
+| `run-mu7f2w7u-1c68f22e` | same, plus store probe | `succeeded`: 10 actions, 1 route decision, 1 subflow entry, 70.2 s. Oracle `passed` |
+| `run-mu7f8oag-6d4ab527` | store size named | `succeeded`: 9 actions, 1 route decision, 1 subflow entry, 86.9 s. Oracle `passed`; store 89,636,864 bytes |
+| `run-mu7fmzcb-0db869c6` | **shipped branch state** | `facilityFailure: {reason: "http.timeout", operationStage: "control.request", timeoutMs: 30000, endpoint: "/api/programs/automation-studio/run-runtime-session"}` |
+
+**Router and subflow, answered.** One created Flow was a straight line of 10
+action nodes; the other three had a router. Those three made **exactly one route
+decision and one subflow entry** each. The sibling finding, that model-authored
+router rules carry no condition and so always match, did not produce a loop
+here: an always-matching rule over one subflow enters it once. The runs took
+62–87 s because each performs 8–10 browser actions at about 5 s each, not
+because anything repeats.
+
+**t012, tested directly rather than by elimination.** The probe recorded
+`grantPath: true` on the timed-out call. The grant path (`llmExecution`) makes
+`executeRecordedFlowRun` skip `startPersistedFlow`, so no run id exists until
+Core replies, and Core replies only after the whole run and its verification.
+The bounded-failure recovery then rethrows at once
+(`packages/test-runner/src/flow-lane/persisted-flow-run.ts:257,264-281`):
+`if (!isBoundedHttpFailure(error) || !executedRunId) throw error` has no id to
+work with. Before t012 the created lane took the deterministic path, which
+starts the run first and so always had an id to poll.
+
+### What I changed, and what I took back
+
+**Kept: every bounded HTTP failure now names its Core route.** You scoped this
+in, and the last live run above proves it.
+
+- `packages/test-runner/src/http-control/index.ts`: `boundedFetch` takes the
+  route and puts it on the timeout, abort and transport failures' details. It
+  carries the route only, with any query string cut, because
+  `create-project?domainId=` carries a caller's value.
+- `packages/test-contracts/src/evaluation.ts` and `evaluation-validation.ts`:
+  `FacilityFailureDiagnostic` gains an optional `endpoint`. It is validated
+  against `FACILITY_FAILURE_ENDPOINT_PATTERN`
+  (`^/api/[a-z0-9][a-z0-9/_-]{0,119}$`) and allowed only on the three `http.*`
+  reasons. The field is optional, so existing evaluations stay valid.
+- `packages/test-runner/src/facility-failure/project-facility-failure.ts`:
+  projects `details.path` into `endpoint` only when it matches that pattern.
+  Anything that is not a Core route is dropped.
+- The durable run-event projection `httpTransportFailureDetails` is
+  **unchanged**. An existing security test requires it to carry closed fields
+  only, and I first broke that test by adding the path to it. I reverted that
+  change, and the test stands as it was.
+
+**Taken back: a recovery that made the timed-out run readable.** It is what
+produced the four `succeeded`/`passed` results above. `executeRecordedFlowRun`
+listed the Flow's runs before a granted run. On a bounded failure it identified
+the one new run and read it to its end.
+
+You said not to work around the wait, so it is reverted, together with its
+tests and a fake update in `live-repair-lane.test.ts`. It is worth placing after
+t016 lands, as a complement rather than a replacement. A 300 s wait still leaves
+a run longer than 300 s with no id to read back, and the run list closes that
+for a run of any length. The design:
+
+1. List the Flow's runs (`list-flow-runs`) before the granted call.
+2. On a bounded failure, take the one run id that is new. None, or several,
+   leaves the original failure standing.
+3. If the list fails, the run goes ahead without recovery rather than failing.
+
+**Hands off, as instructed**: `flow-lane/creation/lane.ts` and
+`existing-fluxiq-control.ts` are unchanged on this branch. I needed no logging in
+`existing-fluxiq-control.ts`: the route is attached one layer down, in
+`http-control/index.ts`, which every control call goes through.
+
+### The next blocker: the redaction attestation, in this repository
+
+Every run that read the playback to its end failed `security.redaction`, 4 of 4:
+
+```
+findings: [{ scope: "workspace", path: ".fluxiq/global.sqlite", categories: ["unscanned-store"] }]
+```
+
+Every run that stopped at or before the timeout passed the same attestation,
+including two where the timed-out request was still being worked on inside
+Core. The probe named the branch:
+
+- **`packages/test-runner/src/secret-leak-attestation.ts:218-220`**, the
+  `metadata.size > limits.maxStoreBytes` arm of `stageDatabase`.
+- `global.sqlite` measured **89,636,864 bytes (85.5 MiB)**: a regular file, not
+  a link.
+- `maxStoreBytes` is 33,554,432 bytes (32 MiB); the 64 MiB `maxTotalBytes` is
+  exceeded too.
+- The two other stores read clean: 1.3 MB and 64 KB.
+
+The comment above the limits gives the reason for the ceiling: 32 MiB is "a
+little over three times the largest store a healthy run has produced". That was
+10.02 MiB, from `social-scheduler-week-ahead`, a run that never completed a
+state-changing Flow. A completed 8–10-action playback on this 280-row page
+leaves a store 8.5 times that size. My reading, not verified, is that Core
+stores page evidence for every action attempt on a big page.
+
+This is a fail-closed security control, so I did not change it. The choice is
+either to raise the store and total ceilings with a stated reason, or to have
+Core store less per attempt. That belongs to whoever owns t014 and Core's run
+storage.
+
+### Commands run and observed results (follow-up)
+
+- `pnpm --filter @fluxiq-web-extension/test-contracts test` → `# pass 115 # fail 0`.
+- `pnpm --filter @fluxiq-web-extension/test-runner test` → `# pass 1146 # fail 0`.
+  One earlier run of this suite failed `FIFO tickets prevent a later scheduler
+  from overtaking an earlier waiter`, a timing test in a file I did not touch.
+  It passed on every later run.
+- `DOMAIN_TEST_BUILD_LABEL=t011 pnpm --filter @fluxiq-web-extension/domain test`
+  → `# pass 677 # fail 0`.
+- `pnpm --filter @fluxiq-web-extension/extension test` → `# pass 688 # fail 0`.
+- `pnpm check` → exit 0; `structure-audit: passed (76 warning(s), 122 baselined)`.
+- Mutation, timeout details without the route → **1 fail**, exactly `a timed-out
+  request names the Core route it went to, and never the query string`.
+  Reverted; back to 1146/1146.
+
+### Not verified (follow-up)
+
+- **That t016's 300 s wait is enough.** The four runs read to their end took
+  63–87 s, well inside 300 s, but I have not run the two branches merged.
+- **Why Core's store is 85.5 MiB.** Only its size and the failing branch are
+  measured.
+- **Whether `lab.generation_http_400` has a real cause.** One occurrence, and it
+  did not recur.
+
+### Open questions or contradictions found (follow-up)
+
+1. **Merge order.** This branch holds three things of different kinds:
+   - the removal of the safety rule, which waits for t018's permission
+     contract, as agreed;
+   - the endpoint naming, which is independent and safe to land alone;
+   - the automation-tab reload fix, which is also independent.
+
+   If you want the naming or the reload fix sooner, they can be split out; their
+   files do not overlap with the rule removal.
+2. **Once t016 lands, the redaction ceiling is what every completed
+   created-Flow run will hit next.** Decide it before the next corpus run, or
+   every success will read as `security.redaction`.
