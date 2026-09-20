@@ -396,3 +396,120 @@ storage.
 2. **Once t016 lands, the redaction ceiling is what every completed
    created-Flow run will hit next.** Decide it before the next corpus run, or
    every success will read as `security.redaction`.
+
+---
+
+## Wiring the press to Core's permission contract (t018)
+
+Base `aca335f` (dev merged, including t016, t018, t020 and t022); shared Core
+`80a8495`.
+
+### Outcome
+
+**Partial.**
+
+- **Exploration presses are wired to Core's permission check, and it works
+  live.** It fires, names the control, and nothing is committed.
+- **Plan steps are not wired.** The declaration needs a Core change,
+  described below.
+- **Neither live proof passed as specified.** The instructed task was blocked,
+  because the model's class and Core's reading of the instruction disagreed.
+  The refund task never reached the refund control.
+
+### How a press's consequences are determined
+
+**The model declares them itself.** `web.press_control`, and the recovery
+option `web.recovery.press`, now *require* `consequences`: Core's classes for
+what this press itself lastingly does, or `[]` when it only changes what is
+shown. FluxIQ never judges a control by how it looks. The contract did not force
+a classification of controls, and no word list was written.
+
+`permission.ts` turns the declaration into Core's check:
+- `[]`: no call is made.
+- A list of Core's classes: `await request.permission({ consequences, control:
+  { name: <the packet name or text the model was shown>, kind }, verb: "press"
+  })`, and the press is made only when Core permits it.
+- Not permitted: refused `web.action.rejected.permission_required`.
+- Not a list of Core's classes: `invalid_input`.
+- No permission check passed in: refused, never taken.
+
+`permission_required` is deliberately left unclassified, so it is not mapped to
+`operator_approval_required`; Core already holds the request. The recovery
+option passes `execution.permission` through.
+
+Optional was tried first. The model simply omitted the declaration, and every
+step went unasked (`run-mu7ia0cl-060ec935`). An optional declaration is a gate
+the model can walk past.
+
+### Plan steps: blocked on Core
+
+I first let a step declare on its target handle:
+`{ handle, consequences }`. Core's handle parser admits only
+`{ handle, location? }` (`AS/runtime/llm/harness-options/plan-node-handles.ts`,
+`isReferenceShape`, around line 79). The declared object therefore was not
+read as a handle, and the node failed `bootstrap.invalid_parameter_value`,
+4 times in `run-mu7iv81y-eb1dc973`. I reverted it, and
+`resolve-plan-node.ts` is back to `aca335f`.
+
+To gate Flow steps, Core must accept a declaration on the handle, or on the node
+beside it. The domain half was written and works: it was measured, then
+reverted. **A Flow step is not permission-checked on this branch.**
+
+### Live evidence (`FLUXIQ_TEST_RUNS_DIR='F:\r11'`)
+
+The build record now carries `instructedConsequences` (from the proposal) and
+`permissionRequest`, including Core's `authority.instructed` with the person's
+quoted words. Change: `flow-lane/creation/build-proposal.ts`.
+
+| run | task | result |
+| --- | --- | --- |
+| `run-mu7itmcl-30d93066` | schedule-post (instructed) | `flow_bootstrap.permission_required`: exploration press on **"Schedule post"** (button), declared `create_new`, missing `create_new`. **Nothing scheduled** (build ended before any playback) |
+| `run-mu7j3a8m-dbdf0478` | schedule-post, shipped code | `permission_required` on **"New post"** (button), declared `create_new`. Core read the instruction as `send_or_publish` ← *"Schedule a post to the Northwind Trails account for the morning of 24 September at nine o'clock, saying: …"*. Missing `create_new`; nothing scheduled |
+| `run-mu7j4dz4-ed09f5fe` | `order-operations-refund-quote` (new task: *"…find out how much refunding the first line on it would give back, as the refund confirmation shows it. Do not change the order."*) | No request. The model never pressed the refund control with a declaration; ended `evidence_repeat_without_progress` after 11 calls. **Nothing refunded**; no request naming the refund control |
+| `run-mu7ipw91-fcd3ca57` | refund-quote | `lab.generation_http_400`, zero provider calls, before the model (seen twice before, not reproduced) |
+| `run-mu7ia0cl-060ec935` | schedule-post, optional declaration | Proposed with no declaration and `instructedConsequences: []`; the playback then timed out at `run-runtime-session`, 30 s |
+
+**Why the instructed job was blocked.** Two model readings must agree class for
+class, and here they did not:
+- The press model over-declared: `create_new` for opening "New post", which
+  only opens a form, and for "Schedule post".
+- Core's instruction reader classified the same words as `send_or_publish`.
+- A class the instruction plainly covers in intent therefore reads as not
+  instructed.
+
+There is a narrow fix on each side:
+- This repository: the press description must say more firmly that opening,
+  showing or ticking is `[]`.
+- t018: decide whether the declared classes should be reconciled against the
+  instructed ones rather than compared exactly.
+
+The first is cheap and I would do it next. The second is a Core design choice.
+
+**The run timeout.** `run-mu7ia0cl` still timed out at `run-runtime-session`
+with a 30 s bound, although t022 is said to be merged. The coordinator should
+check that t022 covers the created lane's playback.
+
+### Not done
+
+- **Recovery wiring**: passing `permittedConsequences` and the instructed
+  classes into `runAutomationStudioRuntimeExploration`. Out of scope, as
+  instructed.
+- **Plan-step permission**: blocked on Core accepting a declaration, as above.
+- **Proof 1** (instructed task proceeds, post scheduled, oracle passed): not
+  achieved.
+- **Proof 2** (request names the refund control): not achieved; no refund
+  press was attempted.
+
+### Checks run
+
+- `tsc` for domain (source and tests) and test-runner → exit 0.
+- `DOMAIN_TEST_BUILD_LABEL=t011 pnpm --filter @fluxiq-web-extension/domain test`
+  → `# pass 680 # fail 0`. New tests: each of Send, Delete, Confirm, Refund and
+  Retry is refused `permission_required` with nothing pressed when Core says no,
+  and pressed when it says yes. Core is asked with the shown name and the
+  model's classes. `[]` asks nothing, an unreadable declaration presses nothing,
+  and no check means refused.
+- `pnpm --filter @fluxiq-web-extension/extension test` → `# pass 688 # fail 0`.
+- `pnpm check` → exit 0.
+- The test-runner and test-contracts suites were not rerun, per the quota
+  instruction. The test-runner type-check inside `pnpm check` passed.
