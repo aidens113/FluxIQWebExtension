@@ -27,13 +27,14 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
-import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
-import { assertFlowLaneBuiltFlow, coreIdentityRequired, coreProbeTargetUsable, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
+import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
+import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts } from "./lane-rules/index.js";
+import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
@@ -352,7 +353,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
     } else {
-      if (paired && topology.authorizationPin) await proveCoreActionRoundTrip(page, topology, paired.sessionId, scenario.id, workflow, capture, runId, (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); });
+      if (paired && topology.authorizationPin) {
+        await proveCoreActionRoundTrip({ page, control: topology.control!, sessionId: paired.sessionId, authorizationPin: topology.authorizationPin, publish: (trigger, summary, details) => capture.trigger({ ...event(runId, scenario.id, undefined, trigger, summary), details }), record: (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); } });
+        // The probe's round trip ran on the start page's own clock: a site that raises an overlay seconds after load (auction-marketplace's
+        // app promotion, at 2.5 s) would meet the recording with it up. So the recording starts on the start page as the run first presented it.
+        await resetScenarioLab(topology.scenarioOrigin, topology.allocation.controllerToken);
+        await openScenarioStart(page, topology.scenarioOrigin, scenario);
+        await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
+      }
       if (topology.control && topology.projectId) recordingBaseline = recordingIds(await topology.control.listRecordings(topology.projectId));
       if (topology.control) {
         // Selected again immediately before the start, so whether Core accepts the recording
@@ -602,7 +610,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       published: flowObservation,
       automationFailureExpected: flowWorkflow.expected.failure ?? null,
       recordingLane: () => recordingLaneProbeObservation({
-        oracleVerdict, actions, automationFailure,
+        // A run the facility failed reports no automation result, which the evaluation contract refuses beside one: the probe's
+        // succeeded read and a later recording failure together left the run with no finalized bundle at all.
+        oracleVerdict, actions, automationFailure: facilityFailure ? undefined : automationFailure,
         automationFailureExpected: workflow.expected.failure ?? null,
         // The run knows which steps ran: one measurement per `extract` step of the script it executed, or `null` when it executed none.
         extraction: extractionRead ? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead }) : null,
@@ -645,46 +655,6 @@ async function pairExtension(page: Page, topology: RunningTopology): Promise<Pai
     readStatus: () => extensionStatus(page),
     approvePairing: referenceCode => topology.control!.approvePairing(referenceCode),
   });
-}
-/** How long the start page is given to show a probe candidate's target before that step is passed over. */
-const PROBE_TARGET_VISIBLE_MS = 1_000;
-/**
- * Proves one Core-issued action reaches the page, typing into the step `selectCoreProbeStep` chooses: a `type` step whose
- * target is visible on `page`, still the start page the recording is about to begin on. A skipped probe is published with its
- * reason. Each action is reported to `record`.
- */
-async function proveCoreActionRoundTrip(page: Page, topology: RunningTopology, sessionId: string, scenarioId: string, workflow: ResolvedScenarioWorkflow, capture: EvidenceCaptureController, runId: string, record: (timing: RunActionTiming, result: unknown) => void) {
-  // Visible is not enough: a consent overlay covers a visible field, and Core rightly refuses to type into it.
-  // A trial click runs the whole actionability check, including "receives events", and presses nothing.
-  const choice = await selectCoreProbeStep(workflow.recordingScript, selector => coreProbeTargetUsable(page, selector, PROBE_TARGET_VISIBLE_MS));
-  if (choice.kind === "skipped") {
-    await capture.trigger({ ...event(runId, scenarioId, undefined, "runtime.settle", "The Core action probe was skipped"), details: { reason: choice.reason, stepIds: choice.stepIds } });
-    return;
-  }
-  const { step, selector: target } = choice; const correlationId = createCorrelationId("command"); const text = "FluxIQ Core probe";
-  const navigationCorrelationId = createCorrelationId("command");
-  const automationPagePromise = page.context().waitForEvent("page", { timeout: 10_000 });
-  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.dispatch", "Initialize the extension automation tab through Core"), details: { correlationId: navigationCorrelationId, actionType: "web.browser.navigate", url: page.url() } });
-  const navigationStartedAt = Date.now();
-  const navigationResponse = await topology.control!.executeClientAction(sessionId, { actionType: "web.browser.navigate", parameters: { url: page.url() }, metadata: { correlationId: navigationCorrelationId } }, topology.authorizationPin!) as any;
-  const navigationResult = navigationResponse?.payload?.result;
-  record(probeTiming("web.browser.navigate", navigationStartedAt, navigationResult), navigationResult);
-  if (navigationResult?.status !== "succeeded") throw new RunnerFailure("action.dispatch", `Core navigation did not succeed: ${String(navigationResult?.status ?? "missing result")}: ${String(navigationResult?.message ?? navigationResult?.error ?? "no error detail")}`);
-  const automationPage = await automationPagePromise;
-  await automationPage.waitForLoadState("domcontentloaded");
-  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.settle", "Core navigation initialized the extension automation tab"), details: { correlationId: navigationCorrelationId, commandId: navigationResult.commandId, status: navigationResult.status, url: automationPage.url() } });
-  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.dispatch", "Dispatch Core action through the production gateway"), details: { correlationId, actionType: "web.dom.type", target } });
-  const typeStartedAt = Date.now();
-  const response = await topology.control!.executeClientAction(sessionId, { actionType: "web.dom.type", parameters: { selector: target, text }, metadata: { correlationId } }, topology.authorizationPin!) as any;
-  const result = response?.payload?.result;
-  record(probeTiming("web.dom.type", typeStartedAt, result), result);
-  if (result?.status !== "succeeded") {
-    await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.settle", "Core action returned a failed result"), details: { correlationId, commandId: result?.commandId, status: result?.status, message: result?.message ?? result?.error } });
-    throw new RunnerFailure("action.dispatch", `Core action did not succeed: ${String(result?.status ?? "missing result")}: ${String(result?.message ?? result?.error ?? "no error detail")}`);
-  }
-  if (await automationPage.locator(target).inputValue() !== text) throw new RunnerFailure("runtime.behavior", "Core action result did not reach page state");
-  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.settle", "Core action reached the expected page state"), details: { correlationId, commandId: result.commandId, status: result.status } });
-  await automationPage.close();
 }
 async function browserVersionFromCdp(context: BrowserContext, page: Page): Promise<string> { const session = await context.newCDPSession(page); try { const result = await session.send("Browser.getVersion"); return result.product || result.userAgent; } finally { await session.detach(); } }
 async function activateScenarioTab(extensionPage: Page, scenarioOrigin: string): Promise<void> {
@@ -791,7 +761,6 @@ function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, tar
   if (noFlowLane !== undefined) throw new RunnerFailure("fixture.invalid", `A Flow run was refused: ${noFlowLane}`);
   return workflow;
 }
-function probeTiming(actionType: string, startedAt: number, result: any): RunActionTiming { return { actionType, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Date.now() - startedAt), status: runActionStatus(result?.status) }; }
 function event(runId: string, scenarioId: string, stepId: string | undefined, trigger: "step.start" | "step.complete" | "gateway.action" | "runtime.dispatch" | "runtime.settle" | "checkpoint" | "error" | "final", summary: string) { return { trigger, summary, correlation: { runId, scenarioId, ...(stepId ? { stepId } : {}), correlationId: createCorrelationId() } }; }
 
 async function copyProcessLogs(bundle: EvidenceBundle, logsDir: string) { try { for (const name of await readdir(logsDir)) if (name.endsWith(".log")) await bundle.writeText(`logs/${name}`, await readFile(path.join(logsDir, name), "utf8")); } catch {} }
