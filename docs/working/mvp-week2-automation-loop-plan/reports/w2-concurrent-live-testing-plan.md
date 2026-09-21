@@ -880,3 +880,21 @@ budgets.
   four successful action attempts with no API-only inference; stop at first
   exact product/driver failure.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-run-presentation-live.md`
+
+### Brief: w2-unified-no-progress-completion
+- Repository: existing isolated `t027-unified-decision` feedback-only candidate
+- Task: inspect the sanitized repeated-request sequence after the successful
+  four-action batch and safe target-change stop; strengthen only Core's bounded
+  already-answered/already-observed feedback so the model completes or chooses
+  genuinely different evidence instead of repeating until the guard fires.
+- Required reads: feedback-only report; evidence-loop repeat/no-progress path;
+  decision-feedback constants and their focused tests
+- Owns (may edit): isolated Core evidence-loop repeat feedback and directly
+  owned focused tests only after live pass; main report
+  `reports/w2-unified-no-progress-completion.md`
+- Must not touch: batch schema/executor/safety, completion normalizer, downstream,
+  user panel/data, other lanes, more than one live run, full suites/commits/pushes
+- Definition of done: same lane completes a 2+ action batch, creates/applies/
+  plays the Flow, and passes oracle; repeated requests remain fail-closed and
+  bounded. Otherwise stop at the next exact terminal outcome.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-no-progress-completion.md`
