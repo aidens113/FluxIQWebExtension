@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-20. Live creation, reduction, field entry, batch safety, real-provider creation, and panel recording/generation are proven; runtime, playback/reuse, and panel blockers remain under live repair.
+Status detail: Executing 2026-09-20. Live creation, reduction, field entry, batch safety, real-provider creation, panel recording/generation, and deterministic saved-Flow reuse are proven; remaining runtime and panel blockers are under live repair.
 Created: 2026-09-15
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -77,7 +77,7 @@ passed the same nine-action Flow oracle. New sanitized telemetry proved two
 later provider runs chose zero batches, so adoption remains open; the failed
 wording experiment was excluded. Panel storage initialization and autofill
 repairs and bounded host-state playback are integrated on t027. The real panel
-reaches generation preflight; evidence-runtime binding remains under live repair. The production panel plus loaded extension now passes recording through generated Subflow and rendered-layout validation in 18.9 seconds after correcting a stale Lab predicate for a legitimate recorder scroll; playback/reuse remains separate. Explicit safe adoption of a marker-less v2 root is merged and pushed on t028, but applying it to the user's root still requires an approved stop, private backup, hash check, and restart. Concurrent work is specified in
+reaches generation preflight; evidence-runtime binding remains under live repair. The production panel plus loaded extension now passes recording through generated Subflow and rendered-layout validation in 18.9 seconds after correcting a stale Lab predicate for a legitimate recorder scroll; two separate runtime/browser lifetimes then replayed the exact saved graph with 4/4 actions, passing oracles, and zero LLM activity. Explicit safe adoption of a marker-less v2 root is merged and pushed on t028, but applying it to the user's root still requires an approved stop, private backup, hash check, and restart. Concurrent work is specified in
 [the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
 same-code configuration, isolated worktrees/services/profiles/stores, at most
 two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
