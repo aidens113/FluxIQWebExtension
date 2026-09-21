@@ -1,7 +1,7 @@
 # Week 2 Exit Plan
 
 Status: Active
-Status detail: t027 in gate triage before landing; t033, P1, L0, L1 running speculatively from its tip; ten realistic-scenario workers and t035 in flight.
+Status detail: t027 landed in both repositories; five realistic sites on dev; P2 (tool failures end every build) and L4 in flight; t033, t035, t036, t047, t048, t049 done and waiting to land.
 Created: 2026-09-21
 Last updated: 2026-09-21
 Owner: Senior supervisor agent
@@ -67,18 +67,13 @@ committed on 2026-09-21. Core `service.ts` is the serial bottleneck: t027 is
 37 lines over its 6,404-line ratchet, and t027, t033, C0, CF and Resume all
 edit it.
 
-**In flight:** `w2x-t027-gate-triage` (t027's builds pass; tests fail 3
-downstream and 5 in Core web, plus test-runner's stale `dist`); speculatively
-from t027's tip: `w2x-t033-land` (I2), `w2x-creation-permission-lost` (P1,
-t047), `w2x-created-flow-repair-lane` (L1,
-t049, with t036 merged in); `w2x-recovery-permissions` (L4, t050, on L0's Core);
-ten
-`w2x-realistic-scenarios` workers (S1, t037-t046). Machine limit: 12 threads,
-26 GB, about 8 GB free under this load; U1 and I3 dispatch as scenario workers
-finish.
+**In flight:** `w2x-tool-failure-feedback` (P2, t051 — the failure every
+realistic site hits); `w2x-recovery-permissions` (L4, t050); the
+everything-store scenario worker (t041). Done and waiting to land: t033 (I2),
+t035 (L2), t036 (L3), t048 (L0), t049 (L1), t047 (P1), four scenarios.
 
-**Next:** land t027 when triage is green; merge t036; then each speculative
-task re-merges `dev`.
+**Next:** push both `dev` branches; land t035, t036, t048, t033, t049, t047
+and the queued scenarios; dispatch P3, U1 and I3.
 
 **Blockers:** none.
 
@@ -95,15 +90,20 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 
 | Id | Work | Repos | After | Status |
 | --- | --- | --- | --- | --- |
-| **I1** | Land t027 without its first-generation batch surface | both | — | in flight |
-| **I2** | t033: rereview, merge `dev`, same-code live A/B on `social-scheduler-schedule-post` (1 vs 16), land. If the rereview blocks again or the A/B fails, hold t033 and go on: it is not on the exit path | both | I1 | schema gap fixed `6992da5`; split `evidence-loop.ts` (810 lines) before landing; waits for I1 |
+| **I1** | Land t027 without its first-generation batch surface | both | — | **done**: downstream `Merge task t027`, Core `278c44b` |
+| **I2** | t033: rereview, merge `dev`, same-code live A/B on `social-scheduler-schedule-post` (1 vs 16), land. If the rereview blocks again or the A/B fails, hold t033 and go on: it is not on the exit path | both | I1 | live A/B passed: arm 1 `run-mubmnrhq-f3f577eb`, arm 16 `run-mubo9tco-90f098f6` (one decision completed 4 ordered field entries; 4 build = 4 observed); resolution staged in t033 worktrees; lands next |
 | **I3** | t034 post-action readiness: merge `dev`, dispatch its existing brief | downstream | I1 | waiting |
 | **I4** | t029 JavaScript node: held until its three review findings are fixed; after the exit | both | — | held |
 | **I5** | Clean-up: `pnpm task prune`; abandon t006, t007, t017; t005 with `--force`; t021 after discarding its rejected Core prototype; remove the `F:\fxlab\t027-*` worktrees; keep t008 and t011 evidence until checked | both | I1 | waiting |
-| **P1** | Creation without a permit ends in HTTP 400 (`lab.generation_http_400`, t036 run `run-mubktq9k-5cb2485b`) instead of a permission request reaching the person; Core's generation handler appears to drop the cause. Reproduce live, then make it a first-class needs-permission outcome | both | I1 | waiting |
-| **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each, merged to `dev` and put into live testing as they finish | downstream | — | in flight |
+| **P1** | Creation without a permit ends in HTTP 400 (`lab.generation_http_400`, t036 run `run-mubktq9k-5cb2485b`) instead of a permission request reaching the person; Core's generation handler appears to drop the cause. Reproduce live, then make it a first-class needs-permission outcome | both | I1 | partial on t047: premise did not reproduce; fixed the real 400 (a successful build over 64k accounted tokens was rejected after its proposal was built; `f932e40`); Lab reads `permission.required` (`f3646ef`); live request unobserved because of P3 |
+| **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each, merged to `dev` and put into live testing as they finish | downstream | — | 5 on `dev` (professional-network, company-website, social-network-feed, photo-social, auction-marketplace); bigbox-retail, crossborder-marketplace, local-classifieds, job-board finished and queued; everything-store building. Every live creation so far built no Flow: P2 |
+| **P2** | A failed exploration tool call ends the whole build and is missing from the trace (`evidence-loop.ts` catch sites; domain throws on covered controls `capture.ts:128` and oversized snapshots `sanitize.ts:276`) — the failure on every realistic site | both | — | in flight on t051 (`w2x-tool-failure-feedback`) |
+| **P3** | The web domain never checks a created Flow's own steps for permission (`resolve-plan-node.ts` has no permission field; design report open question 4, F7), so a created Flow can publish, refund or delete on every run unasked | both | I1 | waiting — next dispatch |
+| **P4** | Lab: judge "this task correctly ends in a permission request" (every realistic site's consequential task needs it); record usage when a proposal read fails (`build-proposal.ts:161`, `run-scenario.ts:340-352`) | downstream | — | waiting |
+| **P5** | `extract_list` cannot de-duplicate across pagination; Core discards the inner error behind `flow_bootstrap.provider_transport_unknown` | both | — | waiting |
+| **P6** | Mechanical: Core has no `.gitattributes` (worktrees check out CRLF, breaking source-contract tests); Core `pnpm check` fails on a fresh checkout because `apps/web` type-checks against `fluxiq`'s built `dist` | Core | — | waiting |
 | **L0** | C0: bring Core `service.ts` under its ratchet by behaviour-unchanged moves | Core | I1 | done on t048 (`56d6106`, 6,381 -> 6,275 lines); lands after I1 |
-| **L1** | Gap step 1: the created-Flow repair lane on `persistent-isolated`, with `--replays` for instruction tasks; proves Persist and the zero-call re-run on identity-drift | downstream | I1 | waiting |
+| **L1** | Gap step 1: the created-Flow repair lane on `persistent-isolated`, with `--replays` for instruction tasks; proves Persist and the zero-call re-run on identity-drift | downstream | I1 | done on t049 (`768eace`): `run-mubmrcyv-beaa2a6b` build 2 = observed 2, repair applied, in-run replay 0 calls; keyless `replay-mubmxtvg-93979815` passed with 0 calls; Core proposed a patch in 1 of 4 runs (L4-L6) |
 | **L2** | C5a+C5b+D5: result verification asks once more after any non-yes answer; only no,no refutes; an empty result is recorded as not checked | both | — | done on t035 (`571f9d4` Core, `cf54c30` downstream); lands after I1 |
 | **V1** | Judge an empty result against the instruction (an empty table can be the right answer) instead of leaving it unchecked; needs the grant-revalidation hang t024 found in provider resolution fixed first; also remove the empty-record refutation in `result-verification/core-observation.ts`, which `verify` can no longer reach | Core | L2 | waiting |
 | **L3** | D3: the Lab's `--llm-permit`, carried to the grant's `permittedConsequences` | downstream | — | in flight |
@@ -296,6 +296,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Owns: the Core files named above and their tests; the architecture line. Must not touch: `result-verification/*`, `live-patch.ts`, `flow-bootstrap/*`, downstream source, other worktrees, git commits, shared `dev`, the user's panel.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-recovery-permissions.md`
 
+### Brief: w2x-tool-failure-feedback
+- Repository: paired task t051, `F:\fxwork\t051\!FluxIQWebExtension` (t027's tip plus t036) and `F:\fxwork\t051\!FluxIQ` (t027's Core plus L0). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
+- Task: plan step P2. On every realistic site built so far (professional-network, company-website, job-board, auction-marketplace) Flow creation ended `flow_bootstrap.evidence_tool_failed` within a few calls: `AS/runtime/llm/evidence-loop.ts` returns `llm_evidence_loop.tool_failed` the moment `executeTool` throws or its result cannot be parsed (the initial-observation site and the decision site, both `catch {}` blocks), and never records the failed call. Make a failed tool call an observation, not the end: record it in the trace (call id, tool id, a closed result code) and give the model a bounded, closed failure record on its next decision — tool id and a code such as target intercepted, not found, detached, timed out, navigation — never raw error text, selectors from the page, or page data. The loop then continues under its existing budgets, repeat and no-progress guards. Cancellation still ends it. Find, live, which web tool threw and why (the auction worker suspects a promotion modal opening 2.5 s after load), and where the failure is a page condition make the domain executor return a closed result code instead of throwing.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: reproduce on `auction-marketplace`'s extraction task and on `professional-network-rotterdam-data-engineers` (reports in `week2-exit-plan/reports/w2x-scenario-*.md`). After the fix the same tasks must get past the first failure: the trace shows the failed call and its code, the model's next decision responds to it, and the build reaches a proposal or a meaningful closed outcome. Passing the oracle is not required — these sites are meant to be hard — but report matched against expected records if a Flow is created, with `build.providerCalls == observed.calls`.
+- Then focused tests (evidence-loop, the domain tool executors, generation-failure), Core `check` and `build`, downstream `pnpm check`. `evidence-loop.ts` must stay under 800 lines; `service.ts` must not grow.
+- Owns: `AS/runtime/llm/evidence-loop.ts` and its tests; the domain `domain/src/runtime/llm-evidence/**` executors that throw on page conditions, and their tests; `AS/runtime/flow-bootstrap/generation-failure.ts` only if a code mapping must change. Must not touch: `recovery/*`, `result-verification/*`, `service.ts`, scenario-lab, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-tool-failure-feedback.md`
+
 ### Brief: w2-multi-action-schema-fix
 - Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
 - Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
@@ -388,6 +396,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: `wc -l .../runtime/service.ts` on t048 printed `6275`; Core `node scripts/structure-audit.mjs` printed `structure-audit: passed (170 warning(s), 361 baselined).`; `run-mubme2r4-81910603` read `{"verdict":"passed","oracle":["passed"],"matched":[14],"expected":[14],"build":5,"observed":5}`. The campaign's playback made one result-verification call; the Flow's steps made none, and the exit criterion's re-run is keyless.
 - Outcome: Done (L0)
 - Follow-up: land after I1.
+
+### 2026-09-21 — t027 landed; five realistic sites on dev; t033 A/B passed
+- Agent: supervisor; workers `w2x-t027-gate-triage`, `w2x-t033-land`, `w2x-created-flow-repair-lane`, `w2x-creation-permission-lost`, scenario workers
+- Changed: t027 triage `e2159d3` (Core) and `1c5c7ad` (downstream: test-runner clears `dist` before building); t027 merged in both repositories; scenario tasks t043, t045, t037, t038, t040 merged; t049 `768eace`; t047 `f932e40`, `f3646ef`; plan rows P2-P6.
+- Why: t027 carried most of the proven Week 2 work; the scenarios must be in live testing; every realistic site's live run exposed the same build-ending tool failure.
+- Validation: t027 `pnpm --filter @fluxiq-web-extension/test-runner test` printed `# tests 1195`, `# pass 1195`, `# fail 0`; Core `vitest run --no-file-parallelism .../generation-failure.test.ts .../service-bootstrap` printed `Tests  113 passed (113)`; the three web test files printed `Tests  48 passed (48)`; each scenario landing printed scenario-lab `# fail 0` (385, 407, 445 passing) and `task finish` reported `"validation":{"ran":true,"command":"pnpm check","passed":true}`; Core `pnpm task finish t027` printed `"merge":"Merge task t027: multi-action-exploration" ... "passed":true` after `fluxiq` was built (its first attempt failed `apps/web` `TS2307` on a stale `dist`: P6); t049 run read `{"verdict":"passed","oracle":["passed"],"build":2,"observed":2}` with repair `["applied","ran"]` and replay calls `[0]`; `replay-mubmxtvg-93979815` read `"verdict":"passed"` with calls `[0]`.
+- Outcome: Partial
+- Follow-up: push both `dev` branches; land the finished tasks; clean up t040's worktree, whose finish crashed parsing the process list after merging.
 
 ---
 
