@@ -332,6 +332,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Owns: `AS/runtime/llm/evidence-loop.ts`, a new or existing context-window module beside it, `AS/runtime/loop-limits/*`, their tests. Must not touch: `recovery/*`, `result-verification/*`, `service.ts`, domain and Lab source, other worktrees, git commits, shared `dev`, the user's panel.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-evidence-window.md`
 
+### Brief: w2x-scenario-selector-audit
+- Repository: task t058, flat worktree `F:\fxwork\t058-bigbox-selectors` on the shared read-only Core (`71e2798`).
+- Task: E1 lane B found that `bigbox-retail`'s recorded workflows `pickup-towels` and `pickup-order` extract with Playwright-only selectors (`:has-text`, `:text-matches`) that the real extension rejects, so their recording-lane runs fail at the extract step through no fault of FluxIQ (`runtime.behavior`, invalid extract selector). `:has-text` or `:text-matches` also appears in `company-website/manifest.ts`, `everything-store/workflows/purchase.ts` and `photo-social/manifest.ts`. Audit every recorded workflow step of all ten realistic sites for selectors the extension's action and extract engines cannot execute, and rewrite each to a selector the extension accepts that picks exactly the same elements. Scripts that only Playwright runs (the honest and naive browser-path tests) may keep Playwright syntax. The sites stay exactly as difficult: change no page, no oracle, no task wording.
+- Live proof: rerun each affected recording lane (provider-free, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`) and show the extract or action step now executes; report record counts against expected.
+- Then the scenario-lab suite and `pnpm check`.
+- Owns: the ten sites' manifest and workflow files under `apps/scenario-lab/src/scenarios/*/`. Must not touch: pages, oracles, tasks, extension or domain source, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-scenario-selector-audit.md`
+
 ### Brief: w2-multi-action-schema-fix
 - Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
 - Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
