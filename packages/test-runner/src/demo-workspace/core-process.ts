@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { access, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { allocateLoopbackPort } from "../allocation.js";
+import { allocateLoopbackPort, assertLoopbackPortBindable } from "../allocation.js";
 import { WebPanelAuthSessionCache } from "../auth-session.js";
 import { coreWebServerProcessSpec, prepareCoreWebBuild } from "../core-web-build/index.js";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
@@ -29,6 +29,8 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
   const webPort = explicitPort(config.origin, "FLUXIQ_DEMO_BASE_URL");
   const gatewayPort = explicitPort(config.gatewayUrl, "FLUXIQ_DEMO_GATEWAY_URL");
   if (webPort === gatewayPort) throw new Error("FLUXIQ_DEMO_BASE_URL and FLUXIQ_DEMO_GATEWAY_URL must use different ports");
+  await assertLoopbackPortBindable(webPort, "FLUXIQ_DEMO_BASE_URL");
+  await assertLoopbackPortBindable(gatewayPort, "FLUXIQ_DEMO_GATEWAY_URL");
 
   await requirePaths([
     path.join(config.fluxiqRepositoryRoot, "apps", "web", "package.json"),
