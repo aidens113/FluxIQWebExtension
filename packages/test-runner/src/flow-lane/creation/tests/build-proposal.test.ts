@@ -29,7 +29,7 @@ async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?:
 
 test("the build saves the instruction, then authorizes, selects the context and explores, as the web panel does", async () => {
   const { core, authorized, record } = await build();
-  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation"]);
+  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation"]);
   assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
   assert.deepEqual(authorized, [FLOW_ID]);
   assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true }]);
@@ -44,6 +44,8 @@ test("the build saves the instruction, then authorizes, selects the context and 
     failure: null,
     recoveredAfterTimeout: false,
     durationMs: 0,
+    instructedConsequences: [],
+    permissionRequest: null,
   });
   assert.equal(JSON.stringify(record).includes("Scrape"), false, "the record holds no instruction text");
 });
@@ -74,6 +76,8 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     failure: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 },
     recoveredAfterTimeout: false,
     durationMs: 0,
+    instructedConsequences: null,
+    permissionRequest: null,
   });
   // A refusal before any request is a build that made no call.
   const early = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", retryable: false, providerInvocation: "not_attempted", providerResponse: "not_received" } } } });

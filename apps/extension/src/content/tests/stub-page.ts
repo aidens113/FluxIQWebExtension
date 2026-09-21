@@ -79,6 +79,13 @@ class StubInput extends StubElement {
 
 class StubTextArea extends StubElement {}
 class StubSelect extends StubElement {}
+// The stub page builds no tables, so nothing is ever one of these; they exist
+// so content code's `instanceof HTMLTableCellElement` checks answer false
+// instead of throwing. They are fallbacks: a test that installs its own table
+// parts before loading the stub page keeps them.
+class StubTableCell extends StubElement {}
+class StubTableRow extends StubElement {}
+class StubTable extends StubElement {}
 
 const STUB_GLOBALS: Record<string, unknown> = {
   Node: { TEXT_NODE, ELEMENT_NODE },
@@ -86,6 +93,12 @@ const STUB_GLOBALS: Record<string, unknown> = {
   HTMLInputElement: StubInput,
   HTMLTextAreaElement: StubTextArea,
   HTMLSelectElement: StubSelect
+};
+
+const FALLBACK_GLOBALS: Record<string, unknown> = {
+  HTMLTableCellElement: StubTableCell,
+  HTMLTableRowElement: StubTableRow,
+  HTMLTableElement: StubTable
 };
 
 /** An element holding `children` in order; a string is a text node. Use `input` for an `<input>`. */
@@ -103,8 +116,10 @@ export function input(type: string, value: string): Element {
 /** Loads the module under test with the stub globals installed, runs `body`, and puts every global back. */
 export async function withStubPage<Module>(load: () => Promise<Module>, body: (loaded: Module) => void): Promise<void> {
   const globals = globalThis as unknown as Record<string, unknown>;
-  const previous = new Map(Object.keys(STUB_GLOBALS).map((name) => [name, Object.getOwnPropertyDescriptor(globals, name)] as const));
+  const names = [...Object.keys(STUB_GLOBALS), ...Object.keys(FALLBACK_GLOBALS)];
+  const previous = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(globals, name)] as const));
   Object.assign(globals, STUB_GLOBALS);
+  for (const [name, value] of Object.entries(FALLBACK_GLOBALS)) if (globals[name] === undefined) globals[name] = value;
   try {
     body(await load());
   } finally {

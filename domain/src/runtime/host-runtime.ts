@@ -53,14 +53,23 @@ import { WEB_AUTOMATION_ROUTE_STATE_PATHS, webAutomationRouteState } from "./rou
  */
 export type WebAutomationHostRuntimeBoundary = Parameters<FluxIQ["programs"]["automationStudio"]["bindHostRuntime"]>[0];
 
-/** How the boundary reaches the paired browser; the expectation evaluator shares it. */
-export type WebAutomationHostRuntimeGateway = { dispatch: WebAutomationExpectationDispatch };
+/**
+ * How the boundary reaches the paired browser; the expectation evaluator
+ * shares it. Host-state captures add the same finite command bound as an
+ * ordinary policy action, so a silent browser cannot strand a Flow run.
+ */
+type WebAutomationHostRuntimeDispatch = (
+  request: Parameters<WebAutomationExpectationDispatch>[0] & { timeoutMs?: number }
+) => ReturnType<WebAutomationExpectationDispatch>;
+export type WebAutomationHostRuntimeGateway = { dispatch: WebAutomationHostRuntimeDispatch };
 
 /** `web-state-diff.v1`, the shape `stateRefs.stateDiff` carries for a web attempt. */
 export const WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v2" as const;
 
 const SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 const HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
+/** Matches Core's default `builtin.policy.action` command timeout. */
+const HOST_STATE_COMMAND_TIMEOUT_MS = 5_000;
 
 /** At most this many elements are listed on each side of a diff; the counts stay exact. */
 const MAX_DIFF_ELEMENTS = 10;
@@ -92,6 +101,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       const result = await gateway.dispatch({
         outputId: SNAPSHOT_OUTPUT_ID,
         payload: {},
+        timeoutMs: HOST_STATE_COMMAND_TIMEOUT_MS,
         metadata: {
           source: HOST_RUNTIME_SOURCE,
           domainId: WEB_AUTOMATION_DOMAIN_ID,
@@ -116,6 +126,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       const result = await gateway.dispatch({
         outputId: SNAPSHOT_OUTPUT_ID,
         payload: {},
+        timeoutMs: HOST_STATE_COMMAND_TIMEOUT_MS,
         metadata: { source: HOST_RUNTIME_SOURCE, domainId: WEB_AUTOMATION_DOMAIN_ID, point: "route" }
       });
       if (!result.ok) throw new Error(result.error ?? "The web route state was not captured.");

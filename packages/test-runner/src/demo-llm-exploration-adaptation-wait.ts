@@ -20,7 +20,7 @@ export type SafeRuntimePatchDiagnostic = Readonly<{
 
 /** True as soon as the bounded diagnosis+patch run is terminal, even without a proposal ID. */
 export function explorationAdaptationRunIsComplete(run: ExistingRunDetail): boolean {
-  return isTerminal(run.summary.status) && (run.interventions?.length ?? 0) >= 2;
+  return isTerminal(run.summary.status);
 }
 
 /** Returns the only proposal identity without exposing provider output or target data. */
@@ -30,6 +30,7 @@ export function requireExactExplorationProposalIdentity(run: ExistingRunDetail):
     throw new RunnerFailure("runtime.behavior", "Exploration adaptation did not produce one exact proposal", {
       details: {
         reasonCode: "exploration_adaptation_run.proposal_identity_invalid",
+        recoveryCode: run.llmGate?.patchSkippedCode ?? run.llmGate?.code ?? "llm.runtime_patch_result_missing",
         runtimePatchDiagnostics: safeRuntimePatchDiagnostics(run),
       },
     });
