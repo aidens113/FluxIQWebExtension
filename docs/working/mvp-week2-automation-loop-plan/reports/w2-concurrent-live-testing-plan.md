@@ -1010,3 +1010,23 @@ budgets.
   proposal is reviewed/applied and the same Flow passes its oracle. Stop at the
   first terminal product result without retrying.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-repair-result-boundary.md`
+
+### Brief: w2-panel-diagnostic-identity-live
+- Repository: isolated current-t027 downstream plus the unchanged unified Core
+  candidate; reuse only disposable product-catalog setup on fresh ports
+- Task: reproduce the reporter masking boundary from the completed live run,
+  map arbitrary sanitized Core reason/issue identities to a fixed valid Lab
+  diagnostic code while retaining bounded categorical detail, then make one
+  real-panel attempt to expose the true terminal reason.
+- Required reads: panel unified-batch-task report; downstream browser evidence
+  diagnostic validation and generation response/error reporting path
+- Owns (may edit): downstream evidence/generation diagnostic adapter and its
+  directly owned focused tests after the existing live reproduction; main
+  report `reports/w2-panel-diagnostic-identity-live.md`
+- Must not touch: unified Core candidate, user panel/data, repair/recording/
+  performance lanes, raw provider/page content, unrelated files/full suites/
+  commits/pushes; one provider attempt after repair only
+- Definition of done: reporter never masks the Core terminal result; live panel
+  returns one bounded valid diagnostic identity and preserves the actual reason
+  category. Batch/apply may continue only if the same attempt passes that gate.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-diagnostic-identity-live.md`
