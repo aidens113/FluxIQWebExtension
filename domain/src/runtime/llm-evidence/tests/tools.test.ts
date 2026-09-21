@@ -169,6 +169,9 @@ test("captures bounded sanitized post-failure evidence without returning the raw
   assert.equal(evidence.truncated, true);
   assert.equal(JSON.stringify(evidence).includes(privateValue), false);
   assert.equal(JSON.stringify(evidence).includes("token"), false);
+  assert.equal(evidence.repairCandidates?.action, "known");
+  assert.ok((evidence.repairCandidates?.candidates.length ?? 0) <= 8);
+  assert.ok(evidence.repairCandidates?.candidates.every(candidate => /^target\.[1-9][0-9]?$/u.test(candidate.target)));
   assert.deepEqual(commands, [{
     actionType: "web.dom.capture_snapshot",
     parameters: {},
@@ -183,6 +186,33 @@ test("captures bounded sanitized post-failure evidence without returning the raw
       definitionId: "web.output.dom-click",
     },
   }]);
+});
+
+test("keeps the whole failure packet within a tight budget after adding candidate envelope bytes", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async () => ({ status: "succeeded", payload: { snapshot: {
+      url: "https://example.test/form",
+      title: "Dense repair form",
+      interactiveElements: Array.from({ length: 30 }, (_, index) => ({
+        tagName: "button",
+        selector: `#action-${index}`,
+        visibleText: `Action ${index} ${"x".repeat(80)}`,
+        attributes: { type: "button" },
+      })),
+    } } }),
+  });
+  const maxEvidenceBytes = 900;
+  const evidence = await runtime.captureSanitizedFailureEvidence({
+    projectId: "project.one",
+    flowId: "flow.one",
+    runId: "run.failed",
+    failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" },
+    maxEvidenceBytes,
+  });
+
+  assert.ok(evidence.repairCandidates);
+  assert.equal(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= maxEvidenceBytes, true);
 });
 
 test("a repair on a packet this runtime issued gets its selector hint back, without the packet ever carrying one", async () => {
@@ -248,10 +278,13 @@ test("post-failure evidence names the parameter a repair fills, and nothing for 
   // dispatches, so the one parameter every repairable action has is offered.
   const recorded = await capture("builtin.policy.action");
   assert.deepEqual(recorded.repairParameters, created.repairParameters);
+  assert.equal(recorded.repairCandidates?.action, "recorded_action_unknown");
+  assert.deepEqual(recorded.repairCandidates?.candidates, [{ target: "target.1", match: "action_unknown", roles: ["clickable", "keyable", "observable"] }]);
   // An action this domain knows offers nothing says so, rather than inviting a
   // repair the check will refuse.
   assert.deepEqual((await capture("web.output.dom-extract_list")).repairParameters, {});
   assert.deepEqual((await capture("web.output.browser-navigate")).repairParameters, {});
+  assert.equal((await capture("web.output.browser-navigate")).repairCandidates?.status, "action_not_repairable");
   // Naming the parameters is not naming the control.
   assert.equal(recorded.failedTargetUnknown, true);
   assert.doesNotMatch(JSON.stringify(recorded), /#place-order|selector/u);

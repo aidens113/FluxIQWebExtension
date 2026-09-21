@@ -92,7 +92,7 @@ export async function waitForPanelRunResponse(page: Page, dispatch: () => Promis
         const error = typeof body === "object" && body !== null && typeof (body as { error?: unknown }).error === "string"
           ? (body as { error: string }).error : "";
         rejectResponse(new Error(`The panel rejected LLM run preparation before runtime dispatch (${llmPreparationRejectionCode(error)})`));
-      }).catch(() => rejectResponse(new Error("The panel rejected LLM run preparation before runtime dispatch (llm_preparation.rejected)")));
+      }).catch(/* best-effort: response body may be absent; retain the closed rejection category */ () => rejectResponse(new Error("The panel rejected LLM run preparation before runtime dispatch (llm_preparation.rejected)")));
     }
   };
   page.on("response", handler);

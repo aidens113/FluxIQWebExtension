@@ -68,8 +68,11 @@ and patch unnecessary. Provider-free replay of its durable state now exposes
 the provider count at two. The corrected budget/UI/grant diagnostics and closed
 result projection are integrated on t027 with focused proof. Existing semantic
 snapshot evidence already covers actionable roles and labels, so a duplicate
-node is rejected; deterministic repair-candidate ranking over that packet is
-the next reusable seam. Unified one-or-many remains isolated because its
+node is rejected. Deterministic repair-candidate ranking over that packet is
+now live-proven with five bounded opaque candidates, a 680-byte projection, and
+focused 22/22 proof. Its provider repair stopped before dispatch because the
+preserved workspace has zero applied bootstrap adaptations; the next run needs
+a fresh current-t027 UI-created workspace. Unified one-or-many remains isolated because its
 provider runs did not complete a Flow. Marker-less-v2 adoption is pushed on
 t028, but the user's root still needs approved stop/backup/hash/restart.
 Concurrent work is specified in
@@ -79,8 +82,8 @@ two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
 full gates only after live behavior passes.
 
 **Open, for the next session, in priority order:**
-1. Add deterministic repair-candidate ranking over existing semantic snapshot
-   evidence, then run a new bounded repair to seek proposal/apply/restart/reuse.
+1. Create a fresh current-t027 workspace through the real UI, then run one
+   bounded repair to seek proposal/apply/restart/reuse.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
