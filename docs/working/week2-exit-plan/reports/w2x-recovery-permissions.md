@@ -1,233 +1,324 @@
 # w2x-recovery-permissions
 
-Worker report, 2026-09-21. Task t050, plan step L4, slice C3 ("Item 3" of
-`reports/w2x-existing-flow-and-repair-design.md`). Worktrees:
-`F:\fxwork\t050\!FluxIQ` (branch `task/t050-recovery-permissions`, HEAD
-`56d6106`) and `F:\fxwork\t050\!FluxIQWebExtension` (HEAD `9e25272`). Nothing
-is committed. `AS/` = Core `packages/fluxiq/src/programs/automation-studio/`,
+Worker report, 2026-09-21. Task t050: plan step L4, slice C3 ("Item 3" of
+`reports/w2x-existing-flow-and-repair-design.md`), plus the supervisor's scope
+extension (the Lab defect, the model-facing policy text, and both live proofs).
+
+Worktrees:
+
+- `F:\fxwork\t050\!FluxIQ`, branch `task/t050-recovery-permissions`, HEAD `56d6106`
+- `F:\fxwork\t050\!FluxIQWebExtension`, HEAD `9e25272`
+
+Nothing is committed. Prefixes: `AS/` = Core `packages/fluxiq/src/programs/automation-studio/`;
 `TR/` = downstream `packages/test-runner/src/`.
 
 ## Outcome
 
-**Partial.** The Core change is built and passes its focused tests (5 new, 1
-rewritten, 356 run), Core `check`, Core `build` and downstream `check`.
-`service.ts` stays at 6,275 lines.
+**Partial.** All the code is done, tested and checked, and both live proofs
+were run on the final code. **Neither live proof showed a permission
+request**, because in no run did the model attempt a press with a lasting
+consequence:
 
-**The live proof is blocked by a Lab defect**, outside what this brief owns.
-The Lab reads a granted recorded-Flow run back before Core's recovery has
-finished, so no `--flow` repair task can show a recovery, whatever Core does.
-The unchanged baseline showed exactly the same symptom. I did not take live
-run 2 (with `--llm-permit`): it would hit the same wall, add no evidence, and
-possibly spend provider money that nothing records. The cause is under "Open
-questions", item 1, with the fix it needs.
+- With no permit, the diagnosis skipped exploration and the patch model
+  declined (`control_gone`).
+- With `--llm-permit modify_existing`, the recovery explored with 2 actions, no
+  request was raised, and a `temporary_target_override` was proposed and
+  refused at preflight.
+
+The request path (a press ends the recovery, the patch call is skipped, and
+`metadata.permissionRequest` is written) is proven by unit tests only.
+
+What the live runs do prove:
+
+- The Lab now waits for Core's recovery. Before the fix, every run reported 0
+  calls and no recovery. Now every recovery completes and is read back, with
+  `observed.calls` equal to Core's own `costAccounting.calls`.
+- Core records `llmGate.permissions` exactly as granted:
+  `{granted:[], instructed:[], lapsed:[]}` without a permit, and
+  `{granted:["modify_existing"], ...}` with one.
+- The patch call is made after the exploration.
 
 ## What changed and why
 
-All the changes are in Core. There are no downstream changes.
+### Core (slice C3)
 
-- **`AS/runtime/llm/execution-grants.ts`**: `resolve()` now also returns
-  `permittedConsequences`, as a copy of the grant's set.
+- **`AS/runtime/llm/execution-grants.ts`**: `resolve()` returns a copy of the
+  grant's `permittedConsequences`.
 - **`AS/runtime/llm/resolver-contract.ts`**: `AutomationStudioLlmProviderResolution`
-  gains `permittedConsequences?: readonly AutomationStudioActionConsequence[]`.
-  Absent means nothing is permitted. The host resolver (`programs/_shared/runtime.ts:79-93`)
-  passes `resolve()` through unchanged, so no host edit was needed.
-- **New `AS/runtime/recovery/annotation/permissions.ts`** (`automationStudioRecoveryPermissionGate`):
-  - Builds one gate at `stage: "recovery"`.
-  - Its authority is two things. The first is the grant's classes (unrecognised
-    words are dropped). The second is `currentAutomationStudioInstructedConsequences`
-    over the parent Flow's `metadata.bootstrapInstructedConsequences`, checked
-    against the Flow's **active** instructions by their full title and body.
-    An edited or inactive instruction lapses its entries.
-  - `instructionIds` are the active instructions.
-  - It observes the failure evidence, so a request can name a control that was
-    already shown to the model.
-  - It returns `{ gate, summary() }`, where the summary is classes only:
-    `{ granted, instructed, lapsed }`.
-  - It never calls a model.
-  - The file is exported from `annotation/index.ts`.
+  gains `permittedConsequences?`. Absent means nothing is permitted. The host
+  passes `resolve()` through unchanged.
+- **New `AS/runtime/recovery/annotation/permissions.ts`**
+  (`automationStudioRecoveryPermissionGate`), exported from the barrel:
+  - one gate per recovery, at `stage: "recovery"`;
+  - its authority is the grant's classes, plus the parent Flow's stored
+    `bootstrapInstructedConsequences`, kept only while the instruction is
+    active and its text is unchanged;
+  - it observes the failure evidence;
+  - its `summary()` returns classes only: `{ granted, instructed, lapsed }`;
+  - it never calls a model.
 - **`AS/runtime/recovery/annotation/annotate.ts`**:
-  - After the provider and the failure evidence, it reads `flowForRecovery`
-    once. That port came from L0. The same read now also supplies the
-    exploration's scope.
-  - It builds the gate when a provider is present and passes it to the
-    exploration.
-  - After the exploration, if `gate.request` is set and a patch call would
-    have followed, the patch call is skipped. It records:
-    - `patchSkippedCode: "llm.runtime_patch_permission_required"`;
-    - `patchSkipped: <the request's sentence>`;
-    - the same code as the resolution stage's `skipCode`.
-  - Whenever a request exists, it is written to `metadata.permissionRequest`
-    (`automation-studio.action-permission-request.v1`, `reason.stage: "recovery"`).
-  - `metadata.llmGate.permissions` records the summary.
-  - The file grows from 454 to 483 lines.
-- **`AS/runtime/recovery/annotation/exploration.ts`**: the input gains an
-  optional `permissionGate`, which is passed through as `gate`. The registry
-  resolution sets `mutationsGovernedByPermission: true`. The header comment
-  that said the policy flag decides side effects is rewritten.
-- **`AS/runtime/recovery/runtime-exploration.ts`**: gains an optional `gate`,
-  which is used as it is. Passing it together with `permittedConsequences`,
-  `instructionIds` or `shownEvidence` throws before anything runs. Without it,
-  the gate is built from the loose fields as before.
-- **`AS/runtime/llm/harness-options/registry.ts`**: the resolution gains
-  `mutationsGovernedByPermission?`. When it is true, `sideEffectAllows` offers
-  `mutate` options whatever the policy says. `destructive` is still never
-  offered. Without the flag, behaviour is unchanged.
-- **Core `docs/architecture/automation-studio.md`**: new subsection "What a
-  recovery may do that outlasts it", before "LLM execution grant lifetime". It
-  states that `policy.allowExternalSideEffects` is no longer read on the
-  recovery exploration path. It also states that the patch stage's own
-  preflight (`live-patch.ts`) still reads the flag until C4.
-- **Tests**:
-  - New `annotation/tests/permissions.test.ts` (7 tests): grant only, the
-    instructed set current, lapsed by an edit and by deactivation, unparseable
-    entries, the name carried only when it was shown, and the summary as a copy.
-  - New `annotation/tests/recovery-permissions.test.ts` (5 tests, driven
-    through `annotate`, with a policy that forbids side effects):
-    - the acting option is offered, and a destructive one is not;
-    - with no grant: a request, no press, no patch call, and the new codes;
-    - with a grant: the press happens and the patch call follows;
-    - with the instructed set: the press happens;
-    - with an edited instruction: a request, and the set reported as lapsed.
-  - `annotate.test.ts`: the two tests that pinned "the policy flag withholds
-    the mutating option" are replaced by one that asserts the option is offered
-    under either flag value.
-  - `runtime-exploration-permission.test.ts` (+2): a gate handed in is used as
-    it is and holds the request; a gate plus loose fields throws before any
-    decision.
-  - `registry.test.ts` (+1): the governed flag, and never a destructive option.
-  - `execution-grant-permissions.test.ts` (+2): `resolve()` returns a copy, and
-    the empty set when nothing was granted.
+  - reads `flowForRecovery` once, and that read also supplies the exploration's
+    scope;
+  - builds the gate once the provider has resolved, and shares it with the
+    exploration;
+  - when a request is raised and a patch would have followed, it skips the
+    patch call and records `patchSkippedCode: "llm.runtime_patch_permission_required"`
+    and `patchSkipped` (the request's sentence);
+  - writes `metadata.permissionRequest` and `llmGate.permissions`.
+- **`AS/runtime/recovery/annotation/exploration.ts`**: takes `permissionGate`
+  and `actionPermissions`; the registry resolution sets
+  `mutationsGovernedByPermission: true`.
+- **`AS/runtime/recovery/runtime-exploration.ts`**: an optional `gate` input is
+  used as it is. Passing it together with the loose fields
+  (`permittedConsequences`, `instructionIds`, `shownEvidence`) throws before
+  anything runs.
+- **`AS/runtime/llm/harness-options/registry.ts`**: `mutationsGovernedByPermission`
+  offers `mutate` options whatever the policy says. `destructive` is never
+  offered.
 
-A decision I took: when a request exists but no patch call would have been
-made anyway (for example, no runtime Flow or `createAdaptations` off), the
-original skip code is kept. `metadata.permissionRequest` is still recorded.
+### Core (extension: what the model is told)
+
+- **`AS/runtime/llm/harness/context-packet.ts`**:
+  - new type `AutomationStudioLlmActionPermissions`, exported from the harness
+    barrel;
+  - when a call carries `actionPermissions`, `policyGates` drops
+    `allowExternalSideEffects` and `requireApprovalForExternalSideEffects`;
+  - it carries `actionPermissions: { permitted, granted, instructed, otherwise }`
+    instead;
+  - `otherwise` is Core's sentence: "An action with any other lasting
+    consequence is still within reach: when the recovery needs one, the run
+    asks the person for permission at that step instead of taking it. Needing
+    permission never makes a step's result unachievable."
+- **`AS/runtime/llm/harness/task-request.ts`**: the harness input gains
+  `actionPermissions?`.
+- annotate passes `actionPermissions` to the diagnosis and to every exploration
+  decision.
+- **The patch call deliberately still gets the flag.** Its preflight
+  (`live-patch.ts`, C4's) still enforces the flag, and telling the model
+  otherwise would be false.
+- **Why the last clause of the sentence exists.** The first wording ended
+  "...asks the person for permission, and that request is the run's answer".
+  In run L1 the diagnosis then answered `stillAchievable: "no"`. The diagnosis
+  instruction says to answer "no" where "only a person can settle it", and "no"
+  ends the recovery with no request, which is exactly the silent refusal the
+  product rule forbids. After the rewording, L3 answered "yes". That is n=1 on
+  each side, so it is suggestive rather than proven.
+- **Core `docs/architecture/automation-studio.md`**: new subsection "What a
+  recovery may do that outlasts it". It says `policy.allowExternalSideEffects`
+  is no longer read on the recovery exploration path, that the model is shown
+  `actionPermissions`, and that the patch call and its preflight still use the
+  flag until C4.
+
+### Downstream (extension: the Lab defect)
+
+- **`TR/flow-lane/persisted-flow-run.ts`**:
+  - **The request bound.** The one request that runs a granted Flow now uses
+    `GRANTED_RUN_REQUEST_MS` = min(the grant's run lease of 600 s, the client's
+    ceiling of 300 s), not the 30 s default.
+  - **What counts as finished.** For a grant that recovers (every purpose except
+    `verify_result`), a `failed` run counts as finished only once
+    `metadata.llmGate` or `metadata.recoveryTrace` is present. Every way out of
+    Core's recovery writes both. The recovery ladder's placeholder intervention
+    does not count, because it is written with the run's first save.
+  - **Both read paths.** This applies on the timeout read-back, and on the
+    answered path should Core ever answer early.
+  - **The deadline.** A run still pending when the wait ends throws
+    `RunnerFailure("performance.budget", ..., { code: "flow_lane.granted_run_unsettled", pending: "recovery" | "verdict", waitedMs })`,
+    not the run's own failure. The wait is bounded by the grant's lease.
+  - `verdictSettled` is replaced by `pendingWork`.
+  - The answered path waits only for the recovery. The old code never waited
+    for a verdict there, and the creation-lane fakes depend on that.
+- **`TR/http-control/index.ts`**: exports `FLUXIQ_HTTP_MAX_TIMEOUT_MS = 300_000`,
+  now used by `boundedTimeout`.
+
+### Tests
+
+- **Core, new**:
+  - `annotation/tests/permissions.test.ts` (7);
+  - `annotation/tests/recovery-permissions.test.ts` (5). It now also asserts
+    that the diagnosis request carries `actionPermissions` and not the flag;
+  - `llm/harness/tests/policy-gates.test.ts` (3).
+- **Core, edited**:
+  - `annotate.test.ts`: the "withholds a mutating option" pair is replaced;
+  - `runtime-exploration-permission.test.ts`: +2;
+  - `registry.test.ts`: +1;
+  - `execution-grant-permissions.test.ts`: +2;
+  - `service-adaptation/tests/{llm-grants,runtime-patches}.test.ts`: the
+    diagnosis now asserts `actionPermissions`, and the patch still asserts the
+    flag.
+- **Downstream, new**: `TR/flow-lane/tests/granted-run-settlement.test.ts` (5):
+  - the request bound is 300 s;
+  - a timed-out run is read past a failed-but-recovering detail until the
+    record is in;
+  - an answered-early run is read the same way;
+  - the deadline produces the closed code after exactly 600 s;
+  - `verify_result` is final at once.
+- **Downstream, edited**: `TR/flow-lane/tests/live-repair-lane.test.ts`. Its
+  fake Core finished a recovery without writing the record real Core writes, so
+  it now writes `llmGate` and `recoveryTrace`.
 
 ## Commands run and observed results
 
-Live runs. Each set `FLUXIQ_TEST_ENV_FILES=none` and ran the campaign's command
-for the task with `--llm-task repair`:
+### Live runs
 
-```
-node scripts/lab/run-lab.mjs run order-operations --workflow dispatch-batch --variant relabelled-dispatch --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-chat --llm-task repair --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-run-tokens 600000 --llm-max-calls 26 --llm-max-cost-usd 0.25
-```
+Every run used the campaign's command for the task with `--llm-task repair` and
+`FLUXIQ_TEST_ENV_FILES=none`:
 
-| Run | Core | Result |
-|---|---|---|
-| baseline `run-mubnt40m-21b3b65f` | unchanged (dist rebuilt first) | verdict failed; `live-llm.json` `observed.calls: 0`, `interventions: 1`, `gate: null`, `exploration.source: "absent"`, `settlement: "lane_failed"` |
-| run 1 `run-mubog4ky-60dfbc44` | this change (fresh Core web build) | identical: `calls: 0`, `gate: null`, `exploration.source: "absent"` |
-| run 1b `run-mubop3er-4c5dbde5` | this change | identical (storage watcher failed to copy) |
-| run 1c `run-mubosmk0-57653b21` | this change | identical; watcher captured the isolated Core's storage, read and then deleted |
+`node scripts/lab/run-lab.mjs run order-operations --workflow dispatch-batch --variant relabelled-dispatch --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-chat --llm-task repair [--llm-permit modify_existing] --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-run-tokens 600000 --llm-max-calls 26 --llm-max-cost-usd 0.25`
 
-What the run 1c capture showed:
+Before the Lab fix (baseline and after C3): `run-mubnt40m-21b3b65f`, `run-mubog4ky-60dfbc44`,
+`run-mubop3er-4c5dbde5` and `run-mubosmk0-57653b21` all gave `observed.calls: 0`,
+`gate: null` and no recovery trace.
 
-- The runtime session metadata was `{"adaptiveRuntime":true,"adaptiveMode":"manual_approval",...,"canonicalFlow":true}`.
-  The trace status was `failed`, with the message "Recovery ladder reached LLM
-  diagnosis fallback before a configured provider was invoked." The session was
-  queued at 20:18:13.065Z and finished at 20:18:21.053Z. The Flow has a Router
-  and a Subflow.
-- The typed run store held only envelopes derived from the session
-  (`compatibilitySource: "runtime-session"`). There was no `llmGate`, no
-  `recoveryTrace` and no permission request anywhere in the project, root or
-  runtime stores.
-- The Lab's run ended at 20:18:44.590Z. That is about 30 s after the run
-  request started.
-- The only intervention is the recovery ladder's placeholder (`service/summaries/conversions.ts:221-240`),
-  not one written by annotate.
+After the Lab fix:
 
-Checks, all run from `F:\fxwork\t050\!FluxIQ\packages\fluxiq` unless noted:
+| Run | Code | Permit | Calls (kind: tokens) | Cost USD | `llmGate.permissions` | Diagnosis, plan | Exploration | Patch outcome |
+|---|---|---|---|---|---|---|---|---|
+| L1 `run-mubq7luu-e0f33737` | first wording | none | diagnosis: 4,564 | 0.00243 | granted [], instructed [], lapsed [] | stillAchievable **no**; plan `stop` | skipped | no call; `patchSkippedCode: llm.runtime_patch_not_requested` |
+| L2 `run-mubqe65d-ffaf7a68` | first wording | modify_existing | diagnosis 4,612; decision 4,040; decision 4,478; patch 7,152 | 0.00990 | granted [modify_existing] | unknown; plan `explore`, `request_patch` | `evidence_gathered`, 2 actions, 2 observed, 0 refused | as L5 |
+| L3 `run-mubqjkhq-8bb3d976` | **final** | none | diagnosis 4,745; patch 4,959 | 0.00495 | granted [], instructed [], lapsed [] | **yes**, deterministicRecoveryPossible yes; plan `request_patch` only | skipped (not requested) | `no_repair`, `runtime_patch.declined.control_gone` |
+| L4 `run-mubqneip-ff8c7221` | final | modify_existing | 0 | 0 | none | none | none | facility failure before the Flow ran (see below) |
+| L5 `run-mubqqeze-8e9a4bbd` | **final** | modify_existing | diagnosis 4,583; decision 4,040; decision 4,513; patch 7,213 | 0.00998 | granted [modify_existing], instructed [], lapsed [] | unknown; `explore`, `request_patch` | `evidence_gathered`, 2 actions, 2 observed, 0 refused | proposed `temporary_target_override`; `preflightOk: false`, see below |
 
-- `npx tsc --noEmit -p tsconfig.json` printed nothing (clean), before and after
-  the tests were added.
-- `npx vitest run` over:
+The L5 patch codes (the same in L2):
+
+- `runtime_patch.side_effect_not_authorized` ("External side effects are
+  disabled by adaptation policy." and "...requires explicit authorization.");
+- `runtime_patch.preflight_rejected`, twice (one is "Runtime patch requires
+  host capability action-dispatch.");
+- `runtime_patch.target_override_rejected.target_not_equivalent` (the domain's
+  check found that the chosen handle does something other than what the failed
+  target did).
+
+The result was `adaptationIds: []` and `changeProposalIds: []`.
+
+Accounting for every run: `observed.calls` equals Core's
+`llmGate.costAccounting.calls` (1, 4, 2 and 4), with `budgetBreaches: 0` and
+`pendingCalls: 0`, and `explorationCalls` is 2 in L2 and L5.
+
+- There is no `build` accounting, because these are recorded Flows, not built
+  ones.
+- `repair` is `null` in `flow-lane.json`. A direct `lab run` carries no
+  declared repair, so no repair was judged.
+- Every run's verdict is `failed` / `runtime.behavior`, which is the Flow's own
+  failure, now correctly reported after the recovery ended.
+- `metadata.permissionRequest` was `null` in every run.
+- Total provider spend across L1 to L5 was about USD 0.027.
+
+**How I read `permissions` and `permissionRequest`.** The Lab's snapshot keeps
+only the gate's code fields, not these. I ran a read-only watcher that copied
+the isolated Core's project store during each run. I read the recovery record
+from its typed run store, printing codes, classes and counts only, and deleted
+every copy afterwards.
+
+**L4's failure was probably caused by that watcher.** Core failed on
+`update-flow-settings (400): SQLITE_READONLY: attempt to write a readonly database`
+before the Flow ran. The watcher copied with `copyFileSync`, which on Windows
+can open the database without write sharing, so SQLite falls back to read-only.
+I rewrote it to use `readFileSync` (which shares with writers), to copy only
+the project stores, and to poll every 3 s. L5 then ran clean.
+
+### Checks
+
+Core, from `packages/fluxiq` unless noted:
+
+- `npx tsc --noEmit -p tsconfig.json`: clean.
+- `npx vitest run` over 13 paths:
   - `recovery/annotation/tests`
   - `recovery/tests/runtime-exploration{,-permission}.test.ts`
-  - `llm/harness-options/tests/registry.test.ts`
+  - `llm/harness-options/tests`
   - `llm/tests/execution-grant{-permissions,s}.test.ts`
+  - `llm/tests/harness.test.ts`
+  - `llm/harness/tests`
   - `tests/deepseek-recovery-requests.test.ts`
-  - `tests/service-adaptation/tests/iterating-recovery.test.ts`
+  - `tests/service-adaptation/tests/{iterating-recovery,llm-grants,runtime-patches}.test.ts`
+  - `action-permissions/tests`
 
-  printed "Test Files 16 passed (16), Tests 172 passed (172)".
-- `npx vitest run` over `action-permissions/tests`, `llm/tests/repair-exploration-tools.test.ts`,
-  `llm/tests/harness.test.ts`, `flow-change/tests/trial.test.ts`,
-  `executor/tests/node-execution.test.ts` and `llm/harness-options/tests`
-  printed "Test Files 11 passed (11), Tests 184 passed (184)".
-- `node scripts/structure-audit.mjs` (Core root) printed "structure-audit:
-  passed (170 warning(s), 361 baselined)."
-- `pnpm check` (Core root) exited 0: "# pass 182 / # fail 0", "# pass 20 /
-  # fail 0", "structure-audit: passed", and `tsc` done for `fluxiq`,
-  `client-gateway-websocket` and `apps/web`.
-- `pnpm build` (Core root) exited 0, including the Next.js build of `apps/web`.
-- `pnpm check` (downstream root) exited 0: every "# fail 0", "structure-audit:
-  passed (84 warning(s), 122 baselined)", and `test-runner check` done.
-- `wc -l .../runtime/service.ts` printed 6275.
+  The result was "Test Files 30 passed (30), Tests 312 passed (312)".
+- Core root `pnpm check`: exit 0, every "# fail 0", "structure-audit: passed
+  (170 warning(s), 361 baselined)".
+- Core root `pnpm build`: exit 0.
+- `node scripts/structure-audit.mjs`, re-run after the last doc edit: passed.
+- `service.ts` is 6,275 lines.
+
+Downstream, from `packages/test-runner` after `npx tsc -p tsconfig.json`, each
+file run with `node --test`:
+
+| Test file | Pass | Fail |
+|---|---|---|
+| `granted-run-settlement` | 5 | 0 |
+| `persisted-flow-run` | 24 | 0 |
+| `harness-recovery` | 8 | 0 |
+| `live-repair-lane` | 4 | 0 |
+| `tests/commands` | 29 | 0 |
+| `live-llm/tests/execution-grant` | 11 | 0 |
+| `flow-lane/creation/tests/lane` | 9 | **1** |
+
+The creation-lane failure is pre-existing. The expected call list lacks
+`get-flow-adaptation`, which committed `build-proposal.ts:262` makes (last
+changed in `f1db4e9`, t027's reconcile) during the build step, before any Flow
+run. None of my files are on that path.
+
+Downstream root `pnpm check`: exit 0, "structure-audit: passed (84 warning(s),
+122 baselined)", and every tsc check done.
 
 ## Not verified
 
-- **Neither live proof.** The Lab never read a completed recovery, so none of
-  the following was observed live: `llmGate.permissions.granted: []`, a
-  recovery `permissionRequest` naming "Pick and pack", the press appearing in
-  the trace under a permit, or whether a patch is then proposed and with what
-  outcome code (the question L5 and L6 need answered).
-- Whether the web domain's recovery press really calls the permission check
-  before acting. The design says it does (`domain/.../harness-options/execute.ts:115-129`,
-  `press.ts:55-63`). I did not read that code, and no live run reached it.
-- Whether DeepSeek calls were made and billed in the four runs. Core's recovery
-  had about 22 s after the Flow finished before the Lab tore it down. That is
-  enough for at least the diagnosis call, but the Lab recorded 0 because it
-  read the detail first. Any such calls are unrecorded.
-- Whether the model presses a lasting control at all under this recovery. It
-  is still shown `adaptationPolicyGates(policy).allowExternalSideEffects: false`
-  in its context packet (see "Open questions", item 2).
-- The instructed half of the live proof (build `order-operations-dispatch-run`
-  with `create-flow`, then repair it through DL) was not attempted. DL does not
-  exist yet.
-- The full Core and downstream test suites were not run, per the brief.
+- **The permission request, live.** No run attempted a press with a lasting
+  consequence, so none of these was seen live:
+  - a recovery `metadata.permissionRequest`;
+  - `llm.runtime_patch_permission_required`;
+  - `missing` being non-empty;
+  - "nothing dispatched".
+- **Whether L2 or L5 pressed anything.** Core's recovery trace does not publish
+  the exploration's tool ids (`toolDetail: "not-published"`), and the gateway
+  kept only the Flow's own command. The run is consistent either with only
+  looking, or with a press the model declared as `[]` or as `modify_existing`
+  (which was granted). The scenario describes "Pick and pack" as a shortcut
+  that shows a view of orders, so a press may honestly declare `[]` and never
+  need permission. If so, this task cannot show the request at all.
+- Whether the rewording causes the diagnosis to say "yes" rather than merely
+  coinciding with it (one run each).
+- The instructed half of item 3. It needs DL.
+- The full test suites, which the brief excludes.
+- The `closed timeout` path live. It is covered by a test only; no live run
+  reached the deadline.
 
 ## Open questions or contradictions found
 
-1. **The Lab abandons a granted Flow run before Core's recovery ends. This
-   blocks L4, L5 and L6 on every `--flow` repair task.**
-   - Where: `TR/flow-lane/persisted-flow-run.ts`. The fix is downstream and
-     needs a slice that owns `TR/flow-lane/`.
-   - The chain:
-     - `runGrantedFlow` calls `run-runtime-session` with the flow lane's
-       `bounds`. That is `{}` from `run-scenario.ts:427` through
-       `run-flow-lane.ts:133`, so it gets the default 30,000 ms bound
-       (`TR/http-control/index.ts:269`).
-     - Core returns only after the graph and the whole recovery are done
-       (`service.ts` routed path, then annotate, then `saveFlowRunDetail`).
-     - A recovery with failure evidence, diagnosis and exploration takes
-       longer than that.
-     - When the request times out, `awaitTerminalRunDetail` accepts the first
-       read whose status is terminal. `verdictSettled` (`persisted-flow-run.ts:449-451`)
-       returns true for any run that did not succeed.
-     - So the Lab takes the session-derived detail as soon as the Flow fails,
-       settles the grant with `calls: 0`, and tears Core down mid-recovery.
-   - Created-Flow runs on t049 still show a recovery (`gate=invoked`,
-     `recovery-trace`). Their `diagnose_and_adapt` recoveries evidently finish
-     within the 30 s.
-   - Fix options:
-     - give `runGrantedFlow` a bound as long as the grant's run lease
-       (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`, already used as
-       `GRANTED_RUN_WAIT_MS`);
-     - or, for a granted run, have the terminal wait require Core's recovery
-       record (`metadata.llmGate` or `metadata.recoveryTrace`) before treating
-       a failed run as settled.
-   - Until then, a recorded-lane repair campaign measures nothing about repair,
-     and it may spend provider money that no snapshot shows.
-2. **The model is still told the flag is false.** `AS/runtime/llm/harness/context-packet.ts:400`
-   (`adaptationPolicyGates`) puts `allowExternalSideEffects` into every
-   recovery request's context, and the Lab's policies hold it `false`. The
-   registry now offers the press anyway, but a model told "no external side
-   effects" may decline to use it. This was outside my files. If live runs show
-   the model avoiding presses, that line needs the same change of meaning:
-   drop the flag, or state that the permission gate decides.
-3. **A request is recorded even when no patch would have followed.** Its skip
-   code then stays the planned one (for example `llm.runtime_patch_unavailable`)
-   rather than `llm.runtime_patch_permission_required`. I chose this because
-   granting the permission would not produce a patch in that case. CU1 should
-   show the request either way.
-4. The brief named `provider-resolution.ts` as moved to `resolver-contract.ts`.
-   That was confirmed: the type lives in `AS/runtime/llm/resolver-contract.ts`
-   and `service.ts` only re-exports it. L0 had already made the `flowForRecovery`
-   port change, so this slice did not repeat it.
+1. **Nothing further can execute or propose on this task without C4 and a host
+   capability.** L5's patch was refused on:
+   - `side_effect_not_authorized` (C4's `live-patch.ts` gate);
+   - "Runtime patch requires host capability action-dispatch" (the Lab's host
+     binding does not declare it, so an `explore_and_adapt` patch cannot
+     execute in the Lab at all);
+   - the domain's `target_not_equivalent`.
+
+   The first two block L5 and L6 on every repair task. The third means the
+   domain's equivalence check rejected the control the model picked. I could
+   not see which control that was: the handle is opaque, and the intervention
+   keeps only kinds.
+2. **This task may never exercise the request.** To prove item 3 live, a task
+   whose repair needs a press that is truly lasting is more likely to raise a
+   request. `social-scheduler-repair-renamed-composer` ("Add to queue") is the
+   design's item-4 candidate.
+3. **The exploration model never sees `policyGates`.** The DeepSeek provider
+   projects the context of `evidence_tool_decision` calls down to instructions
+   and the evidence loop (`deepseek-provider.ts`, around line 497). So
+   `actionPermissions` reaches the packet and the record, but not the model, on
+   exploration decisions; it reaches the model only on the diagnosis. The press
+   tool's own description (`domain/.../harness-options/options.ts:81`) is what
+   tells the explorer about permission. Changing the projection means editing
+   `deepseek-provider.ts`, which is near its 800-line limit and shared with t033.
+4. **Core does not store the diagnosis fields.** A diagnosis intervention keeps
+   only `{kind, confidence}`, and the trace keeps only the verdicts. Why a
+   model answered "not achievable" cannot be read after the run.
+5. **Lab snapshots omit the permission record.** `live-llm.json` keeps only
+   `invoked`, `reason`, `code` and `patchSkippedCode` from `llmGate` (`TR/existing-fluxiq-control.ts`,
+   `runLlmGate`), and never `metadata.permissionRequest`. A future proof should
+   carry `permissions` and the request's classes into the snapshot, so it does
+   not need the storage watcher.
+6. **A request is recorded even when no patch would have followed.** In that
+   case the skip code stays the planned one rather than
+   `llm.runtime_patch_permission_required`. This is unchanged from the first
+   report.
