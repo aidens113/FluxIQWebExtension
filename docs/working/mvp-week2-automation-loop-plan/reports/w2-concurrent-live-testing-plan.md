@@ -898,3 +898,22 @@ budgets.
   plays the Flow, and passes oracle; repeated requests remain fail-closed and
   bounded. Otherwise stop at the next exact terminal outcome.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-no-progress-completion.md`
+
+### Brief: w2-panel-load-latency-live
+- Repository: fresh isolated pair from current integrated t027; production web
+  panel load/perceived-latency diagnosis
+- Task: open an authenticated Automation Studio project in the real panel,
+  record content-free endpoint counts/durations until interactive, identify the
+  largest duplicate/fixed wait (especially snapshot/context/project fan-out),
+  change one proven owner, and rerun the same warm load.
+- Required reads: panel golden and playback-latency reports; Automation Studio
+  panel data-loading hooks/routes implicated by the live network trace only
+- Owns (may edit): isolated Core web panel request scheduling/cache/deduping code
+  and directly owned focused tests after live improvement; main report
+  `reports/w2-panel-load-latency-live.md`
+- Must not touch: runtime/domain semantics, provider/batch/repair/recording lanes,
+  user panel/data, auth/storage, unrelated files, full suites/commits/pushes
+- Definition of done: same UI state remains correct and interactive while warm
+  load or duplicate request count falls materially; otherwise report measured
+  breakdown and make no speculative change.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-load-latency-live.md`
