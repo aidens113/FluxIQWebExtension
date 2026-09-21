@@ -102,7 +102,7 @@ describe("naive paths fail", { concurrency: true }, () => {
   test("reading every listing that mentions pickup today, ads included, returns duplicates and fails the records", TIMEOUT, () => withHarness(async (harness) => {
     await harness.open();
     await runSteps(harness, beforeExtract);
-    const naive = await extractRecords(harness.page, { ...extractStep, target: extractStep.target!.replace(":not(:has-text(\"Sponsored\"))", "") });
+    const naive = await extractRecords(harness.page, { ...extractStep, target: extractStep.target!.replace(":not(:has(> div:first-child))", "") });
     assert.notDeepEqual(naive, PICKUP_TOWEL_RECORDS);
     const names = naive.map((record) => record.name);
     assert.ok(names.length > new Set(names).size, "an ad repeats a listing on the same page");

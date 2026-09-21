@@ -1,7 +1,7 @@
 # Week 2 Exit Plan
 
 Status: Active
-Status detail: All ten realistic sites on dev; extensive live end-to-end campaign (E1) running in five lanes; P2 and L4 in flight; six finished tasks being landed.
+Status detail: E1 round 1 complete on all ten sites (no instruction-built Flow replayed; every cause has an owner); fourteen fix workers in flight; E2 after they land.
 Created: 2026-09-21
 Last updated: 2026-09-21
 Owner: Senior supervisor agent
@@ -67,12 +67,31 @@ committed on 2026-09-21. Core `service.ts` is the serial bottleneck: t027 is
 37 lines over its 6,404-line ratchet, and t027, t033, C0, CF and Resume all
 edit it.
 
-**In flight:** E1, five live-testing lanes (t052-t056, two sites each);
-`w2x-tool-failure-feedback` (P2, t051); `w2x-recovery-permissions` (L4, t050,
-now also fixing the Lab's 30 s granted-run wait that tore Core down
-mid-recovery). Done and waiting to land: t033, t035, t036, t047, t048, t049.
+**E1 round 1 result (all five lanes, all ten sites, 2026-09-21).** Not one
+instruction-built Flow reached a passing deterministic replay: about 70
+creation attempts (Lab and real panel) built one Flow (lane B, everything-store
+via the panel), and it failed on replay (P17). Provider-free recorded Flows
+passed 3 of about 35 recording-lane runs, all on social-network-feed
+(confirm-requests 4/4, move-open-day 1/1). No permission-request ending was
+observed, because no consequential task reached its gated control. Spend about
+$2.6, no HTTP 429s, `build.providerCalls == observed.calls` in every build.
+Ranked causes: P2's build-ending failed tool call (most tasks); the 64 KB
+evidence cap, which also masqueraded as P2 (P7); the 26-call cap (P11);
+repeat-without-progress with ambiguous handles (P18); the Lab probe race (P8);
+dismissible modals classed as needing a person (P9); recorded targets that are
+ambiguous or inside shadow roots (P10); extraction across page loads (P15);
+Lab and site defects (P13, P16, P19); and a created Flow that dropped the
+steps exploration needed while a navigate claimed success (P17). Reports:
+`reports/w2x-e2e-lane-{a..e}.md`.
 
-**Next:** land the waiting tasks while the lanes run; dispatch P3; E2 after P2.
+**In flight:** P11 (t057), L5 (t059), N3 (t060), P8 (t061), P9 (t062), P10
+(t063), P15 (t064), P17 (t065), P13a (t066), P13b/P16/P19 (t067), U1 (t068,
+t069), P18 (t070). Done and waiting to land after round 1's Core hold: t033,
+t047, t049, t050, t051. Landed today: t027, t035, t036, t048, all ten sites,
+t058.
+
+**Next:** land the held work and each fix as it verifies; then E2, the same
+campaign on the fuller product.
 
 **Blockers:** none.
 
@@ -99,8 +118,18 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **E1** | Extensive live end-to-end testing on all ten sites (user, 2026-09-21): recording lane, every instruction task, every repair task, one real-panel creation per site; baseline before P2 | downstream | S1 | in flight: five lanes t052-t056 (`w2x-e2e-live-campaign`) |
 | **E2** | The same campaign again once P2, L4 and the waiting fixes land, to measure how far FluxIQ gets past the first tool failure | downstream | E1, P2 | waiting |
 | **P8** | Lab: the Core action probe types into the site's field on a fresh automation tab where the site's delayed overlays have come back, so recording never starts (5 of 6 lane C recording lanes) | downstream | — | in flight on t061 (`w2x-lab-probe-race`) |
-| **P9** | A dismissible promotion modal is classed `web.intervention.required`, so Core's `llm.gate.manual_intervention` gives the model 0 calls; only a challenge a person must answer (the robot check) should be | both | P2 | waiting — next free slot |
-| **P7** | After P2, builds end `evidence_limit` after 10-15 calls: the loop caps total evidence over the whole build at 64,000 bytes. Replace with a bounded per-request context window (newest evidence plus closed summaries), total bounded only by cost, tokens, deadline and progress | Core | P2 | in flight on t057 (`w2x-evidence-window`) |
+| **P11** | Builds stop at 26 decisions on `evidence_iteration_limit` while still progressing, and the model is never told its remaining budget; recovery keeps a 262,144-byte total cap. Bound by cost, tokens, deadline and progress, with any call ceiling a far-away backstop (user decision, "The fixed call limit was the defect") | Core | P7 | in flight on t057 (same worker) |
+| **P10** | Recorded Flows cannot replay their honest path: an ambiguous stored target (company-website chat Close, 7 equal matches) and a step's expected state taken from a later step (local-classifieds cookie click) ; plus a recorded click inside an open shadow root that does not resolve on replay (job-board consent) | downstream | — | in flight on t063 (`w2x-recording-fidelity`) |
+| **P12** | Repeating-structure detection fails on company-website's team cards and the model repeats the call; the panel shows only a generic error after a failed build | both | — | waiting |
+| **P13** | Lab: scripted navigation refuses URLs with a query string; no run file records which classes `--llm-permit` granted; the Lab counts the initial observation as a decision and flags budget-using builds `performance.budget`; recording events reach Core about one per second, past the Lab's fixed 90 s wait | downstream | P8 | waiting |
+| **P15** | `extract_list` loses its read when Next loads a new document, and numbered pagination ends on a loading skeleton (selector audit, bigbox `pickup-towels`) | downstream | — | in flight on t064 (`w2x-extract-across-pages`) |
+| **P16** | Scenario-lab browser-path tests for auction, crossborder and professional-network fail under load in the combined suite and pass alone; also job-board's frame-target extract step is refused `fixture.invalid` by the Lab (fold into P13) | downstream | — | waiting |
+| **P17** | The campaign's only created Flow (lane B E9, everything-store via the panel) cannot replay: its navigate reported success while the tab stayed on the start page, and the Flow kept none of the overlay dismissals exploration needed | both | — | in flight on t065 (`w2x-created-flow-fidelity`) |
+| **P18** | Exploration hands the model ambiguous handles on duplicated labels (`web.handle.ambiguous` in 6 of lane B's 12 builds), which feeds the repeat-without-progress stalls | both | — | waiting |
+| **P19** | Site defect: everything-store's recording script clicks the cookie Accept after the 4 s notifications prompt has covered the page, stopping its recording lanes and both repair tasks | downstream | — | waiting (with P13/P16) |
+| **P20** | Recovery cannot express "close the dialog, then press": its patches are a target override or a wait and retry, the 2.5 exploration reduction is computed and discarded, and nothing produces an `insert_deterministic_path` repair; the diagnosis also judged a dialog-blocked run "not achievable". Wire the reduced exploration path into a durable repair and teach the diagnosis that a blocked-by-dialog failure is recoverable | Core | L5 | waiting (after L5; shares `recovery/annotation/*`) |
+| **P9** | A dismissible promotion modal is classed `web.intervention.required`, so Core's `llm.gate.manual_intervention` gives the model 0 calls; only a challenge a person must answer (the robot check) should be | both | P2 | done on t062 (`9c70af8`): a dismissible dialog ends `web.action.blocked_by_dialog` (`unexpected_state`) and Core consults the model; the robot check stays `user_intervention_required` (proven in Chromium; live blocked by P8); W14's armed offer now expects the recoverable category |
+| **P7** | After P2, builds end `evidence_limit` after 10-15 calls: the loop caps total evidence over the whole build at 64,000 bytes. Replace with a bounded per-request context window (newest evidence plus closed summaries), total bounded only by cost, tokens, deadline and progress | Core | P2 | done on t057 (uncommitted): 5 live runs, no `evidence_limit` or false `tool_failed`; builds ran 26 decisions over up to 153,142 bytes, then stopped on the call count |
 | **P2** | A failed exploration tool call ends the whole build and is missing from the trace (`evidence-loop.ts` catch sites; domain throws on covered controls `capture.ts:128` and oversized snapshots `sanitize.ts:276`) — the failure on every realistic site | both | — | done on t051 (`0080aca` Core, `363d536` downstream): `run-mubp3phh-cf4643fd` recorded `web.action.rejected.blocked_by_dialog`, the model pressed Not now next, 15 build = 15 observed; lands after E1 round 1 |
 | **P3** | The web domain never checks a created Flow's own steps for permission (`resolve-plan-node.ts` has no permission field; design report open question 4, F7), so a created Flow can publish, refund or delete on every run unasked | both | I1 | waiting — next dispatch |
 | **P4** | Lab: judge "this task correctly ends in a permission request" (every realistic site's consequential task needs it); record usage when a proposal read fails (`build-proposal.ts:161`, `run-scenario.ts:340-352`) | downstream | — | waiting |
@@ -135,146 +164,7 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 
 ## Worker Briefs
 
-### Brief: w2x-branch-integration-audit
-- Repository: both repositories, read-only. Downstream `F:\!FluxIQWebExtension` (dev) and task worktrees under `F:\fxwork\t027`, `t029`, `t033`, `F:\fxwork\t034-post-action-readiness`; Core `F:\!FluxIQ` (dev) and `F:\fxwork\t027\!FluxIQ`, `t029`, `t033`.
-- Task: decide how each open task reaches `dev`. For t027, t029, t033 and t034, in both repositories: what each commit series adds, which of it is live-proven (cite the report and its evidence), which is unproven or failed live (t027's unified one-or-many output did not complete a Flow), uncommitted changes in each worktree, textual conflicts with `dev` and with each other (use `git merge-tree --write-tree`, never a real merge), and semantic overlap (t027 and t033 both touch `flow-lane/creation/build-proposal.ts` and `existing-fluxiq-control.ts`).
-- Also: list the `F:\fxlab\*` and `F:\fxwork\*` worktrees and the closed-task branches (t005, t006, t007, t008, t011, t017, t021) that are safe to remove, using `pnpm task prune --dry-run` and `pnpm task list`.
-- Required reads: this Current State; each task's own working document and reports only; `git log`/`git diff --stat` output.
-- Owns: `docs/working/week2-exit-plan/reports/w2x-branch-integration-audit.md` only.
-- Must not touch: any branch, worktree, source, working document, git history, build output, the user's panel or port 3000, provider credentials. No builds, tests, or live runs.
-- Definition of done: per-task table (content, proven, unproven, conflicts, disposition: merge as-is / merge after split / hold / close); a recommended integration order with the narrowest check to run after each merge; the removal list.
-- Report to: `docs/working/week2-exit-plan/reports/w2x-branch-integration-audit.md`
-
-### Brief: w2x-exit-loop-gap-audit
-- Repository: both repositories, read-only; `dev` plus the t027 worktrees (`F:\fxwork\t027\!FluxIQWebExtension`, `F:\fxwork\t027\!FluxIQ`), which are ahead of `dev`.
-- Task: for each link of the Week 2 exit chain — Fail, Diagnose, Explore, Recover, Generate Repair, Validate, Persist, Resume, Re-run Deterministically — and for each entry point (new Flow from instruction, failing run, edge case in an existing Flow), state: the code path that implements it (Core and downstream file:line), the strongest live evidence (report path and run directory; confirm `build.providerCalls` equals `observed.calls` in `snapshots/live-llm.json`, and judge extraction by `matchedRecords` against `expectedRecords`, never `observedRecords`), and the exact gap. Include 2.9 (FluxBench Week 2 metrics, adaptation-cycle lane, `week2` corpus) and X6. Find the latest full corpus measurement and give its per-scenario results by oracle, not verdict.
-- Required reads: this Current State; `docs/working/mvp-week2-automation-loop-plan.md` Current State and Phases table (the t027 copy); the Week 2 exit criteria in `FluxIQ Web Extension — 30-Day MVP Implementation Plan.md` lines 363-680; reports and `test-runs/` evidence only as needed to confirm a claim.
-- Owns: `docs/working/week2-exit-plan/reports/w2x-exit-loop-gap-audit.md` only.
-- Must not touch: source, tests, working documents, git state, the user's panel, provider credentials. No builds, tests, or live runs.
-- Definition of done: a link-by-link table with code path, evidence, and gap; the smallest ordered set of changes that would let one scenario show the whole chain live with a zero-provider-call replay; which Lab scenarios best demonstrate each entry point; cost and wall-clock estimates from past runs.
-- Report to: `docs/working/week2-exit-plan/reports/w2x-exit-loop-gap-audit.md`
-
-### Brief: w2x-ui-e2e-audit
-- Repository: downstream, read-only; `dev` plus `F:\fxwork\t027\!FluxIQWebExtension`, which holds the new `panel-golden-path` lane.
-- Task: inventory end-to-end UI testing through the real FluxIQ panel and the real unpacked extension. For each user journey — create a Flow from an instruction, record by demonstration, pick and extract data, run, watch Runtime Debug, see a failure, review and apply a repair proposal (and its diff), grant or refuse a permission request, inspect adaptation history, revert, restart and reuse — say whether it is automated, by which lane/spec/script (`panel-golden-path`, `demo-llm-create-ui`, `demo-workspace`, `existing-fluxiq-control`, `apps/extension` Playwright specs), whether it needs the provider, its measured duration, and any recorded flakiness. Say which journeys have no UI at all yet, as distinct from UI with no test.
-- Then propose the E2E UI suite for Week 2: journeys in priority order, one command, isolation (worktree, ports, profile, store), provider-free versus provider lanes, expected wall clock, and what each assertion reads.
-- Required reads: this Current State; `docs/architecture/testing-facility.md`; the lane and script sources named above; t027's `w2-concurrent-live-testing-plan.md`.
-- Owns: `docs/working/week2-exit-plan/reports/w2x-ui-e2e-audit.md` only.
-- Must not touch: source, tests, working documents, git state, the user's panel or port 3000, provider credentials. No live runs; reading existing `test-runs/` evidence is allowed.
-- Definition of done: journey table (automated? lane, provider, duration, gap), a missing-UI list, and the proposed suite with a file-partitioned build order.
-- Report to: `docs/working/week2-exit-plan/reports/w2x-ui-e2e-audit.md`
-
-### Brief: w2x-existing-flow-and-repair-design
-- Repository: both repositories, read-only; Core `F:\fxwork\t027\!FluxIQ` (dev plus t027) is the reference tree. Path prefix `AS/` is `packages/fluxiq/src/programs/automation-studio/`.
-- Task: design, to file:line, the Core and downstream changes for five open items, each as an implementation slice partitioned by file with its narrowest live proof: (1) the third entry point — improving an existing, non-blank Flow from a new instruction or an edge case, where Flow bootstrap refuses non-blank Flows today; (2) repair editing structure — repair returns a revised Flow script and Core shows the person a diff, so a Flow missing a step can be fixed, not only declined (designed in `mvp-week2-automation-loop-plan/reports/w2-routing-and-subflows.md`); (3) the recovery path receiving the permitted set (t018 report); (4) under `explore_and_adapt`, a repair needing a side effect becoming a permission request instead of being dropped (`recovery/annotation/patches.ts:142`); (5) result verification that disagrees with itself at temperature 0 — one repeat on "does not answer", disagreement records `unverified` (t022 report). Say which slices share files and must run serially.
-- Required reads: this Current State; the reports named above under `docs/working/mvp-week2-automation-loop-plan/reports/`; the Core and downstream source they cite.
-- Owns: `docs/working/week2-exit-plan/reports/w2x-existing-flow-and-repair-design.md` only.
-- Must not touch: source, tests, working documents in either repository, git state, the user's panel, provider credentials. No builds, tests, or live runs.
-- Definition of done: per-item design with exact sites, contract changes, UI surface, a live proof on a named Lab scenario, and a file-ownership table showing which slices can run in parallel.
-- Report to: `docs/working/week2-exit-plan/reports/w2x-existing-flow-and-repair-design.md`
-
-### Brief: w2x-t027-reconcile
-- Repository: paired t027 worktrees `F:\fxwork\t027\!FluxIQWebExtension` and `F:\fxwork\t027\!FluxIQ`, branch `task/t027-multi-action-exploration` in both; both already contain current `dev`.
-- Task: remove t027's first-generation multi-action surface so production behaves exactly as `dev` — one action per model decision, no list schema, no Lab max-action control — while keeping every independent t027 change. `docs/working/bootstrap-no-proposal-investigation/reports/w2-t027-t033-integration-map.md` (t027 downstream) classifies every commit. **t033 has not landed**: wherever the map says t033 is authoritative, use `dev`'s version instead.
-- Core: drop superseded `ef7892f`, `4b79c00`, `042562e`. Delete `runtime/llm/evidence-window.ts` and every t027-only file under `runtime/llm/evidence-batch/`. For each file the map lists as t033-authoritative, restore `dev`'s version except hunks from the independent commits (`1079ba8`, `b3f772f`, `fe6e77a`, `680c515`, `949735d`, `bb430e4`, `2dcf06b`); use `git log dev..HEAD -- <file>` to tell them apart. Union by hand: `flow-bootstrap/generation-failure.ts` and test (keep `949735d`'s categorical pre-provider codes), `runtime/service.ts` (keep `llmEvidenceRuntimeStatus` and categorical bootstrap-boundary assignments, drop `batchDecisions`), `api/handlers/llm-generation.ts` and test (keep `bb430e4`'s grant-issue mapping, no `maxActionsPerDecision`).
-- Downstream: restore `dev`'s max-action plumbing in `packages/test-runner/src/{cli,commands}.ts`, `flow-lane/creation/{lane,build-proposal}.ts` and test, `live-llm/{live-llm-plan,live-llm-run}.ts`. In `existing-fluxiq-control.ts` and test drop the `batchDecisions` parser, keep `03c20a6`'s terminal repair outcome. Delete `apps/extension/e2e/content/tests/exploration-state/tests/multi-action-{exploration,safety}.spec.ts`. Keep `719a34d`'s `domain/src/runtime/llm-evidence/tools.ts` sentence.
-- Negative inventory: grep both trees for `MAX_ACTIONS_PER_DECISION`, `maxActionsPerDecision`, `batchDecisions`, `evidence-window`, `tool_calls`; nothing may remain that `dev` lacks.
-- Live first, from a fresh isolated store and profile on allocated ports (never 3000 or 4711), DeepSeek from `.env.local` as earlier t027 reports did: (1) `pnpm panel:golden` through prepare, explore, apply and bound run — explore yields exactly one durable proposal, the bound run passes its oracle with zero provider calls; the repair stage is expected to fail, record its outcome code. (2) One replay of the saved four-action Flow: about 8.2 s, 4/4, oracle passes. Fix only failures the reconciliation introduced.
-- Then focused tests. Core, run from inside `packages/fluxiq`: generation-failure, llm-generation handler, service-bootstrap generation, blank-flow-authoring, action-permissions client, recovery annotate and stages. Downstream: automation-tab, action-runner, target candidates, llm-evidence tools, build-proposal, existing-fluxiq-control, commands, browser-session. Then downstream `pnpm check` and Core `check` and `build`. No full suites.
-- Owns: the files named above, in the two t027 worktrees only; the report.
-- Must not touch: git commits, merges or history (leave changes uncommitted for the supervisor); any other worktree; shared `dev`; the user's panel, store or profile.
-- Definition of done: negative inventory empty; both live results with bundle paths; focused tests and checks pass; the report lists every changed file keyed to the map's commit classification.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-t027-reconcile.md`
-
-### Brief: w2x-verification-agreement
-- Repository: paired task t035, `F:\fxwork\t035\!FluxIQWebExtension` and `F:\fxwork\t035\!FluxIQ`, branch `task/t035-verification-agreement` in both. `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`; `TR/` is downstream `packages/test-runner/src/`.
-- Task: plan step L2 — slices C5a, C5b and D5 of `reports/w2x-existing-flow-and-repair-design.md`, "Item 5". A "does not answer" from result verification is asked once more with the same evidence; the two answers combine in a new pure `result-verification/agreement.ts` exactly per that section's table; `verify_result` grants get a fixed allowance of two calls; the Lab counts verification interventions in `live-llm.json`.
-- Required reads: this Current State; the design report's "Item 5" section; the sources it cites.
-- Owns: Core `AS/runtime/result-verification/{verify,contracts,verdict,verification-status,run-outcome}.ts`, new `agreement.ts`, their tests; `AS/runtime/llm/grant-capabilities.ts`; `AS/runtime/llm/execution-grants.ts` (the `verify_result` allowance only); `AS/api/contracts/llm.ts`; Core web `RunDetailPanels.tsx` only to render "Unverified: the two checks disagreed". Downstream `TR/live-llm/live-llm-run.ts` and its test.
-- Must not touch: Core `AS/runtime/service.ts` (over its ratchet, serial), `recovery/annotation/*`, any other file; git commits; other worktrees; shared `dev`; the user's panel, store, profile or ports 3000 and 4711.
-- Live first, DeepSeek from the worktree's `.env.local`: reproduce the disagreement before changing code where feasible. Proof (a), the Core probe in the design report: verify the stored 14-of-14 `social-scheduler-week-ahead` playback 10 times — no `refuted`, and every "does not answer" is followed by a second call; negative control with the `social-scheduler-whole-queue` instruction ends `refuted` after two calls. Proof (b): `pnpm lab:campaign social-scheduler-week-ahead --max-attempts 1` twice — 14 of 14 `matchedRecords`, `resultVerification.status` `confirmed` or `unverified`, never `refuted`, the verification calls listed.
-- Then focused tests (Core from inside `packages/fluxiq`), Core `check` and `build`, the downstream live-llm tests and `pnpm check`. No full suites.
-- Definition of done: both proofs pass with run paths quoted; tests and checks pass; the report lists every file changed; changes left uncommitted.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-verification-agreement.md`
-
-### Brief: w2x-lab-llm-permit
-- Repository: task t036, flat worktree `F:\fxwork\t036-lab-llm-permit` (branch `task/t036-lab-llm-permit`) on the shared read-only Core `F:\fxwork\!FluxIQ`.
-- Task: plan step L3 — slice D3 of the design report. Add a Lab option `--llm-permit <class,...>` that carries the named action-consequence classes into the execution grant's `permittedConsequences`, which Core already accepts (`AS/runtime/llm/execution-grants.ts:178,237`). Unknown classes are refused before any provider call. No grant carries a class nobody asked for.
-- Required reads: this Current State; the design report's "Item 3" live-proof paragraph and D3 row; `TR/live-llm/{execution-grant,live-llm-plan}.ts`; `packages/test-contracts/src/llm.ts`; `scripts/lab/live-campaign.mjs`; where `--llm-*` flags are parsed (`TR/commands.ts`).
-- Owns: those files and their tests. Keep any `commands.ts` or `cli.ts` hunk minimal: t033 also edits them and merges after this.
-- Must not touch: Core; any other file; git commits; other worktrees; shared `dev`; the user's panel, store, profile or ports 3000 and 4711.
-- Live first: `social-scheduler-schedule-post` as a `create-flow` run on `persistent-isolated`, once without the option and once with `--llm-permit` set to the class the first run requested (or `send_or_publish` if none was requested). Pass: the second grant's preflight lists exactly the requested classes, no permission request is raised for them, the Flow is created and its replay passes the oracle with `build.providerCalls == observed.calls`.
-- Then focused tests for the touched files and `pnpm check`. No full suites.
-- Definition of done: both runs quoted with paths; tests and check pass; changes left uncommitted.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-lab-llm-permit.md`
-
-### Brief: w2x-realistic-scenarios (shared by ten workers, one site each)
-- Repository: the worker's own flat task worktree from the table, on the shared read-only Core `F:\fxwork\!FluxIQ`.
-- Task: build **one legitimately complex Scenario Lab site** replicating a kind of site people really automate (user, 2026-09-21), as a fictional brand modelled on its archetype — no real names, logos or copied content.
-
-| Scenario id | Archetype | Task and worktree |
-| --- | --- | --- |
-| `social-network-feed` | social feed like Facebook | t037 `F:\fxwork\t037-realistic-scenarios` |
-| `photo-social` | photo social like Instagram | t038 `F:\fxwork\t038-scn-photo-social` |
-| `bigbox-retail` | big-box retail like Walmart | t039 `F:\fxwork\t039-scn-bigbox-retail` |
-| `auction-marketplace` | auctions like eBay | t040 `F:\fxwork\t040-scn-auction-marketplace` |
-| `everything-store` | everything store like Amazon; carries the hard anti-bot challenge | t041 `F:\fxwork\t041-scn-everything-store` |
-| `crossborder-marketplace` | cross-border marketplace like AliExpress | t042 `F:\fxwork\t042-scn-crossborder-marketplace` |
-| `professional-network` | professional network like LinkedIn | t043 `F:\fxwork\t043-scn-professional-network` |
-| `local-classifieds` | local classifieds like Facebook Marketplace | t044 `F:\fxwork\t044-scn-local-classifieds` |
-| `company-website` | an ordinary small-company website | t045 `F:\fxwork\t045-scn-company-website` |
-| `job-board` | job postings whose Apply hands off to an applicant-tracking site | t046 `F:\fxwork\t046-scn-job-board` |
-
-- Realism bar, at least six per site: consent banner; newsletter, app-install or notification modals on a delay; a login wall after some scrolling; a chat widget covering a button; lazy loading and infinite scroll; sponsored results mixed into real ones; class names obfuscated per seed; skeleton or delayed rendering; real UI bugs (a button needing a second click, a spinner that clears only on retry, a broken Next that needs page links, a stale count badge); anti-bot (honeypot fields, rate limiting with retry-after, a "verify you are human" interstitial that clears on a wait or a click); iframes; shadow DOM; new tabs; variant pickers; locale-formatted prices and dates; div-buttons with poor accessibility. Anti-bot must be passable by honest behaviour; the hard challenge's correct outcome is asking the person, never bypassing it.
-- At least three Lab tasks: an extraction task judged by `expected.extracted`; a state-changing task judged by final state; a consequential task (buy, bid, apply, message, delete) that must end in a permission request unless granted. Plus one drift variant (repair entry point) and one edge-case variant (new popup, empty results, alternate layout) for the existing-Flow entry point.
-- Conventions: copy the shape of `apps/scenario-lab/src/scenarios/social-scheduler/` and `storefront-checkout/`; deterministic under `SCENARIO_LAB_SEED`; loopback only; the structure audit's budgets (one export per file, barrels, tests in `tests/`). Tasks go in `src/scenarios/<id>/live-tasks.ts` and `repair-tasks.ts`; add **exactly one appended line** each to `src/registry.ts`, `src/scenarios/index.ts`, `live-instructions.ts` and `live-repair-tasks.ts`, and one appended row to `docs/architecture/testing-facility.md`'s scenario list, so the supervisor's merges are one-line unions.
-- Owns: `apps/scenario-lab/src/scenarios/<id>/` and those one-line additions. Must not touch anything else, other worktrees, git commits, shared `dev`, the user's panel or ports 3000 and 4711.
-- Validation, in order: a scenario test proving an honest scripted path passes every oracle and a naive path (fills the honeypot, clicks under the overlay, takes a sponsored row) fails; then one live `create-flow` run of the extraction task with DeepSeek on `persistent-isolated`. FluxIQ failing is fine; the report separates fixture defects (fix them) from product gaps (record them). Then the scenario-lab tests and `pnpm check`.
-- Definition of done: the site, its tests and `pnpm check` passing, the live run quoted with path and oracle result; changes left uncommitted.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-scenario-<id>.md`
-
-### Brief: w2x-t027-gate-triage
-- Repository: the t027 worktrees `F:\fxwork\t027\!FluxIQWebExtension` and `F:\fxwork\t027\!FluxIQ`, branch `task/t027-multi-action-exploration` in both.
-- Task: make both repositories' full gates green on t027 so it can land. Known from the supervisor's `pnpm -r --no-bail test` runs: downstream `packages/test-runner` 3 failures — `generation failures retain only Core-validated bounded diagnostics` (`demo-llm-create-ui/tests/failure-sanitizer.test.ts`), `a dataset task is built, settled, applied, run on a freshly presented page, and passes on the records it stored` (`flow-lane/creation/tests/lane.test.ts`; `dev` fails it too), `rejects reused, applied, cross-scope, and over-budget proposals` (`tests/demo-llm-exploration-adaptation.test.ts`); Core `apps/web` 5 failures — three `login attempt bounds` cases in `app/api/auth/login/tests/route.test.ts`, `runs graph conversion only while a graph subscriber is mounted`, `source contract: connector domain scopes are destination-local`. Core `fluxiq` has one known failure owned by t035 (`result-verification/tests/run-outcome.test.ts`, "stored nothing") — leave it; and three load-induced timeouts that pass alone.
-- First, the mechanical fix the Week 2 document lists as open item 9: `packages/test-runner`'s build never clears `dist`, so deleted and moved tests keep running. Make its `build` remove `dist` before compiling (keeping `domain:dist`), and show a deleted test no longer runs.
-- Then fix every failure at its root cause, whether t027 introduced it or `dev` already had it; say which for each, using `git log dev..HEAD` on the implicated files. Never weaken an assertion. Where a test encodes a contract t027 deliberately changed, update it and keep its safety assertions, as the supervisor did for the generation-lock code in `510680f`. A failure that passes alone under no load is a timeout, not a fix: report its duration.
-- Validation: downstream `pnpm -r --no-bail test` and `pnpm build`; Core `pnpm -r --no-bail test` (only the t035-owned failure may remain) and `pnpm build`; quote the per-package counts.
-- Owns: the files these fixes need in the two t027 worktrees. Must not touch: `result-verification/*`, other worktrees, git commits (leave changes uncommitted), shared `dev`, the user's panel.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-t027-gate-triage.md`
-
-**Speculative bases (supervisor, 2026-09-21).** So nothing waits on t027's triage, P1 runs in t047, L0 in t048 and L1 in t049, each paired worktree under `F:\fxwork\t04N\` with both branches at t027's tip (t049 also carries t036); t033 merges `task/t027-multi-action-exploration` instead of `dev`. Each re-merges `dev` once t027 lands.
-
-### Brief: w2x-t033-land
-- Repository: paired t033 worktrees `F:\fxwork\t033\!FluxIQWebExtension` and `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile` in both. Starts once t027 is on `dev` in both repositories.
-- Task: plan step I2. Merge `dev` into both t033 branches with `git merge --no-commit` and resolve: t033 is authoritative for the multi-action contract; `dev` (now carrying t027) is authoritative for everything t027 kept — categorical pre-provider codes, `llmEvidenceRuntime` inside bootstrap readiness, the grant-issue mapping, the bounded terminal repair outcome, the resolver contract. Then bring Core `runtime/llm/evidence-loop.ts` (810 lines) under the 800-line limit by a behaviour-unchanged extraction. `service.ts` must not grow past its 6,381-line baseline.
-- Live first: the same-code A/B on `social-scheduler-schedule-post`, seed 171, arms `1` and `16`, fresh isolated state per arm, $1 grant each, `FLUXIQ_TEST_ENV_FILES=none`. Pass: both arms create Flows whose replays pass the oracle with `build.providerCalls == observed.calls`; the `16` arm completes at least two ordered actions in one provider decision; usage counted once; state records ordered. Report calls, actions, stop reason, wall clock and cost per arm. If the variant only emits lists without completing two actions, say so: t033 is then held, not forced.
-- Then focused tests (Core from inside `packages/fluxiq`), both repositories' `check` and `build`. No full suites.
-- Owns: the merge resolution and the `evidence-loop.ts` split in the two t033 worktrees; the report. Must not touch: other worktrees, git commits (leave the merge staged and uncommitted), shared `dev`, the user's panel.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-t033-land.md`
-
-### Brief: w2x-creation-permission-lost
-- Repository: a paired task started from `dev` after t027 lands (supervisor creates it). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
-- Task: plan step P1. A `create-flow` build of `social-scheduler-schedule-post` without a permit ended `lab.generation_http_400` (t036 run `F:\fxwork\t036-lab-llm-permit\test-runs\run-mubktq9k-5cb2485b`) instead of a permission request reaching the person. Reproduce it live first, find where the cause is lost (suspected: `AS/api/handlers/llm-generation.ts` collapsing `flow_bootstrap.permission_required`), and make needing permission a first-class outcome of creation: Core returns a closed permission-request result naming the missing consequence classes; the panel's existing permission-continuation dialog shows it; the Lab reports `permission.required` with those classes instead of an HTTP failure.
-- Live proof, `FLUXIQ_TEST_ENV_FILES=none`: the same build without a permit ends in a permission request naming the missing class, with no Flow mutation; the same build with `--llm-permit <that class>` creates the Flow and its replay passes the oracle.
-- Then focused tests and both repositories' `check`. Core `service.ts` must not grow past its baseline; add behaviour in focused modules.
-- Owns: the handler, `flow-bootstrap/generation-failure.ts`, the Lab's creation result reading, their tests; the report. Must not touch: `recovery/*`, `result-verification/*`, other worktrees, git commits, shared `dev`, the user's panel.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-creation-permission-lost.md`
-
-### Brief: w2x-service-headroom
-- Repository: a Core-paired task started from `dev` after t027 lands. Slice C0 of `reports/w2x-existing-flow-and-repair-design.md`.
-- Task: plan step L0. Make room in Core `AS/runtime/service.ts` (6,381 lines, ratchet 6,381) for L4, L6 and N1 by behaviour-unchanged moves: the review projection (about lines 6021-6128 in the design report's numbering; re-locate by content) to a new `flow-bootstrap/review-projection.ts`, plus the port rebinding and `recovery/annotation/{ports,annotate}.ts` adjustments the design names. No behaviour change, no new exports beyond the moved code, barrels updated. Lower the ratchet with `pnpm structure:baseline` in Core.
-- Live proof: one `pnpm lab:campaign social-scheduler-week-ahead --max-attempts 1` with `FLUXIQ_TEST_ENV_FILES=none`: build, apply and review projection unchanged — 14 of 14 `matchedRecords`, `build.providerCalls == observed.calls`.
-- Then the service-bootstrap, service-flows and recovery annotation tests from inside `packages/fluxiq`, Core `check` and `build`.
-- Owns: `service.ts`, the new module, the two annotation files, barrels, their tests. Must not touch: anything t033 or P1 owns, other worktrees, git commits, shared `dev`.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-service-headroom.md`
-
-### Brief: w2x-created-flow-repair-lane
-- Repository: a downstream task started from `dev` after t027 and t036 land. `TR/` is `packages/test-runner/src/`.
-- Task: plan step L1, gap step 1 of `reports/w2x-exit-loop-gap-audit.md`. Give created Flows the Lab's repair lane: call `runLiveRepairLane` after `runCreatedFlowLane` in `TR/run-scenario.ts`, accept the created lane's repair grant in `TR/flow-lane/repair/run-repair-lane.ts`, make `repairsFlow` true for `create-flow` in `TR/live-llm/live-llm-run.ts`, and let `--replays` through for instruction tasks in `TR/commands.ts` and `scripts/lab/live-campaign/**`. The lane approves and applies the repair as the reviewer, then replays with no provider key.
-- Live proof on `identity-drift-rename-redesigned-after-creation`, `persistent-isolated`, `FLUXIQ_TEST_ENV_FILES=none`: the build (calls counted), the drift failure, a repair proposal, approval and apply, then `pnpm lab replay` with no key passing the oracle with zero calls. If Core never proposes a patch (`llm.runtime_patch_not_requested`), record the code and the calls: that is L4-L6's gap, not this lane's.
-- Then focused test-runner tests and `pnpm check`.
-- Owns: those files and their tests; the report. Must not touch: Core, scenario-lab, other worktrees, git commits, shared `dev`.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-created-flow-repair-lane.md`
+Delivered briefs are archived in [archive/delivered-briefs.md](./week2-exit-plan/archive/delivered-briefs.md).
 
 ### Brief: w2x-ui-e2e-foundation
 - Repository: a downstream task started from `dev` after t027 lands. `TR/` is `packages/test-runner/src/`. Design: `reports/w2x-ui-e2e-audit.md`, "Proposed Week 2 end-to-end UI suite", briefs A, B and C.
@@ -292,40 +182,6 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Owns: `TR/ui-e2e/journeys/**`, `TR/demo-llm-create-ui/explore-proposal-ui.ts` and `tests/exploration.test.ts`. Must not touch: topology, assertions, `demo-workspace/{core-process,configuration}.ts`, `panel-golden-path/**`, other worktrees, git commits, shared `dev`.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-ui-e2e-journeys.md`
 
-### Brief: w2x-recovery-permissions
-- Repository: paired task t050, `F:\fxwork\t050\!FluxIQWebExtension` (t027's tip plus t036's `--llm-permit`) and `F:\fxwork\t050\!FluxIQ` (t027's Core plus L0 `56d6106`). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
-- Task: plan step L4, slice C3 — "Item 3" of `reports/w2x-existing-flow-and-repair-design.md`. One permission gate per recovery, built once the provider resolves, whose authority is the grant's `permittedConsequences` plus the Flow's stored, still-current instructed set; exploration and the patch stage share it. `execution-grants.ts` `resolve()` returns `permittedConsequences`; the provider resolution type (now in `AS/runtime/llm/resolver-contract.ts`, not `provider-resolution.ts`) carries it; new `AS/runtime/recovery/annotation/permissions.ts` builds the gate; `annotate.ts` passes it to exploration and, when `gate.request` is set, skips the patch call with `llm.runtime_patch_permission_required` and records `metadata.permissionRequest` (stage `recovery`) and `llmGate.permissions`; `exploration.ts` and `runtime-exploration.ts` take the gate; `harness-options/registry.ts` offers `mutate` options when mutations are governed by permission, never `destructive`. `policy.allowExternalSideEffects` stops being read on the recovery path; add that line to Core `docs/architecture/automation-studio.md`. The design's line numbers predate t027 and L0: locate by content.
-- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `order-operations-repair-relabelled-dispatch` with `--llm-task repair`: (1) no permit — `llmGate.permissions.granted` is `[]`, a lasting press such as "Pick and pack" ends the recovery with a `metadata.permissionRequest` whose `missing` is non-empty, and nothing is dispatched; (2) `--llm-permit <those classes>` — `granted` lists them, no request is raised, the press appears in the trace. Report whether a patch was then proposed and its outcome code: L5 and L6 build on this.
-- Then focused tests from inside `packages/fluxiq` (annotation, runtime-exploration, harness-options registry, execution-grants), Core `check` and `build`, downstream `pnpm check`. `service.ts` must not grow past 6,275 lines.
-- Owns: the Core files named above and their tests; the architecture line. Must not touch: `result-verification/*`, `live-patch.ts`, `flow-bootstrap/*`, downstream source, other worktrees, git commits, shared `dev`, the user's panel.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-recovery-permissions.md`
-
-### Brief: w2x-tool-failure-feedback
-- Repository: paired task t051, `F:\fxwork\t051\!FluxIQWebExtension` (t027's tip plus t036) and `F:\fxwork\t051\!FluxIQ` (t027's Core plus L0). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
-- Task: plan step P2. On every realistic site built so far (professional-network, company-website, job-board, auction-marketplace) Flow creation ended `flow_bootstrap.evidence_tool_failed` within a few calls: `AS/runtime/llm/evidence-loop.ts` returns `llm_evidence_loop.tool_failed` the moment `executeTool` throws or its result cannot be parsed (the initial-observation site and the decision site, both `catch {}` blocks), and never records the failed call. Make a failed tool call an observation, not the end: record it in the trace (call id, tool id, a closed result code) and give the model a bounded, closed failure record on its next decision — tool id and a code such as target intercepted, not found, detached, timed out, navigation — never raw error text, selectors from the page, or page data. The loop then continues under its existing budgets, repeat and no-progress guards. Cancellation still ends it. Find, live, which web tool threw and why (the auction worker suspects a promotion modal opening 2.5 s after load), and where the failure is a page condition make the domain executor return a closed result code instead of throwing.
-- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: reproduce on `auction-marketplace`'s extraction task and on `professional-network-rotterdam-data-engineers` (reports in `week2-exit-plan/reports/w2x-scenario-*.md`). After the fix the same tasks must get past the first failure: the trace shows the failed call and its code, the model's next decision responds to it, and the build reaches a proposal or a meaningful closed outcome. Passing the oracle is not required — these sites are meant to be hard — but report matched against expected records if a Flow is created, with `build.providerCalls == observed.calls`.
-- Then focused tests (evidence-loop, the domain tool executors, generation-failure), Core `check` and `build`, downstream `pnpm check`. `evidence-loop.ts` must stay under 800 lines; `service.ts` must not grow.
-- Owns: `AS/runtime/llm/evidence-loop.ts` and its tests; the domain `domain/src/runtime/llm-evidence/**` executors that throw on page conditions, and their tests; `AS/runtime/flow-bootstrap/generation-failure.ts` only if a code mapping must change. Must not touch: `recovery/*`, `result-verification/*`, `service.ts`, scenario-lab, other worktrees, git commits, shared `dev`, the user's panel.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-tool-failure-feedback.md`
-
-### Brief: w2x-e2e-live-campaign (five lanes, two sites each)
-- Repository: the lane's own flat worktree on the shared read-only Core `F:\fxwork\!FluxIQ` (Core `dev` `278c44b`, built); downstream `dev` `08e7dc6`. Testing only (mode 4): no product, Lab or scenario edits; the one file a lane writes in the repository is its report.
-
-| Lane | Task and worktree | Sites |
-| --- | --- | --- |
-| A | t052 `F:\fxwork\t052-e2e-lane-a` | `social-network-feed`, `photo-social` |
-| B | t053 `F:\fxwork\t053-e2e-lane-b` | `bigbox-retail`, `everything-store` |
-| C | t054 `F:\fxwork\t054-e2e-lane-c` | `auction-marketplace`, `crossborder-marketplace` |
-| D | t055 `F:\fxwork\t055-e2e-lane-d` | `professional-network`, `job-board` |
-| E | t056 `F:\fxwork\t056-e2e-lane-e` | `local-classifieds`, `company-website` |
-
-- Round 1 is the baseline before P2's fix lands. For each site, in order: (1) the provider-free recording lane — record the manifest's honest scripted path through the real unpacked extension and replay the saved Flow (the Lab's recorded-Flow lane; `docs/architecture/testing-facility.md`), which shows whether the extension can act on the site at all; (2) every instruction task registered for the site in `apps/scenario-lab/src/scenarios/live-instructions.ts`, once each, as a `create-flow` campaign run with replays where the lane accepts them; (3) every repair task for the site in `live-repair-tasks.ts`, on the Flow step 1 recorded; (4) one creation through the real panel and extension, using the committed `demo:llm:*` drivers with `FLUXIQ_LLM_SCENARIO_ID` set to the site's extraction task (`reports/w2x-ui-e2e-audit.md`, journey 1).
-- Every run: `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`, allocated ports (never 3000 or 4711), DeepSeek from the worktree's `.env.local`. On HTTP 429, wait its Retry-After and retry once; count those separately. Spend cap: $4 per lane.
-- Judge each run from its files, never from the verdict: `snapshots/live-llm.json` `build.providerCalls` against `observed.calls`; `evaluation.json` `oracleVerdict` and `matchedRecords` against `expectedRecords`; whether a Flow was created; the failure code and stage; where on the site it stopped (screenshots, events); cost; wall clock. A consequential task run without a permit is correct only if it ends in a permission request naming the right class — read Core's run detail yourself, because the task catalog cannot judge it.
-- Classify every failure as: product gap (name the Core or domain site where you can, and mark whether it is P2's build-ending failed tool call), site defect (the site or its oracle is wrong for an honest person), Lab defect, provider noise, or flaky. Fix nothing.
-- Definition of done: every task on both sites run or explicitly recorded as not runnable with the reason.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-e2e-lane-<a..e>.md` — a per-task table, then product gaps ranked by how many tasks they hit.
-
 ### Brief: w2x-evidence-window
 - Repository: paired task t057, `F:\fxwork\t057\!FluxIQWebExtension` and `F:\fxwork\t057\!FluxIQ`, both at P2's tip (t051). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
 - Task: plan step P7. With P2 in place, realistic-site builds now end `llm_evidence_loop.evidence_limit` after 10-15 calls, because the loop caps the total evidence bytes collected across the whole build (the flow-bootstrap 64,000-byte limit), not just what one request carries. The standing direction (Week 2 document, "The fixed call limit was the defect") is that the loop iterates while it makes progress and stops on cost, tokens, the deadline or the no-progress guard, never on a small fixed cap. Make total evidence unbounded except by those: each provider request carries a bounded context window — the newest evidence in full plus compact, closed summaries of older calls (call id, tool id, result code, whether it changed the page) — within the existing per-request evidence context bound and the one 64k-token context constant. Older raw evidence leaves the window whole, never cut mid-record. Accounting still records total evidence bytes. A total-evidence stop survives only as a far-away, configurable backstop. If Core already has a context-window module, extend it rather than adding a second.
@@ -333,14 +189,6 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Then focused tests from inside `packages/fluxiq`, Core `check` and `build`, downstream `pnpm check`. `evidence-loop.ts` is 776 lines: put new behaviour in a focused module and keep it under 800. `service.ts` must not grow.
 - Owns: `AS/runtime/llm/evidence-loop.ts`, a new or existing context-window module beside it, `AS/runtime/loop-limits/*`, their tests. Must not touch: `recovery/*`, `result-verification/*`, `service.ts`, domain and Lab source, other worktrees, git commits, shared `dev`, the user's panel.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-evidence-window.md`
-
-### Brief: w2x-scenario-selector-audit
-- Repository: task t058, flat worktree `F:\fxwork\t058-bigbox-selectors` on the shared read-only Core (`71e2798`).
-- Task: E1 lane B found that `bigbox-retail`'s recorded workflows `pickup-towels` and `pickup-order` extract with Playwright-only selectors (`:has-text`, `:text-matches`) that the real extension rejects, so their recording-lane runs fail at the extract step through no fault of FluxIQ (`runtime.behavior`, invalid extract selector). `:has-text` or `:text-matches` also appears in `company-website/manifest.ts`, `everything-store/workflows/purchase.ts` and `photo-social/manifest.ts`. Audit every recorded workflow step of all ten realistic sites for selectors the extension's action and extract engines cannot execute, and rewrite each to a selector the extension accepts that picks exactly the same elements. Scripts that only Playwright runs (the honest and naive browser-path tests) may keep Playwright syntax. The sites stay exactly as difficult: change no page, no oracle, no task wording.
-- Live proof: rerun each affected recording lane (provider-free, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`) and show the extract or action step now executes; report record counts against expected.
-- Then the scenario-lab suite and `pnpm check`.
-- Owns: the ten sites' manifest and workflow files under `apps/scenario-lab/src/scenarios/*/`. Must not touch: pages, oracles, tasks, extension or domain source, other worktrees, git commits, shared `dev`, the user's panel.
-- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-scenario-selector-audit.md`
 
 ### Brief: w2x-repair-permission-request
 - Repository: paired task t059, `F:\fxwork\t059\!FluxIQWebExtension` and `F:\fxwork\t059\!FluxIQ`, carrying L4 (t050) and P2 (t051) on current `dev`. `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
@@ -367,13 +215,60 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Owns: the probe code, its new module and test, the call site in `run-scenario.ts`. Must not touch: Core, extension, domain, scenario-lab, other worktrees, git commits, shared `dev`, the user's panel.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-lab-probe-race.md`
 
-### Brief: w2-multi-action-schema-fix
-- Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
-- Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
-- Owns: `evidence-batch/input-schema.ts`, `evidence-batch/stop.ts` if the low finding needs it, `evidence-batch/tests/contract.test.ts`; the report.
-- Must not touch: any other file; git commits; other worktrees; shared `dev`; provider or browser.
-- Definition of done: the evidence-batch contract tests and the evidence-loop tests pass from inside `packages/fluxiq`; singleton and default-one behaviour unchanged; changes left uncommitted. No live run: nothing reaches this path until the A/B, which follows.
-- Report to: `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-schema-fix.md`
+### Brief: w2x-dismissible-dialogs
+- Repository: paired task t062 on P2's base (t051), `F:\fxwork\t062\!FluxIQWebExtension` and `F:\fxwork\t062\!FluxIQ`.
+- Task: plan step P9. E1 lane C: on `auction-marketplace` a dismissible promotion modal (it has its own close control) makes a replayed action fail `web.intervention.required` (`domain/src/runtime/failure/codes.ts`, category `user_intervention_required`), and Core's `recovery/deterministic-diagnosis.ts` maps that to `manual_intervention`, so the model gets 0 calls — the recorded Flow that built and the auction repair task both died there. "Needs a person" must mean only what a person alone can answer: a robot check, a credential or second-factor prompt, a payment confirmation. A covering dialog the page lets anyone dismiss must come back as the closed page condition P2 introduced (`web.action.rejected.blocked_by_dialog`, with the dialog's own controls ranked first), which recovery can act on. Find where the extension decides intervention is required, draw the line on evidence the page gives (dismiss or close controls, aria roles, the challenge fixtures' markers) rather than on site names, and keep `everything-store`'s robot check as `web.intervention.required`.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: (1) `auction-marketplace`'s recorded-Flow replay and its repair task — the promotion no longer ends as intervention-required, and recovery gets calls to deal with it; (2) `everything-store`'s robot-check variant still ends `user_intervention_required` and nothing tries to solve it. Report where each run stopped next.
+- Then focused extension, domain and Core recovery tests, both repositories' `check`.
+- Owns: the extension and domain code that classifies a blocked action, `failure/codes.ts` only if a code must be added, Core `recovery/deterministic-diagnosis.ts` only if the mapping must change, their tests. Must not touch: `evidence-loop.ts`, `loop-limits/*`, `live-patch*`, `recovery/annotation/*`, scenario-lab, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-dismissible-dialogs.md`
+
+### Brief: w2x-recording-fidelity
+- Repository: a downstream flat task from `dev` on the shared read-only Core (`71e2798`).
+- Task: plan step P10. E1 lane E (`reports/w2x-e2e-lane-e.md`) found recorded Flows that cannot replay the honest path they recorded: (1) `company-website`'s chat widget Close is stored with a target that resolves to 7 equal matches, so replay cannot choose — the recorder must store enough identity (the owning widget or dialog, the accessible name in context, position among equals, a stable fingerprint) that the target resolves to exactly the element pressed, and replay must refuse an ambiguous match with a closed code rather than guess; (2) `local-classifieds`' cookie-consent click is stored with a later search's URL as its expected result — each recorded step's expected post-state must come from the page state that step produced, not from a later step. Fix both at their cause in the extension recorder and the domain target and expectation code; do not tune the sites.
+- Live first, provider-free, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: record and replay `company-website`'s primary workflow and `local-classifieds`' primary workflow (the recording lane); each recorded step replays to its own recorded state; report oracle results and records matched against expected (lane E saw 13 where 12 were expected on one extraction — say whether that is the recorder, the extractor or the site). One established scenario (`basic-form`) still records and replays.
+- Then focused extension and domain tests and `pnpm check`.
+- Owns: the extension's recording and target-capture code, the domain's target identity and expected-state code, their tests. Must not touch: the extension's action-runner classification of blocked actions (P9 owns it), Lab and scenario-lab source, Core, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-recording-fidelity.md`
+
+### Brief: w2x-extract-across-pages
+- Repository: a downstream flat task from `dev` on the shared read-only Core (`71e2798`).
+- Task: plan step P15. The selector audit (`reports/w2x-scenario-selector-audit.md`) found that `extract_list` reads page 1 of `bigbox-retail`'s `pickup-towels` and then fails (`run_failed`, message channel closed) when its Next control loads a new document, and that numbered pagination ends on a loading skeleton instead of the next page's records. A paginated extraction must survive a Next that navigates (re-attach to the new document, keep the records already read, continue) and must wait for the next page's records to render before reading, bounded by its timeout, while keeping de-duplication and the item cap. E1 lane E also saw 13 records where 12 were expected on one extraction: check whether it is this code.
+- Live first, provider-free, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: `bigbox-retail`'s `pickup-towels` recording lane reads every page and matches its expected records; one numbered-pagination site on `dev` (for example `professional-network` people search) reads past page 1; an established paginated scenario (`product-catalog` or `property-listings`) still matches.
+- Then focused extension and domain extraction tests and `pnpm check`.
+- Owns: the extension's page extraction engine and pagination, the domain's extraction contracts only if a closed code must be added, their tests. Must not touch: the recorder and target-capture code (P10), the action runner's blocked-action classification (P9), Lab and scenario-lab source, Core, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-extract-across-pages.md`
+
+### Brief: w2x-created-flow-fidelity
+- Repository: a paired task from `dev` in both repositories.
+- Task: plan step P17. E1 lane B's E9 (`reports/w2x-e2e-lane-b.md`) is the only created Flow the campaign produced, and it cannot replay: through the real panel, `everything-store` with the `first-page-plus-earbuds` instruction was proposed and applied as navigate (to `/scenarios/everything-store/s?k=wireless+earbuds`), click `a[aria-label="Brightaisle Plus"]`, `extract_list`, end; the keyless run's navigate reported success while its before and after screenshots are identical and Core's after-action location is the start page, and the click then failed `web.target.not_found`. The Flow also kept none of the cookie and notification dismissals exploration needed, so replay met both overlays. Fix both at their cause. (a) A navigate that did not reach its URL must never report success: trace which tab the extension navigated versus the tab being observed, and make navigate verify its outcome. (b) A created Flow must carry what exploration needed to reach its target: find why the authored Flow omitted the dismissals (what the bootstrap shows the model when it writes the Flow, and what Core keeps from exploration — the Week 2 gap audit notes the exploration reduction is computed and discarded) and make the smallest change that gets them into the Flow.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, allocated ports, never 3000 or 4711: reproduce E9 through the panel (`demo:llm:*` with `FLUXIQ_LLM_SCENARIO_ID` for everything-store, as lane B did); after the fix the created Flow's keyless run reaches the results page past both overlays and its extraction is judged by `matchedRecords` against `expectedRecords`, with zero provider calls in the run. Report each step of the created Flow and what exploration did that it kept or dropped.
+- Then focused tests in the files you change and both repositories' `check`.
+- Owns: the extension's navigate action and its outcome reporting, Core's flow-bootstrap authoring and plan code that decides which explored steps a Flow keeps, their tests. Must not touch: `evidence-loop.ts` and `loop-limits/*` (P11), `recovery/*`, `live-patch*`, the recorder (P10), extraction pagination (P15), blocked-action classification (P9), other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-created-flow-fidelity.md`
+
+### Brief: w2x-lab-defects
+- Repository: task t066, flat worktree `F:\fxwork\t066-lab-defects` on the shared read-only Core (`71e2798`). `TR/` is `packages/test-runner/src/`.
+- Task: plan step P13, the Lab defects E1 found (`reports/w2x-e2e-lane-{a,c,d,e}.md`): (1) scripted navigation refuses a URL with a query string, blocking `local-classifieds` save-dining-tables and its repair task; (2) `job-board`'s frame-target extract step is refused `fixture.invalid`; (3) `TR/…/extract-intent.ts` sends Lab extract fields as required (the extension defaults `required: true`), blocking `social-network-feed`'s feed-digest recording; (4) no run file records which classes `--llm-permit` granted — record them in `live-llm.json`; (5) the Lab counts the initial observation as a decision (Core's `decisionCount` is the trace length) and flags builds that used their budget as `performance.budget` — count decisions, not trace rows; (6) the task catalog cannot judge "this task correctly ends in a permission request naming these classes": add a closed expectation to the live-task contract, judge it from Core's run detail (`metadata.permissionRequest`, or the creation diagnostic), and set it on each realistic site's consequential task that is run without a permit.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: the save-dining-tables recording lane starts; the job-board frame extract runs; the feed-digest recording lane runs; one `--llm-permit` run's `live-llm.json` lists the granted classes. (6) is proven by unit tests plus a run where Core raises a request if one can be produced; otherwise say so.
+- Then focused test-runner and test-contracts tests and `pnpm check`.
+- Owns: test-runner and test-contracts files for the six items and their tests, the consequential tasks' expectation lines. Must not touch: `TR/run-scenario.ts` and the Core action probe (P8 owns them — if an item needs them, name the site in your report), the Lab's snapshot reader for permission fields (L5), scenario pages and oracles, Core, extension, domain, other worktrees, git commits, shared `dev`.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-lab-defects.md`
+
+### Brief: w2x-fixture-defects
+- Repository: task t067, flat worktree `F:\fxwork\t067-fixture-defects` on the shared read-only Core (`71e2798`).
+- Task: plan steps P19 and P16. (1) `everything-store`'s recording script clicks the cookie Accept after the 4 s notifications prompt has already covered the page, so every recording lane and both repair tasks stop (`reports/w2x-e2e-lane-b.md`, site defect 1): make the recorded honest path deal with the page as a person would (answer the prompt that is covering the page, then the cookie banner) without changing the site's timings or difficulty. (2) The combined scenario-lab suite fails one browser-path test under load (auction, crossborder or professional-network) and passes it alone: find the cause (fixed sleeps, timeouts, shared browser state) and make each test wait on the page condition it needs, never by lengthening a fixed sleep. Also make sure `live-instructions.ts` (775 of 800 lines) has room: split it by moving the realistic sites' tasks into their own module.
+- Live first: everything-store's primary recording lane (provider-free, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`) passes the opening; then the full scenario-lab suite three times in a row with no failure while the machine is loaded.
+- Owns: the ten realistic sites' manifests, workflows and `tests/`, `apps/scenario-lab/src/scenarios/live-instructions.ts` and a new sibling module for the split. Must not touch: pages, oracles and task wording, test-runner, Core, extension, domain, other worktrees, git commits, shared `dev`.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-fixture-defects.md`
+
+### Brief: w2x-exploration-handles
+- Repository: paired task t070, `F:\fxwork\t070\!FluxIQWebExtension` (P2's domain changes plus current `dev`) and `F:\fxwork\t070\!FluxIQ` (P2's Core).
+- Task: plan step P18. The realistic sites repeat labels on purpose, and exploration hands the model ambiguous handles: `core.decision_unusable` with `web.handle.ambiguous` appears in 6 of E1 lane B's 12 builds and feeds the repeat-without-progress stalls (`reports/w2x-e2e-lane-b.md`, product gap 2). Every element the evidence packet offers must carry a handle that resolves to exactly one element, with the disambiguating context a person would use (the owning card or dialog, the row's other text, position among equals) in bounded, closed form; the model must never be offered two elements it cannot tell apart. Keep P2's front-layer ranking.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: `everything-store-first-page-plus-earbuds-deal-wheel` and one more ambiguous-label task of your choice; report ambiguous-handle decisions before and after, where the build stopped, and whether a Flow was created with matched against expected records.
+- Then focused domain evidence tests, both repositories' `check`.
+- Owns: the domain's `llm-evidence` packet, handle assignment and structure code, their tests. Must not touch: Core, the extension recorder (P10), extraction pagination (P15), blocked-action classification (P9), other worktrees, git commits, shared `dev`.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-exploration-handles.md`
 
 ---
 
@@ -491,6 +386,46 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: t050 `npx vitest run --no-file-parallelism .../recovery .../harness-options .../execution-grant-permissions.test.ts` printed `Tests  399 passed (399)`; lane C's campaign summaries read auction "0 of 5 … 23 calls $0.115517" and crossborder "0 of 5 … 40 calls $0.208087"; neither consequential task reached its gated control, so no permission request was observed.
 - Outcome: Partial
 - Follow-up: P9 at the next free slot; E2 after P2, P7 and P8.
+
+### 2026-09-21 — E1 lane E complete; P7 done; P9, P10 dispatched; P11 given to the P7 worker
+- Agent: supervisor; workers `w2x-e2e-lane-e`, `w2x-evidence-window`
+- Changed: tasks t062 (P9) and t063 (P10); rows P10-P13; P7's worker extended to P11.
+- Why: lane E showed 0 of 13 builds and 0 of 7 recorded replays succeeded on local-classifieds and company-website; 5 builds reported `evidence_tool_failed` were really the 64,000-byte budget; recorded Flows stored ambiguous targets and wrong expected states. P7 removed the evidence cap live, and builds then stopped on a fixed 26-call cap, which the user's standing decision rejects.
+- Validation: lane E judged every run from its files — 0/13 builds created a Flow, 0/7 recorded Flows passed their oracle, 0/2 panel explores produced a proposal, `build.providerCalls == observed.calls` in every provider run; P7's live runs ended `evidence_iteration_limit` at 26 decisions (up to 153,142 bytes) or `repeat_without_progress`, with no `evidence_limit` or `tool_failed`.
+- Outcome: Partial
+- Follow-up: P11 live; E2 after P2, P7/P11, P8, P9 and P10 land.
+
+### 2026-09-21 — E1 lane D complete; selector audit landed; L5 partial; P15 dispatched
+- Agent: supervisor; workers `w2x-e2e-lane-d`, `w2x-scenario-selector-audit`, `w2x-repair-permission-request`
+- Changed: t058 landed (selectors the extension can execute, bigbox naive-path test updated by the supervisor); L5 extended to its four blockers; P10 extended to shadow-root targets; t064 (P15); rows P15, P16.
+- Why: lane D built 0 of 12 Flows (P2 on 10 tasks; a dismissible modal gating the repair; shadow-root and frame targets). L5's code passes but its live proofs were blocked by a 60 s grant claim window shorter than the failing Flow (a panel defect too), a domain equivalence check that reads "Pick and pack" as two actions, and a Lab snapshot reader that drops the permission fields.
+- Validation: t058 bigbox `browser-paths.test.js` printed `# pass 12`, `# fail 0` after the supervisor's one-line fix; its landing printed scenario-lab `# pass 570`, `# fail 0` and `"command":"pnpm check","passed":true`; L5 Core focused vitest "452 passed (452)"; lane D: 0 of 12 created, `build.providerCalls == observed.calls` in every build, 77 calls, $0.3624.
+- Outcome: Partial
+- Follow-up: L5 live proofs after its fixes; E2.
+
+### 2026-09-21 — E1 lane B complete; the first created Flow does not replay; P17 dispatched
+- Agent: supervisor; worker `w2x-e2e-lane-b`
+- Changed: t065 (P17); rows P17-P19.
+- Why: lane B built 0 of 12 Flows in the Lab (7 on P2, others on repeats, the evidence cap and an unclassified 400); its everything-store panel creation proposed, applied and ran a Flow with 0 calls that failed, because a navigate reported success without navigating and the Flow dropped the dismissals exploration needed. A created Flow replaying deterministically is the project's measure of success, so this outranks the remaining exploration gaps.
+- Validation: lane B's report rows E1-E9 and R1-R6, each judged from its run files; `build.providerCalls == observed.calls` in every build; $0.7304 over 135 Lab calls plus $0.053 for the panel; E9's replay before and after screenshots share hash `389ba81a01c8` and Core's after-action location is the start page.
+- Outcome: Partial
+- Follow-up: lane A; then round 2.
+
+### 2026-09-21 — E1 round 1 complete; plan compacted
+- Agent: supervisor; worker `w2x-e2e-lane-a`
+- Changed: Current State (round 1 result); 18 delivered briefs moved to `archive/delivered-briefs.md` (document 587 -> 399 lines); tasks t066-t070 and their briefs.
+- Why: all five lanes reported; the next wave fixes every cause round 1 ranked.
+- Validation: lane A — 0 of 16 creation runs made a Flow, 3 of 7 recording-lane Flows replayed and passed (social-network-feed confirm-requests 4/4, move-open-day 1/1 matched); `compact-plan.mjs` printed "moved 18 briefs, 191 lines; document now 399 lines".
+- Outcome: Partial
+- Follow-up: E2.
+
+### 2026-09-21 — P9 done; W14's contract updated; P20 identified
+- Agent: supervisor; worker `w2x-dismissible-dialogs`
+- Changed: t062 downstream `9c70af8` (P9, plus the supervisor's W14 manifest and test update); row P20.
+- Why: a pop-up anyone can close is not a challenge only a person can answer. W14 (`modal-flows` armed offer, which has its own close control) keeps its contract that a model-free replay stops rather than dismissing an unrecorded offer; only the category changes to the recoverable `unexpected_state`, consistent with capability by default and permission only for consequential acts.
+- Validation: t062 `auction-marketplace-repair-watch-redesign` `run-mubterkd-77a5c4f0` ended `blocked_by_dialog` with 1 model call where it used to make 0; scenario-lab after the W14 update printed `# pass 568` with the two known load-flaky browser tests failing, and those files alone printed auction `# pass 13`, `# fail 0` and professional-network `# pass 9`, `# fail 0`.
+- Outcome: Partial
+- Follow-up: add the blocked-by-dialog row to `docs/architecture/failure-taxonomy.md` at landing; P20 after L5.
 
 ---
 

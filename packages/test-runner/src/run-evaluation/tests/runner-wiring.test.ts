@@ -211,13 +211,13 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
  * change to the extract reader, each tested there; what no unit can show is that
  * the runner consults them, so the call sites are pinned here.
  */
-test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the probe's start-page step, and the final-state facts", async () => {
+test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the Core action probe, and the final-state facts", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, coreProbeTargetUsable, finalStateFacts, selectCoreProbeStep \} from "\.\/lane-rules\/index\.js";/u);
-  // The probe asks whether the page will accept the action, not whether the target is visible:
-  // a consent overlay covers a visible field, and Core refuses to type into a covered one.
-  assert.ok(source.includes("selector => coreProbeTargetUsable(page, selector, PROBE_TARGET_VISIBLE_MS)"), "H3: the probe's target check is a trial click, which tests occlusion");
-  assert.equal(/waitFor\(\{ state: "visible", timeout: PROBE_TARGET_VISIBLE_MS \}\)/u.test(source), false, "H3: the visibility-only probe check is gone");
+  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts \} from "\.\/lane-rules\/index\.js";/u);
+  // L1: the probe reads a mark it planted on the start page, which no overlay can refuse, instead of typing into a
+  // field in a fresh tab that restarted the site's load-timed overlays. It lives in its own module and is tested there.
+  assert.match(source, /import \{ proveCoreActionRoundTrip \} from "\.\/core-action-probe\/index\.js";/u);
+  assert.equal(/web\.dom\.type|waitForEvent\("page"|coreProbeTargetUsable|selectCoreProbeStep/u.test(source), false, "L1: the runner neither types, opens a tab, nor picks a step for the probe");
   // Both Flow lanes -- the one built from the run's recording and the one built from a live instruction task -- are the Flow lane here.
   assert.ok(source.includes("const flowLane = options.flow === true || creation !== undefined;"), "H2: a created-Flow run is a Flow-lane run");
   assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
@@ -228,8 +228,16 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
   assert.ok(at.flowLane < at.built && at.built < at.passed, "H2: a Flow-lane run is checked for a built Flow after the lane and before it can pass");
-  assert.ok(source.includes("const choice = await selectCoreProbeStep(workflow.recordingScript, "), "H3: the probe types only into a step on the start page");
-  assert.ok(source.includes('"The Core action probe was skipped"), details: { reason: choice.reason, stepIds: choice.stepIds } });'), "H3: a skipped probe is published with its reason");
+  const probe = {
+    call: source.indexOf("await proveCoreActionRoundTrip({ page, control: topology.control!, sessionId: paired.sessionId, authorizationPin: topology.authorizationPin,"),
+    reset: source.indexOf("await resetScenarioLab(topology.scenarioOrigin, topology.allocation.controllerToken);"),
+    recording: source.indexOf('const startResponse = await runtimeMessage(extensionControl, { type: "fluxiq.startRecording" })'),
+  };
+  const reload = source.indexOf("await openScenarioStart(page, topology.scenarioOrigin, scenario);", probe.reset);
+  for (const [name, index] of Object.entries({ ...probe, reload })) assert.ok(index > 0, `probe ${name} is in the runner`);
+  // The probe's round trip runs on the start page's clock, so the recording starts on the start page loaded afresh.
+  assert.ok(probe.call < probe.reset && probe.reset < reload && reload < probe.recording, "L1: the probe, then a reset and a fresh load, then the recording");
+  assert.ok(source.includes("oracleVerdict, actions, automationFailure: facilityFailure ? undefined : automationFailure,"), "a facility failure publishes no probe verdict beside it");
   assert.ok(source.includes("await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));"), "H5: the final state is judged on the facts the rule chooses");
   assert.equal(/successFacts/u.test(source), false, "H5: the runner holds no second playback-goal rule");
   assert.ok(source.includes("assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);"), "H1: the recording lane asserts every extract step, against what the read itself reported");
