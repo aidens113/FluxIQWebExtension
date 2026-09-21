@@ -917,3 +917,20 @@ budgets.
   load or duplicate request count falls materially; otherwise report measured
   breakdown and make no speculative change.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-load-latency-live.md`
+
+### Brief: w2-panel-unified-batch-live
+- Repository: fresh isolated pair from current integrated t027 plus exactly the
+  two-file unified provider-decision candidate; real production panel UI
+- Task: run typed instruction → high-token confirmation → provider proposal →
+  visible Audit/approve/apply → deterministic run/oracle through the panel, and
+  inspect sanitized proposal audit for a completed 2+ action decision.
+- Required reads: panel evidence-runtime report; unified-decision and feedback-
+  only reports; current two-file schema/evidence-loop candidate only
+- Owns (may edit): isolated Core `evidence-batch/schema.ts` and `evidence-loop.ts`
+  exactly; main report `reports/w2-panel-unified-batch-live.md`
+- Must not carry: completion-format/feedback or no-progress wording experiments;
+  downstream/user panel/data/other lanes; tests, retries, full suites/commits/pushes
+- Definition of done: real panel proposal audit proves a 2+ completed action
+  batch and the same proposal applies/runs to 4/4 actions plus passing oracle;
+  otherwise stop at the first exact terminal outcome.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-unified-batch-live.md`
