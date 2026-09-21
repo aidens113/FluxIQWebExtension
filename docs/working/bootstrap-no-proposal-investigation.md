@@ -1,7 +1,7 @@
 # Bootstrap Generation No-Proposal Investigation
 
-Status: Complete
-Status detail: Durable creation, isolated manual hosting, and the permission-continuation state machine are verified; provider-triggered permission remains a documented live-coverage gap.
+Status: Active
+Status detail: Durable creation, isolated manual hosting, and permission continuation are verified; integration waits for the task's first-generation multi-action code to be reconciled with t033's default-one live candidate.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -58,13 +58,15 @@ independent rereview found no remaining correctness or security blocker. The
 public browser-safe export and lifecycle-independent response deadline also
 survived review.
 
-**Next:** integrate the completed task into current `dev`. Keep the
-provider-triggered permission continuation as an explicit live gap rather than
-inferring it from component coverage, and schedule that journey when a bounded
-provider response actually requests a consequence.
+**Next:** map the exact overlap with t033 and integrate only after the
+run-scoped, production-default-one multi-action candidate passes its live A/B.
+Keep the provider-triggered permission continuation as an explicit live gap
+rather than inferring it from component coverage.
 
-**Blockers:** none for integration. Existing-store adoption still needs
-explicit user approval and is not part of this task.
+**Blockers:** t027 contains the earlier default-16 multi-action implementation;
+it must not reach `dev` ahead of t033's live proof and reconciliation.
+Existing-store adoption still needs explicit user approval and is not part of
+this task.
 
 ---
 
@@ -141,6 +143,16 @@ explicit user approval and is not part of this task.
 - Review focus: awaited preflight context drift must be rejected before modal/grant state; project/Flow/body binding; newly-high and already-confirmed paths; exact consequences; tests must exercise the real ordering.
 - Definition of done: disposition the prior blocker with file/line evidence; list any remaining correctness/security blocker separately; no code/test/live/provider/commit action.
 - Report to: `docs/working/bootstrap-no-proposal-investigation/reports/w2-permission-post-preflight-rereview.md`
+
+### Brief: w2-t027-t033-integration-map
+- Repository: t027 and t033 paired worktrees, read-only product comparison; t027 downstream unique report only.
+- Task: map the exact first-generation multi-action files/commits in t027 against t033's default-one reconciliation and propose the smallest safe integration order that preserves t027's independent panel/live fixes.
+- Required reads: both working documents' Current State; branch commit lists; product diffs against current `dev`; t033 slice reports available now.
+- Owns: `docs/working/bootstrap-no-proposal-investigation/reports/w2-t027-t033-integration-map.md` only.
+- Must not touch: product/tests/other docs, live panel/store, provider/browser, git/shared `dev`.
+- Required output: classify each t027-only commit/file as independent, superseded by t033, or dependent; identify conflicts and whether merge/cherry-pick is safer; preserve production default one until live acceptance.
+- Definition of done: executable integration sequence with exact commits/files and explicit stop conditions; no test/live/provider/commit action.
+- Report to: `docs/working/bootstrap-no-proposal-investigation/reports/w2-t027-t033-integration-map.md`
 
 ### Brief: w2-bootstrap-no-proposal-diagnosis
 - Repository: paired t027 worktrees and the disposable `t027-fresh-ui-repair` run.
