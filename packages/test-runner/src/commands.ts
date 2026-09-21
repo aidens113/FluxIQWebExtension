@@ -10,7 +10,7 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 export type LabCommand =
   // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
   // `replays` exists only with `llm.task` `repair` or `adapt`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; llmMaxActionsPerDecision?: 1 | 16; instructionTaskId?: string; dryRun?: true; replays?: number }
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
@@ -42,7 +42,6 @@ export function parseLabCommand(argv: string[]): LabCommand {
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
     const llm = llmOptions(rest);
-    const llmMaxActionsPerDecision = maxActionsPerDecisionOption(rest, llm);
     const target = targetOptions(rest);
     if (flowLane && (target.target === "existing" || target.target === "clone")) throw new Error("--flow builds a Flow from the run's own recording; existing and clone targets run a pre-existing Flow");
     const variant = optionalVariant(rest);
@@ -50,7 +49,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     const replays = replaysOption(rest, llm, flowLane);
     // A created Flow is built for the task's variant and run on it, so the variant needs no recorded Flow lane.
     if (variant.variantId && !flowLane && !creation) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
-    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...(llmMaxActionsPerDecision === undefined ? {} : { llmMaxActionsPerDecision }), ...creation, ...replays };
+    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...creation, ...replays };
   }
   if (command === "matrix") {
     rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
@@ -66,7 +65,6 @@ export function parseLabCommand(argv: string[]): LabCommand {
       scenarioIds = parsed;
     }
     const llm = llmOptions(args);
-    maxActionsPerDecisionOption(args, llm);
     if (llm?.task === "create-flow") throw new Error("--llm-task create-flow builds one instruction task per run: use lab run <scenario> --instruction-task ID");
     if (llm && (all || scenarioIds?.length !== 1)) throw new Error("live LLM matrix mode requires exactly one explicit scenario");
     if (llm && repeat !== 1) throw new Error("live LLM matrix mode requires --repeat 1");
@@ -141,7 +139,6 @@ const llmOptionNames = [
   "--live-llm", "--llm-profile", "--llm-provider", "--llm-model", "--llm-task",
   "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens",
   "--llm-max-calls", "--llm-max-run-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd",
-  "--llm-max-actions-per-decision",
 ] as const;
 
 function llmOptions(args: string[]): LlmExecutionProfile | undefined {
@@ -191,19 +188,6 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
   };
   assertLlmExecutionProfile(profile);
   return profile;
-}
-
-/**
- * Flow Bootstrap's evidence-loop action width. It is deliberately outside the
- * provider budget profile: this changes how one provider decision is applied,
- * not what provider, grant, or spend the run authorizes.
- */
-function maxActionsPerDecisionOption(args: string[], llm: LlmExecutionProfile | undefined): 1 | 16 | undefined {
-  const value = optionalIntegerOption(args, "--llm-max-actions-per-decision");
-  if (value === undefined) return undefined;
-  if (llm?.task !== "create-flow") throw new Error("--llm-max-actions-per-decision requires --live-llm --llm-task create-flow");
-  if (value !== 1 && value !== 16) throw new Error("--llm-max-actions-per-decision must be 1 or 16");
-  return value;
 }
 function option(args: string[], name: string): string | undefined { const indexes = args.flatMap((value, index) => value === name ? [index] : []); if (indexes.length > 1) throw new Error(`${name} may only be specified once`); const index = indexes[0]; return index === undefined ? undefined : args[index + 1] ?? (() => { throw new Error(`${name} requires a value`); })(); }
 function integerOption(args: string[], name: string, fallback: number): number { const value = option(args, name); if (value === undefined) return fallback; const parsed = Number(value); if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be an integer`); return parsed; }

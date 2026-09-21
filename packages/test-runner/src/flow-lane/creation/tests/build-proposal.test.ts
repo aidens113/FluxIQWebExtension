@@ -40,7 +40,7 @@ test("the build saves the instruction, then authorizes, selects the context and 
     providerInvocation: "attempted",
     accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
     // A tool id without an identifier's shape is not kept.
-    evidenceLoop: { decisionCount: 4, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"], steps: null, batchDecisions: [] },
+    evidenceLoop: { decisionCount: 4, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"], steps: null },
     failure: null,
     recoveredAfterTimeout: false,
     durationMs: 0,
@@ -72,7 +72,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     providerCalls: 5,
     providerInvocation: "attempted",
     accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
-    evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }], batchDecisions: [] },
+    evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }] },
     failure: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 },
     recoveredAfterTimeout: false,
     durationMs: 0,
@@ -122,20 +122,7 @@ test("a build stopped on refused plans keeps what refused them, decision by deci
       { toolId: "core.decision_unusable", resultCode: "bootstrap.invalid_parameter_value" },
       { toolId: "core.decision_unusable" },
     ],
-    batchDecisions: [],
   });
-});
-
-test("a proposal publishes only batch ordinals, closed result codes and its stop code", async () => {
-  const batchDecisions = [{
-    decision: 2,
-    actionCount: 4,
-    actions: [{ ordinal: 1, resultCode: "web.action_completed" }, { ordinal: 2, resultCode: "web.action_completed" }],
-    stopCode: "llm_evidence_loop.batch.targets_may_have_changed"
-  }];
-  const { record } = await build({ evidenceLoop: { providerCallCount: 4, decisionCount: 4, traceStepCount: 5, iterationCount: 5, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.enter_field"], batchDecisions } });
-  assert.deepEqual(record.evidenceLoop?.batchDecisions, batchDecisions);
-  assert.deepEqual(Object.keys(record.evidenceLoop!.batchDecisions![0]!).sort(), ["actionCount", "actions", "decision", "stopCode"]);
 });
 
 test("a refusal Core's parser does not accept keeps only its HTTP status, and a malformed success is a refusal too", async () => {

@@ -36,7 +36,7 @@ const CORE_DECISION_STEP_PREFIX = "core.";
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
-  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true; maxActionsPerDecision?: 1 | 16 }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
+  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
   listFlowAdaptations(projectId: string, flowId: string, status?: string): Promise<ExistingFlowAdaptationSummary[]>;
   getFlowAdaptation(projectId: string, flowId: string, adaptationId: string): Promise<ExistingFlowAdaptation>;
 };
@@ -46,22 +46,8 @@ export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) =>
 
 export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null }>;
 /** One decision the build's exploration made, in order: the tool it called, or Core's name for a decision that called none, and the code it came to. */
-export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string; batch?: CreatedFlowBuildBatchAction }>;
-export type CreatedFlowBuildBatchAction = Readonly<{ decision: number; ordinal: number; actionCount: number; stopCode: string | null }>;
-export type CreatedFlowBuildBatchDecision = Readonly<{
-  decision: number;
-  actionCount: number;
-  actions: ReadonlyArray<Readonly<{ ordinal: number; resultCode: string | null }>>;
-  stopCode: string | null;
-}>;
-export type CreatedFlowBuildEvidenceLoop = Readonly<{
-  decisionCount: number | null;
-  toolCallCount: number;
-  evidenceBytes: number;
-  toolIds: readonly string[];
-  steps: readonly CreatedFlowBuildStep[] | null;
-  batchDecisions?: readonly CreatedFlowBuildBatchDecision[];
-}>;
+export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
+export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
 
 /**
  * - `providerCalls`: the calls Core counted, from the proposal's evidence-loop
@@ -119,21 +105,21 @@ export type CreatedFlowPermissionRequest = Readonly<{
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string; maxActionsPerDecision?: 1 | 16 }> },
+  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string }> },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
   const now = wait.now ?? Date.now;
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
-  const { grantId, maxActionsPerDecision } = await input.authorize(input.flowId);
+  const { grantId } = await input.authorize(input.flowId);
   // Core's evidence tools act on the one connected client, in this project's context.
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const startedAt = now();
   let envelope: FlowBootstrapGenerationEnvelope;
   try {
     envelope = await control.generateFlowBootstrapAdaptation(
-      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true, ...(maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision }) },
+      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true },
       { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {
@@ -180,7 +166,7 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
     // A proposal cannot exist without a provider's answer.
     providerInvocation: "attempted" as const,
     accounting: detail.accounting ? accountingOf(detail.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: null, batchDecisions: batchDecisionsOf(loop.batchDecisions ?? []) } : null,
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: null } : null,
     recoveredAfterTimeout,
     durationMs,
     instructedConsequences: await instructedConsequencesOf(control, input, adaptationId),
@@ -204,7 +190,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
   const issueCodes = [...new Set((diagnostic.issueCodes ?? []).filter(isVocabulary))];
   const steps = loop?.steps?.flatMap((step): CreatedFlowBuildStep[] => {
     if (!isVocabulary(step.toolId)) return [];
-    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}), ...(step.batch ? { batch: { decision: step.batch.decision, ordinal: step.batch.position, actionCount: step.batch.size, stopCode: step.batch.stoppedBy ? `llm_evidence_loop.batch.${step.batch.stoppedBy}` : null } } : {}) }];
+    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
   });
   return Object.freeze({
     outcome: "failed",
@@ -212,7 +198,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     providerCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null, batchDecisions: batchDecisionsFromSteps(steps ?? []) } : null,
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null } : null,
     failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}) },
     recoveredAfterTimeout: false,
     durationMs,
@@ -239,33 +225,6 @@ function accountingOf(value: { provider?: string; model?: string; inputTokens?: 
 /** The distinct tool ids among `values`, sorted: identifiers only, and none of Core's own decision steps. */
 function vocabulary(values: readonly string[]): string[] {
   return [...new Set(values.filter((value) => isVocabulary(value) && !value.startsWith(CORE_DECISION_STEP_PREFIX)))].sort();
-}
-
-function batchDecisionsOf(values: readonly CreatedFlowBuildBatchDecision[]): CreatedFlowBuildBatchDecision[] {
-  return values.map((batch) => ({
-    decision: batch.decision,
-    actionCount: batch.actionCount,
-    actions: batch.actions.map((action) => ({ ordinal: action.ordinal, resultCode: action.resultCode })),
-    stopCode: batch.stopCode,
-  }));
-}
-
-function batchDecisionsFromSteps(steps: readonly CreatedFlowBuildStep[]): CreatedFlowBuildBatchDecision[] {
-  const batches: CreatedFlowBuildBatchDecision[] = [];
-  for (const step of steps) {
-    if (!step.batch) continue;
-    const previous = batches.at(-1);
-    if (!previous || previous.decision !== step.batch.decision) {
-      batches.push({ decision: step.batch.decision, actionCount: step.batch.actionCount, actions: [{ ordinal: step.batch.ordinal, resultCode: step.resultCode ?? null }], stopCode: step.batch.stopCode });
-      continue;
-    }
-    batches[batches.length - 1] = {
-      ...previous,
-      actions: [...previous.actions, { ordinal: step.batch.ordinal, resultCode: step.resultCode ?? null }],
-      stopCode: step.batch.stopCode ?? previous.stopCode,
-    };
-  }
-  return batches;
 }
 
 function isVocabulary(value: string): boolean {
