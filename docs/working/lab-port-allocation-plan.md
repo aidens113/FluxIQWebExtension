@@ -1,4 +1,5 @@
 # Testing Lab Port Allocation Reliability
+
 Status: Complete
 Status detail: Explicit demo panel and gateway ports are now bind-preflighted before setup; the known excluded port fails in milliseconds instead of after a 108-second startup wait.
 Created: 2026-09-20
