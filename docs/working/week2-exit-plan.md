@@ -1,7 +1,7 @@
 # Week 2 Exit Plan
 
 Status: Active
-Status detail: Opened 2026-09-21; four read-only discovery audits dispatched to ground the completion plan before execution.
+Status detail: Integration under way: t027 is being reconciled onto dev without its first-generation batch surface; t033 remediation is in rereview; two discovery audits remain.
 Created: 2026-09-21
 Last updated: 2026-09-21
 Owner: Senior supervisor agent
@@ -18,15 +18,29 @@ the Week 2 MVP line, including end-to-end UI testing and development, and the
 adaptability of model-authored Flows. This document owns that push; the
 Week 2 loop document keeps its history and phase detail.
 
-**Where things stand.** `dev` is clean and pushed at `d3ad8c5`. Four task
-branches are open and unmerged. t027 is the big one: 41 downstream commits,
-about 9,200 lines, plus 11 Core commits, holding the panel golden-path lane,
-the 44.7% runtime latency cut, closed repair diagnostics and bounded repair
-candidate ranking; its worktree also has uncommitted edits to the Week 2
-document and a latency audit report. t033 has multi-action exploration
-slices 1-4 built behind a default of one, awaiting a live A/B. t029 has a
-node-library gap audit and a planned privileged JavaScript node. t034 has
-only a brief for a post-action readiness latency cut.
+**Where things stand (from `w2x-branch-integration-audit`, supervisor-checked).**
+Four task branches are open. **t027** (41 downstream and 11 Core commits)
+holds the panel golden-path lane, the 44.7% runtime latency cut, reconnect,
+extraction exit, closed repair diagnostics, candidate ranking and the
+permission-continuation UI, but also a first-generation multi-action batch
+whose Core defaults to **16** actions per decision
+(`loop-limits/evidence-loop.ts:53`, checked; `dev` has no such constant), so
+every t027 creation proof ran on settings that must not ship. **t033**'s
+default-one multi-action contract was blocked by an integration review; its
+remediation is now committed (`1433d90` Core) but not rereviewed, and its
+live A/B never ran on the right task. **t029**'s privileged JavaScript node is
+implemented and live-proven for the hand-authored path but blocked by three
+rereview findings; its work is now committed on its task branch (`77b5182`,
+`b1ec0da`) and held. **t034** depends on t027-only snapshot-readiness code.
+
+**Integration decision (supervisor, 2026-09-21): t027 first, with its
+first-generation batch surface removed, then t033 on top, then t034, then
+t029.** Codex's integration map put t033 first, but t033 is review-blocked and
+unmeasured, and waiting on it stalls the UI suite and everything built on
+t027. The map's own fallback applies: land t027's independent work with
+production single-action exactly as on `dev`. The shared seams need a manual
+union in either order, so this costs nothing extra. t027 downstream now
+contains `dev` (`3ba5417`); Core t027 is 0 behind Core `dev`.
 
 **What Week 2 has not yet shown live:** the exit chain end to end. The
 newest real-provider repair run made a diagnosis call and an exploration call,
@@ -56,10 +70,11 @@ journey whose UI does not exist reports `not_built` and fails. Build order is
 in the report: t027's drivers first, then six parallel briefs on disjoint files,
 then one owner for the suite and launcher.
 
-**In flight:** three read-only discovery audits (branch integration, exit-loop
-gaps, existing-Flow and repair design). Their reports decide the integration
-order, the minimal work to demonstrate the exit loop, and the product changes
-the missing UI journeys need.
+**In flight:** `w2x-t027-reconcile` (code and live, t027 worktrees);
+`w2-multi-action-remediation-rereview` (read-only, brief in t033's
+`multi-action-exploration-reconcile.md`); and two read-only audits (exit-loop
+gaps, existing-Flow and repair design) that decide the minimal work to
+demonstrate the exit loop and the product changes the missing UI journeys need.
 
 **Next:** read the four reports, rewrite this Current State as the
 completion plan with ordered, file-partitioned execution phases, then execute
@@ -109,6 +124,19 @@ live-first.
 - Definition of done: per-item design with exact sites, contract changes, UI surface, a live proof on a named Lab scenario, and a file-ownership table showing which slices can run in parallel.
 - Report to: `docs/working/week2-exit-plan/reports/w2x-existing-flow-and-repair-design.md`
 
+### Brief: w2x-t027-reconcile
+- Repository: paired t027 worktrees `F:\fxwork\t027\!FluxIQWebExtension` and `F:\fxwork\t027\!FluxIQ`, branch `task/t027-multi-action-exploration` in both; both already contain current `dev`.
+- Task: remove t027's first-generation multi-action surface so production behaves exactly as `dev` — one action per model decision, no list schema, no Lab max-action control — while keeping every independent t027 change. `docs/working/bootstrap-no-proposal-investigation/reports/w2-t027-t033-integration-map.md` (t027 downstream) classifies every commit. **t033 has not landed**: wherever the map says t033 is authoritative, use `dev`'s version instead.
+- Core: drop superseded `ef7892f`, `4b79c00`, `042562e`. Delete `runtime/llm/evidence-window.ts` and every t027-only file under `runtime/llm/evidence-batch/`. For each file the map lists as t033-authoritative, restore `dev`'s version except hunks from the independent commits (`1079ba8`, `b3f772f`, `fe6e77a`, `680c515`, `949735d`, `bb430e4`, `2dcf06b`); use `git log dev..HEAD -- <file>` to tell them apart. Union by hand: `flow-bootstrap/generation-failure.ts` and test (keep `949735d`'s categorical pre-provider codes), `runtime/service.ts` (keep `llmEvidenceRuntimeStatus` and categorical bootstrap-boundary assignments, drop `batchDecisions`), `api/handlers/llm-generation.ts` and test (keep `bb430e4`'s grant-issue mapping, no `maxActionsPerDecision`).
+- Downstream: restore `dev`'s max-action plumbing in `packages/test-runner/src/{cli,commands}.ts`, `flow-lane/creation/{lane,build-proposal}.ts` and test, `live-llm/{live-llm-plan,live-llm-run}.ts`. In `existing-fluxiq-control.ts` and test drop the `batchDecisions` parser, keep `03c20a6`'s terminal repair outcome. Delete `apps/extension/e2e/content/tests/exploration-state/tests/multi-action-{exploration,safety}.spec.ts`. Keep `719a34d`'s `domain/src/runtime/llm-evidence/tools.ts` sentence.
+- Negative inventory: grep both trees for `MAX_ACTIONS_PER_DECISION`, `maxActionsPerDecision`, `batchDecisions`, `evidence-window`, `tool_calls`; nothing may remain that `dev` lacks.
+- Live first, from a fresh isolated store and profile on allocated ports (never 3000 or 4711), DeepSeek from `.env.local` as earlier t027 reports did: (1) `pnpm panel:golden` through prepare, explore, apply and bound run — explore yields exactly one durable proposal, the bound run passes its oracle with zero provider calls; the repair stage is expected to fail, record its outcome code. (2) One replay of the saved four-action Flow: about 8.2 s, 4/4, oracle passes. Fix only failures the reconciliation introduced.
+- Then focused tests. Core, run from inside `packages/fluxiq`: generation-failure, llm-generation handler, service-bootstrap generation, blank-flow-authoring, action-permissions client, recovery annotate and stages. Downstream: automation-tab, action-runner, target candidates, llm-evidence tools, build-proposal, existing-fluxiq-control, commands, browser-session. Then downstream `pnpm check` and Core `check` and `build`. No full suites.
+- Owns: the files named above, in the two t027 worktrees only; the report.
+- Must not touch: git commits, merges or history (leave changes uncommitted for the supervisor); any other worktree; shared `dev`; the user's panel, store or profile.
+- Definition of done: negative inventory empty; both live results with bundle paths; focused tests and checks pass; the report lists every changed file keyed to the map's commit classification.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-t027-reconcile.md`
+
 ---
 
 ## Work Ledger
@@ -128,6 +156,14 @@ live-first.
 - Validation: `grep -n verified packages/test-runner/src/panel-golden-path/*.ts` in the t027 worktree printed five stages declared `status: "unverified"` in `lane.ts` (lines 127, 132, 133, 134, 137) and `status: unverifiedStages.length ? "incomplete" : "passed"` at line 142; Core `blank-flow-authoring-model.ts:98-104` returns `{ ok: false }` unless nodes, edges, router and Subflows are all empty.
 - Outcome: Partial
 - Follow-up: fold the remaining three audits into ordered execution phases.
+
+### 2026-09-21 — Branch audit integrated; t027 goes first without its batch surface
+- Agent: supervisor; worker `w2x-branch-integration-audit`
+- Changed: Current State; brief `w2x-t027-reconcile`; t027 downstream `71f4fc0` (latency audit report), `3ba5417` (merge `dev`), `6122a78` (archive six delivered briefs, Week 2 document 808 -> 704 lines); t033 Core `1433d90` and downstream `c82e774` (remediation and reports, previously uncommitted); t029 downstream `77b5182` and Core `b1ec0da` (review-blocked work, previously uncommitted, held).
+- Why: worktree-only work was one accident from loss; t027 carries most of the proven Week 2 value and must not wait on a review-blocked t033.
+- Validation: `grep -rn 'MAX_ACTIONS_PER_DECISION *='` in t027 Core printed `runtime/loop-limits/evidence-loop.ts:53: ... = 16`, and in Core `dev` printed nothing; `git status --short | wc -l` printed `0` in the t027 downstream, t033 and t029 worktrees after the commits, apart from t029's untracked `.tmp-w2-final-boundary-live.mjs` driver; `node scripts/structure-audit.mjs` on t027 printed `structure-audit: passed (83 warning(s), 122 baselined).` with exit 0 after the compaction.
+- Outcome: Partial
+- Follow-up: verify `w2x-t027-reconcile` and the t033 rereview; then t033's live A/B on top of the reconciled `dev`.
 
 ---
 
