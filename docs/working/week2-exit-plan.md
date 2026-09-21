@@ -60,7 +60,8 @@ commits) carries most proven Week 2 value plus a first-generation batch whose
 Core defaults to 16 actions per decision; it lands first with that surface
 removed, production staying single-action as on `dev`. t033 (default-one
 multi-action) cleared its rereview (`1433d90`) apart from one medium schema
-gap, now being fixed. t029 (JavaScript node) is committed on its branch and held on
+gap, now fixed (`6992da5`); before landing, its `llm/evidence-loop.ts` (810
+lines, over Core's 800 limit) must be split. t029 (JavaScript node) is committed on its branch and held on
 three review findings. t034 needs t027. Worktree-only work in all three was
 committed on 2026-09-21. Core `service.ts` is the serial bottleneck: t027 is
 37 lines over its 6,404-line ratchet, and t027, t033, C0, CF and Resume all
@@ -69,8 +70,7 @@ edit it.
 **In flight:** `w2x-t027-reconcile` (I1; authorized to lift provider
 resolution out of `service.ts` and fold `llmEvidenceRuntimeStatus` into the
 existing readiness method, clearing both Core ratchets);
-`w2-multi-action-schema-fix` (I2; the rereview cleared all three earlier
-findings and left one medium schema gap); `w2x-verification-agreement` (L2,
+`w2x-verification-agreement` (L2,
 t035); `w2x-lab-llm-permit` (L3, t036).
 
 **Next:** verify and land t027 in both repositories, then run Phase I's t033
@@ -91,7 +91,7 @@ workers run at once.
 | Id | Work | Repos | After | Status |
 | --- | --- | --- | --- | --- |
 | **I1** | Land t027 without its first-generation batch surface | both | — | in flight |
-| **I2** | t033: rereview, merge `dev`, same-code live A/B on `social-scheduler-schedule-post` (1 vs 16), land. If the rereview blocks again or the A/B fails, hold t033 and go on: it is not on the exit path | both | I1 | schema fix in flight |
+| **I2** | t033: rereview, merge `dev`, same-code live A/B on `social-scheduler-schedule-post` (1 vs 16), land. If the rereview blocks again or the A/B fails, hold t033 and go on: it is not on the exit path | both | I1 | schema gap fixed `6992da5`; split `evidence-loop.ts` (810 lines) before landing; waits for I1 |
 | **I3** | t034 post-action readiness: merge `dev`, dispatch its existing brief | downstream | I1 | waiting |
 | **I4** | t029 JavaScript node: held until its three review findings are fixed; after the exit | both | — | held |
 | **I5** | Clean-up: `pnpm task prune`; abandon t006, t007, t017; t005 with `--force`; t021 after discarding its rejected Core prototype; remove the `F:\fxlab\t027-*` worktrees; keep t008 and t011 evidence until checked | both | I1 | waiting |
@@ -239,6 +239,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: Core `dev` `runtime/service.ts:3081` read `input = { ...input, adaptiveMode: "manual_approval", authorizedExternalSideEffects: false };`; lines 3224 and 3278 read `adaptationContext && !input.llmExecution ? await this.retryRuntimeSessionAfterAutoAppliedPatch(` and `input.llmExecution ? null : await this.retryRuntimeSessionAfterAutoAppliedPatch(`; `live-patch.ts:140-141` pushes the side-effect refusals; `pnpm task start verification-agreement --worktree --core` printed `"id":"t035"` and `pnpm task start lab-llm-permit --worktree` printed `"id":"t036"`.
 - Outcome: Partial
 - Follow-up: verify each worker before landing; I1 first.
+
+### 2026-09-21 — t033 rereview cleared; schema gap fixed
+- Agent: supervisor; workers `w2-multi-action-remediation-rereview`, `w2-multi-action-schema-fix`
+- Changed: t033 Core `6992da5` (input-schema fails closed on unsupported shapes, `__proto__`, `-0`, code-point lengths; supervisor made the `action_limit` sentence true for an over-budget list); t033 downstream `74c509f` (both reports).
+- Why: the rereview found every earlier finding fixed and one medium fail-open schema gap.
+- Validation: `npx vitest run .../evidence-batch/tests/contract.test.ts .../llm/tests/evidence-loop.test.ts` from `packages/fluxiq` printed `Tests  54 passed (54)`; `npx vitest run .../recovery/tests/runtime-exploration.test.ts .../recovery/tests/exploration-budget.test.ts` printed `Tests  62 passed (62)`; `git show HEAD:.../llm/evidence-loop.ts | wc -l` printed `810`.
+- Outcome: Partial
+- Follow-up: after I1 lands, merge `dev` into t033, split `evidence-loop.ts` under 800 lines, run the live A/B.
 
 ---
 
