@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { allocateLoopbackPort, allocatePersistentRun, allocateRun, validatePersistentWorkspaceName } from "../allocation.js";
+import { allocateLoopbackPort, allocatePersistentRun, allocateRun, assertLoopbackPortBindable, validatePersistentWorkspaceName } from "../allocation.js";
 
 test("allocates distinct loopback ports and isolated run directories", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-runner-allocation-"));
@@ -18,6 +18,21 @@ test("allocates distinct loopback ports and isolated run directories", async () 
     const port = await allocateLoopbackPort();
     assert.ok(port > 0 && port <= 65_535);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("accepts a bindable requested loopback port and rejects an unavailable one with its owner label", async () => {
+  const port = await allocateLoopbackPort();
+  await assertLoopbackPortBindable(port, "Pinned gateway port");
+  const holder = createServer();
+  try {
+    await new Promise<void>((resolve, reject) => { holder.once("error", reject); holder.listen(port, "127.0.0.1", () => resolve()); });
+    await assert.rejects(
+      assertLoopbackPortBindable(port, "Pinned gateway port"),
+      new RegExp(`Pinned gateway port ${port} cannot be bound on 127\\.0\\.0\\.1 \\(EADDRINUSE\\)`),
+    );
+  } finally {
+    await new Promise<void>(resolve => holder.close(() => resolve()));
+  }
 });
 
 test("rejects run IDs that can escape the runs directory", async () => {

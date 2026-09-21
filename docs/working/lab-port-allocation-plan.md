@@ -1,6 +1,6 @@
 # Testing Lab Port Allocation Reliability
-Status: Active
-Status detail: Live panel smoke exposed a 108-second delay when a requested gateway port fell inside a Windows excluded range; diagnosis and the smallest fail-fast allocation fix are in progress.
+Status: Complete
+Status detail: Explicit demo panel and gateway ports are now bind-preflighted before setup; the known excluded port fails in milliseconds instead of after a 108-second startup wait.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -12,31 +12,23 @@ Related: [automated testing facility plan](./automated-testing-facility-plan.md)
 
 ## Current State
 
-A production panel/extension smoke on pushed `dev` succeeded end to end, but
-its first isolated topology attempt selected gateway port `49873`. On this
-Windows host that port was inside an excluded range (`49776-49875`), so Core
-failed with `EACCES` and the Lab waited through startup recovery before the
-test was rerun. The non-product failure added 108.101 seconds to a run whose
-successful checkpoint otherwise took 73.974 seconds.
+A production panel/extension smoke exposed a 108.101-second startup delay on
+gateway port `49873`, which lies in this Windows host's excluded range. Fifty
+ordinary allocations all returned distinct bindable ports, proving the
+allocator was healthy and the one-off explicit demo URL pin owned the defect.
 
-The existing allocator lives in `packages/test-runner/src/allocation.ts` and
-obtains ports by binding loopback servers. The open question is whether the
-bad port came from its ordinary allocation path or from an explicitly pinned
-port in the one-off live observer. Diagnose that before changing code. If the
-allocator already proves an ephemeral port bindable, preserve it; make an
-explicit requested port fail immediately (or safely fall back where the
-contract permits) rather than waiting on topology startup.
+`assertLoopbackPortBindable` now checks explicit demo panel and gateway ports
+before path preparation, builds, identity setup, or process startup. The
+known excluded port fails with labeled `EACCES`; normal ephemeral allocation
+is unchanged. Live source and compiled-caller probes rejected `49873` in
+13.316 ms and 4.009 ms respectively, and a bindable replacement passed in
+2.591 ms. The supervisor independently reproduced the labeled rejection in
+13.166 ms, rebuilt the package, and observed all 19 focused tests pass.
 
-Live proof comes first: reproduce with the known excluded port, then show the
-corrected path selects or accepts a bindable, distinct replacement without a
-long topology wait. Focused allocator checks follow only after that live
-proof. Do not run the repository-wide suite during iteration.
+**Done:** live diagnosis, test-facility-only fix, live rerun, focused build and
+tests, and supervisor review.
 
-**Done:** isolated task `t031-lab-port-allocation` created from pushed `dev`.
-
-**Next:** diagnose the source of the pinned port; implement the smallest
-test-facility-only correction if the repository owns the bad behavior; rerun
-the live port path and report elapsed time.
+**Next:** merge task t031 to `dev`; no additional product work is implied.
 
 **Blockers:** none.
 
@@ -65,9 +57,16 @@ the live port path and report elapsed time.
 - Outcome: Partial
 - Follow-up: worker diagnosis and live rerun.
 
+### 2026-09-20 — Explicit demo ports fail fast
+- Agent: supervisor, with worker `w2-lab-port-allocation`
+- Changed: loopback bind preflight, persistent demo Core entry point, focused allocation coverage, and worker report.
+- Why: explicit demo endpoints bypassed ordinary bind-proven allocation and could consume the full topology-startup wait before reporting a stable host error.
+- Validation: supervisor compiled probe against `49873` -> labeled `EACCES` in 13.166 ms; `pnpm --filter @fluxiq-web-extension/test-runner build` -> passed; focused Node tests -> 19/19 passed in 4188.372 ms; `git diff --check` -> passed.
+- Outcome: Accepted
+- Follow-up: merge task t031 to `dev`.
+
 ---
 
 ## Open Questions
 
-- Did ordinary allocation return the excluded port, or did a one-off observer pin it after allocation? Owner: `w2-lab-port-allocation`.
-- If an explicit requested port is unavailable, does that caller require fail-fast semantics or safe fallback? Owner: senior supervisor after diagnosis.
+None.
