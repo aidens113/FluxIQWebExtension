@@ -1030,3 +1030,22 @@ budgets.
   returns one bounded valid diagnostic identity and preserves the actual reason
   category. Batch/apply may continue only if the same attempt passes that gate.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-diagnostic-identity-live.md`
+
+### Brief: w2-runtime-command-latency-trace
+- Repository: fresh isolated current-t027 pair plus copied deterministic saved
+  workspace; real panel and production unpacked extension
+- Task: instrument only content-free timestamps/counters at Core dispatch,
+  extension receipt/readiness, content action completion, and gateway response
+  for one 4-action saved run; identify the owner of each repeated ~1-second
+  interval, then test at most one safety-preserving fix if the trace is exact.
+- Required reads: playback and stable-tab latency reports; domain adapter/
+  gateway dispatch; extension command router/action runner; Core gateway command
+- Owns (may edit): isolated timing instrumentation and one proven latency owner;
+  directly owned focused tests only after live improvement; main report
+  `reports/w2-runtime-command-latency-trace.md`
+- Must not touch: user panel/data, provider/repair/batch/recording lanes, snapshot
+  or diff semantics, action correctness, unrelated files/full suites/commits
+- Definition of done: content-free trace accounts for the repeated delay; any
+  retained change passes the same 4/4/oracle/zero-LLM live run with material
+  improvement. Remove instrumentation and revert if no safe gain is proved.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-runtime-command-latency-trace.md`
