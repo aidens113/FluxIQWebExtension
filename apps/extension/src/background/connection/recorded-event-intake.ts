@@ -23,6 +23,7 @@ import {
   activityDetail,
   activityLabel,
   clickEventSignature,
+  endsNavigationExplanation,
   isExecutableRecordedAction,
   isNavigationExplanation
 } from "./recorded-event";
@@ -175,6 +176,9 @@ export class RecordedEventIntake {
       this.deps.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs, payload.kind === "dom.submit"
         ? { kind: "submit" }
         : { kind: "click", recorded: executable ? recordedClick(payload, tabId, frameId, this.deps.recording.recordingId()) : undefined });
+    } else if (tabId !== undefined && executable && endsNavigationExplanation(payload)) {
+      // A later step: whatever commits after it is not the earlier click's landing.
+      this.deps.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs, { kind: "action" });
     }
     if (executable) {
       this.deps.recording.noteEvent();

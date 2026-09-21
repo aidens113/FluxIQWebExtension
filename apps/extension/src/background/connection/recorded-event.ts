@@ -25,6 +25,18 @@ export function isNavigationExplanation(payload: RecordingEventPayload): boolean
   return payload.kind === "dom.click" || payload.kind === "dom.submit";
 }
 
+/**
+ * Whether a recorded executable action ends the window in which the click
+ * before it explains a navigation. Every one does -- a key press, typed text, a
+ * selection, a checked box -- except a click or submit, which open a window of
+ * their own, and a scroll: the recorder sends a scroll when the wheel has been
+ * still for a moment, so it can arrive after a click it preceded, and a scroll
+ * navigates nowhere.
+ */
+export function endsNavigationExplanation(payload: RecordingEventPayload): boolean {
+  return !isNavigationExplanation(payload) && payload.kind !== "dom.scroll" && payload.kind !== "dom.wheel";
+}
+
 export function stateScreenshotEventKey(payload: RecordingEventPayload): string {
   return `${payload.kind}:${payload.sequence}:${payload.eventTimestampMs}`;
 }
