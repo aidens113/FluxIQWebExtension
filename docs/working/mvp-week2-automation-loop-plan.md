@@ -368,6 +368,16 @@ Current briefs live in the reports named by the Work Ledger.
   the next one-change live experiment
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-post-success-await-trace.md`
 
+### Brief: w2-mvp-latency-critical-path-audit
+- Repository: t027 downstream/Core worktrees read-only; report downstream only.
+- Task: reconstruct the current MVP creation/run latency critical path from existing sanitized live reports and code boundaries, separating provider time, panel/Core startup, snapshots, actions, persistence, verification, and UI refresh; rank the next three high-confidence optimizations.
+- Required reads: Current State; `w2-panel-load-latency-live.md`; `w2-stable-tab-latency-live.md`; `w2-runtime-command-latency-trace.md`; `w2-playback-latency-live.md`; latest creation acceptance report; only direct timing/settlement code needed to explain measurements.
+- Owns: `docs/working/mvp-week2-automation-loop-plan/reports/w2-mvp-latency-critical-path-audit.md` only.
+- Must not touch: product/tests/other docs, live processes/panel/store, provider/browser APIs, raw run/page data, t029/t033, git/shared `dev`.
+- Required output: normalized timeline table with evidence confidence; identify which waits are necessary vs accidental/serial/redundant; estimate best/likely saved time without inventing measurements; propose one live-first experiment per ranked item and explicit stop/regression oracles.
+- Definition of done: actionable latency plan tied to observed boundaries and exact owning files; no code, unit suite, provider call, or new live run.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-mvp-latency-critical-path-audit.md`
+
 ## Validation
 
 - Every step: the test and mutation targets its report names, rerun by the
