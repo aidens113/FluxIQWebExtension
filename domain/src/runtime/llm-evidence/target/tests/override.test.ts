@@ -41,6 +41,9 @@ test("resolves a repair from the opaque handle the model was shown, fingerprint 
       accessibleName: "Name",
       selector: "#name",
     },
+    // What the repair names, for a permission request: the name as the packet
+    // printed it, and one plain word for what it is.
+    control: { name: "Name", kind: "textarea" },
   });
 
   // The identity is the name, the role and the tag. The selector is carried as
@@ -173,6 +176,7 @@ test("a recorded action is repaired as the verb its output names", () => {
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedClick, selectors), {
     status: "resolved",
     target: { handles: { element: "target.3" }, handleResolution: "named", tagName: "button", accessibleName: "Unique", selector: "#unique" },
+    control: { name: "Unique", kind: "button" },
   });
   // The output decides the role: a recorded type cannot land on the button it
   // was pointed at, and nothing else is put there for it.
@@ -210,6 +214,7 @@ test("without the binding the repair is fingerprint-only, which is weaker rather
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "name", definitionId: "web.output.dom-type", recordedTarget: recordedName("textarea", "Name") }), {
     status: "resolved",
     target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "textarea", accessibleName: "Name" },
+    control: { name: "Name", kind: "textarea" },
   });
 });
 
@@ -240,6 +245,7 @@ test("carries a child-frame element's frame beside the selector that works insid
       selector: "#card-name",
       metadata: { browserFrameId: 3 },
     },
+    control: { name: "Name on card", kind: "input" },
   });
 });
 
@@ -300,5 +306,6 @@ test("a click on a list row still resolves flat, with the row's position as meta
       selector: ".row:nth-child(1)",
       metadata: { listIndex: 1, listTotal: 2 },
     },
+    control: { name: "Widget", kind: "link" },
   });
 });

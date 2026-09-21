@@ -30,6 +30,21 @@ export type LiveLlmExecutionGrant = Readonly<{
   permittedConsequences: readonly LlmActionConsequence[];
 }>;
 
+/**
+ * How long an issued grant may wait for the run it authorizes to start.
+ *
+ * Only that long: Core holds a runtime grant for its run from the moment the
+ * run starts, and the run's own lease governs from there, so a Flow that fails
+ * minutes in still has its recovery. Before the hold, the claim window was the
+ * whole of a recovery's chance -- a recorded Flow that failed 87 s after it
+ * started ended `llm.provider_resolution_failed` with no call, and no window
+ * this runner could ask for (Core allows at most 300 s) was a fix. The Lab
+ * issues every grant immediately before its run, so a minute is ample, and it
+ * is stated rather than left to Core's default so the two cannot drift apart
+ * unseen.
+ */
+export const LIVE_LLM_GRANT_CLAIM_WINDOW_MS = 60_000;
+
 export type LiveLlmGrantControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown>;
 };
@@ -102,6 +117,7 @@ export async function issueLiveLlmExecutionGrant(control: LiveLlmGrantControl, i
   const highTokenConfirmationSent = plan.highTokenConfirmation.required && maxTotalTokensPerRunAsked === plan.maxTotalTokensPerRun;
   const issueRequest: Record<string, unknown> = limits();
   issueRequest.maxUses = maxCallsAsked;
+  issueRequest.ttlMs = LIVE_LLM_GRANT_CLAIM_WINDOW_MS;
   if (highTokenConfirmationSent) issueRequest.highTokenConfirmation = true;
   const issued = await control.automationStudioCall("issue-llm-execution-grant", issueRequest);
   const grant = isRecord(issued) ? issued.grant : undefined;

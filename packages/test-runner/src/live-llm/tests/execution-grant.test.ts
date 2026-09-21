@@ -89,6 +89,9 @@ test("an adapt grant asks Core for the operator's call count and the run token b
   assert.equal(preflight?.payload.maxTotalEstimatedCostUsd, 2);
   assert.equal(issue?.payload.maxCalls, 10);
   assert.equal(issue?.payload.maxUses, 10);
+  // Only the wait for the run to start: the run holds the grant from there.
+  assert.equal(issue?.payload.ttlMs, 60_000);
+  assert.equal(preflight?.payload.ttlMs, undefined);
   assert.equal(issue?.payload.maxTotalTokensPerRun, tenCalls);
   assert.equal(grant.maxCalls, 10);
   assert.equal(grant.maxTotalTokensPerRun, tenCalls);

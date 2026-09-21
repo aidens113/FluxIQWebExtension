@@ -191,9 +191,12 @@ test("the diff never lists more than the bound, and its counts stay exact", () =
   assert.equal(grown.beforeElementCount, 0);
 });
 
-test("the boundary declares what it can answer, including the expectation seam", () => {
+// `action-dispatch` is what Core asks of a host before a runtime repair that
+// re-points an acting step may run; without it every executed target override
+// was refused at preflight, in the Lab and the panel alike.
+test("the boundary declares what it can answer, including action dispatch and the expectation seam", () => {
   const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
-  assert.deepEqual([...boundary.capabilities], ["state-snapshot", "state-diff", "expectation-evaluation", "route-state"]);
+  assert.deepEqual([...boundary.capabilities], ["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "route-state"]);
   assert.equal(typeof boundary.expectationEvaluator, "function");
   assert.equal(typeof boundary.inspectStateDiff, "function");
 });

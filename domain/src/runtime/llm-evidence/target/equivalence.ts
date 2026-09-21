@@ -29,6 +29,14 @@
 //   exit" is "Save changes" and then something else, and the something else is
 //   what the person did not ask for. Counting conjunctions rather than matching
 //   a phrase list keeps "Save and close" repairable by another "Save and close".
+//   A conjunction joins another action *to the recorded one* only where the
+//   recorded action is one of the parts it joins. A name that shares no part
+//   with the recording -- "Pick and pack" standing where "Dispatch run" stood --
+//   is one control's name, not the recorded action plus another; whether it is
+//   the recorded control is the anchors' question. It used to be refused as a
+//   second action on the conjunction alone (live repair runs of 2026-09-21).
+//   The form anchor vouches only for a control's place, never for what its name
+//   adds, so a control it would accept is still held to the count.
 // - **Nothing that ties it to the recording.** A rename is only recognisable
 //   through something that survived it: the name itself, whole or shortened, or
 //   the recorded form with exactly one control of that kind left in it. Where
@@ -73,9 +81,11 @@ export function webRepairEquivalenceRefusal(input: {
   if (conflictingKinds(recordedControlKind(recorded), namedKind)) return "target_not_equivalent";
   const namedLabels = evidenceNames(input.named);
   const recordedLabels = recordedNames(recorded.fingerprint);
-  if (joinsMoreActions(namedLabels.all, recordedLabels)) return "target_not_equivalent";
+  if (joinsAnotherActionToRecorded(namedLabels.all, recordedLabels)) return "target_not_equivalent";
   if (namesAgree(namedLabels.whole, recordedLabels)) return undefined;
-  if (soleControlOfItsKindInRecordedForm(input.elements, input.named, namedKind, recorded.formId)) return undefined;
+  if (soleControlOfItsKindInRecordedForm(input.elements, input.named, namedKind, recorded.formId)) {
+    return joinsMoreActions(namedLabels.all, recordedLabels) ? "target_not_equivalent" : undefined;
+  }
   return "target_unanchored";
 }
 
@@ -239,9 +249,42 @@ function evidenceNames(element: WebLlmEvidenceElement): { all: string[]; whole: 
 /** Words that join a second action to the first. */
 const CONJUNCTIONS: ReadonlySet<string> = new Set(["and", "then", "plus", "&", "+"]);
 
+/**
+ * Whether a proposed name is the recorded action with another joined to it:
+ * split at its conjunctions, it joins more parts than the recorded name did,
+ * and one of its parts is the recorded action -- that part and a recorded part
+ * agree from the front, one the other shortened or extended ("Save" and "Save
+ * changes"). A name none of whose parts is the recorded action is one
+ * control's name, however many words it joins.
+ */
+function joinsAnotherActionToRecorded(named: readonly string[], recorded: readonly string[]): boolean {
+  const recordedParts = recorded.map(actionParts);
+  const recordedJoins = Math.max(1, ...recordedParts.map((parts) => parts.length));
+  return named.some((name) => {
+    const parts = actionParts(name);
+    return parts.length > recordedJoins
+      && parts.some((part) => recordedParts.some((known) => known.some((recordedPart) => startsWith(part, recordedPart) || startsWith(recordedPart, part))));
+  });
+}
+
 /** Whether the proposed control's name joins more actions than the recorded one's did. */
 function joinsMoreActions(named: readonly string[], recorded: readonly string[]): boolean {
   return conjunctionCount(named) > conjunctionCount(recorded);
+}
+
+/** A name's words, split at its conjunctions into the parts they join. Empty parts are dropped. */
+function actionParts(name: string): string[][] {
+  const parts: string[][] = [[]];
+  for (const word of words(name)) {
+    if (CONJUNCTIONS.has(word)) parts.push([]);
+    else parts[parts.length - 1]!.push(word);
+  }
+  return parts.filter((part) => part.length > 0);
+}
+
+/** Whether `prefix` is a non-empty front of `value`, word for word. */
+function startsWith(value: readonly string[], prefix: readonly string[]): boolean {
+  return prefix.length > 0 && prefix.length <= value.length && prefix.every((word, index) => word === value[index]);
 }
 
 function conjunctionCount(names: readonly string[]): number {

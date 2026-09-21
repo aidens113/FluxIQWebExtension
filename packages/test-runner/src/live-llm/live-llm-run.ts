@@ -387,7 +387,7 @@ export class LiveLlmRun {
       // What Core actually issued, where it said. `null` for a run token budget
       // Core did not report.
       granted: this.grant
-        ? { maxCalls: this.grant.maxCalls, maxTotalTokensPerRun: this.grant.maxTotalTokensPerRun, maxEstimatedCostUsd: this.grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: this.grant.maxTotalEstimatedCostUsd, timeoutMs: this.grant.timeoutMs }
+        ? { maxCalls: this.grant.maxCalls, maxTotalTokensPerRun: this.grant.maxTotalTokensPerRun, maxEstimatedCostUsd: this.grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: this.grant.maxTotalEstimatedCostUsd, timeoutMs: this.grant.timeoutMs, permittedConsequences: [...this.grant.permittedConsequences] }
         : null,
       // Whether this run confirmed Core's high-token exposure on its own
       // behalf, and why: a confirmation nobody can see afterwards is consent

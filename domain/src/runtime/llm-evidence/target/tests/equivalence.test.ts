@@ -189,6 +189,33 @@ test("a control that joins another action to the recorded one is a different act
   assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), recordedCompound, selectors).status, "resolved");
 });
 
+// order-operations-repair-relabelled-dispatch (live, 2026-09-21): the recorded
+// "Dispatch run" was redesigned as "Pick and pack". The conjunction alone used
+// to refuse it as a second action. A conjunction joins another action to the
+// recorded one only where the recorded action is one of its parts; a name that
+// shares none is one control's name, and is judged by what anchors it.
+test("a conjunction inside one control's name is not a second action; the recorded action with another joined still is", () => {
+  const header = { landmark: "banner", heading: "Orders" };
+  const recordedDispatch = click(button("dispatch-run", "Dispatch run", header, { type: "button" }));
+  const renamed = page("/orders", [button("pick", "Pick and pack", header, { type: "button" }), button("export", "Export", header, { type: "button" })]);
+  const pick = validateWebRuntimeTargetOverrideEvidence(renamed.evidence, override(handleOf(renamed.evidence, (element) => element.name === "Pick and pack")), recordedDispatch, renamed.selectors);
+  // One action: what refuses it now is that nothing on the page ties it to the
+  // recording -- not a test id, not its name, not a form -- which is the truth.
+  assert.deepEqual(pick, refused("absent", "target_unanchored"));
+
+  // The recorded action with another joined to it is still two, whichever side
+  // the recorded action is on, and whether the recording's name was cut or kept.
+  for (const label of ["Dispatch run and export", "Export and dispatch run", "Dispatch and export", "Dispatch run then print labels"]) {
+    const joined = page("/orders", [button("joined", label, header, { type: "button" })]);
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(joined.evidence, override("target.1"), recordedDispatch, joined.selectors), refused("absent", "target_not_equivalent"), label);
+  }
+
+  // A compound name that is the recorded compound name, or it shortened, is the recorded control.
+  const recordedCompound = click(button("pick-pack", "Pick and pack orders", header, { type: "button" }));
+  const shortened = page("/orders", [button("pick", "Pick and pack", header, { type: "button" })]);
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(shortened.evidence, override("target.1"), recordedCompound, shortened.selectors).status, "resolved");
+});
+
 test("a reset is not a submit, a link is not a button, and one kind of text field is not another", () => {
   const form = { formId: "settings-form" };
   const cases: Array<[string, Element, AutomationStudioRuntimeTargetOverrideFailedAction]> = [

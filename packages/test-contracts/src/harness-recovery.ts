@@ -57,6 +57,12 @@ export type RunHarnessIntervention = { kind: string; validationOk: boolean | nul
  * `adaptationCreated` and `changeProposalCreated` say whether this attempt
  * produced one; the identifiers are on the run's own lists.
  *
+ * `permissionOutcome` is what the recovery's permission gate said about a
+ * patch that would lastingly act (`recovery/annotation/patches.ts`), and
+ * `permissionRequired` is `true` exactly when the patch was held back as the
+ * request a person answers rather than run. Both are `null` when Core asked
+ * no gate, and **absent** only in a record written before they existed.
+ *
  * `verdict` is Core's judgement of this attempt's trial. It is per attempt,
  * not per run, because Core records it on each attempt and a run may try more
  * than one change: a second drift after a repaired node starts a second trial.
@@ -72,8 +78,20 @@ export type RunHarnessPatchAttempt = {
   issueCodes: string[];
   adaptationCreated: boolean;
   changeProposalCreated: boolean;
+  permissionOutcome?: HarnessPatchPermissionOutcome | null;
+  permissionRequired?: boolean | null;
   verdict?: RunHarnessChangeVerdict | null;
 };
+
+/**
+ * What the recovery's permission gate said about one patch that would run:
+ * `permitted` (nothing lasting declared, or all of it allowed), `required`
+ * (held back as a person's request), `undeclared` (it did not say what it
+ * would do, so it did not run), `not_asked` (it could not have run whatever
+ * the person said).
+ */
+export const harnessPatchPermissionOutcomes = ["permitted", "required", "undeclared", "not_asked"] as const;
+export type HarnessPatchPermissionOutcome = (typeof harnessPatchPermissionOutcomes)[number];
 
 /**
  * The outcomes of Core's change verdict (`AutomationStudioChangeVerdict`), the
