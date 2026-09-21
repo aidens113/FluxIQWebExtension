@@ -40,16 +40,39 @@ export const webAutomationManifestOutputs = webAutomationActionDefinitions.map((
  *   the output node that declares it (`output-nodes/definitions.ts`) rather
  *   than restated, so the node and this registration cannot name different
  *   paths.
+ * - `resultPath`: where an output whose declared data port is narrower than
+ *   its transport envelope keeps that value. The JavaScript node promises the
+ *   returned JSON value on `result`, while the gateway keeps it at
+ *   `result.extracted`; copying the node's declaration here lets Core project
+ *   exactly that value without changing the envelope of every other output.
+ * - `withholdParametersFromPersistence` and
+ *   `withholdResultPayloadFromPersistence`: trusted privacy declarations that
+ *   keep JavaScript source, inputs, and returned page data ephemeral while the
+ *   adapter and downstream Flow still receive the real values.
  *
  * An output with neither carries no `metadata` at all.
  */
 function manifestMetadata(action: WebAutomationActionDefinition): { metadata?: JsonObject } {
   const recordsPath = outputNodeRecordsPath(action.actionType);
-  const metadata: JsonObject = {
-    ...(requiresElementTarget(action.parameterSchema) ? { elementTarget: true } : {}),
-    ...(recordsPath ? { recordsPath } : {})
-  };
+  const resultPath = outputNodeResultPath(action.actionType);
+  const metadata: JsonObject = {};
+  if (requiresElementTarget(action.parameterSchema)) metadata.elementTarget = true;
+  if (recordsPath) metadata.recordsPath = recordsPath;
+  if (resultPath) metadata.resultPath = resultPath;
+  const nodeMetadata = outputNodeMetadata(action.actionType);
+  if (nodeMetadata?.withholdParametersFromPersistence === true) metadata.withholdParametersFromPersistence = true;
+  if (nodeMetadata?.withholdResultPayloadFromPersistence === true) metadata.withholdResultPayloadFromPersistence = true;
   return Object.keys(metadata).length > 0 ? { metadata } : {};
+}
+
+function outputNodeMetadata(outputId: string): JsonObject | undefined {
+  return webAutomationOutputNodeDefinitions.find((node) => node.outputAction?.fixedOutputId === outputId)?.metadata;
+}
+
+function outputNodeResultPath(outputId: string): string | undefined {
+  const resultPath = webAutomationOutputNodeDefinitions
+    .find((node) => node.outputAction?.fixedOutputId === outputId)?.metadata?.resultPath;
+  return typeof resultPath === "string" ? resultPath : undefined;
 }
 
 function outputNodeRecordsPath(outputId: string): string | undefined {

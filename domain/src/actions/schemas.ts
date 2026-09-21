@@ -336,6 +336,20 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     parameterSchema: { type: "object", required: ["dialog"], properties: { dialog: dialogSchema } }
   },
   {
+    actionType: "web.dom.run_javascript",
+    label: "Run JavaScript",
+    description: "Run reviewed JavaScript in an isolated browser user-script world only when purpose-built web nodes cannot express the behavior.",
+    parameterSchema: {
+      type: "object",
+      required: ["source", "inputs"],
+      properties: {
+        source: { type: "string", label: "JavaScript source" },
+        inputs: { type: "object", label: "JSON inputs" },
+        timeoutMs: { type: "integer", label: "Timeout in ms" }
+      }
+    }
+  },
+  {
     actionType: "web.browser.tab",
     label: "Browser Tab",
     description: "Open, switch to, or close a browser tab.",

@@ -130,11 +130,40 @@ derives from:
 - `web.dom.extract_list`
 - `web.dom.upload`
 - `web.dom.dialog`
+- `web.dom.run_javascript`
 - `web.browser.tab`
 - `web.browser.download`
 
-`web.browser.navigate`, `web.browser.tab`, and `web.browser.download` run in
-the background worker; every other action runs in the tab's content script.
+`web.browser.navigate`, `web.browser.tab`, `web.browser.download`, and
+`web.dom.run_javascript` run from the background worker; every other action
+runs in the tab's content script. JavaScript uses the browser's one-shot
+`userScripts.execute` API in `USER_SCRIPT` world. That world has no extension
+API access, but it is not a harmless sandbox: reviewed source can read and
+modify page data and can initiate page-context network activity.
+
+The JavaScript node is an explicit privileged/manual-review escape hatch. Its
+source is literal-only and visible in the proposal, its inputs must be a
+bounded JSON object, and its returned JSON value is projected from the gateway
+envelope at `result.extracted` onto the node's declared `result` data port.
+The source remains durable in the separately owned, reviewed Flow definition by
+design. The trusted output definition tells Core to omit the complete
+JavaScript parameter object and raw result details from saved runtime command
+attempts, saved graph traces, the runtime session's embedded graph copy, and
+public command events; the real values remain available only to the reviewed
+Flow definition, executing adapter, and ephemeral downstream data-port paths. A
+Flow/model field cannot enable this generic trusted persistence projection.
+
+The USER_SCRIPT wrapper serializes the return value and enforces its byte cap
+before browser transport, then returns only a bounded tagged success/failure
+envelope to the extension. Chromium manifests declare the required
+`userScripts` permission up front, and Chrome/Edge also require the user to
+enable the per-extension **Allow user scripts** toggle; the action fails closed
+when either is unavailable. Firefox declares the permission as optional, but
+there is currently no request flow, so an ungranted Firefox installation also
+fails closed rather than claiming parity. The injected and outer timeouts stop
+only FluxIQ's wait. They do not cancel still-running asynchronous source, which
+may produce late page or network effects, and cannot terminate synchronously
+busy source; operators must account for late effects before retrying.
 
 Server action commands use the current gateway shape:
 

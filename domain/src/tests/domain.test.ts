@@ -157,7 +157,7 @@ assert.equal(outputTargetFromPayload({
 })?.selector, "button.save-current");
 
 const outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
-assert.equal(outputNodeDefinitions.length, 18);
+assert.equal(outputNodeDefinitions.length, 19);
 const clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click");
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
 assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);
@@ -301,14 +301,14 @@ assert.equal(incompleteHarness.diagnostics.some((diagnostic) => diagnostic.code 
 assert.equal(incompleteProviderCalls, 0);
 
 // Every web parameter is state-bindable except the list extraction's
-// `recordOutput`. Core requires a record output to be a literal, because a
-// binding could swap its schema, and with it the excluded fields, at run time.
-// A new exception must be added here on purpose.
+// `recordOutput` and privileged JavaScript source. Core requires record output
+// to be literal so a binding cannot swap its schema/exclusions; reviewed code
+// is literal so runtime state cannot replace what the operator approved.
 assert.deepEqual(
   outputNodeDefinitions.flatMap((definition) => definition.parameters
     .filter((parameter) => parameter.allowStateBinding !== true)
     .map((parameter) => `${definition.id}:${parameter.id}:${String(parameter.allowStateBinding)}`)),
-  ["web.output.dom-extract_list:recordOutput:false"]
+  ["web.output.dom-extract_list:recordOutput:false", "web.output.dom-run_javascript:source:false"]
 );
 for (const outputId of ["web.dom.type", "web.dom.select", "web.dom.click", "web.dom.clear", "web.dom.wait_for_selector", "web.dom.extract"]) {
   const definition = outputNodeDefinitions.find((candidate) => candidate.outputAction?.fixedOutputId === outputId);

@@ -23,6 +23,8 @@ import type { JsonObject } from "fluxiq/core";
 import { webAutomationExtractListRequestValue, webAutomationExtractReadValue } from "../actions/extraction";
 import { webAutomationStructureDetectionRequestValue } from "../extraction";
 import {
+  WEB_AUTOMATION_JAVASCRIPT_INPUT_MAX_BYTES,
+  WEB_AUTOMATION_JAVASCRIPT_SOURCE_MAX_BYTES,
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
   WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES,
   type WebAutomationActionCommand,
@@ -45,7 +47,7 @@ import { webAutomationUrlPath } from "../output-nodes";
 /** The command fields that come from a gateway command's `parameters` rather than from its target or envelope. */
 export type WebAutomationLiftedActionParameters = Pick<
   WebAutomationActionCommand,
-  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extract" | "extractList" | "detectStructure" | "upload" | "dialog" | "tab" | "download"
+  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extract" | "extractList" | "detectStructure" | "upload" | "dialog" | "source" | "inputs" | "tab" | "download"
 >;
 
 /**
@@ -89,6 +91,8 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
     detectStructure: webAutomationStructureDetectionRequestValue(parameters.detectStructure),
     upload: uploadRequestValue(parameters.upload),
     dialog: dialogRequestValue(parameters.dialog),
+    source: boundedString(parameters.source, WEB_AUTOMATION_JAVASCRIPT_SOURCE_MAX_BYTES),
+    inputs: boundedJsonObject(parameters.inputs, WEB_AUTOMATION_JAVASCRIPT_INPUT_MAX_BYTES),
     tab: tabRequestValue(parameters.tab),
     download: downloadRequestValue(parameters.download)
   };
@@ -107,6 +111,19 @@ function suppliedParameter(parameters: JsonObject, field: keyof WebAutomationLif
   if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
   if (field === "frameUrlPath") return parameters.browserFrameUrlPath;
   return parameters[field];
+}
+
+function boundedString(value: unknown, maxBytes: number): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 && utf8Bytes(value) <= maxBytes ? value : undefined;
+}
+
+function boundedJsonObject(value: unknown, maxBytes: number): JsonObject | undefined {
+  const object = jsonObject(value);
+  return object !== undefined && utf8Bytes(object) <= maxBytes ? object : undefined;
+}
+
+function utf8Bytes(value: string | JsonObject): number {
+  return new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value)).byteLength;
 }
 
 /** `by` decides which field names the option, so a request naming none of them selects nothing. */

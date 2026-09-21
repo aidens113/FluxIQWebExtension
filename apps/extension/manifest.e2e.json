@@ -19,6 +19,7 @@
     "scripting",
     "storage",
     "tabs",
+    "userScripts",
     "webNavigation",
     "sidePanel"
   ],

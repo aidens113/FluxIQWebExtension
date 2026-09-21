@@ -50,10 +50,26 @@ test("every action type has one valid output node, derived from its own schema r
     assert.deepEqual(node.metadata?.parameterSchema, definition?.parameterSchema, `${outputId} carries its own parameter schema`);
     // Every parameter is state-bindable but a record output, which Core
     // requires to be a literal (see the list extraction's own test below).
-    const bindable = node.parameters.filter((parameter) => parameter.id !== "recordOutput");
+    const bindable = node.parameters.filter((parameter) => parameter.id !== "recordOutput" && !parameter.executableSource);
     assert.equal(bindable.every((parameter) => parameter.allowStateBinding === true), true, `${outputId} parameters must be state-bindable`);
     assert.equal(typeof node.icon === "string" && node.icon.length > 0, true, `${outputId} needs an icon`);
   }
+});
+
+test("the JavaScript escape hatch is literal, privileged, reviewable, and returns its projected JSON value", () => {
+  const node = nodeFor("web.dom.run_javascript");
+  const source = node.parameters.find((parameter) => parameter.id === "source");
+  const inputs = node.parameters.find((parameter) => parameter.id === "inputs");
+  assert.equal(source?.valueType, "string");
+  assert.equal(source?.allowStateBinding, false);
+  assert.deepEqual(source?.executableSource, { language: "javascript" });
+  assert.equal(inputs?.valueType, "object");
+  assert.equal(node.safety?.privileged, true);
+  assert.equal(node.safety?.requiresOperatorApproval, true);
+  assert.equal(node.metadata?.resultPath, "result.extracted");
+  assert.equal(node.metadata?.withholdParametersFromPersistence, true);
+  assert.equal(node.metadata?.withholdResultPayloadFromPersistence, true);
+  assert.equal(node.outputs.some((port) => port.id === "result" && port.role === "data"), true);
 });
 
 test("a node's required parameters are exactly the ones its schema requires", () => {

@@ -44,6 +44,9 @@ const ELEMENT_TARGETED_OUTPUTS: readonly WebAutomationActionType[] = [
 const RECORD_OUTPUTS: Readonly<Partial<Record<WebAutomationActionType, string>>> = {
   "web.dom.extract_list": "result.extracted"
 };
+const RESULT_OUTPUTS: Readonly<Partial<Record<WebAutomationActionType, string>>> = {
+  "web.dom.run_javascript": "result.extracted"
+};
 
 function manifestOutput(outputId: WebAutomationActionType) {
   const output = webAutomationManifestOutputs.find((candidate) => candidate.id === outputId);
@@ -94,9 +97,29 @@ test("an output that is not element targeted declares no element-target metadata
     if (ELEMENT_TARGETED_OUTPUTS.includes(outputId)) continue;
     assert.equal(manifestOutput(outputId).metadata?.elementTarget, undefined, `${outputId} carries no element-target flag`);
     // With no records path either, there is nothing to declare, so no metadata.
-    if (RECORD_OUTPUTS[outputId] === undefined) {
+    if (RECORD_OUTPUTS[outputId] === undefined && RESULT_OUTPUTS[outputId] === undefined) {
       assert.equal(manifestOutput(outputId).metadata, undefined, `${outputId} carries no metadata`);
     }
+  }
+});
+
+test("the JavaScript output projects its declared data port and ordinary outputs keep no result projection", () => {
+  assert.deepEqual(manifestOutput("web.dom.run_javascript").metadata, {
+    resultPath: "result.extracted",
+    withholdParametersFromPersistence: true,
+    withholdResultPayloadFromPersistence: true
+  });
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    assert.equal(manifestOutput(outputId).metadata?.resultPath, RESULT_OUTPUTS[outputId], `${outputId}: result path Core reads`);
+    assert.equal(manifestOutput(outputId).metadata?.resultPath, nodeDefinition(outputId).metadata?.resultPath, `${outputId}: manifest and node result paths agree`);
+  }
+});
+
+test("only JavaScript asks Core to keep parameters and results ephemeral", () => {
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    const expected = outputId === "web.dom.run_javascript" ? true : undefined;
+    assert.equal(manifestOutput(outputId).metadata?.withholdParametersFromPersistence, expected, `${outputId}: parameter persistence`);
+    assert.equal(manifestOutput(outputId).metadata?.withholdResultPayloadFromPersistence, expected, `${outputId}: result persistence`);
   }
 });
 

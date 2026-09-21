@@ -271,7 +271,8 @@ const dispatchOnlyOutputs = [
   // definition. `web.dom.extract` stayed dispatch-only -- the picker cannot
   // define a single value, so no recorded event produces one, and no input is
   // registered for it.
-  "web.dom.assert", "web.dom.dialog", "web.browser.download", "web.dom.extract"
+  "web.dom.assert", "web.dom.dialog", "web.browser.download", "web.dom.extract",
+  "web.dom.run_javascript"
 ];
 // Every action input names one output. Only the tab switch and the tab close
 // share theirs: both are `web.browser.tab`, told apart by the operation the node carries.

@@ -87,6 +87,7 @@ export function runtimeActionLabel(actionType: string): string {
   if (actionType === "web.dom.extract_list") return "Extract list";
   if (actionType === "web.dom.upload") return "Upload files";
   if (actionType === "web.dom.dialog") return "Answer dialog";
+  if (actionType === "web.dom.run_javascript") return "Run JavaScript";
   if (actionType === "web.browser.tab") return "Browser tab";
   if (actionType === "web.browser.download") return "Await download";
   return actionType;

@@ -34,6 +34,7 @@ export type WebAutomationActionType =
   | "web.dom.extract_list"
   | "web.dom.upload"
   | "web.dom.dialog"
+  | "web.dom.run_javascript"
   | "web.browser.tab"
   | "web.browser.download";
 
@@ -226,6 +227,13 @@ export type WebAutomationDialogRequest = {
   promptText?: string | undefined;
 };
 
+/** Bounds for the privileged user-authored JavaScript action. */
+export const WEB_AUTOMATION_JAVASCRIPT_SOURCE_MAX_BYTES = 32_768;
+export const WEB_AUTOMATION_JAVASCRIPT_INPUT_MAX_BYTES = 32_768;
+export const WEB_AUTOMATION_JAVASCRIPT_OUTPUT_MAX_BYTES = 65_536;
+export const WEB_AUTOMATION_JAVASCRIPT_TIMEOUT_MAX_MS = 10_000;
+export const WEB_AUTOMATION_JAVASCRIPT_TIMEOUT_DEFAULT_MS = 5_000;
+
 /** The native dialog kinds the page-world override answers. */
 export type WebAutomationDialogKind = "alert" | "confirm" | "prompt" | "beforeunload";
 
@@ -324,6 +332,10 @@ export type WebAutomationActionCommand = {
   upload?: WebAutomationUploadRequest | undefined;
   /** `web.dom.dialog`: arms the answer to the next native dialog. */
   dialog?: WebAutomationDialogRequest | undefined;
+  /** `web.dom.run_javascript`: literal function-body source reviewed with the Flow. */
+  source?: string | undefined;
+  /** `web.dom.run_javascript`: bounded JSON object exposed to the source as `inputs`. */
+  inputs?: JsonObject | undefined;
   /** `web.browser.tab`. */
   tab?: WebAutomationTabRequest | undefined;
   /** `web.browser.download`. */
@@ -482,6 +494,7 @@ export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
   "web.dom.extract_list",
   "web.dom.upload",
   "web.dom.dialog",
+  "web.dom.run_javascript",
   "web.browser.tab",
   "web.browser.download"
 ];
@@ -509,6 +522,7 @@ export const WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.dom.extract_list": "dom.extract_list",
   "web.dom.upload": "dom.upload",
   "web.dom.dialog": "dom.dialog",
+  "web.dom.run_javascript": "dom.run_javascript",
   "web.browser.tab": "browser.tab",
   "web.browser.download": "browser.download"
 } as const satisfies Record<WebAutomationActionType, string>;

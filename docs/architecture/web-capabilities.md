@@ -130,6 +130,27 @@ connection's last observation. The six observe-only verbs are exempt.
 
 ## Actions Outside The 24
 
+- **`web.dom.run_javascript`** is the privileged, operator-approved escape
+  hatch for reviewed behavior no purpose-built node can express. Literal
+  source runs through one-shot `userScripts.execute` in `USER_SCRIPT` world:
+  it has no extension API access, but it can read or modify page data and
+  initiate page-context network activity. Source and object inputs are bounded
+  at the privileged executor; the wrapper serializes and byte-bounds output in
+  USER_SCRIPT before browser transport and returns a bounded tagged envelope.
+  The reviewed source intentionally remains in the durable Flow definition,
+  while trusted output metadata makes saved runtime command attempts, graph
+  traces, the runtime session's embedded graph copy, and public runtime events
+  omit the JavaScript parameters and raw result details. Real values remain
+  only on the executing adapter and ephemeral data-edge path; a Flow/model
+  field cannot opt into this generic persistence projection. Chromium declares the required
+  `userScripts` permission up front and Chrome/Edge also require **Allow user
+  scripts**; Firefox declares optional permission but has no request path, so
+  an ungranted installation fails closed. Injected and outer timeouts stop only
+  FluxIQ's wait: they do not cancel asynchronous source that may later cause
+  page/network effects, and cannot terminate synchronously non-terminating page
+  code. Retries can therefore overlap late effects. The
+  returned JSON remains at `result.extracted` in the gateway envelope and Core
+  projects it onto the node's declared `result` data port.
 - **`web.dom.capture_snapshot`** is a real action type, output node, and
   manifest output, executed by `content/actions/capture-snapshot.ts`. It
   captures evidence rather than performing a browser capability, takes no

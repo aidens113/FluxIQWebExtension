@@ -16,6 +16,7 @@ import {
 } from "./automation-tab";
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
+import { runBrowserJavaScriptAction } from "./run-javascript";
 import { sendClickCheckingLanding } from "./click-landing";
 import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
 import { chooseFrame } from "./frame-address";
@@ -75,7 +76,28 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
 
   await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
+  if (action.actionType === "web.dom.run_javascript") {
+    const choice = await targetFrameForAction(action, startedAt, tabId, frameId);
+    if ("result" in choice) return withTarget(choice.result, tabId, choice.frameId);
+    return withTarget(await runBrowserJavaScriptAction(action, tabId, choice.frameId), tabId, choice.frameId);
+  }
   return await runActionInFrame(action, startedAt, tabId, frameId);
+}
+
+async function targetFrameForAction(
+  action: BrowserActionCommand,
+  startedAt: number,
+  tabId: number,
+  recordedFrameId: number | undefined
+): Promise<{ frameId: number } | { frameId: number | undefined; result: BrowserActionResult }> {
+  const urlPath = frameUrlPathForAction(action);
+  const choice = urlPath === undefined
+    ? { frameId: recordedFrameId }
+    : chooseFrame(await allTabFrames(tabId), recordedFrameId, urlPath);
+  if ("refused" in choice) return { frameId: recordedFrameId, result: workerActionResult(action, startedAt, choice.refused) };
+  const frameId = choice.frameId ?? TOP_FRAME_ID;
+  const absent = frameId === TOP_FRAME_ID ? undefined : await absentFrameReason(tabId, frameId);
+  return absent === undefined ? { frameId } : { frameId, result: missingFrameFailure(action, startedAt, frameId, absent) };
 }
 
 /** The failed result for an action that threw before or while it ran. */

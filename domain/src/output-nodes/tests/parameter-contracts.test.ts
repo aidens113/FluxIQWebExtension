@@ -5,17 +5,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../definitions";
+import { WEB_AUTOMATION_JAVASCRIPT_INPUT_MAX_BYTES } from "../../actions/types";
 import { webAutomationExtractListParameterContract } from "../extract-list";
 import { webAutomationOutputNodeParameterContracts } from "../parameter-contracts";
 
 const extractListNodeId = webAutomationOutputNodeId("web.dom.extract_list");
+const javascriptNodeId = webAutomationOutputNodeId("web.dom.run_javascript");
 
-test("only the list extraction node has a contract, and it names a registered node", () => {
-  assert.deepEqual(Object.keys(webAutomationOutputNodeParameterContracts), [extractListNodeId]);
+test("the list extraction and JavaScript nodes have contracts, and both name registered nodes", () => {
+  assert.deepEqual(Object.keys(webAutomationOutputNodeParameterContracts), [extractListNodeId, javascriptNodeId]);
   const node = webAutomationOutputNodeDefinitions.find((definition) => definition.id === extractListNodeId);
   // Core refuses to bind a contract to a built-in or unregistered node.
   assert.equal(node?.source.kind, "importer");
   assert.equal(webAutomationOutputNodeParameterContracts[extractListNodeId], webAutomationExtractListParameterContract);
+});
+
+test("the JavaScript contract requires bounded literal source and an object input", () => {
+  const ask = (parameterId: string, value: unknown) => webAutomationOutputNodeParameterContracts[javascriptNodeId]!({ definitionId: javascriptNodeId, parameterId, value: value as never });
+  assert.deepEqual(ask("source", "return inputs.value;"), []);
+  assert.deepEqual(ask("source", " "), ["web.javascript.source_invalid"]);
+  assert.deepEqual(ask("inputs", { value: 1 }), []);
+  for (const value of [null, [], "value", 1]) assert.deepEqual(ask("inputs", value), ["web.javascript.inputs_invalid"]);
+  assert.deepEqual(ask("inputs", { value: "x".repeat(WEB_AUTOMATION_JAVASCRIPT_INPUT_MAX_BYTES) }), ["web.javascript.inputs_too_large"]);
 });
 
 test("the contract checks extractList and nothing else", () => {
@@ -62,8 +73,7 @@ test("the implementation bundle hands Core the extraction contract, so a bad pla
   const bundle = createWebAutomationOutputNodeImplementationBundle();
   const id = webAutomationOutputNodeId("web.dom.extract_list");
   assert.equal(bundle.parameterContracts?.[id], webAutomationExtractListParameterContract);
-  // Only the list extraction declares one; nothing else is silently bound.
-  assert.deepEqual(Object.keys(bundle.parameterContracts ?? {}), [id]);
+  assert.deepEqual(Object.keys(bundle.parameterContracts ?? {}), [id, javascriptNodeId]);
   // A host extension may add to the bundle, but the contracts are still there.
   assert.equal(createWebAutomationOutputNodeImplementationBundle({}).parameterContracts?.[id], webAutomationExtractListParameterContract);
 });

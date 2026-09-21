@@ -29,6 +29,7 @@ export const WEB_AUTOMATION_ACTION_SAFETY = {
   "web.dom.extract_list": "safe",
   "web.dom.upload": "review",
   "web.dom.dialog": "review",
+  "web.dom.run_javascript": "review",
   "web.browser.tab": "review",
   "web.browser.download": "review"
 } as const satisfies Record<WebAutomationActionType, "safe" | "review">;

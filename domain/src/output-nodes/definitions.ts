@@ -1,5 +1,6 @@
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_SAFETY } from "../actions/safety";
 import { webAutomationActionDefinitions } from "../actions/schemas";
@@ -26,6 +27,7 @@ const outputPorts: AutomationNodePort[] = [
  * saves rows declares it -- exactly the outputs that say where their records are.
  */
 const recordsPort: AutomationNodePort = { id: "records", label: "Records", valueType: "array", role: "data" };
+const resultPort: AutomationNodePort = { id: "result", label: "Result", valueType: "any", role: "data" };
 
 /**
  * Where in an action's result the page puts a list of records, which Core's
@@ -117,6 +119,19 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
   const catalogText = catalogTextByOutput[definition.actionType];
+  const metadata: JsonObject = {
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    outputId: definition.actionType,
+    parameterSchema: definition.parameterSchema
+  };
+  if (requiredParameters.has("selector")) metadata.elementTarget = true;
+  if (recordsPath) metadata.recordsPath = recordsPath;
+  if (definition.actionType === "web.dom.run_javascript") {
+    metadata.resultPath = "result.extracted";
+    metadata.withholdParametersFromPersistence = true;
+    metadata.withholdResultPayloadFromPersistence = true;
+  }
+  if (stateVerifyingOutputs.has(definition.actionType)) metadata[VERIFIES_STATE_METADATA_KEY] = true;
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
@@ -140,7 +155,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     },
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
-    outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+    outputs: recordsPath ? [...outputPorts, recordsPort] : definition.actionType === "web.dom.run_javascript" ? [...outputPorts, resultPort] : outputPorts,
     // Every web parameter may be filled from state unless it says otherwise.
     // Only `recordOutput` does, for the reason Core gives its own: a binding
     // could replace the dataset schema, and with it the excluded fields.
@@ -151,23 +166,9 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     })),
     icon: iconForOutput(definition.actionType),
     tags: ["web-automation", "output", ...(catalogText?.tags ?? [])],
-    metadata: {
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema,
-      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
-      // recorded fingerprint against the runtime candidates, and applies its
-      // confidence floor, only for an output that declares this. The flag is
-      // derived from the action's own schema row rather than listed by hand, so
-      // it cannot drift from it: an action that requires a selector cannot run
-      // without an element, and an action that does not — a delta scroll, a
-      // key press to the focused element, a URL assertion, a tab operation —
-      // must not declare it, because Core fails an action outright when a
-      // declared element target has no fingerprint to resolve.
-      ...(requiredParameters.has("selector") ? { elementTarget: true } : {}),
-      ...(recordsPath ? { recordsPath } : {}),
-      ...(stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {})
-    }
+    // Core resolves targets and result projections only when these metadata
+    // keys are present; each optional key is assigned above from its owner.
+    metadata
   };
 }
 
@@ -210,6 +211,29 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
+  if (outputId === "web.dom.run_javascript") return [
+    {
+      id: "source",
+      label: "JavaScript Source",
+      description: "Reviewed JavaScript function-body source. It can read or modify page data and initiate page-context network activity. Use `inputs`, browser DOM globals, and `return` a JSON value only when no purpose-built node can express the behavior.",
+      valueType: "string",
+      required: true,
+      allowStateBinding: false,
+      constraints: { minLength: 1, maxLength: 32_768 },
+      ui: { control: "textarea", placeholder: "const value = inputs.value; return value;" },
+      executableSource: { language: "javascript" }
+    },
+    {
+      id: "inputs",
+      label: "JSON Inputs",
+      description: "Bounded JSON object exposed to the source as `inputs`.",
+      valueType: "object",
+      required: true,
+      defaultValue: {},
+      ui: { control: "value" }
+    },
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 5_000, constraints: { integer: true, minimum: 1, maximum: 10_000 } }
+  ];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
   if (outputId === "web.browser.download") return [structured("download", "Download")];
   return selectorParameters;
@@ -226,6 +250,7 @@ function iconForOutput(outputId: WebAutomationActionType): string {
   if (outputId === "web.dom.extract_list") return "table";
   if (outputId === "web.dom.upload") return "upload";
   if (outputId === "web.dom.dialog") return "message-square";
+  if (outputId === "web.dom.run_javascript") return "file-code";
   if (outputId === "web.browser.tab") return "app-window";
   if (outputId === "web.browser.download") return "download";
   return "square-dot";
