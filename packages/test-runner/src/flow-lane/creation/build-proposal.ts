@@ -36,7 +36,7 @@ const CORE_DECISION_STEP_PREFIX = "core.";
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
-  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
+  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true; maxActionsPerDecision?: 1 | 16 }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
   listFlowAdaptations(projectId: string, flowId: string, status?: string): Promise<ExistingFlowAdaptationSummary[]>;
   getFlowAdaptation(projectId: string, flowId: string, adaptationId: string): Promise<ExistingFlowAdaptation>;
 };
@@ -46,7 +46,7 @@ export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) =>
 
 export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null }>;
 /** One decision the build's exploration made, in order: the tool it called, or Core's name for a decision that called none, and the code it came to. */
-export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
+export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string; targetsUnchanged?: boolean; batch?: Readonly<{ position: number; size: number; stoppedBy?: "refusal" | "effect_not_applied" | "targets_may_have_changed" }> }>;
 export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
 
 /**
@@ -105,7 +105,7 @@ export type CreatedFlowPermissionRequest = Readonly<{
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string }> },
+  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string }>; maxActionsPerDecision?: 1 | 16 },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
@@ -119,7 +119,7 @@ export async function buildCreatedFlowProposal(
   let envelope: FlowBootstrapGenerationEnvelope;
   try {
     envelope = await control.generateFlowBootstrapAdaptation(
-      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true },
+      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true, ...(input.maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision: input.maxActionsPerDecision }) },
       { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {
@@ -190,7 +190,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
   const issueCodes = [...new Set((diagnostic.issueCodes ?? []).filter(isVocabulary))];
   const steps = loop?.steps?.flatMap((step): CreatedFlowBuildStep[] => {
     if (!isVocabulary(step.toolId)) return [];
-    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
+    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}), ...(step.targetsUnchanged === undefined ? {} : { targetsUnchanged: step.targetsUnchanged }), ...(step.batch === undefined ? {} : { batch: { ...step.batch } }) }];
   });
   return Object.freeze({
     outcome: "failed",

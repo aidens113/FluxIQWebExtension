@@ -36,6 +36,8 @@ export type CreatedFlowLaneInput = {
   /** The workflow `request` resolved to, with its variant applied: its expectations judge the run. */
   workflow: ResolvedScenarioWorkflow;
   facilityRunId: string;
+  /** Explicit per-run A/B control; production and ordinary Lab runs omit it. */
+  maxActionsPerDecision?: 1 | 16;
   scenarioOrigin: string;
   runToken: string;
   /** The declared secrets the task's workflow needs (`resolveCreatedFlowSecrets`); the runner also adds their values to the evidence redaction list. */
@@ -119,7 +121,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   }
   const flowId = await createBlankCreationFlow(input.control, { projectId, name: `Lab created flow ${facilityRunId}`, authorizationPin }, bounds);
   await input.prepareFlowPage("build");
-  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, authorize: input.authorizeBuild }, bounds, input.buildWait);
+  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, authorize: input.authorizeBuild, ...(input.maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision: input.maxActionsPerDecision }) }, bounds, input.buildWait);
   await input.settleBuild(build);
   if (build.outcome !== "proposed" || build.adaptationId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})`, {

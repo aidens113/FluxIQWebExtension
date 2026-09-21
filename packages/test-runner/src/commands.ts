@@ -10,7 +10,7 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 export type LabCommand =
   // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
   // `replays` exists only with `llm.task` `repair` or `adapt`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number }
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; maxActionsPerDecision?: 1 | 16; replays?: number }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
@@ -37,7 +37,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}) };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--replays", ...llmOptionNames]);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--llm-max-actions-per-decision", "--replays", ...llmOptionNames]);
     const { flowLane, rest: withoutFlow } = flowLaneOption(args);
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
@@ -225,15 +225,18 @@ function dryRunOption(args: string[]): { dryRun: boolean; rest: string[] } {
  * an instruction task rather than from the run's recording, so the lane flag
  * is refused with it.
  */
-function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { flowLane: boolean; dryRun: boolean }): { instructionTaskId?: string; dryRun?: true } | undefined {
+function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { flowLane: boolean; dryRun: boolean }): { instructionTaskId?: string; dryRun?: true; maxActionsPerDecision?: 1 | 16 } | undefined {
   const taskId = option(args, "--instruction-task");
+  const actionsValue = option(args, "--llm-max-actions-per-decision");
   if (llm?.task !== "create-flow") {
-    if (taskId !== undefined || flags.dryRun) throw new Error("--instruction-task and --dry-run require --live-llm --llm-task create-flow");
+    if (taskId !== undefined || flags.dryRun || actionsValue !== undefined) throw new Error("--instruction-task, --dry-run, and --llm-max-actions-per-decision require --live-llm --llm-task create-flow");
     return undefined;
   }
   if (flags.flowLane) throw new Error("--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
   if (taskId !== undefined && !KEBAB_ID.test(taskId)) throw new Error("--instruction-task must be a lowercase kebab-case task ID");
-  return { ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...(flags.dryRun ? { dryRun: true as const } : {}) };
+  const maxActionsPerDecision = actionsValue === undefined ? undefined : Number(actionsValue);
+  if (maxActionsPerDecision !== undefined && maxActionsPerDecision !== 1 && maxActionsPerDecision !== 16) throw new Error("--llm-max-actions-per-decision must be 1 or 16");
+  return { ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...(flags.dryRun ? { dryRun: true as const } : {}), ...(maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision }) };
 }
 /** The most replays one run may ask for. A repair that holds three times holds; a hundred replays is a benchmark, not a proof. */
 const MAX_REPLAYS = 10;

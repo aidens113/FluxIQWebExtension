@@ -233,6 +233,10 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   assert.equal(campaign.variantId, "short-catalog");
   assert.equal(campaign.instructionTaskId, "product-catalog-all-pages-short-catalog");
   assert.equal(campaign.flowLane, undefined);
+  const baseline = parseLabCommand(["run", "product-catalog", ...live, "--llm-max-actions-per-decision", "1"]);
+  const variant = parseLabCommand(["run", "product-catalog", ...live, "--llm-max-actions-per-decision", "16"]);
+  assert.equal(baseline.command === "run" && baseline.maxActionsPerDecision, 1);
+  assert.equal(variant.command === "run" && variant.maxActionsPerDecision, 16);
   // --dry-run takes no value, wherever it stands.
   const dry = parseLabCommand(["run", "--dry-run", "product-catalog", ...live, "--workflow", "paginated-extraction"]);
   assert.ok(dry.command === "run");
@@ -247,6 +251,8 @@ test("create-flow runs one instruction task without the recorded Flow lane, with
   const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...adapt, "--instruction-task", "product-catalog-first-page"]), /require --live-llm --llm-task create-flow/u);
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--dry-run"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--llm-max-actions-per-decision", "2"]), /must be 1 or 16/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--llm-max-actions-per-decision", "16"]), /require --live-llm --llm-task create-flow/u);
   assert.throws(() => parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...adapt]), /--variant requires --flow/u);
   assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]', ...live]), /create-flow builds one instruction task per run: use lab run/u);
 });

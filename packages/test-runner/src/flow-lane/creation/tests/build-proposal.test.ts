@@ -14,7 +14,7 @@ import { ADAPTATION_ID, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreation
 
 const INSTRUCTION = "Scrape the first page with columns name and price.";
 
-async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?: number } = {}) {
+async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?: number } = {}, maxActionsPerDecision?: 1 | 16) {
   const core = fakeCreationCore(options);
   const authorized: string[] = [];
   let clock = 0;
@@ -23,13 +23,14 @@ async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?:
     flowId: FLOW_ID,
     instruction: INSTRUCTION,
     authorize: async (flowId) => { core.calls.push("authorize"); authorized.push(flowId); return { grantId: "llm-grant:build" }; },
+    ...(maxActionsPerDecision === undefined ? {} : { maxActionsPerDecision }),
   }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, pollMs: 1_000, ...(wait.deadlineMs === undefined ? {} : { deadlineMs: wait.deadlineMs }) });
   return { core, authorized, record };
 }
 
 test("the build saves the instruction, then authorizes, selects the context and explores, as the web panel does", async () => {
   const { core, authorized, record } = await build();
-  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation"]);
+  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation"]);
   assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
   assert.deepEqual(authorized, [FLOW_ID]);
   assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true }]);
@@ -44,12 +45,22 @@ test("the build saves the instruction, then authorizes, selects the context and 
     failure: null,
     recoveredAfterTimeout: false,
     durationMs: 0,
+    instructedConsequences: [],
+    permissionRequest: null,
   });
   assert.equal(JSON.stringify(record).includes("Scrape"), false, "the record holds no instruction text");
 });
 
 test("an instruction Core did not activate refuses before any grant is taken", async () => {
   await assert.rejects(build({ instructionStatus: "draft" }), /Core did not make the task's instruction the Flow's active instruction/u);
+});
+
+test("an explicit run-scoped baseline or variant reaches only the generation request", async () => {
+  for (const maxActionsPerDecision of [1, 16] as const) {
+    const { core } = await build({}, {}, maxActionsPerDecision);
+    assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true, maxActionsPerDecision }]);
+    assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
+  }
 });
 
 test("a refusal is read through Core's diagnostic parser, keeping its code, stage, counts and only well-formed tool ids", async () => {
@@ -60,7 +71,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     providerInvocation: "attempted",
     providerResponse: "received",
     accounting: { requestId: "evidence.one", estimatedInputTokens: 900, provider: "deepseek", model: "deepseek-chat", inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
-    evidenceLoop: { iterationCount: 6, decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }, { toolId: "WEB.Recovery.Shout" }] },
+    evidenceLoop: { iterationCount: 6, decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured", targetsUnchanged: true, batch: { position: 1, size: 2 } }, { toolId: "WEB.Recovery.Shout" }] },
   };
   const { core, record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
   assert.equal(core.calls.includes("get-adaptation"), false);
@@ -70,10 +81,12 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     providerCalls: 5,
     providerInvocation: "attempted",
     accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
-    evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }] },
+    evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured", targetsUnchanged: true, batch: { position: 1, size: 2 } }] },
     failure: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 },
     recoveredAfterTimeout: false,
     durationMs: 0,
+    instructedConsequences: null,
+    permissionRequest: null,
   });
   // A refusal before any request is a build that made no call.
   const early = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", retryable: false, providerInvocation: "not_attempted", providerResponse: "not_received" } } } });

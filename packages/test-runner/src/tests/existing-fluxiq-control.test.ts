@@ -315,7 +315,7 @@ test("a Flow build answers with Core's whole envelope, so a refusal's diagnostic
     requests.push({ path: url.pathname, body: JSON.parse(String(init.body)) });
     return answer;
   });
-  const input = { projectId: "project.web", flowId: "flow.blank", llmExecutionGrantId: "llm-grant:build", evidenceGuided: true as const };
+  const input = { projectId: "project.web", flowId: "flow.blank", llmExecutionGrantId: "llm-grant:build", evidenceGuided: true as const, maxActionsPerDecision: 16 as const };
   assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 200, ok: true, payload: { adaptation: { adaptationId: "adaptation.new", status: "proposed" } } });
   answer = json({ ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.evidence_iteration_limit).", payload: { diagnostic } }, 400);
   assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 400, ok: false, payload: { diagnostic } });
