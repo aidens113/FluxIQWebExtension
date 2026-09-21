@@ -35,8 +35,10 @@ export async function rejectStalePendingCreationAdaptation(
 
 export async function inspectAppliedCreation(control: ExistingFluxIQControlClient, projectId: string, flowId: string, baseDigest: string, canonicalResultingDigest: string): Promise<LiveCreationTopology> {
   const subflows = await control.listFlowSubflows(projectId, flowId);
-  if (subflows.length !== 1 || !subflows[0]!.graphFlowId) inspectionFail("Applied creation must own exactly one graph-backed Subflow", "exploration_apply.subflow_topology_invalid");
-  const owned = subflows[0]!;
+  if (!subflows.length || subflows.some((subflow) => !subflow.graphFlowId)) inspectionFail("Applied creation must own graph-backed Subflows", "exploration_apply.subflow_topology_invalid");
+  const primary = subflows.filter((subflow) => subflow.role === "primary");
+  if (primary.length !== 1) inspectionFail("Applied creation must own exactly one primary Subflow", "exploration_apply.primary_subflow_invalid");
+  const owned = primary[0]!;
   const graphFlowId = owned.graphFlowId;
   if (!graphFlowId) inspectionFail("Applied creation Subflow omitted its graph Flow identity", "exploration_apply.graph_identity_missing");
   const router = await control.getFlowRouter(projectId, flowId);

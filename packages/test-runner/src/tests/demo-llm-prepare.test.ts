@@ -106,6 +106,12 @@ test("demo:llm:prepare is a provider-free real-UI blank Flow lane", async () => 
   assert.match(module, /location\.inputValue\(\) !== ""/u);
   assert.doesNotMatch(module, /form\.getByLabel\("(?:Name|Flow preset|Location|Security PIN)"/u);
   assert.match(module, /getByRole\("dialog", \{ name: "Create project" \}\)/u);
+  assert.match(module, /getByLabel\("Project name"\)\.fill\(config\.projectName\)/u);
+  assert.match(module, /getByLabel\("Description"\)\.fill\("Persistent instruction-only LLM browser automation test workspace"\)/u);
+  assert.match(module, /getByLabel\("Security PIN"\)\.fill\(config\.pin\)/u);
+  assert.doesNotMatch(module, /blank-project-name[^\n]*getByLabel\("Project name", \{ exact: true \}\)/u);
+  assert.doesNotMatch(module, /blank-project-description[^\n]*getByLabel\("Description", \{ exact: true \}\)/u);
+  assert.doesNotMatch(module, /blank-project-pin[^\n]*getByLabel\("Security PIN", \{ exact: true \}\)/u);
   assert.match(module, /getByRole\("button", \{ name: "Add Flow", exact: true \}\)/u);
   assert.match(module, /\/programs\/automation-studio\?domainId=web-automation/u);
   assert.match(module, /getByRole\("heading", \{ name: "Projects", exact: true \}\)\.waitFor/u);
@@ -118,4 +124,8 @@ test("demo:llm:prepare is a provider-free real-UI blank Flow lane", async () => 
   assert.match(module, /lastRecordingId/u);
   assert.match(module, new RegExp(BLANK_LLM_INSTRUCTION_BODY.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
   assert.doesNotMatch(module, /Start recording|Stop recording|generateDemoSubflowFromRecording|review-recording-flow-proposal|deepSeekSecretFromDriverEnvironment/u);
+
+  const goldenLane = await readFile(path.join(repositoryRoot, "packages/test-runner/src/panel-golden-path/lane.ts"), "utf8");
+  assert.match(goldenLane, /prepareWorkspace: prepareDemoLlmBlankWorkspace/u);
+  assert.match(goldenLane, /await drivers\.prepareWorkspace\(config\);\s*const creation = await drivers\.proposeCreation/u);
 });

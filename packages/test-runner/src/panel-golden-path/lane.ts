@@ -3,6 +3,7 @@ import { loadDemoLlmExplorationRequestBinding } from "../demo-llm-exploration-re
 import type { DemoWorkspaceConfiguration, DemoWorkspaceState } from "../demo-workspace/index.js";
 import {
   recordDemoWorkspace,
+  prepareDemoLlmBlankWorkspace,
   runBoundDemoLlmExplorationApplyCheckpoint,
   runBoundDemoLlmExplorationFlow,
   runDemoLlmExplorationAdaptationApply,
@@ -28,6 +29,7 @@ type RepairApply = Awaited<ReturnType<typeof runDemoLlmExplorationAdaptationAppl
 type RepairValidation = Awaited<ReturnType<typeof runDemoLlmExplorationAdaptationValidation>>;
 
 export type PanelGoldenPathDrivers = Readonly<{
+  prepareWorkspace: (config: DemoWorkspaceConfiguration) => Promise<unknown>;
   proposeCreation: (config: DemoWorkspaceConfiguration, request?: DemoLlmExplorationRequest) => Promise<CreationProposal>;
   applyCreation: (config: DemoWorkspaceConfiguration) => Promise<CreationApply>;
   runCreatedFlow: (config: DemoWorkspaceConfiguration) => Promise<BoundRun>;
@@ -39,6 +41,7 @@ export type PanelGoldenPathDrivers = Readonly<{
 }>;
 
 const productionDrivers: PanelGoldenPathDrivers = Object.freeze({
+  prepareWorkspace: prepareDemoLlmBlankWorkspace,
   proposeCreation: runDemoLlmExplorationCheckpoint,
   applyCreation: runBoundDemoLlmExplorationApplyCheckpoint,
   runCreatedFlow: runBoundDemoLlmExplorationFlow,
@@ -75,6 +78,7 @@ export async function runPanelGoldenPath(
   request?: DemoLlmExplorationRequest,
   drivers: PanelGoldenPathDrivers = productionDrivers,
 ): Promise<PanelGoldenPathResult> {
+  await drivers.prepareWorkspace(config);
   const creation = await drivers.proposeCreation(config, request);
   const binding = await loadDemoLlmExplorationRequestBinding(config.workspaceDirectory);
   if (!binding || binding.adaptationId !== creation.adaptationId) {

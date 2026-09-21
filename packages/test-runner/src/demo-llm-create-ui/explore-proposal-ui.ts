@@ -43,11 +43,7 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
   const explore = authoring.getByRole("button", { name: "Explore and create proposal", exact: true });
   await exactVisible(explore, "the Explore and create proposal action");
   await evidence.step("scenario", "explore-target-reactivate", "Reactivate the intended website immediately before evidence-guided generation", () => input.targetPage.bringToFront());
-  const terminal = await evidence.step("panel", "explore-propose", "Explore the connected website and create one reviewable proposal", () => waitForExplorationTerminal(page, authoring, control, projectId, flowId, () => explore.click()));
-  if (terminal.kind === "ui_failure") {
-    await evidence.diagnostic("panel", "exploration-ui-terminal", "exploration.ui-terminal-failure", { apiRequestObserved: terminal.requestObserved, apiResponseObserved: false, uiTerminalFailure: true });
-    fail("Evidence-guided Flow generation reached a terminal UI failure");
-  }
+  let terminal = await evidence.step("panel", "explore-propose", "Explore the connected website and create one reviewable proposal", () => waitForExplorationTerminal(page, authoring, control, projectId, flowId, () => explore.click()));
   if (terminal.kind === "high_token_confirmation") {
     // Core's own rule: the run's token budget, or one call's limit if larger. Not calls times tokens.
     const aggregateAuthorizedTokens = Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens);
@@ -55,14 +51,42 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
       apiRequestObserved: terminal.requestObserved,
       aggregateAuthorizedTokens,
       confirmationThreshold: LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
-      configuredProfileRequiresConfirmation: aggregateAuthorizedTokens > LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
-      confirmationAttempted: false,
+      configuredProfileRequiresConfirmation: aggregateAuthorizedTokens >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
+      confirmationAttempted: true,
     });
-    fail("Evidence-guided Flow generation requires explicit high-token confirmation; the automated checkpoint did not confirm it");
+    const dialog = page.getByRole("dialog", { name: "Confirm high-token Flow Build", exact: true });
+    await exactVisible(dialog, "the high-token Flow Build confirmation");
+    terminal = await evidence.step("panel", "explore-high-token-confirm", "Confirm the explicitly authorized high-token exploration", () => waitForExplorationTerminal(
+      page,
+      authoring,
+      control,
+      projectId,
+      flowId,
+      () => dialog.getByRole("button", { name: "Continue high-token build", exact: true }).click(),
+      { ignoreHighTokenConfirmation: true },
+    ));
+  }
+  if (terminal.kind === "ui_failure") {
+    await evidence.diagnostic("panel", "exploration-ui-terminal", "exploration.ui-terminal-failure", { apiRequestObserved: terminal.requestObserved, apiResponseObserved: false, uiTerminalFailure: true });
+    fail("Evidence-guided Flow generation reached a terminal UI failure");
+  }
+  if (terminal.kind === "high_token_confirmation") {
+    fail("Evidence-guided Flow generation repeated its high-token confirmation after explicit approval");
   }
   if (terminal.kind === "timeout") {
     await evidence.diagnostic("panel", "exploration-terminal-timeout", "exploration.terminal-timeout", { apiResponseObserved: false, uiTerminalFailure: false });
     fail("Evidence-guided Flow generation did not reach a bounded terminal state");
+  }
+  if (terminal.kind === "response") {
+    await evidence.diagnostic("panel", "exploration-generation-response", "exploration.generation-response", {
+      httpStatus: terminal.response.status(),
+      responseOk: terminal.response.ok(),
+    });
+    await page.waitForTimeout(150);
+    const visibleErrorCode = await visibleGenerationErrorCode(authoring);
+    await evidence.diagnostic("panel", "exploration-visible-error", visibleErrorCode ?? "exploration.visible-error.absent", {
+      visibleGenericError: visibleErrorCode !== undefined,
+    });
   }
   let generationBody: unknown;
   if (terminal.kind === "response") {
@@ -74,7 +98,14 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
     fail(`Evidence-guided Flow generation failed (${failure.code})`);
   }
   const proposed = await control.listFlowAdaptations(projectId, flowId, "proposed");
-  if (proposed.length !== 1 || terminal.kind === "proposal" && proposed[0]?.adaptationId !== terminal.adaptationId) fail("Exploration did not persist exactly one scoped proposal");
+  if (proposed.length !== 1 || terminal.kind === "proposal" && proposed[0]?.adaptationId !== terminal.adaptationId) {
+    await evidence.diagnostic("panel", "exploration-proposal-result", "exploration.proposal-count-mismatch", {
+      proposedCount: proposed.length,
+      terminalReportedProposal: terminal.kind === "proposal",
+      terminalProposalMatched: terminal.kind === "proposal" && proposed[0]?.adaptationId === terminal.adaptationId,
+    });
+    fail("Exploration did not persist exactly one scoped proposal");
+  }
   const detail = await control.getFlowAdaptation(projectId, flowId, proposed[0]!.adaptationId);
   if (detail.status !== "proposed" || detail.adaptationKind !== "flow_bootstrap" || !detail.evidenceLoop) fail("Exploration proposal omitted its bounded evidence-loop audit");
   const parsed = terminal.kind === "response"
@@ -113,7 +144,15 @@ export function classifyExplorationUiTerminal(input: { highTokenConfirmationVisi
   if (input.alertVisible) return { kind: "ui_failure", requestObserved: input.requestObserved };
   return undefined;
 }
-async function waitForExplorationTerminal(page: Page, authoring: Locator, control: Pick<ExistingFluxIQControlClient, "listFlowAdaptations">, projectId: string, flowId: string, dispatch: () => Promise<void>): Promise<ExplorationTerminal> {
+async function waitForExplorationTerminal(
+  page: Page,
+  authoring: Locator,
+  control: Pick<ExistingFluxIQControlClient, "listFlowAdaptations">,
+  projectId: string,
+  flowId: string,
+  dispatch: () => Promise<void>,
+  options: { ignoreHighTokenConfirmation?: boolean } = {},
+): Promise<ExplorationTerminal> {
   const context = page.context();
   let request: Request | undefined;
   let captured: Response | undefined;
@@ -137,7 +176,8 @@ async function waitForExplorationTerminal(page: Page, authoring: Locator, contro
     while (Date.now() < deadline) {
       if (captured) return { kind: "response", response: captured };
       const uiTerminal = classifyExplorationUiTerminal({
-        highTokenConfirmationVisible: await page.getByRole("dialog", { name: "Confirm high-token Flow Build", exact: true }).isVisible().catch(() => false),
+        highTokenConfirmationVisible: options.ignoreHighTokenConfirmation !== true
+          && await page.getByRole("dialog", { name: "Confirm high-token Flow Build", exact: true }).isVisible().catch(() => false),
         alertVisible: await authoring.getByRole("alert").isVisible().catch(() => false),
         requestObserved: request !== undefined,
       });
@@ -168,4 +208,22 @@ async function settleObservedResponse(page: Page, request: Request | undefined, 
     request.response().then(response => response ?? undefined).catch(() => undefined),
     page.waitForTimeout(timeout).then(() => undefined),
   ]);
+}
+
+const VISIBLE_GENERATION_ERRORS = Object.freeze([
+  ["exploration.visible-error.provider-timeout", "The model request timed out. Keep the browser connected and try again."],
+  ["exploration.visible-error.evidence-limit", "Exploration reached its evidence limit before it could create a proposal. Start closer to the target page or make the website task more specific, then try again."],
+  ["exploration.visible-error.tool-failed", "The connected browser could not complete an exploration action. Check that the target tab is still available, then try again."],
+  ["exploration.visible-error.interrupted", "Exploration was interrupted. Keep the browser connected and try again."],
+  ["exploration.visible-error.proposal-missing", "Website exploration did not create a Flow proposal. Check the connected browser and task, then try again."],
+  ["exploration.visible-error.authorization-failed", "Flow authoring authorization failed. Verify your session and enabled key."],
+  ["exploration.visible-error.command-failed", "Flow authoring could not be completed."],
+] as const);
+
+async function visibleGenerationErrorCode(authoring: Locator): Promise<string | undefined> {
+  const alert = authoring.getByRole("alert");
+  for (const [code, message] of VISIBLE_GENERATION_ERRORS) {
+    if (await alert.getByText(message, { exact: true }).isVisible().catch(() => false)) return code;
+  }
+  return undefined;
 }
