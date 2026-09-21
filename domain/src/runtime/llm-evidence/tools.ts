@@ -26,6 +26,7 @@ import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilitie
 import {
   assertActive,
   captureEvidence,
+  pageRefusal,
   selectSession,
   toolExecution,
   toolMetadata,
@@ -66,6 +67,7 @@ import {
   type WebLlmSnapshotBinding
 } from "./sanitize";
 import { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence } from "./target";
+import { webActionFailureRejectionCode } from "./action-failure";
 import { recoverable, RecoverableToolRejection, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
@@ -235,7 +237,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_PRESS_TOOL_ID,
-        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
+        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person. A press the page would not take -- a dialog or banner over the control -- comes back with the page as it now is: deal with what is in the way, then press again.",
         inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
         effect: "mutate",
       },
@@ -278,7 +280,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
             metadata: toolMetadata(input),
           });
           assertActive(input.signal);
-          if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
+          if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, input, current, webActionFailureRejectionCode(result), input.signal);
           const snapshot = retain(stable(input, await captureEvidence(gateway, sessionId, input, input.signal, destination.origin)));
           shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
@@ -322,7 +324,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
-        if (error instanceof RecoverableToolRejection) return toolExecution(toolRejection(error.code), false, webLlmToolRejectionResultCode(error.code));
+        if (error instanceof RecoverableToolRejection) {
+          // A refusal the page caused carries the page: it is shown like any
+          // other packet, so the handles on it -- the dialog's close button --
+          // can be pressed next.
+          const page = error.page === undefined ? undefined : retain(stable(input, error.page));
+          if (page !== undefined) shown(input, sessionId, page);
+          return toolExecution(toolRejection(error.code, page?.evidence), false, webLlmToolRejectionResultCode(error.code));
+        }
         throw error;
       }
     },

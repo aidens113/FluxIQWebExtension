@@ -23,6 +23,7 @@ import {
 import type { WebAutomationStructureDetection } from "../../../extraction";
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "../limits";
 import { present } from "../present";
+import { recoverable } from "../tool-rejection";
 import { boundedText } from "../untrusted-json";
 import type { WebLlmExtractionBinding } from "./handles";
 
@@ -87,7 +88,7 @@ export type WebLlmStructurePacketInput = {
  * The packet and the binding, or `undefined` when no field is left once the
  * sensitive ones are dropped. Over budget, fields are cut from the end, from
  * both halves together, and the packet says so; a packet that cannot fit even
- * one field is a caller defect and throws, as `sanitize.ts` does.
+ * one field is refused `evidence_budget_exhausted`, as `sanitize.ts` refuses a page.
  */
 export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLlmStructureSplit | undefined {
   const proposal = input.detection.proposal;
@@ -111,7 +112,8 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
   });
   const limit = evidenceByteLimit(input.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
   while (serializedBytes(packet) > limit) {
-    if (packet.fields.length <= 1) throw new Error("web structure detection exceeds the evidence byte limit");
+    // As for a page packet (`sanitize.ts`): the budget left cannot hold one field.
+    if (packet.fields.length <= 1) recoverable("evidence_budget_exhausted");
     packet.fields.pop();
     packet.fieldsTruncated = true;
   }

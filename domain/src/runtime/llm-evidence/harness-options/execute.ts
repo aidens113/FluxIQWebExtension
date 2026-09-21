@@ -101,7 +101,12 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       try {
         return await handler(handled);
       } catch (error) {
-        if (error instanceof RecoverableToolRejection) return toolExecution(toolRejection(error.code), false, webLlmToolRejectionResultCode(error.code));
+        if (error instanceof RecoverableToolRejection) {
+          // A refusal the page caused carries the page, shown like any packet
+          // so its handles can be pressed next (`../capture.ts`).
+          const page = error.page === undefined ? undefined : shown(handled, error.page);
+          return toolExecution(toolRejection(error.code, page?.evidence), false, webLlmToolRejectionResultCode(error.code));
+        }
         throw error;
       }
     };

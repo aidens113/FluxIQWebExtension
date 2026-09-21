@@ -165,7 +165,9 @@ test("gives up page facts before the last element, and refuses only when nothing
   const nothing = rung(bytes(noDialogs) - 1);
   assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
 
-  assert.throws(() => rung(bytes(nothing) - 1), /exceeds the evidence byte limit/u);
+  // Past the last rung the budget cannot hold the page at all: a refusal the
+  // model is told about (`evidence_budget_exhausted`), not a fault.
+  assert.throws(() => rung(bytes(nothing) - 1), /evidence_budget_exhausted/u);
 });
 
 test("a failure packet passes Core's failure-evidence gate whole", () => {
