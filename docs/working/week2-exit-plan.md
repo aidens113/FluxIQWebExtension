@@ -1,7 +1,7 @@
 # Week 2 Exit Plan
 
 Status: Active
-Status detail: t027 reconciled and verified live, full gates running before it lands; ten realistic-scenario workers and t035 in flight; t036 committed.
+Status detail: t027 in gate triage before landing; t033, P1, L0, L1 running speculatively from its tip; ten realistic-scenario workers and t035 in flight.
 Created: 2026-09-21
 Last updated: 2026-09-21
 Owner: Senior supervisor agent
@@ -67,14 +67,18 @@ committed on 2026-09-21. Core `service.ts` is the serial bottleneck: t027 is
 37 lines over its 6,404-line ratchet, and t027, t033, C0, CF and Resume all
 edit it.
 
-**In flight:** full gates on reconciled t027 in both repositories
-(committed `f40f78e` Core, `f1db4e9` downstream; live proofs verified);
-`w2x-verification-agreement` (L2, t035); ten `w2x-realistic-scenarios`
-workers (S1, t037-t046, one site each). t036 (L3) is verified and committed
-(`fa8b686`), waiting to merge after t027.
+**In flight:** `w2x-t027-gate-triage` (t027's builds pass; tests fail 3
+downstream and 5 in Core web, plus test-runner's stale `dist`); speculatively
+from t027's tip: `w2x-t033-land` (I2), `w2x-creation-permission-lost` (P1,
+t047), `w2x-service-headroom` (L0, t048), `w2x-created-flow-repair-lane` (L1,
+t049, with t036 merged in); `w2x-verification-agreement` (L2, t035, now also
+fixing Core `dev`'s empty-result fail-open from `5616d73`); ten
+`w2x-realistic-scenarios` workers (S1, t037-t046). Machine limit: 12 threads,
+26 GB, about 8 GB free under this load; U1 and I3 dispatch as scenario workers
+finish.
 
-**Next:** land t027 in both repositories when its gates pass; then merge
-t036 and start P1, U1, L1 and t033's merge and A/B in parallel.
+**Next:** land t027 when triage is green; merge t036; then each speculative
+task re-merges `dev`.
 
 **Blockers:** none.
 
@@ -224,6 +228,17 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Definition of done: the site, its tests and `pnpm check` passing, the live run quoted with path and oracle result; changes left uncommitted.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-scenario-<id>.md`
 
+### Brief: w2x-t027-gate-triage
+- Repository: the t027 worktrees `F:\fxwork\t027\!FluxIQWebExtension` and `F:\fxwork\t027\!FluxIQ`, branch `task/t027-multi-action-exploration` in both.
+- Task: make both repositories' full gates green on t027 so it can land. Known from the supervisor's `pnpm -r --no-bail test` runs: downstream `packages/test-runner` 3 failures — `generation failures retain only Core-validated bounded diagnostics` (`demo-llm-create-ui/tests/failure-sanitizer.test.ts`), `a dataset task is built, settled, applied, run on a freshly presented page, and passes on the records it stored` (`flow-lane/creation/tests/lane.test.ts`; `dev` fails it too), `rejects reused, applied, cross-scope, and over-budget proposals` (`tests/demo-llm-exploration-adaptation.test.ts`); Core `apps/web` 5 failures — three `login attempt bounds` cases in `app/api/auth/login/tests/route.test.ts`, `runs graph conversion only while a graph subscriber is mounted`, `source contract: connector domain scopes are destination-local`. Core `fluxiq` has one known failure owned by t035 (`result-verification/tests/run-outcome.test.ts`, "stored nothing") — leave it; and three load-induced timeouts that pass alone.
+- First, the mechanical fix the Week 2 document lists as open item 9: `packages/test-runner`'s build never clears `dist`, so deleted and moved tests keep running. Make its `build` remove `dist` before compiling (keeping `domain:dist`), and show a deleted test no longer runs.
+- Then fix every failure at its root cause, whether t027 introduced it or `dev` already had it; say which for each, using `git log dev..HEAD` on the implicated files. Never weaken an assertion. Where a test encodes a contract t027 deliberately changed, update it and keep its safety assertions, as the supervisor did for the generation-lock code in `510680f`. A failure that passes alone under no load is a timeout, not a fix: report its duration.
+- Validation: downstream `pnpm -r --no-bail test` and `pnpm build`; Core `pnpm -r --no-bail test` (only the t035-owned failure may remain) and `pnpm build`; quote the per-package counts.
+- Owns: the files these fixes need in the two t027 worktrees. Must not touch: `result-verification/*`, other worktrees, git commits (leave changes uncommitted), shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-t027-gate-triage.md`
+
+**Speculative bases (supervisor, 2026-09-21).** So nothing waits on t027's triage, P1 runs in t047, L0 in t048 and L1 in t049, each paired worktree under `F:\fxwork\t04N\` with both branches at t027's tip (t049 also carries t036); t033 merges `task/t027-multi-action-exploration` instead of `dev`. Each re-merges `dev` once t027 lands.
+
 ### Brief: w2x-t033-land
 - Repository: paired t033 worktrees `F:\fxwork\t033\!FluxIQWebExtension` and `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile` in both. Starts once t027 is on `dev` in both repositories.
 - Task: plan step I2. Merge `dev` into both t033 branches with `git merge --no-commit` and resolve: t033 is authoritative for the multi-action contract; `dev` (now carrying t027) is authoritative for everything t027 kept — categorical pre-provider codes, `llmEvidenceRuntime` inside bootstrap readiness, the grant-issue mapping, the bounded terminal repair outcome, the resolver contract. Then bring Core `runtime/llm/evidence-loop.ts` (810 lines) under the 800-line limit by a behaviour-unchanged extraction. `service.ts` must not grow past its 6,381-line baseline.
@@ -331,6 +346,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: t027 bundles `demo-llm-explore-...-1ea03e`, `demo-llm-exploration-request-run-...-e5af83` and `demo-playback-...-48bf10` each read `"verdict":"passed"` in `summary.json`; a grep of the added lines of `git diff dev -- . ':!docs'` for the five batch identifiers printed `0` in both t027 trees; `wc -l .../runtime/service.ts` printed `6381`; Core `node scripts/structure-audit.mjs` printed `structure-audit: passed (170 warning(s), 361 baselined).`; t036 `run-mubl2o09-5679c7f2` read `{"build":5,"observed":5,"permissionRequest":null}` and `"oracleVerdict": "passed"`.
 - Outcome: Partial
 - Follow-up: land t027 when both gate runs pass. Every live-running worker was told to set `FLUXIQ_TEST_ENV_FILES=none`, because task worktrees copy `.env.local`, which targets the user's panel.
+
+### 2026-09-21 — Gate triage on t027; dev test fixes; wave two speculative
+- Agent: supervisor
+- Changed: `dev` `5fa870a` (content stub page gains fallback table classes; 14 extension tests had failed since `3ee5e1d`); t027 Core `510680f` (generation-lock test expects the categorical code, safety assertions kept); t027 downstream `9617103` (merge `dev`); tasks t047-t049 from t027's tip; briefs for triage and wave two.
+- Why: t027's first full gate run failed; triage showed `dev` itself carried broken suites, and waiting on triage would idle the critical path.
+- Validation: `pnpm --filter @fluxiq-web-extension/extension test` on `dev` printed `# fail 14` before and `# tests 688`, `# pass 688`, `# fail 0` after; t027 accounting test printed `Tests  8 passed (8)`; Core `dev` `run-outcome.test.ts` "stored nothing" printed `expected 'succeeded' to be 'failed'` (handed to t035); t027 rerun printed downstream `test=1 build=0` with `packages/test-runner` `# fail 3`, and Core `test=1 build=0` with `apps/web` `Tests  5 failed | 1240 passed (1245)`.
+- Outcome: Partial
+- Follow-up: land t027 on a green triage.
 
 ---
 
