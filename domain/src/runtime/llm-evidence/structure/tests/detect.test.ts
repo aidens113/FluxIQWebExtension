@@ -290,7 +290,7 @@ test("sensitive fields are dropped from both halves, and a producer's stray text
   await assert.rejects(detect(faulty), /without a structure detection/u);
 });
 
-test("the byte budget cuts fields from both halves together, and a packet that cannot fit is a fault", async () => {
+test("the byte budget cuts fields from both halves together, and a packet that cannot fit is refused", async () => {
   const { gateway } = fakeGateway(() => captured("product-catalog-largest"));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const result = await detect(runtime, {}, { maxEvidenceBytes: 600 });
@@ -302,7 +302,7 @@ test("the byte budget cuts fields from both halves together, and a packet that c
   assert.equal(resolved.ok, true);
   if (resolved.ok) assert.deepEqual(Object.keys(resolved.binding.extractList.fields), packet.fields.map((field) => field.key));
 
-  await assert.rejects(detect(runtime, {}, { maxEvidenceBytes: 120 }), /exceeds the evidence byte limit/u);
+  assert.deepEqual(await detect(runtime, {}, { maxEvidenceBytes: 120 }), rejection("evidence_budget_exhausted"));
 });
 
 test("unknown, foreign and stale handles are refused, and a resolved binding cannot be changed from outside", async () => {
@@ -347,13 +347,15 @@ test("a client that cannot detect is a fault rather than a refusal", async () =>
 
   const silent = createWebAutomationLlmEvidenceRuntime(fakeGateway(() => ({ url: "https://example.test/list" })).gateway);
   await assert.rejects(detect(silent), /without a structure detection/u);
+});
 
+test("a page the client could not capture is a refusal the model can work around", async () => {
   const failing = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
     executeAction: async () => ({ status: "failed" }),
   });
-  await assert.rejects(detect(failing), /capture failed/u);
+  assert.deepEqual(await detect(failing), rejection("page_unreadable"));
 });
 
 test("the production binding offers detection only to a client that declares it", async () => {

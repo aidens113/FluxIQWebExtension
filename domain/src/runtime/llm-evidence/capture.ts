@@ -12,15 +12,23 @@
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { webActionFailureRejectionCode, type WebFailedActionResult } from "./action-failure";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
+import { recoverable, RecoverableToolRejection, type WebLlmToolRejectionCode } from "./tool-rejection";
 import { jsonRecord } from "./untrusted-json";
 
-type ClientActionResult = {
-  status: string;
+type ClientActionResult = WebFailedActionResult & {
   payload?: JsonObject;
   error?: string;
 };
+
+/**
+ * Room kept for a page refusal's own envelope -- its schema version, `ok`,
+ * code and the `page` key -- so the packet inside it and the refusal around
+ * it together stay within what the call was allowed.
+ */
+const PAGE_REFUSAL_ENVELOPE_BYTES = 128;
 
 export type WebLlmEvidenceGateway = {
   eligibleSessionIds(): string[];
@@ -92,7 +100,9 @@ export async function captureEvidence(
     metadata: toolMetadata(request),
   });
   assertActive(signal);
-  if (result.status !== "succeeded") throw new Error("web evidence snapshot capture failed");
+  // A page that cannot be read now -- still loading, mid-navigation -- is a
+  // condition the model can wait out or work around, not a fault.
+  if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web evidence action payload");
   return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     budget: "exploration",
@@ -125,6 +135,32 @@ export async function actAndCapture(
 ): Promise<WebLlmSnapshotBinding> {
   const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
   assertActive(signal);
-  if (result.status !== "succeeded") throw new Error("web evidence interaction failed");
+  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRejectionCode(result), signal);
   return await captureEvidence(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
+}
+
+/**
+ * The refusal for an action the page did not let happen, carrying the page as
+ * it now stands: whatever got in the way -- a dialog, a banner -- is on it,
+ * with a handle the model can press. Captured on the origin the action started
+ * from and within the call's budget; a page that cannot be captured leaves the
+ * bare code. Cancellation still ends the call.
+ */
+export async function pageRefusal(
+  gateway: WebLlmEvidenceGateway,
+  sessionId: string,
+  request: WebLlmEvidenceToolRequest,
+  current: WebLlmSnapshotBinding,
+  code: WebLlmToolRejectionCode,
+  signal?: AbortSignal
+): Promise<RecoverableToolRejection> {
+  const budget = request.maxEvidenceBytes === undefined ? undefined : request.maxEvidenceBytes - PAGE_REFUSAL_ENVELOPE_BYTES;
+  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(code);
+  try {
+    const page = await captureEvidence(gateway, sessionId, budget === undefined ? request : { ...request, maxEvidenceBytes: budget }, signal, new URL(current.evidence.location).origin);
+    return new RecoverableToolRejection(code, page);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return new RecoverableToolRejection(code);
+  }
 }
