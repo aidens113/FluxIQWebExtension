@@ -34,9 +34,32 @@ judged the run unachievable, and never produced a patch. Existing-Flow
 improvement, the third entry point, is not started; neither are 2.9's
 FluxBench Week 2 metrics, adaptation-cycle lane and `week2` corpus, nor X6.
 
-**In flight:** four read-only discovery audits (briefs below). Their reports
-decide the integration order, the minimal work to demonstrate the exit loop,
-the end-to-end UI suite, and the existing-Flow and repair-structure design.
+**End-to-end UI testing (from `w2x-ui-e2e-audit`, supervisor-checked).** No
+committed command drives the exit chain through the UI. `panel:golden` exists
+only on t027, has never finished, and cannot pass by construction: five of its
+twelve stages are declared `unverified` in code (`panel-golden-path/lane.ts:127-137`
+on t027), not measured. Its repair stage has 0 of 9 passing bundles. The
+Runtime Debug, no-reload refresh, extraction and reconnect proofs used
+disposable drivers that were never committed, and no UI lane judges extraction
+by `matchedRecords`. Three journeys have **no product UI**: improving an
+existing Flow (Core's authoring panel refuses non-blank Flows,
+`authoring/blank-flow-authoring-model.ts:98-104`, checked), a permission
+request raised by a run or repair, and a structural repair diff. Revert,
+adaptation history and the "Changed fields" table have UI but no test.
+**Decision:** replace `panel:golden` with `pnpm ui:e2e` — a provider-free lane
+(F1 record-generate-run-Runtime Debug, F2 pick-extract-dataset with
+`matchedRecords === expectedRecords`, F3 visible failure, F4 restart and reuse;
+about 3-4 min) and a provider lane (P1 create, P2 fail-repair-diff-apply-rerun,
+P3 UI revert and history, P4 repaired reuse, P5 permission grant and refuse, P6
+existing-Flow improvement; about 6-8 min, cents). Every stage is measured; a
+journey whose UI does not exist reports `not_built` and fails. Build order is
+in the report: t027's drivers first, then six parallel briefs on disjoint files,
+then one owner for the suite and launcher.
+
+**In flight:** three read-only discovery audits (branch integration, exit-loop
+gaps, existing-Flow and repair design). Their reports decide the integration
+order, the minimal work to demonstrate the exit loop, and the product changes
+the missing UI journeys need.
 
 **Next:** read the four reports, rewrite this Current State as the
 completion plan with ordered, file-partitioned execution phases, then execute
@@ -97,6 +120,14 @@ live-first.
 - Validation: `git rev-list --count dev..task/t027-multi-action-exploration` printed `41`; Core `task/t027-multi-action-exploration ahead=11 behind=0`; no Codex session file exists for 2026-09-21, so no other agent is working the task worktrees.
 - Outcome: Partial
 - Follow-up: integrate the four reports into the completion plan.
+
+### 2026-09-21 — End-to-end UI test audit integrated
+- Agent: supervisor; worker `w2x-ui-e2e-audit`
+- Changed: Current State (UI testing findings and the `ui:e2e` decision); `reports/w2x-ui-e2e-audit.md`.
+- Why: the Week 2 exit chain must be proven through the real panel, and no committed lane can do that today.
+- Validation: `grep -n verified packages/test-runner/src/panel-golden-path/*.ts` in the t027 worktree printed five stages declared `status: "unverified"` in `lane.ts` (lines 127, 132, 133, 134, 137) and `status: unverifiedStages.length ? "incomplete" : "passed"` at line 142; Core `blank-flow-authoring-model.ts:98-104` returns `{ ok: false }` unless nodes, edges, router and Subflows are all empty.
+- Outcome: Partial
+- Follow-up: fold the remaining three audits into ordered execution phases.
 
 ---
 
