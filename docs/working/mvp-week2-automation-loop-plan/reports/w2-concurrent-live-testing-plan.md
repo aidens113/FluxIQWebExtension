@@ -1069,3 +1069,23 @@ budgets.
   then proposal/apply/playback/oracle pass; otherwise preserve the exact visible
   terminal category and keep the candidate isolated.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-unified-progress-live.md`
+
+### Brief: w2-extraction-exit-live
+- Repository: fresh isolated current-t027 pair/workspace; production panel and
+  unpacked extension against the existing product-catalog fixture
+- Task: exercise Phase 2.0's strict live path: select an example/repeating
+  structure through the extension UI, infer/confirm fields, record or compile
+  extraction into ordinary Flow nodes, run it, persist a dataset, inspect the
+  real preview, export CSV/JSON, and run the existing record oracle.
+- Required reads: first-class-data-extraction plan Current State; extraction
+  picker/confirm/control UI; dataset panel/export routes; existing extraction
+  Scenario Lab driver and manifest
+- Owns (may edit): isolated downstream extraction UI/driver defects found live
+  and directly owned focused tests after live progress; Core only for an exact
+  generic dataset/panel defect; main report `reports/w2-extraction-exit-live.md`
+- Must not touch: user panel/data, provider/repair/batch/performance lanes,
+  unrelated files/full suites/commits/pushes; preserve redaction rules
+- Definition of done: real UI selection yields an ordinary runnable Flow,
+  persisted records match the oracle, preview and both exports work; otherwise
+  stop at and classify the first exact product boundary.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-extraction-exit-live.md`
