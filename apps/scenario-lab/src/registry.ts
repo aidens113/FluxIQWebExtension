@@ -29,6 +29,7 @@ import { propertyListingsScenario } from "./scenarios/property-listings/index.js
 import { companyDirectoryScenario } from "./scenarios/company-directory/index.js";
 import { socialSchedulerScenario } from "./scenarios/social-scheduler/index.js";
 import { socialInboxScenario } from "./scenarios/social-inbox/index.js";
+import { jobBoardScenario } from "./scenarios/job-board/index.js";
 import { localClassifiedsScenario } from "./scenarios/local-classifieds/index.js";
 import { auctionMarketplaceScenario } from "./scenarios/auction-marketplace/index.js";
 import { photoSocialScenario } from "./scenarios/photo-social/index.js";
@@ -70,6 +71,7 @@ const registry = new Map<ScenarioId, ScenarioDefinition>([
   [companyDirectoryScenario.id, companyDirectoryScenario],
   [socialSchedulerScenario.id, socialSchedulerScenario],
   [socialInboxScenario.id, socialInboxScenario],
+  [jobBoardScenario.id, jobBoardScenario],
   [localClassifiedsScenario.id, localClassifiedsScenario],
   [auctionMarketplaceScenario.id, auctionMarketplaceScenario],
   [photoSocialScenario.id, photoSocialScenario],
