@@ -755,3 +755,41 @@ budgets.
   actions. Otherwise record the exact first failure/zero-adoption evidence and
   leave the experiment isolated. Compare provider calls/build and total time.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-evidence-decision-live.md`
+
+### Brief: w2-recording-playback-reuse-live
+- Repository: existing isolated `t027-recording-panel` pair/workspace after its
+  proven recording-generated Subflow; live validation and report
+- Task: run the saved recording-generated Flow through the production panel,
+  require every action and scenario oracle to pass, let the runtime stop, then
+  start it again and rerun the same saved Flow without regeneration or provider.
+- Required reads: `reports/w2-recording-panel-live.md`; demo playback driver;
+  saved workspace state and only sanitized artifacts from these runs
+- Owns (may edit): downstream demo playback driver only if an exact live UI
+  mismatch proves it stale, directly owned focused tests after live progress,
+  and main report `reports/w2-recording-playback-reuse-live.md`
+- Must not touch: user panel/profile/data, Core/product runtime, provider/batch/
+  repair lanes, recording generation, unrelated files, commits/pushes/full suites
+- Definition of done: two panel-started runs across separate runtime lifetimes
+  execute the same saved graph and identities, every action succeeds, both page
+  oracles pass, and provider call count is zero; otherwise stop at first failure
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-recording-playback-reuse-live.md`
+
+### Brief: w2-unified-decision-completion-repair
+- Repository: existing isolated `t027-unified-decision` pair retaining only its
+  two-file unified-decision candidate; Core completion diagnosis/repair/live proof
+- Task: trace the two `bootstrap.unknown_parameter` completion refusals to the
+  closed parameter-shape invariant, add only bounded non-content diagnostics if
+  needed, and implement the smallest safe normalizer/schema correction without
+  weakening unknown-parameter refusal for genuinely unsupported fields.
+- Required reads: unified-decision report; bootstrap completion normalization,
+  validation feedback, node catalog parameter schemas, and relevant prior easy-
+  model-output report; only this run's local fixture artifacts
+- Owns (may edit): isolated Core bootstrap normalization/schema/closed diagnostics
+  and focused owned tests only after a live pass; unified two-file candidate;
+  main report `reports/w2-unified-decision-completion-repair.md`
+- Must not touch: downstream source, user panel/data, batch executor safety,
+  permissions, recording/repair lanes, unrelated files, commits/pushes/full suite
+- Definition of done: same real-provider lane completes at least one 2+ action
+  batch, creates/applies/plays the Flow, and passes the oracle; unsupported
+  parameters still fail closed. Otherwise stop at the next exact failure.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-decision-completion-repair.md`
