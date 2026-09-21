@@ -13,6 +13,7 @@ export const scenarioIds = [
   "company-directory",
   "social-scheduler",
   "social-inbox",
+  "crossborder-marketplace",
   "bigbox-retail",
   "job-board",
   "local-classifieds",

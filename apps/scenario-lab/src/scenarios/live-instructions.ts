@@ -1,5 +1,6 @@
 import { REPLY_TICKET, TRIAGE_AGENT } from "./support-desk/index.js";
 import { LINE_ITEM_ORDER, REFUND_ORDER } from "./order-operations/index.js";
+import { CROSSBORDER_MARKETPLACE_LIVE_TASKS } from "./crossborder-marketplace/index.js";
 import { BIGBOX_RETAIL_LIVE_TASKS } from "./bigbox-retail/index.js";
 import { JOB_BOARD_LIVE_TASKS } from "./job-board/index.js";
 import { LOCAL_CLASSIFIEDS_LIVE_TASKS } from "./local-classifieds/index.js";
@@ -758,6 +759,7 @@ const TASKS: LiveInstructionTask[] = [
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-conversation",
   },
+  ...CROSSBORDER_MARKETPLACE_LIVE_TASKS,
   ...BIGBOX_RETAIL_LIVE_TASKS,
   ...JOB_BOARD_LIVE_TASKS,
   ...LOCAL_CLASSIFIEDS_LIVE_TASKS,

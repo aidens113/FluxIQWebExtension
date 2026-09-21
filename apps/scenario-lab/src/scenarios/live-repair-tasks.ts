@@ -1,3 +1,4 @@
+import { CROSSBORDER_MARKETPLACE_REPAIR_TASKS } from "./crossborder-marketplace/index.js";
 import { BIGBOX_RETAIL_REPAIR_TASKS } from "./bigbox-retail/index.js";
 import { JOB_BOARD_REPAIR_TASKS } from "./job-board/index.js";
 import { LOCAL_CLASSIFIEDS_REPAIR_TASKS } from "./local-classifieds/index.js";
@@ -214,6 +215,7 @@ const TASKS: LiveRepairTask[] = [
     patchKind: "temporary_target_override",
     description: "The dispatch-run shortcut was redesigned: same place, same job, no test id, a new class and the label renamed to Pick and pack. The model must re-point the click at it, never at Export or New order, which would dispatch orders nobody paid for.",
   },
+  ...CROSSBORDER_MARKETPLACE_REPAIR_TASKS,
   ...SOCIAL_NETWORK_FEED_REPAIR_TASKS,
   // `sensitive-input` / `extract-card-secrets` is not a task: its refusal happens while the Flow lane records,
   // so no Flow exists for a model to repair (the exclusion in `tests/live-repair-tasks.test.ts` says why).
