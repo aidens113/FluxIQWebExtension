@@ -31,9 +31,15 @@ test("terminal two-intervention rejection completes without waiting for an adapt
   );
 });
 
-test("wait completion remains false until both terminal state and two interventions are durable", () => {
+test("wait completion stops at any terminal state, including a diagnosis-only categorical skip", () => {
   assert.equal(explorationAdaptationRunIsComplete(run("running", 2)), false);
-  assert.equal(explorationAdaptationRunIsComplete(run("failed", 1)), false);
+  const skipped = run("failed", 1);
+  skipped.llmGate = { invoked: true, patchSkippedCode: "llm.runtime_patch_not_requested" };
+  assert.equal(explorationAdaptationRunIsComplete(skipped), true);
+  assert.throws(
+    () => requireExactExplorationProposalIdentity(skipped),
+    (error: any) => error?.details?.recoveryCode === "llm.runtime_patch_not_requested",
+  );
   assert.equal(requireExactExplorationProposalIdentity(run("failed", 2, ["adaptation.one"])), "adaptation.one");
   assert.throws(() => requireExactExplorationProposalIdentity(run("failed", 2, ["a", "b"])), /one exact proposal/u);
 });

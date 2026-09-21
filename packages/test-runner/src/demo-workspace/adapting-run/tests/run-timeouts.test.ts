@@ -19,7 +19,10 @@ test("an adapting run is waited for through the grant's claim window and whole l
 
 test("both adapting-run waits use that timeout, not a fixed minute", async () => {
   const ui = await readFile(path.join(sourceRoot, "adaptation-ui.ts"), "utf8");
-  assert.match(ui, /waitForPanelRunResponse\(page, \(\) => runButton\.click\(\), ADAPTING_RUN_TIMEOUT_MS\)/u);
+  assert.match(ui, /waitForPanelRunResponse\(page, async \(\) =>/u);
+  assert.match(ui, /Confirm high-token LLM Execution/u);
+  assert.match(ui, /Continue high-token execution/u);
+  assert.match(ui, /\}, ADAPTING_RUN_TIMEOUT_MS\)/u);
   const wait = ui.slice(ui.indexOf("export async function waitForAdaptationRun"), ui.indexOf("export function requireCompleteAdaptationIntervention"));
   assert.match(wait, /Date\.now\(\) \+ ADAPTING_RUN_TIMEOUT_MS/u);
   assert.doesNotMatch(wait, /60_000/u);

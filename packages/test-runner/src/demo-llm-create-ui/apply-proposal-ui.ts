@@ -10,7 +10,7 @@ import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { inspectAppliedCreation, parseAppliedExecutionDigest } from "./adaptation-lifecycle.js";
 import { watchAppliedBinding } from "./applied-binding.js";
 import type { LiveCreationTopology } from "./creation-outcomes.js";
-import { exactVirtualizedHierarchyObject, exactVisible, review } from "./panel-interaction.js";
+import { exactVirtualizedHierarchyObject, exactVisible, review, waitForEndpoint } from "./panel-interaction.js";
 import { fail, inspectionFail } from "./runner-fail.js";
 
 export type ApplyExistingEvidenceGuidedCreationInput = Readonly<{
@@ -44,11 +44,13 @@ export async function approveApplyExistingEvidenceGuidedCreationViaUi(input: App
   const rows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-adaptations`, "the exact checkpoint Flow Adaptations row", ".tree-row-main.type-folder");
   await evidence.step("panel", "exploration-apply-adaptations-open", "Open Adaptations for the exact checkpoint Flow", () => rows.click());
   await evidence.step("panel", "exploration-apply-runtime-search-clear", "Clear hierarchy search", () => search.fill(""));
-  await exactVisible(page.getByRole("table", { name: "Adaptations", exact: true }), "the checkpoint Flow Adaptations table", 30_000);
-  const proposal = page.getByText(adaptationId, { exact: true });
+  const adaptations = page.locator('[role="table"][aria-label="Adaptations"]:visible');
+  await exactVisible(adaptations, "the checkpoint Flow Adaptations table", 30_000);
+  const proposal = adaptations.getByText(adaptationId, { exact: true });
   await exactVisible(proposal, "the exact pending evidence-guided proposal", 30_000);
-  await evidence.step("panel", "exploration-apply-select", "Select the exact pending evidence-guided proposal", () => proposal.click());
-  await page.getByText("Adaptation Detail", { exact: true }).waitFor({ timeout: 30_000 });
+  const detailResponse = await evidence.step("panel", "exploration-apply-select", "Select the exact pending evidence-guided proposal", () => waitForEndpoint(page, "get-flow-adaptation", () => proposal.click()));
+  if (!detailResponse.ok()) fail("The exact pending evidence-guided proposal detail could not be loaded");
+  await exactVisible(page.locator(".automation-runtime-log-page > header span").filter({ hasText: adaptationId }), "the exact pending evidence-guided proposal detail", 30_000);
   const audit = page.getByRole("button", { name: "Audit", exact: true });
   await exactVisible(audit, "the Adaptation Audit tab");
   await evidence.step("panel", "exploration-apply-audit", "Review the exact pending proposal audit", () => audit.click());

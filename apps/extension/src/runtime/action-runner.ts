@@ -8,7 +8,9 @@ import {
   workerBlockedFailure
 } from "./action-results";
 import {
+  consumeSnapshotReadiness,
   currentAutomationTabId,
+  noteSnapshotReadiness,
   readTabUrl,
   resolveAutomationTab,
   setAutomationTab,
@@ -73,9 +75,13 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     return withTarget(navigationResult(action, startedAt, action.url, await readTabUrl(tabId)), tabId, frameId);
   }
 
-  await waitForTabReady(tabId);
+  if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
-  return await runActionInFrame(action, startedAt, tabId, frameId);
+  const run = await runActionInFrame(action, startedAt, tabId, frameId);
+  if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
+    await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
+  }
+  return run;
 }
 
 /** The failed result for an action that threw before or while it ran. */

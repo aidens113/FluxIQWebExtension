@@ -363,6 +363,12 @@ test("reads Core's per-call lines exactly, and refuses a malformed one rather th
   assert.equal(detail.providerCallsOmitted, 0);
   assert.deepEqual(detail.providerCalls?.map(call => [call.sequence, call.taskKind, call.allowance, call.validationOk, call.totalTokens, call.charged.tokens]), [[1, "runtime_diagnosis", "run", true, 15, "reported"], [2, "evidence_tool_decision", "exploration", null, null, "reserved"], [3, "runtime_patch", "run", true, 15, "reported"]]);
   assert.deepEqual(detail.providerCalls?.[1], { sequence: 2, requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: null, allowance: "exploration", promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", provider: "deepseek", model: "deepseek-chat", validationOk: null, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null, charged: { inputTokens: 8_000, outputTokens: 2_000, totalTokens: 10_000, estimatedCostUsd: 0.08, tokens: "reserved", cost: "reserved" }, budgetBreach: false });
+  gate = { patchSkipped: "No repair was requested.", structuredDiagnosis: { patchNeeded: false } };
+  const preserved = await client.getRunDetail("project.web", "run.one");
+  assert.equal(preserved.llmGate?.patchSkippedCode, "llm.runtime_patch_not_requested");
+  gate = { patchSkippedCode: "llm.runtime_patch_grant_scope_refused" };
+  const published = await client.getRunDetail("project.web", "run.one");
+  assert.equal(published.llmGate?.patchSkippedCode, "llm.runtime_patch_grant_scope_refused");
   gate = {};
   const older = await client.getRunDetail("project.web", "run.one");
   assert.equal("providerCalls" in older || "providerCallsOmitted" in older, false, "a Core without per-call lines is reported as having none, not as zero calls");

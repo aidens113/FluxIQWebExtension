@@ -62,9 +62,14 @@ export function assertDemoRecordingDerivedFlow(document: Record<string, unknown>
   const edges = Array.isArray(document.edges) ? document.edges as Array<Record<string, any>> : [];
   const outputIds = nodes.map(node => node.parameterValues?.outputId).sort();
   const requiredOutputIds = ["web.dom.click", "web.dom.select", "web.dom.type", "web.dom.type"].sort();
-  const selfContainedOutputIds = ["web.browser.navigate", ...requiredOutputIds].sort();
-  const validOutputIds = stableJson(outputIds) === stableJson(requiredOutputIds) || stableJson(outputIds) === stableJson(selfContainedOutputIds);
-  const validNodes = (nodes.length === 4 || nodes.length === 5) && nodes.every(node => node.definitionId === "builtin.policy.action"
+  // The browser may scroll a control into view while the real recorder is on.
+  // `dom.scroll` is an executable recording event, so generation correctly
+  // preserves one such observation just as it preserves an optional typed
+  // navigation. Keep the accepted sets exact so another or duplicate action
+  // still fails this deterministic fixture check.
+  const optionalOutputSets = [[], ["web.browser.navigate"], ["web.dom.scroll"], ["web.browser.navigate", "web.dom.scroll"]];
+  const validOutputIds = optionalOutputSets.some(optional => stableJson(outputIds) === stableJson([...optional, ...requiredOutputIds].sort()));
+  const validNodes = nodes.length >= 4 && nodes.length <= 6 && nodes.every(node => node.definitionId === "builtin.policy.action"
     && typeof node.metadata?.recordingProposalId === "string"
     && typeof node.metadata?.actionEntryId === "string"
     && (!recordingId || Array.isArray(node.metadata?.evidence) && node.metadata.evidence.some((item: any) => item?.artifactId === recordingId)));

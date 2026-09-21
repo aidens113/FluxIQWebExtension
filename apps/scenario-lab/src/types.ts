@@ -14,6 +14,13 @@ export const scenarioIds = [
   "social-scheduler",
   "social-inbox",
   "bigbox-retail",
+  "job-board",
+  "local-classifieds",
+  "auction-marketplace",
+  "photo-social",
+  "social-network-feed",
+  "company-website",
+  "professional-network",
 ] as const;
 
 export type ScenarioId = (typeof scenarioIds)[number];

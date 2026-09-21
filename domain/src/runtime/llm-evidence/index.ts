@@ -50,7 +50,7 @@ export {
   type WebLlmStructurePaginationMode
 } from "./structure";
 export { webLlmStateDigest } from "./state-digest";
-export { validateWebRuntimeTargetOverrideEvidence } from "./target";
+export { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence, WEB_REPAIR_CANDIDATE_LIMIT, type WebRepairCandidateMatch, type WebRepairCandidateProjection, type WebRepairCandidateRefusal } from "./target";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,
   WEB_LLM_TOOL_RESULT_SCHEMA_VERSION,

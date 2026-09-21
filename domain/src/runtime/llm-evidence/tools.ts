@@ -37,7 +37,7 @@ import {
   webAutomationExplorationRefusalClassifier,
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
-import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
+import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { enterWebField } from "./enter-field";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import {
@@ -65,7 +65,7 @@ import {
   type WebLlmSanitizeOptions,
   type WebLlmSnapshotBinding
 } from "./sanitize";
-import { validateWebRuntimeTargetOverrideEvidence } from "./target";
+import { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence } from "./target";
 import { recoverable, RecoverableToolRejection, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
@@ -235,7 +235,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_PRESS_TOOL_ID,
-        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
+        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
         inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
         effect: "mutate",
       },
@@ -376,9 +376,11 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       assertActive(input.signal);
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
-      return retainFailure(sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
+      const totalBudget = evidenceByteLimit(input.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure);
+      const candidateBudget = Math.min(1_024, Math.floor(totalBudget / 3));
+      const binding = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
         budget: "failure",
-        maxEvidenceBytes: input.maxEvidenceBytes,
+        maxEvidenceBytes: totalBudget - candidateBudget,
         expectedOrigin: undefined,
         // Core's failed-action identity is an attempt, a node and a definition
         // id, and carries nothing about the control -- so this recapture marks
@@ -388,7 +390,17 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         // Core tells the model to fill from this packet; without them a correct
         // live repair was refused for guessing the key.
         failedAction: { repairParameters: webFailureRepairParameters({ definitionId: input.failedAction.definitionId }) },
-      }))).evidence;
+      }));
+      // The candidate object's own bytes are not the whole cost of attaching
+      // it: JSON also adds the comma, property name and colon. Measure that
+      // envelope against this exact packet so the final serialized evidence,
+      // not merely each independently bounded part, stays inside Core's gate.
+      const baseBytes = serializedBytes(binding.evidence);
+      const envelopeBytes = serializedBytes({ ...binding.evidence, repairCandidates: null }) - baseBytes - serializedBytes(null);
+      const availableCandidateBytes = Math.min(candidateBudget, totalBudget - baseBytes - envelopeBytes);
+      const candidates = projectWebRepairCandidates(binding.evidence.elements, { definitionId: input.failedAction.definitionId }, availableCandidateBytes);
+      if (candidates) binding.evidence.repairCandidates = candidates;
+      return retainFailure(binding).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
       // Judged before the target: a packet of another version, or not a packet
