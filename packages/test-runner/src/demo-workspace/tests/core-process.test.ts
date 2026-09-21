@@ -8,8 +8,10 @@ import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "n
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createServer } from "node:net";
 import { RunnerFailure } from "../../failure.js";
-import { removeDemoSession, runThenCleanUp } from "../core-process.js";
+import { resolveDemoWorkspaceConfiguration } from "../configuration.js";
+import { removeDemoSession, runThenCleanUp, startPersistentDemoCore } from "../core-process.js";
 
 function codedError(code: string): Error & { code: string } {
   return Object.assign(new Error(`${code}: resource busy or locked, rmdir 'session'`), { code });
@@ -132,4 +134,37 @@ test("the demo Core serves the cached production build, shared with every run of
   assert.doesNotMatch(source, /prepareCoreWebBuild\(\{[^}]*runsDirectory/u);
   assert.match(source, /supervisor\.start\(coreWebServerProcessSpec\(\{\s*name: "demo-fluxiq-web",\s*build: coreWebBuild,\s*port: webPort,/u);
   assert.doesNotMatch(source, /"dev"|--turbopack|prepareWebWorkspace/u);
+});
+
+function topologyConfiguration(webPort: number, gatewayPort: number) {
+  const repository = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
+  return resolveDemoWorkspaceConfiguration(repository, { FLUXIQ_TEST_USERNAME: "runner", FLUXIQ_TEST_PASSWORD: "secret-password", FLUXIQ_TEST_PIN: "123456" }, {
+    origin: `http://127.0.0.1:${webPort}`,
+    gatewayUrl: `ws://127.0.0.1:${gatewayPort}/client`,
+  });
+}
+
+test("a start whose panel and gateway share a port is refused before anything is launched", async () => {
+  const config = { ...topologyConfiguration(52001, 52002), gatewayUrl: "ws://127.0.0.1:52001/client" };
+  await assert.rejects(startPersistentDemoCore(config), /must use different ports/u);
+});
+
+test("a start on a port another process holds is refused before anything is launched", async () => {
+  const holder = createServer();
+  await new Promise<void>(resolve => holder.listen(0, "127.0.0.1", () => resolve()));
+  try {
+    const address = holder.address();
+    assert.ok(address && typeof address === "object");
+    await assert.rejects(startPersistentDemoCore(topologyConfiguration(address.port, 52002)), /cannot be bound/u);
+  } finally {
+    await new Promise<void>(resolve => holder.close(() => resolve()));
+  }
+});
+
+test("a restart start skips the host build, domain setup and identity check, and still launches the cached production build", async () => {
+  const source = await readFile(path.resolve(import.meta.dirname, "..", "..", "..", "src", "demo-workspace", "core-process.ts"), "utf8");
+  const prepared = /if \(!options\.reusePreparedWorkspace\) \{([\s\S]*?)\n    \}\n    const coreWebBuild = await prepareCoreWebBuild/u.exec(source);
+  assert.ok(prepared, "the one-time preparation is guarded by reusePreparedWorkspace and precedes the Core web build");
+  for (const step of ['name: "demo-host-build"', 'name: "demo-domain-setup"', "await ensureDemoIdentity(config);"]) assert.ok(prepared[1]!.includes(step), step);
+  assert.match(source, /export async function withPersistentDemoCore[\s\S]*?const core = await startPersistentDemoCore\(config\);\s*return runThenCleanUp\(operation, \(\) => core\.stop\(\)\);/u);
 });
