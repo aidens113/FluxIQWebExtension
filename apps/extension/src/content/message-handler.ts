@@ -63,7 +63,7 @@ function isAddressedToThisFrame(message: { frameId?: number; topFrameOnly?: bool
 
 export function installMessageHandler(): void {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean };
+    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean };
     if (typed.type === "fluxiq.ping") {
       sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
       return false;
@@ -83,7 +83,9 @@ export function installMessageHandler(): void {
     }
     if (typed.type === "executeAction" && typed.action) {
       if (!isAddressedToThisFrame(typed)) return false;
-      void executeAction(typed.action)
+      // `extraction` rides beside the action when the worker carries a
+      // paginated list read across documents (`action-runtime/extraction-continuation.ts`).
+      void executeAction(typed.action, typed.extraction)
         .then(sendResponse)
         .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));
       return true;
