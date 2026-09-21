@@ -98,6 +98,8 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each | downstream | — | **done**: all ten on `dev` (`08e7dc6`, 41 registered scenarios); `live-instructions.ts` is at 775 of 800 lines and must be split before more tasks are added; two combined-suite runs each had one flaky failure that passed on rerun (identify it) |
 | **E1** | Extensive live end-to-end testing on all ten sites (user, 2026-09-21): recording lane, every instruction task, every repair task, one real-panel creation per site; baseline before P2 | downstream | S1 | in flight: five lanes t052-t056 (`w2x-e2e-live-campaign`) |
 | **E2** | The same campaign again once P2, L4 and the waiting fixes land, to measure how far FluxIQ gets past the first tool failure | downstream | E1, P2 | waiting |
+| **P8** | Lab: the Core action probe types into the site's field on a fresh automation tab where the site's delayed overlays have come back, so recording never starts (5 of 6 lane C recording lanes) | downstream | — | in flight on t061 (`w2x-lab-probe-race`) |
+| **P9** | A dismissible promotion modal is classed `web.intervention.required`, so Core's `llm.gate.manual_intervention` gives the model 0 calls; only a challenge a person must answer (the robot check) should be | both | P2 | waiting — next free slot |
 | **P7** | After P2, builds end `evidence_limit` after 10-15 calls: the loop caps total evidence over the whole build at 64,000 bytes. Replace with a bounded per-request context window (newest evidence plus closed summaries), total bounded only by cost, tokens, deadline and progress | Core | P2 | in flight on t057 (`w2x-evidence-window`) |
 | **P2** | A failed exploration tool call ends the whole build and is missing from the trace (`evidence-loop.ts` catch sites; domain throws on covered controls `capture.ts:128` and oversized snapshots `sanitize.ts:276`) — the failure on every realistic site | both | — | done on t051 (`0080aca` Core, `363d536` downstream): `run-mubp3phh-cf4643fd` recorded `web.action.rejected.blocked_by_dialog`, the model pressed Not now next, 15 build = 15 observed; lands after E1 round 1 |
 | **P3** | The web domain never checks a created Flow's own steps for permission (`resolve-plan-node.ts` has no permission field; design report open question 4, F7), so a created Flow can publish, refund or delete on every run unasked | both | I1 | waiting — next dispatch |
@@ -357,6 +359,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Owns: the web files named above, their tests, and any client barrel line the component needs. Must not touch: Core runtime, `result-verification/*`, `RunDetailPanels.tsx` beyond mounting (t035 changed it), downstream source, other worktrees, git commits, shared `dev`, the user's panel.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-run-permission-ui.md`
 
+### Brief: w2x-lab-probe-race
+- Repository: a downstream flat task on the shared read-only Core (`71e2798`). `TR/` is `packages/test-runner/src/`.
+- Task: plan step P8. E1 lane C found that 5 of 6 recording lanes on `auction-marketplace` and `crossborder-marketplace` never start recording: `proveCoreActionRoundTrip` in `TR/run-scenario.ts` (about lines 650-690) checks a `type` step's target is usable on the original page, then has Core navigate a fresh automation tab and types there — where the site's delayed overlays (promotion, coupon popup, cookie banner) have come up again and cover the field, so the probe throws `action.dispatch` and the lane fails before recording. The probe's job is to prove one Core-issued action reaches the page through the production gateway; it must not depend on the site under test being free of overlays. Make it robust on every realistic site: for example, prove the round trip with an action whose success does not need an uncovered control, or treat a closed page-condition result (such as P2's `blocked_by_dialog` rejection, when present) as proof that the command reached the page. Whatever you choose must still fail when the gateway, extension or content script is genuinely broken. `run-scenario.ts` is at 797 of 800 lines: move the probe into its own module under `TR/` with its test.
+- Live first, provider-free, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: the recording lanes that failed on `auction-marketplace` and `crossborder-marketplace` (lane C's report, `reports/w2x-e2e-lane-c.md`) now start and record; one established scenario (`basic-form`) still passes; and a deliberately broken gateway (for example a wrong session id) still fails the probe.
+- Then test-runner tests for the moved module and `pnpm check`.
+- Owns: the probe code, its new module and test, the call site in `run-scenario.ts`. Must not touch: Core, extension, domain, scenario-lab, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-lab-probe-race.md`
+
 ### Brief: w2-multi-action-schema-fix
 - Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
 - Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
@@ -473,6 +483,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: `pnpm task sync-core --dry-run` from lane B printed "26 running process(es) are working inside it or a worktree that shares it"; t051 `run-mubp3phh-cf4643fd` `live-llm.json` contains `web.action.rejected.blocked_by_dialog` and reads `{"build":15,"observed":15}`.
 - Outcome: Partial
 - Follow-up: sync and resume the lanes; land P2 after round 1.
+
+### 2026-09-21 — E1 lane C complete; L4 committed; L5, N3 and P8 dispatched
+- Agent: supervisor; workers `w2x-e2e-lane-c`, `w2x-recovery-permissions`
+- Changed: t050 `9be9f11` (Core recovery permission gate) and `1f6932e` (Lab waits for recovery to settle); t059 (L5) and t060 (N3) on L4's base, t061 (P8); rows P8 and P9.
+- Why: lane C showed no Flow built on either marketplace site; the causes are P2 (11 tasks), the Lab probe race (6), exploration stalls (2), and a dismissible modal classed as needing a person (2). L4's live runs reached complete, accounted recoveries but were refused at preflight, which L5 turns into a permission request.
+- Validation: t050 `npx vitest run --no-file-parallelism .../recovery .../harness-options .../execution-grant-permissions.test.ts` printed `Tests  399 passed (399)`; lane C's campaign summaries read auction "0 of 5 … 23 calls $0.115517" and crossborder "0 of 5 … 40 calls $0.208087"; neither consequential task reached its gated control, so no permission request was observed.
+- Outcome: Partial
+- Follow-up: P9 at the next free slot; E2 after P2, P7 and P8.
 
 ---
 
