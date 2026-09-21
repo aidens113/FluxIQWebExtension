@@ -952,3 +952,40 @@ budgets.
   restart, extension reconnects, 4/4 actions and oracle pass, zero LLM activity;
   otherwise stop at first exact failure.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-reconnect-reuse-live.md`
+
+### Brief: w2-stable-tab-latency-live
+- Repository: fresh isolated pair from current integrated t027 with a copied
+  disposable deterministic demo workspace; production unpacked extension
+- Task: use the measured 14.8-second saved playback as the baseline, trace the
+  one-second `waitForTabReady` cadence, implement the narrowest readiness-cache
+  or event-invalidated alternative that preserves navigation safety, then run
+  the exact saved Flow through the real panel for an A/B latency measurement.
+- Required reads: playback-latency report; extension `automation-tab.ts`,
+  `action-runner.ts`, `click-landing.ts`, and directly owned readiness tests
+- Owns (may edit): isolated extension tab-readiness implementation and directly
+  owned focused tests only after live evidence; main report
+  `reports/w2-stable-tab-latency-live.md`
+- Must not touch: Core/domain semantics, user panel/profile/data, provider/batch/
+  repair/recording lanes, snapshots/diffs, unrelated files/full suites/commits
+- Definition of done: same project/Flow/graph, 4/4 durable actions, oracle pass,
+  zero LLM activity, navigation safeguards retained, and a measured material
+  runtime reduction; otherwise revert the candidate and report the boundary.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-stable-tab-latency-live.md`
+
+### Brief: w2-panel-unified-batch-task-live
+- Repository: reuse the clean isolated unified candidate and fresh disposable
+  panel workspace; real production UI and headed Chromium
+- Task: choose an existing safe fixture/instruction whose next evidence step
+  naturally has at least two independent read-only actions, then run typed
+  instruction through confirmation and proposal once; continue through visible
+  review/apply/playback/oracle only if sanitized audit proves a 2+ action batch.
+- Required reads: panel unified-batch report; unified decision live report;
+  existing Scenario Lab fixture catalog and candidate prompt/schema only
+- Owns (may edit): no source; main report
+  `reports/w2-panel-unified-batch-task-live.md`
+- Must not touch: candidate schema/executor/prompt, user panel/data, repair/
+  recording/performance lanes, tests/full suites/commits/pushes; no provider retry
+- Definition of done: one natural real-panel decision completes 2+ ordered safe
+  actions, then the same proposal visibly applies and playback passes its page
+  oracle; otherwise stop at the first exact terminal outcome and classify it.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-unified-batch-task-live.md`
