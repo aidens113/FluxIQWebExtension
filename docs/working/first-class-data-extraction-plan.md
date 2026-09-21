@@ -1,7 +1,7 @@
 # First-Class Data Extraction Plan
 
 Status: Active
-Status detail: Executing 2026-09-15; X0-X3, X4.1 and X5 contracts/measurement/fixtures are complete, verified, committed and pushed, and the picker (X4.2-X4.4) is now being built after the user gave the go.
+Status detail: Extraction, picker-to-recording, durable datasets, preview/export, and no-reload Runtime Debug refresh are built; a fresh integrated pushed-dev UI scrape/restart/reuse smoke is in progress.
 Created: 2026-09-15
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -12,6 +12,20 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ---
 
 ## Current State
+
+**Update 2026-09-20:** the picker and its recording path are complete. A live
+t027 production panel/extension run selected a repeating structure, captured
+eight rows, saved and executed the generated Flow, persisted the exact dataset,
+and rendered all eight rows with non-empty CSV and JSON exports. Runtime Debug's
+same-view history/dataset refresh was fixed and merged on t030. Task t032 has
+now passed the extraction path again on current pushed `dev` from a fresh
+isolated production UI workspace: initial and full-restart replay each produced
+one successful extraction action, one dataset, eight rows, seven fields, eight
+rendered preview rows, non-empty CSV/JSON, and zero provider calls. Stable
+project, Flow, Subflow, graph, and recording identities survived the restart.
+The supervisor independently read the sanitized counts-only result and observed
+the same pass. The full definitive run took 70.099 seconds. This proves the
+saved scraping capability; model authoring is a separate live lane.
 
 **Phase, as of 2026-09-15: X0-X3, X4.1 and X5's contracts, measurement and
 fixtures are complete and verified, every worker has reported, and both
@@ -484,6 +498,16 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 - Definition of done: first reproduce through the real panel; make the smallest root-cause fix; rerun the same picker/recording/Flow/playback path or a preserved equivalent and observe the new completed run plus dataset controls without reload/reopen; only then run focused tests/build.
 - Report to: `docs/working/first-class-data-extraction-plan/reports/w2-runtime-debug-refresh-live.md`
 
+### Brief: w2-integrated-extraction-ui-smoke
+- Repository: pushed downstream/Core `dev` in task t032's isolated read-only topology; report written on t032.
+- Task: prove a user can use the production panel plus unpacked extension to select a repeating structure, confirm fields, record/save the extraction Flow, execute it, inspect the durable dataset and exports, restart Core/browser, and replay with the same result.
+- Required reads: Current State; `reports/w2-runtime-debug-refresh-live.md`; existing extraction picker/demo helpers reached directly from that report.
+- Owns: disposable t032 profile/store/run data and `reports/w2-integrated-extraction-ui-smoke.md` only.
+- Must not touch: product/Core source, user store/profile, ports 3000/49100, provider credentials, other reports/working docs, git history, or raw extracted values in the report.
+- Live order: use the real panel and extension UI; record exact UI checkpoints, row/field counts, dataset/export presence, action/oracle counts and stage timings; restart both sides and replay; do not begin with or run unit suites.
+- Definition of done: initial and restarted runs both satisfy the counts-only oracle, Runtime Debug updates without reload and exposes preview/CSV/JSON, restarted replay uses the saved Flow with zero provider calls; first failure is categorized precisely if any checkpoint stops the path.
+- Report to: `docs/working/first-class-data-extraction-plan/reports/w2-integrated-extraction-ui-smoke.md`
+
 ## Work Ledger
 
 ### 2026-09-15 — Picker complete; a false accuracy score removed
@@ -666,6 +690,14 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 - Outcome: Open
 - Follow-up: X5.5 owns it, and must not publish a pooled extraction accuracy
   number until it is settled
+
+### 2026-09-20 — Integrated extraction UI and restart smoke
+- Agent: supervisor, with worker `w2-integrated-extraction-ui-smoke`
+- Changed: counts-only live report; no product source.
+- Why: prove the website-scraping path through the actual production panel and extension on pushed `dev`, including persistence and export after a full restart.
+- Validation: sanitized result -> initial and replay each 1/1 action, 1 dataset, 8 rows, 7 fields, 8 preview rows, non-empty CSV/JSON, zero provider calls; stable saved identities; total 70.099 seconds; `git diff --check` -> passed.
+- Outcome: Accepted
+- Follow-up: none for deterministic saved extraction; instruction-to-extraction authoring remains part of the model-authoring campaign.
 
 ## Open Questions
 
