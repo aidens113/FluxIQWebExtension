@@ -17,13 +17,15 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 t027 production panel/extension run selected a repeating structure, captured
 eight rows, saved and executed the generated Flow, persisted the exact dataset,
 and rendered all eight rows with non-empty CSV and JSON exports. Runtime Debug's
-same-view history/dataset refresh was fixed and merged on t030, then a separate
-pushed-`dev` smoke proved its no-reload terminal update. Task t032 now repeats
-the extraction path on current pushed `dev` from a fresh isolated UI workspace,
-including full Core/browser restart and deterministic reuse, so the answer to
-"can it scrape a website?" is backed by integrated rather than branch-local
-evidence. This lane is provider-free; it tests the saved extraction capability,
-not model authoring.
+same-view history/dataset refresh was fixed and merged on t030. Task t032 has
+now passed the extraction path again on current pushed `dev` from a fresh
+isolated production UI workspace: initial and full-restart replay each produced
+one successful extraction action, one dataset, eight rows, seven fields, eight
+rendered preview rows, non-empty CSV/JSON, and zero provider calls. Stable
+project, Flow, Subflow, graph, and recording identities survived the restart.
+The supervisor independently read the sanitized counts-only result and observed
+the same pass. The full definitive run took 70.099 seconds. This proves the
+saved scraping capability; model authoring is a separate live lane.
 
 **Phase, as of 2026-09-15: X0-X3, X4.1 and X5's contracts, measurement and
 fixtures are complete and verified, every worker has reported, and both
@@ -688,6 +690,14 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 - Outcome: Open
 - Follow-up: X5.5 owns it, and must not publish a pooled extraction accuracy
   number until it is settled
+
+### 2026-09-20 — Integrated extraction UI and restart smoke
+- Agent: supervisor, with worker `w2-integrated-extraction-ui-smoke`
+- Changed: counts-only live report; no product source.
+- Why: prove the website-scraping path through the actual production panel and extension on pushed `dev`, including persistence and export after a full restart.
+- Validation: sanitized result -> initial and replay each 1/1 action, 1 dataset, 8 rows, 7 fields, 8 preview rows, non-empty CSV/JSON, zero provider calls; stable saved identities; total 70.099 seconds; `git diff --check` -> passed.
+- Outcome: Accepted
+- Follow-up: none for deterministic saved extraction; instruction-to-extraction authoring remains part of the model-authoring campaign.
 
 ## Open Questions
 
