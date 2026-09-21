@@ -70,8 +70,9 @@ edit it.
 **In flight:** `w2x-t027-gate-triage` (t027's builds pass; tests fail 3
 downstream and 5 in Core web, plus test-runner's stale `dist`); speculatively
 from t027's tip: `w2x-t033-land` (I2), `w2x-creation-permission-lost` (P1,
-t047), `w2x-service-headroom` (L0, t048), `w2x-created-flow-repair-lane` (L1,
-t049, with t036 merged in); ten
+t047), `w2x-created-flow-repair-lane` (L1,
+t049, with t036 merged in); `w2x-recovery-permissions` (L4, t050, on L0's Core);
+ten
 `w2x-realistic-scenarios` workers (S1, t037-t046). Machine limit: 12 threads,
 26 GB, about 8 GB free under this load; U1 and I3 dispatch as scenario workers
 finish.
@@ -101,12 +102,12 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **I5** | Clean-up: `pnpm task prune`; abandon t006, t007, t017; t005 with `--force`; t021 after discarding its rejected Core prototype; remove the `F:\fxlab\t027-*` worktrees; keep t008 and t011 evidence until checked | both | I1 | waiting |
 | **P1** | Creation without a permit ends in HTTP 400 (`lab.generation_http_400`, t036 run `run-mubktq9k-5cb2485b`) instead of a permission request reaching the person; Core's generation handler appears to drop the cause. Reproduce live, then make it a first-class needs-permission outcome | both | I1 | waiting |
 | **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each, merged to `dev` and put into live testing as they finish | downstream | — | in flight |
-| **L0** | C0: bring Core `service.ts` under its ratchet by behaviour-unchanged moves | Core | I1, I2 decision | waiting |
+| **L0** | C0: bring Core `service.ts` under its ratchet by behaviour-unchanged moves | Core | I1 | done on t048 (`56d6106`, 6,381 -> 6,275 lines); lands after I1 |
 | **L1** | Gap step 1: the created-Flow repair lane on `persistent-isolated`, with `--replays` for instruction tasks; proves Persist and the zero-call re-run on identity-drift | downstream | I1 | waiting |
 | **L2** | C5a+C5b+D5: result verification asks once more after any non-yes answer; only no,no refutes; an empty result is recorded as not checked | both | — | done on t035 (`571f9d4` Core, `cf54c30` downstream); lands after I1 |
 | **V1** | Judge an empty result against the instruction (an empty table can be the right answer) instead of leaving it unchecked; needs the grant-revalidation hang t024 found in provider resolution fixed first; also remove the empty-record refutation in `result-verification/core-observation.ts`, which `verify` can no longer reach | Core | L2 | waiting |
 | **L3** | D3: the Lab's `--llm-permit`, carried to the grant's `permittedConsequences` | downstream | — | in flight |
-| **L4** | C3: recovery receives the permitted set; the permission gate, not `allowExternalSideEffects`, decides acting options | Core | L0, L3 | waiting |
+| **L4** | C3: recovery receives the permitted set; the permission gate, not `allowExternalSideEffects`, decides acting options | Core | L0, L3 | in flight on t050 (`w2x-recovery-permissions`) |
 | **L5** | C4+D4: a repair needing a side effect becomes a needs-permission request, not a preflight refusal | both | L4 | waiting |
 | **L6** | Gap step 3: Resume on granted runs — record the verified trial's continuation and continue from `verdict.resumeFrom`; relax the `autoApply`-only retry for in-run use (L9) | Core | L0, L5 | waiting |
 | **L7** | Gap step 4: 2.9 plumbing — `providerCallCount` and `adaptationsExercised` on every run, the 2.6 recorder wired, Lab adaptation metrics and bench rows | both | L6 | waiting |
@@ -287,6 +288,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Owns: `TR/ui-e2e/journeys/**`, `TR/demo-llm-create-ui/explore-proposal-ui.ts` and `tests/exploration.test.ts`. Must not touch: topology, assertions, `demo-workspace/{core-process,configuration}.ts`, `panel-golden-path/**`, other worktrees, git commits, shared `dev`.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-ui-e2e-journeys.md`
 
+### Brief: w2x-recovery-permissions
+- Repository: paired task t050, `F:\fxwork\t050\!FluxIQWebExtension` (t027's tip plus t036's `--llm-permit`) and `F:\fxwork\t050\!FluxIQ` (t027's Core plus L0 `56d6106`). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
+- Task: plan step L4, slice C3 — "Item 3" of `reports/w2x-existing-flow-and-repair-design.md`. One permission gate per recovery, built once the provider resolves, whose authority is the grant's `permittedConsequences` plus the Flow's stored, still-current instructed set; exploration and the patch stage share it. `execution-grants.ts` `resolve()` returns `permittedConsequences`; the provider resolution type (now in `AS/runtime/llm/resolver-contract.ts`, not `provider-resolution.ts`) carries it; new `AS/runtime/recovery/annotation/permissions.ts` builds the gate; `annotate.ts` passes it to exploration and, when `gate.request` is set, skips the patch call with `llm.runtime_patch_permission_required` and records `metadata.permissionRequest` (stage `recovery`) and `llmGate.permissions`; `exploration.ts` and `runtime-exploration.ts` take the gate; `harness-options/registry.ts` offers `mutate` options when mutations are governed by permission, never `destructive`. `policy.allowExternalSideEffects` stops being read on the recovery path; add that line to Core `docs/architecture/automation-studio.md`. The design's line numbers predate t027 and L0: locate by content.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `order-operations-repair-relabelled-dispatch` with `--llm-task repair`: (1) no permit — `llmGate.permissions.granted` is `[]`, a lasting press such as "Pick and pack" ends the recovery with a `metadata.permissionRequest` whose `missing` is non-empty, and nothing is dispatched; (2) `--llm-permit <those classes>` — `granted` lists them, no request is raised, the press appears in the trace. Report whether a patch was then proposed and its outcome code: L5 and L6 build on this.
+- Then focused tests from inside `packages/fluxiq` (annotation, runtime-exploration, harness-options registry, execution-grants), Core `check` and `build`, downstream `pnpm check`. `service.ts` must not grow past 6,275 lines.
+- Owns: the Core files named above and their tests; the architecture line. Must not touch: `result-verification/*`, `live-patch.ts`, `flow-bootstrap/*`, downstream source, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-recovery-permissions.md`
+
 ### Brief: w2-multi-action-schema-fix
 - Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
 - Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
@@ -371,6 +380,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: `npx vitest run .../result-verification .../llm/tests/verify-result-grant.test.ts` from t035 `packages/fluxiq` printed `Tests  66 passed (66)`; `F:\r35\run-mubmkp4x-d4fadf21` (`data-table-inventory-empty`) read `{"verdict":"passed","oracle":["passed"],"matched":[0],"expected":[0],"build":3,"observed":3}` with `core.result.no_records` in `live-llm.json`; the worker's probe of the stored 14-of-14 run confirmed 20 of 20.
 - Outcome: Done
 - Follow-up: land after t027; V1.
+
+### 2026-09-21 — L0 verified and committed on t048; L4 dispatched
+- Agent: supervisor; worker `w2x-service-headroom`
+- Changed: t048 Core `56d6106` (review projection moved out of `service.ts`, ratchet 6,381 -> 6,275); task t050 (L4) from t049's downstream and t048's Core; brief `w2x-recovery-permissions`.
+- Why: `service.ts` headroom was the gate on every later Core step; L4 is next on the critical path to Recover.
+- Validation: `wc -l .../runtime/service.ts` on t048 printed `6275`; Core `node scripts/structure-audit.mjs` printed `structure-audit: passed (170 warning(s), 361 baselined).`; `run-mubme2r4-81910603` read `{"verdict":"passed","oracle":["passed"],"matched":[14],"expected":[14],"build":5,"observed":5}`. The campaign's playback made one result-verification call; the Flow's steps made none, and the exit criterion's re-run is keyless.
+- Outcome: Done (L0)
+- Follow-up: land after I1.
 
 ---
 
