@@ -21,7 +21,7 @@ test("manifest is valid: W12 primary, W13 consent-then-click, W14 interstitial, 
   assert.equal(bannerAbsent.expected.failure, undefined);
   assert.deepEqual(bannerAbsent.expected.finalState, consent.expected.finalState);
   const armed = resolveScenarioWorkflow(manifest, { workflowId: "interstitial", variantId: "armed" });
-  assert.deepEqual(armed.expected.failure, { category: "user_intervention_required" });
+  assert.deepEqual(armed.expected.failure, { category: "unexpected_state" });
   assert.deepEqual(armed.recordingScript.map((step) => step.target), ["testid:add-section", "testid:add-section", undefined]);
 });
 

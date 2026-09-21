@@ -35,7 +35,7 @@ export function clearAction(action: BrowserActionCommand, deps: ContentActionDep
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be cleared", report.detail, evidence());
+    return deps.rejected(action, startedAt, report.code, "a target that can be cleared", report.detail, { ...evidence(), blockedAt: report.point });
   }
 
   if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {

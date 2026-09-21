@@ -11,7 +11,9 @@ import test from "node:test";
 import {
   AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES,
   AUTOMATION_STUDIO_FAILURE_RECORD_LIMITS,
-  parseAutomationStudioFailureRecord
+  buildAutomationStudioRuntimeDeterministicDiagnosis,
+  parseAutomationStudioFailureRecord,
+  type AutomationStudioNodeAttemptTrace
 } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH } from "../../../actions/types";
 import {
@@ -35,6 +37,7 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   ["TIMEOUT", "web.action.timeout", "timeout", true, "execution"],
   ["AUTH_REQUIRED", "web.auth.required", "auth_required", false, "confirmation"],
   ["USER_INTERVENTION_REQUIRED", "web.intervention.required", "user_intervention_required", false, "execution"],
+  ["BLOCKED_BY_DIALOG", "web.action.blocked_by_dialog", "unexpected_state", false, "execution"],
   ["UNSUPPORTED_TYPE", "web.action.unsupported_type", "blocked_by_capability_or_policy", false, "dispatch"],
   ["NOT_IMPLEMENTED", "web.action.not_implemented", "blocked_by_capability_or_policy", false, "dispatch"],
   ["INVALID_PARAMETER", "web.action.invalid_parameter", "graph_validation_or_unknown_node", false, "dispatch"],
@@ -130,4 +133,41 @@ test("the guard admits every code and nothing else", () => {
   for (const outside of ["web.action.rejected ", "WEB.ACTION.REJECTED", "web.target.missing", "", "toString", undefined, null, 7]) {
     assert.equal(isWebAutomationFailureCode(outside), false, JSON.stringify(outside));
   }
+});
+
+test("a dialog in the way reaches the model under Core's own diagnosis, and a challenge never does", () => {
+  // The line `content/action-runtime/blocking-dialog.ts` draws is only worth
+  // drawing if Core routes the two codes apart. Live on 2026-09-21 a promotion
+  // with its own "Not now" was reported as USER_INTERVENTION_REQUIRED, and
+  // Core, rightly for that category, refused to ask the model how to get past
+  // it. So the pair is asserted through Core's real Stage A diagnosis, not
+  // restated from its current table.
+  const diagnose = (code: WebAutomationFailureCode) => {
+    const failedAttempt: AutomationStudioNodeAttemptTrace = {
+      attemptId: "node.press.attempt.1",
+      nodeId: "node.press",
+      definitionId: "web.dom.click",
+      startedAt: 1,
+      finishedAt: 2,
+      status: "failed",
+      route: "failed",
+      inputs: {},
+      outputs: {},
+      effects: [],
+      message: "Action blocked.",
+      failure: webAutomationFailureRecord(code, { expected: "a target that can be clicked", actual: "covered: the point landed on the scrim" })
+    };
+    return buildAutomationStudioRuntimeDeterministicDiagnosis({ projectId: "project.one", flowId: "flow.one", runId: "run.one", failedAttempt });
+  };
+
+  const dialog = diagnose(WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG);
+  assert.equal(dialog.failureClass, "unexpected_state");
+  assert.equal(dialog.resolution, "model_required");
+  assert.equal(dialog.modelNeeded, true);
+
+  const challenge = diagnose(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED);
+  assert.equal(challenge.failureClass, "user_intervention_required");
+  assert.equal(challenge.resolution, "manual_intervention");
+  assert.equal(challenge.modelNeeded, false);
+  assert.equal(challenge.stillAchievable, "no");
 });

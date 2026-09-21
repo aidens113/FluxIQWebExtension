@@ -24,15 +24,16 @@
 // packet from it (Phase 1.5 step 4) and a snapshot taken later, at diagnosis
 // time, describes a page that has since moved on.
 //
-// Two codes are decided from the page rather than from the verb, and both sit
+// Some codes are decided from the page rather than from the verb, and they sit
 // here because this is the single point every result passes through.
 // `authGateFailure` reports AUTH_REQUIRED when the target (or a list read's
 // item selector) matched nothing, or a URL claim did not hold, and what is on
-// the page is a sign-in wall.
-// `blockedByModal` reports USER_INTERVENTION_REQUIRED when a target was refused
-// as covered or inert and a modal dialog is standing over the page -- the
-// condition that code was named for, which nothing in the browser path produced
-// until now, and which the plan's own corpus row W14 requires.
+// the page is a sign-in wall. `challengeGateFailure` reports
+// USER_INTERVENTION_REQUIRED on the same condition when the page is a robot
+// check or a code prompt instead. And a target refused as covered or inert
+// while a dialog stands over the page is BLOCKED_BY_DIALOG, or
+// USER_INTERVENTION_REQUIRED when that dialog asks for what only a person can
+// give; `blocking-dialog.ts` draws that line.
 //
 // What a validation implies for the status is decided in
 // `validation-outcome.ts`; this module assembles it with what the page can
@@ -56,6 +57,8 @@ import type {
   DomSnapshot,
   JsonValue
 } from "../types";
+import { blockingDialog } from "./blocking-dialog";
+import { challengeIn } from "./challenge-evidence";
 import { boundValidation, statusForValidation } from "./validation-outcome";
 
 type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
@@ -86,6 +89,12 @@ export type ActionResultEvidence = {
   /** A snapshot asked to detect a structure: what it found, or why nothing. Structure only, never a value (D3). */
   structure?: BrowserActionResult["structure"];
   resolution?: BrowserActionTargetResolution | undefined;
+  /**
+   * Where the hit test landed on something other than the target, for a target
+   * refused as `covered`. It decides what covered it (`blocking-dialog.ts`) and
+   * never leaves the page: a point says nothing a snapshot would not.
+   */
+  blockedAt?: { x: number; y: number } | undefined;
 };
 
 /**
@@ -178,10 +187,16 @@ export function success(
  * at a call site would be outside the closed set, and Core routes on the
  * category, which is the same for every refusal.
  *
- * One refusal is not that failure at all, and it is the second place a code is
+ * One refusal is not that failure at all, and it is another place a code is
  * decided from the page rather than from the verb: a target the page will not
- * let anything touch *because a modal dialog is waiting for an answer*. See
- * `blockedByModal` for the rule and what it deliberately does not claim.
+ * let anything touch *because a dialog is standing over it*. That is
+ * BLOCKED_BY_DIALOG -- the page is in a state the step did not expect, and
+ * recovery may answer or close the dialog -- unless the dialog asks for what
+ * only a person can give, which is USER_INTERVENTION_REQUIRED. Reporting a
+ * dialog as ACTION_REJECTED would tell Core a gate refused the action on
+ * purpose (`blocked_by_capability_or_policy`), which no dialog is.
+ * `blocking-dialog.ts` draws the line and says what it deliberately does not
+ * claim.
  */
 export function actionRejected(
   action: BrowserActionCommand,
@@ -193,16 +208,16 @@ export function actionRejected(
 ): BrowserActionResult {
   const validation = boundValidation({ status: "failed", expected, actual });
   const observed = validation.status === "failed" ? validation.actual : actual;
-  const modal = blockedByModal(reason);
-  if (modal) {
+  const dialog = blockingDialog(reason, evidence.blockedAt);
+  if (dialog) {
+    const code = dialog.kind === "person"
+      ? WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED
+      : WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG;
     return buildResult(action, startedAt, {
       status: "failed",
       validation,
-      message: `Action blocked: ${observed}; ${modal}`,
-      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
-        expected,
-        actual: `${reason}: ${observed}; ${modal}`
-      })
+      message: `Action blocked: ${observed}; ${dialog.sentence}`,
+      failure: webAutomationFailureRecord(code, { expected, actual: `${reason}: ${observed}; ${dialog.sentence}` })
     }, evidence);
   }
   return buildResult(action, startedAt, {
@@ -277,16 +292,18 @@ function unobservedOutputCode(action: BrowserActionCommand): WebAutomationFailur
  * record names the claim, never the address the page is at, which on a real
  * sign-in page carries a return path or a token.
  *
- * This is one of two places a code is decided from the page rather than from
+ * This is one of the places a code is decided from the page rather than from
  * the verb, which is why it sits at the single point every result passes
- * through rather than in one producer. The other is `blockedByModal` above,
- * and the two are ordered: a refusal met by a modal is settled before the
- * result is built, and this hook then runs over the record either branch
+ * through rather than in one producer. The others are the dialog rule in
+ * `actionRejected` above and `challengeGateFailure` below, and they are
+ * ordered: a refusal met by a dialog is settled before the result is built,
+ * and this hook and then the challenge hook run over the record either branch
  * produced. AUTH_REQUIRED winning is deliberate -- a page that has become a
  * sign-in gate needs a person to sign in, which is more specific than "a person
- * must act" -- though the two cannot meet in practice, since a target that
- * resolved well enough to be refused is a target this hook's selector condition
- * (nothing matches it) rules out, and a URL claim is never refused.
+ * must act" -- though a refusal and this hook cannot meet in practice, since a
+ * target that resolved well enough to be refused is a target this hook's
+ * selector condition (nothing matches it) rules out, and a URL claim is never
+ * refused.
  */
 function authGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
   const sought = soughtSelector(action);
@@ -310,75 +327,35 @@ function namedUrlClaim(action: BrowserActionCommand): boolean {
 }
 
 /**
- * The two actionability refusals a modal dialog explains. `covered` is the
- * overlay-and-backdrop shape: the hit test landed on the scrim in front of the
- * target. `hidden` is the `inert` shape, which is the one a correct modal
- * actually produces -- both `dialog.showModal()` and the ARIA pattern mark the
- * rest of the document inert, and `actionability.ts` reports an inert target as
- * hidden, because there is no point on screen that belongs to it.
+ * USER_INTERVENTION_REQUIRED, when what the action looked for is not in this
+ * document and the document is a challenge only a person can answer: a robot
+ * check, or a prompt for a one-time or second-factor code. It is
+ * `authGateFailure`'s rule with a different page on the other side of it, and
+ * it exists for the same reason: a store that has decided the session is
+ * automated answers every address with its challenge, so a replayed step finds
+ * nothing it recorded, and reporting that as a missing target sends Core to ask
+ * the model -- which is to say, to have a guess typed into the challenge.
  *
- * `disabled` is not here, and neither is any verb's own word (`upload_rejected`,
- * `unsupported_key`, `not_checkable`): those describe the target, and a dialog
- * standing somewhere else on the page does not make them untrue.
+ * "Not in this document" is the same test the sign-in rule uses, widened by the
+ * resolver's own verdict: a Flow's target need not be a CSS selector, and when
+ * the resolver found nothing, nothing was found whatever the selector's syntax.
+ * The page is read only for a robot check or a code prompt, and only in what it
+ * declares or states in its headings (`challenge-evidence.ts`): a card field on
+ * a checkout page, or a captcha mentioned in passing, does not make a missing
+ * target the person's.
  */
-const MODAL_BLOCKED_REFUSALS: ReadonlySet<string> = new Set(["covered", "hidden"]);
-
-/**
- * USER_INTERVENTION_REQUIRED, when the page is not refusing the action so much
- * as waiting for a person: a modal dialog is up, and the target is behind it.
- *
- * This is the page-side condition the code was named for -- Core's category is
- * "a person must act before the run can continue" -- and until now nothing in
- * the browser path produced it at all. It was reported as ACTION_REJECTED,
- * which tells an orchestrator the opposite of the truth: `blocked_by_capability_or_policy`
- * means a gate refused the action and no retry can change that, so a run met by
- * an unrecorded cookie wall or upsell interstitial stopped as if the *step* were
- * wrong. The plan's own corpus says otherwise: W14
- * (`modal-flows/interstitial/armed`) requires `user_intervention_required`, and
- * before this hook no producer could have satisfied it.
- *
- * Both halves are required, because either alone is ordinary -- the same rule
- * `authGateFailure` follows below. A rendered modal on a page whose target is
- * actionable is just a page with a dialog on it, and a covered or inert target
- * with no modal is an overlay, a sticky footer, or a genuinely hidden control:
- * `modal-flows`' cookie banner covers the primary action and is *not* modal, so
- * a refusal there stays ACTION_REJECTED, which is right.
- *
- * "Modal" is taken from the page's own declaration rather than guessed from
- * geometry: `aria-modal="true"`, which is the ARIA contract that the rest of
- * the document is not interactive, or `:modal`, which matches a `<dialog>` that
- * was opened with `showModal()` and nothing else. A dialog that is present but
- * not rendered does not count -- `modal-flows` keeps its invite dialog in the
- * markup behind `hidden` at all times, and treating that as blocking would make
- * every refusal on that fixture an intervention.
- *
- * **What it does not claim.** It does not check that the modal is the thing
- * covering *this* target, because the refusal arrives here as a reason and a
- * sentence, not as an element and a hit point. A target inside the modal that
- * is itself covered by something else would be reported as an intervention. A
- * captcha is not detected either: no fixture ships one, and a vendor-iframe
- * heuristic proved against nothing is a guess with a code attached.
- */
-function blockedByModal(reason: string): string | undefined {
-  if (!MODAL_BLOCKED_REFUSALS.has(reason) || !renderedModalPresent()) return undefined;
-  return "a modal dialog is open over the page, so a person has to answer it before the run can continue";
-}
-
-/** A dialog the page declares modal and the browser is actually painting. */
-function renderedModalPresent(): boolean {
-  return rendered('[aria-modal="true"]') || rendered("dialog:modal");
-}
-
-/** Whether anything matching the selector has a box on screen. An unsupported selector is no answer, so it says false. */
-function rendered(selector: string): boolean {
-  try {
-    for (const element of document.querySelectorAll(selector)) {
-      if (element.getClientRects().length > 0) return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
+function challengeGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
+  const sought = soughtSelector(action);
+  const missing = failure.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND || (sought ? selectorMatchesNothing(sought) : false);
+  if (!missing && !namedUrlClaim(action)) return undefined;
+  const body = document.body;
+  const challenge = body ? challengeIn(body, "page") : undefined;
+  if (!challenge) return undefined;
+  const what = challenge === "captcha" ? "a robot check" : "a prompt for a verification code";
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected: failure.expected ?? (missing ? (sought ? `an element matching ${sought}` : "the action's target") : "the page URL the Flow claimed"),
+    actual: `${missing ? failure.actual ?? "nothing matched the target" : "the page is not at the URL the Flow claimed"}; the document is ${what}, which only a person can answer`
+  });
 }
 
 /** True when nothing in this document matches the selector. An unparseable selector is no answer at all, so it says false. */
@@ -415,7 +392,9 @@ function buildResult(
     finishedAt: Date.now()
   };
   if (core.message !== undefined) result.message = core.message;
-  if (core.failure !== undefined) result.failure = authGateFailure(action, core.failure) ?? core.failure;
+  if (core.failure !== undefined) {
+    result.failure = authGateFailure(action, core.failure) ?? challengeGateFailure(action, core.failure) ?? core.failure;
+  }
   if (evidence.element) result.element = evidence.element;
   if (action.visualTarget) result.visualTarget = action.visualTarget;
   // A failure always carries the page it failed on: the domain builds the
