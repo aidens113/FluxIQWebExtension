@@ -1,3 +1,4 @@
+import { PHOTO_SOCIAL_REPAIR_TASKS } from "./photo-social/index.js";
 import { SOCIAL_NETWORK_FEED_REPAIR_TASKS } from "./social-network-feed/index.js";
 import { COMPANY_WEBSITE_REPAIR_TASKS } from "./company-website/index.js";
 
@@ -212,6 +213,7 @@ const TASKS: LiveRepairTask[] = [
   ...SOCIAL_NETWORK_FEED_REPAIR_TASKS,
   // `sensitive-input` / `extract-card-secrets` is not a task: its refusal happens while the Flow lane records,
   // so no Flow exists for a model to repair (the exclusion in `tests/live-repair-tasks.test.ts` says why).
+  ...PHOTO_SOCIAL_REPAIR_TASKS,
   ...COMPANY_WEBSITE_REPAIR_TASKS,
   ...PROFESSIONAL_NETWORK_REPAIR_TASKS,
 ];
