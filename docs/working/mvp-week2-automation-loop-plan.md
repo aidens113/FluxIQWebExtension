@@ -73,9 +73,10 @@ reconcile it only after field entry and truthful `targetsUnchanged` evidence.
 **In progress 2026-09-20 (t027):** t026 is integrated. Chromium A/B reduced
 six actions from six decisions to three; all five focused batch-safety rows
 passed. Matching real-provider baseline and batching runs both created and
-passed the same nine-action Flow oracle. New sanitized telemetry proved two
-later provider runs chose zero batches, so adoption remains open; the failed
-wording experiment was excluded. Panel storage initialization and autofill
+passed the same nine-action Flow oracle. A unified one-or-many provider shape
+now has live batches of two and four successful actions plus a correct target-
+change stop, but remains isolated because those runs have not completed Flow
+creation/playback/oracle. Panel storage initialization and autofill
 repairs and bounded host-state playback are integrated on t027. The real panel now completes instruction, high-token confirmation, one-call provider proposal, visible Audit/approve/apply, and a 4/4-action passing oracle; warm request-to-proposal was 11.6 seconds. The production panel plus loaded extension also passes recording through generated Subflow and rendered-layout validation in 18.9 seconds; two separate runtime/browser lifetimes replayed the exact saved graph with zero LLM activity. Removing redundant Lab screenshots around Core snapshots reduced its measured runtime step from 15.8 to 14.8 seconds without weakening state capture. Explicit safe adoption of a marker-less v2 root is merged and pushed on t028, but applying it to the user's root still requires an approved stop, private backup, hash check, and restart. Concurrent work is specified in
 [the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
 same-code configuration, isolated worktrees/services/profiles/stores, at most
