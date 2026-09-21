@@ -21,7 +21,7 @@ export type ExistingRuntimePatchAttempt = { kind?: string; proposalOnly?: boolea
  * what tells a live run that never called the provider apart from one that did,
  * so a run cannot report a green result on an unreached model.
  */
-export type ExistingRunLlmGate = { invoked: boolean; reason?: string; code?: string };
+export type ExistingRunLlmGate = { invoked: boolean; reason?: string; code?: string; patchSkippedCode?: string };
 /**
  * Core's own per-run provider accounting (`metadata.llmGate.costAccounting`).
  * Counts and totals only, and the numbers a budget is actually held to: an
@@ -654,7 +654,14 @@ function runLlmGate(value: JsonRecord): ExistingRunLlmGate {
   };
   const reason = bounded(value.reason, "reason", 512);
   const code = bounded(value.code, "code", 128);
-  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}) };
+  const publishedPatchSkippedCode = bounded(value.patchSkippedCode, "patchSkippedCode", 128);
+  const diagnosis = optionalRecord(value.structuredDiagnosis, `${at}.structuredDiagnosis`);
+  const patchSkippedCode = publishedPatchSkippedCode && /^llm\.runtime_patch_[a-z_]+$/u.test(publishedPatchSkippedCode)
+    ? publishedPatchSkippedCode
+    : value.patchSkipped !== undefined && diagnosis?.patchNeeded === false
+      ? "llm.runtime_patch_not_requested"
+      : undefined;
+  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}), ...(patchSkippedCode ? { patchSkippedCode } : {}) };
 }
 /**
  * Core's receipt for a repair the model declined (`automationStudioDeclinedRepairAttempt`):

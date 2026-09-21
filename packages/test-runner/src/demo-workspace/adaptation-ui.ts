@@ -107,7 +107,10 @@ export async function runAdaptationFromPanel(page: Page, flowTreeItemId: string,
   const response = await evidence.step("panel", "adaptation-runtime-run", "Run one bounded diagnosis and adaptation proposal", () => waitForPanelRunResponse(page, async () => {
     await runButton.click();
     const confirmation = page.getByRole("dialog", { name: "Confirm high-token LLM Execution", exact: true });
-    const confirmationObserved = await confirmation.waitFor({ state: "visible", timeout: 2_000 }).then(() => true).catch(() => false);
+    // The confirmation follows an authenticated preflight request. A cold
+    // production panel can take several seconds to compile and answer it, so a
+    // two-second probe can miss a modal that is still legitimately on its way.
+    const confirmationObserved = await confirmation.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
     if (confirmationObserved) {
       await evidence.diagnostic("panel", "adaptation-high-token-confirmation", "adaptation.high-token-confirmation", { observed: true });
       await confirmation.getByRole("button", { name: "Continue high-token execution", exact: true }).click();

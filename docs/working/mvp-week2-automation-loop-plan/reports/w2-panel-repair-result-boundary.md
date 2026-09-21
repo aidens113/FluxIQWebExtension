@@ -1,6 +1,6 @@
 # w2-panel-repair-result-boundary
 
-Status: blocked at one terminal live provider result; no retry performed.
+Status: result boundary repaired and verified provider-free through the real managed panel/runtime; no retry performed.
 
 ## Scope and isolation
 
@@ -22,7 +22,7 @@ Status: blocked at one terminal live provider result; no retry performed.
    - First visible runtime action: `01:48:18.331Z`.
    - Runtime action complete: `01:48:19.413Z`.
    - Panel run response complete: `01:48:34.930Z` (24.615 s after click).
-6. Durable terminal projection: status `failed`; provider calls `2`; interventions `1` (`diagnosis`); adaptations `0`; change proposals `0`. The diagnosis returned and the patch provider call was spent, but no reviewable patch/proposal was produced. No second provider attempt was made.
+6. Durable terminal projection: status `failed`; provider calls `2`; interventions `1` (`diagnosis`); adaptations `0`; change proposals `0`. Subsequent durable-event inspection corrected the first interpretation: call 2 was `evidence_tool_decision`, not `runtime_patch`. The structured diagnosis said `patchNeeded: false`, `stillAchievable: no`, and `explorationNeeded: true`; therefore no patch call was made. No second provider attempt was made.
 
 The review/apply/oracle/restart phases were correctly not entered because the terminal run produced zero proposals rather than exactly one.
 
@@ -54,13 +54,33 @@ No commits or pushes were made.
 - An attempted package-scoped test command unexpectedly expanded the package's full `dist/**/*.test.js` suite despite file arguments. It was not used as the validation claim; the command reported 1,190 passes and 5 failures, including two invalid raw-TypeScript arguments added to that command. This was broader than intended. The two owned compiled files were subsequently run directly and passed 17/17.
 - No repository-wide check/test/build suite was intentionally run.
 
-## Next exact product boundary
+## Provider-free result-boundary continuation
 
-The provider-backed patch call is still not durably explainable through the downstream run-detail projection: two calls were counted, only the diagnosis intervention survived, and zero proposal was recorded. The new Core recovery-trace path should be verified against this exact malformed/invalid patch-result case, and the downstream run-detail parser must expose the bounded `failureCode` if Core persisted it. Do not retry the model until the same terminal result can be classified from durable state.
+The terminal result is now durably explainable. The root cause was not malformed patch output: Core ran exploration when the plan requested a look even though its unachievable verdict made `patchRequest.request` false. Since recovery does not re-plan after exploration, the evidence had no consumer and could never become a patch or proposal. The downstream wait then compounded this by requiring two interventions even after the run was terminal; this run had only its diagnosis intervention, so the driver waited indefinitely.
+
+Smallest candidate repair:
+
+- Core `runtime/recovery/annotation/annotate.ts` now runs exploration only when the plan both requests exploration and requests a patch, publishes `llm.runtime_patch_not_requested` (or the corresponding closed grant/unavailable code), and carries it into recovery resolution detail. Patch-call failures remain separately classified with their bounded diagnostic code.
+- Core `runtime/recovery/stages.ts` records the closed `skipCode` for a skipped resolution and the bounded `failureCode` for a failed patch result.
+- Downstream `existing-fluxiq-control.ts` reads the published closed code and derives `llm.runtime_patch_not_requested` for preserved older evidence that has `patchSkipped` plus `structuredDiagnosis.patchNeeded === false`.
+- Downstream `demo-llm-exploration-adaptation-wait.ts` treats every terminal status as terminal and includes only the bounded recovery code when no exact proposal exists.
+- Downstream `demo-workspace/adaptation-lane.ts` exposes that bounded code in the sanitized state projection.
+
+Provider-free live verification used the preserved actual run through a freshly started authenticated managed panel/runtime on unique loopback ports 3367/4937. The result was: `failed`, one `diagnosis` intervention, provider-call count still `2`, zero adaptations, zero change proposals, and `recoveryCode: llm.runtime_patch_not_requested`. This read created no run and made no provider request. All isolated listeners were closed afterward.
+
+Focused validation after that live result:
+
+- Core annotation + recovery stages: 38/38 passed (the command explicitly excluded generated `.tmp` build copies).
+- Downstream test-runner build passed.
+- Downstream run-detail parser + terminal wait tests: 25/25 passed by direct compiled-file invocation.
+- `git diff --check` passed in both isolated repositories (line-ending notices only).
+- No broad suite was run.
 
 ## Reusable capability observation
 
-The journey exposed a useful browser-domain capability gap, though it did not prove that gap caused this terminal result: semantic target drift currently asks repair logic to infer a replacement selector from general evidence. A reusable, bounded native web node that enumerates actionable elements by role/label and returns opaque candidate identities would give creation and repair the same deterministic evidence seam, reduce free-form selector generation, and be reusable across click/fill/select actions. This should be scoped as a downstream web-automation node (DOM/browser concepts prevent promotion to generic Core) and evaluated separately after the durable patch-failure code is visible.
+The journey did **not** justify a new actionable-elements node. `web.dom.capture_snapshot` already captures interactive elements, and `web.inspect_current_page` already sanitizes them into bounded `web-llm-evidence.v2` elements carrying opaque target handles plus semantic `tag`, `role`, accessible `name`, visible text, control type, form/landmark/heading context, and frame identity. The downstream target validator already checks action compatibility and recorded-target equivalence. A duplicate node would reproduce an existing capture/sanitization seam.
+
+The smallest reusable missing capability is instead a deterministic **repair-candidate projection/ranker** over the existing failure/current-page packet: filter elements by the failed action's repairable parameter role, compare them with the recorded fingerprint using the existing equivalence rules, and expose only a bounded ordered list of opaque handles plus closed match/refusal categories to the repair prompt. This belongs in downstream `domain/src/runtime/llm-evidence/target/` and can be attached to the existing failure-evidence/runtime binding; Core should remain browser-neutral and merely carry the bounded candidate projection.
 
 ## Disposable residue
 

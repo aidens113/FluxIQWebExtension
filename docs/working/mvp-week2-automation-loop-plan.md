@@ -55,35 +55,32 @@ reveal wording. t025 proved a four-step disclosure exploration reduced to one
 replayable press with an intact state chain. t026 added field entry and truthful
 target stability. t021 itself remains stale; only its reconciled ideas matter.
 
-**In progress 2026-09-20 (t027):** t026 is integrated. Chromium A/B reduced
-six actions from six decisions to three; all five focused batch-safety rows
-passed. Matching real-provider baseline and batching runs both created and
-passed the same nine-action Flow oracle. A unified one-or-many provider shape
-now has live batches of two and four successful actions plus a correct target-
-change stop, but remains isolated because those runs have not completed Flow
-creation/playback/oracle. Panel storage initialization and autofill
-repairs and bounded host-state playback are integrated on t027. The real panel now completes instruction, high-token confirmation, one-call provider proposal, visible Audit/approve/apply, and a 4/4-action passing oracle; warm request-to-proposal was 11.6 seconds. The production panel plus loaded extension also passes recording through generated Subflow and rendered-layout validation in 18.9 seconds; the exact saved graph survived a complete Core/browser stop and new authenticated extension connection, then replayed 4/4 with a passing oracle and zero LLM activity. A real repair run visibly failed the intended action and completed diagnosis plus patch calls, but persisted no patch/proposal; its now-proven topology and high-token driver corrections are integrated while the Core result boundary remains under isolated diagnosis. Removing redundant Lab screenshots around Core snapshots reduced its measured runtime step from 15.8 to 14.8 seconds without weakening state capture; the extension's repeated one-second tab-readiness cadence is now under isolated live A/B. Explicit safe adoption of a marker-less v2 root is merged and pushed on t028, but applying it to the user's root still requires an approved stop, private backup, hash check, and restart. Concurrent work is specified in
-repairs and bounded host-state playback are integrated on t027. The real panel
-completes instruction through 4/4 oracle; recording survives restart and reuses
-the saved Flow with zero LLM. A provider-backed repair made two calls and
-completed diagnosis, but persisted no patch/proposal and exposed no bounded
-patch failure code; no retry was spent. The production picker-to-dataset path
-passed with 8 rows, exact oracle, rendered preview, and non-empty CSV/JSON
-exports. Runtime Debug required reload to see its own new run, now isolated as
-t030. One-shot same-document snapshot readiness reduced a clean 4-action run
-from 14.774 to 8.165 seconds (-44.7%) without removing evidence; its source and
-focused 34/34 test proof are integrated here. Unified one-or-many remains
-isolated after provider runs failed to complete a Flow. Explicit marker-less-v2
-adoption is pushed on t028; applying it to the user's root still requires
-approved stop/backup/hash/restart. Concurrent work is specified in
+**In progress 2026-09-20 (t027):** the real panel completes instruction through
+a 4/4 oracle; recording survives a full Core/browser restart and reuses the
+saved Flow with zero LLM activity. Picker-to-dataset passed with 8 rows, exact
+oracle, rendered preview, and non-empty CSV/JSON exports. One-shot same-document
+snapshot readiness reduced a clean 4-action run from 14.774 to 8.165 seconds
+(-44.7%) without removing evidence. Runtime Debug's no-reload refresh is now
+merged on t030. The real provider repair run made two calls: diagnosis followed
+by evidence exploration, not a patch call; diagnosis marked the run unachievable
+and patch unnecessary. Provider-free replay of its durable state now exposes
+`llm.runtime_patch_not_requested`, stops terminal waiting correctly, and keeps
+the provider count at two. The corrected budget/UI/grant diagnostics and closed
+result projection are integrated on t027 with focused proof. Existing semantic
+snapshot evidence already covers actionable roles and labels, so a duplicate
+node is rejected; deterministic repair-candidate ranking over that packet is
+the next reusable seam. Unified one-or-many remains isolated because its
+provider runs did not complete a Flow. Marker-less-v2 adoption is pushed on
+t028, but the user's root still needs approved stop/backup/hash/restart.
+Concurrent work is specified in
 [the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
 same-code configuration, isolated worktrees/services/profiles/stores, at most
 two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
 full gates only after live behavior passes.
 
 **Open, for the next session, in priority order:**
-1. Preserve the repair patch failure category through terminal run detail,
-   then live-prove proposal/apply/restart/reuse; do not repeat the failed call.
+1. Add deterministic repair-candidate ranking over existing semantic snapshot
+   evidence, then run a new bounded repair to seek proposal/apply/restart/reuse.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
@@ -136,20 +133,9 @@ run unit tests, `pnpm check` and the suites as a regression net. The corpus
 measures where the product stands when a fix is believed finished; it is never
 the development loop.
 
-**Reaffirmed by the user, 2026-09-20.** Resume t011 from its preserved
-worktree. Live reproduction and same-scenario reruns come before unit tests;
-do not run the full suite after each change. The first target remains the
-schedule-post permission mismatch, followed by the created-lane timeout only
-after that scenario behaves correctly.
-
-**Live integration direction, 2026-09-20.** Add t021's optional multi-action
-exploration output to live testing after t011's permission path works, along
-with the missing field-entry option and `targetsUnchanged` signal needed for a
-fair measurement. Audit every other open task branch against `dev`; bring only
-coherent, still-needed work into the live sequence, with its own focused proof.
-
-**Next steps:** close the repair result boundary, finish t030's automatic run
-refresh, then integrate t027 and use the corpus as the Week 2 measurement.
+**Next steps:** live-prove deterministic repair-candidate ranking, seek the
+remaining proposal/apply/reuse path, then integrate t027 and run the Week 2
+measurement once at the coherent boundary.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -240,6 +226,16 @@ gating it.
 Dispatched briefs whose work has landed are archived in
 [archive/settled-worker-briefs.md](./mvp-week2-automation-loop-plan/archive/settled-worker-briefs.md).
 Current briefs live in the reports named by the Work Ledger.
+
+### Brief: w2-repair-candidate-ranking-live
+- Repository: paired t027 worktrees; use a fresh isolated Lab profile/store
+- Task: add a deterministic bounded repair-candidate projection over existing semantic snapshot evidence, then live-test the same failed-target class before focused tests.
+- Required reads: Current State; `reports/w2-panel-repair-result-boundary.md`; downstream `domain/src/runtime/llm-evidence/target/`, action compatibility/equivalence, and current-page packet binding.
+- Owns: the smallest downstream domain files and focused tests for projection/ranking, its existing failure-evidence binding, and `reports/w2-repair-candidate-ranking-live.md`.
+- Must not touch: Core contracts, user data/profile, shared `dev`, unrelated reports, or provider credentials in artifacts.
+- Live order: prove current evidence has candidates but no deterministic ranking; implement; rerun the same production extension/panel path; test only after it works.
+- Definition of done: bounded opaque handles plus closed match/refusal categories reach repair context; no raw DOM/HTML; exact live before/after evidence and narrow post-live checks.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-repair-candidate-ranking-live.md`
 
 ### Brief: w2-t011-live-permission-resume
 - Repository: this repository, with read-only inspection of FluxIQ Core
