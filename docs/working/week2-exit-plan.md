@@ -105,6 +105,7 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **L0** | C0: bring Core `service.ts` under its ratchet by behaviour-unchanged moves | Core | I1, I2 decision | waiting |
 | **L1** | Gap step 1: the created-Flow repair lane on `persistent-isolated`, with `--replays` for instruction tasks; proves Persist and the zero-call re-run on identity-drift | downstream | I1 | waiting |
 | **L2** | C5a+C5b+D5: result verification repeats a "does not answer" once; disagreement records `unverified` | both | — | in flight |
+| **V1** | Judge an empty result against the instruction (an empty table can be the right answer) instead of leaving it unchecked; needs the grant-revalidation hang t024 found in provider resolution fixed first | Core | L2 | waiting |
 | **L3** | D3: the Lab's `--llm-permit`, carried to the grant's `permittedConsequences` | downstream | — | in flight |
 | **L4** | C3: recovery receives the permitted set; the permission gate, not `allowExternalSideEffects`, decides acting options | Core | L0, L3 | waiting |
 | **L5** | C4+D4: a repair needing a side effect becomes a needs-permission request, not a preflight refusal | both | L4 | waiting |
@@ -354,6 +355,15 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: `pnpm --filter @fluxiq-web-extension/extension test` on `dev` printed `# fail 14` before and `# tests 688`, `# pass 688`, `# fail 0` after; t027 accounting test printed `Tests  8 passed (8)`; Core `dev` `run-outcome.test.ts` "stored nothing" printed `expected 'succeeded' to be 'failed'` (handed to t035); t027 rerun printed downstream `test=1 build=0` with `packages/test-runner` `# fail 3`, and Core `test=1 build=0` with `apps/web` `Tests  5 failed | 1240 passed (1245)`.
 - Outcome: Partial
 - Follow-up: land t027 on a green triage.
+
+### 2026-09-21 — Result verification: re-ask "unknown", never pass an empty result silently
+- Agent: supervisor; worker `w2x-verification-agreement`
+- Changed: decisions sent back to the t035 worker; plan row V1.
+- Why: live, the flip at temperature 0 is yes/unknown, not yes/no, so the designed table still refuted correct runs; and "fail every empty extraction" is wrong, because an instruction can allow an empty table and schedule-post's empty set comes from its own extract step.
+- Decision: re-ask any non-yes first answer once; one yes in the pair records `unverified` (`model_disagreed`); two non-yes answers that are not both `no` record `unverified` (`model_unconfirmed`); only no,no refutes; a silent or unavailable first call still fails closed. An empty result keeps t024's provider-free path but records verification not performed with `core.result.no_records` and says so in run detail.
+- Validation: `F:\r35\run-mublcbqf-9e815106` read matched 14 of expected 14, `"oracleVerdict": "passed"`, `{"build":4,"observed":4}`, yet the product's verification recorded `refuted` on a single `unsure` — a false failure.
+- Outcome: Partial
+- Follow-up: verify t035's live rerun (probe ×10 with zero refuted; `data-table-inventory-empty` not failed).
 
 ---
 
