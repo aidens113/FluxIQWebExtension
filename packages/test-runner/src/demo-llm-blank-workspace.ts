@@ -86,9 +86,9 @@ export async function prepareBlankLlmFlowViaUi(input: {
     await evidence.step("panel", "blank-project-create-open", "Open the Create project dialog", () => page.getByRole("button", { name: "Project", exact: true }).click());
     const dialog = page.getByRole("dialog", { name: "Create project" });
     await dialog.waitFor({ state: "visible", timeout: 30_000 });
-    await evidence.step("panel", "blank-project-name", "Enter the instruction-only project name", () => dialog.getByLabel("Project name", { exact: true }).fill(config.projectName));
-    await evidence.step("panel", "blank-project-description", "Describe the instruction-only testing workspace", () => dialog.getByLabel("Description", { exact: true }).fill("Persistent instruction-only LLM browser automation test workspace"));
-    await evidence.step("panel", "blank-project-pin", "Authorize instruction-only project creation", () => dialog.getByLabel("Security PIN", { exact: true }).fill(config.pin), { sensitive: true });
+    await evidence.step("panel", "blank-project-name", "Enter the instruction-only project name", () => dialog.getByLabel("Project name").fill(config.projectName));
+    await evidence.step("panel", "blank-project-description", "Describe the instruction-only testing workspace", () => dialog.getByLabel("Description").fill("Persistent instruction-only LLM browser automation test workspace"));
+    await evidence.step("panel", "blank-project-pin", "Authorize instruction-only project creation", () => dialog.getByLabel("Security PIN").fill(config.pin), { sensitive: true });
     await evidence.step("panel", "blank-project-create-submit", "Create the instruction-only project", () => dialog.getByRole("button", { name: "Create project", exact: true }).click(), { sensitive: true });
     const created = (await control.listProjects("web-automation")).filter(item => item.name === config.projectName);
     if (created.length !== 1) throw new RunnerFailure("environment.missing", "Panel project creation did not produce one web-automation project");

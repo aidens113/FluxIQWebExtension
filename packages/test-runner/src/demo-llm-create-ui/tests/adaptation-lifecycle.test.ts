@@ -43,8 +43,11 @@ test("stale creation cleanup is a no-op when clear and fails closed on ambiguity
 test("applied topology inspector accepts registered structural nodes around executable actions", async () => {
   const flow = (flowId: string, nodes: unknown[] = [], edges: unknown[] = []) => ({ flowId, projectId: "project.one", name: flowId, updatedAt: 1, contentHash: "hash." + flowId, document: { nodes, edges, metadata: { flowRepresentationKind: flowId === "flow.one" ? "orchestration" : "subflow" } } });
   const control = {
-    listFlowSubflows: async () => [{ projectId: "project.one", flowId: "flow.one", subflowId: "subflow.one", graphFlowId: "graph.one", name: "Generated", status: "active", role: "primary" }],
-    getFlowRouter: async () => ({ routerId: "router.one", projectId: "project.one", flowId: "flow.one", fallback: { kind: "subflow", subflowId: "subflow.one" }, rules: [] }),
+    listFlowSubflows: async () => [
+      { projectId: "project.one", flowId: "flow.one", subflowId: "subflow.one", graphFlowId: "graph.one", name: "Generated", status: "active", role: "primary" },
+      { projectId: "project.one", flowId: "flow.one", subflowId: "subflow.utility", graphFlowId: "graph.utility", name: "Utility", status: "active", role: "utility" },
+    ],
+    getFlowRouter: async () => ({ routerId: "router.one", projectId: "project.one", flowId: "flow.one", fallback: { kind: "subflow", subflowId: "subflow.one" }, rules: [{ target: { kind: "subflow", subflowId: "subflow.utility" } }] }),
     getExactFlow: async (_projectId: string, flowId: string) => flowId === "graph.one" ? flow(flowId, [{ nodeId: "node.start", definitionId: "builtin.control.start" }, { nodeId: "node.one", definitionId: "web.fill" }, { nodeId: "node.end", definitionId: "builtin.control.end" }], [{ edgeId: "edge.one" }, { edgeId: "edge.two" }]) : flow(flowId),
     getFlowGraphViewport: async () => ({ graphRevision: 1, nodes: [{ nodeId: "node.start", x: 0, y: 0 }, { nodeId: "node.one", x: 300, y: 0 }, { nodeId: "node.end", x: 600, y: 0 }], edgeIds: ["edge.one", "edge.two"], nodeCount: 3, edgeCount: 2 }),
     listNativeNodeDefinitions: async () => [{ id: "web.fill", version: "1", sourceKind: "importer", executable: true, externalSideEffect: false }],

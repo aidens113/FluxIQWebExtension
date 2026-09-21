@@ -70,6 +70,7 @@ const ALLOWED_PACKET_KEYS = new Set([
   // addressed, and which parameters a repair fills (`element`, the one every
   // repairable action has).
   "failedTarget", "failedTargetMissing", "failedTargetUnknown", "repairParameters", "element",
+  "repairCandidates", "status", "action", "parameter", "candidates", "target", "match", "roles", "refusals", "category", "count",
   // Page context.
   "frame", "isTop", "childFrameIds", "loading", "readyState", "busy", "spinner",
   "pendingNavigation", "navigation", "type", "redirects", "referrer", "dialogs",

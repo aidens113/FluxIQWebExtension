@@ -48,6 +48,11 @@ export async function readSanitizedGenerationFailure(response: Pick<Response, "s
   const status = response.status();
   let body = "";
   try { body = await response.text(); } catch { /* fail closed without response content */ }
+  return sanitizeGenerationFailureBody(status, body);
+}
+
+/** Sanitize a body already consumed by the caller; Playwright response bodies are single-read. */
+export function sanitizeGenerationFailureBody(status: number, body: string): SanitizedGenerationFailure {
   const responseBytes = Math.min(Buffer.byteLength(body, "utf8"), 1_000_000);
   if (!body || responseBytes > 4096) return sanitizedGenerationFailure(status, responseBytes, false);
   try {

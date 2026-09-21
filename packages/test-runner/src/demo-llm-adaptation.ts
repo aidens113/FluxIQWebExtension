@@ -30,13 +30,16 @@ export const FIRST_LIVE_ADAPTATION_PROFILE: Readonly<LlmExecutionProfile> = Obje
   retainRawResponses: false,
   maxConcurrentRuns: 1,
   budget: {
-    maxInputTokens: 4_000,
-    maxOutputTokens: 1_000,
-    maxTotalTokensPerRequest: 5_000,
+    // Runtime repair carries the diagnosis, bounded failure context, and the
+    // patch/no-repair schema. Use the same model-sized request profile as the
+    // live creation lane so the provider adapter's full visible prompt fits.
+    maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens,
+    maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
+    maxTotalTokensPerRequest: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
     // A ceiling, not the count this demo certifies: an adaptation iterates for
     // as many calls as it needs, and the certificate below records what it made.
     maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun,
-    timeoutMs: 20_000,
+    timeoutMs: DEFAULT_LLM_LAB_BUDGET.timeoutMs,
     maxRetries: 0,
     maxEstimatedCostUsd: 0.25,
   },
