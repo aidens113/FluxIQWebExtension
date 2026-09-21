@@ -3,6 +3,7 @@ import test from "node:test";
 import { RunnerFailure } from "../../../failure.js";
 import { buildCreatedFlowProposal } from "../build-proposal.js";
 import { ADAPTATION_ID, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
+import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
 
 /**
  * The build is the one paid step of a created-Flow run, and whatever Core
@@ -84,6 +85,31 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
   assert.equal(early.record.providerCalls, 0);
   assert.equal(early.record.providerInvocation, "not_attempted");
   assert.deepEqual(early.record.failure, { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 });
+});
+
+test("a build Core stopped to ask a person is a permission request naming the missing classes, not an HTTP failure", async () => {
+  const diagnostic = await permissionRequiredDiagnostic();
+  const { core, record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.equal(record.outcome, "permission_required");
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.permission_required", stage: "provider_output_validation", httpStatus: 400 });
+  assert.deepEqual(record.permissionRequest, {
+    actionKind: "exploration_step",
+    verb: "press",
+    controlName: "Schedule post",
+    controlKind: "button",
+    consequences: ["send_or_publish"],
+    missing: ["send_or_publish"],
+    instructed: [],
+  });
+  assert.equal(record.providerCalls, 2);
+  assert.equal(record.adaptationId, null);
+  // Core built nothing, so there is no proposal to read back.
+  assert.equal(core.calls.includes("get-adaptation"), false);
+  // A request only ever travels on its own ending: the same request on another code is no diagnostic at all.
+  const other = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { ...(diagnostic as Record<string, unknown>), code: "flow_bootstrap.evidence_cancelled" } } } });
+  assert.equal(other.record.outcome, "failed");
+  assert.equal(other.record.failure?.code, "lab.generation_http_400");
+  assert.equal(other.record.permissionRequest, null);
 });
 
 test("a build stopped on refused plans keeps what refused them, decision by decision, and no tool list of Core's own steps", async () => {

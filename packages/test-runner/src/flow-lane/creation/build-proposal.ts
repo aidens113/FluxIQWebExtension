@@ -50,6 +50,11 @@ export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: bo
 export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
 
 /**
+ * - `outcome`: `proposed` when Core left a pending proposal; `permission_required`
+ *   when Core stopped the build to ask a person for a lasting consequence nobody
+ *   allowed -- not a failure of the build, and never an HTTP failure, but the
+ *   question FluxIQ puts to the person, carried in `permissionRequest`;
+ *   `failed` for every other ending.
  * - `providerCalls`: the calls Core counted, from the proposal's evidence-loop
  *   audit or the refusal's decision count; `null` when Core did not say. Core
  *   does not itemize a build's calls one by one, so this count and
@@ -74,7 +79,7 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   classes were missing. Core's own payload for the person, cut to those.
  */
 export type CreatedFlowBuild = Readonly<{
-  outcome: "proposed" | "failed";
+  outcome: "proposed" | "permission_required" | "failed";
   adaptationId: string | null;
   providerCalls: number | null;
   providerInvocation: "attempted" | "not_attempted" | "unknown";
@@ -193,7 +198,8 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
   });
   return Object.freeze({
-    outcome: "failed",
+    // Core's parser admits a request only on its own ending, and that ending only with one.
+    outcome: diagnostic.permissionRequest ? "permission_required" : "failed",
     adaptationId: null,
     providerCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
