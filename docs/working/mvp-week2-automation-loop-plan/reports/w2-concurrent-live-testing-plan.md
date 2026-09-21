@@ -793,3 +793,22 @@ budgets.
   batch, creates/applies/plays the Flow, and passes the oracle; unsupported
   parameters still fail closed. Otherwise stop at the next exact failure.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-decision-completion-repair.md`
+
+### Brief: w2-playback-latency-live
+- Repository: existing isolated `t027-recording-panel` pair/workspace after two
+  proven deterministic playbacks; downstream timing diagnosis/live iteration
+- Task: use sanitized stage/action timings to decompose the ~16 s panel runtime-
+  run step, identify the largest avoidable fixed wait or polling delay, change
+  only that owner, and rerun the same saved Flow once through the panel.
+- Required reads: recording playback/reuse report; its sanitized timelines;
+  demo panel-run/control-wait driver and directly implicated host wait only
+- Owns (may edit): downstream demo playback/panel wait or test-runner host wait
+  proved responsible, directly owned focused tests after live improvement, and
+  main report `reports/w2-playback-latency-live.md`
+- Must not touch: Core/product action semantics, saved workspace identities,
+  provider/batch/repair lanes, user panel/data, unrelated files/full suites/
+  commits/pushes
+- Definition of done: exact saved Flow still passes every action and oracle with
+  zero LLM activity, and measured runtime-run latency falls materially; if the
+  16 s is real action time, report the breakdown and do not weaken waits.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-playback-latency-live.md`
