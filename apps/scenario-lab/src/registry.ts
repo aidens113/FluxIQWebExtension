@@ -30,6 +30,9 @@ import { companyDirectoryScenario } from "./scenarios/company-directory/index.js
 import { socialSchedulerScenario } from "./scenarios/social-scheduler/index.js";
 import { socialInboxScenario } from "./scenarios/social-inbox/index.js";
 import { photoSocialScenario } from "./scenarios/photo-social/index.js";
+import { socialNetworkFeedScenario } from "./scenarios/social-network-feed/index.js";
+import { companyWebsiteScenario } from "./scenarios/company-website/index.js";
+import { professionalNetworkScenario } from "./scenarios/professional-network/index.js";
 import type { ScenarioDefinition, ScenarioId } from "./types.js";
 import type { WebScenario } from "@fluxiq-web-extension/test-contracts";
 
@@ -66,6 +69,9 @@ const registry = new Map<ScenarioId, ScenarioDefinition>([
   [socialSchedulerScenario.id, socialSchedulerScenario],
   [socialInboxScenario.id, socialInboxScenario],
   [photoSocialScenario.id, photoSocialScenario],
+  [socialNetworkFeedScenario.id, socialNetworkFeedScenario],
+  [companyWebsiteScenario.id, companyWebsiteScenario],
+  [professionalNetworkScenario.id, professionalNetworkScenario],
 ]);
 
 export function getScenario(id: string): ScenarioDefinition | undefined {
