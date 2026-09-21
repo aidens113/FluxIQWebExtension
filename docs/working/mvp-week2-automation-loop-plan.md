@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-20. Live creation, reduction, field entry, batch safety, real-panel creation/run, recording, restart/reconnect, and deterministic saved-Flow reuse are proven; repair and unified batch acceptance remain under live work.
+Status detail: Executing 2026-09-20. Creation, recording, extraction, restart/reuse, and the 44.7% runtime-latency gain are live-proven; repair proposal persistence and unified batch acceptance remain open.
 Created: 2026-09-15
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -31,44 +31,29 @@ strict, fail-closed validation. Built as `w2-easy-model-output`.
 other workers' state. Run Core tests from inside `packages/fluxiq`, never the
 repository root, or they take vitest's 5,000 ms default, not 15,000 ms.
 
-**Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, supervisor-verified and
-pushed in both repositories.** What each established is archived in
-[archive/completed-phase-narrative.md](./mvp-week2-automation-loop-plan/archive/completed-phase-narrative.md);
-the file:line evidence is in `reports/w2-a` through `w2-d` and the two scoping
-reports. One finding from those investigations is still open: flow bootstrap
-refuses any flow that is not blank, so the "improve an existing flow" entry
-point cannot reuse it unchanged.
+**Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, verified, and pushed.**
+Their narrative is archived in
+[completed-phase-narrative.md](./mvp-week2-automation-loop-plan/archive/completed-phase-narrative.md).
+Bootstrap still accepts only blank Flows, so existing-Flow improvement is open.
 
 **Read live results call by call** from `snapshots/live-llm.json` and each
 run's `evaluation.json`, never from the verdict: a run reporting `passed` while
 its oracle says `failed` was the commonest defect found on 2026-09-17.
 
-**Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
-deterministic-path patch gated by a compile-checked record
-(`runtime/service/adaptations/gates.ts`); Core's exploration-reduction seam;
-2.6 replay recorder (t007); a run that refuses to continue
-on `resumable: false` and resumes from the failed node (t006); fail-closed
-result verification on `loop_verification`. Token limits derive from one
-constant sized to the model's 64k context, in all ten places that held a copy.
+**Built and landed:** the 2.4 resume point, 2.5 deterministic patch gate,
+exploration reduction, 2.6 replay recorder, `resumable: false` refusal plus
+failed-node resume, fail-closed result verification, and one 64k token-limit
+source. Two live fail-opens are closed.
 
-**Landed and pushed 2026-09-18:** t010 in-place link clicks; t014/t023 the
-redaction scan reads the run's own store at any size (no leak ever existed; the
-check failed only runs that worked); t012 a created Flow's result is judged, and
-an unjudged run reports `unverified`; t015 extraction mismatches recorded field
-by field; t013 shared Core kept current, its web build cache outside
-`node_modules` (inside it crashed 4/4 as an illegal instruction), repeats no
-longer blamed on RAM; t019 save-and-replay; t022 a run names its own id first, so
-a granted run is read back after a timeout (fixed a regression t012 caused);
-t018 permission contract in Core, the instruction itself a grant; t020 routing
-and subflows the model can author, with context; t016 created-Flow repair.
+**Landed and pushed 2026-09-18:** in-place links; run-owned redaction scans;
+created-Flow judging; field-level extraction mismatches; stable shared-Core
+builds; save/replay; timeout-safe run identity; Core permission contracts;
+model-authored routing/Subflows; and created-Flow repair (t010-t023 reports).
 
-**Completed 2026-09-20:** t024 integrated t011's read-only reveal wording and
-proved the schedule-post creation lane through a normal runtime-session return.
-On its task branch, t025 ported t005's state digest onto current contracts and
-proved it in Chromium: inspect, open the wrong disclosure, close it, open the
-right disclosure; Core reported an intact state chain and reduced the four
-steps to the one replayable press. t021's multi-action work remains stale;
-reconcile it only after field entry and truthful `targetsUnchanged` evidence.
+**Completed 2026-09-20:** t024 proved schedule-post creation with read-only
+reveal wording. t025 proved a four-step disclosure exploration reduced to one
+replayable press with an intact state chain. t026 added field entry and truthful
+target stability. t021 itself remains stale; only its reconciled ideas matter.
 
 **In progress 2026-09-20 (t027):** t026 is integrated. Chromium A/B reduced
 six actions from six decisions to three; all five focused batch-safety rows
@@ -78,14 +63,27 @@ now has live batches of two and four successful actions plus a correct target-
 change stop, but remains isolated because those runs have not completed Flow
 creation/playback/oracle. Panel storage initialization and autofill
 repairs and bounded host-state playback are integrated on t027. The real panel now completes instruction, high-token confirmation, one-call provider proposal, visible Audit/approve/apply, and a 4/4-action passing oracle; warm request-to-proposal was 11.6 seconds. The production panel plus loaded extension also passes recording through generated Subflow and rendered-layout validation in 18.9 seconds; the exact saved graph survived a complete Core/browser stop and new authenticated extension connection, then replayed 4/4 with a passing oracle and zero LLM activity. A real repair run visibly failed the intended action and completed diagnosis plus patch calls, but persisted no patch/proposal; its now-proven topology and high-token driver corrections are integrated while the Core result boundary remains under isolated diagnosis. Removing redundant Lab screenshots around Core snapshots reduced its measured runtime step from 15.8 to 14.8 seconds without weakening state capture; the extension's repeated one-second tab-readiness cadence is now under isolated live A/B. Explicit safe adoption of a marker-less v2 root is merged and pushed on t028, but applying it to the user's root still requires an approved stop, private backup, hash check, and restart. Concurrent work is specified in
+repairs and bounded host-state playback are integrated on t027. The real panel
+completes instruction through 4/4 oracle; recording survives restart and reuses
+the saved Flow with zero LLM. A provider-backed repair made two calls and
+completed diagnosis, but persisted no patch/proposal and exposed no bounded
+patch failure code; no retry was spent. The production picker-to-dataset path
+passed with 8 rows, exact oracle, rendered preview, and non-empty CSV/JSON
+exports. Runtime Debug required reload to see its own new run, now isolated as
+t030. One-shot same-document snapshot readiness reduced a clean 4-action run
+from 14.774 to 8.165 seconds (-44.7%) without removing evidence; its source and
+focused 34/34 test proof are integrated here. Unified one-or-many remains
+isolated after provider runs failed to complete a Flow. Explicit marker-less-v2
+adoption is pushed on t028; applying it to the user's root still requires
+approved stop/backup/hash/restart. Concurrent work is specified in
 [the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
 same-code configuration, isolated worktrees/services/profiles/stores, at most
 two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
 full gates only after live behavior passes.
 
 **Open, for the next session, in priority order:**
-1. Finish t027's real-panel repair boundary, unified real-provider completed
-   batch, and safe playback-latency A/B; then close and integrate the task.
+1. Preserve the repair patch failure category through terminal run detail,
+   then live-prove proposal/apply/restart/reuse; do not repeat the failed call.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
@@ -150,9 +148,8 @@ with the missing field-entry option and `targetsUnchanged` signal needed for a
 fair measurement. Audit every other open task branch against `dev`; bring only
 coherent, still-needed work into the live sequence, with its own focused proof.
 
-**Next steps:** add field entry and `targetsUnchanged`; reconcile t021's
-optional multi-action output and exercise it live; then use the corpus as the
-Week 2 measurement.
+**Next steps:** close the repair result boundary, finish t030's automatic run
+refresh, then integrate t027 and use the corpus as the Week 2 measurement.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because

@@ -4,7 +4,15 @@
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { currentAutomationTabId, forgetAutomationTab, latestOpenAutomationTab, resolveAutomationTab, setAutomationTab } from "../automation-tab";
+import {
+  consumeSnapshotReadiness,
+  currentAutomationTabId,
+  forgetAutomationTab,
+  latestOpenAutomationTab,
+  noteSnapshotReadiness,
+  resolveAutomationTab,
+  setAutomationTab
+} from "../automation-tab";
 
 function stubOpenTabs(t: TestContext, open: ReadonlySet<number>): void {
   const holder = globalThis as { chrome?: unknown };
@@ -110,4 +118,47 @@ test("a navigation somewhere else drives the tab there, and does not reload", as
 
   assert.deepEqual(driven.reloads, []);
   assert.deepEqual(driven.updates, [{ url: "https://example.test/orders", active: true }]);
+});
+
+function stubSnapshotDocument(t: TestContext): { replaceDocument(): void } {
+  const holder = globalThis as { chrome?: unknown };
+  const previous = holder.chrome;
+  const stored: Record<string, unknown> = {};
+  let documentId = "document.one";
+  holder.chrome = {
+    runtime: {},
+    tabs: {
+      get: async () => ({ id: 7, url: "https://example.test/form", status: "complete" })
+    },
+    webNavigation: {
+      getAllFrames: (_details: unknown, callback: (frames: unknown[]) => void) => callback([{ frameId: 0, documentId }])
+    },
+    storage: {
+      session: {
+        set: async (values: Record<string, unknown>) => Object.assign(stored, values),
+        get: async (key: string) => ({ [key]: stored[key] }),
+        remove: async (key: string) => void delete stored[key]
+      }
+    }
+  };
+  t.after(() => {
+    holder.chrome = previous;
+  });
+  return { replaceDocument: () => { documentId = "document.two"; } };
+}
+
+test("a successful snapshot proves only the immediately following action on the same document is ready", async (t) => {
+  stubSnapshotDocument(t);
+  await noteSnapshotReadiness(7, "https://example.test/form");
+
+  assert.equal(await consumeSnapshotReadiness(7), true);
+  assert.equal(await consumeSnapshotReadiness(7), false, "the proof is consumed once");
+});
+
+test("a same-URL replacement document cannot reuse the snapshot readiness proof", async (t) => {
+  const page = stubSnapshotDocument(t);
+  await noteSnapshotReadiness(7, "https://example.test/form");
+  page.replaceDocument();
+
+  assert.equal(await consumeSnapshotReadiness(7), false);
 });
