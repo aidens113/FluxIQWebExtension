@@ -1049,3 +1049,23 @@ budgets.
   retained change passes the same 4/4/oracle/zero-LLM live run with material
   improvement. Remove instrumentation and revert if no safe gain is proved.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-runtime-command-latency-trace.md`
+
+### Brief: w2-panel-unified-progress-live
+- Repository: isolated unified Core candidate plus the live-proven downstream
+  diagnostic adapter; fresh disposable product-catalog panel workspace
+- Task: use the now-visible sanitized sequence (inspect succeeded, structure
+  absent, repeated until no-progress) to make the narrowest provider guidance
+  change that asks for independent safe evidence in one decision and directs a
+  different observation or completion after a no-structure result; run once.
+- Required reads: diagnostic-identity and unified no-progress reports; Core
+  evidence-loop decision feedback/prompt; existing focused prompt tests
+- Owns (may edit): isolated Core evidence-loop guidance and directly owned
+  focused tests only after live progress; main report
+  `reports/w2-panel-unified-progress-live.md`
+- Must not touch: schema/executor safety, completion output format, user panel/
+  data, repair/recording/performance lanes, unrelated files/full suites/commits;
+  one provider attempt only
+- Definition of done: real panel produces a completed 2+ safe-action decision,
+  then proposal/apply/playback/oracle pass; otherwise preserve the exact visible
+  terminal category and keep the candidate isolated.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-unified-progress-live.md`
