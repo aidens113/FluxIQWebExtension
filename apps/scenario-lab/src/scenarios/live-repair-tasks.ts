@@ -1,3 +1,4 @@
+import { SOCIAL_NETWORK_FEED_REPAIR_TASKS } from "./social-network-feed/index.js";
 import { COMPANY_WEBSITE_REPAIR_TASKS } from "./company-website/index.js";
 
 import { PROFESSIONAL_NETWORK_REPAIR_TASKS } from "./professional-network/index.js";
@@ -208,6 +209,7 @@ const TASKS: LiveRepairTask[] = [
     patchKind: "temporary_target_override",
     description: "The dispatch-run shortcut was redesigned: same place, same job, no test id, a new class and the label renamed to Pick and pack. The model must re-point the click at it, never at Export or New order, which would dispatch orders nobody paid for.",
   },
+  ...SOCIAL_NETWORK_FEED_REPAIR_TASKS,
   // `sensitive-input` / `extract-card-secrets` is not a task: its refusal happens while the Flow lane records,
   // so no Flow exists for a model to repair (the exclusion in `tests/live-repair-tasks.test.ts` says why).
   ...COMPANY_WEBSITE_REPAIR_TASKS,
