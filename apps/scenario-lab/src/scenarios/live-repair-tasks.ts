@@ -1,3 +1,4 @@
+import { BIGBOX_RETAIL_REPAIR_TASKS } from "./bigbox-retail/index.js";
 import { JOB_BOARD_REPAIR_TASKS } from "./job-board/index.js";
 import { LOCAL_CLASSIFIEDS_REPAIR_TASKS } from "./local-classifieds/index.js";
 import { AUCTION_MARKETPLACE_REPAIR_TASKS } from "./auction-marketplace/index.js";
@@ -216,6 +217,7 @@ const TASKS: LiveRepairTask[] = [
   ...SOCIAL_NETWORK_FEED_REPAIR_TASKS,
   // `sensitive-input` / `extract-card-secrets` is not a task: its refusal happens while the Flow lane records,
   // so no Flow exists for a model to repair (the exclusion in `tests/live-repair-tasks.test.ts` says why).
+  ...BIGBOX_RETAIL_REPAIR_TASKS,
   ...JOB_BOARD_REPAIR_TASKS,
   ...LOCAL_CLASSIFIEDS_REPAIR_TASKS,
   ...AUCTION_MARKETPLACE_REPAIR_TASKS,
