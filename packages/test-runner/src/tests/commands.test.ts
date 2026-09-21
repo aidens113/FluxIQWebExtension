@@ -277,3 +277,16 @@ test("replay names the persistent workspace, the saved Flow and the task that ju
   assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "../escape", "--flow", "flow.c1542a11"]), /--workspace/);
   assert.throws(() => parseLabCommand(["replay", "social-scheduler", "--workspace", "t019-replay", "--flow", "flow.c1542a11", "--instruction-task", "Not_Kebab"]), /kebab-case/);
 });
+
+test("--llm-permit carries the named consequence classes on the live profile", () => {
+  const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
+  const permitted = parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit", "send_or_publish, create_new"]);
+  assert.deepEqual(permitted.command === "run" ? permitted.llm?.permittedConsequences : undefined, ["send_or_publish", "create_new"]);
+  const unpermitted = parseLabCommand(["run", "social-scheduler", ...create]);
+  assert.equal(unpermitted.command === "run" && unpermitted.llm ? "permittedConsequences" in unpermitted.llm : true, false);
+  assert.throws(() => parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit", "purchase"]), /unknown consequence class: purchase/u);
+  assert.throws(() => parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit", "delete,delete"]), /more than once/u);
+  assert.throws(() => parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit", "delete,"]), /comma-separated list/u);
+  assert.throws(() => parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit"]), /--llm-permit requires a value/u);
+  assert.throws(() => parseLabCommand(["run", "social-scheduler", "--llm-permit", "delete"]), /explicit --live-llm/u);
+});

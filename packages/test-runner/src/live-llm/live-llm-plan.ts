@@ -5,7 +5,8 @@
 // limit below is at or inside the profile's own, so a cap the operator typed
 // can only ever bind harder, never less.
 
-import { DEFAULT_LLM_LAB_BUDGET, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 
 /**
@@ -107,6 +108,12 @@ export type LiveLlmPlan = {
   };
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
   declared: LlmTokenBudget;
+  /**
+   * What the run's grant permits its actions to do: exactly the operator's
+   * `--llm-permit`, in Core's order, and empty without it. Nothing adds to it,
+   * so no grant this run takes out can carry a class nobody asked for.
+   */
+  permittedConsequences: readonly LlmActionConsequence[];
 };
 
 /**
@@ -156,7 +163,27 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
     maxTotalEstimatedCostUsd: Math.min(CORE_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
     highTokenConfirmation: highTokenConfirmation(runTokens),
     declared: { ...budget },
+    permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };
+}
+
+/**
+ * `--llm-permit`, judged against Core's own list rather than the Lab's mirror
+ * of it, so a class Core would refuse is refused here -- before a key is read
+ * or a provider reached -- and never dropped: a grant that silently held less
+ * than was asked for would leave the run to discover the gap by stopping.
+ * Returned in Core's order, which is the order Core reports it back in.
+ */
+function permittedConsequencesOf(asked: readonly string[] | undefined, purpose: LiveLlmPurpose): readonly LlmActionConsequence[] {
+  if (asked === undefined || asked.length === 0) return Object.freeze([]);
+  const known: readonly string[] = AUTOMATION_STUDIO_ACTION_CONSEQUENCES;
+  const unknown = asked.filter((consequence) => !known.includes(consequence));
+  if (unknown.length) throw refusal(`--llm-permit ${unknown.join(",")} names a consequence class Core does not recognise; use ${known.join(", ")}`);
+  if (new Set(asked).size !== asked.length) throw refusal("--llm-permit names a consequence class more than once");
+  // A diagnosis asks one question and takes no action, so it has nothing to
+  // permit; a permit on it is a mistaken command, not a harmless extra.
+  if (purpose === "diagnosis_only") throw refusal("--llm-permit permits actions, and a diagnose run takes none");
+  return Object.freeze(AUTOMATION_STUDIO_ACTION_CONSEQUENCES.filter((consequence) => asked.includes(consequence)));
 }
 
 type RunTokenBudget = { tokens: number; source: string };

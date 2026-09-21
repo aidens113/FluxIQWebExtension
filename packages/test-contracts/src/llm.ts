@@ -38,6 +38,17 @@ export const llmEvidenceKinds = [
 ] as const;
 export type LlmEvidenceKind = (typeof llmEvidenceKinds)[number];
 
+/**
+ * The lasting consequences a person can permit a live run's actions to have:
+ * FluxIQ Core's closed set, `AUTOMATION_STUDIO_ACTION_CONSEQUENCES` in
+ * `runtime/action-permissions/consequences.ts`, in Core's order. Mirrored
+ * because this package depends only on Core's public contracts; the test
+ * runner's plan tests pin it to Core's own export, so a class Core adds or
+ * renames fails the build here instead of being refused at the grant.
+ */
+export const llmActionConsequences = ["move_money", "delete", "send_or_publish", "modify_existing", "create_new"] as const;
+export type LlmActionConsequence = (typeof llmActionConsequences)[number];
+
 export type LlmTokenBudget = {
   maxInputTokens: number;
   maxOutputTokens: number;
@@ -69,6 +80,18 @@ export type LlmExecutionProfile = {
   retainRawResponses: false;
   maxConcurrentRuns: 1;
   budget: LlmTokenBudget;
+  /**
+   * `--llm-permit`: the consequences this run's execution grant permits its
+   * actions to have, carried into the grant's `permittedConsequences` and
+   * nowhere else. Absent permits none, as it does in Core, so a run nobody
+   * permitted anything stops and asks exactly as before. Live runs only, each
+   * class at most once.
+   *
+   * This is not `externalSideEffects`, which stays `false`: that is about a run
+   * reaching past the loopback fixture, and a permitted consequence lands on the
+   * fixture's own state -- the post it schedules, the order it refunds.
+   */
+  permittedConsequences?: LlmActionConsequence[];
 };
 
 export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
