@@ -69,12 +69,62 @@ export async function beginLiveLlmRun(input: {
  */
 const CREATED_FLOW_REPAIR_PURPOSE = "diagnose_and_adapt" satisfies PersistedFlowLlmExecution["purpose"];
 
+/**
+ * What Core's result verification did on one run, as `snapshots/live-llm.json`
+ * states it: the status and verdict words Core recorded, and every
+ * verification call the run detail itemizes.
+ *
+ * Core asks whether a finished run's result answers the request, and asks a
+ * `does not answer` once more with the same evidence. Those calls are paid
+ * for, but they are made after the run and outside its run budget, so the
+ * per-call lines and Core's accounting do not list them; until this record, a
+ * bundle never said they happened (`w2-save-and-replay.md`). They are read
+ * from the run's interventions, which Core marks
+ * `metadata.source: "verifyAutomationStudioRunResult"`.
+ *
+ * Counts, closed-vocabulary words and token figures only. Core's `reason` is
+ * a sentence and is left behind, as the exploration record leaves its own.
+ */
+type LiveLlmVerificationRecord = {
+  /** `run-detail` when Core recorded a verification, `absent` when it recorded none, `unreadable` when the detail could not be read. */
+  source: "run-detail" | "absent" | "unreadable";
+  /** Core's `resultVerification.status`: `confirmed`, `refuted`, `unverified` or `no_result`. */
+  status: string | null;
+  basis: string | null;
+  code: string | null;
+  /** The verdict each call reached, in order, as Core recorded them. */
+  verdicts: string[];
+  /** Core's own count of the calls, where it recorded one. */
+  recordedCalls: number | null;
+  /** Verification calls the run detail itemizes. */
+  calls: number;
+  interventions: LiveLlmVerificationCall[];
+  totalEstimatedCostUsd: number;
+};
+
+type LiveLlmVerificationCall = {
+  /** 1 for the first call, 2 for the repeat of a `does not answer`. */
+  check: number | null;
+  requestId: string | null;
+  validationOk: boolean | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  estimatedCostUsd: number | null;
+};
+
+const VERIFICATION_SOURCE = "verifyAutomationStudioRunResult";
+const VERIFICATION_WORD = /^[a-z][a-z0-9_.:-]{1,127}$/u;
+const NO_VERIFICATION: LiveLlmVerificationRecord = { source: "absent", status: null, basis: null, code: null, verdicts: [], recordedCalls: null, calls: 0, interventions: [], totalEstimatedCostUsd: 0 };
+
 export class LiveLlmRun {
   private observed: LiveLlmObservedUsage | undefined;
   /** The grant Core issued for this run, and what its request sent; `undefined` before that. */
   private grant: LiveLlmExecutionGrant | undefined;
   /** What the bounded exploration did, read at settlement; `undefined` before that. */
   private exploration: LiveLlmExplorationRecord | undefined;
+  /** What Core's result verification did on the settled run; `undefined` before that. */
+  private verification: LiveLlmVerificationRecord | undefined;
   /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
   private buildRecord: CreatedFlowBuild | undefined;
   /** The repair grant a created Flow's playback ran under, and what that run spent; `undefined` before each. */
@@ -239,7 +289,7 @@ export class LiveLlmRun {
     const detail = await control.getRunDetail(input.projectId, input.runId);
     // Read before the snapshot is written, and never allowed to fail the
     // settlement: it says what exploring did, not whether the run was legal.
-    this.exploration = await readLiveLlmExploration(control, input);
+    await this.readRunRecords(control, input);
     await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {});
   }
 
@@ -281,7 +331,7 @@ export class LiveLlmRun {
     } catch {
       observed = undefined;
     }
-    if (input.runId) this.exploration = await readLiveLlmExploration(control, { projectId: input.projectId, runId: input.runId });
+    if (input.runId) await this.readRunRecords(control, { projectId: input.projectId, runId: input.runId });
     const repair = {
       purpose: plan.purpose,
       runId: input.runId ?? null,
@@ -341,7 +391,7 @@ export class LiveLlmRun {
     }
     // A lane that failed after exploring is exactly the run whose exploration
     // record is worth having, so it is read here too, on the same run id.
-    if (input.runId) this.exploration = await readLiveLlmExploration(control, { projectId: input.projectId, runId: input.runId });
+    if (input.runId) await this.readRunRecords(control, { projectId: input.projectId, runId: input.runId });
     if (!observed) {
       await this.writeSnapshot(bundle, null, { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" });
       return undefined;
@@ -356,6 +406,21 @@ export class LiveLlmRun {
       throw breach;
     }
     return undefined;
+  }
+
+  /**
+   * The exploration and verification records, from one read of the raw run
+   * detail: both live in it, and a settlement reads it once.
+   */
+  private async readRunRecords(control: LiveLlmExplorationControl, scope: { projectId: string; runId: string }): Promise<void> {
+    let pending: Promise<unknown> | undefined;
+    const once: LiveLlmExplorationControl = {
+      automationStudioCall: (endpoint, payload, bounds) => endpoint === "get-flow-run-detail"
+        ? (pending ??= control.automationStudioCall(endpoint, payload, bounds))
+        : control.automationStudioCall(endpoint, payload, bounds),
+    };
+    this.exploration = await readLiveLlmExploration(once, scope);
+    this.verification = await readLiveLlmVerification(once, scope);
   }
 
   private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>): Promise<void> {
@@ -405,9 +470,72 @@ export class LiveLlmRun {
       // settlement read one; `source` says whether Core published one at all,
       // so an empty record is never read as "it explored nothing".
       exploration: this.exploration ?? null,
+      // What Core's result verification did and every call it made, which the
+      // accounting above does not include. `null` before a settlement read one.
+      verification: this.verification ?? null,
       ...extra,
     });
   }
+}
+
+/**
+ * Reads the run's result verification from Core, or says why it could not.
+ * It raises nothing, for the reason `readLiveLlmExploration` gives.
+ */
+async function readLiveLlmVerification(control: LiveLlmExplorationControl, scope: { projectId: string; runId: string }): Promise<LiveLlmVerificationRecord> {
+  let payload: unknown;
+  try {
+    payload = await control.automationStudioCall("get-flow-run-detail", { projectId: scope.projectId, runId: scope.runId });
+  } catch {
+    return { ...NO_VERIFICATION, source: "unreadable" };
+  }
+  const detail = asRecord(asRecord(payload)?.runDetail);
+  const recorded = asRecord(asRecord(detail?.metadata)?.resultVerification);
+  const interventions = (Array.isArray(detail?.interventions) ? detail.interventions : [])
+    .map(asRecord)
+    .filter((item): item is Record<string, unknown> => asRecord(item?.metadata)?.source === VERIFICATION_SOURCE)
+    .map(verificationCall);
+  if (!recorded && interventions.length === 0) return NO_VERIFICATION;
+  return {
+    source: "run-detail",
+    status: word(recorded?.status),
+    basis: word(recorded?.basis),
+    code: word(recorded?.code),
+    verdicts: Array.isArray(recorded?.verdicts) ? recorded.verdicts.flatMap((value) => word(value) ?? []) : [],
+    recordedCalls: amount(recorded?.calls),
+    calls: interventions.length,
+    interventions,
+    totalEstimatedCostUsd: interventions.reduce((sum, call) => sum + (call.estimatedCostUsd ?? 0), 0),
+  };
+}
+
+function verificationCall(item: Record<string, unknown>): LiveLlmVerificationCall {
+  const metadata = asRecord(item.metadata);
+  const usage = asRecord(item.tokenUsage);
+  const validation = asRecord(item.validation);
+  const cost = usage?.estimatedCostUsd;
+  return {
+    check: amount(metadata?.verificationCheck),
+    requestId: word(metadata?.requestId),
+    validationOk: typeof validation?.ok === "boolean" ? validation.ok : null,
+    inputTokens: amount(usage?.inputTokens),
+    outputTokens: amount(usage?.outputTokens),
+    totalTokens: amount(usage?.totalTokens),
+    estimatedCostUsd: typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null,
+  };
+}
+
+/** A closed-vocabulary word, or `null` for anything that is not one. Never a sentence. */
+function word(value: unknown): string | null {
+  return typeof value === "string" && VERIFICATION_WORD.test(value) ? value : null;
+}
+
+function amount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 /** What a settlement publishes on the run's event stream: counts and a total, never a call. */

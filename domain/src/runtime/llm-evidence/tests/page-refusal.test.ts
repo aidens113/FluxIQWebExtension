@@ -55,7 +55,7 @@ function promptPage() {
         return { status: "succeeded" };
       }
       if (state.prompt) {
-        const blocked: Click = { status: "failed", error: `Action blocked: ${PRIVATE}`, failure: { category: "user_intervention_required", code: WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, retryable: false, stage: "execution", actual: `covered: ${PRIVATE}` } };
+        const blocked: Click = { status: "failed", error: `Action blocked: ${PRIVATE}`, failure: { category: "unexpected_state", code: WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG, retryable: false, stage: "execution", actual: `covered: ${PRIVATE}` } };
         return blocked;
       }
       return { status: "succeeded" };
@@ -168,7 +168,13 @@ test("cancellation during the refusal's look at the page still ends the call", a
 test("a failed action's refusal code is read from the client's closed code, never its words", () => {
   const codes = WEB_AUTOMATION_FAILURE_CODES;
   const cases: Array<[Parameters<typeof webActionFailureRejectionCode>[0], string]> = [
-    [{ status: "failed", failure: { code: codes.USER_INTERVENTION_REQUIRED, actual: "covered: x" } }, "blocked_by_dialog"],
+    [{ status: "failed", failure: { code: codes.BLOCKED_BY_DIALOG, actual: "covered: x" } }, "blocked_by_dialog"],
+    [{ status: "failed", failure: { code: codes.BLOCKED_BY_DIALOG, actual: "hidden: x" } }, "blocked_by_dialog"],
+    // A challenge only a person may answer is never offered to the model as a
+    // dialog to close, whatever the refusal's words say.
+    [{ status: "failed", failure: { code: codes.USER_INTERVENTION_REQUIRED, actual: "covered: x" } }, "needs_person"],
+    [{ status: "failed", failure: { code: codes.USER_INTERVENTION_REQUIRED } }, "needs_person"],
+    [{ status: "failed", failure: { code: codes.AUTH_REQUIRED } }, "needs_person"],
     [{ status: "failed", failure: { code: codes.ACTION_REJECTED, actual: "covered: the cookie banner" } }, "target_covered"],
     [{ status: "failed", failure: { code: codes.ACTION_REJECTED, actual: "disabled: Save" } }, "target_not_actionable"],
     [{ status: "failed", failure: { code: codes.ACTION_REJECTED, actual: "the words covered: later" } }, "target_not_actionable"],

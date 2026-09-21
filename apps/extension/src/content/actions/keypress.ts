@@ -41,7 +41,7 @@ export function keypressAction(action: BrowserActionCommand, deps: ContentAction
   if (named) {
     const report = deps.checkActionability(target);
     if (!report.actionable) {
-      return deps.rejected(action, startedAt, report.code, "a target that can receive the key press", report.detail, evidence());
+      return deps.rejected(action, startedAt, report.code, "a target that can receive the key press", report.detail, { ...evidence(), blockedAt: report.point });
     }
   }
 

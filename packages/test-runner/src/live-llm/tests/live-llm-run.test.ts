@@ -127,6 +127,7 @@ test("a default adapt run records that it sent no high-token confirmation, and w
   assert.match(snapshot.highTokenConfirmation.reason, new RegExp(`within Core's ${CORE_THRESHOLD}-token confirmation threshold; no confirmation is needed`, "u"));
   assert.equal(snapshot.exploration.source, "absent");
   assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
+  assert.deepEqual(snapshot.verification, { source: "absent", status: null, basis: null, code: null, verdicts: [], recordedCalls: null, calls: 0, interventions: [], totalEstimatedCostUsd: 0 });
   assert.equal(run.usage.calls, 3);
 });
 
@@ -276,6 +277,74 @@ test("a create-flow run repairs the Flow it built under a proposal-only diagnose
   assert.deepEqual(published.at(-1), { repair: { calls: 3, interventions: 3, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true } } });
   assert.equal(run.usage.calls, 5 + 3, "the evaluation counts every call the run paid for");
   assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
+});
+
+/**
+ * Core judges a finished run's result after the run, outside its run budget,
+ * and asks a `does not answer` a second time with the same evidence. Those
+ * calls are paid for and are in no per-call line, so the snapshot lists them
+ * from the run's interventions, which Core marks as verification.
+ */
+const verifiedRunDetail = {
+  runDetail: {
+    metadata: {
+      resultVerification: {
+        status: "unverified",
+        performed: true,
+        verdict: "unsure",
+        basis: "model_disagreed",
+        code: "core.result.verdicts_disagree",
+        reason: "The two checks of this result disagreed.",
+        observation: "14 records stored, across 1 record set.",
+        verdicts: ["does_not_answer", "answers"],
+        calls: 2,
+      },
+    },
+    interventions: [
+      { interventionId: "i-recovery", kind: "diagnosis", tokenUsage: { inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 }, validation: { ok: true, issues: [] }, metadata: { requestId: "llm.runtime_diagnosis.a" } },
+      { interventionId: "i-verify-1", kind: "diagnosis", tokenUsage: { inputTokens: 1_944, outputTokens: 300, totalTokens: 2_244, estimatedCostUsd: 0.00125 }, validation: { ok: true, issues: [] }, metadata: { requestId: "llm.loop_verification.b", source: "verifyAutomationStudioRunResult", verificationCheck: 1 } },
+      { interventionId: "i-verify-2", kind: "diagnosis", tokenUsage: { inputTokens: 1_944, outputTokens: 280, totalTokens: 2_224, estimatedCostUsd: 0.00123 }, validation: { ok: true, issues: [] }, metadata: { requestId: "llm.loop_verification.c", source: "verifyAutomationStudioRunResult", verificationCheck: 2 } },
+    ],
+  },
+};
+
+test("a created Flow's playback lists every result-verification call Core made, and none of its prose", async () => {
+  const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const endpoints: string[] = [];
+  const control = { getRunDetail: async () => detail, automationStudioCall: async (endpoint: string) => { endpoints.push(endpoint); return verifiedRunDetail; } };
+  await run.settleRepair(control, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined);
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  assert.ok(endpoints.every(endpoint => endpoint === "get-flow-run-detail"));
+  assert.deepEqual(snapshot.verification, {
+    source: "run-detail",
+    status: "unverified",
+    basis: "model_disagreed",
+    code: "core.result.verdicts_disagree",
+    verdicts: ["does_not_answer", "answers"],
+    recordedCalls: 2,
+    calls: 2,
+    interventions: [
+      { check: 1, requestId: "llm.loop_verification.b", validationOk: true, inputTokens: 1_944, outputTokens: 300, totalTokens: 2_244, estimatedCostUsd: 0.00125 },
+      { check: 2, requestId: "llm.loop_verification.c", validationOk: true, inputTokens: 1_944, outputTokens: 280, totalTokens: 2_224, estimatedCostUsd: 0.00123 },
+    ],
+    totalEstimatedCostUsd: 0.00125 + 0.00123,
+  });
+  assert.equal(JSON.stringify(snapshot).includes("disagreed."), false, "Core's reason sentence is not copied into the bundle");
+  assert.equal(snapshot.repair.observed.calls, 3, "the repair's own accounting is unchanged by the verification record");
+});
+
+test("a verification record that cannot be read says so, and settles the run all the same", async () => {
+  const { core, run, written, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const control = { getRunDetail: async () => detail, automationStudioCall: async (): Promise<unknown> => { throw new Error("gone"); } };
+  await run.settleRepair(control, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async () => undefined);
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  assert.equal(snapshot.verification.source, "unreadable");
+  assert.equal(snapshot.verification.calls, 0);
+  assert.equal(snapshot.repair.observed.calls, 3);
 });
 
 test("only a create-flow run has a repair grant, and a repair that cannot be read back is recorded, not raised", async () => {
