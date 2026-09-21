@@ -1,7 +1,7 @@
 # Week 2 Exit Plan
 
 Status: Active
-Status detail: Execution plan written from four audits; I1 (t027), I2 (t033 schema fix), L2 (t035) and L3 (t036) in flight.
+Status detail: t027 reconciled and verified live, full gates running before it lands; ten realistic-scenario workers and t035 in flight; t036 committed.
 Created: 2026-09-21
 Last updated: 2026-09-21
 Owner: Senior supervisor agent
@@ -67,14 +67,14 @@ committed on 2026-09-21. Core `service.ts` is the serial bottleneck: t027 is
 37 lines over its 6,404-line ratchet, and t027, t033, C0, CF and Resume all
 edit it.
 
-**In flight:** `w2x-t027-reconcile` (I1; authorized to lift provider
-resolution out of `service.ts` and fold `llmEvidenceRuntimeStatus` into the
-existing readiness method, clearing both Core ratchets);
-`w2x-verification-agreement` (L2,
-t035); `w2x-lab-llm-permit` (L3, t036).
+**In flight:** full gates on reconciled t027 in both repositories
+(committed `f40f78e` Core, `f1db4e9` downstream; live proofs verified);
+`w2x-verification-agreement` (L2, t035); ten `w2x-realistic-scenarios`
+workers (S1, t037-t046, one site each). t036 (L3) is verified and committed
+(`fa8b686`), waiting to merge after t027.
 
-**Next:** verify and land t027 in both repositories, then run Phase I's t033
-decision and dispatch U1 and L1 in parallel with it.
+**Next:** land t027 in both repositories when its gates pass; then merge
+t036 and start P1, U1, L1 and t033's merge and A/B in parallel.
 
 **Blockers:** none.
 
@@ -85,8 +85,9 @@ decision and dispatch U1 and L1 in parallel with it.
 Slice names C0-CU2, D3-DL are defined in `reports/w2x-existing-flow-and-repair-design.md`;
 steps 1-4 of the gap audit are in `reports/w2x-exit-loop-gap-audit.md`
 ("Smallest ordered set of changes"). Every slice proves itself live first, on
-the scenario its report names, then runs its focused tests. At most four code
-workers run at once.
+the scenario its report names, then runs its focused tests. There is no fixed
+worker cap (user, 2026-09-21): a worker is added whenever it shortens wall-clock
+time without duplicated work, a shared file, or idling on an unlanded dependency.
 
 | Id | Work | Repos | After | Status |
 | --- | --- | --- | --- | --- |
@@ -95,6 +96,8 @@ workers run at once.
 | **I3** | t034 post-action readiness: merge `dev`, dispatch its existing brief | downstream | I1 | waiting |
 | **I4** | t029 JavaScript node: held until its three review findings are fixed; after the exit | both | — | held |
 | **I5** | Clean-up: `pnpm task prune`; abandon t006, t007, t017; t005 with `--force`; t021 after discarding its rejected Core prototype; remove the `F:\fxlab\t027-*` worktrees; keep t008 and t011 evidence until checked | both | I1 | waiting |
+| **P1** | Creation without a permit ends in HTTP 400 (`lab.generation_http_400`, t036 run `run-mubktq9k-5cb2485b`) instead of a permission request reaching the person; Core's generation handler appears to drop the cause. Reproduce live, then make it a first-class needs-permission outcome | both | I1 | waiting |
+| **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each, merged to `dev` and put into live testing as they finish | downstream | — | in flight |
 | **L0** | C0: bring Core `service.ts` under its ratchet by behaviour-unchanged moves | Core | I1, I2 decision | waiting |
 | **L1** | Gap step 1: the created-Flow repair lane on `persistent-isolated`, with `--replays` for instruction tasks; proves Persist and the zero-call re-run on identity-drift | downstream | I1 | waiting |
 | **L2** | C5a+C5b+D5: result verification repeats a "does not answer" once; disagreement records `unverified` | both | — | in flight |
@@ -196,6 +199,31 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Definition of done: both runs quoted with paths; tests and check pass; changes left uncommitted.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-lab-llm-permit.md`
 
+### Brief: w2x-realistic-scenarios (shared by ten workers, one site each)
+- Repository: the worker's own flat task worktree from the table, on the shared read-only Core `F:\fxwork\!FluxIQ`.
+- Task: build **one legitimately complex Scenario Lab site** replicating a kind of site people really automate (user, 2026-09-21), as a fictional brand modelled on its archetype — no real names, logos or copied content.
+
+| Scenario id | Archetype | Task and worktree |
+| --- | --- | --- |
+| `social-network-feed` | social feed like Facebook | t037 `F:\fxwork\t037-realistic-scenarios` |
+| `photo-social` | photo social like Instagram | t038 `F:\fxwork\t038-scn-photo-social` |
+| `bigbox-retail` | big-box retail like Walmart | t039 `F:\fxwork\t039-scn-bigbox-retail` |
+| `auction-marketplace` | auctions like eBay | t040 `F:\fxwork\t040-scn-auction-marketplace` |
+| `everything-store` | everything store like Amazon; carries the hard anti-bot challenge | t041 `F:\fxwork\t041-scn-everything-store` |
+| `crossborder-marketplace` | cross-border marketplace like AliExpress | t042 `F:\fxwork\t042-scn-crossborder-marketplace` |
+| `professional-network` | professional network like LinkedIn | t043 `F:\fxwork\t043-scn-professional-network` |
+| `local-classifieds` | local classifieds like Facebook Marketplace | t044 `F:\fxwork\t044-scn-local-classifieds` |
+| `company-website` | an ordinary small-company website | t045 `F:\fxwork\t045-scn-company-website` |
+| `job-board` | job postings whose Apply hands off to an applicant-tracking site | t046 `F:\fxwork\t046-scn-job-board` |
+
+- Realism bar, at least six per site: consent banner; newsletter, app-install or notification modals on a delay; a login wall after some scrolling; a chat widget covering a button; lazy loading and infinite scroll; sponsored results mixed into real ones; class names obfuscated per seed; skeleton or delayed rendering; real UI bugs (a button needing a second click, a spinner that clears only on retry, a broken Next that needs page links, a stale count badge); anti-bot (honeypot fields, rate limiting with retry-after, a "verify you are human" interstitial that clears on a wait or a click); iframes; shadow DOM; new tabs; variant pickers; locale-formatted prices and dates; div-buttons with poor accessibility. Anti-bot must be passable by honest behaviour; the hard challenge's correct outcome is asking the person, never bypassing it.
+- At least three Lab tasks: an extraction task judged by `expected.extracted`; a state-changing task judged by final state; a consequential task (buy, bid, apply, message, delete) that must end in a permission request unless granted. Plus one drift variant (repair entry point) and one edge-case variant (new popup, empty results, alternate layout) for the existing-Flow entry point.
+- Conventions: copy the shape of `apps/scenario-lab/src/scenarios/social-scheduler/` and `storefront-checkout/`; deterministic under `SCENARIO_LAB_SEED`; loopback only; the structure audit's budgets (one export per file, barrels, tests in `tests/`). Tasks go in `src/scenarios/<id>/live-tasks.ts` and `repair-tasks.ts`; add **exactly one appended line** each to `src/registry.ts`, `src/scenarios/index.ts`, `live-instructions.ts` and `live-repair-tasks.ts`, and one appended row to `docs/architecture/testing-facility.md`'s scenario list, so the supervisor's merges are one-line unions.
+- Owns: `apps/scenario-lab/src/scenarios/<id>/` and those one-line additions. Must not touch anything else, other worktrees, git commits, shared `dev`, the user's panel or ports 3000 and 4711.
+- Validation, in order: a scenario test proving an honest scripted path passes every oracle and a naive path (fills the honeypot, clicks under the overlay, takes a sponsored row) fails; then one live `create-flow` run of the extraction task with DeepSeek on `persistent-isolated`. FluxIQ failing is fine; the report separates fixture defects (fix them) from product gaps (record them). Then the scenario-lab tests and `pnpm check`.
+- Definition of done: the site, its tests and `pnpm check` passing, the live run quoted with path and oracle result; changes left uncommitted.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-scenario-<id>.md`
+
 ### Brief: w2-multi-action-schema-fix
 - Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
 - Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
@@ -247,6 +275,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: `npx vitest run .../evidence-batch/tests/contract.test.ts .../llm/tests/evidence-loop.test.ts` from `packages/fluxiq` printed `Tests  54 passed (54)`; `npx vitest run .../recovery/tests/runtime-exploration.test.ts .../recovery/tests/exploration-budget.test.ts` printed `Tests  62 passed (62)`; `git show HEAD:.../llm/evidence-loop.ts | wc -l` printed `810`.
 - Outcome: Partial
 - Follow-up: after I1 lands, merge `dev` into t033, split `evidence-loop.ts` under 800 lines, run the live A/B.
+
+### 2026-09-21 — t027 verified and committed; t036 verified; ten scenario workers
+- Agent: supervisor; workers `w2x-t027-reconcile`, `w2x-lab-llm-permit`, `w2x-realistic-scenarios` (ten)
+- Changed: t027 Core `f40f78e` and downstream `f1db4e9` (reconciliation; Core `service.ts` baseline lowered 6,404 -> 6,381); t036 `fa8b686`; tasks t037-t046 started; plan rows P1 and S1; the inherited four-worker cap removed (user, 2026-09-21).
+- Why: the user asked for more workers where they save time, one worker per realistic site, and scenarios that are purposefully difficult.
+- Validation: t027 bundles `demo-llm-explore-...-1ea03e`, `demo-llm-exploration-request-run-...-e5af83` and `demo-playback-...-48bf10` each read `"verdict":"passed"` in `summary.json`; a grep of the added lines of `git diff dev -- . ':!docs'` for the five batch identifiers printed `0` in both t027 trees; `wc -l .../runtime/service.ts` printed `6381`; Core `node scripts/structure-audit.mjs` printed `structure-audit: passed (170 warning(s), 361 baselined).`; t036 `run-mubl2o09-5679c7f2` read `{"build":5,"observed":5,"permissionRequest":null}` and `"oracleVerdict": "passed"`.
+- Outcome: Partial
+- Follow-up: land t027 when both gate runs pass. Every live-running worker was told to set `FLUXIQ_TEST_ENV_FILES=none`, because task worktrees copy `.env.local`, which targets the user's panel.
 
 ---
 
