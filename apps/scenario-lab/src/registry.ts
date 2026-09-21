@@ -29,6 +29,7 @@ import { propertyListingsScenario } from "./scenarios/property-listings/index.js
 import { companyDirectoryScenario } from "./scenarios/company-directory/index.js";
 import { socialSchedulerScenario } from "./scenarios/social-scheduler/index.js";
 import { socialInboxScenario } from "./scenarios/social-inbox/index.js";
+import { jobBoardScenario } from "./scenarios/job-board/index.js";
 import type { ScenarioDefinition, ScenarioId } from "./types.js";
 import type { WebScenario } from "@fluxiq-web-extension/test-contracts";
 
@@ -64,6 +65,7 @@ const registry = new Map<ScenarioId, ScenarioDefinition>([
   [companyDirectoryScenario.id, companyDirectoryScenario],
   [socialSchedulerScenario.id, socialSchedulerScenario],
   [socialInboxScenario.id, socialInboxScenario],
+  [jobBoardScenario.id, jobBoardScenario],
 ]);
 
 export function getScenario(id: string): ScenarioDefinition | undefined {
