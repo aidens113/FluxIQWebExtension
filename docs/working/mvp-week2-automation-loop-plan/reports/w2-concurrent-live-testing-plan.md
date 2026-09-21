@@ -812,3 +812,71 @@ budgets.
   zero LLM activity, and measured runtime-run latency falls materially; if the
   16 s is real action time, report the breakdown and do not weaken waits.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-playback-latency-live.md`
+
+### Brief: w2-unified-decision-provider-repro
+- Repository: unchanged isolated `t027-unified-decision` completion-repair candidate
+- Task: rerun the identical real-provider schedule-post lane exactly once, with
+  no source mutation, to distinguish the pre-decision HTTP 400 from the earlier
+  accepted unified schema and exercise the completion wording if provider entry
+  succeeds.
+- Required reads: unified-decision and completion-repair reports; sanitized
+  artifacts only
+- Owns (may edit): only main report
+  `reports/w2-unified-decision-provider-repro.md`; ignored isolated artifacts
+- Must not touch: source/tests, user panel/data, other lanes, retries beyond this
+  one run, commits/pushes/full suites
+- Definition of done: record whether provider entry succeeds; acceptance still
+  requires a completed 2+ action batch, Flow creation/playback, and passing
+  oracle. Stop at the first terminal outcome without changing code.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-decision-provider-repro.md`
+
+### Brief: w2-unified-decision-feedback-only
+- Repository: existing isolated `t027-unified-decision` candidate
+- Task: remove only the added first-request Flow-script-format sentence while
+  retaining unified decisions and the post-refusal unknown-parameter feedback;
+  rerun the identical provider lane once to test whether provider entry returns
+  and whether the model can correct a refusal without enlarging initial schema.
+- Required reads: the three unified-decision reports; exact four-file Core diff
+- Owns (may edit): isolated Core `flow-script-format.ts` only to restore its base
+  text; main report `reports/w2-unified-decision-feedback-only.md`
+- Must not touch: unified schema/executor, normalizer/validator, downstream/user
+  data/other lanes, more than one run, tests/full suites/commits/pushes
+- Definition of done: provider entry, a 2+ action batch, Flow creation/playback,
+  and oracle pass; otherwise stop at the exact terminal outcome and keep isolated
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-decision-feedback-only.md`
+
+### Brief: w2-panel-repair-continuation
+- Repository: existing isolated `t027-panel` pair/workspace whose created Flow
+  passed apply and deterministic execution; production UI repair continuation
+- Task: induce the declared controlled drift, present the failed run, request
+  one LLM repair, visibly review/apply it, rerun to a passing oracle, restart,
+  and reuse the exact saved repair without another provider call.
+- Required reads: panel evidence-runtime report; t016 repair report; persisted
+  workspace binding; repair proposal/apply/validation drivers
+- Owns (may edit): downstream repair UI drivers/assertions proved stale by live
+  evidence and focused tests after live progress; main report
+  `reports/w2-panel-repair-continuation.md`
+- Must not touch: Core, user panel/data, batching/recording/performance lanes,
+  unrelated files, commits/pushes/full suites/model retries
+- Definition of done: continuous project/Flow/run/adaptation IDs; intended failure
+  is visibly presented; repair review/apply and oracle pass; restarted reuse uses
+  zero provider calls. Otherwise stop at first exact boundary.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-repair-continuation.md`
+
+### Brief: w2-panel-run-presentation-live
+- Repository: existing isolated `t027-recording-panel` workspace with passed
+  deterministic runs; production panel UI assertion
+- Task: open the saved Flow's latest run in the real panel and prove the exact
+  run row, terminal status, action log, and four successful attempts are visibly
+  bound to the durable run identity; repair only stale UI locators/assertions.
+- Required reads: recording playback/reuse and latency reports; panel runtime
+  run/action-log UI; current demo panel-run driver
+- Owns (may edit): downstream panel-run presentation driver/assertions and
+  directly owned focused tests after live proof; main report
+  `reports/w2-panel-run-presentation-live.md`
+- Must not touch: Core/product runtime, saved data, provider/batch/repair lanes,
+  user panel/data, unrelated files, commits/pushes/full suites
+- Definition of done: real panel visibly presents the exact durable run and all
+  four successful action attempts with no API-only inference; stop at first
+  exact product/driver failure.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-run-presentation-live.md`
