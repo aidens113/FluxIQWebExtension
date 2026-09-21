@@ -160,3 +160,110 @@ deferral this repository's standards forbid.
 - Must not touch: `service.ts`, `recovery/**`, `harness-options/**`,
   `llm/context-packet.ts`, `.structure-baseline.json`, this repository
 - Report to: `.../reports/w2-import-cycle.md`
+
+## Delivered 2026-09-20 (t011 and t024 briefs, archived 2026-09-21)
+
+### Brief: w2-t011-core-permission-seams
+- Repository: FluxIQ Core, read-only
+- Task: trace the existing instruction-derived permission comparison and the
+  plan-node handle parser to identify the smallest domain-neutral changes for
+  consequence reconciliation and Flow-step declarations. Do not implement,
+  build, or test while the live baseline is still running.
+- Required reads: downstream Current State and `reports/{w2-permission-request,w2-reveal-not-commit}.md`;
+  Core `runtime/action-permissions/`; `runtime/llm/harness-options/plan-node-handles.ts`;
+  the immediate callers that consume parsed plan handles
+- Owns (may edit): only
+  `reports/w2-t011-core-permission-seams.md` in the t011 extension worktree
+- Must not touch: any Core source, any other report, either working document,
+  test files, commits or pushes
+- Definition of done: exact data-flow and file:line evidence; proposed minimal
+  compatibility behavior; risks and one focused live proof for each seam
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-core-permission-seams.md`
+
+### Brief: w2-open-branch-live-audit
+- Repository: this repository; paired Core branches read-only where present
+- Task: audit every open task branch against current `dev`, its existing report,
+  and current landed code. Identify which unmerged changes are still needed for
+  live Week 2 testing, which are already superseded, and which must remain held.
+- Required reads: this document's Current State; `pnpm task list`; each open
+  branch's commits/diff stat; only the report directly associated with that task
+- Owns (may edit): only
+  `reports/w2-open-branch-live-audit.md` in the shared `dev` checkout
+- Must not touch: source, tests, other reports or working documents, task
+  branches/worktrees, Core source, commits or pushes
+- Definition of done: one evidence-backed row per open branch with disposition
+  `integrate-live`, `superseded/close`, or `hold`, dependencies, overlap risks,
+  and the narrow first live proof; explicitly assess t021 batching
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-open-branch-live-audit.md`
+
+### Brief: w2-t011-created-run-timeout
+- Repository: this repository and FluxIQ Core, read-only
+- Task: diagnose why live run `run-mua7yzln-7c8d0a9d` still exhausted the
+  granted-run read-back window despite t022's `newRunId` path. Inspect the run
+  bundle call-by-call and the current request/read-back implementation; do not
+  expose page data or secrets and do not implement yet.
+- Required reads: this document's Current State; `reports/w2-run-timeout.md`;
+  the run's `evaluation.json`, `snapshots/live-llm.json`, and bounded lifecycle
+  events; `flow-lane/{persisted-flow-run,creation/lane}.ts`; Core requested-run
+  id and runtime-session/result-verification paths
+- Owns (may edit): only `reports/w2-t011-created-run-timeout.md` in the t011
+  extension worktree
+- Must not touch: source, tests, other reports/working docs, commits or pushes
+- Definition of done: exact failed stage and timeline, whether the named run
+  exists and its terminal/verdict state, root cause with file:line evidence,
+  smallest fix location, and one focused live rerun command
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-created-run-timeout.md`
+
+### Brief: w2-t011-missing-result-verification
+- Repository: this repository and FluxIQ Core, read-only
+- Task: diagnose live run `run-mua8g4li-6a746736`, whose named playback is
+  durably `succeeded` with 9/9 actions but no result-verification record while
+  the runner waits. Determine why the verification call was skipped or stuck.
+- Required reads: the bounded run bundle/project status; t012/t022 reports;
+  current execution-grant issuance, `result-verification/`, runtime-session
+  completion, and downstream settlement/read-back paths
+- Owns (may edit): only `reports/w2-t011-missing-result-verification.md` in the
+  t011 extension worktree
+- Must not touch: source, tests, other reports/working docs, commits or pushes
+- Definition of done: exact gate/call state with file:line evidence, smallest
+  coherent fix, and the same single-scenario live proof; no secret/page output
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-missing-result-verification.md`
+
+### Brief: w2-t024-project-database-lifetime
+- Repository: paired task t024, FluxIQ Core implementation with downstream live proof
+- Task: make the smallest coherent project-database pool lifetime change that
+  prevents a durable run-detail save from stalling during close/reopen races;
+  then rerun only `social-scheduler-schedule-post` live. Do not begin with tests.
+- Required reads: this document's Current State;
+  `reports/w2-t011-missing-result-verification.md`; Core
+  `storage/project/database.ts`, its direct pool users, and only its focused test
+- Owns (may edit): Core `packages/fluxiq/src/programs/automation-studio/storage/project/database.ts`,
+  temporary env-gated stage markers in Core `runtime/service.ts` and
+  `runtime/result-verification/run-outcome.ts` (removed before handoff), its
+  directly owned focused test if live behavior succeeds, and downstream
+  `reports/w2-t024-project-database-lifetime.md`
+- Must not touch: other Core/extension source, existing reports/working docs,
+  task t011, commits or pushes; no corpus or full suite
+- Definition of done: fix pool lifetime; same live scenario reaches terminal
+  playback plus durable `resultVerification.status: no_result` and fixture
+  oracle, or records the next precise blocker; only then run the narrowest
+  pool/type check
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-project-database-lifetime.md`
+
+### Brief: w2-t024-post-success-await-trace
+- Repository: paired task t024, both sides read-only
+- Task: while the current t024 schedule-post run remains live, trace the exact
+  unresolved await after its 9/9 successful playback. Distinguish run-detail
+  save, store release, session write, dataset listing, and verification entry
+  using closed lifecycle/SQLite/process evidence; reassess the pool hypothesis.
+- Required reads: Current State; t024 pool brief and t011 missing-verification
+  report; Core service post-success path, typed run-detail writer/repository,
+  database pool, result-verification ports; bounded live run state
+- Owns (may edit): only `reports/w2-t024-post-success-await-trace.md` in the
+  t024 extension worktree
+- Must not touch: source, tests, other reports/working docs, processes, commits
+  or pushes; no page data, secrets, build, unit suite, or new live run
+- Definition of done: name the exact unresolved promise or narrow it to the
+  smallest instrumentable boundary, explain why the first fix failed, and give
+  the next one-change live experiment
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-post-success-await-trace.md`
