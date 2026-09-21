@@ -27,8 +27,10 @@
 // rules make it; form 1 is checked against the page, because an id is unique
 // only when its author kept it so.
 //
-// Two limits. An element in a shadow tree is addressed within that tree, best
-// effort: `document.querySelector` reaches neither form. And an element no
+// Two limits. An element in a shadow tree is addressed within that tree:
+// `document.querySelector` reaches neither form, so the selector is only half
+// of that element's address, and the recorder writes the other half -- the
+// chain of shadow hosts above it -- beside it (`shadow/host-chain.ts`). And an element no
 // longer in a document -- a control a click removed, described afterwards --
 // can be checked against nothing, so it gets its first anchor or a short
 // structural path, which is what every element got before this module.
