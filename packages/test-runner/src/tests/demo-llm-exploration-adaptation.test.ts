@@ -88,8 +88,18 @@ test("rejects reused, applied, cross-scope, and over-budget proposals", () => {
   assert.throws(() => evaluateExplorationAdaptationProposal(applied as any), /strict contract/u);
   const escaped = fixture(); escaped.proposal.flowId = "flow.other";
   assert.throws(() => evaluateExplorationAdaptationProposal(escaped as any), /strict contract/u);
-  const over = fixture(); over.run.interventions[0]!.inputTokens = 9_000; over.run.interventions[0]!.totalTokens = 9_050;
-  assert.throws(() => evaluateExplorationAdaptationProposal(over as any), /strict contract/u);
+  // Over budget is judged against the live profile, not a restated number: t027 raised it to the Lab's model-sized request.
+  const { maxInputTokens, maxOutputTokens } = FIRST_LIVE_ADAPTATION_PROFILE.budget;
+  const overAccounting = (error: any) => /strict contract/u.test(error.message) && error.details?.reasonCode === "exploration_adaptation_run.provider_accounting_invalid";
+  const atLimit = fixture(); const limitCall = atLimit.run.interventions[0]!;
+  limitCall.inputTokens = maxInputTokens; limitCall.totalTokens = limitCall.inputTokens + limitCall.outputTokens;
+  assert.equal(evaluateExplorationAdaptationProposal(atLimit as any).status, "proposed");
+  const overInput = fixture(); const inputCall = overInput.run.interventions[0]!;
+  inputCall.inputTokens = maxInputTokens + 1; inputCall.totalTokens = inputCall.inputTokens + inputCall.outputTokens;
+  assert.throws(() => evaluateExplorationAdaptationProposal(overInput as any), overAccounting);
+  const overOutput = fixture(); const outputCall = overOutput.run.interventions[1]!;
+  outputCall.outputTokens = maxOutputTokens + 1; outputCall.totalTokens = outputCall.inputTokens + outputCall.outputTokens;
+  assert.throws(() => evaluateExplorationAdaptationProposal(overOutput as any), overAccounting);
 });
 
 test("command targets exact exploration readiness and excludes creation, apply, and replay", async () => {

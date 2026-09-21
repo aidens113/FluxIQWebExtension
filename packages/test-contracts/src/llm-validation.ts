@@ -2,6 +2,7 @@ import {
   LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
   LLM_LAB_MAX_CALLS_PER_RUN,
   LLM_LAB_MAX_ESTIMATED_COST_USD,
+  llmActionConsequences,
   llmEvidenceKinds,
   llmTaskKinds,
   type LlmExecutionProfile,
@@ -15,12 +16,13 @@ import { add, array, enumeration, finite, keys, object, parseJson, result, text,
 
 const tasks = [...llmTaskKinds];
 const evidenceKinds = [...llmEvidenceKinds];
+const consequences = [...llmActionConsequences];
 
 export function validateLlmExecutionProfile(input: unknown): ValidationResult<LlmExecutionProfile> {
   const issues: ValidationIssue[] = [];
   const value = object(input, "$", issues);
   if (value) {
-    keys(value, ["schemaVersion", "profileId", "mode", "provider", "model", "task", "scenarioNetworkPolicy", "providerEgressPolicy", "externalSideEffects", "approvalMode", "retainRawPrompts", "retainRawResponses", "maxConcurrentRuns", "budget"], "$", issues);
+    keys(value, ["schemaVersion", "profileId", "mode", "provider", "model", "task", "scenarioNetworkPolicy", "providerEgressPolicy", "externalSideEffects", "approvalMode", "retainRawPrompts", "retainRawResponses", "maxConcurrentRuns", "budget", "permittedConsequences"], "$", issues);
     version(value.schemaVersion, "$.schemaVersion", issues);
     safeIdentifier(value.profileId, "$.profileId", issues);
     enumeration(value.mode, ["deterministic-dry", "live"], "$.mode", issues);
@@ -39,6 +41,11 @@ export function validateLlmExecutionProfile(input: unknown): ValidationResult<Ll
     } else {
       if (value.provider !== undefined) add(issues, "$.provider", "must be absent in deterministic-dry mode");
       if (value.model !== undefined) add(issues, "$.model", "must be absent in deterministic-dry mode");
+      if (value.permittedConsequences !== undefined) add(issues, "$.permittedConsequences", "must be absent in deterministic-dry mode");
+    }
+    if (value.permittedConsequences !== undefined) {
+      array(value.permittedConsequences, "$.permittedConsequences", issues, (entry, path, target) => enumeration(entry, consequences, path, target));
+      if (Array.isArray(value.permittedConsequences)) uniqueStrings(value.permittedConsequences, "$.permittedConsequences", issues, "consequence classes");
     }
   }
   return result(input, issues);
