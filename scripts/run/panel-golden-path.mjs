@@ -1,5 +1,5 @@
 import path from "node:path";
-import { withoutProviderSecrets } from "./provider-secret-environment.mjs";
+import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 
 const repositoryRoot = path.resolve(process.env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
 const names = [
@@ -11,10 +11,10 @@ const names = [
 
 try {
   const [{ loadAllowlistedTestEnvironment }, workspace, golden, requests] = await Promise.all([
-    import("../packages/test-runner/dist/target-config.js"),
-    import("../packages/test-runner/dist/demo-workspace.js"),
-    import("../packages/test-runner/dist/panel-golden-path/index.js"),
-    import("../packages/test-runner/dist/demo-llm-exploration-request.js"),
+    import("../../packages/test-runner/dist/target-config.js"),
+    import("../../packages/test-runner/dist/demo-workspace.js"),
+    import("../../packages/test-runner/dist/panel-golden-path/index.js"),
+    import("../../packages/test-runner/dist/demo-llm-exploration-request.js"),
   ]);
   const environment = await loadAllowlistedTestEnvironment(repositoryRoot, withoutProviderSecrets(process.env), names);
   const config = workspace.resolveDemoWorkspaceConfiguration(repositoryRoot, environment);
@@ -44,4 +44,3 @@ try {
   process.stderr.write(JSON.stringify({ status: "failed", message: "Panel golden path failed", reasonCode }) + "\n");
   process.exitCode = 1;
 }
-

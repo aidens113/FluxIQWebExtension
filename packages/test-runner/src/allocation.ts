@@ -39,8 +39,21 @@ const RESERVED_WORKSPACE_NAMES = new Set(["persistent-isolated", "sessions"]);
 export async function allocateLoopbackPort(): Promise<number> {
   const server = await listenOnLoopback();
   const port = portOf(server);
-  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  await closeServer(server);
   return port;
+}
+
+/** Fail before topology startup when a caller pins a loopback port this host cannot bind. */
+export async function assertLoopbackPortBindable(port: number, label = "Loopback port"): Promise<void> {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error(`${label} must be an integer from 1 to 65535`);
+  let server: Server;
+  try {
+    server = await listenOnLoopback(port);
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException)?.code;
+    throw new Error(`${label} ${port} cannot be bound on 127.0.0.1${code ? ` (${code})` : ""}`, { cause });
+  }
+  await closeServer(server);
 }
 
 export async function allocateRun(baseDir: string, requestedRunId?: string): Promise<RunAllocation> {
@@ -261,4 +274,8 @@ function portOf(server: Server): number {
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Failed to allocate a loopback port");
   return address.port;
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 }

@@ -1,6 +1,6 @@
 # Bootstrap Generation No-Proposal Investigation
 
-Status: Completed
+Status: Complete
 Status detail: Durable creation, isolated manual hosting, and the permission-continuation state machine are verified; provider-triggered permission remains a documented live-coverage gap.
 Created: 2026-09-20
 Last updated: 2026-09-20

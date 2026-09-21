@@ -246,7 +246,7 @@ export async function settleObservedResponseText(response: Pick<Response, "text"
   });
   try {
     return await Promise.race([
-      response.text().catch(() => undefined),
+      response.text(),
       deadline,
     ]);
   } finally {
