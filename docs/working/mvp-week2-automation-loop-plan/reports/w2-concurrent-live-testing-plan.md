@@ -934,3 +934,21 @@ budgets.
   batch and the same proposal applies/runs to 4/4 actions plus passing oracle;
   otherwise stop at the first exact terminal outcome.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-unified-batch-live.md`
+
+### Brief: w2-reconnect-reuse-live
+- Repository: fresh isolated pair from current integrated t027 with a copied
+  disposable deterministic demo workspace; production panel/extension live
+- Task: connect the unpacked extension, stop the owned Core/gateway while idle,
+  restart it, restore authenticated panel and extension connection, then run the
+  exact saved Flow to a passing oracle without regeneration or provider calls.
+- Required reads: recording playback/reuse report; browser-session connection
+  waits; persistent Core process lifecycle; sanitized artifacts only
+- Owns (may edit): downstream reconnect/persistence driver only after an exact
+  live mismatch, focused owned tests after live progress, and main report
+  `reports/w2-reconnect-reuse-live.md`
+- Must not touch: user panel/profile/data, Core/product runtime, provider/batch/
+  repair lanes, saved source workspace, unrelated files/full suites/commits/pushes
+- Definition of done: same project/Flow/graph identities survive full owned
+  restart, extension reconnects, 4/4 actions and oracle pass, zero LLM activity;
+  otherwise stop at first exact failure.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-reconnect-reuse-live.md`
