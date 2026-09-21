@@ -77,7 +77,9 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
     await evidence.diagnostic("panel", "exploration-terminal-timeout", "exploration.terminal-timeout", { apiResponseObserved: false, uiTerminalFailure: false });
     fail("Evidence-guided Flow generation did not reach a bounded terminal state");
   }
-  if (terminal.kind === "response") {
+  let generationBody: unknown;
+  let permissionConfirmed = false;
+  while (terminal.kind === "response") {
     await evidence.diagnostic("panel", "exploration-generation-response", "exploration.generation-response", {
       httpStatus: terminal.response.status(),
       responseOk: terminal.response.ok(),
@@ -87,19 +89,41 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
     await evidence.diagnostic("panel", "exploration-visible-error", visibleErrorCode ?? "exploration.visible-error.absent", {
       visibleGenericError: visibleErrorCode !== undefined,
     });
-  }
-  let generationBody: unknown;
-  let generationText = "";
-  if (terminal.kind === "response") {
-    try {
-      generationText = await terminal.response.text();
-      generationBody = JSON.parse(generationText) as unknown;
-    } catch { /* sanitized failure parsing below */ }
-  }
-  if (terminal.kind === "response" && (!terminal.response.ok() || !generationBody || typeof generationBody !== "object" || Array.isArray(generationBody) || (generationBody as Record<string, unknown>).ok !== true)) {
-    const failure = sanitizeGenerationFailureBody(terminal.response.status(), generationText);
-    await recordExplorationGenerationFailure(evidence, failure);
-    fail(`Evidence-guided Flow generation failed (${failure.code})`);
+    const dialog = page.getByRole("dialog", { name: "Confirm Flow action consequences", exact: true });
+    const generationText = await settleObservedResponseText(terminal.response, 2_000);
+    if (generationText !== undefined) {
+      try { generationBody = JSON.parse(generationText) as unknown; } catch { /* sanitized failure parsing below */ }
+    }
+    if (terminal.response.ok() && generationBody && typeof generationBody === "object" && !Array.isArray(generationBody) && (generationBody as Record<string, unknown>).ok === true) break;
+    const permissionDialogVisible = await dialog.isVisible().catch(() => false);
+    if (generationText === undefined) {
+      await evidence.diagnostic("panel", "exploration-response-body", "exploration.response-body-unsettled", { permissionDialogVisible });
+      if (!permissionDialogVisible || permissionConfirmed) fail("Evidence-guided Flow generation response body did not settle");
+    } else {
+      const failure = sanitizeGenerationFailureBody(terminal.response.status(), generationText);
+      await recordExplorationGenerationFailure(evidence, failure);
+      if (failure.reasonCode !== "flow_bootstrap.permission_required" || permissionConfirmed) fail(`Evidence-guided Flow generation failed (${failure.code})`);
+    }
+
+    await exactVisible(dialog, "the Flow action consequence confirmation");
+    const consequences = dialog.getByRole("list", { name: "Consequences requiring approval", exact: true }).getByRole("listitem");
+    const consequenceCount = await consequences.count();
+    if (consequenceCount < 1 || consequenceCount > 8) fail("Flow action consequence confirmation was not bounded");
+    await evidence.diagnostic("panel", "exploration-permission-request", "exploration.permission-required", { consequenceCount, proposalCountBeforeApproval: 0 });
+    if ((await control.listFlowAdaptations(projectId, flowId, "proposed")).length !== 0) fail("Permission request created a proposal before approval");
+    if ((await control.getExactFlow(projectId, flowId)).contentHash !== blankContentHash) fail("Permission request mutated the blank Flow before approval");
+    await evidence.step("panel", "explore-permission-cancel", "Cancel the bounded consequence request", () => dialog.getByRole("button", { name: "Cancel", exact: true }).click());
+    await dialog.waitFor({ state: "hidden" });
+    if ((await control.listFlowAdaptations(projectId, flowId, "proposed")).length !== 0) fail("Cancelling permission created a proposal");
+    if ((await control.getExactFlow(projectId, flowId)).contentHash !== blankContentHash) fail("Cancelling permission mutated the blank Flow");
+    await evidence.step("panel", "explore-permission-reopen", "Reopen the retained consequence request", () => authoring.getByRole("button", { name: "Review requested permissions", exact: true }).click());
+    await exactVisible(dialog, "the retained Flow action consequence confirmation");
+    permissionConfirmed = true;
+    terminal = await evidence.step("panel", "explore-permission-confirm", "Approve only the named Flow action consequences", () => waitForExplorationTerminal(
+      page, authoring, control, projectId, flowId,
+      () => dialog.getByRole("button", { name: "Allow and continue", exact: true }).click(),
+      { ignoreHighTokenConfirmation: true },
+    ));
   }
   const proposed = await control.listFlowAdaptations(projectId, flowId, "proposed");
   if (proposed.length !== 1 || terminal.kind === "proposal" && proposed[0]?.adaptationId !== terminal.adaptationId) {
@@ -212,6 +236,22 @@ async function settleObservedResponse(page: Page, request: Request | undefined, 
     request.response().then(response => response ?? undefined).catch(() => undefined),
     page.waitForTimeout(timeout).then(() => undefined),
   ]);
+}
+
+export async function settleObservedResponseText(response: Pick<Response, "text">, timeout: number): Promise<string | undefined> {
+  let cancelDeadline: () => void = () => {};
+  const deadline = new Promise<undefined>((resolve) => {
+    const timer = globalThis.setTimeout(resolve, timeout);
+    cancelDeadline = () => globalThis.clearTimeout(timer);
+  });
+  try {
+    return await Promise.race([
+      response.text().catch(() => undefined),
+      deadline,
+    ]);
+  } finally {
+    cancelDeadline();
+  }
 }
 
 const VISIBLE_GENERATION_ERRORS = Object.freeze([

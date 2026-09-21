@@ -12,6 +12,7 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
+import { settleObservedResponseText } from "../explore-proposal-ui.js";
 import { readCreateUiSource } from "./module-source.js";
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
@@ -118,8 +119,10 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /responseOk: terminal\.response\.ok\(\)/u);
   assert.match(uiSource, /visibleGenerationErrorCode\(authoring\)/u);
   assert.match(uiSource, /exploration\.proposal-count-mismatch/u);
-  assert.match(uiSource, /generationBody as Record<string, unknown>\)\.ok !== true/u);
-  assert.match(uiSource, /generationText = await terminal\.response\.text\(\)/u);
+  assert.match(uiSource, /generationBody as Record<string, unknown>\)\.ok === true/u);
+  assert.match(uiSource, /generationText = await settleObservedResponseText\(terminal\.response, 2_000\)/u);
+  assert.match(uiSource, /exploration\.response-body-unsettled/u);
+  assert.match(uiSource, /permissionDialogVisible/u);
   assert.match(uiSource, /sanitizeGenerationFailureBody\(terminal\.response\.status\(\), generationText\)/u);
   assert.doesNotMatch(uiSource, /terminal\.response\.json\(\)|readSanitizedGenerationFailure\(terminal\.response\)/u);
   assert.doesNotMatch(uiSource, /waitForEndpoint\(page, "generate-flow-bootstrap-adaptation", \(\) => explore\.click\(\), 190_000\)/u);
@@ -140,4 +143,9 @@ test("exploration UI terminal classifier stops at high-token confirmation withou
   });
   assert.equal(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: false, requestObserved: false }), undefined);
   assert.equal(Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens) >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, true);
+});
+
+test("external response-body observation is bounded independently of the product UI", async () => {
+  assert.equal(await settleObservedResponseText({ text: async () => "bounded" }, 1), "bounded");
+  assert.equal(await settleObservedResponseText({ text: () => new Promise<string>(() => undefined) }, 1), undefined);
 });

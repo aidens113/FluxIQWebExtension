@@ -1,7 +1,7 @@
 # Manual Panel Test Findings
 
 Status: Active
-Status detail: Login is closed; storage initialization and explicit safe root adoption are proven, while protected application to the user's root and an autofill retest remain.
+Status detail: Login is closed; manual testing is restored on an isolated v2 root, while protected adoption of the preserved prior root and an autofill retest remain.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: User for submission; senior supervisor agent for triage and closure
@@ -24,9 +24,16 @@ defined and linked to the concurrent live-testing campaign. PANEL-001 traced a
 login HTTP 500 to a missing importer-root launch setting; the panel was
 restarted with the t027 downstream checkout as owner.
 
-**Next:** apply PANEL-002 only after an approved panel stop and verified private
-backup, then retest PANEL-003 in the user's browser. Findings must not include
-secrets or private recorded-page content.
+**Current manual host:** `http://127.0.0.1:3000` now uses a separate fresh v2
+root and the real downstream domain; gateway `ws://127.0.0.1:4711/client` is
+listening. The prior marker-less root is preserved untouched. New credentials,
+projects, model keys, pairings, recordings, and Flows in this host are isolated
+test data and will not appear in the prior root.
+
+**Next:** retest PANEL-003 and continue ordinary panel/extension journeys on
+the isolated host. Apply PANEL-002 to the preserved prior root only after
+explicit approval, an approved panel stop, and verified private backup.
+Findings must not include secrets or private recorded-page content.
 
 **Blockers:** none.
 
