@@ -104,7 +104,18 @@ export async function runAdaptationFromPanel(page: Page, flowTreeItemId: string,
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && await runButton.isDisabled()) await page.waitForTimeout(100);
   if (await runButton.isDisabled()) throw new RunnerFailure("runtime.behavior", "Diagnose and propose adaptation mode was not ready to run");
-  const response = await evidence.step("panel", "adaptation-runtime-run", "Run one bounded diagnosis and adaptation proposal", () => waitForPanelRunResponse(page, () => runButton.click(), ADAPTING_RUN_TIMEOUT_MS));
+  const response = await evidence.step("panel", "adaptation-runtime-run", "Run one bounded diagnosis and adaptation proposal", () => waitForPanelRunResponse(page, async () => {
+    await runButton.click();
+    const confirmation = page.getByRole("dialog", { name: "Confirm high-token LLM Execution", exact: true });
+    // The confirmation follows an authenticated preflight request. A cold
+    // production panel can take several seconds to compile and answer it, so a
+    // two-second probe can miss a modal that is still legitimately on its way.
+    const confirmationObserved = await confirmation.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+    if (confirmationObserved) {
+      await evidence.diagnostic("panel", "adaptation-high-token-confirmation", "adaptation.high-token-confirmation", { observed: true });
+      await confirmation.getByRole("button", { name: "Continue high-token execution", exact: true }).click();
+    }
+  }, ADAPTING_RUN_TIMEOUT_MS));
   const body = await response.json() as any;
   if (!response.ok()) throw new RunnerFailure("runtime.behavior", "The authenticated adaptation run request was rejected", { details: { reasonCode: adaptationRunRejectionCode(body?.error) } });
   const runId = body?.payload?.runtimeSession?.runId;

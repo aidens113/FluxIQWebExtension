@@ -17,8 +17,9 @@ const CORE_THRESHOLD = AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 const DEFAULT_CALLS = DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
 
-function plan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutionProfile["budget"]> = {}): LiveLlmPlan {
+function plan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutionProfile["budget"]> = {}, permit?: LlmExecutionProfile["permittedConsequences"]): LiveLlmPlan {
   return planLiveLlmExecution({
+    ...(permit === undefined ? {} : { permittedConsequences: permit }),
     schemaVersion: LLM_LAB_SCHEMA_VERSION,
     profileId: `lab-${task}`,
     mode: "live",
@@ -38,15 +39,19 @@ function plan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutionPro
 
 type Call = { endpoint: string; payload: Record<string, unknown> };
 
-/** A Core that records every request and issues exactly what the issue call asked for, unless told otherwise. */
-function fakeCore(grantOverrides: Record<string, unknown> = {}) {
+/**
+ * A Core that records every request and issues exactly what the issue call
+ * asked for, unless told otherwise. Its preflight and grant echo the permitted
+ * consequences the request carried, as Core's do.
+ */
+function fakeCore(grantOverrides: Record<string, unknown> = {}, preflightOverrides: Record<string, unknown> = {}) {
   const calls: Call[] = [];
   return {
     calls,
     control: {
       async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
         calls.push({ endpoint, payload: structuredClone(payload) });
-        if (endpoint === "preflight-llm-execution") return { preflight: {} };
+        if (endpoint === "preflight-llm-execution") return { preflight: { permittedConsequences: payload.permittedConsequences, ...preflightOverrides } };
         const tokenLimits = payload.tokenLimits as { maxTotalTokens: number };
         const maxCalls = payload.maxCalls as number;
         return {
@@ -59,6 +64,7 @@ function fakeCore(grantOverrides: Record<string, unknown> = {}) {
             maxTotalEstimatedCostUsd: Math.min(2, (payload.maxEstimatedCostUsd as number) * maxCalls),
             timeoutMs: payload.timeoutMs,
             providerRetryCount: 0,
+            permittedConsequences: payload.permittedConsequences,
             ...grantOverrides,
           },
         };
@@ -143,4 +149,53 @@ test("a grant from a Core that reports no run token budget is accepted and recor
   const grant = await issueLiveLlmExecutionGrant(fakeCore({ maxTotalTokensPerRun: undefined }).control, { ...target, plan: plan("adapt") });
   assert.equal(grant.maxTotalTokensPerRun, null);
   assert.equal(grant.maxCalls, 26);
+});
+
+test("without --llm-permit both requests ask for no consequences, and the grant permits none", async () => {
+  const core = fakeCore();
+  const grant = await issueLiveLlmExecutionGrant(core.control, { ...target, plan: plan("create-flow") });
+  for (const call of core.calls) assert.deepEqual(call.payload.permittedConsequences, [], call.endpoint);
+  assert.deepEqual(grant.permittedConsequences, []);
+});
+
+test("--llm-permit reaches the preflight and the grant as exactly the classes asked for", async () => {
+  const core = fakeCore();
+  const grant = await issueLiveLlmExecutionGrant(core.control, { ...target, plan: plan("create-flow", {}, ["create_new", "send_or_publish"]) });
+  // Core's order, which is the order Core reports the set back in.
+  for (const call of core.calls) assert.deepEqual(call.payload.permittedConsequences, ["send_or_publish", "create_new"], call.endpoint);
+  assert.deepEqual(grant.permittedConsequences, ["send_or_publish", "create_new"]);
+});
+
+test("a second grant permits nothing, whatever the run was permitted", async () => {
+  const core = fakeCore();
+  const grant = await issueLiveLlmExecutionGrant(core.control, { ...target, plan: plan("create-flow", {}, ["send_or_publish"]), override: { purpose: "verify_result", maxCalls: 1 } });
+  for (const call of core.calls) assert.deepEqual(call.payload.permittedConsequences, [], call.endpoint);
+  assert.deepEqual(grant.permittedConsequences, []);
+});
+
+test("a preflight or grant that permits other than what was asked is refused", async () => {
+  const permitted = plan("create-flow", {}, ["send_or_publish"]);
+  const cases: Array<[Record<string, unknown>, Record<string, unknown>, RegExp]> = [
+    // A class nobody asked for, caught before anything is issued.
+    [{}, { permittedConsequences: ["send_or_publish", "move_money"] }, /preflight permits move_money, which this run did not ask for/u],
+    [{}, { permittedConsequences: [] }, /preflight does not permit send_or_publish, which this run asked for/u],
+    [{}, { permittedConsequences: undefined }, /preflight did not report the permitted consequences this run asked for/u],
+    [{}, { permittedConsequences: "send_or_publish" }, /preflight reported invalid permitted consequences/u],
+    [{ permittedConsequences: ["send_or_publish", "delete"] }, {}, /grant permits delete, which this run did not ask for/u],
+    [{ permittedConsequences: [] }, {}, /grant does not permit send_or_publish, which this run asked for/u],
+    [{ permittedConsequences: undefined }, {}, /grant did not report the permitted consequences this run asked for/u],
+  ];
+  for (const [grantOverride, preflightOverride, expected] of cases) {
+    const core = fakeCore(grantOverride, preflightOverride);
+    await assert.rejects(issueLiveLlmExecutionGrant(core.control, { ...target, plan: permitted }), expected, JSON.stringify({ grantOverride, preflightOverride }));
+    // A preflight refusal issues nothing.
+    if (Object.keys(preflightOverride).length) assert.deepEqual(core.calls.map(call => call.endpoint), ["preflight-llm-execution"]);
+  }
+  // A grant that permits more than an unpermitted run asked for is refused too.
+  await assert.rejects(issueLiveLlmExecutionGrant(fakeCore({ permittedConsequences: ["send_or_publish"] }).control, { ...target, plan: plan("create-flow") }), /grant permits send_or_publish, which this run did not ask for/u);
+});
+
+test("a Core that reports no permitted set is accepted when none was asked for", async () => {
+  const grant = await issueLiveLlmExecutionGrant(fakeCore({ permittedConsequences: undefined }, { permittedConsequences: undefined }).control, { ...target, plan: plan("adapt") });
+  assert.deepEqual(grant.permittedConsequences, []);
 });

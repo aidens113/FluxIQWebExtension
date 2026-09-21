@@ -40,6 +40,7 @@ import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { capturedTruncated, evidenceElementTotal, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
 import { present } from "./present";
 import { boundedText, jsonRecord } from "./untrusted-json";
+import type { WebRepairCandidateProjection } from "./target";
 
 /**
  * `.v2` is not cosmetic. `.v1` described every element with its `selector`, so a
@@ -78,6 +79,8 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
    * nothing to re-point.
    */
   repairParameters?: Record<string, string>;
+  /** Bounded opaque repair handles ranked from these same elements; failure packets only. */
+  repairCandidates?: WebRepairCandidateProjection;
 };
 
 /**
@@ -180,7 +183,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     failedTarget: undefined,
     failedTargetMissing: undefined,
     failedTargetUnknown: undefined,
-    repairParameters: undefined
+    repairParameters: undefined,
+    repairCandidates: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, [selectors, records], maxEvidenceBytes);

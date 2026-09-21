@@ -241,6 +241,7 @@ export async function inspectLatestDemoLlmAdaptationRun(config: DemoWorkspaceCon
       interventionValidation: Object.freeze((detail.interventions ?? []).map(item => item.validationOk ?? null)),
       interventionCodes: Object.freeze((detail.interventions ?? []).map(item => Object.freeze(item.validationCodes ?? []))),
       runtimePatchAttempts: Object.freeze((detail.runtimePatchAttempts ?? []).map(item => Object.freeze(item))),
+      recoveryCode: detail.llmGate?.patchSkippedCode ?? detail.llmGate?.code ?? null,
       adaptationStates: Object.freeze(adaptationStates),
       providerCallCount: detail.providerCallCount ?? 0,
       adaptationCount: detail.adaptationIds?.length ?? 0,

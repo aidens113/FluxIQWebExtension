@@ -2,8 +2,8 @@
 // evidence-guided exploration checkpoint. Every row here belongs to a run that
 // must stop at a *proposed* adaptation -- the parser refuses one that has
 // already been applied, the launcher and the UI driver carry no approve/apply
-// seam at all, and the terminal classifier stops at the high-token
-// confirmation instead of paying for the build behind it.
+// seam at all. The explicitly authorized golden lane confirms the visible
+// high-token boundary but still stops at a proposed adaptation.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -12,6 +12,7 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
+import { settleObservedResponseText } from "../explore-proposal-ui.js";
 import { readCreateUiSource } from "./module-source.js";
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
@@ -100,8 +101,11 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /waitForExplorationTerminal/u);
   assert.match(uiSource, /authoring\.getByRole\("alert"\)/u);
   assert.match(uiSource, /Confirm high-token Flow Build/u);
-  assert.match(uiSource, /confirmationAttempted: false/u);
-  assert.doesNotMatch(driver, /Continue high-token build/u);
+  assert.match(uiSource, /configuredProfileRequiresConfirmation: aggregateAuthorizedTokens >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD/u);
+  assert.match(uiSource, /confirmationAttempted: true/u);
+  assert.match(uiSource, /Continue high-token build/u);
+  assert.match(uiSource, /ignoreHighTokenConfirmation: true/u);
+  assert.match(uiSource, /options\.ignoreHighTokenConfirmation !== true[\s\S]*Confirm high-token Flow Build/u);
   assert.match(uiSource, /control\.listFlowAdaptations\(projectId, flowId, "proposed"\)/u);
   assert.match(uiSource, /Date\.now\(\) \+ EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS/u);
   assert.match(uiSource, /context\.on\("request", observeRequest\)/u);
@@ -110,7 +114,17 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /request\.response\(\)/u);
   assert.match(uiSource, /context\.off\("requestfinished", observeFinished\)/u);
   assert.match(uiSource, /apiRequestObserved: terminal\.requestObserved/u);
-  assert.match(uiSource, /generationBody as Record<string, unknown>\)\.ok !== true/u);
+  assert.match(uiSource, /exploration-generation-response/u);
+  assert.match(uiSource, /httpStatus: terminal\.response\.status\(\)/u);
+  assert.match(uiSource, /responseOk: terminal\.response\.ok\(\)/u);
+  assert.match(uiSource, /visibleGenerationErrorCode\(authoring\)/u);
+  assert.match(uiSource, /exploration\.proposal-count-mismatch/u);
+  assert.match(uiSource, /generationBody as Record<string, unknown>\)\.ok === true/u);
+  assert.match(uiSource, /generationText = await settleObservedResponseText\(terminal\.response, 2_000\)/u);
+  assert.match(uiSource, /exploration\.response-body-unsettled/u);
+  assert.match(uiSource, /permissionDialogVisible/u);
+  assert.match(uiSource, /sanitizeGenerationFailureBody\(terminal\.response\.status\(\), generationText\)/u);
+  assert.doesNotMatch(uiSource, /terminal\.response\.json\(\)|readSanitizedGenerationFailure\(terminal\.response\)/u);
   assert.doesNotMatch(uiSource, /waitForEndpoint\(page, "generate-flow-bootstrap-adaptation", \(\) => explore\.click\(\), 190_000\)/u);
 });
 
@@ -128,5 +142,10 @@ test("exploration UI terminal classifier stops at high-token confirmation withou
     requestObserved: true,
   });
   assert.equal(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: false, requestObserved: false }), undefined);
-  assert.equal(Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens) > LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, false);
+  assert.equal(Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens) >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, true);
+});
+
+test("external response-body observation is bounded independently of the product UI", async () => {
+  assert.equal(await settleObservedResponseText({ text: async () => "bounded" }, 1), "bounded");
+  assert.equal(await settleObservedResponseText({ text: () => new Promise<string>(() => undefined) }, 1), undefined);
 });

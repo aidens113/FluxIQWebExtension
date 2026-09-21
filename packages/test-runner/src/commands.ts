@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_LAB_BUDGET, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
@@ -136,7 +136,7 @@ export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>
 }
 
 const llmOptionNames = [
-  "--live-llm", "--llm-profile", "--llm-provider", "--llm-model", "--llm-task",
+  "--live-llm", "--llm-profile", "--llm-provider", "--llm-model", "--llm-task", "--llm-permit",
   "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens",
   "--llm-max-calls", "--llm-max-run-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd",
 ] as const;
@@ -175,6 +175,7 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
     retainRawPrompts: false,
     retainRawResponses: false,
     maxConcurrentRuns: 1,
+    ...permittedConsequencesOption(args),
     budget: {
       maxInputTokens: integerOption(args, "--llm-max-input-tokens", DEFAULT_LLM_LAB_BUDGET.maxInputTokens),
       maxOutputTokens: integerOption(args, "--llm-max-output-tokens", DEFAULT_LLM_LAB_BUDGET.maxOutputTokens),
@@ -284,3 +285,19 @@ function rejectUnknownOptions(args: string[], allowed: string[]) { for (const va
 function positional(args: string[], index: number, label: string): string { const value = positionalValues(args)[index]; if (!value) throw new Error(`${label} is required`); return value; }
 /** Arguments that are neither an option nor the value following one. */
 function positionalValues(args: string[]): string[] { return args.filter((value, offset) => offset === 0 || !args[offset - 1]?.startsWith("--")).filter(value => !value.startsWith("--")); }
+/**
+ * `--llm-permit send_or_publish,create_new`: the consequence classes the run's
+ * execution grant permits, comma-separated, each once. An unknown class is
+ * refused here, before a key is read or a provider reached, never dropped.
+ */
+function permittedConsequencesOption(args: string[]): { permittedConsequences?: LlmActionConsequence[] } {
+  const value = option(args, "--llm-permit");
+  if (value === undefined) return {};
+  const classes = value.split(",").map(item => item.trim());
+  if (classes.some(item => !item)) throw new Error("--llm-permit takes a comma-separated list of consequence classes");
+  const known: readonly string[] = llmActionConsequences;
+  const unknown = classes.filter(item => !known.includes(item));
+  if (unknown.length) throw new Error(`--llm-permit names an unknown consequence class: ${unknown.join(", ")}; use ${known.join(", ")}`);
+  if (new Set(classes).size !== classes.length) throw new Error("--llm-permit names a consequence class more than once");
+  return { permittedConsequences: classes as LlmActionConsequence[] };
+}

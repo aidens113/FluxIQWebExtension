@@ -10,7 +10,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { Page } from "@playwright/test";
-import { WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_INSPECT_TOOL_ID } from "@fluxiq-web-extension/domain/node";
+import {
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_INSPECT_RESULT_CODE,
+  WEB_LLM_INSPECT_TOOL_ID,
+  webLlmToolRejectionResultCode,
+} from "@fluxiq-web-extension/domain/node";
 import { BrowserEvidenceRecorder } from "../../browser-evidence.js";
 import { readSanitizedGenerationFailure, recordExplorationGenerationFailure } from "../index.js";
 
@@ -67,4 +72,26 @@ test("an exploration past the recorder's largest count still records why it fail
   assert.match(past, /"stage":"exploration-generation-rejected","errorCode":"flow_bootstrap\.evidence_completion_plan_invalid"/u);
   assert.match(past, /"evidenceBytesOverMillion":true/u);
   assert.doesNotMatch(past, /"evidenceBytes":/u);
+});
+
+test("a long tool and result pair retains the result category without masking the failure", async () => {
+  const resultCode = webLlmToolRejectionResultCode("no_repeating_structure");
+  assert.ok(`${WEB_LLM_DETECT_STRUCTURE_TOOL_ID}.${resultCode}`.length > 64);
+  const events = await recordedEvents({
+    ...refusal,
+    evidenceLoop: {
+      iterationCount: 2,
+      decisionCount: 2,
+      toolCallCount: 2,
+      evidenceBytes: 1200,
+      steps: [
+        { toolId: WEB_LLM_INSPECT_TOOL_ID, effectApplied: false, resultCode: WEB_LLM_INSPECT_RESULT_CODE },
+        { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effectApplied: false, resultCode },
+      ],
+    },
+  });
+
+  assert.match(events, new RegExp(`"stage":"exploration-tool-result","errorCode":"${resultCode.replaceAll(".", "\\.")}","facts":\\{"sequence":2`, "u"));
+  assert.match(events, /"stage":"exploration-generation-rejected","errorCode":"flow_bootstrap\.evidence_completion_plan_invalid"/u);
+  assert.doesNotMatch(events, /Evidence diagnostic identity is invalid/u);
 });
