@@ -36,13 +36,13 @@ function pageSnapshot(url: string, selectors: string[], extra: JsonObject = {}):
   };
 }
 
-function gateway(answers: Array<Partial<OutputDispatchResult<JsonObject>>>): { gateway: WebAutomationHostRuntimeGateway; calls: Array<{ outputId: string; metadata: JsonObject }> } {
-  const calls: Array<{ outputId: string; metadata: JsonObject }> = [];
+function gateway(answers: Array<Partial<OutputDispatchResult<JsonObject>>>): { gateway: WebAutomationHostRuntimeGateway; calls: Array<{ outputId: string; metadata: JsonObject; timeoutMs?: number }> } {
+  const calls: Array<{ outputId: string; metadata: JsonObject; timeoutMs?: number }> = [];
   return {
     calls,
     gateway: {
       dispatch: async (request) => {
-        calls.push({ outputId: request.outputId, metadata: request.metadata });
+        calls.push({ outputId: request.outputId, metadata: request.metadata, ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}) });
         const answer = answers[calls.length - 1] ?? { ok: false, error: "no answer" };
         return { outputId: request.outputId, ok: false, ...answer } as OutputDispatchResult<JsonObject>;
       }
@@ -63,6 +63,7 @@ test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.cap
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
+  assert.equal(calls[0]?.timeoutMs, 5_000);
   assert.equal(calls[0]?.metadata.point, "before_action");
   assert.equal(calls[0]?.metadata.attemptId, "node.1.attempt.1");
   assert.equal(ref.stateSnapshotId, "web.state.1");
@@ -83,6 +84,7 @@ test("a recorded action, Core's policy node naming web.dom.click, gets a state r
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
+  assert.equal(calls[0]?.timeoutMs, 5_000);
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
   assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
   assert.equal(typeof ref.summary?.truncated, "boolean");
@@ -206,6 +208,7 @@ test("the route state a Router tests is the sanitized packet projected: location
   const boundary = createWebAutomationHostRuntime(seam);
   const state = await boundary.observeRouteState!({ projectId: "project.one", flowId: "flow.one" });
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
+  assert.equal(calls[0]?.timeoutMs, 5_000);
   const page = (state as { page: Record<string, unknown> }).page;
   assert.equal(page.path, "/queue");
   assert.equal(page.location, "https://shop.test/queue");

@@ -13,7 +13,13 @@ function fixture(): any {
     { id: "end", definitionId: "builtin.control.end", parameterValues: { resultStatus: "succeeded" } },
   ], edges: [{ id: "one" }, { id: "two" }], metadata: { parentFlowId: flowId } } };
   const summary = { runId: "run.baseline", projectId, flowId, status: "succeeded", routeDecisionCount: 1, subflowEntryCount: 1, actionAttemptCount: 3, interventionCount: 0, adaptationCount: 0, updatedAt: 10 };
-  const run = { summary, routeDecisions: [], subflows: [], actionAttempts: ["start", "type", "end"].map((nodeId, order) => ({ attemptId: `attempt.${order}`, nodeId, definitionId: order === 1 ? "web.output.dom-type" : `builtin.control.${order ? "end" : "start"}`, order, status: "succeeded", startedAt: order + 1 })), interventions: [], adaptationIds: [], changeProposalIds: [], providerCallCount: 0 };
+  const run = {
+    summary,
+    routeDecisions: [{ decisionId: "decision.baseline", routerId: "router.generated", selectedSubflowId: "subflow.generated" }],
+    subflows: [{ subflowId: "subflow.generated", graphFlowId, routeDecisionId: "decision.baseline" }],
+    actionAttempts: ["start", "type", "end"].map((nodeId, order) => ({ attemptId: `attempt.${order}`, nodeId, definitionId: order === 1 ? "web.output.dom-type" : `builtin.control.${order ? "end" : "start"}`, order, status: "succeeded", startedAt: order + 1 })),
+    interventions: [], adaptationIds: [], changeProposalIds: [], providerCallCount: 0,
+  };
   const control = {
     requireProject: async () => ({ id: projectId }),
     getExactFlow: async (_projectId: string, requestedFlowId: string) => requestedFlowId === flowId ? parent : graph,

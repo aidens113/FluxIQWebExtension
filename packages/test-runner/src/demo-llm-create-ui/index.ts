@@ -10,7 +10,7 @@ export { type CreationSettingsLimits, EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_M
 export { type EvidenceGuidedCreationCheckpoint, type LiveCreationGeneration, type LiveCreationTopology } from "./creation-outcomes.js";
 export { exactVirtualizedHierarchyObject } from "./panel-interaction.js";
 export { type SanitizedSettingsSaveFailure, readSanitizedSettingsSaveFailure } from "./settings-save-failure.js";
-export { type SanitizedGenerationFailure, readSanitizedGenerationFailure } from "./generation-failure.js";
+export { type SanitizedGenerationFailure, readSanitizedGenerationFailure, sanitizeGenerationFailureBody } from "./generation-failure.js";
 export { recordExplorationGenerationFailure } from "./exploration-failure-evidence.js";
 export { type ProviderFreeGenerationReadiness, assertProviderFreeGenerationReadiness, readProviderFreeGenerationReadiness } from "./generation-readiness.js";
 export { configureEvidenceGuidedCreationViaUi, configureFirstLiveCreationViaUi } from "./flow-settings-ui.js";

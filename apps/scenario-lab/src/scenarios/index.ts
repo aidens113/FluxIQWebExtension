@@ -3,3 +3,8 @@ export type { LiveInstructionTask } from "./live-instructions.js";
 export { LIVE_REPAIR_TASKS } from "./live-repair-tasks.js";
 export type { LiveRepairTask } from "./live-repair-tasks.js";
 export { EVERYTHING_STORE_LIVE_TASKS, EVERYTHING_STORE_REPAIR_TASKS } from "./everything-store/index.js";
+export { crossborderMarketplaceScenario } from "./crossborder-marketplace/index.js";
+export { JOB_BOARD_LIVE_TASKS, JOB_BOARD_REPAIR_TASKS, jobBoardScenario } from "./job-board/index.js";
+export { LOCAL_CLASSIFIEDS_LIVE_TASKS, LOCAL_CLASSIFIEDS_REPAIR_TASKS, localClassifiedsScenario } from "./local-classifieds/index.js";
+export { photoSocialScenario } from "./photo-social/index.js";
+export { socialNetworkFeedScenario } from "./social-network-feed/index.js";
