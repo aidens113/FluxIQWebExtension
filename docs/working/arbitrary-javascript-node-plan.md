@@ -1,7 +1,7 @@
 # Arbitrary JavaScript Flow Node Plan
 
 Status: Active
-Status detail: Discovery confirmed the capability is absent; implementation is queued behind the three active live-validation lanes.
+Status detail: JavaScript-node implementation and live validation are active; the node-gap audit found no build-now node and queued one direct semantic-evidence probe.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -13,7 +13,7 @@ Related: [Week 2 automation loop](./mvp-week2-automation-loop-plan.md), [extensi
 
 ## Current State
 
-**Discovery complete; implementation not started.** The downstream web node
+**Discovery complete; implementation and live validation active.** The downstream web node
 catalog has deterministic DOM actions and extraction, while Core has built-in
 data/control nodes and trusted-local importer implementations. Neither side
 currently exposes a user-authored JavaScript Flow node. Core's LLM output
@@ -62,12 +62,12 @@ behavior. A repeated behavior becomes a purpose-built Core or web node, after
 which the LLM should prefer that node over JavaScript. JavaScript is the escape
 hatch, not the normal authoring vocabulary.
 
-**Next:** dispatch the implementation/live-validation brief when a worker slot
-finishes its current MVP lane, then review and integrate the result.
+**Next:** finish the JavaScript-node live journeys and directly test whether
+existing snapshot evidence makes the sole provisional node-gap candidate
+unnecessary, then review and integrate only evidence-backed behavior.
 
-**Blockers:** all three worker slots are currently running the higher-priority
-repair, extraction, and performance live lanes. The task has an isolated paired
-worktree and can begin immediately when the first slot returns.
+**Blockers:** none known. Chrome's per-extension user-script toggle and exact
+result-port transport remain live boundaries to prove before integration.
 
 ---
 
@@ -107,6 +107,16 @@ worktree and can begin immediately when the first slot returns.
 - Definition of done: ranked list of at most five candidates with concrete repeated live evidence, existing-node overlap, owning repository, smallest contract, and an explicit recommendation to build now/defer/reject; no candidate based only on speculation.
 - Report to: `docs/working/arbitrary-javascript-node-plan/reports/w2-node-library-gap-live.md`
 
+### Brief: w2-semantic-actionables-live-probe
+- Repository: isolated disposable Lab worktree based on current downstream `dev`; t029 read-only except its unique report
+- Task: live-probe whether existing `web.dom.capture_snapshot` / page inspection exposes bounded role, accessible-name/label, actionable-state, and stable opaque target evidence sufficient for creation and repair; decide whether `web.dom.query_actionables` is a real missing node.
+- Required reads: this document's Current State; `w2-node-library-gap-live.md`; existing snapshot/inspection output contracts and extension implementation; Scenario Lab fixture controls.
+- Owns (may edit): only `docs/working/arbitrary-javascript-node-plan/reports/w2-semantic-actionables-live-probe.md`; disposable ignored run/profile data outside user storage.
+- Must not touch: product source, t027/t030, shared `dev`, user `.fluxiq`, user browser profile, provider credentials, or any other worker report.
+- Live order: inspect the real output contract, run a controlled page with ambiguous selectors but distinct semantic identities through the production extension/panel path, capture only structural metadata, and compare the evidence to the proposed smallest node contract.
+- Definition of done: report exact fields and boundedness; demonstrate whether a consumer can distinguish actionable candidates without raw DOM/HTML; recommend build now/defer/reject from observed evidence; no provider call and no product edits.
+- Report to: `docs/working/arbitrary-javascript-node-plan/reports/w2-semantic-actionables-live-probe.md`
+
 ---
 
 ## Work Ledger
@@ -118,6 +128,14 @@ worktree and can begin immediately when the first slot returns.
 - Validation: repository search and source inspection -> no user-authored JS node; current LLM validator rejects executable-code keys; Chrome 153 is installed and exposes the MV3 user-script API when enabled.
 - Outcome: Partial
 - Follow-up: dispatch `w2-arbitrary-js-node-live` when a worker slot returns.
+
+### 2026-09-20 â€” Node-gap audit and direct-proof follow-up
+- Agent: supervisor + `w2-node-library-gap-live`
+- Changed: gap-audit report and this brief/state update only
+- Why: The audit rejected UI/runtime/harness defects as node gaps and found one provisional semantic-actionable query that needs direct live proof before adding catalog surface.
+- Validation: registry/report inspection and `git diff --check`; no provider call or product edit.
+- Outcome: Partial
+- Follow-up: run the isolated semantic evidence probe while JavaScript-node implementation continues.
 
 ---
 
