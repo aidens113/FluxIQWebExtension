@@ -16,6 +16,7 @@ export * from "./interactive-session.js";
 export * from "./isolated-flow-importer.js";
 export * from "./network-guard.js";
 export * from "./panel-verification.js";
+export * from "./panel-golden-path/index.js";
 export * from "./persistent-identity.js";
 export * from "./demo-workspace.js";
 export * from "./demo-operation-status.js";

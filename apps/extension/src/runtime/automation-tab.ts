@@ -15,6 +15,24 @@ const AUTOMATION_TAB_HISTORY = 8;
 // The tabs FluxIQ has driven, oldest first. The last is the automation tab.
 let automationTabs: number[] = [];
 
+type SnapshotReadinessProof = {
+  tabId: number;
+  url: string;
+  documentId: string;
+  capturedAt: number;
+};
+
+/**
+ * A successful DOM snapshot is stronger evidence than another tab poll: the
+ * target document was complete enough for its content script to answer. The
+ * proof is deliberately one-shot and names Chrome's document UUID. A worker
+ * restart may preserve it in session storage, but any new document fails the
+ * identity check and keeps the ordinary settling wait.
+ */
+let snapshotReadinessProof: SnapshotReadinessProof | undefined;
+const SNAPSHOT_READINESS_MAX_AGE_MS = 10_000;
+const SNAPSHOT_READINESS_STORAGE_KEY = "runtimeSnapshotReadinessProof";
+
 export async function resolveAutomationTab(input: { requestedTabId?: number; initialUrl?: string; active?: boolean; forceNew?: boolean } = {}): Promise<number> {
   if (input.requestedTabId !== undefined) {
     // A named tab is still driven to the requested URL; otherwise a navigation
@@ -48,6 +66,7 @@ export function setAutomationTab(tabId: number): void {
  */
 export function forgetAutomationTab(tabId?: number): void {
   automationTabs = tabId === undefined ? [] : automationTabs.filter((id) => id !== tabId);
+  void clearSnapshotReadiness();
 }
 
 export function currentAutomationTabId(): number | undefined {
@@ -111,6 +130,7 @@ async function existingAutomationTab(): Promise<number | undefined> {
  * writing a navigation asks for.
  */
 async function updateTabUrl(tabId: number, url: string): Promise<void> {
+  await clearSnapshotReadiness();
   if (await readTabUrl(tabId) === url) {
     await chrome.tabs.update(tabId, { active: true });
     await chrome.tabs.reload(tabId);
@@ -118,6 +138,70 @@ async function updateTabUrl(tabId: number, url: string): Promise<void> {
     await chrome.tabs.update(tabId, { url, active: true });
   }
   await waitForTabReady(tabId);
+}
+
+/** Remembers that a read-only snapshot just answered from this exact document. */
+export async function noteSnapshotReadiness(tabId: number, url: string | undefined): Promise<void> {
+  if (!url) return;
+  const documentId = await readTopDocumentId(tabId);
+  if (!documentId) return;
+  snapshotReadinessProof = { tabId, url, documentId, capturedAt: Date.now() };
+  try {
+    await chrome.storage?.session?.set({ [SNAPSHOT_READINESS_STORAGE_KEY]: snapshotReadinessProof });
+  } catch {
+    /* best-effort: the in-memory proof remains safe for the immediate command */
+  }
+}
+
+/**
+ * Consumes the immediately preceding snapshot proof when Chrome still reports
+ * the same complete document. A failed check falls back to waitForTabReady.
+ */
+export async function consumeSnapshotReadiness(tabId: number): Promise<boolean> {
+  let stored: unknown;
+  if (snapshotReadinessProof === undefined) {
+    try {
+      stored = (await chrome.storage?.session?.get(SNAPSHOT_READINESS_STORAGE_KEY))?.[SNAPSHOT_READINESS_STORAGE_KEY];
+    } catch {
+      stored = undefined;
+    }
+  }
+  const proof = snapshotReadinessProof ?? (isSnapshotReadinessProof(stored) ? stored : undefined);
+  await clearSnapshotReadiness();
+  if (!proof || proof.tabId !== tabId || Date.now() - proof.capturedAt > SNAPSHOT_READINESS_MAX_AGE_MS) return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status !== "complete" || tab.url !== proof.url || isTransientNavigationUrl(tab.url)) return false;
+    return await readTopDocumentId(tabId) === proof.documentId;
+  } catch {
+    return false;
+  }
+}
+
+async function clearSnapshotReadiness(): Promise<void> {
+  snapshotReadinessProof = undefined;
+  if (typeof chrome === "undefined") return;
+  try {
+    await chrome.storage?.session?.remove(SNAPSHOT_READINESS_STORAGE_KEY);
+  } catch {
+    /* best-effort: a missing session store is only a conservative cache miss */
+  }
+}
+
+function isSnapshotReadinessProof(value: unknown): value is SnapshotReadinessProof {
+  const proof = value as Partial<SnapshotReadinessProof> | undefined;
+  return typeof proof?.tabId === "number" && typeof proof.url === "string" &&
+    typeof proof.documentId === "string" && typeof proof.capturedAt === "number";
+}
+
+function readTopDocumentId(tabId: number): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+      const error = chrome.runtime.lastError;
+      if (error || !frames) resolve(undefined);
+      else resolve(frames.find((frame) => frame.frameId === 0)?.documentId);
+    });
+  });
 }
 
 export function waitForTabReady(tabId: number): Promise<void> {

@@ -87,7 +87,13 @@ export async function waitForPanelRunResponse(page: Page, dispatch: () => Promis
     }
     const isLlmPreparation = response.url().includes("/api/programs/automation-studio/preflight-llm-execution")
       || response.url().includes("/api/programs/automation-studio/issue-llm-execution-grant");
-    if (isLlmPreparation && !response.ok()) rejectResponse(new Error("The panel rejected LLM run preparation before runtime dispatch"));
+    if (isLlmPreparation && !response.ok()) {
+      void response.json().then((body: unknown) => {
+        const error = typeof body === "object" && body !== null && typeof (body as { error?: unknown }).error === "string"
+          ? (body as { error: string }).error : "";
+        rejectResponse(new Error(`The panel rejected LLM run preparation before runtime dispatch (${llmPreparationRejectionCode(error)})`));
+      }).catch(/* best-effort: response body may be absent; retain the closed rejection category */ () => rejectResponse(new Error("The panel rejected LLM run preparation before runtime dispatch (llm_preparation.rejected)")));
+    }
   };
   page.on("response", handler);
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -102,6 +108,26 @@ export async function waitForPanelRunResponse(page: Page, dispatch: () => Promis
     if (timeout) clearTimeout(timeout);
     page.off("response", handler);
   }
+}
+
+function llmPreparationRejectionCode(error: string): string {
+  if (/^llm_grant\.[a-z_]+$/u.test(error)) return error;
+  if (/actor session is unavailable/iu.test(error)) return "llm_grant.actor_session_unavailable";
+  if (/Authorization session mismatch/iu.test(error)) return "llm_grant.session_mismatch";
+  if (/High-token LLM execution requires explicit confirmation/iu.test(error)) return "llm_grant.high_token_confirmation_required";
+  if (/key changed during grant authorization/iu.test(error)) return "llm_grant.key_changed";
+  if (/Flow or settings changed during grant authorization/iu.test(error)) return "llm_grant.binding_changed";
+  if (/Secret key session unlock is unavailable/iu.test(error)) return "llm_grant.key_session_locked";
+  if (/Secret reveal authorization was refused/iu.test(error)) return "llm_grant.reveal_authorization_refused";
+  if (/Secret reveal authorization TTL is invalid/iu.test(error)) return "llm_grant.reveal_authorization_ttl_invalid";
+  if (/Secret key could not be opened/iu.test(error)) return "llm_grant.key_open_failed";
+  if (/enabled LLM key is required/iu.test(error)) return "llm_grant.enabled_key_required";
+  if (/reveal authorization/iu.test(error)) return "llm_grant.reveal_authorization_failed";
+  if (/token limit is invalid/iu.test(error)) return "llm_grant.token_limit_invalid";
+  if (/call limit is invalid/iu.test(error)) return "llm_grant.call_limit_invalid";
+  if (/estimated-cost limit is invalid/iu.test(error)) return "llm_grant.cost_limit_invalid";
+  if (/timeout limit is invalid/iu.test(error)) return "llm_grant.timeout_invalid";
+  return "llm_preparation.rejected";
 }
 
 export async function waitForPanelMutationResponse(page: Page, endpoint: string, dispatch: () => Promise<void>): Promise<import("@playwright/test").Response> {
