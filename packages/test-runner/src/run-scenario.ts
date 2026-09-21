@@ -358,6 +358,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // The probe's round trip ran on the start page's own clock: a site that raises an overlay seconds after load (auction-marketplace's
         // app promotion, at 2.5 s) would meet the recording with it up. So the recording starts on the start page as the run first presented it.
         await resetScenarioLab(topology.scenarioOrigin, topology.allocation.controllerToken);
+        // The reset disarms the fixture, so a run that armed its variant before the first load arms it again here.
+        if (workflow.variant && !flowLane) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
         await openScenarioStart(page, topology.scenarioOrigin, scenario);
         await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
       }
