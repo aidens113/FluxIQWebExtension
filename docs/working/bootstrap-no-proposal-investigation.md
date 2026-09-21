@@ -1,7 +1,7 @@
 # Bootstrap Generation No-Proposal Investigation
 
 Status: Active
-Status detail: A fresh production-UI generation completed its provider transport and two live evidence actions but persisted no proposal or bootstrap adaptation; the exact discard boundary is being traced.
+Status detail: Read-once diagnostics now expose `flow_bootstrap.permission_required`; the missing explicit UI permission-confirm/reissue continuation is being implemented and live-tested.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -21,20 +21,21 @@ no visible generic error. Immediate provider-free inspection nevertheless
 found `proposedCount: 0`, `bootstrap: false`, `providerMatches: false`, and
 `modelMatches: false`.
 
-The repair cycle correctly stopped: without an applied bootstrap adaptation,
-semantic drift and target repair cannot produce meaningful evidence. The
-response body is neither persisted nor exposed, so current evidence does not
-distinguish provider content, structured-output validation, normalization,
-proposal persistence, or response projection. The disposable run has 121
-sanitized events and remains available for bounded inspection.
+The original driver read the Playwright response twice, so Core's closed
+failure envelope was lost after the first parse. The read-once sanitizer fix is
+live-proven and supervisor-verified. One identical rerun now reports
+`flow_bootstrap.permission_required`: one provider invocation, three decisions
+and tool calls, two successful evidence actions, 2,087 evidence bytes, and zero
+proposals. Core correctly refuses because the authoring grant carries no
+`permittedConsequences`; the UI has no confirmation/reissue continuation.
 
-**Done:** one live reproduction through the production UI; exact transport and
-durable-state boundary recorded; no blind retry, unit suite, or source edit.
+**Done:** live reproduction, exact response-consumption defect fixed, one live
+rerun with a stable closed diagnostic, focused 8/8 checks, and supervisor
+rebuild/test review.
 
-**Next:** trace the request from provider response through validation and
-persistence, add only closed categorical instrumentation if existing evidence
-cannot identify the boundary, fix one root cause, and rerun the same live UI
-instruction once. Run focused checks only after the live proposal appears.
+**Next:** add explicit review of Core's bounded permission request, reissue the
+build grant with only the confirmed consequences, and resume the same creation
+request. Prove a durable unapplied proposal live before focused tests.
 
 **Blockers:** none.
 
@@ -52,6 +53,16 @@ instruction once. Run focused checks only after the live proposal appears.
 - Definition of done: first discard/failure boundary has a stable categorical code; same live UI request produces a reviewable unapplied bootstrap proposal or stops at a narrower honest blocker; no proposal is auto-applied; focused checks follow only a live pass.
 - Report to: `docs/working/bootstrap-no-proposal-investigation/reports/w2-bootstrap-no-proposal-diagnosis.md`
 
+### Brief: w2-bootstrap-permission-continuation-live
+- Repository: paired t027 worktrees; Core owns the authoring UI/grant continuation, downstream owns the production UI live driver/report.
+- Task: present Core's bounded `flow_bootstrap.permission_required` request for explicit operator confirmation, reissue the build grant with exactly the confirmed consequences, and resume the same creation request to a reviewable proposal.
+- Required reads: Current State; diagnosis report; Core action-permission failure contract and API grant issuance; `blank-flow-authoring-model.ts` plus its direct view/dialog; downstream evidence-guided UI driver and failure sanitizer.
+- Owns: the smallest Core authoring model/view/API-client files and focused tests needed for the confirmation/reissue continuation; directly owned downstream driver/assertion files if live control needs them; `docs/working/bootstrap-no-proposal-investigation/reports/w2-bootstrap-permission-continuation-live.md`.
+- Must not touch: unrelated runtime permission semantics, automatic authorization, other t027 features/reports/docs, user state/port 3000, raw credentials/provider response/page data, shared `dev`, git history.
+- Live order: verify the current permission request is bounded and displayable without raw evidence; implement explicit confirmation and exact consequence reissue; rerun the same production UI instruction once; require no preapproval Flow mutation and one visible durable proposal; tests only after live pass.
+- Definition of done: UI names consequences before approval; cancel leaves zero proposal; confirmation reissues only the requested set; resumed build yields one unapplied bootstrap proposal; provider/accounting bounds and evidence audit remain intact; focused UI/handler checks pass afterward.
+- Report to: `docs/working/bootstrap-no-proposal-investigation/reports/w2-bootstrap-permission-continuation-live.md`
+
 ---
 
 ## Work Ledger
@@ -64,8 +75,16 @@ instruction once. Run focused checks only after the live proposal appears.
 - Outcome: Partial
 - Follow-up: trace and fix the first categorical discard boundary.
 
+### 2026-09-20 — Closed diagnostic restored
+- Agent: supervisor, with worker `w2-bootstrap-no-proposal-diagnosis`
+- Changed: downstream response read/sanitizer boundary and focused tests; diagnosis report.
+- Why: the live driver consumed one response twice and hid the safe Core failure that should guide the next product change.
+- Validation: same live UI request -> `flow_bootstrap.permission_required`, one provider call, three tool calls, two applied evidence actions, zero proposals; supervisor package build -> passed; focused tests -> 8/8 passed.
+- Outcome: Accepted
+- Follow-up: explicit UI permission confirmation and exact grant reissue.
+
 ---
 
 ## Open Questions
 
-- Did the provider return no usable content, or did validation, normalization, persistence, or response projection discard it? Owner: `w2-bootstrap-no-proposal-diagnosis`.
+- How should the existing authoring UI display the bounded consequence request while preserving the current high-token confirmation as a separate gate? Owner: `w2-bootstrap-permission-continuation-live`.

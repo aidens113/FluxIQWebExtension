@@ -119,6 +119,9 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /visibleGenerationErrorCode\(authoring\)/u);
   assert.match(uiSource, /exploration\.proposal-count-mismatch/u);
   assert.match(uiSource, /generationBody as Record<string, unknown>\)\.ok !== true/u);
+  assert.match(uiSource, /generationText = await terminal\.response\.text\(\)/u);
+  assert.match(uiSource, /sanitizeGenerationFailureBody\(terminal\.response\.status\(\), generationText\)/u);
+  assert.doesNotMatch(uiSource, /terminal\.response\.json\(\)|readSanitizedGenerationFailure\(terminal\.response\)/u);
   assert.doesNotMatch(uiSource, /waitForEndpoint\(page, "generate-flow-bootstrap-adaptation", \(\) => explore\.click\(\), 190_000\)/u);
 });
 

@@ -9,7 +9,7 @@ import type { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import type { BuildApproveApplyCreationInput } from "./build-flow-ui.js";
 import type { EvidenceGuidedCreationCheckpoint } from "./creation-outcomes.js";
-import { readSanitizedGenerationFailure } from "./generation-failure.js";
+import { sanitizeGenerationFailureBody } from "./generation-failure.js";
 import { recordExplorationGenerationFailure } from "./exploration-failure-evidence.js";
 import { assertProviderFreeGenerationReadiness } from "./generation-readiness.js";
 import { finite, identifier, integer, record, text } from "./json-shapes.js";
@@ -89,11 +89,15 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
     });
   }
   let generationBody: unknown;
+  let generationText = "";
   if (terminal.kind === "response") {
-    try { generationBody = await terminal.response.json(); } catch { /* sanitized failure parsing below */ }
+    try {
+      generationText = await terminal.response.text();
+      generationBody = JSON.parse(generationText) as unknown;
+    } catch { /* sanitized failure parsing below */ }
   }
   if (terminal.kind === "response" && (!terminal.response.ok() || !generationBody || typeof generationBody !== "object" || Array.isArray(generationBody) || (generationBody as Record<string, unknown>).ok !== true)) {
-    const failure = await readSanitizedGenerationFailure(terminal.response);
+    const failure = sanitizeGenerationFailureBody(terminal.response.status(), generationText);
     await recordExplorationGenerationFailure(evidence, failure);
     fail(`Evidence-guided Flow generation failed (${failure.code})`);
   }
