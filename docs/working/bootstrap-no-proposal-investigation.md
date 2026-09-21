@@ -1,7 +1,7 @@
 # Bootstrap Generation No-Proposal Investigation
 
 Status: Active
-Status detail: Read-once diagnostics now expose `flow_bootstrap.permission_required`; the missing explicit UI permission-confirm/reissue continuation is being implemented and live-tested.
+Status detail: The first permission-confirm/reissue candidate built but its live run stopped between response observation and dialog rendering; that boundary is being traced provider-free before another call.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -37,6 +37,12 @@ rebuild/test review.
 build grant with only the confirmed consequences, and resume the same creation
 request. Prove a durable unapplied proposal live before focused tests.
 
+**Latest live result:** the first Core UI/downstream-driver candidate reached
+the same permission-producing actions, but no consequence dialog or proposal
+appeared. It is not accepted or committed. The next pass must distinguish
+response settlement, strict parser rejection, authoring state reset, and modal
+rendering without a provider call, then rerun once after one root-cause fix.
+
 **Blockers:** none.
 
 ---
@@ -63,6 +69,16 @@ request. Prove a durable unapplied proposal live before focused tests.
 - Definition of done: UI names consequences before approval; cancel leaves zero proposal; confirmation reissues only the requested set; resumed build yields one unapplied bootstrap proposal; provider/accounting bounds and evidence audit remain intact; focused UI/handler checks pass afterward.
 - Report to: `docs/working/bootstrap-no-proposal-investigation/reports/w2-bootstrap-permission-continuation-live.md`
 
+### Brief: w2-permission-dialog-boundary
+- Repository: paired t027 candidate worktrees and preserved sanitized failed-run evidence.
+- Task: find the first boundary after response observation that prevented the strictly parsed permission request from rendering; fix one cause, then rerun the same production UI path once.
+- Required reads: Current State; permission-continuation report; current two-file candidate diff; Core `ProgramCommandTransport` response normalization, permission parser, authoring panel state/effects/modal lifecycle; downstream terminal response settlement.
+- Owns: existing candidate Core authoring panel and its directly owned focused test/probe; existing downstream exploration driver and directly owned focused test/probe; unique report `w2-permission-dialog-boundary.md`.
+- Must not touch: permission gate semantics, automatic authorization, unrelated t027 files, user state/port 3000, raw response/page/credential output, shared `dev`, git history.
+- Live order: use provider-free replay/component instrumentation to categorize response parsed/request parsed/state set/dialog rendered; remove all temporary instrumentation; make one smallest fix; then one real UI rerun, including cancel/reopen/confirm; tests only after live pass.
+- Definition of done: bounded consequence dialog visibly opens; cancel preserves blank hash and zero proposals; reopen works; confirmation reissues exactly missing consequences and yields one durable unapplied proposal; otherwise report the next exact closed boundary without another blind retry.
+- Report to: `docs/working/bootstrap-no-proposal-investigation/reports/w2-permission-dialog-boundary.md`
+
 ---
 
 ## Work Ledger
@@ -82,6 +98,14 @@ request. Prove a durable unapplied proposal live before focused tests.
 - Validation: same live UI request -> `flow_bootstrap.permission_required`, one provider call, three tool calls, two applied evidence actions, zero proposals; supervisor package build -> passed; focused tests -> 8/8 passed.
 - Outcome: Accepted
 - Follow-up: explicit UI permission confirmation and exact grant reissue.
+
+### 2026-09-20 — First permission UI candidate failed live
+- Agent: supervisor, with worker `w2-bootstrap-permission-continuation-live`
+- Changed: uncommitted two-file candidate and accepted failure report.
+- Why: live behavior, not compilation, decides whether the continuation exists.
+- Validation: production build/setup passed; same live UI request reached permission-producing actions but no consequence dialog or proposal; no focused tests or second retry.
+- Outcome: Partial
+- Follow-up: provider-free trace of response settlement, strict parse, state, and modal boundary before one rerun.
 
 ---
 
