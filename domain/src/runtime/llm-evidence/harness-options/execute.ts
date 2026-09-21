@@ -41,6 +41,7 @@ import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
 import { currentElementForReturnedTarget, pressControl } from "../press";
 import type { WebLlmSnapshotBinding } from "../sanitize";
+import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
 import { recoverable, RecoverableToolRejection, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
@@ -243,9 +244,12 @@ function targetHandle(value: JsonObject): string {
 /** The `target` handle in an input whose keys were already checked. */
 function handleIn(value: JsonObject): string {
   const target = value.target;
-  if (typeof target !== "string" || !/^target\.[1-9][0-9]?$/u.test(target)) recoverable("invalid_input");
+  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) recoverable("invalid_input");
   return target;
 }
+
+/** The handle shape the options declare (`./options.ts`), read the same way. */
+const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 
 function requestedUrl(input: unknown): URL {
   try {

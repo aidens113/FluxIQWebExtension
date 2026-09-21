@@ -34,7 +34,7 @@ test("false, 0 and the empty string are values and survive", () => {
     inputType: undefined, controlType: undefined, hasValue: false, selectedValue: "", href: undefined,
     options: undefined, revealKind: undefined, expanded: false, focused: undefined, recent: undefined,
     changed: undefined, form: undefined, landmark: undefined, heading: undefined, item: undefined, cell: undefined,
-    repeats: undefined
+    repeats: undefined, dialog: undefined, within: undefined, alike: undefined
   });
   assert.deepEqual(element, { target: "target.1", tag: "input", frameId: 0, role: "", hasValue: false, selectedValue: "", expanded: false });
 });

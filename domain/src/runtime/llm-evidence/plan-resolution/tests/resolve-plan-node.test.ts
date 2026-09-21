@@ -213,32 +213,38 @@ test("a let-go extraction handle is stale", async () => {
   assert.deepEqual(newest.status === "resolved" && (newest.parameters.extractList as JsonObject).paginate, { mode: "scroll", maxScrolls: 50 });
 });
 
-test("handles are resolved per page: a recapture replaces a page, pages that disagree make a bare handle ambiguous", async () => {
+test("handles are resolved per page and numbered per Flow: a recapture replaces a page, and no bare handle names two controls", async () => {
   let page: Page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#first", visibleText: "First" }] };
   const runtime = runtimeOver(() => page);
   await inspect(runtime);
   // A recapture of the same page is the model's new view of it -- but a
   // control it does not still hold is not quietly replaced by whatever now
   // stands where it stood. #first is gone, so its handle names nothing, and
-  // #renamed is a control this page has not addressed before, so it is given a
-  // number the page has never spent (see stable-handles.ts).
+  // #renamed is a control this Flow has not addressed before, so it is given a
+  // number the Flow has never spent (see stable-handles.ts).
   page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedAt("web.handle.unknown", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
-  // Another page agreeing on the handle leaves it resolvable bare.
+  // Another page's control is given its own number, even at the same selector,
+  // and both resolve bare: the plan writes them bare.
   page = { url: "https://example.test/b", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
-  // One that disagrees makes it ambiguous bare, and each page still answers for itself.
+  // A third page's control is another number again: nothing is ambiguous bare,
+  // and a location beside a handle confirms the page that issued it.
   page = { url: "https://example.test/c", elements: [{ tagName: "a", selector: "#other", visibleText: "Other" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedAt("web.handle.ambiguous", "selector"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
+  for (const handle of ["target.2", "target.3", "target.4"]) {
+    assert.equal(resolve(runtime, CLICK_NODE, { selector: { handle } }).status, "resolved", handle);
+  }
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.4" } }), clickResolvedTo("#other", "a", "Other"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.4", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/never" } }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.4", location: "https://example.test/never" } }), refusedAt("web.handle.unknown", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/c" } }), refusedAt("web.handle.unknown", "selector"));
 
   // A page let go by the bounded store makes its handles stale, by location and bare.
@@ -248,7 +254,7 @@ test("handles are resolved per page: a recapture replaces a page, pages that dis
   }
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/a" } }), refusedAt("web.handle.stale", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedAt("web.handle.stale", "selector"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#other", "button", "Other"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.12" } }), clickResolvedTo("#other", "button", "Other"));
 });
 
 test("a handle is this project and Flow's alone, and a reveal's recapture is what the plan resolves against", async () => {
@@ -292,7 +298,9 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   });
   const malformed: JsonObject[] = [
     { selector: { handle: "target.x" } },
-    { selector: { handle: "target.100" } },
+    // Past the widest number a Flow issues (`stable-handles.ts`).
+    { selector: { handle: "target.10000" } },
+    { selector: { handle: "target.0" } },
     { selector: { handle: 5 } },
     { selector: { handle: "target.1", extra: true } },
     { selector: { handle: "target.1", location: 3 } },
@@ -351,11 +359,12 @@ test("a selector the page gave to several controls is refused rather than acted 
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedAt("web.handle.not_unique", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/catalog" } }), refusedAt("web.handle.not_unique", "selector"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  // A page that describes the link alone does not make the other page's shared selector unique.
+  // A page that describes the link alone does not make the other page's shared
+  // selector unique; its own link is its own control, with a number of its own.
   page = { url: "https://example.test/other", elements: [submit, link("one")] };
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), refusedAt("web.handle.not_unique", "selector"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/other" } }), {
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.5", location: "https://example.test/other" } }), {
     status: "resolved",
     parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "one", selector: '[data-testid="product-link"]' } }
   });
@@ -363,7 +372,7 @@ test("a selector the page gave to several controls is refused rather than acted 
   const framedLink: JsonObject = { tagName: "a", selector: 'frame[4] >> [data-testid="product-link"]', accessibleName: "framed", attributes: { href: "/p/framed", "data-testid": "product-link", "data-fluxiq-frame-id": "4" } };
   page = { url: "https://example.test/framed", elements: [link("top"), framedLink] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/framed" } }), {
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.7", location: "https://example.test/framed" } }), {
     status: "resolved",
     parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "framed", selector: '[data-testid="product-link"]' }, browserFrameId: 4 }
   });

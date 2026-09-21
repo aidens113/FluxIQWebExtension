@@ -186,21 +186,23 @@ test("a list item and a child frame's element keep their place in the identity",
   });
 });
 
-test("pages that agree on a bare handle's selector but not its description carry only what they agree on", async () => {
-  let page: Page = { url: "https://example.test/step-1", elements: [{ tagName: "button", selector: "#next", accessibleName: "Next" }] };
-  const runtime = runtimeOver(() => page);
-  await inspect(runtime);
-  page = { url: "https://example.test/step-2", elements: [{ tagName: "button", selector: "#next", accessibleName: "Finish" }] };
-  await inspect(runtime);
-  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }).element, { tagName: "button", selector: "#next" });
-  assert.deepEqual(
-    resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/step-2" } }).element,
-    { tagName: "button", accessibleName: "Finish", selector: "#next" }
-  );
+// The authoring tools number handles for the whole Flow (`../../stable-handles.ts`),
+// so two pages they show never share one. The store still decides what a bare
+// handle two pages share means -- a Flow whose numbers had to start again can
+// produce one -- so that rule is held here against the store itself, with
+// packets numbered positionally as the sanitizer numbers them.
+test("pages that agree on a bare handle's selector but not its description carry only what they agree on", () => {
+  const targets = createWebLlmTargetPackets();
+  const scope = { projectId: "project.one", flowId: "flow.one" };
+  const show = (url: string, element: JsonObject): void => targets.remember(scope, sanitizeWebLlmSnapshotWithBindings({ url, interactiveElements: [element] }));
+  const elementOf = (resolution: ReturnType<typeof targets.resolve>) => (resolution.ok ? resolution.element : resolution.code);
+  show("https://example.test/step-1", { tagName: "button", selector: "#next", accessibleName: "Next" });
+  show("https://example.test/step-2", { tagName: "button", selector: "#next", accessibleName: "Finish" });
+  assert.deepEqual(elementOf(targets.resolve(scope, "target.1", undefined)), { tagName: "button", selector: "#next" });
+  assert.deepEqual(elementOf(targets.resolve(scope, "target.1", "https://example.test/step-2")), { tagName: "button", accessibleName: "Finish", selector: "#next" });
   // A third page that agrees with neither on the tag leaves the family out too.
-  page = { url: "https://example.test/step-3", elements: [{ tagName: "a", selector: "#next", accessibleName: "Finish" }] };
-  await inspect(runtime);
-  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }).element, { selector: "#next" });
+  show("https://example.test/step-3", { tagName: "a", selector: "#next", accessibleName: "Finish" });
+  assert.deepEqual(elementOf(targets.resolve(scope, "target.1", undefined)), { selector: "#next" });
 });
 
 test("the handle decides the identity: a model-written element beside it is replaced, beside a literal selector it is left alone", async () => {

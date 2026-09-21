@@ -81,6 +81,25 @@ export type WebLlmEvidenceElement = {
    * (`apps/extension/src/content/repeat-exemplars.ts`).
    */
   repeats?: number;
+  /**
+   * Only on an element that would otherwise read exactly like another in this
+   * packet: the name of the open dialog it sits in, where the look-alikes are
+   * not all in one (`look-alikes.ts`).
+   */
+  dialog?: string;
+  /**
+   * Only on such an element: the words of the row, card or list item it sits
+   * in, less its controls' words, where those differ between the look-alikes --
+   * "the Add to cart in the Soundcrest Air Pro 2 card".
+   */
+  within?: string;
+  /**
+   * Only on elements that still read alike after `dialog` and `within`: which
+   * of them this is, top to bottom on the page, and how many of them this
+   * packet describes. No two elements of a packet share a description once it
+   * is set.
+   */
+  alike?: { index: number; total: number };
 };
 
 /** A packet element with its selector put back, which only domain code ever holds. */
@@ -88,10 +107,20 @@ export type ResolvedWebLlmEvidenceElement = WebLlmEvidenceElement & { selector: 
 
 /**
  * One described element: what the packet carries, and what stays behind -- the
- * selector that addresses it, and the record it sits in where the page repeats
- * one. Neither leaves the domain.
+ * selector that addresses it, the record it sits in where the page repeats
+ * one, and the cues that tell it from a look-alike. The selector and the
+ * record never leave the domain; a cue is published only on an element that
+ * needs it (`look-alikes.ts`).
  */
-export type DescribedEvidenceElement = { element: WebLlmEvidenceElement; selector: string; record: string | undefined };
+export type DescribedEvidenceElement = {
+  element: WebLlmEvidenceElement;
+  selector: string;
+  record: string | undefined;
+  /** The record's own words, cut to the placement bound. Absent where the page keyed the record or it was not one of several. */
+  within: string | undefined;
+  /** Where the element starts on the page, when the capture measured it. */
+  position: { top: number; left: number } | undefined;
+};
 
 /** More rows than a page holds; the bound only stops a hostile number reaching the packet. */
 const MAX_REPEATS = 100_000;
@@ -168,9 +197,40 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     item: placement.item,
     cell: placement.cell,
     // One is not a run: a count of one says nothing the element does not.
-    repeats: repeats !== undefined && repeats > 1 ? repeats : undefined
+    repeats: repeats !== undefined && repeats > 1 ? repeats : undefined,
+    // Written by the packet, not the element: only a look-alike carries them.
+    dialog: undefined,
+    within: undefined,
+    alike: undefined
   });
-  return { element, selector: addressed.selector, record: recordAddress(raw.context) };
+  return {
+    element,
+    selector: addressed.selector,
+    record: recordAddress(raw.context),
+    within: recordWords(raw.context),
+    // Document coordinates only: a viewport box is in another space, and one
+    // look-alike measured in each would be put in the wrong order.
+    position: documentPosition(raw.documentBounds)
+  };
+}
+
+/**
+ * The words of the record the element sits in, as the page read them
+ * (`apps/extension/src/content/identity/record.ts`): the row's or card's own
+ * text less its controls' words, which is what a person reads to say which row
+ * they mean. Cut to the placement bound, like a heading. Present only where the
+ * page did not key the record, since a key is an identifier nobody reads.
+ */
+function recordWords(context: unknown): string | undefined {
+  if (!isJsonRecord(context) || !isJsonRecord(context.record)) return undefined;
+  return boundedText(context.record.text, WEB_LLM_EVIDENCE_BOUNDS.placement) || undefined;
+}
+
+/** Where a measured box starts, or `undefined` for a box that is not one. */
+function documentPosition(bounds: unknown): { top: number; left: number } | undefined {
+  if (!isJsonRecord(bounds)) return undefined;
+  const { x, y } = bounds;
+  return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y) ? { top: y, left: x } : undefined;
 }
 
 /**

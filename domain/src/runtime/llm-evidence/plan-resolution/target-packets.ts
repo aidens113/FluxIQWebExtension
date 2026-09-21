@@ -1,16 +1,24 @@
 // The target handles one Flow's authoring was shown, remembered per page, so a
 // plan that names `target.N` can be given the selector behind it.
 //
-// Handles are positional: `target.3` on one page and `target.3` on the next
-// are different controls. So this keeps, for each project and Flow, the newest
-// packet the model was shown for each page it visited -- a recapture of a page
-// replaces that page's handles, as it replaced them in front of the model --
-// and a handle is resolved against those pages:
+// This keeps, for each project and Flow, the newest packet the model was shown
+// for each page it visited -- a recapture of a page replaces that page's
+// handles, as it replaced them in front of the model -- and a handle is
+// resolved against those pages:
 //
 // - named with the page's `location`, against that page alone;
 // - named bare, against every remembered page, and only when they all agree
 //   on what it names. Two pages that give one handle different selectors make
 //   a bare handle `ambiguous`, never a guess at the newer one.
+//
+// The authoring tools number handles for the whole Flow (`../stable-handles.ts`),
+// so two pages they show never give one handle to different controls, and a
+// bare handle -- the way the Flow script format writes a step's target --
+// resolves. They used to number every page from `target.1`, and a bare handle
+// was then ambiguous as soon as the exploration had seen two pages: 6 of E1
+// lane B's 12 builds on the realistic stores. The rule above stays, for a
+// packet numbered any other way and for a Flow whose numbers had to start
+// again.
 //
 // A selector the page gave to more than one described element -- every product
 // card's link can share one -- names none of them in particular, so resolving
