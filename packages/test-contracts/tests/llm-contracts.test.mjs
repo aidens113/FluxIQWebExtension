@@ -172,3 +172,12 @@ test("evaluation requires a zero-call deterministic replay and safety gate", () 
   assert.equal(validateLlmRunEvaluation({ ...evaluation, maxCallsPerRun: 64 }).valid, true);
   assert.equal(validateLlmRunEvaluation({ ...evaluation, maxCallsPerRun: 65 }).valid, false);
 });
+
+test("a live profile may permit consequence classes, each once, and a dry one none", () => {
+  assert.equal(validateLlmExecutionProfile({ ...liveProfile, permittedConsequences: ["send_or_publish", "create_new"] }).valid, true);
+  assert.equal(validateLlmExecutionProfile({ ...liveProfile, permittedConsequences: [] }).valid, true);
+  for (const permittedConsequences of [["purchase"], ["delete", "delete"], "delete", [1]]) {
+    assert.equal(validateLlmExecutionProfile({ ...liveProfile, permittedConsequences }).valid, false, JSON.stringify(permittedConsequences));
+  }
+  assert.equal(validateLlmExecutionProfile({ ...createDeterministicDryLlmProfile(), permittedConsequences: ["delete"] }).valid, false);
+});

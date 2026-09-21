@@ -6,10 +6,12 @@ import {
   LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
   LLM_LAB_MAX_CALLS_PER_RUN,
   LLM_LAB_SCHEMA_VERSION,
+  llmActionConsequences,
   type LlmExecutionProfile,
   type LlmTaskKind,
 } from "@fluxiq-web-extension/test-contracts";
 import {
+  AUTOMATION_STUDIO_ACTION_CONSEQUENCES,
   AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS,
   AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS,
   AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
@@ -249,4 +251,30 @@ test("the call, token and cost numbers the Lab mirrors are Core's own", async ()
   const totalCost = /^const MAX_TOTAL_COST_USD = ([0-9_.]+);/mu.exec(source);
   assert.ok(totalCost?.[1], "MAX_TOTAL_COST_USD is no longer a plain numeric constant in Core's execution-grants.ts");
   assert.equal(Number(totalCost[1].replaceAll("_", "")), planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd);
+});
+
+test("the consequence classes the Lab mirrors are Core's own, in Core's order", () => {
+  // The contracts package cannot import Core's runtime, so it keeps a copy;
+  // this is what stops the copy drifting. A class Core adds or renames fails
+  // here instead of at a live grant.
+  assert.deepEqual([...llmActionConsequences], [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES]);
+});
+
+test("without --llm-permit the plan permits nothing", () => {
+  assert.deepEqual(planLiveLlmExecution(profile({ task: "create-flow" })).permittedConsequences, []);
+  assert.deepEqual(planLiveLlmExecution(profile({ task: "repair", permittedConsequences: [] })).permittedConsequences, []);
+});
+
+test("--llm-permit is planned as exactly the classes asked for, in Core's order", () => {
+  for (const task of ["create-flow", "repair", "adapt"] as const) {
+    const planned = planLiveLlmExecution(profile({ task, permittedConsequences: ["create_new", "move_money"] }));
+    assert.deepEqual(planned.permittedConsequences, ["move_money", "create_new"], task);
+  }
+});
+
+test("an unknown or repeated class, or a permit on a diagnosis, is refused before any provider call", () => {
+  const unknown = ["send_or_publish", "purchase"] as unknown as NonNullable<LlmExecutionProfile["permittedConsequences"]>;
+  assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow", permittedConsequences: unknown })), /--llm-permit purchase names a consequence class Core does not recognise/u);
+  assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow", permittedConsequences: ["delete", "delete"] })), /more than once/u);
+  assert.throws(() => planLiveLlmExecution(profile({ task: "diagnose", permittedConsequences: ["delete"] })), /a diagnose run takes none/u);
 });

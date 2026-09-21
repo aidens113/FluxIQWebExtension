@@ -4,6 +4,7 @@
 // so the grant -- not the runner's good intentions -- is what stops a run
 // spending more than it was authorized to.
 
+import type { LlmActionConsequence } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 import type { LiveLlmPlan, LiveLlmPurpose } from "./live-llm-plan.js";
 
@@ -21,6 +22,12 @@ export type LiveLlmExecutionGrant = Readonly<{
   maxTotalTokensPerRun: number | null;
   /** Whether the issue request carried Core's high-token confirmation. */
   highTokenConfirmationSent: boolean;
+  /**
+   * The consequences the grant permits the run's actions to have, as Core's
+   * preflight and grant both reported them -- which is exactly what the
+   * request asked for, or the grant was refused. Empty permits none.
+   */
+  permittedConsequences: readonly LlmActionConsequence[];
 }>;
 
 export type LiveLlmGrantControl = {
@@ -62,6 +69,10 @@ export async function issueLiveLlmExecutionGrant(control: LiveLlmGrantControl, i
   // `verify_result` grant beside a 600,000-token plan was refused with "LLM
   // total token limit is invalid" before this held it down.
   const maxTotalTokensPerRunAsked = Math.min(plan.maxTotalTokensPerRun, plan.tokenLimits.maxTotalTokens * maxCallsAsked);
+  // What the operator's `--llm-permit` allows, on the plan's own grant only. A
+  // second grant judges a finished run's result and takes no action, so it
+  // permits none: no grant carries a consequence nobody asked it to.
+  const permittedConsequencesAsked: readonly LlmActionConsequence[] = input.override ? [] : plan.permittedConsequences;
   const limits = () => ({
     projectId: input.projectId,
     flowId: input.flowId,
@@ -76,8 +87,12 @@ export async function issueLiveLlmExecutionGrant(control: LiveLlmGrantControl, i
     maxEstimatedCostUsd: plan.maxEstimatedCostUsd,
     maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd,
     providerRetryCount: 0,
+    permittedConsequences: [...permittedConsequencesAsked],
   });
-  await control.automationStudioCall("preflight-llm-execution", limits());
+  const preflight = await control.automationStudioCall("preflight-llm-execution", limits());
+  // Core parses the set before it issues anything, so the preflight is where a
+  // disagreement is caught while nothing is spent and no grant exists.
+  confirmedConsequences(isRecord(preflight) && isRecord(preflight.preflight) ? preflight.preflight.permittedConsequences : undefined, permittedConsequencesAsked, "preflight");
   // Core's preflight takes no confirmation; only the issue call weighs it. It is
   // sent only when the plan's run token budget is above Core's threshold, so a
   // grant Core would issue anyway is never issued as a confirmed high-token one
@@ -114,7 +129,29 @@ export async function issueLiveLlmExecutionGrant(control: LiveLlmGrantControl, i
   const timeoutMs = wholeNumber(grant.timeoutMs, "timeout");
   if (timeoutMs > plan.timeoutMs) throw refusal("Core issued a grant authorizing a longer call timeout than this run asked for");
   if (grant.providerRetryCount !== 0) throw refusal("Core issued a grant permitting provider retries");
-  return Object.freeze({ grantId, purpose, maxCalls, maxEstimatedCostUsd, maxTotalEstimatedCostUsd, timeoutMs, maxTotalTokensPerRun, highTokenConfirmationSent });
+  const permittedConsequences = confirmedConsequences(grant.permittedConsequences, permittedConsequencesAsked, "grant");
+  return Object.freeze({ grantId, purpose, maxCalls, maxEstimatedCostUsd, maxTotalEstimatedCostUsd, timeoutMs, maxTotalTokensPerRun, highTokenConfirmationSent, permittedConsequences });
+}
+
+/**
+ * What Core reports a grant permits, held to exactly what was asked. A class
+ * nobody asked for is refused outright. So is one that was asked for and is
+ * missing: the run would stop to ask a person for what the operator already
+ * permitted, and the permission request it raised would be the Lab's mistake
+ * reported as the model's. A Core that reports no set is taken at its word
+ * only when none was asked for, since absent is none.
+ */
+function confirmedConsequences(reported: unknown, asked: readonly LlmActionConsequence[], source: "preflight" | "grant"): readonly LlmActionConsequence[] {
+  if (reported === undefined) {
+    if (asked.length) throw refusal(`Core's ${source} did not report the permitted consequences this run asked for (${asked.join(", ")})`);
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(reported) || reported.some((entry) => typeof entry !== "string")) throw refusal(`Core's ${source} reported invalid permitted consequences`);
+  const extra = [...new Set(reported as string[])].filter((entry) => !(asked as readonly string[]).includes(entry));
+  if (extra.length) throw refusal(`Core's ${source} permits ${extra.join(", ")}, which this run did not ask for`);
+  const missing = asked.filter((entry) => !reported.includes(entry));
+  if (missing.length) throw refusal(`Core's ${source} does not permit ${missing.join(", ")}, which this run asked for`);
+  return Object.freeze([...asked]);
 }
 
 function wholeNumber(value: unknown, label: string): number {
