@@ -80,7 +80,9 @@ function liveCore(recovery: Recovery) {
           interventions: recovery === "none" ? [] : [{ interventionId: "i.diagnosis", kind: "diagnosis" }, { interventionId: "i.patch", kind: "runtime_patch" }],
           adaptationIds: proposed ? [ADAPTATION_ID] : [],
           changeProposalIds: proposed ? [PROPOSAL_ID] : [],
-          ...(attempt ? { metadata: { runtimePatchAttempts: [attempt.raw] } } : {}),
+          // Every way out of Core's recovery writes its gate and its trace; a granted
+          // run is finished only once they are in (`persisted-flow-run.ts`).
+          metadata: { llmGate: { invoked: recovery !== "none" }, recoveryTrace: { stages: [] }, ...(attempt ? { runtimePatchAttempts: [attempt.raw] } : {}) },
         } };
       }
       if (endpoint === "get-flow-adaptation") {
