@@ -72,7 +72,11 @@ node is rejected. Deterministic repair-candidate ranking over that packet is
 now live-proven with five bounded opaque candidates, a 680-byte projection, and
 focused 22/22 proof. Its provider repair stopped before dispatch because the
 preserved workspace has zero applied bootstrap adaptations; the next run needs
-a fresh current-t027 UI-created workspace. Unified one-or-many remains isolated because its
+a fresh current-t027 UI-created workspace. A separate pushed-`dev` production
+smoke has now passed the complete provider-free UI path: project and Flow
+creation, recording, saved four-node generation, full Core/browser restart,
+4/4 replay with the visible oracle, and Runtime Debug updating in place.
+Unified one-or-many remains isolated because its
 provider runs did not complete a Flow. Marker-less-v2 adoption is pushed on
 t028, but the user's root still needs approved stop/backup/hash/restart.
 Concurrent work is specified in
@@ -248,6 +252,16 @@ Current briefs live in the reports named by the Work Ledger.
 - Must not touch: product source, shared `dev`, user store/profile, provider credentials, other reports, or ports 3000/49100.
 - Definition of done: exact UI checkpoints, action/oracle counts, no-reload Runtime Debug result, stage timings, and first failure if any; no provider call; no automated suite.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-integrated-dev-ui-smoke.md`
+
+### Brief: w2-fresh-ui-repair-cycle
+- Repository: paired t027 worktrees after current `dev` integration; use a new isolated UI-created workspace/profile/store.
+- Task: live-prove one complete real-LLM repair proposal, human approval, corrected rerun, full restart, and deterministic zero-call reuse; begin from a bootstrap adaptation created through the production panel UI.
+- Required reads: Current State; `reports/w2-panel-repair-result-boundary.md`; `reports/w2-repair-candidate-ranking-live.md`; existing t027 live launch/run scripts only as needed.
+- Owns: disposable t027 run/profile/store data; a unique live helper under `scripts/lab/` only if required; `reports/w2-fresh-ui-repair-cycle.md`.
+- Must not touch: product/Core source, shared `dev`, user store/profile, port 3000, other reports/working docs, git history, or raw credentials/page data in artifacts.
+- Live order: create current-code workspace through the real UI; verify one applied bootstrap adaptation; introduce one semantic target drift; run bounded repair with the real provider; inspect each call and candidate projection; approve exactly one proposed target edit; rerun oracle; restart Core/browser and prove reuse with zero calls.
+- Definition of done: proposal is not pre-applied; approval changes only the intended target; corrected run passes; restarted reuse passes with provider delta zero; provider calls stay within the configured budget and exact categorical failures are reported if a closed gate stops the cycle.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-fresh-ui-repair-cycle.md`
 
 ### Brief: w2-t011-core-permission-seams
 - Repository: FluxIQ Core, read-only
