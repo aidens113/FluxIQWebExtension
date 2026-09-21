@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
+import { createdFlowSecretInputs } from "../../creation/index.js";
 import { runLiveRepairLane, type LiveRepairLaneInput } from "../run-repair-lane.js";
 import type { ProveLiveRepairControl } from "../prove-repair.js";
 
@@ -30,7 +31,10 @@ const REFUSED: RunHarnessRecovery = {
 
 const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.click", order: 0, status: "succeeded", startedAt: 1_000, finishedAt: 1_030 };
 
-function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyRefused?: boolean; providerCalls?: number; goal?: boolean } = {}) {
+/** What the recovery's proposal pointed at, as Core's adaptation stores it: the page's one submit control. */
+const APPLY_CHANGES = { tagName: "button", accessibleName: "Apply changes", metadata: { controlType: "submit" } };
+
+function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyRefused?: boolean; providerCalls?: number; goal?: boolean; target?: Record<string, unknown>; nodes?: unknown[] } = {}) {
   const endpoints: string[] = [];
   const written: Array<{ path: string; value: any }> = [];
   const published: Record<string, unknown>[] = [];
@@ -47,9 +51,9 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
     }),
     automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
       endpoints.push(endpoint + (payload.action ? `:${String(payload.action)}` : ""));
-      if (endpoint === "get-flow") return { flow: { nodes: [] } };
+      if (endpoint === "get-flow") return { flow: { nodes: options.nodes ?? [] } };
       if (endpoint === "list-flow-subflows") return { subflows: [] };
-      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: "adaptation-1", status: applied ? "applied" : "proposed" } };
+      if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: "adaptation-1", status: applied ? "applied" : "proposed", proposalId: "proposal-1", patch: [{ kind: "edit_action_target", after: options.target ?? APPLY_CHANGES }] } };
       if (endpoint === "review-flow-adaptation") {
         if (payload.action === "apply") {
           if (options.applyRefused) throw new RunnerFailure("environment.missing", "Automation Studio call failed: review-flow-adaptation");
@@ -62,7 +66,7 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
   } as unknown as ProveLiveRepairControl;
   const input: LiveRepairLaneInput = {
     ...(options.replays === undefined ? {} : { replays: options.replays }),
-    live: { repairsFlow: true, describe: () => ({ task: "repair", purpose: "explore_and_adapt" }) },
+    live: { repairsFlow: true, describeRepair: () => ({ task: "repair", purpose: "explore_and_adapt" }) },
     lane: { flowId: "flow-1", run: { harnessRecovery: options.recovery ?? RECOVERED } },
     projectId: "project-1", facilityRunId: "run-lab", scenarioId: "identity-drift",
     secrets: [], steps: [],
@@ -162,4 +166,64 @@ test("a replay whose goal did not hold fails the run, naming the replays that mi
     runLiveRepairLane(fake.control, fake.input),
     (error: unknown) => error instanceof RunnerFailure && /did not hold: 1 of 1 replay\(s\) did not reach the fixture's expected final state/u.test(error.message),
   );
+});
+
+/**
+ * A Flow FluxIQ built from an instruction: its playback ran under the
+ * proposal-only repair grant, so its repair is the same kind of proposal, and
+ * its own lane judged no declared repair, so this lane judges it first.
+ */
+const DECLARED = { patchKind: "temporary_target_override", target: { tagName: "button", accessibleName: "Apply changes", controlType: "submit" } } as const;
+function createdLane(options: Parameters<typeof lane>[0] = {}) {
+  const fake = lane(options);
+  const input: LiveRepairLaneInput = {
+    ...fake.input, expectation: DECLARED,
+    // The created lane's own rule, as the runner hands it in.
+    rebuildInputs: (nodes) => createdFlowSecretInputs({ scenarioId: fake.input.scenarioId, secrets: fake.input.secrets, workflow: { recordingScript: [] }, nodes }),
+    live: { repairsFlow: true, describeRepair: () => ({ task: "create-flow", purpose: "diagnose_and_adapt" }) },
+  };
+  return { ...fake, input };
+}
+
+test("a created Flow's proposal is judged against the declared repair, then applied and replayed under the grant that made it", async (t) => {
+  const fake = createdLane({ replays: 1 });
+  t.after(fake.restore);
+  const proof = await runLiveRepairLane(fake.control, fake.input);
+  assert.deepEqual([proof?.task, proof?.purpose, proof?.application.outcome], ["create-flow", "diagnose_and_adapt", "applied"]);
+  assert.deepEqual(proof?.replays.map((replay) => [replay.outcome, replay.providerCalls, replay.goalPassed]), [["ran", 0, true]]);
+  assert.equal(fake.written[0]?.value.declaredRepair.verdict, "repaired");
+  assert.equal(fake.published[0]?.declaredRepair, "repaired");
+  // Judged before the review: the adaptation is read, then approved, then applied.
+  assert.ok(fake.endpoints.indexOf("get-flow-adaptation") < fake.endpoints.indexOf("review-flow-adaptation:approve"));
+});
+
+test("a created Flow's proposal naming another control, or no proposal, is never applied or replayed", async (t) => {
+  const wrong = createdLane({ replays: 1, target: { tagName: "button", accessibleName: "Discard changes", metadata: { controlType: "button" } } });
+  t.after(wrong.restore);
+  await assert.rejects(
+    runLiveRepairLane(wrong.control, wrong.input),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /not the declared one: its proposal named a different control \(accessibleName, controlType differ\)/u.test(error.message),
+  );
+  assert.equal(wrong.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false, "a wrong proposal must not be approved onto the Flow");
+  assert.deepEqual(wrong.reset, []);
+  assert.deepEqual([wrong.written[0]?.value.declaredRepair.verdict, wrong.written[0]?.value.application, wrong.written[0]?.value.replays], ["wrong_target", null, []], "the judgement is written before the run fails");
+  assert.deepEqual(wrong.published[0], { declaredRepair: "wrong_target", application: null });
+
+  // A refusal is not the declared repair either: a created Flow that failed and proposed nothing does not pass as repaired.
+  const none = createdLane({ replays: 1, recovery: REFUSED });
+  t.after(none.restore);
+  await assert.rejects(runLiveRepairLane(none.control, none.input), /not the declared one: no temporary_target_override was proposed/u);
+  assert.equal(none.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false);
+});
+
+test("a created Flow's run inputs are rebuilt by the rule its caller hands in, here the created lane's, which refuses a Flow asking for files before anything is applied", async (t) => {
+  const uploading = { id: "node.upload", definitionId: "web.output.dom-upload", parameterValues: { selector: "#file", upload: { $state: { path: "web.upload.file" } } }, metadata: { outputActionId: "web.dom.upload" } };
+  const fake = createdLane({ replays: 1, nodes: [uploading] });
+  t.after(fake.restore);
+  await assert.rejects(runLiveRepairLane(fake.control, fake.input), /asks the run for files on 1 node\(s\)/u);
+  assert.equal(fake.endpoints.some((endpoint) => endpoint.startsWith("review-flow-adaptation")), false);
+  // The recorded rule reads a node's nested parameters only, so the same flat node asks it for nothing.
+  const recorded = lane({ replays: 1, nodes: [uploading] });
+  t.after(recorded.restore);
+  assert.equal((await runLiveRepairLane(recorded.control, recorded.input))?.application.outcome, "applied");
 });

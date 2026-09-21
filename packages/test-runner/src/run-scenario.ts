@@ -27,7 +27,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, createdFlowLaneSnapshot, createdFlowSecretInputs, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
@@ -69,9 +69,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
-  // A Flow-lane run whose grant only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal.
+  // A Flow-lane run whose grant only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
+  // Flow always, and a created one when `--replays` has its repair applied, whose proposal the repair lane then judges (`proveRepair` below).
   const workflow = resolveWorkflow(scenario, options, target);
-  const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.flow === true, proposalOnly: options.live?.proposesRepairOnly === true });
+  const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.flow === true || (options.creation !== undefined && options.replays !== undefined), proposalOnly: options.live?.proposesRepairOnly === true });
   // A variant never changes the recording: on the Flow lane the script runs
   // unarmed, so the recording lane checks the workflow's own expectations while
   // the variant's govern the Flow run alone. Judging the unarmed recording by
@@ -276,6 +277,16 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         catch { return false; }
       },
     });
+    // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no grant, so "the model fixed it" becomes "the Flow
+    // works without the model"; without the option nothing happens. `checkGoal` is the scenario's own final state, never the proposal-only one the run was
+    // held to. A created Flow's lane judged no declared repair, so the repair lane judges it first, and rebuilds its inputs by the created lane's rule.
+    const proveRepair = (control: ProveLiveRepairControl, activeTopology: RunningTopology, projectId: string, lane: LiveRepairLaneInput["lane"], builtFrom: "recording" | "instruction") => runLiveRepairLane(control, {
+      ...(builtFrom === "instruction" ? { rebuildInputs: nodes => createdFlowSecretInputs({ scenarioId: scenario.id, secrets: declaredSecrets, workflow: flowWorkflow, nodes }), ...(repair ? { expectation: repair } : {}) } : {}),
+      ...(options.replays === undefined ? {} : { replays: options.replays }), ...(live ? { live } : {}), lane, projectId, facilityRunId: runId, scenarioId: scenario.id, secrets: declaredSecrets, steps: flowWorkflow.recordingScript,
+      scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, prepare: flowRunHooks(activeTopology, async () => undefined).prepareFlowPage,
+      checkGoal: () => findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow).then(found => { scenarioPage = found; return true; }, () => false),
+      bundle, publish: details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live repair was applied and replayed"), details }),
+    });
     const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
     const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await (stepRunner?.activePage() ?? page).screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
@@ -338,7 +349,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
       const lane = await runCreatedFlowLane({
-        control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow, facilityRunId: runId,
+        control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
@@ -351,6 +362,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         }),
       });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
+      await proveRepair(control, activeTopology, createdProjectId, lane, "instruction");
     } else {
       if (paired && topology.authorizationPin) await proveCoreActionRoundTrip(page, topology, paired.sessionId, scenario.id, workflow, capture, runId, (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); });
       if (topology.control && topology.projectId) recordingBaseline = recordingIds(await topology.control.listRecordings(topology.projectId));
@@ -440,18 +452,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         }));
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
-        // `--replays N`: approve the repair this run produced, apply it to the Flow, and replay that Flow N
-        // times with no grant, so "the model fixed it" becomes "the Flow works without the model". Without
-        // the option the lane does nothing. `checkGoal` is judged against the scenario's own expected final
-        // state, never the proposal-only one an `adapt` run's Flow run was held to.
-        await runLiveRepairLane(control, {
-          ...(options.replays === undefined ? {} : { replays: options.replays }), ...(live ? { live } : {}),
-          lane, projectId, facilityRunId: runId, scenarioId: scenario.id, secrets: declaredSecrets, steps: flowWorkflow.recordingScript,
-          scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken,
-          prepare: flowRunHooks(activeTopology, async () => undefined).prepareFlowPage,
-          checkGoal: () => findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow).then(found => { scenarioPage = found; return true; }, () => false),
-          bundle, publish: details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live repair was applied and replayed"), details }),
-        });
+        await proveRepair(control, activeTopology, projectId, lane, "recording");
       }
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
