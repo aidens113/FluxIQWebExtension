@@ -26,6 +26,7 @@
 // `MAX_SCANNED` below and `reports/x-scan-cap.md` for the measurement.
 
 import type { ElementFingerprintCandidate } from "fluxiq/automation-studio";
+import type { LookupRoot } from "../selector";
 import { accessibleNameFor } from "./accessible-name";
 import { boundedText } from "./bounded-text";
 import { implicitRole } from "./implicit-role";
@@ -122,8 +123,11 @@ const CANDIDATE_SELECTOR = [
 ].join(",");
 
 /**
- * The candidates in this document that share the recorded target's tag or role
- * family, in document order, capped.
+ * The candidates in `roots` that share the recorded target's tag or role
+ * family, in document order within each root and root after root, capped. The
+ * roots are the document, or the shadow roots a recorded target's host chain
+ * reached (`../selector/shadow/scope.ts`): a target recorded inside a widget's
+ * shadow root is weighed against that widget's controls, never the page's.
  *
  * "Family" is deliberately loose: a `<button>` that became a `<div role=
  * "button">` is the same control to a person, and a resolver that insisted on
@@ -136,20 +140,24 @@ const CANDIDATE_SELECTOR = [
  * `MAX_SCANNED` interactive elements or exactly `MAX_CANDIDATES` family members
  * is reported complete, which it is.
  */
-export function collectTargetCandidates(family: CandidateFamily, root: Document = document): TargetCandidatePool {
+export function collectTargetCandidates(family: CandidateFamily, roots: readonly LookupRoot[] = [document]): TargetCandidatePool {
   const tagName = family.tagName?.toLowerCase();
   const role = family.role?.toLowerCase();
-  const interactive = root.querySelectorAll(CANDIDATE_SELECTOR);
+  const lists = roots.map((root) => root.querySelectorAll(CANDIDATE_SELECTOR));
+  const total = lists.reduce((sum, list) => sum + list.length, 0);
   const candidates: TargetCandidate[] = [];
   let examined = 0;
-  for (const element of interactive) {
-    if (examined >= MAX_SCANNED) return { candidates, examined, truncated: true };
-    examined += 1;
-    if (!inFamily(element, tagName, role)) continue;
-    candidates.push({ element, fingerprint: candidateFingerprint(element, candidates.length) });
-    // The scorer's budget is full. Anything after this element is unweighed,
-    // and that is only truncation if there was in fact something after it.
-    if (candidates.length >= MAX_CANDIDATES) return { candidates, examined, truncated: examined < interactive.length };
+  for (const interactive of lists) {
+    for (const element of interactive) {
+      if (examined >= MAX_SCANNED) return { candidates, examined, truncated: true };
+      examined += 1;
+      if (!inFamily(element, tagName, role)) continue;
+      // The index is across every root, so no two candidates share a fallback id.
+      candidates.push({ element, fingerprint: candidateFingerprint(element, candidates.length) });
+      // The scorer's budget is full. Anything after this element is unweighed,
+      // and that is only truncation if there was in fact something after it.
+      if (candidates.length >= MAX_CANDIDATES) return { candidates, examined, truncated: examined < total };
+    }
   }
   return { candidates, examined, truncated: false };
 }

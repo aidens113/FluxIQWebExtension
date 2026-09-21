@@ -1,3 +1,5 @@
+import type { LookupRoot } from "./selector";
+
 export type ElementFingerprint = {
   selector?: string;
   xpath?: string;
@@ -9,39 +11,45 @@ export type ElementFingerprint = {
   attributes?: Record<string, string>;
 };
 
-/** Resolves the most stable available part of an element fingerprint. */
-export function findClosestFingerprint(fingerprint: ElementFingerprint): Element | null {
-  const bySelector = query(fingerprint.selector);
+/**
+ * Resolves the most stable available part of an element fingerprint, looking
+ * in `root`: the document, or the shadow root a recorded target's host chain
+ * reached (`selector/shadow/scope.ts`). A recorded xpath is written from the
+ * top of the element's own tree, so it is evaluated only against a document --
+ * the xpath of an element inside a shadow root names nothing XPath can walk to.
+ */
+export function findClosestFingerprint(fingerprint: ElementFingerprint, root: LookupRoot = document): Element | null {
+  const bySelector = query(root, fingerprint.selector);
   if (bySelector) return bySelector;
   // Checked before it is handed over, because an expression XPath cannot parse
   // makes `document.evaluate` *throw* rather than match nothing -- and a throw
   // here leaves `resolveTarget` altogether and fails the step, where a strategy
   // that found nothing would have let the ones below it run.
-  if (fingerprint.xpath && isReadableXpath(fingerprint.xpath)) {
+  if (fingerprint.xpath && !isShadowRoot(root) && isReadableXpath(fingerprint.xpath)) {
     const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
     if (result instanceof Element) return result;
   }
   if (fingerprint.id) {
-    const byId = document.getElementById(fingerprint.id);
+    const byId = root.getElementById(fingerprint.id);
     if (byId) return byId;
   }
   const tag = fingerprint.tagName || "*";
   const testId = fingerprint.attributes?.["data-testid"];
   if (testId) {
-    const byTestId = query(`[data-testid="${cssString(testId)}"]`);
+    const byTestId = query(root, `[data-testid="${cssString(testId)}"]`);
     if (byTestId) return byTestId;
   }
   if (fingerprint.name) {
-    const byName = query(`${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
+    const byName = query(root, `${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
     if (byName) return byName;
   }
   if (fingerprint.classNames?.length) {
-    const byClass = query(`${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
+    const byClass = query(root, `${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
     if (byClass) return byClass;
   }
   if (fingerprint.visibleText) {
     const normalized = normalizeText(fingerprint.visibleText);
-    return [...document.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
+    return [...root.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
   }
   return null;
 }
@@ -112,9 +120,14 @@ function isReadableXpath(xpath: string): boolean {
   return delimiter === undefined;
 }
 
-function query(selector: string | undefined): Element | null {
+function query(root: LookupRoot, selector: string | undefined): Element | null {
   if (!selector) return null;
-  try { return document.querySelector(selector); } catch { return null; }
+  try { return root.querySelector(selector); } catch { return null; }
+}
+
+/** A shadow root, told apart by its host: a document has none. */
+function isShadowRoot(root: LookupRoot): root is ShadowRoot {
+  return "host" in root;
 }
 
 function normalizeText(value: string): string { return value.replace(/\s+/g, " ").trim(); }

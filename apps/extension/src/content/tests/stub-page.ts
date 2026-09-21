@@ -12,6 +12,12 @@ const ELEMENT_NODE = 1;
 class StubNode {
   parentElement: StubElement | null = null;
   constructor(readonly nodeType: number) {}
+  /** The topmost ancestor, as a detached tree reports it: the stub page builds no document and no shadow roots. */
+  getRootNode(): StubNode {
+    let node: StubNode = this;
+    while (node.parentElement) node = node.parentElement;
+    return node;
+  }
   get textContent(): string {
     return "";
   }

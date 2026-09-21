@@ -15,7 +15,7 @@
 // helper is used: every key of `DomElementContext` is optional, so the contract
 // type alone holds none of these names in place. Drop a clause and the field
 // leaves the wire; the reader still compiles, because absence is what optional
-// means. `present` requires the literal to mention all nine keys and drops the
+// means. `present` requires the literal to mention every key and drops the
 // `undefined` ones afterwards, so a deleted field is a compile error here and a
 // renamed one is an excess property. `shared/present.ts` states the general
 // case; this type is the one it could not be applied to until the helper's
@@ -30,6 +30,7 @@
 // left out, and text that sits inside a sensitive control gives nothing.
 
 import { present } from "../../shared/present";
+import { shadowHostChain } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
@@ -82,7 +83,12 @@ export function elementContext(element: Element): DomElementContext | undefined 
     // the repeated things* it sat in -- the only signal that separates 240
     // identical row actions, and the one a replay checks its answer against
     // before acting (`record.ts`).
-    record: recordIdentity(element)
+    record: recordIdentity(element),
+    // Which shadow roots the element sat inside. Its selector is written within
+    // the innermost of them, so without this a replay looks for it in the light
+    // document, where the selector names something else or nothing
+    // (`../selector/shadow/host-chain.ts`).
+    shadowHosts: shadowHostChain(element)
   });
   return Object.keys(context).length ? context : undefined;
 }

@@ -112,6 +112,7 @@ import {
   type WebAutomationFailureRecord
 } from "@fluxiq-web-extension/domain/client";
 import { findClosestFingerprint, type ElementFingerprint } from "../element-finder";
+import { deepElementFromPoint, resolveShadowScope, type LookupRoot, type ShadowScope } from "../selector";
 import {
   candidateFingerprint,
   candidateLabel,
@@ -217,14 +218,18 @@ export class TargetResolutionError extends Error implements WebAutomationFailure
  */
 export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
   const target = recordedTarget(action);
+  // A target recorded inside a shadow root is looked for only in the roots its
+  // recorded host chain reaches, by every strategy below and by scoring; any
+  // other target in the document, as it always was (`selector/shadow/scope.ts`).
+  const scope = resolveShadowScope(target?.context?.shadowHosts);
   const misses: string[] = [];
   // Enumerating and scoring the family is the costly half of a resolution, and
   // both a point's answer and the final fallback may need it. Nothing on the
   // page changes inside this call, so it runs at most once.
   let family: ScoredFamily | undefined;
-  const scoredFamily = (known: RecordedTarget): ScoredFamily => (family ??= scoreFamily(known));
+  const scoredFamily = (known: RecordedTarget): ScoredFamily => (family ??= scoreFamily(known, scope));
 
-  for (const attempt of exactAttempts(action, target)) {
+  for (const attempt of exactAttempts(action, target, scope)) {
     if (!attempt.matches.length) {
       misses.push(attempt.description);
       continue;
@@ -289,8 +294,8 @@ type ScoredFamily = { nearby: TargetCandidatePool; decided: CandidateSelection |
 /** No recorded target, so no family was enumerated or scored. */
 const NO_FAMILY: ScoredFamily = { nearby: NO_POOL, decided: undefined };
 
-function scoreFamily(target: RecordedTarget): ScoredFamily {
-  const nearby = collectTargetCandidates(candidateFamily(target));
+function scoreFamily(target: RecordedTarget, scope: ShadowScope): ScoredFamily {
+  const nearby = collectTargetCandidates(candidateFamily(target), scope.roots);
   return { nearby, decided: scoreTargetCandidates(target, nearby.candidates) };
 }
 
@@ -345,29 +350,31 @@ function candidateFamily(target: RecordedTarget): { tagName?: string | undefined
  * The exact strategies, in the order they are tried, each evaluated only when
  * the ones before it missed. The order is the one this module shipped with, so
  * a selector still wins over a point and a failure still names its misses in
- * the same sequence.
+ * the same sequence. Each looks only in `scope`, and a failure says where it
+ * looked when that was not the document.
  */
-function* exactAttempts(action: BrowserActionCommand, target: RecordedTarget | undefined): Generator<StrategyAttempt> {
+function* exactAttempts(action: BrowserActionCommand, target: RecordedTarget | undefined, scope: ShadowScope): Generator<StrategyAttempt> {
+  const where = scope.description === undefined ? "" : ` in ${scope.description}`;
   if (action.selector) {
-    yield { strategy: "selector", description: `selector ${action.selector}`, matches: querySelectorAll(action.selector) };
+    yield { strategy: "selector", description: `selector ${action.selector}${where}`, matches: querySelectorAll(scope.roots, action.selector) };
   }
   if (action.coordinates) {
     yield {
       strategy: "coordinates",
-      description: `coordinates ${action.coordinates.x},${action.coordinates.y}`,
-      matches: elementsAtPoint(action.coordinates)
+      description: `coordinates ${action.coordinates.x},${action.coordinates.y}${where}`,
+      matches: elementsAtPoint(action.coordinates, scope)
     };
   }
   const visualPoint = pointFromVisualTarget(action.visualTarget);
   if (visualPoint) {
     yield {
       strategy: "visual-target",
-      description: `visual target ${Math.round(visualPoint.x)},${Math.round(visualPoint.y)}`,
-      matches: elementsAtPoint(visualPoint)
+      description: `visual target ${Math.round(visualPoint.x)},${Math.round(visualPoint.y)}${where}`,
+      matches: elementsAtPoint(visualPoint, scope)
     };
   }
   if (target) {
-    yield { strategy: "fingerprint", description: "element fingerprint", matches: fingerprintMatches(target) };
+    yield { strategy: "fingerprint", description: `element fingerprint${where}`, matches: fingerprintMatches(target, scope.roots) };
   }
 }
 
@@ -380,19 +387,28 @@ function* exactAttempts(action: BrowserActionCommand, target: RecordedTarget | u
  * rather than delegated because that is the half that ties: "the button that
  * says Continue" is one target on most pages and two on this one, and only a
  * count can tell those apart.
+ *
+ * Each root in scope is asked on its own, so a stable signal that answers in
+ * two shadow roots answers twice, and the resolver weighs the two rather than
+ * taking the first.
  */
-function fingerprintMatches(target: RecordedTarget): Element[] {
+function fingerprintMatches(target: RecordedTarget, roots: readonly LookupRoot[]): Element[] {
   const { visibleText, ...stable } = target;
-  const exact = findClosestFingerprint(stable);
-  if (exact) return [exact];
+  const exact = roots.flatMap((root) => {
+    const found = findClosestFingerprint(stable, root);
+    return found ? [found] : [];
+  });
+  if (exact.length) return exact;
   if (!visibleText) return [];
   const wanted = normalizeText(visibleText);
   const matches: Element[] = [];
   let scanned = 0;
-  for (const element of document.querySelectorAll(target.tagName || "*")) {
-    scanned += 1;
-    if (scanned > MAX_TEXT_SCAN) break;
-    if (normalizeText(element.textContent ?? "") === wanted) matches.push(element);
+  for (const root of roots) {
+    for (const element of root.querySelectorAll(target.tagName || "*")) {
+      scanned += 1;
+      if (scanned > MAX_TEXT_SCAN) return matches;
+      if (normalizeText(element.textContent ?? "") === wanted) matches.push(element);
+    }
   }
   return matches;
 }
@@ -596,17 +612,30 @@ function describedElement(value: unknown): RecordedTarget | undefined {
   return Object.keys(value).length ? value as RecordedTarget : undefined;
 }
 
-function querySelectorAll(selector: string): Element[] {
-  try {
-    return [...document.querySelectorAll(selector)];
-  } catch {
-    return [];
-  }
+function querySelectorAll(roots: readonly LookupRoot[], selector: string): Element[] {
+  return roots.flatMap((root) => {
+    try {
+      return [...root.querySelectorAll(selector)];
+    } catch {
+      return [];
+    }
+  });
 }
 
-function elementsAtPoint(point: { x: number; y: number }): Element[] {
-  const element = document.elementFromPoint(point.x, point.y);
-  return element ? [element] : [];
+/**
+ * What a point lands on. For a target recorded inside a shadow root the point
+ * is followed into the roots it paints, and it answers only when it lands in
+ * the scope: `document.elementFromPoint` alone answers with the outermost
+ * shadow host, which lane D's replay weighed against the consent button inside
+ * it and refused.
+ */
+function elementsAtPoint(point: { x: number; y: number }, scope: ShadowScope): Element[] {
+  if (!scope.scoped) {
+    const element = document.elementFromPoint(point.x, point.y);
+    return element ? [element] : [];
+  }
+  const element = deepElementFromPoint(point.x, point.y);
+  return element && scope.roots.includes(element.getRootNode() as LookupRoot) ? [element] : [];
 }
 
 /**

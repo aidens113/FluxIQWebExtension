@@ -10,8 +10,25 @@ const ticked = (legend: string) => `fieldset:has(legend:text-is("${legend}")) la
  * rated 4.5 or better. The sidebar's filters narrow the results but cannot
  * say any of the three: "Today" counts delivery too, the rating filter stops
  * at "4 & up", and ads ignore filters altogether.
+ *
+ * FluxIQ's extraction reads with plain CSS, which cannot read a tile's words,
+ * so each condition is said with what the tile's markup carries instead:
+ *
+ * - an ad is the only tile that opens with a `div`, its "Sponsored" label;
+ *   every other tile opens with a badge `span` or its title link;
+ * - the stars bar is drawn `--pct` wide, the rating times twenty, and every
+ *   rating has one decimal, so 4.5 or better is a bar 90% to 100% wide;
+ * - "Pickup today" and "Pickup tomorrow" differ in nothing but their words,
+ *   so the two listings the home store has only tomorrow, which the "Today"
+ *   filter keeps for their delivery today, are left out by item id.
  */
-const KEPT_LISTINGS = "div[data-item-id]:not(:has-text(\"Sponsored\")):has-text(\"Pickup today\"):has(span:text-matches(\"^(4[.][5-9]|5[.]0)$\"))";
+const NOT_AN_AD = ":not(:has(> div:first-child))";
+const RATED_4_5_AND_UP = [90, 92, 94, 96, 98, 100].map((width) => `span[style="--pct:${width}%"]`).join(", ");
+const PICKUP_ONLY_TOMORROW = [
+  "433201876", // Softerra Pick-A-Sheet Paper Towels, 8 Triple Rolls
+  "470665371", // Northmere Paper Towels, 12 Rolls
+].map((itemId) => `[data-item-id="${itemId}"]`).join(", ");
+const KEPT_LISTINGS = `div[data-item-id]${NOT_AN_AD}:has(${RATED_4_5_AND_UP}):not(${PICKUP_ONLY_TOMORROW})`;
 
 /**
  * Reads the qualifying paper towels across every page. The second filter is
@@ -42,9 +59,11 @@ export const PICKUP_TOWELS_WORKFLOW: ScenarioWorkflow = {
       target: KEPT_LISTINGS,
       fields: {
         name: "a span",
-        price: "span:text-matches(\"^[$][0-9]+[.][0-9]{2}$\")",
-        unitPrice: "div:text-matches(\"/(sheet|roll)$\")",
-        rating: "span:text-matches(\"^[0-5][.][0-9]$\")",
+        // The price written out whole is the hidden span just before the drawn one, whose cents are a `sup`.
+        price: "span:has(+ span > sup)",
+        unitPrice: "div:has(> span > sup) > div",
+        // The average is the span just before the stars bar.
+        rating: "span:has(+ span[style])",
       },
       pagination: { next: "nav[aria-label=\"Pagination\"] a[aria-current=\"page\"] + a", maxPages: 5 },
     },

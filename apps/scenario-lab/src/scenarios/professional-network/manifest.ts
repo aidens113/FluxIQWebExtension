@@ -50,6 +50,8 @@ const personFields = {
   location: ":scope > div:nth-child(2) > div:nth-child(3)",
 };
 const ORGANIC_RESULTS = `li[data-urn^="urn:gl:member:"]:not([data-ad-slot])`;
+/** The results list once it holds an organic result: one element, as the Lab's wait requires, where the results themselves are ten. */
+const ORGANIC_RESULTS_SHOWN = `section[aria-label="Search results"] ul[role="list"]:has(> ${ORGANIC_RESULTS})`;
 const VISIBLE_SHOW_RESULTS = `div:text-is("Show results") >> visible=true`;
 
 /**
@@ -74,13 +76,13 @@ const SEARCH_SCRIPT: ScenarioStep[] = [
   { id: "open-connections", operation: "click", target: `div[tabindex="0"]:text-is("Connections ▾")` },
   { id: "choose-second-degree", operation: "check", target: "role:checkbox:2nd", value: true },
   { id: "apply-connections", operation: "click", target: VISIBLE_SHOW_RESULTS },
-  { id: "second-degree-shown", operation: "waitForState", target: ORGANIC_RESULTS, timeoutMs: 6000 },
+  { id: "second-degree-shown", operation: "waitForState", target: ORGANIC_RESULTS_SHOWN, timeoutMs: 6000 },
   { id: "open-locations", operation: "click", target: `div[tabindex="0"]:text-is("Locations ▾")` },
   { id: "type-location", operation: "type", target: `input[placeholder="Add a location"]`, value: "Rotterdam" },
   { id: "choose-rotterdam-nl", operation: "click", target: `input[placeholder="Add a location"] ~ div > div:text-is("Rotterdam, South Holland, Netherlands")` },
   { id: "reopen-locations", operation: "click", target: `div[tabindex="0"]:text-is("Locations ▾")` },
   { id: "apply-locations", operation: "click", target: VISIBLE_SHOW_RESULTS },
-  { id: "rotterdam-shown", operation: "waitForState", target: ORGANIC_RESULTS, timeoutMs: 6000 },
+  { id: "rotterdam-shown", operation: "waitForState", target: ORGANIC_RESULTS_SHOWN, timeoutMs: 6000 },
   {
     id: "extract-rotterdam-engineers", operation: "extract", target: ORGANIC_RESULTS, fields: personFields,
     pagination: { mode: "numbered", pages: `section[aria-label="Search results"] li > button`, maxPages: 5 },

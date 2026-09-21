@@ -110,3 +110,15 @@ test("only a mutation proposes: a click's own entry proposes nothing, so Core's 
   assert.equal(webAutomationLateTargetWait(clickEntry(), [clickEntry()]), undefined);
   assert.equal(webAutomationLateTargetWait(clickEvent(), [clickEntry()]), undefined);
 });
+
+// A wait names a selector and no root, so for a click inside a shadow root it
+// would look in the light document for a selector written within that root.
+test("a click recorded inside a shadow root proposes nothing", () => {
+  const element = { selector: "section > div:nth-of-type(2) > button:nth-of-type(1)", tagName: "button", context: { shadowHosts: ["body > rf-consent"] } };
+  const inShadow = recorded({ kind: "dom.click", sequence: 3, url: PAGE, title: "Delayed UI", eventTimestampMs: 1_100, element });
+  assert.equal(webAutomationLateTargetWait(mutation(1), [inShadow]), undefined, "a recorded click");
+  assert.equal(webAutomationLateTargetWait(mutation(1), [clickEntry({ parameters: webAutomationOutputPayload("web.dom.click", inShadow.payload) })]), undefined, "a live click's action entry");
+  const inDocument = { ...element, context: { heading: "We value your privacy" } };
+  const light = recorded({ kind: "dom.click", sequence: 3, url: PAGE, title: "Delayed UI", eventTimestampMs: 1_100, element: inDocument });
+  assert.equal(webAutomationLateTargetWait(mutation(1), [light])?.outputId, "web.dom.wait_for_selector", "the same click in the document still waits");
+});

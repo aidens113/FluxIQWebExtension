@@ -276,6 +276,18 @@ export type DomElementContext = {
     key?: string | undefined;
     text?: string | undefined;
   } | undefined;
+  /**
+   * The open shadow roots the element sat inside, outermost first, each named
+   * by its host's selector within the tree that host sits in
+   * (`content/selector/shadow-host-chain.ts`). A selector for an element in a
+   * shadow tree is written within that tree, so on its own it names nothing in
+   * the page: a chat widget's Close recorded as `div:nth-of-type(2) > div`
+   * matched seven unrelated elements in the light document at replay. The
+   * resolver walks this chain first and looks for the element only inside the
+   * roots it reaches (`content/selector/shadow-scope.ts`). Absent for an
+   * element in the document itself.
+   */
+  shadowHosts?: string[] | undefined;
 };
 
 /**

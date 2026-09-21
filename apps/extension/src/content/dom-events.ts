@@ -12,6 +12,15 @@
 // before click so an action taken during the press is captured with the state
 // that preceded it.
 //
+// Open shadow roots. A composed event reaches these listeners retargeted: its
+// `target` is the outermost shadow host, not the control inside the widget, so
+// every path reads the element off the composed path instead
+// (`eventTargetElement`), as the pointer paths always did. Before that, an
+// arrow key pressed in `<kf-location>`'s radius select was recorded against
+// the `kf-location` host. And `change` and `submit` are not composed at all,
+// so they never arrive here from inside a root: each open root an interaction
+// enters gets the same two listeners (`shadow-root-events.ts`).
+//
 // Typed text is debounced into one pending `dom.input` (`recorder.ts`). A
 // pointer press, a text field's `change` and a key that acts on the text rather
 // than typing it (`continuesTyping`) send it first, so no action is recorded
@@ -43,6 +52,7 @@ import {
   rememberEventPathElements
 } from "./event-elements";
 import { captureSettings } from "./capture-settings";
+import { listenInOpenShadowRoots } from "./shadow-root-events";
 import {
   emit,
   emitInputEvent,
@@ -54,12 +64,44 @@ import type { JsonObject } from "./types";
 
 let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 
+/**
+ * A control's value changed. Registered on the document, and on each open
+ * shadow root an interaction enters, because `change` does not leave one.
+ */
+function recordChange(event: Event): void {
+  if (!isRecording()) return;
+  if (!event.isTrusted) return;
+  rememberEventPathElements(event);
+  const target = eventTargetElement(event) ?? null;
+  if (target && isTextEntryElement(target)) {
+    flushPendingInput();
+    return;
+  }
+  if (target && !shouldRecordChangeEvent(target)) return;
+  emit("dom.change", compactObject({
+    element: target ? describeElement(target) : undefined,
+    inputValue: captureSettings.inputValues ? readElementValue(target) : undefined
+  }));
+}
+
+/** A form was submitted. Registered where `recordChange` is, for the same reason. */
+function recordSubmit(event: Event): void {
+  if (!isRecording()) return;
+  rememberEventPathElements(event);
+  const target = eventTargetElement(event) ?? null;
+  emit("dom.submit", compactObject({ element: target ? describeElement(target) : undefined }));
+}
+
+/** What an open shadow root is given once an interaction enters it: the events it does not let out. */
+const SHADOW_ROOT_LISTENERS = { change: recordChange, submit: recordSubmit };
+
 export function installRecordingEventListeners(): void {
   document.addEventListener("pointerdown", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     if (event.button !== 0 || event.isPrimary === false) return;
     rememberEventPathElements(event);
+    listenInOpenShadowRoots(event, SHADOW_ROOT_LISTENERS);
     flushPendingInput();
     const eventElement = eventTargetElement(event);
     const target = eventElement ? pointerActivationTarget(eventElement) : null;
@@ -95,7 +137,7 @@ export function installRecordingEventListeners(): void {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
-    const target = event.target instanceof Element ? event.target : null;
+    const target = eventTargetElement(event) ?? null;
     if (target && isTextEntryElement(target)) {
       scheduleInputEvent(target);
       return;
@@ -105,34 +147,23 @@ export function installRecordingEventListeners(): void {
     emitInputEvent(target);
   }, true);
 
-  document.addEventListener("change", (event) => {
-    if (!isRecording()) return;
-    if (!event.isTrusted) return;
-    rememberEventPathElements(event);
-    const target = event.target instanceof Element ? event.target : null;
-    if (target && isTextEntryElement(target)) {
-      flushPendingInput();
-      return;
-    }
-    if (target && !shouldRecordChangeEvent(target)) return;
-    emit("dom.change", compactObject({
-      element: target ? describeElement(target) : undefined,
-      inputValue: captureSettings.inputValues ? readElementValue(target) : undefined
-    }));
-  }, true);
+  document.addEventListener("change", recordChange, true);
 
-  document.addEventListener("submit", (event) => {
+  document.addEventListener("submit", recordSubmit, true);
+
+  // A focus moved into a widget arrives before any key that changes it, and
+  // records nothing of its own.
+  document.addEventListener("focusin", (event) => {
     if (!isRecording()) return;
-    rememberEventPathElements(event);
-    const target = event.target instanceof Element ? event.target : null;
-    emit("dom.submit", compactObject({ element: target ? describeElement(target) : undefined }));
+    listenInOpenShadowRoots(event, SHADOW_ROOT_LISTENERS);
   }, true);
 
   document.addEventListener("keydown", (event) => {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
-    const keyTarget = event.target instanceof Element ? event.target : null;
+    listenInOpenShadowRoots(event, SHADOW_ROOT_LISTENERS);
+    const keyTarget = eventTargetElement(event) ?? null;
     if (!continuesTyping(event, keyTarget)) flushPendingInput();
     emit("dom.keydown", compactObject({
       key: recordableKey(event.key, keyTarget),

@@ -457,3 +457,20 @@ test("a tab switch that names no path is evidence, not an action", async () => {
   assert.equal(h.counted(), 0);
   assert.deepEqual(h.sent, []);
 });
+
+// Lane E, local-classifieds: the cookie banner's button, then Enter in the
+// search box, whose handler sets `location.href`. The browser reports that as
+// the page's own `link` commit, inside the click's five-second window.
+test("a key press after a click takes the navigation it causes away from that click", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness("recording", { navigation: new NavigationRecorder(), reenter: true });
+  await h.intake.accept(click("pointerdown", 7, 1_000), 4, 0);
+  await h.intake.accept({ kind: "dom.keydown", sequence: 8, url: "https://shop.test/", title: "Shop", eventTimestampMs: 1_700, key: "Enter", element: { selector: "#q", tagName: "input", inputType: "search" } } as RecordingEventPayload, 4, 0);
+  h.intake.noteNavigationCommitted(commit("https://shop.test/search/?q=bike", "link", 1_900));
+  t.mock.timers.tick(250);
+  await settle();
+
+  assert.equal(h.counted(), 2, "the click and the key press are both actions");
+  assert.equal(h.sent.length, 2, "and nothing else is sent: no landing");
+  assert.equal(h.sent.some((message) => (message.payload as SentRecordingEvent).metadata?.transition === "explained"), false, "the search page is not the click's landing");
+});

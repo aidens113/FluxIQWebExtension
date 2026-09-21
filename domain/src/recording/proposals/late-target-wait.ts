@@ -46,6 +46,11 @@ const TOP_FRAME_ID = 0;
  *
  * - The click replays in the top document. The wait names no frame, so it runs
  *   there; a click recorded in a child frame proposes nothing.
+ * - The click's target sits in the document itself. A target recorded inside a
+ *   shadow root has a selector written within that root, and a wait names no
+ *   root, so it would look for that selector in the light document -- where it
+ *   names something else or nothing -- and a click recorded inside one proposes
+ *   nothing.
  * - The click's own URL, when it carries one, is the mutation's URL apart from
  *   the fragment. An `action` entry carries none.
  * - No evidence skipped on the way names another URL, which would mean the page
@@ -88,8 +93,15 @@ function clickTargetWait(action: { outputId: string; parameters: JsonObject }, s
   if (selector === undefined || selector.length === 0) return undefined;
   const frameId = action.parameters.browserFrameId;
   if (frameId !== undefined && frameId !== TOP_FRAME_ID) return undefined;
+  if (insideShadowRoot(action.parameters)) return undefined;
   if (step.payload.url !== undefined && documentKey(step.payload.url) !== document) return undefined;
   return { outputId: WAIT_OUTPUT, parameters: { selector, wait: { condition: "present" } }, confidence: 0.9, label: "Wait for element" };
+}
+
+/** Whether the click's recorded element carries a shadow host chain, so its selector is written within a shadow root. */
+function insideShadowRoot(parameters: JsonObject): boolean {
+  const hosts = objectValue(objectValue(parameters.element)?.context)?.shadowHosts;
+  return Array.isArray(hosts) && hosts.length > 0;
 }
 
 /** Whether a skipped entry reports a URL that is not the mutation's document. */

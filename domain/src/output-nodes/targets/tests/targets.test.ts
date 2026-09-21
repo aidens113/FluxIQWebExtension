@@ -504,3 +504,28 @@ test("a recording that named no record still dispatches without one", () => {
   const node = { ...recordedNode(), target: repairedSave };
   assert.equal(recordOf(outputTargetFromPayload(node)), undefined, "nothing is invented for a control that sits in no record");
 });
+
+// Lane E, company-website: the chat greeting's Close sat inside the widget's
+// shadow root, and its selector, written within that root, matched seven
+// unrelated elements of the light document at replay. The host chain is what
+// sends the page into the right root, so it must reach the page intact.
+test("the shadow roots the element sat in survive into the dispatched target", () => {
+  const shadowHosts = ["body > div:nth-of-type(7)", "chat-card"];
+  const target = outputTargetFromPayload({
+    selector: "div:nth-of-type(2) > div",
+    element: { selector: "div:nth-of-type(2) > div", tagName: "div", accessibleName: "Close", context: { shadowHosts } }
+  });
+  assert.deepEqual((target?.element as { context?: unknown }).context, { shadowHosts });
+});
+
+test("a host chain with a hole in it is dropped whole, never shortened", () => {
+  const rows: Array<[label: string, shadowHosts: unknown]> = [
+    ["a blank host", ["body > rf-consent", " "]],
+    ["a host that is not a selector", ["body > rf-consent", 7]],
+    ["an empty chain", []],
+    ["not a list", "body > rf-consent"]
+  ];
+  for (const [label, shadowHosts] of rows) {
+    assert.equal(elementFingerprint({ selector: "button", context: { shadowHosts } })?.context, undefined, label);
+  }
+});

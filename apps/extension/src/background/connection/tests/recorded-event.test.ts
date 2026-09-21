@@ -9,6 +9,7 @@ import {
   activityDetail,
   activityLabel,
   clickEventSignature,
+  endsNavigationExplanation,
   isExecutableRecordedAction,
   isNavigationExplanation,
   shouldRequireStateForEvidence,
@@ -104,4 +105,16 @@ test("an activity detail prefers the element's name, then its text, selector, sc
   assert.equal(activityDetail(recorded("dom.mutation", { mutation: { added: 2, removed: 1, attributes: 0, text: 0 } })), "2 added, 1 removed");
   assert.equal(activityDetail(recorded("browser.navigation")), "https://example.test/checkout");
   assert.equal(activityDetail(recorded("browser.navigation", { url: "" })), undefined);
+});
+
+test("every executable action but a click, a submit and a scroll ends the window of the click before it", () => {
+  const rows: Array<[label: string, payload: RecordingEventPayload, ends: boolean]> = [
+    ["a key pressed", recorded("dom.keydown", { element: searchField, key: "Enter" }), true],
+    ["text typed into a field", recorded("dom.input", { element: searchField, inputValue: "shoes" }), true],
+    ["a field changed", recorded("dom.change", { element: searchField, inputValue: "shoes" }), true],
+    ["a click, which opens a window of its own", recorded("dom.click", { element: button }), false],
+    ["a submit, which extends the click's", recorded("dom.submit", { element: button }), false],
+    ["a scroll, sent once the wheel is still and so possibly after a click it preceded", recorded("dom.scroll", { scroll: { x: 0, y: 400 } }), false]
+  ];
+  for (const [label, payload, ends] of rows) assert.equal(endsNavigationExplanation(payload), ends, label);
 });

@@ -84,6 +84,17 @@ export type WebAutomationElementContext = {
     /** The record's own bounded text, for a record the author keyed by nothing. */
     text?: string | undefined;
   } | undefined;
+  /**
+   * The open shadow roots the element sat inside, outermost first, each named
+   * by its host's selector within the tree the host sits in. The recorded
+   * selector is written within the innermost of them, so it names nothing in
+   * the page on its own; the extension walks this chain and looks for the
+   * element only in the roots it reaches (`content/selector/shadow/`), and a
+   * chain that reaches none is a target not found, never a lookup in the light
+   * document. Like `record`, it is a gate the page applies, not a weight Core
+   * scores.
+   */
+  shadowHosts?: string[] | undefined;
 };
 
 /**

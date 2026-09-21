@@ -325,7 +325,8 @@ function elementContext(value: unknown): WebAutomationElementContext | undefined
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition),
-    record: elementRecord(context.record)
+    record: elementRecord(context.record),
+    shadowHosts: shadowHosts(context.shadowHosts)
   } satisfies ElementContextFields);
   return Object.keys(fields).length > 0 ? fields as WebAutomationElementContext : undefined;
 }
@@ -357,6 +358,19 @@ function elementRecord(value: unknown): WebAutomationElementContext["record"] {
     text: stringValue(record.text)
   } satisfies ContractFields<NonNullable<WebAutomationElementContext["record"]>>);
   return Object.keys(fields).length > 0 ? fields as NonNullable<WebAutomationElementContext["record"]> : undefined;
+}
+
+/**
+ * The shadow hosts the element sat inside, outermost first, or nothing. Every
+ * entry must be a non-blank selector: a chain with a hole in it would send the
+ * page into the wrong tree, so such a chain is dropped whole and the target
+ * stays a light-document one -- which, for an element that was in a shadow
+ * root, the page then fails to find rather than finding something else.
+ */
+function shadowHosts(value: unknown): WebAutomationElementContext["shadowHosts"] {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const hosts = value.filter((item): item is string => typeof item === "string" && item.trim() !== "");
+  return hosts.length === value.length ? hosts : undefined;
 }
 
 /** A cell in a table. The column header is the part a person reads, and is absent where the table has none. */

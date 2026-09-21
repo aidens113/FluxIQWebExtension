@@ -3,6 +3,14 @@
 // navigation that follows it, so this decides what survives. A navigation the
 // page made itself survives only as the landing of the click that caused it,
 // and then it names that click.
+//
+// A click explains only what commits before the next recorded action. Its
+// window used to stay open for five seconds whatever happened in them, so on
+// local-classifieds the search a key press ran 700 ms after "Allow all cookies"
+// was recorded as that click's landing, and the replayed cookie click then
+// failed for not reaching the search page (lane E). A key press, typed text or
+// any other executable action now ends the window of the click before it, and
+// the navigation is judged by the action in force when it committed.
 
 const NAVIGATION_DEBOUNCE_MS = 250;
 // A navigation to the URL a tab already had when recording started belongs to
@@ -10,6 +18,9 @@ const NAVIGATION_DEBOUNCE_MS = 250;
 const INITIAL_NAVIGATION_GRACE_MS = 10_000;
 // How long a click or submit keeps explaining the navigations that follow it.
 const EXPLANATORY_ACTION_WINDOW_MS = 5_000;
+// Recorded actions remembered per tab, so a navigation committed before the
+// latest of them is still judged by the one in force when it committed.
+const MAX_EXPLANATORY_ACTIONS = 16;
 
 /**
  * Where a committed navigation came from, as far as recording it goes.
@@ -32,13 +43,17 @@ export type NavigationOrigin = "typed" | "page" | "other";
 export type RecordedClick = { readonly sequence: number; readonly eventId: string };
 
 /**
- * What can explain a navigation. A click is named by how it was recorded when
- * it is executable and by nothing when it cannot be replayed; a form submit is
- * evidence, never a candidate, so it names nothing of its own.
+ * What can explain a navigation, and what ends an explanation. A click is
+ * named by how it was recorded when it is executable and by nothing when it
+ * cannot be replayed; a form submit is evidence, never a candidate, so it names
+ * nothing of its own. Any other recorded action -- a key press, typed text, a
+ * checked box -- explains nothing, but it ends the window of the click before
+ * it: what commits after it is not that click's doing.
  */
 export type NavigationExplainer =
   | { readonly kind: "click"; readonly recorded: RecordedClick | undefined }
-  | { readonly kind: "submit" };
+  | { readonly kind: "submit" }
+  | { readonly kind: "action" };
 
 /**
  * What a debounced navigation becomes: nothing, a navigation in its own right,
@@ -49,13 +64,23 @@ export type NavigationVerdict =
   | { readonly kind: "navigation" }
   | { readonly kind: "explained"; readonly click: RecordedClick };
 
-type ExplanatoryAction = { readonly timestamp: number; readonly click: RecordedClick | undefined };
+/** One recorded action as navigation sees it: when it happened, whether it explains a navigation, and the click it names. */
+type ExplanatoryAction = { readonly timestamp: number; readonly explains: boolean; readonly click: RecordedClick | undefined };
 
 const DROP: NavigationVerdict = { kind: "drop" };
 const NAVIGATION: NavigationVerdict = { kind: "navigation" };
 
 function withinExplanatoryWindow(openedAt: number, timestamp: number): boolean {
   return timestamp - openedAt >= 0 && timestamp - openedAt < EXPLANATORY_ACTION_WINDOW_MS;
+}
+
+/** The last recorded action at or before `timestamp`, from a time-ordered history. */
+function actionInForce(history: readonly ExplanatoryAction[], timestamp: number): ExplanatoryAction | undefined {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const entry = history[index]!;
+    if (entry.timestamp <= timestamp) return entry;
+  }
+  return undefined;
 }
 
 export class NavigationRecorder {
@@ -65,18 +90,30 @@ export class NavigationRecorder {
   private generation = 0;
   private readonly lastRecorded = new Map<number, { url: string; timestamp: number }>();
   private readonly initialUrls = new Map<number, string>();
-  private readonly explanatoryActions = new Map<number, ExplanatoryAction>();
+  private readonly explanatoryActions = new Map<number, ExplanatoryAction[]>();
 
-  // Opens the window in which a navigation is this action's consequence. A
-  // submit extends it and keeps the click it follows, because a submit button
+  // Opens the window in which a navigation is this action's consequence, or,
+  // for an action that explains nothing, closes the one before it. A submit
+  // extends the window and keeps the click it follows, because a submit button
   // fires `click` and then `submit` and the click is the candidate; a click
-  // that is itself outside the submit's window explained nothing.
+  // that is itself outside the submit's window explained nothing, and neither
+  // does one a later action ended -- pressing Enter in a field submits its form
+  // with no click at all.
   noteExplanatoryAction(tabId: number, timestamp: number, explainer: NavigationExplainer): void {
-    const previous = this.explanatoryActions.get(tabId);
-    const click = explainer.kind === "click"
-      ? explainer.recorded
-      : previous !== undefined && withinExplanatoryWindow(previous.timestamp, timestamp) ? previous.click : undefined;
-    this.explanatoryActions.set(tabId, { timestamp, click });
+    const history = this.explanatoryActions.get(tabId) ?? [];
+    const previous = actionInForce(history, timestamp);
+    const action: ExplanatoryAction = explainer.kind === "click"
+      ? { timestamp, explains: true, click: explainer.recorded }
+      : explainer.kind === "submit"
+        ? { timestamp, explains: true, click: previous?.explains === true && withinExplanatoryWindow(previous.timestamp, timestamp) ? previous.click : undefined }
+        : { timestamp, explains: false, click: undefined };
+    // Kept in time order, a tie after what was noted first, so the action in
+    // force at any instant is the last one at or before it.
+    let at = history.length;
+    while (at > 0 && history[at - 1]!.timestamp > timestamp) at -= 1;
+    history.splice(at, 0, action);
+    if (history.length > MAX_EXPLANATORY_ACTIONS) history.splice(0, history.length - MAX_EXPLANATORY_ACTIONS);
+    this.explanatoryActions.set(tabId, history);
   }
 
   // Collapses the burst of URL, title, and status updates a single load emits
@@ -149,8 +186,11 @@ export class NavigationRecorder {
       this.initialUrls.delete(tabId);
       return DROP;
     }
-    const action = this.explanatoryActions.get(tabId);
-    const explanation = action !== undefined && withinExplanatoryWindow(action.timestamp, timestamp) ? action : undefined;
+    // The action in force when the navigation committed, not the latest one:
+    // an action taken after the commit, before this debounced call, neither
+    // explains the navigation nor takes it from the click that does.
+    const action = actionInForce(this.explanatoryActions.get(tabId) ?? [], timestamp);
+    const explanation = action?.explains === true && withinExplanatoryWindow(action.timestamp, timestamp) ? action : undefined;
     if (origin === "page") {
       return explanation?.click === undefined ? DROP : { kind: "explained", click: explanation.click };
     }

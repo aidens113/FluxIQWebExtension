@@ -44,16 +44,18 @@ export const PICKUP_ORDER_WORKFLOW: ScenarioWorkflow = {
     { id: "pay-at-pickup", operation: "click", target: "role:radio:Pay at pickup" },
     { id: "place-order", operation: "click", target: "role:button:Place order" },
     { id: "order-confirmed", operation: "waitForState", target: "h1:has-text(\"Thanks for your order\")", timeoutMs: 8000 },
+    // Plain CSS, which is what FluxIQ's extraction reads with: the confirmation is the one section headed by an h1,
+    // and each value is found by where the page prints it, apart from its label (`pages/order-page.ts`).
     {
       id: "extract-order",
       operation: "extract",
-      target: "section:has(h1:has-text(\"Thanks for your order\"))",
+      target: "section:has(> h1)",
       fields: {
-        order: "span:text-matches(\"^[0-9]{7}-[0-9]{5}$\")",
+        order: "h1 + p > span",
         item: "li a",
-        quantity: "li span:text-matches(\"^[0-9]+$\")",
+        quantity: "li > span > span:last-child",
         total: "dd:last-of-type",
-        pickup: "span:text-matches(\"^(Mon|Tue), Sep [0-9]+, \")",
+        pickup: "h2 ~ p > span",
       },
     },
     { id: "order-read", operation: "checkpoint" },

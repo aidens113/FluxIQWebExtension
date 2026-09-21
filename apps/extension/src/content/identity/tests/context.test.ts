@@ -83,7 +83,9 @@ function stub(options: StubOptions = {}): Element {
     closest: (selector: string) => closest[selector] ?? null,
     querySelector: () => options.querySelector ?? null,
     querySelectorAll: () => options.querySelectorAll ?? [],
-    matches: () => false
+    matches: () => false,
+    // An element in an ordinary document, so the shadow host chain is empty.
+    getRootNode: () => ({ nodeType: 9 })
   } as unknown as Element;
 }
 
