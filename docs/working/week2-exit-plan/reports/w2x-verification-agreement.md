@@ -8,7 +8,12 @@ Date: 2026-09-21.
 
 ## Outcome
 
-**Partial.** The code is built exactly to the Item 5 table and works live.
+**Done, after the supervisor's round-two decisions.** See the last section,
+"Round two", which supersedes the verification table and the empty-result
+handling described below. What follows up to that section is round one, kept
+as the record of what was measured before the decisions.
+
+**Round one was Partial.** The code is built exactly to the Item 5 table and works live.
 However, the pass criteria for both live proofs cannot be met by that table.
 The flipping verdict I measured live at temperature 0 was **`unknown`**, not
 `no`. The table deliberately does not ask an `unknown` a second time, so an
@@ -272,3 +277,187 @@ and do one of the following:
   consequences into verification. Fail `no_records` only when the record-set
   node belongs to a Flow that instructs no lasting consequence, and exempt
   instructions that allow empty results by letting the judge see them.
+
+## Round two: supervisor decisions (re-ask any non-yes answer; empty results are recorded, not judged)
+
+The supervisor made two decisions, and both are implemented in the same t035
+worktrees. Nothing is committed.
+
+### Decision 1: the final verification table
+
+A first answer other than `yes` is asked once more with the same evidence. A
+first call that gave no answer at all (a silent reply, or a call that did not
+come back usable) is not repeated and fails closed, as before.
+
+| First | Second | Recorded as | Run status |
+|---|---|---|---|
+| yes | (not asked) | `confirmed`, 1 call | as its steps earned it |
+| no | no | `refuted`, `core.result.does_not_answer_request`, 2 calls | failed |
+| no or unknown | yes | `unverified`, basis `model_disagreed`, code `core.result.verdicts_disagree` | as its steps earned it |
+| unknown | unknown or no | `unverified`, basis `model_unconfirmed`, code `core.result.refutation_unconfirmed` | as its steps earned it |
+| no | unknown | `unverified`, basis `model_unconfirmed`, code `core.result.refutation_unconfirmed` | as its steps earned it |
+| no or unknown | silent or unavailable | `unverified`, basis `model_unconfirmed`, code `core.result.refutation_unconfirmed` (the reason names the second call's code) | as its steps earned it |
+| silent or unavailable | (not asked) | `refuted`, fails closed, 1 call | failed |
+
+The supervisor's decision did not cover a second call that is silent or
+unavailable after a first `no` or `unknown`. I kept round one's treatment,
+`model_unconfirmed`: two answers that never said yes and never agreed on no
+are not proof the run failed.
+
+### Decision 2: empty results
+
+- **Provider-free, as before.** t024's routing is kept: a run with
+  `totalRecordCount === 0` goes to `verify` without resolving a provider.
+- **A record set that holds no rows** (and no refused rows) is recorded as
+  `performed: false` with the code `core.result.no_records`. The reason reads
+  "Nothing was stored, so the result was not checked: the run's record set
+  holds no rows, and whether an empty result answers the request was never
+  judged."
+- **Its status is `unverified`, never `no_result`.** Every skip code except
+  `nothing_to_judge` already maps to `unverified`. The run keeps the status
+  its steps earned.
+- **A run that stored no record set at all** is still `nothing_to_judge`,
+  with status `no_result`.
+- **Rows that were all refused** are still Core's provider-free
+  `every_record_refused` refutation.
+- **The panel** shows "Unverified: nothing was stored, so the result was not
+  checked".
+
+**Named follow-up, not built:** judging an empty result against the
+instruction. It needs t024's grant-revalidation hang fixed first; on
+2026-09-20 an empty result that reached provider resolution never returned.
+
+### Files changed in round two
+
+All paths are in Core, within files this brief already owned; downstream
+code is unchanged since round one.
+
+- **`agreement.ts`** now carries the new table.
+  `automationStudioResultVerificationAskAgain` returns true when the basis is
+  `model` and the verdict is not `answers`.
+- **`verify.ts`**
+  - Uses `AskAgain`.
+  - Adds the skip code `noRecords` (`core.result.no_records`).
+  - `nothingToJudge` separates an empty record set from having no record set.
+  - Header comment rewritten.
+- **Comments only:** `contracts.ts`, `verdict.ts`, `verification-status.ts`
+  and `run-outcome.ts`.
+- **`grant-capabilities.ts`:** the comment that said re-asking "would buy the
+  same answer twice" is replaced with the measured flips of 2026-09-18 and
+  2026-09-21.
+- **`execution-grants.ts` and `api/contracts/llm.ts`:** comment wording only.
+- **`RunDetailPanels.tsx`**
+  - `model_unconfirmed` now reads "Unverified: the two checks did not settle
+    it".
+  - `no_records` has its own label.
+- **Tests**
+  - `agreement.test.ts` was rewritten for the new table.
+  - `run-outcome.test.ts` was changed as follows:
+    - `unknown` then `yes` now gives `unverified`/`disagreed`.
+    - Every unknown/no pair gives `unconfirmed`.
+    - An unavailable first call and a silent first call each fail closed on
+      one call.
+    - The "stored nothing" test now expects the new contract and still
+      asserts zero provider requests.
+    - The status sweep now expects `unknown` to give `unverified`.
+
+### Commands run and observed results
+
+Every live Lab run below used `FLUXIQ_TEST_ENV_FILES=none
+FLUXIQ_TEST_TARGET=isolated FLUXIQ_TEST_RUNS_DIR=F:/r35`. None reached ports
+3000 or 4711.
+
+**Live Core probe** (`t035probe/probe.mjs` against the rebuilt dist, real
+DeepSeek, on stored run `72b19723`, 14 of 14 rows, sha `23782055…`):
+
+| Instruction | n | Result |
+|---|---|---|
+| week-ahead (`round2-week-ahead.json`) | 10 | 10 `confirmed`, first answer `yes` each time, **0 refuted** |
+| week-ahead, second batch (`round2-week-ahead-2.json`) | 10 | 10 `confirmed`, **0 refuted** |
+| whole-queue control | 3 | 3 `unverified`/`model_unconfirmed` (`no`→`unknown` ×1, `unknown`→`unknown` ×2), run `succeeded`, 2 calls each, interventions checks [1,2] |
+| retry-failed control | 2 | 2 `refuted` (`no`→`no`), run `failed`, 2 calls each |
+
+The two controls now differ:
+
+- **The whole-queue control** is **unconfirmed, no longer refuted**. Under
+  the new table its answers, which never say `yes` and never agree on `no`,
+  are not proof of failure.
+- **The retry-failed control** is still **refuted**.
+
+No week-ahead first answer was non-yes in these 20 runs, so the proof case
+never needed a second call. Every non-yes first answer that did occur (5 of
+5, in the whole-queue control) was followed by a second call. The round-one
+failure, run `F:\r35\run-mublcbqf-9e815106` (14 of 14 matched, refuted on a
+single `unknown`), is now covered by the `run-outcome` test "asks an unsure
+answer again, and a yes on the second check leaves the run succeeded and
+unverified". I did not reproduce that run live. The probe made 30 calls for
+$0.03762.
+
+**Live `pnpm lab:campaign data-table-inventory-empty --max-attempts 1`:**
+
+- **First attempt, `F:\r35\run-mubmhhey-3d2c3c80`: facility failure before
+  the run started.** The Lab's Core web production build died during type
+  checking with `uncaughtException [Error: kill EPERM]`, the campaign
+  reported `process.startup`, and no Flow ran. Builds of the same source
+  succeeded both before and after, so this looks like an environment fault
+  or this machine's memory, not the change.
+- **Rerun, `F:\r35\run-mubmkp4x-d4fadf21`: passed.**
+  - The oracle `passed`, with 0 of 0 expected, observed and matched.
+  - The run `succeeded`.
+  - `resultVerification` is `unverified`, with code `core.result.no_records`,
+    no verdicts, and 0 verification calls.
+  - The Lab's reported verdict is `unverified`.
+  - `build.providerCalls` 3 = `observed.calls` 3, costing $0.0096.
+  - `live-llm.json` does not record `performed`. That it is `false` follows
+    from the code: `no_records` with no verdict is now produced only by
+    `nothingToJudge`.
+
+**Tests and checks.** These ran after the probe. The focused Core tests ran
+before the empty-variant Lab run, one step earlier than the supervisor's
+stated order; the Lab run came after and needed no code change.
+
+- **Core focused vitest** over `result-verification`, `verify-result-grant`,
+  `execution-grants` and `api/contracts/tests/llm`: **97 of 97 passed**. The
+  `run-outcome.test.ts` file passed in full, 21 of 21, including the updated
+  "stored nothing" test.
+- **Core `pnpm check`** exited 0. Structure tests passed 182 of 182, task
+  tests passed 20 of 20, and the audit reported `passed (168 warning(s), 361
+  baselined)`. `tsc` passed for `fluxiq`, `client-gateway-websocket` and
+  `apps/web`.
+- **Core `pnpm build`** exited 0.
+- **Core web runtime vitest:** 46 of 46 passed.
+- **Downstream test-runner:** `pnpm build` exited 0, and the live-llm tests
+  passed 73 of 73.
+- **Downstream `pnpm check`** exited 0. Lab tests passed 74 of 75 with 1
+  skipped, which was already skipped before; the audit reported `passed (81
+  warning(s), 122 baselined)`.
+
+### Not verified in round two
+
+- **A live week-ahead first answer that was not `yes`.** All 20 round-two
+  week-ahead verifications answered `yes` on the first call. The
+  `unknown`→`yes` path to `model_disagreed` is proven only by tests. The
+  `unknown`→`unknown` and `no`→`unknown` paths to `model_unconfirmed` are
+  proven live by the whole-queue control.
+- **The `no_records` and `model_unconfirmed` panel labels,** which I never
+  saw in a browser.
+- **A week-ahead campaign rerun after round two.** The supervisor's proof
+  list did not include one, and I did not run it.
+
+### Open items
+
+- **Judging an empty result against the instruction** is the follow-up named
+  above. It is blocked on t024's grant-revalidation hang.
+- **One case the decision left open:** a second call that is silent or
+  unavailable after a first `unknown` now reads as `unconfirmed`, so the run
+  passes as `unverified`. Before round two, a first `unknown` was `refuted`.
+  The supervisor may want this tightened.
+- **The core observation's own `no_records` refutation**
+  (`core-observation.ts`) is now unreachable through `verify`, because
+  `nothingToJudge` settles the case first. Its unit test still exercises it
+  directly. I do not own that file.
+- **Round one's open items 4 to 6 still stand:**
+  - `agreement.ts` is not in the barrel.
+  - The stale "one call" comments in `runtime-session-grant.ts:116` and
+    `live-llm-plan.ts:22-30`.
+  - Verification calls are outside the run budget.

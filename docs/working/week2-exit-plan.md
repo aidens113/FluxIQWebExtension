@@ -71,8 +71,7 @@ edit it.
 downstream and 5 in Core web, plus test-runner's stale `dist`); speculatively
 from t027's tip: `w2x-t033-land` (I2), `w2x-creation-permission-lost` (P1,
 t047), `w2x-service-headroom` (L0, t048), `w2x-created-flow-repair-lane` (L1,
-t049, with t036 merged in); `w2x-verification-agreement` (L2, t035, now also
-fixing Core `dev`'s empty-result fail-open from `5616d73`); ten
+t049, with t036 merged in); ten
 `w2x-realistic-scenarios` workers (S1, t037-t046). Machine limit: 12 threads,
 26 GB, about 8 GB free under this load; U1 and I3 dispatch as scenario workers
 finish.
@@ -104,8 +103,8 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each, merged to `dev` and put into live testing as they finish | downstream | — | in flight |
 | **L0** | C0: bring Core `service.ts` under its ratchet by behaviour-unchanged moves | Core | I1, I2 decision | waiting |
 | **L1** | Gap step 1: the created-Flow repair lane on `persistent-isolated`, with `--replays` for instruction tasks; proves Persist and the zero-call re-run on identity-drift | downstream | I1 | waiting |
-| **L2** | C5a+C5b+D5: result verification repeats a "does not answer" once; disagreement records `unverified` | both | — | in flight |
-| **V1** | Judge an empty result against the instruction (an empty table can be the right answer) instead of leaving it unchecked; needs the grant-revalidation hang t024 found in provider resolution fixed first | Core | L2 | waiting |
+| **L2** | C5a+C5b+D5: result verification asks once more after any non-yes answer; only no,no refutes; an empty result is recorded as not checked | both | — | done on t035 (`571f9d4` Core, `cf54c30` downstream); lands after I1 |
+| **V1** | Judge an empty result against the instruction (an empty table can be the right answer) instead of leaving it unchecked; needs the grant-revalidation hang t024 found in provider resolution fixed first; also remove the empty-record refutation in `result-verification/core-observation.ts`, which `verify` can no longer reach | Core | L2 | waiting |
 | **L3** | D3: the Lab's `--llm-permit`, carried to the grant's `permittedConsequences` | downstream | — | in flight |
 | **L4** | C3: recovery receives the permitted set; the permission gate, not `allowExternalSideEffects`, decides acting options | Core | L0, L3 | waiting |
 | **L5** | C4+D4: a repair needing a side effect becomes a needs-permission request, not a preflight refusal | both | L4 | waiting |
@@ -364,6 +363,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: `F:\r35\run-mublcbqf-9e815106` read matched 14 of expected 14, `"oracleVerdict": "passed"`, `{"build":4,"observed":4}`, yet the product's verification recorded `refuted` on a single `unsure` — a false failure.
 - Outcome: Partial
 - Follow-up: verify t035's live rerun (probe ×10 with zero refuted; `data-table-inventory-empty` not failed).
+
+### 2026-09-21 — L2 verified and committed on t035
+- Agent: supervisor; worker `w2x-verification-agreement`
+- Changed: t035 Core `571f9d4`, downstream `cf54c30`.
+- Why: the product's own result check refuted correct runs on a single `unknown`.
+- Validation: `npx vitest run .../result-verification .../llm/tests/verify-result-grant.test.ts` from t035 `packages/fluxiq` printed `Tests  66 passed (66)`; `F:\r35\run-mubmkp4x-d4fadf21` (`data-table-inventory-empty`) read `{"verdict":"passed","oracle":["passed"],"matched":[0],"expected":[0],"build":3,"observed":3}` with `core.result.no_records` in `live-llm.json`; the worker's probe of the stored 14-of-14 run confirmed 20 of 20.
+- Outcome: Done
+- Follow-up: land after t027; V1.
 
 ---
 
