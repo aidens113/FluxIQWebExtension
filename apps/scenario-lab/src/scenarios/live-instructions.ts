@@ -1,5 +1,6 @@
 import { REPLY_TICKET, TRIAGE_AGENT } from "./support-desk/index.js";
 import { LINE_ITEM_ORDER, REFUND_ORDER } from "./order-operations/index.js";
+import { LOCAL_CLASSIFIEDS_LIVE_TASKS } from "./local-classifieds/index.js";
 import { AUCTION_MARKETPLACE_LIVE_TASKS } from "./auction-marketplace/index.js";
 import { PHOTO_SOCIAL_LIVE_TASKS } from "./photo-social/index.js";
 import { SOCIAL_NETWORK_FEED_TASKS } from "./social-network-feed/index.js";
@@ -755,6 +756,7 @@ const TASKS: LiveInstructionTask[] = [
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-conversation",
   },
+  ...LOCAL_CLASSIFIEDS_LIVE_TASKS,
   ...AUCTION_MARKETPLACE_LIVE_TASKS,
   ...PHOTO_SOCIAL_LIVE_TASKS,
   ...SOCIAL_NETWORK_FEED_TASKS,
