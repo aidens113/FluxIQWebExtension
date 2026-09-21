@@ -98,7 +98,8 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **S1** | Ten purposefully difficult realistic sites (user, 2026-09-21), one worker each | downstream | — | **done**: all ten on `dev` (`08e7dc6`, 41 registered scenarios); `live-instructions.ts` is at 775 of 800 lines and must be split before more tasks are added; two combined-suite runs each had one flaky failure that passed on rerun (identify it) |
 | **E1** | Extensive live end-to-end testing on all ten sites (user, 2026-09-21): recording lane, every instruction task, every repair task, one real-panel creation per site; baseline before P2 | downstream | S1 | in flight: five lanes t052-t056 (`w2x-e2e-live-campaign`) |
 | **E2** | The same campaign again once P2, L4 and the waiting fixes land, to measure how far FluxIQ gets past the first tool failure | downstream | E1, P2 | waiting |
-| **P2** | A failed exploration tool call ends the whole build and is missing from the trace (`evidence-loop.ts` catch sites; domain throws on covered controls `capture.ts:128` and oversized snapshots `sanitize.ts:276`) — the failure on every realistic site | both | — | in flight on t051 (`w2x-tool-failure-feedback`) |
+| **P7** | After P2, builds end `evidence_limit` after 10-15 calls: the loop caps total evidence over the whole build at 64,000 bytes. Replace with a bounded per-request context window (newest evidence plus closed summaries), total bounded only by cost, tokens, deadline and progress | Core | P2 | in flight on t057 (`w2x-evidence-window`) |
+| **P2** | A failed exploration tool call ends the whole build and is missing from the trace (`evidence-loop.ts` catch sites; domain throws on covered controls `capture.ts:128` and oversized snapshots `sanitize.ts:276`) — the failure on every realistic site | both | — | done on t051 (`0080aca` Core, `363d536` downstream): `run-mubp3phh-cf4643fd` recorded `web.action.rejected.blocked_by_dialog`, the model pressed Not now next, 15 build = 15 observed; lands after E1 round 1 |
 | **P3** | The web domain never checks a created Flow's own steps for permission (`resolve-plan-node.ts` has no permission field; design report open question 4, F7), so a created Flow can publish, refund or delete on every run unasked | both | I1 | waiting — next dispatch |
 | **P4** | Lab: judge "this task correctly ends in a permission request" (every realistic site's consequential task needs it); record usage when a proposal read fails (`build-proposal.ts:161`, `run-scenario.ts:340-352`) | downstream | — | waiting |
 | **P5** | `extract_list` cannot de-duplicate across pagination; Core discards the inner error behind `flow_bootstrap.provider_transport_unknown` | both | — | waiting |
@@ -323,6 +324,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Definition of done: every task on both sites run or explicitly recorded as not runnable with the reason.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-e2e-lane-<a..e>.md` — a per-task table, then product gaps ranked by how many tasks they hit.
 
+### Brief: w2x-evidence-window
+- Repository: paired task t057, `F:\fxwork\t057\!FluxIQWebExtension` and `F:\fxwork\t057\!FluxIQ`, both at P2's tip (t051). `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
+- Task: plan step P7. With P2 in place, realistic-site builds now end `llm_evidence_loop.evidence_limit` after 10-15 calls, because the loop caps the total evidence bytes collected across the whole build (the flow-bootstrap 64,000-byte limit), not just what one request carries. The standing direction (Week 2 document, "The fixed call limit was the defect") is that the loop iterates while it makes progress and stops on cost, tokens, the deadline or the no-progress guard, never on a small fixed cap. Make total evidence unbounded except by those: each provider request carries a bounded context window — the newest evidence in full plus compact, closed summaries of older calls (call id, tool id, result code, whether it changed the page) — within the existing per-request evidence context bound and the one 64k-token context constant. Older raw evidence leaves the window whole, never cut mid-record. Accounting still records total evidence bytes. A total-evidence stop survives only as a far-away, configurable backstop. If Core already has a context-window module, extend it rather than adding a second.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: `professional-network-rotterdam-data-engineers` and `auction-marketplace`'s extraction task (both on `dev`; merge `dev` into the downstream worktree first). Pass: builds go past 15 calls without `evidence_limit` and end in a proposal or another meaningful closed outcome, with `build.providerCalls == observed.calls`. Report whether a Flow was created, matched against expected records, calls, tokens, cost and where the build stopped on the site.
+- Then focused tests from inside `packages/fluxiq`, Core `check` and `build`, downstream `pnpm check`. `evidence-loop.ts` is 776 lines: put new behaviour in a focused module and keep it under 800. `service.ts` must not grow.
+- Owns: `AS/runtime/llm/evidence-loop.ts`, a new or existing context-window module beside it, `AS/runtime/loop-limits/*`, their tests. Must not touch: `recovery/*`, `result-verification/*`, `service.ts`, domain and Lab source, other worktrees, git commits, shared `dev`, the user's panel.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-evidence-window.md`
+
 ### Brief: w2-multi-action-schema-fix
 - Repository: t033 Core worktree `F:\fxwork\t033\!FluxIQ`, branch `task/t033-multi-action-reconcile`; report in the t033 downstream worktree.
 - Task: close the medium finding of `F:\fxwork\t033\!FluxIQWebExtension\docs\working\multi-action-exploration-reconcile\reports\w2-multi-action-remediation-rereview.md`: `runtime/llm/evidence-batch/input-schema.ts` accepts invalid input inside `oneOf` branches, for tuple or boolean `items`, and for boolean property schemas. Add the single schema-level check the rereview describes so an unsupported shape fails closed, with a test per case. Also make the low finding truthful: a list that exceeds the remaining action budget must not end exploration as "used every action".
@@ -431,6 +440,14 @@ downstream `live-llm/live-llm-plan.ts` L3 then N1's DL.
 - Validation: each landing printed scenario-lab `# fail 0` (463, 491, 518, then 541 and 570 on rerun after one flaky failure each) and `task finish` reported `"command":"pnpm check","passed":true`; `scenarioIds` counted `41 scenario ids`; the first lane start moved the shared Core to `278c44b` and built it.
 - Outcome: Partial
 - Follow-up: E2 after P2; identify the flaky combined-suite test.
+
+### 2026-09-21 — Core landings paused for E1; shared Core sync; P2 done; P7 dispatched
+- Agent: supervisor; workers `w2x-tool-failure-feedback`, E1 lanes
+- Changed: t036, t035 (both repositories) and t048 landed; t051 committed (P2); t057 (P7) started on P2's tip; lanes A, C, D, E asked to pause.
+- Why: landing t035 moved Core `dev`, and the Lab's behind-`dev` guard then refused every new lane run against the shared Core. Decision: no further Core landings until E1 round 1 finishes (t047, t051, t033 wait); sync the shared Core once, with no run in flight, rather than forcing it under running processes. Lane D disclosed that its environment had set `FLUXIQ_LAB_ALLOW_BEHIND_CORE=1` from the start; its four creation runs still used Core `278c44b` and count as round 1 on that revision. No lane may use the override.
+- Validation: `pnpm task sync-core --dry-run` from lane B printed "26 running process(es) are working inside it or a worktree that shares it"; t051 `run-mubp3phh-cf4643fd` `live-llm.json` contains `web.action.rejected.blocked_by_dialog` and reads `{"build":15,"observed":15}`.
+- Outcome: Partial
+- Follow-up: sync and resume the lanes; land P2 after round 1.
 
 ---
 
