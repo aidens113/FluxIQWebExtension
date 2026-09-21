@@ -1,5 +1,6 @@
 import type { ExpectedFact, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { createScenarioManifest } from "../../types.js";
+import { TEAM } from "./data/index.js";
 import { BOOKING_RECORD, EXPECTED_QUOTE, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS, QUOTE_INPUT, SITE_PATHS } from "./expectations.js";
 
 /**
@@ -60,8 +61,24 @@ const QUOTE_SCRIPT: ScenarioStep[] = [
   { id: "quote-requested", operation: "checkpoint" },
 ];
 
-/** A grid card at a branch whose Gas Safe line holds a number, in the "Our people" grid only. */
-const gasSafeCardAt = (branch: string) => `section[aria-label="Our people"] article:has(dt:text-is("Gas Safe ID") + dd:text-matches("^[0-9]+$")):has(dt:text-is("Branch") + dd:text-is("${branch}"))`;
+/**
+ * The grid cards the read keeps, in the "Our people" grid only: everyone at
+ * Eastmoor or Hollins Cross whose Gas Safe line holds a number.
+ *
+ * FluxIQ's extraction reads with plain CSS, which cannot read a card's words,
+ * and nothing else on a card says its branch or what its Gas Safe line holds:
+ * a card at Eastmoor and one at Wrenfield, or a Gas Safe number and
+ * "Registration pending", differ only in text. So the recording names the
+ * cards it read by their place in the grid, which lists every card in
+ * `TEAM` order once "Show more people" has loaded the last batch.
+ */
+const GAS_ENGINEERS = ["tomasz-wierzbicki", "priya-anand", "james-whitlock-eastmoor", "grace-lindqvist", "owen-castellane", "farah-qureshi", "ruth-abernethy", "stefan-novak"];
+const gridPlace = (id: string): number => {
+  const index = TEAM.findIndex((card) => card.id === id);
+  if (index < 0) throw new Error(`The team has no card ${id}`);
+  return index + 1;
+};
+const gasEngineerCards = GAS_ENGINEERS.map((id) => `section[aria-label="Our people"] article:nth-of-type(${gridPlace(id)})`).join(", ");
 
 const TEAM_SCRIPT: ScenarioStep[] = [
   ...FIRST_VISIT,
@@ -75,13 +92,15 @@ const TEAM_SCRIPT: ScenarioStep[] = [
   { id: "press-show-more-again", operation: "click", target: 'button:text-is("Show more people")' },
   { id: "await-last-batch", operation: "waitForState", target: 'article:has(h3:text-is("Ruth Abernethy"))', timeoutMs: 10000 },
   {
-    id: "extract-gas-engineers", operation: "extract", target: `${gasSafeCardAt("Eastmoor")}, ${gasSafeCardAt("Hollins Cross")}`,
-    fields: { name: "h3", role: "h3 + p", branch: 'dt:text-is("Branch") + dd', gasSafeId: 'dt:text-is("Gas Safe ID") + dd' },
+    // A card's branch is always its first line; each kept card's Gas Safe line is its last, Stefan Novak's after his F-Gas one.
+    id: "extract-gas-engineers", operation: "extract", target: gasEngineerCards,
+    fields: { name: "h3", role: "h3 + p", branch: "dl > div:first-child > dd", gasSafeId: "dl > div:last-child > dd" },
   },
   { id: "gas-engineers-extracted", operation: "checkpoint" },
 ];
 
-const priceRowsIn = (title: string) => `section:has(> button:has-text("${title}")) tbody tr:not(:has(span:text-is("Sponsored")))`;
+/** A category's rows, partner adverts left out: an advert is the only row holding a `span`, its "Sponsored" label. */
+const priceRowsIn = (category: string) => `section[data-category="${category}"] tbody tr:not(:has(span))`;
 
 const PRICE_SCRIPT: ScenarioStep[] = [
   ...FIRST_VISIT,
@@ -91,13 +110,22 @@ const PRICE_SCRIPT: ScenarioStep[] = [
   { id: "await-business-prices", operation: "waitForState", target: 'td:text-is("£79.17")', timeoutMs: 8000 },
   { id: "open-repairs", operation: "click", target: 'button:has-text("Repairs & call-outs")' },
   {
-    id: "extract-business-prices", operation: "extract", target: `${priceRowsIn("Servicing & safety checks")}, ${priceRowsIn("Repairs & call-outs")}`,
+    id: "extract-business-prices", operation: "extract", target: `${priceRowsIn("servicing")}, ${priceRowsIn("repairs")}`,
     fields: { service: "column:Service", price: "column:Price" },
   },
   { id: "prices-extracted", operation: "checkpoint" },
 ];
 
 const WIDGET = "frame:Slotwise booking/";
+
+/**
+ * The confirmation lists its facts in this order, each a `dt` label and its
+ * `dd` value. Plain CSS cannot read a label's words, so a value is found by
+ * its label's place.
+ */
+const CONFIRMATION_LABELS = ["Reference", "Branch", "Service", "Date", "Time", "Engineer", "Deposit paid"] as const;
+const valueOf = (label: (typeof CONFIRMATION_LABELS)[number]) => `dt:nth-of-type(${CONFIRMATION_LABELS.indexOf(label) + 1}) + dd`;
+
 const BOOKING_SCRIPT: ScenarioStep[] = [
   ...FIRST_VISIT,
   { id: "open-booking", operation: "click", target: 'nav a:text-is("Book a service")' },
@@ -117,7 +145,7 @@ const BOOKING_SCRIPT: ScenarioStep[] = [
   { id: "await-booking-confirmation", operation: "waitForState", target: "testid:booking-reference", timeoutMs: 8000 },
   {
     id: "extract-booking", operation: "extract", target: "main dl",
-    fields: { reference: 'dt:text-is("Reference") + dd', branch: 'dt:text-is("Branch") + dd', date: 'dt:text-is("Date") + dd', time: 'dt:text-is("Time") + dd', engineer: 'dt:text-is("Engineer") + dd' },
+    fields: { reference: valueOf("Reference"), branch: valueOf("Branch"), date: valueOf("Date"), time: valueOf("Time"), engineer: valueOf("Engineer") },
   },
   { id: "booking-extracted", operation: "checkpoint" },
 ];

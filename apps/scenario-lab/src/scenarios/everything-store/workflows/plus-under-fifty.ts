@@ -43,7 +43,7 @@ export const PLUS_UNDER_FIFTY_WORKFLOW: ScenarioWorkflow = {
   recordingScript: [
     ...SHARED_STEPS.openStore,
     ...SHARED_STEPS.search("sweep", "wireless earbuds"),
-    { id: "sweep-results", operation: "waitForState", target: `[data-component="search-result"][data-sku]`, timeoutMs: 6000 },
+    { id: "sweep-results", operation: "waitForState", target: `[data-component="search-result"][data-sku][data-index="1"]`, timeoutMs: 6000 },
     { id: "sweep-plus-only", operation: "click", target: "role:link:Brightaisle Plus" },
     { id: "sweep-plus-results", operation: "waitForState", target: `[data-component="search-result"][data-sku][data-index="1"]`, timeoutMs: 6000 },
     { id: "sweep-four-stars", operation: "click", target: "role:link:4 Stars & Up" },

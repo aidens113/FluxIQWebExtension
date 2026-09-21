@@ -21,7 +21,7 @@ const RESULT_COUNT: ExpectedFact = {
 const FIRST_PAGE_STEPS: ScenarioStep[] = [
   ...SHARED_STEPS.openStore,
   ...SHARED_STEPS.search("first", "wireless earbuds"),
-  { id: "first-results", operation: "waitForState", target: `[data-component="search-result"][data-sku]`, timeoutMs: 6000 },
+  { id: "first-results", operation: "waitForState", target: `[data-component="search-result"][data-sku][data-index="1"]`, timeoutMs: 6000 },
   { id: "first-plus-only", operation: "click", target: "role:link:Brightaisle Plus" },
   { id: "first-plus-results", operation: "waitForState", target: `${ORGANIC_CARDS}[data-index="1"]`, timeoutMs: 6000 },
   { id: "first-scroll-down", operation: "scroll", value: 6000 },
