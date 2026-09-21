@@ -237,26 +237,14 @@ Current briefs live in the reports named by the Work Ledger.
 - Definition of done: bounded opaque handles plus closed match/refusal categories reach repair context; no raw DOM/HTML; exact live before/after evidence and narrow post-live checks.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-repair-candidate-ranking-live.md`
 
-### Brief: w2-t011-live-permission-resume
-- Repository: this repository, with read-only inspection of FluxIQ Core
-- Task: resume t011 by reproducing `schedule-post` live, then make the smallest
-  browser-domain prompt/contract change needed so opening/showing/ticking a
-  control declares `[]`; rerun the same live scenario until its next real
-  blocker is established. Do not start with unit tests or run the corpus.
-- Required reads: this document's Current State; `reports/w2-reveal-not-commit.md`;
-  `domain/src/runtime/llm-evidence/harness-options/{exploration-terms,vocabulary}.ts`;
-  `domain/src/runtime/llm-evidence/{permission,press}.ts`; the live instruction
-  and Lab command paths already named by the report
-- Owns (may edit): the t011 worktree's browser-domain files listed above and
-  `domain/src/runtime/llm-evidence/tools.ts`,
-  `domain/src/runtime/llm-evidence/harness-options/options.ts`, and
-  `reports/w2-t011-live-permission-resume.md`
-- Must not touch: FluxIQ Core source; shared `dev` checkout; other reports;
-  tests until the live scenario behaves correctly; commits or pushes
-- Definition of done: one pre-change live run inspected call-by-call; smallest
-  focused change; same live scenario rerun and inspected; narrow tests only
-  after live success or a precisely evidenced next blocker
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-live-permission-resume.md`
+### Brief: w2-integrated-dev-ui-smoke
+- Repository: pushed downstream/Core `dev`, read-only; report written on t027
+- Task: live-test the current integrated production panel plus loaded extension end to end without an LLM call: authenticate an isolated store, create a project, record a simple fixture task, generate/save its Flow, run it from the UI, and confirm Runtime Debug updates in place.
+- Required reads: Current State; t030 Runtime Debug report; existing recording/reconnect report; normal Lab topology commands only.
+- Owns: disposable run/profile/store data and `reports/w2-integrated-dev-ui-smoke.md` only.
+- Must not touch: product source, shared `dev`, user store/profile, provider credentials, other reports, or ports 3000/49100.
+- Definition of done: exact UI checkpoints, action/oracle counts, no-reload Runtime Debug result, stage timings, and first failure if any; no provider call; no automated suite.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-integrated-dev-ui-smoke.md`
 
 ### Brief: w2-t011-core-permission-seams
 - Repository: FluxIQ Core, read-only
