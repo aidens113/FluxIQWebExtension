@@ -127,7 +127,8 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **P17** | The campaign's only created Flow (lane B E9, everything-store via the panel) cannot replay: its navigate reported success while the tab stayed on the start page, and the Flow kept none of the overlay dismissals exploration needed | both | — | in flight on t065 (`w2x-created-flow-fidelity`) |
 | **P18** | Exploration hands the model ambiguous handles on duplicated labels (`web.handle.ambiguous` in 6 of lane B's 12 builds), which feeds the repeat-without-progress stalls | both | — | waiting |
 | **P19** | Site defect: everything-store's recording script clicks the cookie Accept after the 4 s notifications prompt has covered the page, stopping its recording lanes and both repair tasks | downstream | — | waiting (with P13/P16) |
-| **P9** | A dismissible promotion modal is classed `web.intervention.required`, so Core's `llm.gate.manual_intervention` gives the model 0 calls; only a challenge a person must answer (the robot check) should be | both | P2 | in flight on t062 (`w2x-dismissible-dialogs`) |
+| **P20** | Recovery cannot express "close the dialog, then press": its patches are a target override or a wait and retry, the 2.5 exploration reduction is computed and discarded, and nothing produces an `insert_deterministic_path` repair; the diagnosis also judged a dialog-blocked run "not achievable". Wire the reduced exploration path into a durable repair and teach the diagnosis that a blocked-by-dialog failure is recoverable | Core | L5 | waiting (after L5; shares `recovery/annotation/*`) |
+| **P9** | A dismissible promotion modal is classed `web.intervention.required`, so Core's `llm.gate.manual_intervention` gives the model 0 calls; only a challenge a person must answer (the robot check) should be | both | P2 | done on t062 (`9c70af8`): a dismissible dialog ends `web.action.blocked_by_dialog` (`unexpected_state`) and Core consults the model; the robot check stays `user_intervention_required` (proven in Chromium; live blocked by P8); W14's armed offer now expects the recoverable category |
 | **P7** | After P2, builds end `evidence_limit` after 10-15 calls: the loop caps total evidence over the whole build at 64,000 bytes. Replace with a bounded per-request context window (newest evidence plus closed summaries), total bounded only by cost, tokens, deadline and progress | Core | P2 | done on t057 (uncommitted): 5 live runs, no `evidence_limit` or false `tool_failed`; builds ran 26 decisions over up to 153,142 bytes, then stopped on the call count |
 | **P2** | A failed exploration tool call ends the whole build and is missing from the trace (`evidence-loop.ts` catch sites; domain throws on covered controls `capture.ts:128` and oversized snapshots `sanitize.ts:276`) — the failure on every realistic site | both | — | done on t051 (`0080aca` Core, `363d536` downstream): `run-mubp3phh-cf4643fd` recorded `web.action.rejected.blocked_by_dialog`, the model pressed Not now next, 15 build = 15 observed; lands after E1 round 1 |
 | **P3** | The web domain never checks a created Flow's own steps for permission (`resolve-plan-node.ts` has no permission field; design report open question 4, F7), so a created Flow can publish, refund or delete on every run unasked | both | I1 | waiting — next dispatch |
@@ -417,6 +418,14 @@ Delivered briefs are archived in [archive/delivered-briefs.md](./week2-exit-plan
 - Validation: lane A — 0 of 16 creation runs made a Flow, 3 of 7 recording-lane Flows replayed and passed (social-network-feed confirm-requests 4/4, move-open-day 1/1 matched); `compact-plan.mjs` printed "moved 18 briefs, 191 lines; document now 399 lines".
 - Outcome: Partial
 - Follow-up: E2.
+
+### 2026-09-21 — P9 done; W14's contract updated; P20 identified
+- Agent: supervisor; worker `w2x-dismissible-dialogs`
+- Changed: t062 downstream `9c70af8` (P9, plus the supervisor's W14 manifest and test update); row P20.
+- Why: a pop-up anyone can close is not a challenge only a person can answer. W14 (`modal-flows` armed offer, which has its own close control) keeps its contract that a model-free replay stops rather than dismissing an unrecorded offer; only the category changes to the recoverable `unexpected_state`, consistent with capability by default and permission only for consequential acts.
+- Validation: t062 `auction-marketplace-repair-watch-redesign` `run-mubterkd-77a5c4f0` ended `blocked_by_dialog` with 1 model call where it used to make 0; scenario-lab after the W14 update printed `# pass 568` with the two known load-flaky browser tests failing, and those files alone printed auction `# pass 13`, `# fail 0` and professional-network `# pass 9`, `# fail 0`.
+- Outcome: Partial
+- Follow-up: add the blocked-by-dialog row to `docs/architecture/failure-taxonomy.md` at landing; P20 after L5.
 
 ---
 
