@@ -1,7 +1,7 @@
 # Optional Multi-Action Exploration Reconciliation
 
 Status: Active
-Status detail: Slices 1-4 pass focused checks behind production default one; the same-code live baseline/variant comparison is active before integration.
+Status detail: Slices 1-4 are pinned behind production default one; independent review found atomic-admission, refusal-stop, and schema-validation blockers now under remediation before live A/B.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -35,14 +35,15 @@ Production/UI callers omit the option and remain default one. The final slice
 passed 130 focused Core tests, 58 focused downstream tests, and affected
 checks/builds.
 
-**Next:** run one same-code live baseline (`1`) and variant (`16`) from fresh
-isolated state, require both to create and execute valid persisted Flows, and
-require the variant to complete at least two ordered actions in one provider
-decision with exact trace/accounting/state evidence. Do not change the
-production default from one based only on receiving a list.
+**Next:** close the three independent-review blockers with real recovery-ledger
+atomicity/refusal/schema focused proofs, rereview, then run one same-code live
+baseline (`1`) and variant (`16`) from fresh isolated state. The first live
+attempt used the wrong extraction instruction and is non-acceptance evidence;
+the corrected task is `social-scheduler-schedule-post`.
 
-**Blockers:** none for the bounded live A/B. Integration and any production
-opt-in remain blocked until every conjunctive live oracle passes.
+**Blockers:** whole-list action/repeat admission is not atomic at the recovery
+ledger; domain-classified refusals can continue without `ok:false`; the local
+input matcher ignores `uniqueItems`. Live A/B and integration remain paused.
 
 ---
 
@@ -113,6 +114,37 @@ opt-in remain blocked until every conjunctive live oracle passes.
 - Acceptance: both persist plan-valid Flows and execute them through the production extension against the same deterministic oracle; baseline executes no list; variant completes >=2 ordered actions in one decision; call/action/usage/trace/state/permission/stability accounting is exact and bounded; no unintended consequence or auto-apply.
 - Definition of done: sanitized report with measurements and exact pass/fail per oracle; focused checks only after a live pass or smallest live-proven fix; no broad suite.
 - Report to: `docs/working/multi-action-exploration-reconcile/reports/w2-multi-action-live-ab.md`
+
+### Brief: w2-multi-action-integration-review
+- Repository: paired t033 worktrees, product read-only; downstream unique report only.
+- Task: independently review pinned downstream `fab7cba` and Core `0dbf62f` for correctness, closed parsing, permission/evidence/state safety, bounded accounting, and production default-one before merge.
+- Required reads: Current State; current-map risks/acceptance; slice reports; candidate diffs against `dev` and directly changed product/tests only.
+- Owns: `docs/working/multi-action-exploration-reconcile/reports/w2-multi-action-integration-review.md` only.
+- Must not touch: product/tests/other docs, live A/B processes/artifacts, provider/browser/manual panel, git/shared `dev`.
+- Review focus: whole-list preflight atomicity; stop after refusal/non-applied/unstable target; no hidden-evidence permission leak; unique call/state ordering; usage/provider-decision counts; bounded sanitized diagnostics; omitted option truly removes/rejects list behavior; only Lab create-flow accepts 1/16.
+- Definition of done: findings by severity with file/line evidence and explicit integrate/block disposition; distinguish any live-only unknown; no test/live/provider/commit action.
+- Report to: `docs/working/multi-action-exploration-reconcile/reports/w2-multi-action-integration-review.md`
+
+### Brief: w2-multi-action-review-remediation
+- Repository: paired t033 worktrees; Core product/tests only, downstream unique report only.
+- Task: close all three integration-review blockers before any further provider/live run.
+- Required reads: Current State; integration-review report; current recovery budget/ledger wrapper; evidence-batch runner/stop/input-schema and nearest tests.
+- Owns Core: smallest `runtime/recovery/` ledger/admission seam, `runtime/llm/evidence-batch/` transition/stop/schema seams, and nearest focused tests. Owns downstream: unique report only.
+- Must not touch: downstream product/Lab caller, production default/caller, diagnostics/accounting already accepted, live processes/artifacts, provider/browser/manual panel, t027/t029, shared `dev`, git history.
+- Atomicity: the authoritative recovery action and signature-repeat ledger must read-only admit/reserve the whole list before action 1; rejection executes/persists no prefix and ordinary singleton semantics remain exact.
+- Refusal/schema: carry a domain-neutral classified-refusal verdict into the batch stop decision independent of evidence shape; validate `uniqueItems` and fail closed on unsupported schema keywords rather than accepting a weaker contract.
+- Definition of done: focused real-ledger tests prove all-or-nothing action/repeat rejection; both refusal channels stop; duplicate consequences reject atomically; default-one and previously accepted permission/state/usage cases stay green; affected Core check/build and diff check pass; no live/provider/full suite.
+- Report to: `docs/working/multi-action-exploration-reconcile/reports/w2-multi-action-review-remediation.md`
+
+### Brief: w2-multi-action-remediation-rereview
+- Repository: paired t033 worktrees, product read-only; downstream unique report only.
+- Task: independently verify the remediation closes every integration-review blocker without weakening accepted default-one, permission/state, accounting, or Lab-only caller behavior.
+- Required reads: integration-review and remediation reports; final nine-file Core remediation diff and directly affected tests.
+- Owns: `docs/working/multi-action-exploration-reconcile/reports/w2-multi-action-remediation-rereview.md` only.
+- Must not touch: product/tests/other docs, live artifacts/processes, provider/browser/manual panel, git/shared `dev`.
+- Review focus: authoritative ledger admission is read-only and complete before action 1; signature repeats match real ledger semantics; charging remains per executed action; classified refusal always stops; schema matcher enforces uniqueItems and cannot fail open on unsupported keywords; singleton/default-one unchanged.
+- Definition of done: re-evaluate all prior high/medium findings with file/line evidence, list any new blocker separately, and give integrate/block disposition; no test/live/provider/commit action.
+- Report to: `docs/working/multi-action-exploration-reconcile/reports/w2-multi-action-remediation-rereview.md`
 
 ---
 
