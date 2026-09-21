@@ -26,23 +26,48 @@ export type DemoWorkspaceConfiguration = {
   headless: boolean;
 };
 
-export function resolveDemoWorkspaceConfiguration(repositoryRoot: string, env: NodeJS.ProcessEnv): DemoWorkspaceConfiguration {
+/**
+ * What a caller that allocated its own topology supplies in place of the
+ * environment's fixed demo endpoints (`3300`/`4877`, which every isolated live
+ * run had to override by hand, and one of which fell inside a Windows excluded
+ * port range). Each value passes the same checks as its environment variable,
+ * and the two ports must be explicit and distinct, because a Core started on
+ * this configuration binds exactly these ports.
+ */
+export type DemoWorkspaceTopologyOverrides = {
+  /** The panel origin on its allocated loopback port. */
+  origin: string;
+  /** The client gateway WebSocket URL on its allocated loopback port. */
+  gatewayUrl: string;
+  /** The run-scoped workspace; it must still resolve below the runs directory. */
+  workspaceDirectory?: string;
+  /** An absolute pinned copy of the unpacked extension build. */
+  extensionSourceDirectory?: string;
+};
+
+export function resolveDemoWorkspaceConfiguration(repositoryRoot: string, env: NodeJS.ProcessEnv, overrides?: DemoWorkspaceTopologyOverrides): DemoWorkspaceConfiguration {
   const root = path.resolve(repositoryRoot);
   const runsDirectory = path.resolve(env.FLUXIQ_TEST_RUNS_DIR ?? path.join(root, "test-runs"));
-  const workspaceDirectory = path.resolve(env.FLUXIQ_DEMO_RUN_DIR?.trim() || path.join(runsDirectory, "web-extension-demo"));
+  const workspaceDirectory = path.resolve(overrides?.workspaceDirectory ?? (env.FLUXIQ_DEMO_RUN_DIR?.trim() || path.join(runsDirectory, "web-extension-demo")));
   const relative = path.relative(runsDirectory, workspaceDirectory);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("FLUXIQ_DEMO_RUN_DIR must resolve below FLUXIQ_TEST_RUNS_DIR");
+    throw new Error(overrides?.workspaceDirectory ? "The allocated workspace must resolve below FLUXIQ_TEST_RUNS_DIR" : "FLUXIQ_DEMO_RUN_DIR must resolve below FLUXIQ_TEST_RUNS_DIR");
   }
   const fluxiqRepositoryRoot = path.resolve(env.FLUXIQ_CORE_ROOT?.trim() || path.join(root, "..", "!FluxIQ"));
   const fluxiqRoot = path.join(workspaceDirectory, "fluxiq-root");
-  const extensionOverride = env.FLUXIQ_DEMO_EXTENSION_DIR?.trim();
-  if (extensionOverride && !path.isAbsolute(extensionOverride)) throw new Error("FLUXIQ_DEMO_EXTENSION_DIR must be an absolute path");
+  const extensionLabel = overrides?.extensionSourceDirectory ? "The pinned extension build" : "FLUXIQ_DEMO_EXTENSION_DIR";
+  const extensionOverride = overrides?.extensionSourceDirectory ?? env.FLUXIQ_DEMO_EXTENSION_DIR?.trim();
+  if (extensionOverride && !path.isAbsolute(extensionOverride)) throw new Error(`${extensionLabel} must be an absolute path`);
   const extensionSourceDirectory = extensionOverride ? path.resolve(extensionOverride) : path.join(root, "apps", "extension", "dist", "chrome");
-  const origin = exactHttpOrigin(env.FLUXIQ_DEMO_BASE_URL?.trim() || "http://127.0.0.1:3300", "FLUXIQ_DEMO_BASE_URL");
-  const gatewayUrl = requireSecureGatewayUrl(env.FLUXIQ_DEMO_GATEWAY_URL?.trim() || "ws://127.0.0.1:4877/client", "FLUXIQ_DEMO_GATEWAY_URL");
-  requireLoopbackEndpoint(origin, "FLUXIQ_DEMO_BASE_URL");
-  requireLoopbackEndpoint(gatewayUrl, "FLUXIQ_DEMO_GATEWAY_URL");
+  const originLabel = overrides ? "The allocated panel origin" : "FLUXIQ_DEMO_BASE_URL";
+  const gatewayLabel = overrides ? "The allocated gateway URL" : "FLUXIQ_DEMO_GATEWAY_URL";
+  const origin = exactHttpOrigin(overrides?.origin ?? (env.FLUXIQ_DEMO_BASE_URL?.trim() || "http://127.0.0.1:3300"), originLabel);
+  const gatewayUrl = requireSecureGatewayUrl(overrides?.gatewayUrl ?? (env.FLUXIQ_DEMO_GATEWAY_URL?.trim() || "ws://127.0.0.1:4877/client"), gatewayLabel);
+  requireLoopbackEndpoint(origin, originLabel);
+  requireLoopbackEndpoint(gatewayUrl, gatewayLabel);
+  if (overrides && explicitPort(origin, originLabel) === explicitPort(gatewayUrl, gatewayLabel)) {
+    throw new Error("The allocated panel origin and gateway URL must use different ports");
+  }
   return {
     repositoryRoot: root,
     runsDirectory,

@@ -252,3 +252,32 @@ test("clearing recording tabs isolates already-running work from the next record
   await Promise.resolve();
   await recorder.flush();
 });
+
+// Lane E, local-classifieds: "Allow all cookies", then the search typed and run
+// with Enter 700 ms later. The search page the key press reached used to be
+// recorded as the cookie click's landing, and the replayed cookie click then
+// failed for not arriving there.
+test("a later action ends a click's window: what commits after it is not that click's landing", () => {
+  const recorder = recorderAfterClick(recordedClick(7));
+  recorder.noteExplanatoryAction(TAB, 1_400, { kind: "action" });
+  assert.deepEqual(recorder.shouldRecord(TAB, "https://shop.test/search/", 1_700, "page", undefined), { kind: "drop" }, "the page's own navigation after the key press is nobody's landing");
+  assert.deepEqual(recorder.shouldRecord(TAB, "https://shop.test/search/?q=bike", 1_800, "other", undefined), { kind: "navigation" }, "a history update after it is recorded as it would be with no click before it");
+});
+
+test("a navigation is judged by the action in force when it committed, not by the latest one", () => {
+  const recorder = recorderAfterClick(recordedClick(7));
+  recorder.noteExplanatoryAction(TAB, 1_300, { kind: "action" });
+  // Committed at 1 200, before the key press at 1 300, and judged only once the debounce settled after it.
+  assert.deepEqual(recorder.shouldRecord(TAB, ACCOUNT, 1_200, "page", undefined), { kind: "explained", click: { sequence: 7, eventId: "web.7.1000" } });
+
+  const later = recorderAfterClick(recordedClick(7));
+  later.noteExplanatoryAction(TAB, 1_300, { kind: "click", recorded: recordedClick(8, 1_300) });
+  assert.deepEqual(later.shouldRecord(TAB, ACCOUNT, 1_200, "page", undefined), { kind: "explained", click: { sequence: 7, eventId: "web.7.1000" } }, "a click after the commit does not take the landing either");
+});
+
+test("a submit that follows a later action keeps no click", () => {
+  const recorder = recorderAfterClick(recordedClick(7));
+  recorder.noteExplanatoryAction(TAB, 1_300, { kind: "action" });
+  recorder.noteExplanatoryAction(TAB, 1_310, { kind: "submit" });
+  assert.deepEqual(recorder.shouldRecord(TAB, ACCOUNT, 1_500, "page", undefined), { kind: "drop" }, "Enter in a field submits its form with no click");
+});

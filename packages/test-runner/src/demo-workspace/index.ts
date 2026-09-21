@@ -4,7 +4,8 @@
 export { runDemoLlmAdaptation, inspectLatestDemoLlmAdaptationRun, controlPreparedDemoLlmTargetAdaptation } from "./adaptation-lane.js";
 export { prepareDemoLlmBlankWorkspace } from "./blank-preparation.js";
 export { type BoundExplorationApplyCheckpoint, runBoundDemoLlmExplorationApplyCheckpoint, type BoundExplorationRunCheckpoint, boundExplorationRunStages, type BoundExplorationRunStage, runBoundDemoLlmExplorationFlow } from "./bound-exploration.js";
-export { type DemoWorkspaceConfiguration, resolveDemoWorkspaceConfiguration } from "./configuration.js";
+export { type DemoWorkspaceConfiguration, type DemoWorkspaceTopologyOverrides, resolveDemoWorkspaceConfiguration } from "./configuration.js";
+export { authenticatedControl, type DemoCoreStartOptions, type RunningDemoCore, startPersistentDemoCore, withPersistentDemoCore } from "./core-process.js";
 export { runDemoLlmCreationSettingsProbe, runDemoLlmCreationReadinessProbe, runDemoLlmPendingCreationProbe, runDemoLlmAppliedCreationProbe, runDemoLlmAppliedCreationRevertProbe, runDemoLlmAppliedCreationReplayProbe, runDemoLlmCreation } from "./creation-lanes.js";
 export { prepareDemoLlmWorkspace, runDemoLlmDiagnosis } from "./diagnosis-lanes.js";
 export { runDemoLlmAdaptationReadinessProbe, runDemoLlmExplorationAdaptationReadinessProbe, runDemoLlmExplorationAdaptationRevert, runDemoLlmExplorationAdaptationReject, runDemoLlmExplorationAdaptationProposal, runDemoLlmExplorationAdaptationApply, runDemoLlmExplorationAdaptationValidation } from "./exploration-adaptation.js";
