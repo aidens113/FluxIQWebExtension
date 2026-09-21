@@ -98,6 +98,15 @@ worktree and can begin immediately when the first slot returns.
 - Definition of done: all three live journeys are observed in order; source remains reviewable and privileged; existing-node task avoids JS; missing-node task uses JS and passes its oracle; focused checks pass only after live behavior works; limitations are reported honestly.
 - Report to: `docs/working/arbitrary-javascript-node-plan/reports/w2-arbitrary-js-node-live.md`
 
+### Brief: w2-node-library-gap-live
+- Repository: t029 downstream, read-only except its unique report
+- Task: audit live MVP journeys and the registered web/Core node catalog for repeated behavior currently expressed through orchestration glue or likely to fall through to JavaScript; distinguish true node gaps from runtime/UI/harness defects.
+- Required reads: this document's Current State; t027 extraction, repair-result, runtime-latency, reconnect/reuse, and unified-progress reports; downstream output-node definitions; Core built-in node registry.
+- Owns (may edit): only `docs/working/arbitrary-javascript-node-plan/reports/w2-node-library-gap-live.md`.
+- Must not touch: product source, t027/t030, shared dev, user data, worker reports, tests, or live provider credentials.
+- Definition of done: ranked list of at most five candidates with concrete repeated live evidence, existing-node overlap, owning repository, smallest contract, and an explicit recommendation to build now/defer/reject; no candidate based only on speculation.
+- Report to: `docs/working/arbitrary-javascript-node-plan/reports/w2-node-library-gap-live.md`
+
 ---
 
 ## Work Ledger
