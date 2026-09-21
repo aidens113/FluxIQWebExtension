@@ -475,6 +475,15 @@ land; X5-H; X5-D; then the Lab runs and the bench pair, one at a time.
 Recorded at dispatch on 2026-09-15. Completed briefs are in the
 [archive](./first-class-data-extraction-plan/archive/2026-09-15-completed-briefs-and-ledger.md).
 
+### Brief: w2-runtime-debug-refresh-live
+- Repository: paired t030 downstream and FluxIQ Core worktrees
+- Task: reproduce and fix Runtime Debug staying at `0 runs` after its own successful extraction run, then live-prove automatic history/dataset refresh without page reload.
+- Required reads: this document's Current State; `reports/w2-extraction-exit-live.md` from t027; Core paired document Current State; the Runtime Debug run-start, run-history query/subscription, selected-run, dataset preview/export files reached by tracing the live UI.
+- Owns (may edit): t030 Core Runtime Debug UI/query/subscription files and focused tests, any t030 downstream live driver/report unique to this brief.
+- Must not touch: t027/t029, user `.fluxiq`, unrelated extraction/runtime code, shared `dev`, or any report except its own.
+- Definition of done: first reproduce through the real panel; make the smallest root-cause fix; rerun the same picker/recording/Flow/playback path or a preserved equivalent and observe the new completed run plus dataset controls without reload/reopen; only then run focused tests/build.
+- Report to: `docs/working/first-class-data-extraction-plan/reports/w2-runtime-debug-refresh-live.md`
+
 ## Work Ledger
 
 ### 2026-09-15 — Picker complete; a false accuracy score removed
