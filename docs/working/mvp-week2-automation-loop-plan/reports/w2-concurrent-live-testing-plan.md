@@ -989,3 +989,24 @@ budgets.
   actions, then the same proposal visibly applies and playback passes its page
   oracle; otherwise stop at the first exact terminal outcome and classify it.
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-unified-batch-task-live.md`
+
+### Brief: w2-panel-repair-result-boundary
+- Repository: fresh isolated pair from current t027 including the live-proven
+  downstream repair-driver corrections; copied disposable repair workspace
+- Task: use only sanitized durable detail from the failed two-call repair to
+  trace why diagnosis+patch yielded zero patch attempts/proposals; fix one
+  deterministic Core boundary or add the narrow missing categorical diagnostic,
+  then make one real-panel repair attempt and continue review/apply/oracle only
+  if that attempt creates exactly one proposal.
+- Required reads: panel repair-continuation report; Core recovery annotation
+  `annotate.ts`, `patches.ts`, recovery trace/stages, and directly owned tests
+- Owns (may edit): isolated Core recovery result/diagnostic boundary and focused
+  owned tests after live progress; downstream only if needed to consume the new
+  bounded diagnostic; main report `reports/w2-panel-repair-result-boundary.md`
+- Must not touch: user panel/data, unified batch/recording/performance lanes,
+  raw provider/page content, unrelated files/full suites/commits/pushes; one
+  provider-bearing attempt only
+- Definition of done: exact categorical cause is durable; ideally one visible
+  proposal is reviewed/applied and the same Flow passes its oracle. Stop at the
+  first terminal product result without retrying.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-repair-result-boundary.md`

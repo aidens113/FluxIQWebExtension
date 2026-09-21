@@ -103,7 +103,8 @@ export async function runDemoLlmExplorationAdaptationProposal(config: DemoWorksp
         activeAdaptationStates: activeRuntimeAdaptations.map(item => ({ status: item.status, adaptationKind: item.adaptationKind ?? "ordinary", patchKinds: item.patchKinds ?? [] })),
       } });
     }
-    if (target.currentExecutionDigest !== target.appliedExecutionDigest) {
+    const ordinaryAdaptations = detailsBefore.filter(item => item.adaptationKind !== "flow_bootstrap");
+    if (target.currentExecutionDigest !== target.appliedExecutionDigest && ordinaryAdaptations.length > 0) {
       const revertedTargets = detailsBefore.filter((item, index) => item.adaptationKind !== "flow_bootstrap"
         && statusFor(item, index) === "reverted"
         && item.patchKinds?.length === 1
