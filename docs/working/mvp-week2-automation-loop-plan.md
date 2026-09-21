@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-20. Live creation and the downstream exploration-state reducer are proven; field entry, truthful unchanged-target evidence, and optional multi-action exploration are next.
+Status detail: Executing 2026-09-20. Creation, recording, extraction, restart/reuse, and the 44.7% runtime-latency gain are live-proven; repair proposal persistence and unified batch acceptance remain open.
 Created: 2026-09-15
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -31,58 +31,63 @@ strict, fail-closed validation. Built as `w2-easy-model-output`.
 other workers' state. Run Core tests from inside `packages/fluxiq`, never the
 repository root, or they take vitest's 5,000 ms default, not 15,000 ms.
 
-**Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, supervisor-verified and
-pushed in both repositories.** What each established is archived in
-[archive/completed-phase-narrative.md](./mvp-week2-automation-loop-plan/archive/completed-phase-narrative.md);
-the file:line evidence is in `reports/w2-a` through `w2-d` and the two scoping
-reports. One finding from those investigations is still open: flow bootstrap
-refuses any flow that is not blank, so the "improve an existing flow" entry
-point cannot reuse it unchanged.
+**Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, verified, and pushed.**
+Their narrative is archived in
+[completed-phase-narrative.md](./mvp-week2-automation-loop-plan/archive/completed-phase-narrative.md).
+Bootstrap still accepts only blank Flows, so existing-Flow improvement is open.
 
 **Read live results call by call** from `snapshots/live-llm.json` and each
 run's `evaluation.json`, never from the verdict: a run reporting `passed` while
 its oracle says `failed` was the commonest defect found on 2026-09-17.
 
-**Built and landed:** 2.4 resume point, two live fail-opens closed; 2.5
-deterministic-path patch gated by a compile-checked record
-(`runtime/service/adaptations/gates.ts`); Core's exploration-reduction seam;
-2.6 replay recorder (t007); a run that refuses to continue
-on `resumable: false` and resumes from the failed node (t006); fail-closed
-result verification on `loop_verification`. Token limits derive from one
-constant sized to the model's 64k context, in all ten places that held a copy.
+**Built and landed:** the 2.4 resume point, 2.5 deterministic patch gate,
+exploration reduction, 2.6 replay recorder, `resumable: false` refusal plus
+failed-node resume, fail-closed result verification, and one 64k token-limit
+source. Two live fail-opens are closed.
 
-**Landed and pushed 2026-09-18:** t010 in-place link clicks; t014/t023 the
-redaction scan reads the run's own store at any size (no leak ever existed; the
-check failed only runs that worked); t012 a created Flow's result is judged, and
-an unjudged run reports `unverified`; t015 extraction mismatches recorded field
-by field; t013 shared Core kept current, its web build cache outside
-`node_modules` (inside it crashed 4/4 as an illegal instruction), repeats no
-longer blamed on RAM; t019 save-and-replay; t022 a run names its own id first, so
-a granted run is read back after a timeout (fixed a regression t012 caused);
-t018 permission contract in Core, the instruction itself a grant; t020 routing
-and subflows the model can author, with context; t016 created-Flow repair.
+**Landed and pushed 2026-09-18:** in-place links; run-owned redaction scans;
+created-Flow judging; field-level extraction mismatches; stable shared-Core
+builds; save/replay; timeout-safe run identity; Core permission contracts;
+model-authored routing/Subflows; and created-Flow repair (t010-t023 reports).
 
-**Completed 2026-09-20:** t024 integrated t011's read-only reveal wording and
-proved the schedule-post creation lane through a normal runtime-session return.
-On its task branch, t025 ported t005's state digest onto current contracts and
-proved it in Chromium: inspect, open the wrong disclosure, close it, open the
-right disclosure; Core reported an intact state chain and reduced the four
-steps to the one replayable press. t021's multi-action work remains stale;
-reconcile it only after field entry and truthful `targetsUnchanged` evidence.
+**Completed 2026-09-20:** t024 proved schedule-post creation with read-only
+reveal wording. t025 proved a four-step disclosure exploration reduced to one
+replayable press with an intact state chain. t026 added field entry and truthful
+target stability. t021 itself remains stale; only its reconciled ideas matter.
 
-**In progress 2026-09-20 (t026):** authoring and recovery exploration now
-declare one inferred field-entry option for text controls and selects. The
-authoring path reports `targetsUnchanged: true` only when every previously
-shown handle still maps to the same selector at the same location; navigation
-and recovery stay conservative. A focused Chromium run on `social-scheduler`
-opened the composer, then entered post text, account, date, and time through the
-real content action path. Opening the modal truthfully invalidated old targets;
-all four field entries preserved them. Optional multi-action output remains the
-next task after t026 is integrated.
+**In progress 2026-09-20 (t027):** the real panel completes instruction through
+a 4/4 oracle; recording survives a full Core/browser restart and reuses the
+saved Flow with zero LLM activity. Picker-to-dataset passed with 8 rows, exact
+oracle, rendered preview, and non-empty CSV/JSON exports. One-shot same-document
+snapshot readiness reduced a clean 4-action run from 14.774 to 8.165 seconds
+(-44.7%) without removing evidence. Runtime Debug's no-reload refresh is now
+merged on t030. The real provider repair run made two calls: diagnosis followed
+by evidence exploration, not a patch call; diagnosis marked the run unachievable
+and patch unnecessary. Provider-free replay of its durable state now exposes
+`llm.runtime_patch_not_requested`, stops terminal waiting correctly, and keeps
+the provider count at two. The corrected budget/UI/grant diagnostics and closed
+result projection are integrated on t027 with focused proof. Existing semantic
+snapshot evidence already covers actionable roles and labels, so a duplicate
+node is rejected. Deterministic repair-candidate ranking over that packet is
+now live-proven with five bounded opaque candidates, a 680-byte projection, and
+focused 22/22 proof. Its provider repair stopped before dispatch because the
+preserved workspace has zero applied bootstrap adaptations; the next run needs
+a fresh current-t027 UI-created workspace. A separate pushed-`dev` production
+smoke has now passed the complete provider-free UI path: project and Flow
+creation, recording, saved four-node generation, full Core/browser restart,
+4/4 replay with the visible oracle, and Runtime Debug updating in place.
+Unified one-or-many remains isolated because its
+provider runs did not complete a Flow. Marker-less-v2 adoption is pushed on
+t028, but the user's root still needs approved stop/backup/hash/restart.
+Concurrent work is specified in
+[the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
+same-code configuration, isolated worktrees/services/profiles/stores, at most
+two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
+full gates only after live behavior passes.
 
 **Open, for the next session, in priority order:**
-1. Add field entry and truthful `targetsUnchanged`, then reconcile t021's
-   optional multi-action output against current `dev` and compare it live.
+1. Create a fresh current-t027 workspace through the real UI, then run one
+   bounded repair to seek proposal/apply/restart/reuse.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.
@@ -135,21 +140,9 @@ run unit tests, `pnpm check` and the suites as a regression net. The corpus
 measures where the product stands when a fix is believed finished; it is never
 the development loop.
 
-**Reaffirmed by the user, 2026-09-20.** Resume t011 from its preserved
-worktree. Live reproduction and same-scenario reruns come before unit tests;
-do not run the full suite after each change. The first target remains the
-schedule-post permission mismatch, followed by the created-lane timeout only
-after that scenario behaves correctly.
-
-**Live integration direction, 2026-09-20.** Add t021's optional multi-action
-exploration output to live testing after t011's permission path works, along
-with the missing field-entry option and `targetsUnchanged` signal needed for a
-fair measurement. Audit every other open task branch against `dev`; bring only
-coherent, still-needed work into the live sequence, with its own focused proof.
-
-**Next steps:** add field entry and `targetsUnchanged`; reconcile t021's
-optional multi-action output and exercise it live; then use the corpus as the
-Week 2 measurement.
+**Next steps:** live-prove deterministic repair-candidate ranking, seek the
+remaining proposal/apply/reuse path, then integrate t027 and run the Week 2
+measurement once at the coherent boundary.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -241,131 +234,44 @@ Dispatched briefs whose work has landed are archived in
 [archive/settled-worker-briefs.md](./mvp-week2-automation-loop-plan/archive/settled-worker-briefs.md).
 Current briefs live in the reports named by the Work Ledger.
 
-### Brief: w2-t011-live-permission-resume
-- Repository: this repository, with read-only inspection of FluxIQ Core
-- Task: resume t011 by reproducing `schedule-post` live, then make the smallest
-  browser-domain prompt/contract change needed so opening/showing/ticking a
-  control declares `[]`; rerun the same live scenario until its next real
-  blocker is established. Do not start with unit tests or run the corpus.
-- Required reads: this document's Current State; `reports/w2-reveal-not-commit.md`;
-  `domain/src/runtime/llm-evidence/harness-options/{exploration-terms,vocabulary}.ts`;
-  `domain/src/runtime/llm-evidence/{permission,press}.ts`; the live instruction
-  and Lab command paths already named by the report
-- Owns (may edit): the t011 worktree's browser-domain files listed above and
-  `domain/src/runtime/llm-evidence/tools.ts`,
-  `domain/src/runtime/llm-evidence/harness-options/options.ts`, and
-  `reports/w2-t011-live-permission-resume.md`
-- Must not touch: FluxIQ Core source; shared `dev` checkout; other reports;
-  tests until the live scenario behaves correctly; commits or pushes
-- Definition of done: one pre-change live run inspected call-by-call; smallest
-  focused change; same live scenario rerun and inspected; narrow tests only
-  after live success or a precisely evidenced next blocker
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-live-permission-resume.md`
+### Brief: w2-repair-candidate-ranking-live
+- Repository: paired t027 worktrees; use a fresh isolated Lab profile/store
+- Task: add a deterministic bounded repair-candidate projection over existing semantic snapshot evidence, then live-test the same failed-target class before focused tests.
+- Required reads: Current State; `reports/w2-panel-repair-result-boundary.md`; downstream `domain/src/runtime/llm-evidence/target/`, action compatibility/equivalence, and current-page packet binding.
+- Owns: the smallest downstream domain files and focused tests for projection/ranking, its existing failure-evidence binding, and `reports/w2-repair-candidate-ranking-live.md`.
+- Must not touch: Core contracts, user data/profile, shared `dev`, unrelated reports, or provider credentials in artifacts.
+- Live order: prove current evidence has candidates but no deterministic ranking; implement; rerun the same production extension/panel path; test only after it works.
+- Definition of done: bounded opaque handles plus closed match/refusal categories reach repair context; no raw DOM/HTML; exact live before/after evidence and narrow post-live checks.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-repair-candidate-ranking-live.md`
 
-### Brief: w2-t011-core-permission-seams
-- Repository: FluxIQ Core, read-only
-- Task: trace the existing instruction-derived permission comparison and the
-  plan-node handle parser to identify the smallest domain-neutral changes for
-  consequence reconciliation and Flow-step declarations. Do not implement,
-  build, or test while the live baseline is still running.
-- Required reads: downstream Current State and `reports/{w2-permission-request,w2-reveal-not-commit}.md`;
-  Core `runtime/action-permissions/`; `runtime/llm/harness-options/plan-node-handles.ts`;
-  the immediate callers that consume parsed plan handles
-- Owns (may edit): only
-  `reports/w2-t011-core-permission-seams.md` in the t011 extension worktree
-- Must not touch: any Core source, any other report, either working document,
-  test files, commits or pushes
-- Definition of done: exact data-flow and file:line evidence; proposed minimal
-  compatibility behavior; risks and one focused live proof for each seam
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-core-permission-seams.md`
+### Brief: w2-integrated-dev-ui-smoke
+- Repository: pushed downstream/Core `dev`, read-only; report written on t027
+- Task: live-test the current integrated production panel plus loaded extension end to end without an LLM call: authenticate an isolated store, create a project, record a simple fixture task, generate/save its Flow, run it from the UI, and confirm Runtime Debug updates in place.
+- Required reads: Current State; t030 Runtime Debug report; existing recording/reconnect report; normal Lab topology commands only.
+- Owns: disposable run/profile/store data and `reports/w2-integrated-dev-ui-smoke.md` only.
+- Must not touch: product source, shared `dev`, user store/profile, provider credentials, other reports, or ports 3000/49100.
+- Definition of done: exact UI checkpoints, action/oracle counts, no-reload Runtime Debug result, stage timings, and first failure if any; no provider call; no automated suite.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-integrated-dev-ui-smoke.md`
 
-### Brief: w2-open-branch-live-audit
-- Repository: this repository; paired Core branches read-only where present
-- Task: audit every open task branch against current `dev`, its existing report,
-  and current landed code. Identify which unmerged changes are still needed for
-  live Week 2 testing, which are already superseded, and which must remain held.
-- Required reads: this document's Current State; `pnpm task list`; each open
-  branch's commits/diff stat; only the report directly associated with that task
-- Owns (may edit): only
-  `reports/w2-open-branch-live-audit.md` in the shared `dev` checkout
-- Must not touch: source, tests, other reports or working documents, task
-  branches/worktrees, Core source, commits or pushes
-- Definition of done: one evidence-backed row per open branch with disposition
-  `integrate-live`, `superseded/close`, or `hold`, dependencies, overlap risks,
-  and the narrow first live proof; explicitly assess t021 batching
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-open-branch-live-audit.md`
+### Brief: w2-fresh-ui-repair-cycle
+- Repository: paired t027 worktrees after current `dev` integration; use a new isolated UI-created workspace/profile/store.
+- Task: live-prove one complete real-LLM repair proposal, human approval, corrected rerun, full restart, and deterministic zero-call reuse; begin from a bootstrap adaptation created through the production panel UI.
+- Required reads: Current State; `reports/w2-panel-repair-result-boundary.md`; `reports/w2-repair-candidate-ranking-live.md`; existing t027 live launch/run scripts only as needed.
+- Owns: disposable t027 run/profile/store data; a unique live helper under `scripts/lab/` only if required; `reports/w2-fresh-ui-repair-cycle.md`.
+- Must not touch: product/Core source, shared `dev`, user store/profile, port 3000, other reports/working docs, git history, or raw credentials/page data in artifacts.
+- Live order: create current-code workspace through the real UI; verify one applied bootstrap adaptation; introduce one semantic target drift; run bounded repair with the real provider; inspect each call and candidate projection; approve exactly one proposed target edit; rerun oracle; restart Core/browser and prove reuse with zero calls.
+- Definition of done: proposal is not pre-applied; approval changes only the intended target; corrected run passes; restarted reuse passes with provider delta zero; provider calls stay within the configured budget and exact categorical failures are reported if a closed gate stops the cycle.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-fresh-ui-repair-cycle.md`
 
-### Brief: w2-t011-created-run-timeout
-- Repository: this repository and FluxIQ Core, read-only
-- Task: diagnose why live run `run-mua7yzln-7c8d0a9d` still exhausted the
-  granted-run read-back window despite t022's `newRunId` path. Inspect the run
-  bundle call-by-call and the current request/read-back implementation; do not
-  expose page data or secrets and do not implement yet.
-- Required reads: this document's Current State; `reports/w2-run-timeout.md`;
-  the run's `evaluation.json`, `snapshots/live-llm.json`, and bounded lifecycle
-  events; `flow-lane/{persisted-flow-run,creation/lane}.ts`; Core requested-run
-  id and runtime-session/result-verification paths
-- Owns (may edit): only `reports/w2-t011-created-run-timeout.md` in the t011
-  extension worktree
-- Must not touch: source, tests, other reports/working docs, commits or pushes
-- Definition of done: exact failed stage and timeline, whether the named run
-  exists and its terminal/verdict state, root cause with file:line evidence,
-  smallest fix location, and one focused live rerun command
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-created-run-timeout.md`
-
-### Brief: w2-t011-missing-result-verification
-- Repository: this repository and FluxIQ Core, read-only
-- Task: diagnose live run `run-mua8g4li-6a746736`, whose named playback is
-  durably `succeeded` with 9/9 actions but no result-verification record while
-  the runner waits. Determine why the verification call was skipped or stuck.
-- Required reads: the bounded run bundle/project status; t012/t022 reports;
-  current execution-grant issuance, `result-verification/`, runtime-session
-  completion, and downstream settlement/read-back paths
-- Owns (may edit): only `reports/w2-t011-missing-result-verification.md` in the
-  t011 extension worktree
-- Must not touch: source, tests, other reports/working docs, commits or pushes
-- Definition of done: exact gate/call state with file:line evidence, smallest
-  coherent fix, and the same single-scenario live proof; no secret/page output
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t011-missing-result-verification.md`
-
-### Brief: w2-t024-project-database-lifetime
-- Repository: paired task t024, FluxIQ Core implementation with downstream live proof
-- Task: make the smallest coherent project-database pool lifetime change that
-  prevents a durable run-detail save from stalling during close/reopen races;
-  then rerun only `social-scheduler-schedule-post` live. Do not begin with tests.
-- Required reads: this document's Current State;
-  `reports/w2-t011-missing-result-verification.md`; Core
-  `storage/project/database.ts`, its direct pool users, and only its focused test
-- Owns (may edit): Core `packages/fluxiq/src/programs/automation-studio/storage/project/database.ts`,
-  temporary env-gated stage markers in Core `runtime/service.ts` and
-  `runtime/result-verification/run-outcome.ts` (removed before handoff), its
-  directly owned focused test if live behavior succeeds, and downstream
-  `reports/w2-t024-project-database-lifetime.md`
-- Must not touch: other Core/extension source, existing reports/working docs,
-  task t011, commits or pushes; no corpus or full suite
-- Definition of done: fix pool lifetime; same live scenario reaches terminal
-  playback plus durable `resultVerification.status: no_result` and fixture
-  oracle, or records the next precise blocker; only then run the narrowest
-  pool/type check
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-project-database-lifetime.md`
-
-### Brief: w2-t024-post-success-await-trace
-- Repository: paired task t024, both sides read-only
-- Task: while the current t024 schedule-post run remains live, trace the exact
-  unresolved await after its 9/9 successful playback. Distinguish run-detail
-  save, store release, session write, dataset listing, and verification entry
-  using closed lifecycle/SQLite/process evidence; reassess the pool hypothesis.
-- Required reads: Current State; t024 pool brief and t011 missing-verification
-  report; Core service post-success path, typed run-detail writer/repository,
-  database pool, result-verification ports; bounded live run state
-- Owns (may edit): only `reports/w2-t024-post-success-await-trace.md` in the
-  t024 extension worktree
-- Must not touch: source, tests, other reports/working docs, processes, commits
-  or pushes; no page data, secrets, build, unit suite, or new live run
-- Definition of done: name the exact unresolved promise or narrow it to the
-  smallest instrumentable boundary, explain why the first fix failed, and give
-  the next one-change live experiment
-- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t024-post-success-await-trace.md`
+### Brief: w2-mvp-latency-critical-path-audit
+- Repository: t027 downstream/Core worktrees read-only; report downstream only.
+- Task: reconstruct the current MVP creation/run latency critical path from existing sanitized live reports and code boundaries, separating provider time, panel/Core startup, snapshots, actions, persistence, verification, and UI refresh; rank the next three high-confidence optimizations.
+- Required reads: Current State; `w2-panel-load-latency-live.md`; `w2-stable-tab-latency-live.md`; `w2-runtime-command-latency-trace.md`; `w2-playback-latency-live.md`; latest creation acceptance report; only direct timing/settlement code needed to explain measurements.
+- Owns: `docs/working/mvp-week2-automation-loop-plan/reports/w2-mvp-latency-critical-path-audit.md` only.
+- Must not touch: product/tests/other docs, live processes/panel/store, provider/browser APIs, raw run/page data, t029/t033, git/shared `dev`.
+- Required output: normalized timeline table with evidence confidence; identify which waits are necessary vs accidental/serial/redundant; estimate best/likely saved time without inventing measurements; propose one live-first experiment per ranked item and explicit stop/regression oracles.
+- Definition of done: actionable latency plan tied to observed boundaries and exact owning files; no code, unit suite, provider call, or new live run.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-mvp-latency-critical-path-audit.md`
 
 ## Validation
 

@@ -98,14 +98,31 @@ export async function inspectDemoLlmAdaptationReadiness(
   }
 
   const subflows = await control.listFlowSubflows(scope.projectId, scope.flowId);
-  if (subflows.length !== 1 || !subflows[0]?.graphFlowId) fail("adaptation_readiness.topology_invalid", "Adaptation readiness requires one graph-backed owned Subflow");
-  const subflow = subflows[0];
-  const graphFlowId = nonEmpty(subflow.graphFlowId, "generated graph Flow identity");
+  if (!subflows.length || subflows.some(item => !item.graphFlowId)) fail("adaptation_readiness.topology_invalid", "Adaptation readiness requires graph-backed owned Subflows");
+  if (subflows.filter(item => item.role === "primary").length !== 1) fail("adaptation_readiness.topology_invalid", "Adaptation readiness requires exactly one primary Subflow");
   const router = await control.getFlowRouter(scope.projectId, scope.flowId);
   if (!router) fail("adaptation_readiness.topology_invalid", "Adaptation readiness requires the generated Flow Router");
-  const ownedRouteCount = [router.fallback, ...router.rules.map(rule => rule.target)]
-    .filter(target => target?.kind === "subflow" && target.subflowId === subflow.subflowId).length;
-  if (ownedRouteCount !== 1) fail("adaptation_readiness.topology_invalid", "Adaptation readiness requires exactly one route to the generated Subflow");
+
+  let run: ExistingRunDetail | undefined;
+  for (const candidate of (await control.listFlowRuns(scope.projectId, scope.flowId)).sort((left, right) => right.updatedAt - left.updatedAt)) {
+    if (candidate.status !== "succeeded") continue;
+    const detail = await control.getRunDetail(scope.projectId, candidate.runId);
+    if (detail.summary.projectId === scope.projectId && detail.summary.flowId === scope.flowId
+      && detail.actionAttempts.length > 0 && detail.actionAttempts.every(item => item.status === "succeeded")
+      && (detail.providerCallCount ?? 0) === 0 && (detail.interventions?.length ?? 0) === 0
+      && (detail.adaptationIds?.length ?? 0) === 0 && (detail.changeProposalIds?.length ?? 0) === 0
+      && (detail.summary.adaptationCount ?? 0) === 0) {
+      run = detail;
+      break;
+    }
+  }
+  if (!run) fail("adaptation_readiness.baseline_not_deterministic", "No successful zero-LLM deterministic baseline exists in the bounded Flow run history");
+  const decision = run.routeDecisions.find(item => item.routerId === router.routerId);
+  const subflow = decision ? subflows.find(item => item.subflowId === decision.selectedSubflowId) : undefined;
+  if (!subflow?.graphFlowId || !run.subflows.some(item => item.subflowId === subflow.subflowId && item.graphFlowId === subflow.graphFlowId)) {
+    fail("adaptation_readiness.topology_invalid", "Deterministic baseline did not select an owned graph-backed Subflow");
+  }
+  const graphFlowId = nonEmpty(subflow.graphFlowId, "generated graph Flow identity");
 
   const graph = await control.getExactFlow(scope.projectId, graphFlowId);
   assertNoRecordingMetadata(graph.document, "generated graph Flow");
@@ -128,21 +145,6 @@ export async function inspectDemoLlmAdaptationReadiness(
     .filter(node => node.definitionId.startsWith("web.output.dom-") && node.parameterKeys.includes("selector"))
     .map(node => Object.freeze({ nodeId: node.nodeId, definitionId: node.definitionId, parameterKeys: Object.freeze([...node.parameterKeys]) }));
   if (adaptableTargets.length < 1) fail("adaptation_readiness.target_missing", "Generated graph has no selector-bound web action for the semantic-drift adaptation lane");
-
-  let run: ExistingRunDetail | undefined;
-  for (const candidate of (await control.listFlowRuns(scope.projectId, scope.flowId)).sort((left, right) => right.updatedAt - left.updatedAt)) {
-    if (candidate.status !== "succeeded") continue;
-    const detail = await control.getRunDetail(scope.projectId, candidate.runId);
-    if (detail.summary.projectId === scope.projectId && detail.summary.flowId === scope.flowId
-      && detail.actionAttempts.length > 0 && detail.actionAttempts.every(item => item.status === "succeeded")
-      && (detail.providerCallCount ?? 0) === 0 && (detail.interventions?.length ?? 0) === 0
-      && (detail.adaptationIds?.length ?? 0) === 0 && (detail.changeProposalIds?.length ?? 0) === 0
-      && (detail.summary.adaptationCount ?? 0) === 0) {
-      run = detail;
-      break;
-    }
-  }
-  if (!run) fail("adaptation_readiness.baseline_not_deterministic", "No successful zero-LLM deterministic baseline exists in the bounded Flow run history");
 
   return Object.freeze({
     status: "passed" as const,

@@ -137,6 +137,8 @@ export async function runBoundDemoLlmExplorationFlow(config: DemoWorkspaceConfig
       return await withDemoBrowser(config, panelCookie, "demo-llm-exploration-request-run", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
       let detail;
       let execution;
+      let selectedSubflowId: string | undefined;
+      let selectedGraphFlowId: string | undefined;
       try {
         await openProjectInPanel(panelPage, config.origin, project.name, evidence);
         await openFlowInCurrentProject(panelPage, applied.flowName, evidence);
@@ -148,7 +150,19 @@ export async function runBoundDemoLlmExplorationFlow(config: DemoWorkspaceConfig
           graphFlowId: topology.graphFlowId, routerId: topology.routerId, updatedAt: new Date().toISOString(),
         };
         execution = await runDemoFlowFromPanel(panelPage, state, evidence);
-        detail = await waitForRoutedRunDetail(control, state, execution.runId, topology.nodeCount);
+        const dispatched = await control.getRunDetail(state.projectId, execution.runId);
+        const decision = dispatched.routeDecisions.find(item => item.routerId === topology.routerId);
+        const selected = decision
+          ? (await control.listFlowSubflows(state.projectId, state.flowId)).find(item => item.subflowId === decision.selectedSubflowId)
+          : undefined;
+        if (!selected?.graphFlowId) throw new Error("Runtime selected a Subflow outside the applied Flow Bootstrap topology");
+        const selectedGraph = await control.getExactFlow(state.projectId, selected.graphFlowId);
+        const selectedNodeCount = Array.isArray(selectedGraph.document.nodes) ? selectedGraph.document.nodes.length : 0;
+        if (!selectedNodeCount) throw new Error("Runtime selected an empty Flow Bootstrap Subflow");
+        selectedSubflowId = selected.subflowId;
+        selectedGraphFlowId = selected.graphFlowId;
+        const selectedState = { ...state, subflowId: selected.subflowId, graphFlowId: selected.graphFlowId };
+        detail = await waitForRoutedRunDetail(control, selectedState, execution.runId, selectedNodeCount);
       } catch (cause) {
         throw boundExplorationRunFailure("browser_execution", "exploration_request_run.browser_execution_failed", cause);
       }
@@ -161,13 +175,14 @@ export async function runBoundDemoLlmExplorationFlow(config: DemoWorkspaceConfig
       }
       let validated;
       try {
+        if (!selectedSubflowId || !selectedGraphFlowId) throw new Error("Selected Flow Bootstrap topology was not retained after execution");
         const afterRecordings = recordingIds(await control.listRecordings(binding.projectId));
         validated = validateBoundExplorationRun({
           runId: execution.runId, dispatchStatus: execution.status, detailStatus: detail.summary.status,
           ...(detail.providerCallCount === undefined ? {} : { providerCallCount: detail.providerCallCount }), interventionCount: interventions.length,
           actionStatuses: detail.actionAttempts.map(attempt => attempt.status),
           selectedSubflowIds: detail.routeDecisions.map(decision => decision.selectedSubflowId), subflows: detail.subflows,
-          ownedSubflowId: topology.ownedSubflowId, graphFlowId: topology.graphFlowId,
+          ownedSubflowId: selectedSubflowId, graphFlowId: selectedGraphFlowId,
           recordingIdsBefore: [...beforeRecordings], recordingIdsAfter: [...afterRecordings],
         });
         if ((await extensionStatus(extensionPage)).recordingState !== "idle") throw new Error("Recorder is not idle after execution");
