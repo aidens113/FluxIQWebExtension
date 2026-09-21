@@ -70,8 +70,8 @@ test("first adaptation profile bounds each call strictly and lets the adaptation
   // The call count is a ceiling, not a count the certificate below requires:
   // an adaptation may gather evidence between its diagnosis and patch.
   assert.deepEqual(FIRST_LIVE_ADAPTATION_PROFILE.budget, {
-    maxInputTokens: 4_000, maxOutputTokens: 1_000, maxTotalTokensPerRequest: 5_000,
-    maxCallsPerRun: 26, timeoutMs: 20_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    maxInputTokens: 48_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 56_000,
+    maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.task, "adapt");
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.approvalMode, "manual");

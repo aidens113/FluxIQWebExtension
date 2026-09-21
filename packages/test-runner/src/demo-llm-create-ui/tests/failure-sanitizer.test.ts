@@ -14,7 +14,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readSanitizedGenerationFailure, readSanitizedSettingsSaveFailure } from "../index.js";
+import { readSanitizedGenerationFailure, readSanitizedSettingsSaveFailure, sanitizeGenerationFailureBody } from "../index.js";
 import { readCreateUiSource } from "./module-source.js";
 import { WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_EVIDENCE_RESULT_CODES, WEB_LLM_EVIDENCE_TOOL_IDS, WEB_LLM_INSPECT_TOOL_ID } from "@fluxiq-web-extension/domain/node";
 
@@ -111,6 +111,12 @@ test("generation failures retain only Core-validated bounded diagnostics", async
     outputTokens: 100,
     totalTokens: 1000,
   });
+  const consumedOnce = sanitizeGenerationFailureBody(400, JSON.stringify({
+    ok: false,
+    error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).",
+    payload: { diagnostic },
+  }));
+  assert.deepEqual(consumedOnce, known);
 
   const truncated = await readSanitizedGenerationFailure(response(400, JSON.stringify({
     ok: false,

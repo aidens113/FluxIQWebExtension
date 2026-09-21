@@ -290,6 +290,10 @@ export async function installRuntimeActionEvidence(page: Page, evidence: Browser
       || typeof value.commandId !== "string"
       || typeof value.actionType !== "string"
     ) throw new Error("Extension emitted an invalid action-evidence boundary");
+    // Core's state snapshots are already durable runtime evidence. Capturing a
+    // second Lab screenshot around each snapshot command only stalls the
+    // command acknowledgement and adds no user-action boundary evidence.
+    if (value.actionType === "web.dom.capture_snapshot") return;
     await evidence.runtimeActionBoundary({
       phase: value.phase,
       commandId: value.commandId,

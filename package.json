@@ -51,6 +51,7 @@
     "lab:test": "node --test \"scripts/lab/**/tests/*.test.mjs\"",
     "lab:interactive": "node scripts/lab/run-lab.mjs interactive",
     "lab:pair": "node scripts/lab/pair.mjs",
+    "panel:golden": "pnpm --filter @fluxiq-web-extension/scenario-lab build && pnpm --filter @fluxiq-web-extension/extension test:e2e:build && pnpm --filter @fluxiq-web-extension/test-runner... build && node scripts/run/panel-golden-path.mjs",
     "real-site:policy": "pnpm --filter @fluxiq-web-extension/real-site-policy build && node packages/real-site-policy/dist/cli.js",
     "structure:check": "node scripts/structure-audit.mjs",
     "structure:baseline": "node scripts/structure-audit.mjs --update",
