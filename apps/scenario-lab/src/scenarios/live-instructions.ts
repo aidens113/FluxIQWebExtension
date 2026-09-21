@@ -1,6 +1,8 @@
 import { REPLY_TICKET, TRIAGE_AGENT } from "./support-desk/index.js";
 import { LINE_ITEM_ORDER, REFUND_ORDER } from "./order-operations/index.js";
 import { SOCIAL_NETWORK_FEED_TASKS } from "./social-network-feed/index.js";
+import { COMPANY_WEBSITE_LIVE_TASKS } from "./company-website/index.js";
+import { PROFESSIONAL_NETWORK_LIVE_TASKS } from "./professional-network/index.js";
 
 /**
  * Plain-English instructions for live Flow creation against the scenario
@@ -752,6 +754,8 @@ const TASKS: LiveInstructionTask[] = [
     expectedDatasetId: "extract-conversation",
   },
   ...SOCIAL_NETWORK_FEED_TASKS,
+  ...COMPANY_WEBSITE_LIVE_TASKS,
+  ...PROFESSIONAL_NETWORK_LIVE_TASKS,
 ];
 
 export const LIVE_INSTRUCTION_TASKS: readonly LiveInstructionTask[] = Object.freeze(TASKS.map((task) => Object.freeze({ ...task })));
