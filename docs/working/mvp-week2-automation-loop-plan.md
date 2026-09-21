@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-20. Live creation, exploration-state reduction, and field-entry continuity are proven; optional multi-action exploration is under live comparison, with concurrent lanes planned but not started.
+Status detail: Executing 2026-09-20. Live creation, reduction, field entry, batch safety, real-provider creation, and panel recording/generation are proven; runtime, playback/reuse, and panel blockers remain under live repair.
 Created: 2026-09-15
 Last updated: 2026-09-20
 Owner: Senior supervisor agent
@@ -70,21 +70,22 @@ right disclosure; Core reported an intact state chain and reduced the four
 steps to the one replayable press. t021's multi-action work remains stale;
 reconcile it only after field entry and truthful `targetsUnchanged` evidence.
 
-**In progress 2026-09-20 (t027):** t026 is integrated. A focused Chromium A/B
-performed the same six actions while optional multi-action output reduced
-provider decisions from six to three. One real-provider run entered all four
-fields, then stopped on permission when the model attempted a lasting press
-during exploration; a later retry hit a transient generation HTTP 400, and the
-next retry was stopped at the user's request. The experiment remains
-uncommitted and unmerged. Concurrent worker execution is specified in
+**In progress 2026-09-20 (t027):** t026 is integrated. Chromium A/B reduced
+six actions from six decisions to three; all five focused batch-safety rows
+passed. Matching real-provider baseline and batching runs both created and
+passed the same nine-action Flow oracle. New sanitized telemetry proved two
+later provider runs chose zero batches, so adoption remains open; the failed
+wording experiment was excluded. Panel storage initialization and autofill
+repairs and bounded host-state playback are integrated on t027. The real panel
+reaches generation preflight; evidence-runtime binding remains under live repair. The production panel plus loaded extension now passes recording through generated Subflow and rendered-layout validation in 18.9 seconds after correcting a stale Lab predicate for a legitimate recorder scroll; playback/reuse remains separate. Explicit safe adoption of a marker-less v2 root is merged and pushed on t028, but applying it to the user's root still requires an approved stop, private backup, hash check, and restart. Concurrent work is specified in
 [the live-testing plan](./mvp-week2-automation-loop-plan/reports/w2-concurrent-live-testing-plan.md):
 same-code configuration, isolated worktrees/services/profiles/stores, at most
 two provider lanes, a panel UI lane, supervisor evidence barriers, and unit /
 full gates only after live behavior passes.
 
 **Open, for the next session, in priority order:**
-1. Add field entry and truthful `targetsUnchanged`, then reconcile t021's
-   optional multi-action output against current `dev` and compare it live.
+1. Finish t027 panel evidence binding, bounded playback, recording/reuse,
+   and a real-provider completed batch; then close the golden path and integrate.
 2. The model result check disagrees with itself on identical input at
    temperature 0. Designed fix (t022 report): a single "does not answer" triggers
    one repeat; disagreement records `unverified`, never pass or fail.

@@ -352,3 +352,406 @@ budgets.
   gaps rather than claiming coverage, and passes a narrow build/type check;
   live run remains a separate isolated validation lane
 - Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-golden-orchestrator.md`
+
+### Brief: w2-t027-provider-baseline
+- Repository: pinned t027 validation pair, source read-only
+- Task: run the real DeepSeek `social-scheduler-schedule-post` created-Flow
+  lane with `--llm-max-actions-per-decision 1`; inspect artifacts call by call.
+- Required reads: Week 2 Current State; concurrent plan acceptance/stop rules;
+  batch-control report; only this run's sanitized artifacts
+- Owns (may edit): only main t027
+  `reports/w2-t027-provider-baseline.md`; run artifacts stay ignored
+- Must not touch: source/tests/other reports, manual panel, commits/pushes, or
+  retry except one recognized provider/facility transient
+- Definition of done: record exact candidate hashes, instance/run root, run id,
+  elapsed time, calls/actions/tokens/cost, Flow/proposal/playback/oracle outcome,
+  stop reason, and call-by-call evidence classification without page content
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-provider-baseline.md`
+
+### Brief: w2-t027-provider-batching
+- Repository: separate pinned t027 validation pair, source read-only
+- Task: run the identical real DeepSeek created-Flow lane with
+  `--llm-max-actions-per-decision 16`; prove a completed batch and inspect all
+  later-action stop boundaries call by call.
+- Required reads: same as baseline brief; only this lane's sanitized artifacts
+- Owns (may edit): only main t027
+  `reports/w2-t027-provider-batching.md`; run artifacts stay ignored
+- Must not touch: source/tests/other reports, manual panel, commits/pushes, or
+  retry except one recognized provider/facility transient
+- Definition of done: same measurements as baseline plus batch sizes/positions,
+  stop codes, proof no later action crossed a stop, and fair A/B classification
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-provider-batching.md`
+
+### Brief: w2-panel-storage-layout
+- Repository: paired t027, read-only diagnosis except unique report
+- Task: reproduce/trace PANEL-002, where creating an Automation Studio project
+  reports that program document transactions require storage layout v2;
+  identify whether safe framework migration, launch setup, or product UI is
+  missing. Preserve all user/runtime data.
+- Required reads: manual finding PANEL-002; Core storage-layout/setup/migration
+  route and project creation transaction path; bounded server trace/metadata
+- Owns (may edit): only downstream
+  `reports/w2-panel-storage-layout.md`
+- Must not touch: `.fluxiq` contents, source/tests, manual inbox, running panel,
+  processes, commits/pushes, or any migration/reset
+- Definition of done: exact root cause and current layout state without private
+  data; safe non-destructive fix path; owned files for implementation; focused
+  live retest steps and compatibility risk
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-storage-layout.md`
+
+### Brief: w2-t027-panel-live
+- Repository: pinned t027 panel validation pair, source read-only
+- Task: finish isolated provisioning and execute `pnpm panel:golden` through
+  the production FluxIQ panel/extension, preserving exact Flow identity across
+  typed creation, review/apply, run, repair, rerun, restart/reuse, and recording.
+- Required reads: panel-golden-path and orchestrator reports; concurrent plan
+  acceptance/stop rules; only this run's sanitized evidence bundles
+- Owns (may edit): only main t027 `reports/w2-t027-panel-live.md`; ignored
+  artifacts stay in the assigned panel run/workspace directories
+- Must not touch: source/tests/other reports, user's port-3000 panel/runtime
+  data, commits/pushes, or credentials outside process-local environment
+- Definition of done: run the actual panel launcher; record every visible stage
+  as verified/unverified/failed, exact IDs/codes/counts/timings/oracles, first
+  real blocker, and no claim of completion from API state alone
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-live.md`
+
+### Brief: w2-panel-autofill
+- Repository: paired t027; live reproduction and focused Core web UI fix
+- Task: reproduce PANEL-003 in Chromium, identify why ordinary authenticated
+  forms are classified as login forms, then add the narrow semantic/autocomplete
+  correction without weakening the real login/password-manager experience.
+- Required reads: manual finding PANEL-003; affected rendered form components;
+  AuthShell login form as the positive control; direct UI test ownership
+- Owns (may edit): only confirmed affected Core `apps/web/src/` form/component
+  files, their directly owned focused tests, and downstream
+  `reports/w2-panel-autofill.md`
+- Must not touch: storage/runtime data, downstream production source, other
+  reports/working docs, provider lanes, commits/pushes, or full suites
+- Definition of done: live browser reproduction first; ordinary forms no longer
+  expose credential-field semantics while login retains correct username /
+  current-password autocomplete; focused live retest then narrow UI tests
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-autofill.md`
+
+### Brief: w2-panel-runtime-initialization
+- Repository: paired t027; Core web implementation with isolated live proof
+- Task: fix PANEL-002 by serializing awaited panel runtime initialization and
+  running setup only for genuinely fresh storage before authentication writes;
+  fail closed for legacy/incomplete layouts and preserve all existing data.
+- Required reads: PANEL-002 and storage-layout report; Core web
+  `lib/fluxiq.ts`, `instrumentation.ts`, their focused tests; framework setup
+  state contract only
+- Owns (may edit): Core `apps/web/src/lib/fluxiq.ts`,
+  `apps/web/src/instrumentation.ts`, directly owned focused test, downstream
+  `reports/w2-panel-runtime-initialization.md`
+- Must not touch: user's `.fluxiq`, migration implementation/API/UI, unrelated
+  Core/downstream source, other reports/docs, commits/pushes, or full suites
+- Definition of done: isolated empty-root panel creates v2 marker before login,
+  first login/project creation/restart works live, legacy/incomplete roots do
+  not auto-migrate; only after live pass run focused tests/check
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-runtime-initialization.md`
+
+### Brief: w2-t027-single-action-context
+- Repository: isolated baseline validation pair; Core fix, downstream read-only
+- Task: trace the live `flow_bootstrap.provider_evidence_loop_context_invalid`
+  produced only by `maxActionsPerDecision=1`, make the smallest context/schema
+  fix, and rerun the identical real-provider baseline before any unit tests.
+- Required reads: provider-baseline report and sanitized failed run artifact;
+  Core evidence-loop decision schema plus the direct provider context validator
+- Owns (may edit): isolated Core evidence-loop and directly responsible
+  `runtime/llm/harness/` context/schema files, directly owned focused test only
+  after live success, and main downstream
+  `reports/w2-t027-single-action-context.md`
+- Must not touch: main task source, batching/panel lanes, user panel/data,
+  unrelated Core/downstream files, commits/pushes, or full suites
+- Definition of done: exact context rejection proven; smallest fix; same frozen
+  baseline reaches provider and either creates/runs/passes its Flow or exposes
+  the next product blocker; narrow test only after live success
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-single-action-context.md`
+
+### Brief: w2-t027-batch-telemetry
+- Repository: isolated batching validation pair; paired implementation/rerun
+- Task: publish the minimum sanitized per-decision batch telemetry needed to
+  prove real multi-action use—action count/ordinals, closed result codes, and
+  stop code—without prompts, inputs, selectors, page evidence, or values; then
+  rerun the identical batching lane live.
+- Required reads: provider-batching report; Core evidence trace audit detail /
+  batch trace types; downstream creation snapshot projection and validation
+- Owns (may edit): isolated Core batch/audit projection files, isolated
+  downstream creation/live snapshot projection files and directly owned tests
+  only after live proof, plus main report `reports/w2-t027-batch-telemetry.md`
+- Must not touch: main task source, baseline/panel lanes, user panel/data,
+  unrelated files, commits/pushes, or full suites
+- Definition of done: sanitized artifact proves or disproves completed batches
+  and every stop boundary; identical real-provider candidate rerun passes Flow,
+  playback, and oracle; narrow tests only after live success
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-batch-telemetry.md`
+
+### Brief: w2-t027-panel-driver-fix
+- Repository: isolated panel validation pair; downstream driver fix/rerun
+- Task: make `panel:golden` prepare its blank workspace before creation and
+  make the project-name/PIN locators match the current required-field labels;
+  rerun the same production panel lane immediately.
+- Required reads: panel-live report; golden orchestrator lane/launcher; blank
+  workspace preparation driver and existing working provisioning locator
+- Owns (may edit): isolated downstream `panel-golden-path/lane.ts`, directly
+  responsible blank-workspace driver locator file, focused tests only after
+  live progression, and main report `reports/w2-t027-panel-driver-fix.md`
+- Must not touch: Core/product UI, main task source, user panel/data, provider
+  A/B lanes, unrelated files, commits/pushes, or full suites
+- Definition of done: actual panel progresses past project creation and into
+  the next visible stage or completes; inspect browser evidence; add narrow
+  tests only after live progression; report next exact blocker honestly
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-driver-fix.md`
+
+### Brief: w2-t027-panel-driver-labels
+- Repository: isolated panel validation pair; downstream driver fix/rerun
+- Task: replace the remaining brittle exact-label assumptions in the current
+  blank-workspace form with semantic locators matching the production UI,
+  beginning with Description; rerun `panel:golden` immediately after the
+  smallest coherent locator repair.
+- Required reads: panel-driver-fix report; blank-workspace driver; production
+  Create Project form markup; existing focused preparation tests
+- Owns (may edit): isolated downstream blank-workspace driver, its directly
+  owned focused tests only after live progression, and main report
+  `reports/w2-t027-panel-driver-labels.md`
+- Must not touch: Core/product UI, main task source, user panel/data, provider
+  A/B lanes, unrelated files, commits/pushes, or full suites
+- Definition of done: actual production panel clears Description and advances
+  to the next visible stage or completes; inspect browser evidence, then run
+  only the narrow owned test; report the next exact blocker honestly
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-driver-labels.md`
+
+### Brief: w2-t027-panel-token-confirmation
+- Repository: isolated panel validation pair; downstream driver fix/rerun
+- Task: align the golden-path driver's high-token confirmation boundary with
+  the production UI contract at equality, confirm through the visible panel,
+  and rerun from the same isolated golden path immediately.
+- Required reads: panel-driver-labels report; panel golden-path lane; production
+  UI high-token confirmation condition and diagnostic contract
+- Owns (may edit): isolated downstream panel golden-path driver/launcher,
+  directly owned focused tests only after live progression, and main report
+  `reports/w2-t027-panel-token-confirmation.md`
+- Must not touch: Core/product UI, main task source, user panel/data, unrelated
+  files, provider batch lane, commits/pushes, or full suites
+- Definition of done: the visible confirmation is handled at the exact
+  production threshold and the real API/provider request begins; continue to
+  the next visible stage or report its exact first blocker; run only narrow
+  owned tests after the live attempt
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-token-confirmation.md`
+
+### Brief: w2-t027-batch-adoption
+- Repository: isolated batching validation pair; paired prompt/rerun iteration
+- Task: use the successful telemetry rerun to identify why the provider chose
+  only single actions, make the smallest Core instruction/schema-description
+  change that clearly prefers multiple ordered actions when they are safe and
+  target-stable, then rerun the identical real-provider lane.
+- Required reads: batch-telemetry report; evidence-loop system instruction and
+  tool schema; sanitized batch counts only (never prompt/page evidence/values)
+- Owns (may edit): isolated Core evidence-loop prompt/schema-description files,
+  directly owned focused tests only after live proof, and main report
+  `reports/w2-t027-batch-adoption.md`
+- Must not touch: batch telemetry projection except to retain its existing
+  scoped diff, downstream product source, panel/user data, unrelated files,
+  commits/pushes, or full suites
+- Definition of done: identical real-provider run creates/applies the Flow,
+  passes playback/oracle, and sanitized telemetry proves at least one decision
+  completed two or more actions; otherwise report the exact adoption evidence
+  and next smallest lever without claiming batching success
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-batch-adoption.md`
+
+### Brief: w2-t027-panel-generation-response
+- Repository: isolated panel validation pair; downstream observability/rerun
+- Task: preserve a sanitized generation-response status, closed diagnostic
+  code/stage, and visible panel error when the confirmed Explore/create request
+  settles; rerun the identical production panel path and diagnose the response.
+- Required reads: panel-token-confirmation report; golden-path lane; production
+  generation API/UI response contract; existing event/error sanitization
+- Owns (may edit): isolated downstream panel golden-path driver and directly
+  owned event/test types, focused tests only after live progression, and main
+  report `reports/w2-t027-panel-generation-response.md`
+- Must not touch: Core/product UI, main task source, user panel/data, batch lane,
+  unrelated files, commits/pushes, or full suites
+- Definition of done: live evidence records the response status plus only
+  closed safe diagnostic fields/visible generic error, and either advances to
+  proposal review or identifies the exact next product/driver blocker; narrow
+  owned tests run only after the live attempt
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-generation-response.md`
+
+### Brief: w2-t027-panel-busy-confirmation
+- Repository: isolated panel validation pair; downstream driver fix/rerun
+- Task: after approving the visible high-token confirmation, treat that same
+  modal's disabled/busy `Building...` state as transitional rather than a new
+  confirmation, then await response, visible alert, proposal, or timeout.
+- Required reads: panel-generation-response report; golden terminal observer;
+  production confirmation modal busy/close behavior and response events
+- Owns (may edit): isolated downstream panel golden-path observer/driver and
+  directly owned focused tests only after live progression, plus main report
+  `reports/w2-t027-panel-busy-confirmation.md`
+- Must not touch: Core/product UI, user panel/data, batch lane, unrelated files,
+  commits/pushes, or full suites
+- Definition of done: the same production panel run advances beyond the busy
+  confirmation into a real response/alert/proposal or reaches its true timeout;
+  evidence records only sanitized status/code/stage and provider counts
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-busy-confirmation.md`
+
+### Brief: w2-t027-panel-preflight-diagnosis
+- Repository: isolated panel validation pair; downstream diagnosis/rerun
+- Task: project the response's closed pre-provider diagnostic stage and bounded
+  issue codes, trace them to the exact panel/Core contract mismatch, apply only
+  the smallest in-scope repair if downstream-owned, and rerun the real UI path.
+- Required reads: panel-busy-confirmation report; generation API response and
+  Flow Bootstrap diagnostic contracts; corresponding panel request builder
+- Owns (may edit): isolated downstream golden observer/request builder and
+  directly owned tests; if the defect is Core-owned, report the exact file/seam
+  without editing it; main report `reports/w2-t027-panel-preflight-diagnosis.md`
+- Must not touch: unrelated Core/product UI, user panel/data, batch lane,
+  unrelated files, commits/pushes, full suites, or raw prompt/page evidence
+- Definition of done: live response records closed stage/issue codes and the
+  exact contract mismatch; a downstream fix, if applicable, advances to a
+  provider call/proposal or reports the next blocker; narrow tests follow live
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-t027-panel-preflight-diagnosis.md`
+
+### Brief: w2-panel-existing-root-recovery
+- Repository: main t027 panel root plus Core, strictly read-only diagnosis
+- Task: determine the official non-destructive recovery path for the user's
+  marker-less root created before awaited initialization, preserving its auth
+  database and any state; do not execute migration, setup, reset, or writes.
+- Required reads: PANEL-002 diagnosis/runtime reports; Core storage inspection,
+  migration source/tests/operations doc; metadata-only current root inventory
+- Owns (may edit): only main report
+  `reports/w2-panel-existing-root-recovery.md`
+- Must not touch: user's `.fluxiq` contents, running port-3000 panel, source,
+  tests, branches, commits/pushes, raw database rows, credentials, or secrets
+- Definition of done: report current layout classification, which official
+  operation applies, its backup/rollback and server-stop requirements, exact
+  expected file transitions, risks, and whether explicit user approval is
+  required before the supervisor may execute it
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-existing-root-recovery.md`
+
+### Brief: w2-host-state-command-timeout
+- Repository: isolated paired t027 unit; downstream runtime repair/live proof
+- Task: apply a finite command timeout to web host snapshot/route-state gateway
+  captures so a missing browser answer cannot leave created-Flow playback
+  running beyond its HTTP/read-back windows; rerun one created Flow live first.
+- Required reads: `reports/w2-t011-created-run-timeout.md`; downstream host
+  runtime/dispatcher; ordinary action timeout contract; current adoption hang
+- Owns (may edit): downstream `domain/src/runtime/host-runtime.ts`, its directly
+  owned focused tests only after live proof, and main report
+  `reports/w2-host-state-command-timeout.md`
+- Must not touch: Core, batch prompt/telemetry, panel/user data, unrelated files,
+  commits/pushes, full suites, or raise outer HTTP/grant timeouts
+- Definition of done: real created-Flow playback either completes normally or
+  fails terminally with a bounded host-state timeout and readable run detail;
+  it must not remain running through the 600-second read-back; narrow tests
+  follow the live result
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-host-state-command-timeout.md`
+
+### Brief: w2-uncommitted-v2-adoption
+- Repository: isolated paired t027 unit; Core framework recovery implementation
+- Task: add an explicit, fail-closed recovery seam for a marker-less root that
+  contains only valid v2-owned top-level state, preserving existing databases
+  byte-for-byte and writing only the missing v2 commit marker; never auto-adopt.
+- Required reads: existing-root-recovery report; Core storage layout/migration,
+  framework public API and tests; operations docs; panel initialization contract
+- Owns (may edit): Core framework storage inspection/recovery/API and directly
+  owned focused tests/docs, plus main downstream report
+  `reports/w2-uncommitted-v2-adoption.md`
+- Must not touch: user's `.fluxiq` or server, downstream product source, batch/
+  panel lanes, unrelated files, commits/pushes, full suites, or automatic startup
+- Definition of done: isolated live fixture made through real fresh panel/auth
+  then stripped only of its marker is explicitly adopted and restarts with auth
+  intact; byte hash of preexisting DB is unchanged; legacy roots, journal,
+  unknown/ambiguous entries, and malformed DB fail without writes; focused tests
+  only after live proof
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-uncommitted-v2-adoption.md`
+
+### Brief: w2-panel-evidence-runtime-binding
+- Repository: isolated panel pair; Core diagnostic/root-cause repair and rerun
+- Task: give an absent evidence runtime/tools its own closed pre-provider code,
+  expose only bounded binding/tool-count status, reproduce through the panel,
+  trace the instance mismatch or earlier exception, fix the smallest Core-owned
+  cause, and rerun the real UI path.
+- Required reads: panel-preflight-diagnosis report; Core Flow Bootstrap
+  evidence-guided branch/catch; web runtime instance lifecycle/status; downstream
+  host registration and five-tool binding seam
+- Owns (may edit): isolated Core automation service failure vocabulary/status,
+  Core web runtime status or lifecycle files, directly owned focused tests only
+  after live evidence, and main report `reports/w2-panel-evidence-runtime-binding.md`
+- Must not touch: downstream request/product source, user panel/data, batch lane,
+  unrelated files, commits/pushes, full suites, or expose tools/input details
+- Definition of done: panel status/response distinguishes missing binding from
+  other preflight failure; root cause is fixed so real panel reaches a provider
+  call/proposal, or exact remaining Core exception is reported; narrow tests
+  follow live progression
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-panel-evidence-runtime-binding.md`
+
+### Brief: w2-batch-schema-order
+- Repository: fresh isolated paired t027 unit; Core schema experiment/live proof
+- Task: place the existing multi-action evidence-decision schema variant before
+  singular variants without changing wording or semantics, then rerun the same
+  real-provider created-Flow lane with integrated sanitized telemetry.
+- Required reads: batch-adoption and batch-telemetry reports; evidence decision
+  schema ordering and existing provider validator tests
+- Owns (may edit): isolated Core evidence-batch schema ordering and directly
+  owned focused tests only after live proof, plus main report
+  `reports/w2-batch-schema-order.md`
+- Must not touch: prior failed wording diff, host timeout, panel/user data,
+  unrelated files, commits/pushes, or full suites
+- Definition of done: Flow creation/playback/oracle pass and telemetry proves at
+  least one decision completed two or more actions; otherwise record the exact
+  zero-adoption evidence and do not integrate the experiment
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-batch-schema-order.md`
+
+### Brief: w2-recording-panel-live
+- Repository: fresh isolated paired t027 candidate; live validation/report only
+- Task: exercise the real panel plus loaded extension recording path end to end:
+  start recording, perform the scenario task, stop/finalize, inspect the visible
+  timeline, generate/apply its deterministic Flow/Subflow, run it, and reuse it.
+- Required reads: panel-golden-path/orchestrator reports; existing demo recording
+  drivers and one stable recording scenario; only this run's sanitized artifacts
+- Owns (may edit): only main report `reports/w2-recording-panel-live.md`; ignored
+  run artifacts stay in assigned isolated roots
+- Must not touch: source/tests, user panel/profile/data, provider batch lane,
+  unrelated reports, commits/pushes, or full suites
+- Definition of done: record every visible stage with exact stable IDs/counts/
+  timings and page oracle; distinguish UI/extension/API evidence; if blocked,
+  stop at and report the first exact product/driver failure without API-only pass
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-recording-panel-live.md`
+
+### Brief: w2-repair-reuse-live
+- Repository: fresh isolated paired t027 candidate; real-provider live report
+- Task: run one existing created Flow into a controlled target drift, observe
+  failure diagnosis and LLM repair, review/apply the repaired Flow, rerun to a
+  passing oracle, restart the runtime, then reuse the saved repair without LLM.
+- Required reads: t016 created-Flow repair and t025 state-digest reports; current
+  repair/reuse driver; one stable scenario manifest; sanitized artifacts only
+- Owns (may edit): downstream repair/reuse or blank-workspace driver locators
+  when an exact live UI mismatch proves them stale, directly owned focused tests
+  only after live progress, and main report `reports/w2-repair-reuse-live.md`;
+  ignored artifacts stay in unique isolated roots
+- Must not touch: source/tests, user panel/profile/data, recording/batch lanes,
+  unrelated reports, commits/pushes, full suites, or retry model decisions
+- Definition of done: exact Flow/adaptation/run IDs remain continuous; first run
+  fails for intended drift, repair is visibly reviewable/applied, rerun and
+  oracle pass, restarted reuse makes zero provider calls; otherwise report the
+  first exact blocker and mutation boundary
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-repair-reuse-live.md`
+
+### Brief: w2-unified-evidence-decision-live
+- Repository: fresh isolated paired t027 candidate; Core schema experiment/live proof
+- Task: replace the competing singular evidence tool-call variants plus optional
+  batch variant with one provider-facing `tool_calls` wrapper accepting one to
+  the existing bounded maximum, while preserving completion, internal singular
+  semantics, ordered execution, permission checks, and every batch stop rule.
+- Required reads: batch telemetry/adoption/schema-order reports; evidence-loop
+  decision schema/parser; evidence-batch schema/reader/coordinator
+- Owns (may edit): isolated Core evidence decision/batch schema, parser and
+  directly owned focused tests only after live proof; main report
+  `reports/w2-unified-evidence-decision-live.md`
+- Must not touch: failed wording/order diffs, downstream source, user panel/data,
+  recording/repair lanes, unrelated files, commits/pushes, or full suites
+- Definition of done: identical real-provider schedule-post creation, playback,
+  and oracle pass; telemetry proves at least one decision executes two or more
+  actions. Otherwise record the exact first failure/zero-adoption evidence and
+  leave the experiment isolated. Compare provider calls/build and total time.
+- Report to: `docs/working/mvp-week2-automation-loop-plan/reports/w2-unified-evidence-decision-live.md`

@@ -1,7 +1,7 @@
 # Manual Panel Test Findings
 
 Status: Active
-Status detail: User-facing inbox for manual FluxIQ panel and extension testing; PANEL-001 is fixed by launch configuration and awaiting user retest.
+Status detail: Login is closed; storage initialization and explicit safe root adoption are proven, while protected application to the user's root and an autofill retest remain.
 Created: 2026-09-20
 Last updated: 2026-09-20
 Owner: User for submission; senior supervisor agent for triage and closure
@@ -24,8 +24,9 @@ defined and linked to the concurrent live-testing campaign. PANEL-001 traced a
 login HTTP 500 to a missing importer-root launch setting; the panel was
 restarted with the t027 downstream checkout as owner.
 
-**Next:** the user retests PANEL-001, then records further observations without
-including secrets or private recorded-page content.
+**Next:** apply PANEL-002 only after an approved panel stop and verified private
+backup, then retest PANEL-003 in the user's browser. Findings must not include
+secrets or private recorded-page content.
 
 **Blockers:** none.
 
@@ -38,6 +39,8 @@ template would interrupt testing. Include approximately what you clicked,
 what you expected, what happened, and when. The supervisor will structure it.
 
 <!-- Add quick notes here. Do not include passwords, tokens, cookies, or private page data. -->
+-Got Program document transactions require FluxIQ storage layout v2: F:\fxwork\t027\!FluxIQWebExtension\.fluxiq\artifacts\automation-studio\projects\index.json when trying to create new automation studio project
+-Every form seems to make my browser think its a login form, which causes an autofill user and password which we do NOT want
 
 ---
 
@@ -48,7 +51,7 @@ new findings. It is fine to leave unknown fields blank.
 
 ### PANEL-001 — Login returned HTTP 500 when panel lacked importer root
 
-- Status: Ready for retest
+- Status: Closed
 - Reported: 2026-09-20, America/Los_Angeles
 - Build or branch shown in panel: paired t027 candidate
 - Browser and version: user browser, version not reported
@@ -64,8 +67,55 @@ new findings. It is fine to leave unknown fields blank.
 - Worker report: server trace showed `resolveFluxIQWebHostRoot` refused the
   framework checkout because no importing repository root was configured
 - Supervisor verification: panel restarted with
-  `FLUXIQ_IMPORTER_ROOT=F:\fxwork\t027\!FluxIQWebExtension`; user retest pending
-- Retest requested: yes
+  `FLUXIQ_IMPORTER_ROOT=F:\fxwork\t027\!FluxIQWebExtension`; server recorded a
+  successful login, forced password replacement, and authenticated panel load
+- Retest requested: completed
+
+### PANEL-002 — Creating an Automation Studio project requires storage layout v2
+
+- Status: In progress
+- Reported: 2026-09-20, America/Los_Angeles
+- Build or branch shown in panel: paired t027 candidate
+- Browser and version: user browser, version not reported
+- Panel URL or test instance: `http://127.0.0.1:3000`
+- Starting state: authenticated Automation Studio, creating a new project
+- Expected: new project is created or a supported migration prompt is shown
+- Actual: creation fails because the project index requires FluxIQ storage
+  layout v2
+- Frequency: observed once; blocks project creation
+- Visible error text or code: `Program document transactions require FluxIQ
+  storage layout v2`
+- Severity: blocking
+- Assigned worker: supervisor for protected application; implementation complete
+- Worker report: `mvp-week2-automation-loop-plan/reports/w2-panel-storage-layout.md`
+- Supervisor verification: isolated live matrix passed fresh initialization,
+  login/PIN, project creation, reload/restart, and non-mutating refusal of
+  legacy/incomplete roots; integrated focused test passed 16/16. The user's
+  marker-less existing root now has an explicit offline adoption command on
+  both pushed `dev` branches, proven with byte-identical database hashes and
+  non-mutating negative cases. It still requires an approved panel stop,
+  verified private backup, adoption, hash check, and restart.
+- Retest requested: no
+
+### PANEL-003 — Non-login forms trigger username/password autofill
+
+- Status: Ready for retest
+- Reported: 2026-09-20, America/Los_Angeles
+- Build or branch shown in panel: paired t027 candidate
+- Browser and version: user browser, version not reported
+- Panel URL or test instance: `http://127.0.0.1:3000`
+- Starting state: authenticated panel forms
+- Expected: only the actual authentication form prompts credential autofill
+- Actual: ordinary forms are classified by the browser as login forms and
+  receive username/password autofill suggestions or values
+- Frequency: appears across every form encountered
+- Severity: major
+- Assigned worker: `w2-panel-autofill`
+- Worker report: `mvp-week2-automation-loop-plan/reports/w2-panel-autofill.md`
+- Supervisor verification: scoped Core UI diff integrated on t027; isolated
+  live Chromium passed Create Project/Add Flow semantics and HTTP 200 project
+  creation; integrated focused positive/negative controls passed 7/7
+- Retest requested: yes, in the user's saved-password browser profile
 
 ### Finding template
 
