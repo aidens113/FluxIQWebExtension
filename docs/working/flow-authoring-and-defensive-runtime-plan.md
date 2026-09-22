@@ -570,6 +570,14 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 
 ---
 
+### 2026-09-22 — Wave one: the Lab's zero-call declaration and the domain's refusal detail landed
+- Agent: supervisor; workers `fa-lab-measurement`, `fa-domain-tools`
+- Changed: t080 merged (`387b314`) and t079 merged (`cdb038e`), both pushed. D0 done; A8 done but inert until the repeat rule changes; A12 blocked on a two-line Core change; A11 done on the domain side only.
+- Why: D0 unblocks every adversarial variant — without it the live-LLM guard fails each correct deterministic absorption. A8's detail is a prerequisite whose value waits on `fa-build-draft`.
+- Validation: the supervisor re-ran both worktrees rather than trusting the reports. t080: every package `# fail 0`, `test-runner # pass 1286`. t079: every package `# fail 0`, `domain # pass 730`. Both `task finish` runs reported `"command":"pnpm check","passed":true`. t080's live proof stands: `run-mud4xk2c-18c83d3d` undeclared failed `runtime.behavior` with its oracle passing, `run-mud4zvw9-2d497834` declared passed; `budget.ts` is byte-for-byte unchanged and `settleBuild` passes no declaration, both confirmed by the supervisor.
+- Outcome: Partial
+- Follow-up: the permission-gate hole (finding 1) needs its own task; A12's Core half and the strategy field join wave two; `fa-domain-tools`' three named Core edits fold into the A11 successor.
+
 ## Open Questions
 
 - Does the dry run reset the page, the workspace, or the whole browser context?
