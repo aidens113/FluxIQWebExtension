@@ -39,14 +39,17 @@ export async function closeSession(session: Session): Promise<void> {
   await session.lab.close();
 }
 
-/** Arms a variant the way the Lab does: one authorized POST of its `arm`. */
-export async function arm(session: Session, mode: string): Promise<void> {
-  const response = await fetch(`${session.lab.origin}/api/professional-network/set-mode`, {
+/**
+ * One authorized POST of a site operation: the request the Lab sends to arm a
+ * variant, and the one the page's own controls send through `GL.mutate`.
+ */
+export async function postToSite(session: Session, operation: string, payload: unknown): Promise<void> {
+  const response = await fetch(`${session.lab.origin}/api/professional-network/${operation}`, {
     method: "POST",
     headers: { authorization: `Bearer ${session.lab.runToken}`, "content-type": "application/json" },
-    body: JSON.stringify({ mode }),
+    body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error(`arming ${mode} answered ${response.status}`);
+  if (!response.ok) throw new Error(`${operation} answered ${response.status}`);
 }
 
 /** What the runner's fact probe reads for a `text` fact: the first element with the test id, its text trimmed. */

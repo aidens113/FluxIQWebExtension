@@ -84,11 +84,12 @@ Lab and site defects (P13, P16, P19); and a created Flow that dropped the
 steps exploration needed while a navigate claimed success (P17). Reports:
 `reports/w2x-e2e-lane-{a..e}.md`.
 
-**In flight:** P11 (t057), L5 (t059), N3 (t060), P8 (t061), P9 (t062), P10
-(t063), P15 (t064), P17 (t065), P13a (t066), P13b/P16/P19 (t067), U1 (t068,
-t069), P18 (t070). Done and waiting to land after round 1's Core hold: t033,
-t047, t049, t050, t051. Landed today: t027, t035, t036, t048, all ten sites,
-t058.
+**In flight:** integration branch t075, holding every finished Core-side
+task merged together (t059 with L4 and P2, t057, t065, t047, t060 in Core;
+t049, t059, t062, t065, t070, t047, t057 downstream; one import-line
+conflict resolved), under full gates in both repositories; P20 (t071), N1
+(t072), P13a (t066), P13b/P16/P19 (t067), U1 journeys (t069), P22 (t074), P23
+(t073). t033 re-merges after the batch lands.
 
 **Next:** land the held work and each fix as it verifies; then E2, the same
 campaign on the fuller product.
@@ -124,13 +125,13 @@ time without duplicated work, a shared file, or idling on an unlanded dependency
 | **P13** | Lab: scripted navigation refuses URLs with a query string; no run file records which classes `--llm-permit` granted; the Lab counts the initial observation as a decision and flags budget-using builds `performance.budget`; recording events reach Core about one per second, past the Lab's fixed 90 s wait | downstream | P8 | waiting |
 | **P15** | `extract_list` loses its read when Next loads a new document, and numbered pagination ends on a loading skeleton (selector audit, bigbox `pickup-towels`) | downstream | — | **landed** (`Merge task t064`): bigbox pickup-towels 0/9 -> 9/9 over 2 pages, product-catalog 23/23, people search 23/23 over 3 pages (content harness); cross-page field-for-field repeats dropped and documented |
 | **P16** | Scenario-lab browser-path tests for auction, crossborder and professional-network fail under load in the combined suite and pass alone; also job-board's frame-target extract step is refused `fixture.invalid` by the Lab (fold into P13) | downstream | — | waiting |
-| **P17** | The campaign's only created Flow (lane B E9, everything-store via the panel) cannot replay: its navigate reported success while the tab stayed on the start page, and the Flow kept none of the overlay dismissals exploration needed | both | — | in flight on t065 (`w2x-created-flow-fidelity`) |
+| **P17** | The campaign's only created Flow (lane B E9, everything-store via the panel) cannot replay: its navigate reported success while the tab stayed on the start page, and the Flow kept none of the overlay dismissals exploration needed | both | — | done on t065 (`81482fe` Core, `8c1f1d8` downstream): navigate now targets and verifies the watched tab (it loaded another tab before); the Flow script keeps a step per exploration change; a dismissed control's handle still resolved to another control, which P18's per-Flow numbering addresses |
 | **P18** | Exploration hands the model ambiguous handles on duplicated labels (`web.handle.ambiguous` in 6 of lane B's 12 builds), which feeds the repeat-without-progress stalls | both | — | done on t070 (`0855f46`): handles numbered once per Flow, look-alikes disambiguated; the same plan shape now resolves with none ambiguous; the needed filter was missing from the results page's 40 elements (P22) |
 | **P19** | Site defect: everything-store's recording script clicks the cookie Accept after the 4 s notifications prompt has covered the page, stopping its recording lanes and both repair tasks | downstream | — | waiting (with P13/P16) |
 | **P20** | Recovery cannot express "close the dialog, then press": its patches are a target override or a wait and retry, the 2.5 exploration reduction is computed and discarded, and nothing produces an `insert_deterministic_path` repair; the diagnosis also judged a dialog-blocked run "not achievable". Wire the reduced exploration path into a durable repair and teach the diagnosis that a blocked-by-dialog failure is recoverable | Core | L5 | in flight on t071 (`w2x-recovery-repair-path`), with the diagnosis-as-veto and 25 s call limit found by L5 |
 | **P21** | Core registers no `cancel-runtime-session` handler, so the panel's Stop returns 404 and orphaned runs block the project; Allow and run again grants only the missing classes and drops ones allowed earlier | both | — | waiting |
-| **P22** | The evidence packet can leave out the control a task needs (everything-store's "Brightaisle Plus" filter was not among the results page's 40 elements), so the model guesses | downstream | P18 | waiting |
-| **P23** | Core answers some builds with an unclassified HTTP 400 or `provider_transport_unknown` and records no inner cause (lanes A, B, E; P18; P11) | Core | — | waiting |
+| **P22** | The evidence packet can leave out the control a task needs (everything-store's "Brightaisle Plus" filter was not among the results page's 40 elements), so the model guesses | downstream | P18 | in flight on t074 (`w2x-evidence-selection`) |
+| **P23** | Core answers some builds with an unclassified HTTP 400 or `provider_transport_unknown` and records no inner cause (lanes A, B, E; P18; P11) | Core | — | in flight on t073 (`w2x-core-failure-causes`) |
 | **P24** | Core: after a PIN review the Audit tab shows 0 events until reopened, because review results omit the audit trail (`service.ts` ~4775-4802); one UI-suite run never received a run response that Core finished in 10 s | Core | — | waiting |
 | **P9** | A dismissible promotion modal is classed `web.intervention.required`, so Core's `llm.gate.manual_intervention` gives the model 0 calls; only a challenge a person must answer (the robot check) should be | both | P2 | done on t062 (`9c70af8`): a dismissible dialog ends `web.action.blocked_by_dialog` (`unexpected_state`) and Core consults the model; the robot check stays `user_intervention_required` (proven in Chromium; live blocked by P8); W14's armed offer now expects the recoverable category |
 | **P7** | After P2, builds end `evidence_limit` after 10-15 calls: the loop caps total evidence over the whole build at 64,000 bytes. Replace with a bounded per-request context window (newest evidence plus closed summaries), total bounded only by cost, tokens, deadline and progress | Core | P2 | done on t057 (`5dc461f`, with P11): no `evidence_limit` or false `tool_failed`; a per-request context window replaces the 64 KB total |
@@ -266,6 +267,22 @@ Delivered briefs are archived in [archive/delivered-briefs.md](./week2-exit-plan
 - Then focused Core flow-bootstrap and handler tests, both repositories' `check` and `build`. `service.ts` must not grow (6,275-line ratchet): put behaviour in the revision modules.
 - Owns: Core `flow-bootstrap/revision/*` (new), the minimal hooks in flow-bootstrap authoring, plan and adaptation, `service.ts` call sites, `api/handlers/llm-generation.ts` and contracts for `revise`, their tests; downstream `TR/saved-flow-revision/*` (new), `TR/live-llm/live-llm-plan.ts`, `TR/existing-fluxiq-control.ts` for `revise`, `TR/flow-lane/repair/*` only as the lane needs. Must not touch: the web UI (N4 follows), `recovery/*` (P20), `llm/evidence-loop.ts` and `loop-limits/*` (P11), other worktrees, git commits, shared `dev`, the user's panel.
 - Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-existing-flow-revision.md`
+
+### Brief: w2x-core-failure-causes
+- Repository: a paired task from `dev` in both repositories. `AS/` is Core `packages/fluxiq/src/programs/automation-studio/`.
+- Task: plan step P23. Across E1 (lanes A, B, E) and the P11 and P18 runs, Flow creation sometimes ends in an unclassified HTTP 400 or `flow_bootstrap.provider_transport_unknown`, and neither the run files nor Core's diagnostic records the inner cause, so nobody can fix it. (1) Make every such ending carry a closed inner cause — for example provider HTTP status class, provider timeout, grant revoked or expired, response not JSON, schema refusal, host transport error — never raw provider or page text; (2) find the actual causes behind the cited runs (their ids are in `reports/w2x-e2e-lane-{a,b,e}.md`, `w2x-exploration-handles.md`, `w2x-evidence-window.md`) and fix any that are FluxIQ defects rather than provider noise, such as a grant revoked after a timeout while the build still needed it.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: rerun realistic creation tasks that ended this way until one does, and show its inner cause in the run files; then show a fixed cause no longer ends a build.
+- Then focused Core tests for the generation handler and failure mapping, both repositories' `check`.
+- Owns: Core `api/handlers/llm-generation.ts`, `flow-bootstrap/generation-failure.ts`, `llm/deepseek-provider.ts` error mapping only, the grant lifetime if a revoke-after-timeout is the cause, their tests; the Lab's reading of the new cause. Must not touch: `llm/evidence-loop.ts`, `loop-limits/*`, `recovery/*`, `flow-bootstrap/revision/*` (N1), other worktrees, git commits, shared `dev`.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-core-failure-causes.md`
+
+### Brief: w2x-evidence-selection
+- Repository: paired task on P18's base (t070): its downstream plus current `dev`, and P2's Core.
+- Task: plan step P22. The evidence packet can leave out the control the task needs: on `everything-store`'s results page the "Brightaisle Plus" filter the instruction names was not among the 40 elements shown, so the model guessed and pressed the wrong filter (`reports/w2x-exploration-handles.md`). Make the packet choose what a person would look at for this instruction: rank elements by relevance to the instruction's own words and to the task's current step, keep P2's front-layer (open dialog) ranking and P18's unambiguous handles, and let the model ask for more of the page by text or region when what it needs is not shown, within the per-request context window. Bounded and closed as today: no raw page values beyond what the packet already allows, sensitive controls still withheld.
+- Live first, `FLUXIQ_TEST_ENV_FILES=none`, `persistent-isolated`: `everything-store-first-page-plus-earbuds` (and its deal-wheel variant) — the named filter appears in the packet or is found on request, the build proceeds past the filter, and if a Flow is created its extraction is judged by `matchedRecords` against `expectedRecords` with `build.providerCalls == observed.calls`.
+- Then focused domain evidence tests and `pnpm check` in both repositories.
+- Owns: the domain's `llm-evidence` element selection, ranking, packet and inspect-request code, their tests. Must not touch: Core, the extension recorder and extraction engine, other worktrees, git commits, shared `dev`.
+- Report to: `F:\!FluxIQWebExtension\docs\working\week2-exit-plan\reports\w2x-evidence-selection.md`
 
 ### Brief: w2x-lab-defects
 - Repository: task t066, flat worktree `F:\fxwork\t066-lab-defects` on the shared read-only Core (`71e2798`). `TR/` is `packages/test-runner/src/`.
@@ -462,6 +479,14 @@ Delivered briefs are archived in [archive/delivered-briefs.md](./week2-exit-plan
 - Validation: t068 test-runner printed `# pass 1239`, `# fail 0` and the provider-free `demo:llm:prepare` lane printed `PREPARE OK` on the restructured Core start; t064 extension printed `# pass 705`, `# fail 0`; both `task finish` runs reported `"command":"pnpm check","passed":true`.
 - Outcome: Partial
 - Follow-up: land the held Core batch once the flat-worktree workers (P13a, P13b, U1 journeys) finish, then sync the shared Core and run E2.
+
+### 2026-09-21 — P17 done; P22 and P23 dispatched; Core batch integrated on t075
+- Agent: supervisor; worker `w2x-created-flow-fidelity`
+- Changed: t065 committed; t073 (P23), t074 (P22); integration task t075 with the held Core-side work merged in both repositories.
+- Why: landing the held tasks one by one would move Core `dev` under the flat-worktree workers several times; one integration branch lands them together once those workers finish, after one full gate run.
+- Validation: Core merges of t059, t057, t065, t047 and t060 printed "ALL MERGED"; downstream merges printed one conflict (`run-scenario.ts` imports, resolved as the union of P8's `resetScenarioLab` and the repair lane's inputs; file 769 lines) and then "ALL MERGED"; full gates running.
+- Outcome: Partial
+- Follow-up: finish t075 into `dev` in both repositories when the gates pass and the flat workers are done; sync the shared Core; E2.
 
 ---
 

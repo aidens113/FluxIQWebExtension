@@ -25,7 +25,10 @@ type Role = Parameters<Page["getByRole"]>[0];
 type Records = Array<Record<string, string | null>>;
 let browser: Browser;
 
-before(async () => { browser = await chromium.launch({ channel: "chromium", headless: true }); });
+// Same-site tabs share one renderer process. The honest paths open a page in a new tab, and Chromium's default, a
+// new renderer process for each such tab, was measured at 24 to 30 s a tab on a CPU-saturated machine against under
+// 1.2 s with the flag. These specs judge the site, not the browser's process model.
+before(async () => { browser = await chromium.launch({ channel: "chromium", headless: true, args: ["--process-per-site"] }); });
 after(async () => { await browser?.close(); });
 
 type Session = { lab: RunningScenarioLab; context: BrowserContext; page: Page; errors: string[]; close(): Promise<void> };
@@ -197,7 +200,8 @@ describe("the job board in a browser", { concurrency: true, timeout: 120_000 }, 
         await page.locator(`article[data-jk="${posting.key}"] h2 a`).click();
         const retry = pane.getByText("Retry");
         const more = pane.getByText("···");
-        await Promise.race([retry.waitFor({ timeout: 6000 }), more.waitFor({ timeout: 6000 })]);
+        // Whichever the pane shows first. A race of two waits leaves the loser running, and its timeout, six seconds on, fails the test from outside it.
+        await retry.or(more).first().waitFor({ timeout: 6000 });
         if (await retry.isVisible()) await retry.click();
         await more.click({ timeout: 6000 });
         await pane.getByText("Save job", { exact: true }).click();
