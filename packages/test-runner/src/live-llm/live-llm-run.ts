@@ -11,7 +11,8 @@ import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { CreatedFlowBuild, PersistedFlowLlmExecution } from "../flow-lane/index.js";
 import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
-import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached } from "./budget.js";
+import { assertLiveLlmBudgetHeld } from "./budget.js";
+import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
 import type { LiveLlmExecutionGrant } from "./execution-grant.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
@@ -130,6 +131,8 @@ export class LiveLlmRun {
   /** The repair grant a created Flow's playback ran under, and what that run spent; `undefined` before each. */
   private repairGrant: LiveLlmExecutionGrant | undefined;
   private repairObserved: LiveLlmObservedUsage | undefined;
+  /** What the run's scenario declares about provider calls; `null` until the runner reads the resolved workflow, and for a scenario that declares nothing. */
+  private declaredCalls: DeclaredProviderCalls | null = null;
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
 
@@ -217,6 +220,17 @@ export class LiveLlmRun {
     assertLaneFlag(this.plan, lane.flowLane);
     if (this.createsFlow && !lane.creation) throw new RunnerFailure("fixture.invalid", "--llm-task create-flow needs an instruction task to build from, and this run carries none");
     if (!this.createsFlow && lane.creation) throw new RunnerFailure("fixture.invalid", `An instruction task is built only by --llm-task create-flow, not ${this.plan.task}`);
+  }
+
+  /**
+   * What the run's scenario or variant declares about provider calls, read
+   * once the workflow is resolved and before anything starts. A declaration
+   * holds the Flow run to spending nothing in place of the default check that
+   * it spent something (`declared-provider-calls.ts`); it never reaches the
+   * build, whose own settlement keeps that check whatever was declared.
+   */
+  expectProviderCalls(declared: DeclaredProviderCalls | null): void {
+    this.declaredCalls = declared;
   }
 
   /**
@@ -308,7 +322,7 @@ export class LiveLlmRun {
     // Read before the snapshot is written, and never allowed to fail the
     // settlement: it says what exploring did, not whether the run was legal.
     await this.readRunRecords(control, input);
-    await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {});
+    await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {}, this.declaredCalls);
   }
 
   /**
@@ -319,7 +333,9 @@ export class LiveLlmRun {
    */
   async settleBuild(build: CreatedFlowBuild, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
     this.buildRecord = build;
-    await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build });
+    // Deliberately no declaration: a build that reached no provider proposed
+    // no Flow, so "the runtime absorbed it" can never be what happened here.
+    await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build }, null);
     const { provider, model } = build.accounting ?? {};
     if ((provider != null && provider !== this.plan.provider) || (model != null && model !== this.plan.model)) {
       throw new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`);
@@ -441,12 +457,12 @@ export class LiveLlmRun {
     this.verification = await readLiveLlmVerification(once, scope);
   }
 
-  private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>): Promise<void> {
+  private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>, declared: DeclaredProviderCalls | null): Promise<void> {
     this.observed = observed;
     await this.writeSnapshot(bundle, observed, extra);
-    await publish(usageSummary(observed));
+    await publish({ ...usageSummary(observed), ...(declared ? { declaredProviderCalls: declared.count } : {}) });
     assertLiveLlmBudgetHeld(this.plan, observed);
-    assertLiveLlmProviderWasReached(this.plan, observed);
+    assertProviderCallsAsDeclared(this.plan, observed, declared);
   }
 
   /** `snapshots/live-llm.json`: what was authorized, what Core granted, and what the run spent, or `null` where that could not be read. */
@@ -482,6 +498,12 @@ export class LiveLlmRun {
         reason: this.plan.highTokenConfirmation.reason,
       },
       declared: this.plan.declared,
+      // What the scenario or variant declared this run may spend, when it
+      // declared anything: written on every snapshot, spent or not, so that a
+      // run finishing with no provider call is readable as intended rather
+      // than inferred from the zero beside it. `null` for the ordinary run,
+      // which is held to reaching a provider (`declared-provider-calls.ts`).
+      expectedProviderCalls: this.declaredCalls,
       observed,
       // What the bounded exploration did on this run, from Core's own recovery
       // trace: counts, its outcome and the code that ended it. `null` before a

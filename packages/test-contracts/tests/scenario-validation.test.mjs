@@ -36,6 +36,39 @@ test("rejects invalid scenarios before a runner can start", () => {
   assert.throws(() => assertWebScenario(invalid), ContractValidationError);
 });
 
+test("a declared zero-call expectation is accepted, and anything but an absence is refused", () => {
+  // The declaration exists so that a variant the deterministic runtime is
+  // meant to absorb can say so; `--live-llm` otherwise fails a run that
+  // correctly reached no provider. It declares an absence, never a budget --
+  // the per-run call caps stay the operator's -- so a non-zero count and a
+  // declaration with no reason are both scenario defects.
+  const declared = { ...validScenario, expected: { ...validScenario.expected, providerCalls: { count: 0, because: "the ladder re-resolves the renamed control without asking" } } };
+  assert.equal(validateWebScenario(declared).valid, true);
+  assert.equal(resolveScenarioWorkflow(declared).expected.providerCalls.count, 0);
+
+  const budgeted = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, providerCalls: { count: 2, because: "one round trip" } } });
+  assert.equal(budgeted.valid, false);
+  assert.ok(!budgeted.valid && budgeted.issues.some((entry) => entry.path === "$.expected.providerCalls.count"));
+
+  const unexplained = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, providerCalls: { count: 0 } } });
+  assert.equal(unexplained.valid, false);
+  assert.ok(!unexplained.valid && unexplained.issues.some((entry) => entry.path === "$.expected.providerCalls.because"));
+
+  const strange = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, providerCalls: { count: 0, because: "why", reason: "why" } } });
+  assert.equal(strange.valid, false);
+  assert.ok(!strange.valid && strange.issues.some((entry) => entry.path === "$.expected.providerCalls.reason"));
+});
+
+test("a variant's declaration replaces the workflow's, like every other expectation", () => {
+  const scenario = {
+    ...validScenario,
+    expected: { ...validScenario.expected, providerCalls: { count: 0, because: "the workflow's own" } },
+    variants: [{ id: "slow-render", description: "Content arrives late.", arm: { operation: "delay" }, expected: { providerCalls: { count: 0, because: "rung 2 waits for readiness" } } }],
+  };
+  assert.equal(validateWebScenario(scenario).valid, true);
+  assert.equal(resolveScenarioWorkflow(scenario, { variantId: "slow-render" }).expected.providerCalls.because, "rung 2 waits for readiness");
+});
+
 test("rejects malformed JSON with a contract error", () => {
   assert.throws(() => parseWebScenarioJson("{"), ContractValidationError);
 });

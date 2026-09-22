@@ -22,6 +22,7 @@ export function summarizeTask(task, attempts, final, bundle) {
   const recovery = evaluation?.harnessRecovery ?? flowLane?.harnessRecovery ?? null;
   const automationFailure = evaluation?.automationFailureReported ?? run?.automationFailure ?? null;
   const declaredFailure = evaluation?.automationFailureExpected ?? null;
+  const declaredSpend = liveLlm?.expectedProviderCalls ?? null;
   const oracleVerdict = evaluation?.oracleVerdict ?? result?.observation?.oracleVerdict ?? null;
   // A created Flow's repair is counted beside its build in the same record the row's tokens and dollars come from;
   // `evaluation.llm.calls`, the fallback, already counts both.
@@ -80,6 +81,15 @@ export function summarizeTask(task, attempts, final, bundle) {
     automationFailure: failureLabel(automationFailure),
     /** The failure the scenario or variant declared this run must report, when it declared one. */
     declaredFailure: failureLabel(declaredFailure),
+    /**
+     * The provider spend the scenario or variant declared, when it declared
+     * any: today only `0`, meaning the deterministic runtime was expected to
+     * absorb the fault without the model. Read from the live-LLM snapshot,
+     * which records the declaration whether or not it held, so a row showing
+     * `providerCalls: 0` says whether that silence was intended.
+     */
+    declaredProviderCalls: declaredSpend === null ? null : declaredSpend.count,
+    declaredProviderCallsBecause: declaredSpend === null ? null : declaredSpend.because,
     issueCodes: distinct([
       ...calls.flatMap((call) => call.validationCodes ?? []),
       ...(recovery?.interventions ?? []).flatMap((item) => item.validationCodes ?? []),

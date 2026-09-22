@@ -153,9 +153,27 @@ const validateFailure: Validator = (value, path, issues) => {
   optionalString(value, "code", path, issues);
 };
 
+/**
+ * `expected.providerCalls`, the declaration that a run must finish without the
+ * model. `count` is `0` and nothing else -- this declares an absence, not a
+ * budget -- and `because` must say what is expected to absorb the failure, so
+ * that the run record carries a reason a reader can weigh rather than a bare
+ * exemption.
+ */
+const validateProviderCalls: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["count", "because"], path, issues);
+  if (value.count !== 0) issue(issues, `${path}.count`, "must be 0; a declaration here says the model is not consulted at all, and the per-run call caps stay the operator's");
+  requiredString(value, "because", path, issues);
+  if (typeof value.because === "string" && value.because.length > MAX_BECAUSE_CHARS) issue(issues, `${path}.because`, `must be at most ${MAX_BECAUSE_CHARS} characters`);
+};
+
+/** One sentence, which is what the run record has room to carry. */
+const MAX_BECAUSE_CHARS = 200;
+
 const validateExpected: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["pageFacts", "recordingEvents", "actions", "finalState", "allowedConsoleErrors", "extracted", "failure"], path, issues);
+  checkKeys(value, ["pageFacts", "recordingEvents", "actions", "finalState", "allowedConsoleErrors", "extracted", "failure", "providerCalls"], path, issues);
   if (value.pageFacts !== undefined) arrayOf(value.pageFacts, `${path}.pageFacts`, issues, validateFact);
   if (value.finalState !== undefined) arrayOf(value.finalState, `${path}.finalState`, issues, validateFact);
   if (value.recordingEvents !== undefined) arrayOf(value.recordingEvents, `${path}.recordingEvents`, issues, (event, eventPath, target) => {
@@ -178,6 +196,7 @@ const validateExpected: Validator = (value, path, issues) => {
   });
   if (value.extracted !== undefined) arrayOf(value.extracted, `${path}.extracted`, issues, validateExtraction);
   if (value.failure !== undefined) validateFailure(value.failure, `${path}.failure`, issues);
+  if (value.providerCalls !== undefined) validateProviderCalls(value.providerCalls, `${path}.providerCalls`, issues);
 };
 
 const validateVariant: Validator = (value, path, issues) => {

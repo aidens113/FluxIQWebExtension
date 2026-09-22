@@ -141,6 +141,32 @@ export type ExpectedExtraction = {
 };
 /** The failure category a negative scenario or variant must be classified as, in Core's taxonomy. */
 export type ExpectedFailure = { category: AutomationStudioAdaptiveFailureClass; code?: string };
+
+/**
+ * A run this scenario or variant declares must finish without the model being
+ * consulted at all: the deterministic runtime is expected to absorb whatever
+ * the fixture arms, and the grant `--live-llm` takes out must go unspent.
+ *
+ * It exists because the opposite is asserted by default. `--live-llm` is a
+ * request for a real provider call, so a live run that reached no provider
+ * fails (`assertLiveLlmProviderWasReached`) -- the guard that catches a
+ * deterministic pass wearing a live run's clothes. An adversarial variant that
+ * the runtime is *supposed* to absorb without the model would therefore fail
+ * under exactly the flag that makes the model available, and every correct
+ * absorption would read as a defect.
+ *
+ * `count` is `0` and nothing else: this declares an absence, not a budget, and
+ * the caps on what a run may spend stay the operator's (`--llm-max-calls`).
+ * `because` is the fixture author's one sentence saying what is expected to do
+ * the absorbing, and it is written into the run's `snapshots/live-llm.json` so
+ * a reader sees that the silence was intended rather than inferred.
+ *
+ * Like `failure`, this narrows one judgement and no other. It exempts the
+ * provider-reached check and holds the run to spending nothing; it does not
+ * touch the oracle, the declared final state, the extraction judgement or a
+ * facility failure. A run that declares no call and then makes one fails.
+ */
+export type ExpectedProviderCalls = { count: 0; because: string };
 export type ScenarioGoal = { id: string; description: string; successFacts: ExpectedFact[] };
 
 /**
@@ -166,6 +192,7 @@ export type ScenarioExpected = {
   allowedConsoleErrors?: string[];
   extracted?: ExpectedExtraction[];
   failure?: ExpectedFailure;
+  providerCalls?: ExpectedProviderCalls;
 };
 
 /**
@@ -321,6 +348,7 @@ export const webScenarioJsonSchema = {
         allowedConsoleErrors: stringArray,
         extracted: { type: "array", items: { $ref: "#/$defs/extraction" } },
         failure: { $ref: "#/$defs/failure" },
+        providerCalls: { $ref: "#/$defs/providerCalls" },
       },
     },
     fact: {
@@ -349,6 +377,10 @@ export const webScenarioJsonSchema = {
     failure: {
       type: "object", additionalProperties: false, required: ["category"],
       properties: { category: { enum: AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES }, code: { type: "string", minLength: 1 } },
+    },
+    providerCalls: {
+      type: "object", additionalProperties: false, required: ["count", "because"],
+      properties: { count: { const: 0 }, because: { type: "string", minLength: 1, maxLength: 200 } },
     },
     secret: {
       type: "object", additionalProperties: false, required: ["id", "step"],
