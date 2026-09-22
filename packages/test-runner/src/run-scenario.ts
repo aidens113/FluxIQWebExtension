@@ -29,7 +29,7 @@ import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
 import { awaitFinalizedRecording, createdFlowLaneSnapshot, createdFlowSecretInputs, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
-import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
+import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
@@ -91,6 +91,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // A live provider run is planned and credentialed before this is reached (`beginLiveLlmRun`), so that an unexecutable profile or an absent key refuses at the command line rather than inside a run.
   const live = options.live; const creation = options.creation; const flowLane = options.flow === true || creation !== undefined;
   if (live) live.assertLane({ flowLane: options.flow === true, creation: creation !== undefined }); else if (creation) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
+  // What this run's scenario declares about provider calls, read from the same
+  // resolved expectations the lane is judged by, so a variant's declaration
+  // replaces the workflow's exactly as every other field of `expected` does.
+  if (live) live.expectProviderCalls(declaredProviderCalls(flowWorkflow.expected, { scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id }));
   // Declared replay secrets resolve before the bundle so their values join the
   // redaction list; only the two Flow lanes supply them, so a recording-lane run
   // of the same scenario does not require them to be configured.

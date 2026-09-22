@@ -106,6 +106,15 @@ export type ExistingFlowAdaptation = ExistingFlowAdaptationSummary & {
     toolCallCount: number;
     evidenceBytes: number;
     toolIds: string[];
+    /**
+     * Every decision of the build, in order, where Core published them. A
+     * refused build carries them on its failure diagnostic; a proposed one
+     * carries them here or not at all, and Core does not publish them on a
+     * proposal yet -- see `fa-lab-measurement.md`. Read as optional so the
+     * Lab records the trail the moment Core does, rather than having to be
+     * changed again afterwards.
+     */
+    steps?: Array<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
   };
 };
 export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string };
@@ -419,6 +428,27 @@ function project(value: unknown, at: string): ExistingProject { const item = rec
 function flowSummary(value: unknown, at: string): ExistingFlowSummary { const item = record(value, at); const sourceMode = enumeration(item.sourceMode, ["visual", "code"] as const, `${at}.sourceMode`); return { flowId: text(item.flowId, `${at}.flowId`), name: text(item.name, `${at}.name`), ...(typeof item.description === "string" ? { description: item.description } : {}), sourceMode, nodeCount: integer(item.nodeCount, `${at}.nodeCount`), edgeCount: integer(item.edgeCount, `${at}.edgeCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(typeof item.version === "string" ? { version: item.version } : {}) }; }
 function flowSubflow(value: unknown, at: string, projectId: string, flowId: string): ExistingFlowSubflow { const item = record(value, at); if (text(item.projectId, `${at}.projectId`) !== projectId || text(item.flowId, `${at}.flowId`) !== flowId) invalid(`${at} escaped the requested parent Flow`); return { projectId, flowId, subflowId: text(item.subflowId, `${at}.subflowId`), ...(typeof item.graphFlowId === "string" && item.graphFlowId ? { graphFlowId: item.graphFlowId } : {}), name: text(item.name, `${at}.name`), status: text(item.status, `${at}.status`), role: text(item.role, `${at}.role`) }; }
 function flowAdaptationSummary(value: unknown, at: string, projectId: string, flowId: string): ExistingFlowAdaptationSummary { const item = record(value, at); const parsed = { adaptationId: text(item.adaptationId, `${at}.adaptationId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), status: text(item.status, `${at}.status`) }; if (parsed.projectId !== projectId || parsed.flowId !== flowId) invalid(`${at} escaped the requested parent Flow`); return parsed; }
+/** Core's own ceiling on a published trace: one entry per evidence-loop iteration, plus the deterministic iteration 0. */
+const MAX_EVIDENCE_LOOP_STEPS = 65;
+
+/**
+ * A build's published decisions, in order. Only the tool id, whether its
+ * effect was applied, and the code it came to are kept -- the same three
+ * fields a refused build's diagnostic carries, so a proposed build and a
+ * refused one read alike. Nothing the tool returned and nothing the model
+ * wrote is admitted.
+ */
+function evidenceLoopSteps(value: unknown, at: string): Array<{ toolId: string; effectApplied?: boolean; resultCode?: string }> {
+  return array(value, at).map((entry, index) => {
+    const step = record(entry, `${at}[${index}]`);
+    return {
+      toolId: text(step.toolId, `${at}[${index}].toolId`),
+      ...(step.effectApplied === undefined ? {} : { effectApplied: Boolean(step.effectApplied) }),
+      ...(step.resultCode === undefined ? {} : { resultCode: text(step.resultCode, `${at}[${index}].resultCode`) }),
+    };
+  });
+}
+
 function flowAdaptation(value: unknown, at: string, projectId: string, flowId: string, adaptationId: string): ExistingFlowAdaptation {
   const item = record(value, at);
   const summary = flowAdaptationSummary(item, at, projectId, flowId);
@@ -455,6 +485,7 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
     toolCallCount: integer(auditDetail.toolCallCount, `${at}.metadata.phase9.created.detail.toolCallCount`),
     evidenceBytes: integer(auditDetail.evidenceBytes, `${at}.metadata.phase9.created.detail.evidenceBytes`),
     toolIds: stringArray(auditDetail.toolIds, `${at}.metadata.phase9.created.detail.toolIds`),
+    ...(auditDetail.steps === undefined ? {} : { steps: evidenceLoopSteps(auditDetail.steps, `${at}.metadata.phase9.created.detail.steps`) }),
   } : undefined;
   if (evidenceLoop && (
     (evidenceLoop.providerCallCount === undefined) !== (evidenceLoop.decisionCount === undefined)
@@ -466,6 +497,7 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
     || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.iterationCount < evidenceLoop.providerCallCount || evidenceLoop.iterationCount > evidenceLoop.providerCallCount + 1))
     || evidenceLoop.toolCallCount > 16 || evidenceLoop.toolCallCount > evidenceLoop.iterationCount
     || evidenceLoop.evidenceBytes > 7_340_032 || evidenceLoop.toolIds.length > 16
+    || (evidenceLoop.steps !== undefined && evidenceLoop.steps.length > MAX_EVIDENCE_LOOP_STEPS)
   )) invalid(`${at}.metadata.phase9 created evidence audit exceeded its bounded contract`);
   const patchKinds = item.patch === undefined ? undefined : array(item.patch, `${at}.patch`).map((value, index) => text(record(value, `${at}.patch[${index}]`).kind, `${at}.patch[${index}].kind`));
   const validationStatuses = item.validationResults === undefined ? [] : array(item.validationResults, `${at}.validationResults`).map((value, index) => enumeration(record(value, `${at}.validationResults[${index}]`).status, ["succeeded", "failed"] as const, `${at}.validationResults[${index}].status`));
