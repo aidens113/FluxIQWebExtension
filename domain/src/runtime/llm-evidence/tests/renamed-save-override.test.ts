@@ -157,7 +157,10 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
       accessibleName: "Apply changes",
       selector: RENAMED_SAVE_SELECTOR,
       metadata: { controlType: "submit", formId: "settings-form" }
-    }
+    },
+    // What the repair names, for a permission request (t059): the accessible
+    // name the packet printed, and one plain word for what it is.
+    control: { name: "Apply changes", kind: "button" }
   };
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), clickAction, selectors), resolvedSave);
   // The same repair as the live lane asks for it: a recorded click, named by

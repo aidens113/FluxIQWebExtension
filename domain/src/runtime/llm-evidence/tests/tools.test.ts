@@ -125,6 +125,8 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.1" } }, clickAction), {
     status: "resolved",
     target: { handles: { element: "target.1" }, handleResolution: "named", ...resolution },
+    // What the repair names, for a permission request (t059).
+    control: { name: "Continue", kind: "button" },
   });
   // A handle nobody minted is refused: nothing is put in its place.
   assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.9" } }, clickAction), { status: "absent", reason: "handle_not_issued" });
@@ -243,6 +245,7 @@ test("a repair on a packet this runtime issued gets its selector hint back, with
   assert.deepEqual(runtime.validateTargetOverrideEvidence(evidence as unknown as JsonObject, { handles: { element: "target.1" } }, clickAction), {
     status: "resolved",
     target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "button", visibleText: "Place order", selector: "#place-order" },
+    control: { name: "Place order", kind: "button" },
   });
 
   // A packet this runtime never issued has no binding, so the repair is
@@ -251,6 +254,7 @@ test("a repair on a packet this runtime issued gets its selector hint back, with
   assert.deepEqual(runtime.validateTargetOverrideEvidence(foreign as unknown as JsonObject, { handles: { element: "target.1" } }, clickAction), {
     status: "resolved",
     target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "button", visibleText: "Place order" },
+    control: { name: "Place order", kind: "button" },
   });
 });
 
