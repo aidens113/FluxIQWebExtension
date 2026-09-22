@@ -84,12 +84,21 @@ Lab and site defects (P13, P16, P19); and a created Flow that dropped the
 steps exploration needed while a navigate claimed success (P17). Reports:
 `reports/w2x-e2e-lane-{a..e}.md`.
 
-**In flight:** integration branch t075, holding every finished Core-side
-task merged together (t059 with L4 and P2, t057, t065, t047, t060 in Core;
-t049, t059, t062, t065, t070, t047, t057 downstream; one import-line
-conflict resolved), under full gates in both repositories; P20 (t071), N1
-(t072), P13a (t066), P13b/P16/P19 (t067), U1 journeys (t069), P22 (t074), P23
-(t073). t033 re-merges after the batch lands.
+**Landed 2026-09-22:** the t075 integration is merged and pushed in both
+repositories (downstream `c32d664`, Core `7952512`, 25 Core commits), so L4, P2,
+P7, P11, P17, P18, P1's Lab half, N3, L1, L5 and the per-Flow handle numbering
+are all on `dev`. t067 and t069 landed earlier the same way.
+
+**In flight, all cut off mid-task on 2026-09-21 with uncommitted work in their
+worktrees:** P20 (t071), N1 (t072), P13a (t066, whose worker did report
+Partial — four of six items proven), P22 (t074), P23 (t073). Each needs its
+work judged and finished before it can land. t033 re-merges now the batch has
+landed.
+
+**Paused:** further live measurement, behind
+[flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-defensive-runtime-plan.md)
+at the user's direction on 2026-09-22. E2 runs after that plan's workstreams A
+and B, not before.
 
 **Next:** land the held work and each fix as it verifies; then E2, the same
 campaign on the fuller product.
@@ -497,6 +506,15 @@ Delivered briefs are archived in [archive/delivered-briefs.md](./week2-exit-plan
 - Follow-up: finish t075 into `dev` in both repositories when the gates pass and the flat workers are done; sync the shared Core; E2.
 
 ---
+
+
+### 2026-09-22 — The Week 2 Core batch landed in both repositories
+- Agent: supervisor; worker `w2x-integration-fixes`
+- Changed: t075 merged to `dev` downstream (`c32d664`) and in Core (`7952512`, 25 commits); seven test expectations reconciled; `docs/working/README.md` regenerated.
+- Why: the merged tasks changed behaviour their tests still described. The briefed P11-vs-P17 conflict did not exist: the 5,000-byte schema guard was a stale tripwire, and t065's replay premise costs about 470 bytes of it, so it rose to 5,600 with the binding 8,000-token input bound untouched. All five edits the cut-off attempt left were checked against the merged source and kept.
+- Validation: the supervisor re-ran both repositories rather than trusting the worker. Core `pnpm check` passed (structure-audit passed, 4 of 4 projects Done), `pnpm -r --no-bail test` printed `Test Files 323 passed (323)` and `Tests 2795 passed | 1 skipped (2796)` with **no failures**, `pnpm build` exit 0; downstream `pnpm check`, `pnpm -r --no-bail test` and `pnpm build` all exit 0 with `test-runner # pass 1280 # fail 0`. Both `task finish` runs reported `"command":"pnpm check","passed":true`. The first downstream finish correctly refused on a stale `docs/working/README.md` caused by the supervisor's own later edit.
+- Outcome: Accepted
+- Follow-up: finish the five cut-off tasks; then the authoring and defensive-runtime plan's workstreams A and B; E2 after those.
 
 ## Open Questions
 
