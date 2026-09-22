@@ -66,8 +66,13 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  * - `failure.issueCodes`: the codes Core says refused the last plan the model
  *   completed -- validation's or the domain's -- when it names any. Codes
  *   only; the plan paths and page content they refer to are never kept.
- * - `evidenceLoop.steps`: every decision of a refused build, in order, as
- *   Core recorded it; `toolIds` are the tools among them.
+ * - `evidenceLoop.steps`: every decision of the build, in order, as Core
+ *   recorded it; `toolIds` are the tools among them. A refused build carries
+ *   them on its failure diagnostic. A proposed build carries them only where
+ *   Core publishes them on the proposal, which it does not do today, so the
+ *   successful builds most worth studying still read `null` -- the Lab half of
+ *   this is in place and the Core half is specified in
+ *   `docs/working/flow-authoring-and-defensive-runtime-plan/reports/fa-lab-measurement.md`.
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
  * - `instructedConsequences`: the lasting consequences Core found the person's
@@ -171,7 +176,7 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
     // A proposal cannot exist without a provider's answer.
     providerInvocation: "attempted" as const,
     accounting: detail.accounting ? accountingOf(detail.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: null } : null,
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: buildSteps(loop.steps) } : null,
     recoveredAfterTimeout,
     durationMs,
     instructedConsequences: await instructedConsequencesOf(control, input, adaptationId),
@@ -184,6 +189,20 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
           : undefined;
   if (problem) return Object.freeze({ ...base, outcome: "failed", failure: { code: problem, stage: null, httpStatus: null } });
   return Object.freeze({ ...base, outcome: "proposed", failure: null });
+}
+
+/**
+ * The build's decisions as the record keeps them: identifiers only, and `null`
+ * where Core published none. The same filter the refused path applies, so a
+ * proposed build's trail and a refused one's are the same shape and a reader
+ * can compare them.
+ */
+function buildSteps(steps: ReadonlyArray<{ toolId: string; effectApplied?: boolean; resultCode?: string }> | undefined): readonly CreatedFlowBuildStep[] | null {
+  if (steps === undefined) return null;
+  return steps.flatMap((step): CreatedFlowBuildStep[] => {
+    if (!isVocabulary(step.toolId)) return [];
+    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
+  });
 }
 
 /** A refusal, read through Core's own diagnostic parser; a body that parser rejects keeps only its HTTP status. */

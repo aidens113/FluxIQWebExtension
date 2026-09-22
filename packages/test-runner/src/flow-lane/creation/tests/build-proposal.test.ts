@@ -51,6 +51,33 @@ test("the build saves the instruction, then authorizes, selects the context and 
   assert.equal(JSON.stringify(record).includes("Scrape"), false, "the record holds no instruction text");
 });
 
+test("a proposed build keeps the decisions Core published on the proposal, in the shape a refused build's carry", async () => {
+  // Core stores the build's evidence trace on the proposal and does not
+  // project it onto `get-flow-adaptation` yet, so `steps` is `null` on every
+  // proposed build measured so far. This pins the Lab's half: the moment the
+  // created audit detail carries them, the accrual trail of a *successful*
+  // build is in the record, filtered exactly as a refused build's is.
+  const { record } = await build({
+    evidenceLoop: {
+      providerCallCount: 4, decisionCount: 4, traceStepCount: 5, iterationCount: 5, toolCallCount: 4, evidenceBytes: 18_000,
+      toolIds: ["web.recovery.inspect"],
+      steps: [
+        { toolId: "web.inspect_current_page", effectApplied: false, resultCode: "web.inspect.succeeded" },
+        { toolId: "web.reveal_safe", effectApplied: true },
+        { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+        { toolId: "WEB.Unrecognized.Tool" },
+      ],
+    },
+  });
+  assert.deepEqual(record.evidenceLoop?.steps, [
+    { toolId: "web.inspect_current_page", effectApplied: false, resultCode: "web.inspect.succeeded" },
+    { toolId: "web.reveal_safe", effectApplied: true },
+    { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+  ]);
+  // `toolIds` stays Core's own list on a proposal, which already excludes its decision steps.
+  assert.deepEqual(record.evidenceLoop?.toolIds, ["web.recovery.inspect"]);
+});
+
 test("an instruction Core did not activate refuses before any grant is taken", async () => {
   await assert.rejects(build({ instructionStatus: "draft" }), /Core did not make the task's instruction the Flow's active instruction/u);
 });
