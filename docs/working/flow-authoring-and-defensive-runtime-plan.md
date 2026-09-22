@@ -75,9 +75,23 @@ re-checked in source by the supervisor. Three things moved the plan materially:
 - **Design Two's premise was wrong and is corrected below: no per-node retry
   exists at all.** The ladder must bring its own retry loop.
 
-**What is not yet decided.** The phase and step table, which waits on d4, d6 and
-d7 (target defenses, Lab measurement, Core structure budgets) so that it can name
-real files and real directories.
+**Settled by the user, 2026-09-22, after reading the above.** Recorded state is
+the product's central selling point, so three things are requirements rather than
+options: **retries are on by default** with a real default attempt count; the
+**recorded state is read at execution time**, not merely stored; and a **recorded
+delay is a maximum wait for the expected state, not a sleep** — if the state
+appears sooner the node runs immediately, and if it never appears the node is
+attempted at the deadline anyway rather than failed. This is Design Two's
+opening section and steps B0, B1 and B1a.
+
+**Supervisor finding, same day.** The delay data needed for that ceiling already
+exists: Core's recording entries carry `timestamp` **and `monotonicOffsetMs`**
+(`model/recording-framework.ts:20-22`), the latter being the clock that survives
+a wall-clock change. Nothing carries the gap between consecutive entries onto the
+Flow node, which is step B0 and is small.
+
+**What is not yet decided.** Where genuinely new Core modules live, and the Lab
+evidence needed to attribute a recovery to a rung — d6 and d7 are still out.
 
 **Next:** fold the remaining three reports into a phase table, then dispatch.
 
@@ -176,7 +190,46 @@ passed. The proposal is a handover of that artifact, not a fresh composition.
 
 ---
 
-## Design Two: The Recovery Ladder
+## Design Two: Recorded State Drives Execution
+
+**The recorded state is the product's central selling point, and today the
+runtime does not read it** (user, 2026-09-22). Everything below follows from
+treating that as a product requirement rather than an option.
+
+Three rules are settled and not open for re-weighing:
+
+1. **Retries are on by default.** A node that fails is retried without anyone
+   opting in, with a sensible default attempt count. Retry that exists but
+   defaults to one attempt, or must be enabled per node, does not satisfy this.
+2. **Recorded state is consulted, not merely stored.** Capturing a digest or an
+   expected state and then never reading it at execution time is precisely the
+   defect discovery found. State that only serves provenance or a later
+   diagnosis misses the point of the feature.
+3. **A recorded delay is a ceiling, not a sleep.** See below.
+
+### The recorded delay is a wait ceiling gated by expected state
+
+The gap recorded between two steps during authoring becomes the **maximum** time
+the runtime waits for that node's expected state before proceeding anyway:
+
+- **State seen early → execute immediately.** A replay on a fast page is
+  *faster* than the recording that produced it. The recorded delay is never
+  spent idling once the page is ready.
+- **State not seen by the deadline → attempt the node anyway, and mark it.** The
+  recording is evidence the action was possible at that point, so a missing state
+  is not by itself a reason to fail. Only if the attempt then fails does the
+  ladder below begin.
+- **The ceiling has a floor and a cap.** A 50 ms recorded gap must not mean the
+  runtime gives up on the state after 50 ms on a slow day, and a 90 s gap where
+  the author went to make coffee must not stall a run. Proposed defaults, all
+  configurable: wait ceiling `clamp(recordedGap × 2, 2 s, 30 s)`; retry attempts
+  **3**; backoff 250 ms, 1 s, 2 s. The Lab measures whether these are right.
+
+This one mechanic replaces both of the failure modes round 1 showed: the timing
+failures that a fixed sleep would have papered over slowly, and the ones a
+missing wait caused outright.
+
+## Design Two (continued): The Recovery Ladder
 
 **A node that fails is never executed a second time. Verified.** The step loop
 (`runtime/executor/graph-run.ts:211`) runs each node once; on a failure it picks
@@ -515,9 +568,11 @@ marked `after P0` is blocked until it merges.
 
 | Id | Work | Repo | After |
 | --- | --- | --- | --- |
-| B1 | A bounded per-node retry loop in the step loop (`runtime/executor/graph-run.ts:211,253-277`). **None exists today**; the ladder cannot work without it. | C | — |
+| B0 | **Carry the recorded gap onto the node.** Core's recording entries already hold `timestamp` and `monotonicOffsetMs` (`model/recording-framework.ts:20-22`), which is the right clock for an inter-step gap; nothing carries that gap onto the Flow node. Derive it from consecutive entries and store it as the node's wait ceiling. | C | — |
+| B1 | **A per-node retry loop, on by default**, in the step loop (`runtime/executor/graph-run.ts:211,253-277`). **None exists today.** Default 3 attempts with 250 ms / 1 s / 2 s backoff, configurable per node and per Flow. Not opt-in. | C | — |
+| B1a | **The wait ceiling gated by expected state.** Before attempting a node, wait for its expected pre-state for up to `clamp(recordedGap × 2, 2 s, 30 s)`. State seen early → execute immediately, so a fast page replays faster than the recording. Deadline reached → attempt anyway and mark it, because the recording is evidence the action was possible. Only a failed attempt starts the ladder. | C, X | B0, B3 |
 | B2 | Evaluate the recorded expectation on a failed attempt, not only a succeeded one (`transition-comparison.ts:109`), re-checking **inside** the evaluation before the failure record is built, so no non-retryable `STATE_MISMATCH` is minted that would have been retried. | C | B1 |
-| B3 | Read the recorded state link — `stateLink`, `stateSnapshotId`, `stateRef` are written onto every node and no execution path reads them. Rungs 2 to 4 read what is already stored. | C | B2 |
+| B3 | **Read the recorded state link.** `stateLink`, `stateSnapshotId` and `stateRef` are written onto every node and no execution path reads them — the defect that makes the product's central feature inert. Rungs 2 to 4, and B1a's gate, read what is already stored. | C | B2 |
 | B4 | Express the rungs as recovery candidates that are **consumed and dropped** from the list, since any deterministic candidate on offer suppresses escalation (`adaptive-orchestrator.ts:92`); and let a non-`deterministic_path` candidate execute (`graph-run.ts:260`). | C | B3 |
 | B5 | Verify an action did something: arm `content/action-runtime/in-place-effect.ts` beyond `a[href]` clicks, make a navigate prove it moved or reloaded, and give a navigate result enough evidence to judge (`runtime/action-results.ts`, `navigation-outcome.ts:25-30`, `automation-tab.ts:132-141`). | X | — |
 | B6 | Resolve wait selectors through `resolveShadowScope` instead of a bare `document.querySelector` (`wait-conditions.ts:74,82,90,96`), so a wait can be satisfied inside a shadow root. | X | — |
