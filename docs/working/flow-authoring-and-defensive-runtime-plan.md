@@ -506,6 +506,49 @@ supervisor confirmed in source itself are marked **verified**.
    that assumes them is blocked until that integration lands, which is the
    worker already running.
 
+### From d6 — what the Lab can measure (2026-09-22)
+
+1. **The dry run already exists as a loop. Verified.** `replayRepairedFlow`
+   (`packages/test-runner/src/flow-lane/repair/replay-repair.ts:79-125`) is
+   Design One's dry run exactly: `prepare()` → `executeRecordedFlowRun` with no
+   `llmExecution` → count provider calls from **Core's own accounting** → check
+   the goal. Its `prepare` is `resetScenarioLab` + arm variant + load start page,
+   so **the Lab can already reset a scenario to a known start state mid-run**
+   without restarting the topology. A7 is therefore far cheaper than scoped: what
+   is missing is a node id on the published attempt and somewhere to record the
+   verdict, not the loop.
+2. **A dry run costs about 2.3 s per node plus about 1 s of reset**, measured
+   across 111 evaluations on disk (median 2,268 ms per node) against a median
+   created-Flow run of 80.7 s — **6 to 30% more wall clock per attempt and zero
+   extra provider calls.** Campaign tasks run sequentially, so it is additive.
+   That is affordable for what it buys.
+3. **Not one of the five deterministic rungs is observable today**, so the
+   measurement must be built before the ladder can be judged. Two hard blockers:
+   `flowActionsSnapshot` (`run-flow-lane.ts:428-437`) **drops the node id**, so a
+   retried node cannot be joined back to its node; and
+   `WebAutomationTargetResolution.strategy`
+   (`domain/src/actions/types.ts:387-393`) — the exact rung-1 evidence — is
+   dropped because Core's run detail drops `outputs`
+   (`persisted-flow-run.ts:149-153`).
+4. **The zero-call expectation is currently inverted. Verified.**
+   `assertLiveLlmProviderWasReached` (`live-llm/budget.ts:101-109`) **throws when
+   a `--live-llm` run made no provider call**, to catch "a deterministic pass
+   wearing a live run's clothes". That guard is correct for the creation lane —
+   but an adversarial variant that is *supposed* to be absorbed by rung 2 with
+   zero calls would fail under exactly the flag that makes the model available.
+   The fix is a **declared**-zero-calls expectation, not removing the guard, and
+   it must land before any variant is authored or every correct absorption reads
+   as a failure. The precedent to copy is `expected.failure` +
+   `declaredFailureVerdict` (`run-evaluation/declared-failure-verdict.ts:43-70`),
+   which overrides only dispatch and targeting and never the oracle.
+5. Smaller gaps worth folding in: `evidenceLoop.steps` is `null` on every
+   **proposed** build and populated only on refused ones
+   (`build-proposal.ts:73-74`) — so the successful builds we most want to study
+   are the ones we cannot; `snapshots/repair-lane.json` is written and read by
+   nobody, leaving `replayProviderCalls` hard-coded `null`; no campaign row
+   carries a duration; and the `navigation` and `state.change` evidence triggers
+   exist in the contract but were emitted **zero** times across 219 bundles.
+
 ---
 
 ## Decisions On Recorded Commitments
@@ -558,7 +601,8 @@ marked `after P0` is blocked until it merges.
 | A4 | Add a sibling assembler taking reduced steps, beside the text-only `assembleAutomationStudioFlowScriptPlan` (`authoring/assemble.ts:53`), so the proposal is built from the accrued draft rather than re-emitted prose. | C | A3 |
 | A5 | New decision kinds beside `tool_call` and `complete` (`evidence-loop.ts:70-72,532-560`): drop a step, amend a step's settings, mark a step exploratory. Today `complete` re-emits the whole Flow from scratch with its previous script absent from the request. | C | A4 |
 | A6 | Reserve the draft's allocation in `evidenceContextWindow` (`evidence-loop.ts:638-670`), or carry it beside `routing` in the `flowBootstrap` packet. **This is the direct fix for the per-toolId eviction that produced the `everything-store` Flow.** | C | A4 |
-| A7 | An execution seam that replays the draft from a reset page during the build, gated by the existing `AutomationStudioActionPermissionGate`; then forbid proposing until the draft has replayed clean. The highest-value step in the document. | C, D | A4, d6 |
+| A7 | An execution seam that replays the draft from a reset page during the build, gated by the existing `AutomationStudioActionPermissionGate`; then forbid proposing until the draft has replayed clean. The highest-value step in the document. **The loop already exists** — `flow-lane/repair/replay-repair.ts:79-125` is `prepare()` → model-free run → count Core's own provider calls → check goal, and its `prepare` already resets the scenario mid-run. What is missing is a node id on the published attempt and a place for the verdict. Costs ~2.3 s per node plus ~1 s of reset, 6-30% per attempt, zero provider calls. | C, D, L | A4 |
+| A12 | Populate `evidenceLoop.steps` on **proposed** builds, not only refused ones (`build-proposal.ts:73-74`). Today the successful builds we most want to study are the ones we cannot see. | L | — |
 | A8 | Give a tool rejection enough detail for the model to route around it — which handle, what was wrong (`domain/.../tool-rejection.ts:25-57`, eight bare codes today). Directly attacks round 1's repeat-without-progress stalls. | D | — |
 | A9 | Register a wait tool on the authoring path: Core's builtins are never registered for a build (`runtime/service.ts:1881` passes no `host`), and the domain's wait is stage-pinned to `gather`/`iterate` while bootstrap carries no stage. | C, D | — |
 | A10 | Stop `sanitizeEvidenceLoopTrace` dropping `resultCode` and `effectApplied` from a successful build's stored trace (`runtime/service.ts:5931-5944`). | C | — |
@@ -599,9 +643,11 @@ absorb it, and an expectation of **zero provider calls**.
 
 | Id | Work | Repo | After |
 | --- | --- | --- | --- |
-| D1 | Fixture conditions: timed overlay, content arriving after the action that needed it, a control renamed between authoring and replay, per-visit row differences, session expiry mid-Flow. | L | — |
-| D2 | Per-condition expectations naming the absorbing rung, and the Lab evidence needed to attribute a recovery to a rung. | L | d6, B4 |
-| D3 | A measured lane that runs every condition and reports rung attribution and provider-call count. | L | D1, D2 |
+| D0 | **A declared-zero-calls expectation, before any variant is authored.** `assertLiveLlmProviderWasReached` (`live-llm/budget.ts:101-109`) throws when a `--live-llm` run makes no provider call — correct for the creation lane, but it would fail every variant that the ladder absorbs correctly. Copy the `expected.failure` / `declaredFailureVerdict` precedent (`run-evaluation/declared-failure-verdict.ts:43-70`), which overrides only dispatch and targeting and never the oracle. **Blocks D1.** | L | — |
+| D0a | **Make the rungs observable at all.** Publish the node id on `flowActionsSnapshot` (`run-flow-lane.ts:428-437`, dropped today) so a retried node joins back to its node, and carry `WebAutomationTargetResolution.strategy` through Core's run detail (`persisted-flow-run.ts:149-153` drops `outputs`). Without both, no rung can be attributed. | C, D, L | — |
+| D1 | Fixture conditions: timed overlay, content arriving after the action that needed it, a control renamed between authoring and replay, per-visit row differences, session expiry mid-Flow. | L | D0 |
+| D2 | Per-condition expectations naming the absorbing rung and the expected provider-call count. | L | D0a, B4 |
+| D3 | A measured lane that runs every condition and reports rung attribution and provider-call count. Also fix the two dead evidence paths found here: `snapshots/repair-lane.json` is written and read by nobody (leaving `replayProviderCalls` hard-coded `null`), and no campaign row carries a duration. | L | D1, D2 |
 
 ### Validation
 
