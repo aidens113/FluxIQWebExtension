@@ -1,6 +1,12 @@
 // The wait-for-selector verb: wait until the page satisfies a condition about
 // an element, and report what it showed.
 //
+// The selector is looked for where the *recorded target* says the element
+// lives: `recordedShadowHosts` reads the host chain the recorder wrote beside
+// it, and the wait is scoped to the roots that chain reaches, exactly as the
+// click that follows it will be. A node with no chain waits on the document,
+// as every wait did before.
+//
 // `action.wait.condition` chooses what is waited for -- `present` (the default,
 // and the only condition before Phase 1.2), `visible`, `enabled`, `absent`, a
 // `url`, or the page going `stable`. Running out of time is not the same as
@@ -10,6 +16,7 @@
 // `execute.ts` turns that into a plain failure, because a malformed command
 // never waited for anything.
 
+import { recordedShadowHosts } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, WebAutomationWaitCondition } from "../types";
 import type { ContentActionDependencies } from "./types";
 
@@ -19,12 +26,14 @@ type WaitPhrases = { expected: string; satisfied: string; timedOut: string };
 export async function waitForSelectorAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const condition = action.wait?.condition ?? "present";
   const url = action.wait?.url ?? action.url;
+  const shadowHosts = recordedShadowHosts(action);
   const outcome = await deps.waitForCondition({
     condition,
     selector: action.selector,
     url,
     timeoutMs: action.timeoutMs,
-    stableForMs: action.wait?.stableForMs
+    stableForMs: action.wait?.stableForMs,
+    ...(shadowHosts ? { shadowHosts } : {})
   });
   const phrases = phrasesFor(condition, action.selector, url);
   if (!outcome.ok) {

@@ -11,10 +11,12 @@ import {
   consumeSnapshotReadiness,
   currentAutomationTabId,
   noteSnapshotReadiness,
+  readTabTitle,
   readTabUrl,
   resolveAutomationTab,
   setAutomationTab,
-  waitForTabReady
+  waitForTabReady,
+  type TabDriveRecord
 } from "./automation-tab";
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
@@ -22,7 +24,7 @@ import { sendClickCheckingLanding } from "./click-landing";
 import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
 import { chooseFrame } from "./frame-address";
 import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
-import { compareNavigatedUrl } from "./navigation-outcome";
+import { compareNavigatedUrl, judgeTabMovement } from "./navigation-outcome";
 import { navigationTargetTab } from "./navigation-target";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
@@ -63,7 +65,10 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
 
   const startedAt = Date.now();
   const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
-  const tabId = await resolveAutomationTab(await tabRequestFor(action, request, isNavigation));
+  // The resolution drives the tab when the action is a navigation, and reports
+  // what that drive did: the only evidence there is that the navigation was
+  // any work at all.
+  const { tabId, drive } = await resolveAutomationTab(await tabRequestFor(action, request, isNavigation));
   const frameId = frameIdForAction(action);
 
   const unsupportedReason = await unsupportedPageReasonFor(action, request, tabId, isNavigation);
@@ -79,7 +84,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     // the top frame says whether what it committed was the page or Chrome's
     // own error page, which keeps the requested URL in the address bar.
     const loadFailed = (await allTabFrames(tabId)).some((frame) => frame.frameId === TOP_FRAME_ID && frame.errorOccurred);
-    return withTarget(navigationResult(action, startedAt, action.url, await readTabUrl(tabId), loadFailed), tabId, frameId);
+    const landing = { landed: await readTabUrl(tabId), title: await readTabTitle(tabId), loadFailed, drive };
+    return withTarget(navigationResult(action, startedAt, action.url, landing), tabId, frameId);
   }
 
   if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
@@ -149,28 +155,61 @@ async function unsupportedPageReasonFor(
   return unsupportedAutomationPageReason(await readTabUrl(tabId)) ?? request.unsupportedPageReason;
 }
 
+/** Where the tab ended up and what putting it there did: everything the navigate's post-condition is judged on. */
+type NavigationLanding = {
+  landed: string | undefined;
+  title: string | undefined;
+  loadFailed: boolean;
+  drive: TabDriveRecord | undefined;
+};
+
+/**
+ * A navigation's post-condition, in two halves.
+ *
+ * The destination is judged first, because landing somewhere else explains
+ * everything after it. Then the movement: a navigation that left the tab on
+ * the document it already held did nothing, however right its address reads,
+ * and reporting that as success is how a Flow carried on against a page it
+ * believed it had replaced. Only positive evidence of a no-op fails --
+ * `judgeTabMovement` says when it could not tell -- and what it saw is put on
+ * the validation either way, because a navigate result carries no snapshot and
+ * no element to reconstruct it from.
+ */
 function navigationResult(
   action: BrowserActionCommand,
   startedAt: number,
   requested: string,
-  landed: string | undefined,
-  loadFailed: boolean
+  landing: NavigationLanding
 ): BrowserActionResult {
+  const { landed, title, loadFailed } = landing;
+  const page = { ...(landed !== undefined ? { url: landed } : {}), ...(title ? { title } : {}) };
   const comparison = compareNavigatedUrl(requested, landed, loadFailed);
-  if (comparison.matched) {
+  if (!comparison.matched) {
     return workerActionResult(action, startedAt, {
-      status: "succeeded",
-      message: "Navigation completed.",
-      validation: { status: "passed", expected: comparison.expected, actual: comparison.actual },
-      ...(landed !== undefined ? { url: landed } : {})
+      status: "failed",
+      message: loadFailed ? `The browser could not load ${comparison.expected}.` : `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
+      validation: { status: "failed", expected: comparison.expected, actual: comparison.actual },
+      failure: navigationUnexpectedFailure(comparison.expected, comparison.actual),
+      ...page
+    });
+  }
+  const movement = judgeTabMovement(landing.drive);
+  if (!movement.moved) {
+    const expected = `${comparison.expected}, reached by loading it`;
+    const actual = `${comparison.actual}: ${movement.detail}`;
+    return workerActionResult(action, startedAt, {
+      status: "failed",
+      message: `Navigation left the tab on the page it was already showing: ${movement.detail}.`,
+      validation: { status: "failed", expected, actual },
+      failure: navigationUnexpectedFailure(expected, actual),
+      ...page
     });
   }
   return workerActionResult(action, startedAt, {
-    status: "failed",
-    message: loadFailed ? `The browser could not load ${comparison.expected}.` : `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
-    validation: { status: "failed", expected: comparison.expected, actual: comparison.actual },
-    failure: navigationUnexpectedFailure(comparison.expected, comparison.actual),
-    ...(landed !== undefined ? { url: landed } : {})
+    status: "succeeded",
+    message: "Navigation completed.",
+    validation: { status: "passed", expected: comparison.expected, actual: `${comparison.actual}: ${movement.detail}` },
+    ...page
   });
 }
 

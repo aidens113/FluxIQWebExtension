@@ -18,6 +18,18 @@
 // meant to load had arrived, which is `output_not_observed`. A run that wants
 // a bounded amount of scrolling asks for `by`, which has no such expectation.
 //
+// `toElement` reads the actionability gate after it has moved the page, and
+// reports what the gate saw beside the position it reached -- but it never
+// refuses on it. Scrolling is how a covered control is brought out from under
+// a sticky header in the first place, and nothing standing over the target
+// stops the page from arriving there, so a refusal would take away the move
+// that recovery makes. What the gate is good for here is evidence: a scroll
+// that reports "the point landed on div.scrim, which covers the target" tells
+// the next step, and whoever reads the run, why the click after it was
+// refused. The gate is read *after* `scrollElementIntoView`, because it
+// returns early without scrolling for a hidden or disabled target, and such a
+// target was scrolled to before.
+//
 // The verb never rejects: every throw is caught here and reported through
 // `deps.failure`. That is belt and braces, not the last line of defence --
 // `actions/execute.ts` awaits every branch, so its catch would report the same
@@ -27,6 +39,7 @@
 // independently of how the dispatcher calls it. (Until 2026-09-11 the
 // dispatcher returned this promise unawaited, and the catch was load-bearing.)
 
+import type { ActionabilityReport } from "../action-runtime";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
@@ -88,13 +101,19 @@ async function scrollToPosition(
 function scrollToElement(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const { element, resolution } = deps.resolveTarget(action);
   deps.scrollElementIntoView(element);
+  const reachable = deps.checkActionability(element);
   const rect = element.getBoundingClientRect();
   const inView = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
   return deps.success(action, startedAt, "Scrolled the target into view.", {
     status: inView ? "passed" : "failed",
     expected: "the target within the viewport",
-    actual: `the target is at ${Math.round(rect.left)},${Math.round(rect.top)} in a ${window.innerWidth}x${window.innerHeight} viewport`
+    actual: `the target is at ${Math.round(rect.left)},${Math.round(rect.top)} in a ${window.innerWidth}x${window.innerHeight} viewport; ${reachableDetail(reachable)}`
   }, { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
+}
+
+/** What the gate saw, named as a refusal would name it, so a covered target reads the same wherever it is reported. */
+function reachableDetail(report: ActionabilityReport): string {
+  return report.actionable ? report.detail : `${report.code}: ${report.detail}`;
 }
 
 /**

@@ -583,31 +583,57 @@ test("a click whose tab lands on a page served 404 fails as navigation_unexpecte
 // too: the created Flow of E1 lane B, E9, "navigated" in a tab nobody looked at
 // and then failed on the start page it had never left.
 
-type BrowserTab = { url: string | undefined; loadFailed?: boolean };
+type BrowserTab = { url: string | undefined; loadFailed?: boolean; title?: string; document?: number; ignores?: boolean };
 
-/** Tabs whose URL a navigation changes, with every update and creation recorded. */
-function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: number[]; created: string[] } {
-  const calls = { updated: [] as number[], created: [] as string[] };
+/**
+ * Tabs whose URL a navigation changes, with every update and creation
+ * recorded.
+ *
+ * A tab also carries the top frame's document number, which the stub
+ * increments for every load it performs -- that is what Chrome's document UUID
+ * is, and it is the only evidence that a navigation to the address a tab
+ * already shows did any work. A tab marked `ignores` acts like a browser that
+ * did not carry the request out: it accepts the call and changes nothing.
+ */
+function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: number[]; created: string[]; reloaded: number[] } {
+  const calls = { updated: [] as number[], created: [] as string[], reloaded: [] as number[] };
+  const loaded = (tabId: number) => {
+    const tab = tabs[tabId]!;
+    if (tab.ignores !== true) tab.document = (tab.document ?? 0) + 1;
+  };
   (globalThis as { chrome?: unknown }).chrome = {
     runtime: {},
     tabs: {
-      get: (tabId: number) => tabs[tabId] ? Promise.resolve({ id: tabId, url: tabs[tabId]!.url, status: "complete" }) : Promise.reject(new Error(`No tab with id: ${tabId}.`)),
+      get: (tabId: number) => tabs[tabId]
+        ? Promise.resolve({ id: tabId, url: tabs[tabId]!.url, title: tabs[tabId]!.title, status: "complete" })
+        : Promise.reject(new Error(`No tab with id: ${tabId}.`)),
       update: (tabId: number, properties: { url?: string }) => {
         calls.updated.push(tabId);
-        if (properties.url !== undefined) tabs[tabId]!.url = properties.url;
+        if (properties.url !== undefined && tabs[tabId]!.ignores !== true) {
+          tabs[tabId]!.url = properties.url;
+          loaded(tabId);
+        }
         return Promise.resolve({ id: tabId, url: tabs[tabId]!.url });
       },
-      reload: () => Promise.resolve(),
+      reload: (tabId: number) => {
+        calls.reloaded.push(tabId);
+        loaded(tabId);
+        return Promise.resolve();
+      },
       create: (properties: { url: string }) => {
         calls.created.push(properties.url);
-        tabs[900] = { url: properties.url };
+        tabs[900] = { url: properties.url, document: 1 };
         return Promise.resolve({ id: 900, url: properties.url });
       },
       onUpdated: { addListener: () => undefined, removeListener: () => undefined }
     },
     webNavigation: {
       getAllFrames: (details: { tabId: number }, callback: (found: unknown[]) => void) =>
-        callback([{ frameId: 0, errorOccurred: tabs[details.tabId]?.loadFailed === true }])
+        callback([{
+          frameId: 0,
+          errorOccurred: tabs[details.tabId]?.loadFailed === true,
+          documentId: `document.${tabs[details.tabId]?.document ?? 0}`
+        }])
     }
   };
   return calls;
@@ -666,4 +692,46 @@ test("a navigation whose page the browser could not load fails, though the addre
     expected: RESULTS,
     actual: `the browser could not load ${RESULTS}`
   });
+});
+
+test("a navigation the browser did not carry out fails, though the tab is at the requested address", async () => {
+  // The campaign's created Flow, in one row: the opening navigate names the
+  // page the tab is already on, the browser does nothing, and the address the
+  // post-condition compares is right either way. Only the document says so.
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, title: "Brightaisle", ignores: true } });
+  const run = await navigate(STORE, 41);
+
+  assert.deepEqual(calls.reloaded, [41], "the reload was asked for");
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, "web.navigation.unexpected");
+  assert.match(run.result.message ?? "", /already showing/u);
+  assert.equal(run.result.url, STORE, "and the result still says where the tab is");
+});
+
+test("a navigation the browser did carry out succeeds, and says what the tab did and which page it reached", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, title: "Brightaisle" } });
+  const run = await navigate(STORE, 41);
+
+  assert.deepEqual(calls.reloaded, [41]);
+  assert.equal(run.result.status, "succeeded");
+  assert.equal(run.result.title, "Brightaisle", "the page's own name is evidence a worker-side result can carry");
+  const validation = run.result.validation;
+  assert.equal(validation.status, "passed");
+  assert.match(validation.status === "passed" ? validation.actual : "", /loaded the page again/u);
+});
+
+test("a browser that will not say which document a tab holds is reported, never failed", async () => {
+  forgetAutomationTab();
+  (globalThis as { chrome?: unknown }).chrome = undefined;
+  const calls = installNavigationStub({ 41: { url: STORE } });
+  // No documentId at all: `getAllFrames` answers frames without one, as an
+  // older browser or a refused permission would.
+  const chrome = (globalThis as { chrome?: { webNavigation: { getAllFrames: unknown } } }).chrome!;
+  chrome.webNavigation.getAllFrames = (_details: { tabId: number }, callback: (found: unknown[]) => void) => callback([{ frameId: 0 }]);
+  const run = await navigate(STORE, 41);
+
+  assert.deepEqual(calls.reloaded, [41]);
+  assert.equal(run.result.status, "succeeded", "an unreadable document is not evidence of a no-op");
 });

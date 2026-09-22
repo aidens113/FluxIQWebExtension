@@ -1,6 +1,12 @@
 // Coverage of automation-tab.ts's memory of driven tabs: the automation tab is
 // the one set last, forgetting it returns to the tab driven before it, and the
 // most recent tab still open is found past tabs that have since closed.
+//
+// And of what driving a tab reports about itself. A drive's record is the only
+// evidence that a navigation was any work: the address reads the same whether
+// the browser loaded the page again or ignored the request, so the rows below
+// drive a stub that acts on what it is asked and one that does not, and hold
+// the record to telling them apart.
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
@@ -75,21 +81,43 @@ test("the latest open automation tab skips, and forgets, tabs that have closed",
 // left on it -- which is how a dialog opened while the Flow was being authored
 // was still up when the Flow ran, and blocked its first step. A navigation
 // means "be on this page", not "be on this page unless you already are".
-function stubDrivableTab(t: TestContext, tabId: number, url: string): { updates: unknown[]; reloads: number[] } {
+function stubDrivableTab(t: TestContext, tabId: number, url: string, options: { loads?: boolean } = {}): { updates: unknown[]; reloads: number[] } {
   const holder = globalThis as { chrome?: unknown };
   const previous = holder.chrome;
   const updates: unknown[] = [];
   const reloads: number[] = [];
+  const loads = options.loads ?? true;
+  let current = url;
+  let documents = 0;
   holder.chrome = {
     tabs: {
       get: async (asked: number) => {
         if (asked !== tabId) throw new Error(`No tab with id: ${asked}.`);
-        return { id: tabId, url, status: "complete" };
+        return { id: tabId, url: current, title: "Queue", status: "complete" };
       },
-      update: async (_asked: number, properties: unknown) => void updates.push(properties),
-      reload: async (asked: number) => void reloads.push(asked),
+      update: async (_asked: number, properties: unknown) => {
+        updates.push(properties);
+        const asked = (properties as { url?: string }).url;
+        // A browser that acts on the update replaces the document; one that
+        // does not -- `loads: false` -- leaves the tab exactly as it was.
+        if (asked !== undefined && loads) {
+          current = asked;
+          documents += 1;
+        }
+      },
+      reload: async (asked: number) => {
+        reloads.push(asked);
+        if (loads) documents += 1;
+      },
       onUpdated: { addListener: () => undefined, removeListener: () => undefined },
     },
+    // The top frame's document UUID, which changes for every document the
+    // browser loads. It is the only evidence that a reload happened.
+    webNavigation: {
+      getAllFrames: (_details: { tabId: number }, callback: (frames: unknown[]) => void) =>
+        callback([{ frameId: 0, documentId: `document.${documents}` }])
+    },
+    runtime: {},
   };
   t.after(() => {
     holder.chrome = previous;
@@ -102,11 +130,29 @@ test("a navigation to the page the tab already shows reloads it, so nothing is i
   forgetAutomationTab();
   setAutomationTab(7);
 
-  assert.equal(await resolveAutomationTab({ initialUrl: "https://example.test/queue" }), 7);
+  const resolved = await resolveAutomationTab({ initialUrl: "https://example.test/queue" });
 
+  assert.equal(resolved.tabId, 7);
   assert.deepEqual(driven.reloads, [7]);
   // Brought forward, but never asked to navigate to where it already is.
   assert.deepEqual(driven.updates, [{ active: true }]);
+  // And the record says the reload was a reload, and that it happened: the
+  // address alone reads the same either way.
+  assert.equal(resolved.drive?.reloaded, true);
+  assert.equal(resolved.drive?.urlBefore, "https://example.test/queue");
+  assert.notEqual(resolved.drive?.documentBefore, resolved.drive?.documentAfter);
+});
+
+test("a reload the browser does not act on leaves a record that says so", async (t) => {
+  const driven = stubDrivableTab(t, 7, "https://example.test/queue", { loads: false });
+  forgetAutomationTab();
+  setAutomationTab(7);
+
+  const resolved = await resolveAutomationTab({ initialUrl: "https://example.test/queue" });
+
+  assert.deepEqual(driven.reloads, [7], "the reload was asked for");
+  assert.equal(resolved.drive?.documentBefore, resolved.drive?.documentAfter, "and the tab kept the document it had");
+  assert.equal(resolved.drive?.urlBefore, resolved.drive?.urlAfter);
 });
 
 test("a navigation somewhere else drives the tab there, and does not reload", async (t) => {
@@ -114,10 +160,15 @@ test("a navigation somewhere else drives the tab there, and does not reload", as
   forgetAutomationTab();
   setAutomationTab(7);
 
-  assert.equal(await resolveAutomationTab({ initialUrl: "https://example.test/orders" }), 7);
+  const resolved = await resolveAutomationTab({ initialUrl: "https://example.test/orders" });
 
+  assert.equal(resolved.tabId, 7);
   assert.deepEqual(driven.reloads, []);
   assert.deepEqual(driven.updates, [{ url: "https://example.test/orders", active: true }]);
+  assert.deepEqual(
+    { before: resolved.drive?.urlBefore, after: resolved.drive?.urlAfter, reloaded: resolved.drive?.reloaded },
+    { before: "https://example.test/queue", after: "https://example.test/orders", reloaded: false }
+  );
 });
 
 function stubSnapshotDocument(t: TestContext): { replaceDocument(): void } {

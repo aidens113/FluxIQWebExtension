@@ -144,16 +144,22 @@ test("check: unchecking a radio and checking a non-checkable target are both ACT
   });
 });
 
+// The refusal now comes from the actionability gate, which runs before the
+// verb touches the control -- the same gate click, type and select are held to
+// -- so the reason is the gate's wording rather than the checkable-state
+// capability's. The verb's own `disabled` refusal is still behind it, for a
+// control the gate passes and the platform refuses (a disabled `<fieldset>`
+// around a control the gate reads as enabled).
 test("check: a disabled control is rejected with the disabled reason and is left untouched", async ({ openHarness, page }) => {
   const harness = await openHarness("keyboard-forms");
   await disable(page, EMAIL_UPDATES);
   const reply = await harness.runAction({ commandId: "check-disabled", actionType: "web.dom.check", selector: EMAIL_UPDATES, checked: true });
   expect(reply).toMatchObject({
     status: "failed",
-    validation: { status: "failed", actual: "the checkbox is disabled" },
+    validation: { status: "failed", actual: "the element is disabled" },
     failure: {
       category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
-      expected: "the control is checked", actual: "disabled: the checkbox is disabled"
+      expected: "the control is checked", actual: "disabled: the element is disabled"
     }
   });
   await expect(page.locator(EMAIL_UPDATES)).not.toBeChecked();

@@ -50,6 +50,18 @@ export type WorkerActionOutcome = {
   failure?: FailureRecord | undefined;
   /** Where the browser ended up, when the action knows it. */
   url?: string | undefined;
+  /**
+   * What the page the browser ended up on calls itself.
+   *
+   * A worker-side result carries no snapshot, no element and no resolution --
+   * there is no document in a service worker to take them from -- so until this
+   * was added a navigate result held nothing at all that said *which* page it
+   * had reached beyond its address. A title is one property read, it is on the
+   * result shape Core already accepts, and it is the difference between "the
+   * address is right" and "the address is right and the page behind it is the
+   * one we meant".
+   */
+  title?: string | undefined;
 };
 
 /** Assembles a worker-side result. The validation's text is bounded on the way in. */
@@ -68,6 +80,7 @@ export function workerActionResult(
     finishedAt: Date.now()
   };
   if (outcome.url !== undefined) result.url = outcome.url;
+  if (outcome.title !== undefined) result.title = outcome.title;
   if (outcome.failure !== undefined) result.failure = outcome.failure;
   if (action.visualTarget !== undefined) result.visualTarget = action.visualTarget;
   return result;
