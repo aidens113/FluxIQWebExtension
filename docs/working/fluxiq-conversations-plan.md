@@ -153,6 +153,77 @@ the exchange stays in one place, not that they stop existing.
    and its re-authentication step; do not copy burying a decision on a fifth
    tab.
 
+### From conv-core-primitives (2026-09-22)
+
+1. **Core has no conversation, thread, message or turn concept at all.** It has
+   one shape for "the automation has a question", and it was written
+   deliberately as *terminal*. Its own header
+   (`runtime/action-permissions/request.ts:1-12`) is the most useful thing
+   discovery found: "It ends the run; it does not park it. … There is no pending
+   request store and no resumable run, deliberately (the user's decision). But
+   the payload is written so that parking can be added without changing it:
+   `requestId` is the key a store would hold it under, and nothing in it assumes
+   the run has already ended." **That is the designed seam for this work.**
+2. **Core already has a parked-run mechanism with no way to answer it. Verified.**
+   `builtin.routine.approval` (`nodes/routine/approval.ts`) has an approval
+   message, a timeout and a default route as parameters, returns
+   `status: "waiting"`, and emits `routine.approval.requested`. The supervisor
+   grepped both repositories: the only other reference declares the effect is
+   expected (`executor/expected-transition.ts:48`). **Nothing consumes it** — no
+   endpoint, no UI, no resume path.
+3. **A new `conversation` field on a model request would be rejected outright**
+   by the hard allowlist at `deepseek-provider.ts:510-511` for every authoring
+   build, and silently dropped even if it passed. Prior turns must ride inside
+   `evidenceLoop.evidence[]` — which is already the de facto transcript, and into
+   which **Core already writes its own replies** under `core.decision_check`,
+   `core.completion_check` and `core.request_check`.
+4. **There is no assistant role.** A provider call is exactly two messages, roles
+   `"system" | "user"` only. The codebase *relies* on every decision being a
+   fresh request, so real dialogue is a far larger change than it appears.
+5. **The sharpest case of ending what should have asked:** a `no_repair` whose
+   reason is `person_required` — "only a person can settle this"
+   (`harness/structured-response.ts:40`). The model says a person must decide,
+   Core files a receipt, and nobody is asked. Alongside it: `permission_denied`
+   for "nobody to ask", an exploration that downgrades a domain's
+   `operator_approval_required` to `destructive_action_refused`, and nine stop
+   reasons each with a Core-authored English sentence that reaches nobody in
+   real time.
+6. **Authoring questions are not durable; recovery questions are** — the same
+   payload, two fates. Authoring's reaches the person as an HTTP body and is
+   persisted nowhere.
+7. **Structure constraints, verified not assumed.** `runtime/service.ts` is
+   exactly on its ratchet at 6,275 lines: **one added line fails `pnpm check`**.
+   A plain readonly property does not count toward the 223-method ceiling, so
+   that side is survivable. `automation-studio/runtime/` holds **24 of its 25**
+   permitted entries, so this must be a `runtime/conversations/` directory and
+   never loose files. Depth is capped at 9 segments and does not ratchet.
+
+---
+
+## Decisions
+
+Taken by the supervisor on the five questions discovery raised, rather than
+deferred.
+
+1. **`builtin.routine.approval` becomes live; it is not removed.** It is already
+   the right shape — a prompt, a timeout, a default route, a waiting status. The
+   conversation gives it the answer path it never had. The permission request
+   converges on the same thread and the same answering mechanism rather than
+   growing a second one.
+2. **The conversation view is the inbox, not `problems`.** Problems is a
+   diagnostics surface. Reachability comes from a globally mounted prompt
+   following the pairing component's precedent, which is the only thing in the
+   product that has ever got an unattended person's attention.
+3. **Authoring and recovery questions both become durable**, reconciled on the
+   payload that was already designed for it. Same question, same fate.
+4. **`service.ts` headroom is a prerequisite and gets its own task**, before any
+   conversation code needs the facade. There is precedent: task t048 brought it
+   from 6,381 to 6,275 by behaviour-unchanged moves.
+5. **No assistant role for now.** Prior turns ride inside the evidence array,
+   where Core already writes its own replies. That matches how the loop works
+   today and avoids a change the codebase's every-decision-is-fresh assumption
+   would fight.
+
 ---
 
 ## Worker Briefs
