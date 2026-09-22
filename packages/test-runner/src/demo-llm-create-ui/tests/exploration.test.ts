@@ -3,7 +3,10 @@
 // must stop at a *proposed* adaptation -- the parser refuses one that has
 // already been applied, the launcher and the UI driver carry no approve/apply
 // seam at all. The explicitly authorized golden lane confirms the visible
-// high-token boundary but still stops at a proposed adaptation.
+// high-token boundary but still stops at a proposed adaptation. The driver
+// also asserts the order of the panel's progress states, and answers the
+// consequence dialog either way: allow after proving Cancel changes nothing,
+// or refuse for good.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -12,7 +15,7 @@ import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
-import { settleObservedResponseText } from "../explore-proposal-ui.js";
+import { explorationProgressOrderIssue, refuseEvidenceGuidedCreationPermissionViaUi, settleObservedResponseText } from "../explore-proposal-ui.js";
 import { readCreateUiSource } from "./module-source.js";
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
@@ -51,7 +54,12 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(launcher, /applyOutcome: "not_attempted"/u);
   assert.match(launcher, /replayOutcome: "not_attempted"/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|approveFlowAdaptation|applyFlowAdaptation|runPersistedFlow/u);
-  const driver = proposeEvidenceGuidedCreationViaUi.toString();
+  // Both public entry points are thin: the one driver both run is the internal
+  // exploration function, so that is what these rows read.
+  const explorationSource = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui", "explore-proposal-ui.ts"), "utf8");
+  assert.match(proposeEvidenceGuidedCreationViaUi.toString(), /exploreEvidenceGuidedCreationViaUi\(input, "allow"\)/u);
+  assert.match(refuseEvidenceGuidedCreationPermissionViaUi.toString(), /exploreEvidenceGuidedCreationViaUi\(input, "refuse"\)/u);
+  const driver = explorationDriverSource(explorationSource);
   assert.match(driver, /Website task/u);
   assert.match(driver, /Explore and create proposal/u);
   assert.match(driver, /targetPage\.bringToFront/u);
@@ -149,3 +157,66 @@ test("external response-body observation is bounded independently of the product
   assert.equal(await settleObservedResponseText({ text: async () => "bounded" }, 1), "bounded");
   assert.equal(await settleObservedResponseText({ text: () => new Promise<string>(() => undefined) }, 1), undefined);
 });
+
+test("progress must prepare before inspecting and end on its terminal state, never regressing after it", () => {
+  assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "ready_for_review"], "proposal"), undefined);
+  // A confirmed high-token build and a permission continuation each prepare again.
+  assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "permission_pending", "preparing", "inspecting", "ready_for_review"], "proposal"), undefined);
+  assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "permission_pending"], "permission_request"), undefined);
+  assert.equal(explorationProgressOrderIssue(["inspecting", "ready_for_review"], "proposal"), "progress.preparing_missing");
+  assert.equal(explorationProgressOrderIssue(["inspecting", "preparing", "inspecting", "ready_for_review"], "proposal"), "progress.preparing_missing");
+  assert.equal(explorationProgressOrderIssue(["preparing", "ready_for_review"], "proposal"), "progress.inspecting_missing");
+  assert.equal(explorationProgressOrderIssue([], "proposal"), "progress.inspecting_missing");
+  assert.equal(explorationProgressOrderIssue(["preparing", "inspecting"], "proposal"), "progress.review_missing");
+  assert.equal(explorationProgressOrderIssue(["preparing", "ready_for_review", "inspecting"], "proposal"), "progress.review_missing");
+  assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "ready_for_review"], "permission_request"), "progress.permission_pending_missing");
+  assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "permission_pending", "preparing"], "permission_request"), "progress.regressed");
+});
+
+test("the progress observer is installed before the click and reads only Core's own progress labels", async () => {
+  const source = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui", "explore-proposal-ui.ts"), "utf8");
+  const driver = explorationDriverSource(source);
+  assert.ok(driver.indexOf("watchExplorationProgress(page)") >= 0);
+  assert.ok(driver.indexOf("watchExplorationProgress(page)") < driver.indexOf("explore-target-reactivate"));
+  assert.ok(driver.indexOf("explore-target-reactivate") < driver.indexOf("waitForExplorationTerminal"));
+  assert.match(driver, /assertProgressOrder\(evidence, await settledProgress\(page, progress, "ready_for_review"\), "proposal"\)/u);
+  // The labels are Core's: the authoring panel and its model, in the sibling Core checkout this package links.
+  const coreAuthoring = path.join(root, "..", "!FluxIQ", "apps", "web", "src", "features", "automation-studio", "authoring");
+  const panel = await readFile(path.join(coreAuthoring, "BlankFlowAuthoringPanel.tsx"), "utf8");
+  const model = await readFile(path.join(coreAuthoring, "blank-flow-authoring-model.ts"), "utf8");
+  for (const label of ['progress[aria-label="Preparing website exploration"]', 'progress[aria-label="Inspecting live target"]', "Ready for review.", "Flow action approval is still required."]) assert.ok(source.includes(label), label);
+  assert.match(panel, /<progress aria-label="Preparing website exploration" \/>/u);
+  assert.match(panel, /<progress aria-label=\{AUTOMATION_LLM_PROGRESS_LABELS\.inspectingLiveTarget\} \/>/u);
+  assert.match(model, /inspectingLiveTarget: "Inspecting live target"/u);
+  assert.match(panel, /<strong>\{AUTOMATION_LLM_PROGRESS_LABELS\.readyForReview\}\.<\/strong>/u);
+  assert.match(model, /readyForReview: "Ready for review"/u);
+  assert.match(panel, /<strong>Flow action approval is still required\.<\/strong>/u);
+  assert.match(panel, /aria-label="Build Flow from instructions"/u);
+});
+
+test("the refuse path cancels for good: it never reopens or allows, and proves no proposal or Flow change follows", async () => {
+  const source = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui", "explore-proposal-ui.ts"), "utf8");
+  const driver = explorationDriverSource(source);
+  const refuse = source.slice(source.indexOf("async function refuseRetainedPermission"), source.indexOf("async function assertProgressOrder"));
+  assert.ok(refuse.length > 0);
+  // The refusal returns after the Cancel checks and before the reopen and the allow.
+  assert.ok(driver.indexOf("explore-permission-cancel") < driver.indexOf('decision === "refuse"'));
+  assert.ok(driver.indexOf('decision === "refuse"') < driver.indexOf("explore-permission-reopen"));
+  assert.ok(driver.indexOf('decision === "refuse"') < driver.indexOf("Allow and continue"));
+  assert.doesNotMatch(refuse, /Allow and continue|explore-permission-reopen|\.click\(/u);
+  assert.match(refuse, /Review requested permissions/u);
+  assert.match(refuse, /listFlowAdaptations\(projectId, flowId, "proposed"\)\)\.length !== 0\) fail\("Refusing permission created a proposal"\)/u);
+  assert.match(refuse, /contentHash !== blankContentHash\) fail\("Refusing permission mutated the blank Flow"\)/u);
+  assert.match(refuse, /settledProgress\(page, input\.progress, "permission_pending"\)/u);
+  // A model that never asks leaves the refusal unverified rather than passed.
+  assert.match(refuseEvidenceGuidedCreationPermissionViaUi.toString(), /permission\.not_requested/u);
+  assert.match(refuseEvidenceGuidedCreationPermissionViaUi.toString(), /verification: "unverified"/u);
+  assert.doesNotMatch(source, /Approve Adaptation|Apply Adaptation|authorizationPin/u);
+});
+
+/** The one exploration driver both entry points run, from its declaration to the next top-level declaration. */
+function explorationDriverSource(source: string): string {
+  const start = source.indexOf("async function exploreEvidenceGuidedCreationViaUi");
+  assert.ok(start >= 0, "the internal exploration driver is present");
+  return source.slice(start, source.indexOf("\n/** How long the panel may take", start));
+}

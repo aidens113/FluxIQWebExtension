@@ -16,3 +16,18 @@ export { type DemoLlmPreparationState, parseDemoLlmPreparationState, assertDemoL
 export { startPersistentScenarioLabWithRecovery, requireDemoScenarioUrl } from "./scenario-lab.js";
 export { setupDemoWorkspaceDeepSeekKey, recordDemoWorkspace, runDemoWorkspaceFlow } from "./workspace-lanes.js";
 export { type DemoWorkspaceState } from "./workspace-state.js";
+
+// The building blocks the UI end-to-end journeys compose (`ui-e2e/journeys`):
+// the persistent Core and its signed-in control client, the extension, panel
+// and scenario pages, and the panel steps a journey drives. They are exported
+// here because a consumer outside this directory may reach them only through
+// its barrel.
+export { credentialLiterals, explicitPort } from "./configuration.js";
+export { authenticatedControl, withPersistentDemoCore } from "./core-process.js";
+export { connectExtension, extensionStatus, pollStatus, withDemoBrowser } from "./browser-session.js";
+export { assertConnectedSession, recordingIds, waitForNewRecording, waitForRoutedRunDetail } from "./control-waits.js";
+export { openFlowInCurrentProject, openProjectInPanel, selectFlowInCurrentProject } from "./panel-navigation.js";
+export { runDemoFlowFromPanel } from "./panel-run.js";
+export { type DemoFlowProfile, generateDemoSubflowFromRecording, provisionDemoFlow } from "./provisioning.js";
+export { stableHierarchyNodeId } from "./selectors.js";
+export { withWorkspaceLock } from "./workspace-state.js";
