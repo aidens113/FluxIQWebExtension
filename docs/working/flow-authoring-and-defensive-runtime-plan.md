@@ -1,7 +1,7 @@
 # Flow Authoring And Defensive Runtime
 
 Status: Active
-Status detail: Design drafted 2026-09-22; five discovery reports in flight to pin the seams. No implementation dispatched yet.
+Status detail: Designs settled and all seven discovery reports folded in, 2026-09-22. The step table names real files; no implementation dispatched yet, and the Week 2 integration lands first.
 Created: 2026-09-22
 Last updated: 2026-09-22
 Owner: Senior supervisor agent
@@ -59,9 +59,9 @@ than approximated downstream, and the user answered "yes good, i want to edit
 core". A Core-side paired document is therefore required, and this work follows
 Core's own agent instructions while in that repository.
 
-**What discovery changed.** Seven read-only workers were dispatched; d1, d2, d3
-and d5 have reported and their findings are below, with the load-bearing claims
-re-checked in source by the supervisor. Three things moved the plan materially:
+**What discovery changed.** Seven read-only workers reported, and every
+load-bearing claim below was re-checked in source by the supervisor. Three things
+moved the plan materially:
 
 - **Most of Design One already exists in Core and is wired to the wrong entry
   point.** `runtime/exploration-reduction/` holds exactly the step shape and the
@@ -90,10 +90,13 @@ exists: Core's recording entries carry `timestamp` **and `monotonicOffsetMs`**
 a wall-clock change. Nothing carries the gap between consecutive entries onto the
 Flow node, which is step B0 and is small.
 
-**What is not yet decided.** Where genuinely new Core modules live, and the Lab
-evidence needed to attribute a recovery to a rung — d6 and d7 are still out.
+**All seven discovery reports are in**, and the plan below names real files. The
+binding constraint they found is that Core's `service.ts` sits *exactly* on its
+ratchet at 6,275 lines and 223 methods, so every step lands in a new module and
+no edit may add a line to the service.
 
-**Next:** fold the remaining three reports into a phase table, then dispatch.
+**Next:** write the Core-side paired document, then dispatch workstream A and B
+against the step table once the t075 integration lands.
 
 **Blockers:** none. The Week 2 integration branch should still land first, since
 this work edits the same Core files.
@@ -549,6 +552,37 @@ supervisor confirmed in source itself are marked **verified**.
    carries a duration; and the `navigation` and `state.change` evidence triggers
    exist in the contract but were emitted **zero** times across 219 bundles.
 
+### From d7 — where this can live in Core (2026-09-22)
+
+1. **`service.ts` has zero headroom. Verified.** The structure baseline records
+   6,275 lines and 223 methods on `AutomationStudioService`, and the file is
+   *exactly* 6,275 lines with *exactly* 223 methods. The audit reports
+   `lowerable 0` — every ratcheted entry sits at its recorded value. **Not one
+   line and not one method may be added to the service.** `model/` is 28 of 28
+   files, `runtime/tests/` 25 of 25, `deepseek-provider.ts` 797 of 800. Every
+   step here therefore lands in new modules; edits inside `service.ts` may only
+   change lines, never add them. B8's guard changes qualify; nothing else may
+   touch it.
+2. **Four rules cannot be baselined away.** Path depth over nine segments fails
+   outright, and `runtime/llm/harness`, `harness-options`, `stages` and
+   `flow-bootstrap/plan` are **already at maximum depth and can never gain a
+   subdirectory**. Plus forbidden imports; the `runtime/llm` → `runtime/recovery`
+   value-import boundary, whose prescribed remedy is to put shared values in
+   `runtime/loop-limits/`; and facade dispatch, so collaborators under
+   `runtime/service/` call public methods through `AutomationStudioFacadePorts`.
+3. **The dry run needs no new execution machinery** — `runAutomationStudioGraph(flow,
+   { allowLlmDiagnosis: false })` already exists (`graph-run.ts:53`,
+   `recovery-ladder.ts:55`). But it **crosses a documented boundary**: see
+   decision 4 below.
+4. **An ordered deterministic-before-model ladder already exists twice** —
+   `executor/recovery-ladder.ts` and `runtime/recovery/`. Design Two extends one
+   of them; it must not become a third.
+5. **Draft-edit tools go through the existing harness-option registry** (cap 32
+   options, Core owns 6) emitting `AutomationStudioGraphPatchOperation`, not a
+   second vocabulary. Proposed homes: `runtime/flow-draft/`,
+   `harness-options/builtin-edits.ts`, `runtime/draft-rehearsal/`, and an
+   extension of `runtime/recovery/`.
+
 ---
 
 ## Decisions On Recorded Commitments
@@ -576,6 +610,15 @@ Three existing commitments sit in this plan's path. None is reversed silently.
    is ever produced — that reverses nothing. The node-level retry the ladder
    needs does contradict `element-identity.md`, so that document is updated in
    the same work unit to record the bounded retry and why it exists.
+4. **"The evidence loop is not a runtime executor for the workflow being
+   authored"** (Core's `docs/architecture/automation-studio/llm-flow-bootstrap.md:432-434`).
+   The in-flight dry run (A7) deliberately changes this, because a build that
+   cannot run its own draft cannot know whether the draft works — which is the
+   defect that produced round 1's single Flow. **Decision: make the change and
+   rewrite that passage in the same work unit**, stating what the build may now
+   execute, that it runs with `allowLlmDiagnosis: false`, and that it remains
+   gated by the existing action-permission gate. A documented boundary is changed
+   in the open, never quietly.
 
 ---
 
