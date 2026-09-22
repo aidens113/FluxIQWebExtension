@@ -246,6 +246,34 @@ deferred.
 
 ---
 
+## A Measured Baseline For "Is That Failure Mine?"
+
+Recorded once, on 2026-09-22, so no further task has to re-litigate it.
+
+Under concurrent worker load this machine's Core suite fails a batch of tests
+that **no code change causes**. The supervisor measured it directly: a full
+`npx vitest run` in `packages/fluxiq` on **clean `dev`, with no task changes at
+all**, printed `Test Files 11 failed | 320 passed (331)` and
+`Tests 17 failed | 2832 passed | 1 skipped (2850)` — 16 of them `Test timed
+out`, 2 performance assertions, and nothing else.
+
+For comparison, on the same afternoon: `conv-parking-and-resume` saw 31,
+`conv-service-headroom` saw 40, and an earlier task saw 28 then 1. Every one was
+a timeout, an `EBUSY` on `global.sqlite`, an `ENOTEMPTY` on an rmdir of
+`%TEMP%luxiq-*`, or a performance threshold. `conv-service-headroom` proved
+its own innocence properly by restoring the pre-change file and re-running the
+same files both ways — one subset identical, another 14 failing before against
+40 passing after.
+
+**How to judge a suite result here.** A failure is suspect only if it is *not* in
+that family, or if it reproduces when its file is run alone on an otherwise idle
+machine. Both cheap checks beat arguing from the count. The machine also has
+faulty RAM, which is the standing explanation for rare non-reproducible failures
+on it, and running several heavy workers beside a full suite is what turns that
+from rare into routine.
+
+---
+
 ## The Contract
 
 Fixed by the supervisor before dispatch so four workers can build against it in
