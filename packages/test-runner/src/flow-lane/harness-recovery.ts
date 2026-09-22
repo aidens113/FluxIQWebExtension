@@ -57,6 +57,9 @@ export async function readHarnessRecovery(
     issueCodes: withRefusalCase(attempt.issueCodes, refusals[index]),
     adaptationCreated: attempt.adaptationCreated,
     changeProposalCreated: attempt.changeProposalCreated,
+    // Only where Core asked the recovery's permission gate about this patch, so
+    // a record of a run that asked none reads exactly as it always did.
+    ...(attempt.permissionOutcome ? { permissionOutcome: attempt.permissionOutcome, permissionRequired: attempt.permissionRequired === true } : {}),
   }));
   const adaptationIds = identifiers(detail.adaptationIds ?? [], "runDetail.adaptationIds");
   const changeProposalIds = identifiers(detail.changeProposalIds ?? [], "runDetail.changeProposalIds");

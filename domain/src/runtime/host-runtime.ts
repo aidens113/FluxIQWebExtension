@@ -86,8 +86,18 @@ const WEB_AUTOMATION_OUTPUT_IDS: ReadonlySet<string> = new Set(WEB_AUTOMATION_AC
 /** Core's node definition for a recorded action. Core exports no constant for it. */
 const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 
-/** What this host can answer, in Core's capability vocabulary. */
-const HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation", "route-state"] as const);
+/**
+ * What this host can answer, in Core's capability vocabulary.
+ *
+ * `action-dispatch` is what a runtime repair that re-points or replaces an
+ * acting step needs before Core will run it (`live-patch.ts`), and this host
+ * does dispatch every web action a Flow runs, through the gateway the boundary
+ * is bound with. It was left off, so every executed target override was refused
+ * at preflight with "Runtime patch requires host capability action-dispatch" --
+ * in the Lab and in the panel alike, since both bind this one boundary
+ * (`registerWebAutomationRuntime`).
+ */
+const HOST_RUNTIME_CAPABILITIES = Object.freeze(["action-dispatch", "state-snapshot", "state-diff", "expectation-evaluation", "route-state"] as const);
 
 export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntimeGateway): WebAutomationHostRuntimeBoundary {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);

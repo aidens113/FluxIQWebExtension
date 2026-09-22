@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { validateRunHarnessRecovery, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
-import { ExistingFluxIQControlClient } from "../../existing-fluxiq-control.js";
+import { ExistingFluxIQControlClient, type ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { flowLaneObservation } from "../lane-observation.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
@@ -264,6 +264,56 @@ test("a recovery Core's gate refused says why, by the gate's code and never its 
   // A sentence where the code belongs fails the read by its path.
   serve(refused({ invoked: false, code: "Current training mode or settings do not allow LLM intervention." }));
   await assert.rejects(run(control), (error: unknown) => error instanceof RunnerFailure && error.message.includes("harnessRecovery.refusalCode"));
+});
+
+// A repair the recovery's permission gate held back (Week 2 exit, L5): the
+// patch call was made, the model wrote a repair that would lastingly act, and
+// nobody had allowed its classes. It was read as `runtime_patch.preflight_rejected`
+// and the gate's code, classes and the request itself were dropped, so a live
+// proof had to read Core's store. They travel now, each through the reader
+// that owns its shape.
+test("a repair held for permission carries the gate's outcome, its codes and the request Core built", async (t) => {
+  const REQUEST = {
+    schemaVersion: "automation-studio.action-permission-request.v1",
+    requestId: "permission-request:repair",
+    requestedAtMs: 1_300,
+    action: { kind: "flow_step", id: "builtin.policy.action", ref: "node.one", verb: "press" },
+    control: { name: "Add to queue", kind: "button" },
+    consequences: ["send_or_publish", "create_new"],
+    missing: ["send_or_publish", "create_new"],
+    reason: { stage: "recovery", instructionIds: [] },
+    authority: { granted: [], instructed: [] },
+    sentence: "To repair the step that failed, the Flow would press \"Add to queue\" (button) each time it runs, which would send or publish something that others will receive or see and create something new that stays. Neither its instruction nor a grant allows that, so the repair stopped to ask."
+  };
+  const held = (request: unknown) => () => ({
+    summary: { ...summary, status: "failed", interventionCount: 2, adaptationCount: 0 }, routeDecisions: [], subflows: [], actionAttempts: [attempt],
+    interventions: [
+      { interventionId: "intervention.diagnosis", kind: "diagnosis", validation: { ok: true, issues: [] }, createdAt: 1_100 },
+      { interventionId: "intervention.patch", kind: "runtime_patch", validation: { ok: true, issues: [] }, createdAt: 1_200 },
+    ],
+    metadata: {
+      llmGate: { invoked: true, ok: true, patchHeldCode: "llm.runtime_patch_permission_required", permissions: { granted: [], instructed: [], lapsed: [] } },
+      permissionRequest: request,
+      runtimePatchAttempts: [{ kind: "temporary_target_override", executed: false, preflightOk: false, permissionOutcome: "required", permissionRequired: true, requestId: "permission-request:repair", missing: ["send_or_publish", "create_new"], issues: [`Permission required: ${REQUEST.sentence}`], traceStatus: "not-run" }],
+    },
+  });
+  const { control, serve } = await core(t);
+  serve(held(REQUEST));
+  const outcome = await run(control);
+  assert.deepEqual(outcome.harnessRecovery?.runtimePatchAttempts, [
+    { kind: "temporary_target_override", proposalOnly: null, executed: false, preflightOk: false, issueCodes: ["runtime_patch.permission_required"], adaptationCreated: false, changeProposalCreated: false, permissionOutcome: "required", permissionRequired: true },
+  ]);
+  assert.equal(validateRunHarnessRecovery(outcome.harnessRecovery).valid, true);
+  // The evaluation carries closed words only: the control's name and Core's sentence stay behind.
+  assert.equal(JSON.stringify(outcome.harnessRecovery).includes("Add to queue"), false);
+
+  const detail = await control.getRunDetail("project.web", "run.one") as unknown as ExistingRunDetail;
+  assert.deepEqual(detail.llmGate, { invoked: true, patchHeldCode: "llm.runtime_patch_permission_required", permissions: { granted: [], instructed: [], lapsed: [] } });
+  assert.deepEqual(detail.permissionRequest, REQUEST);
+
+  // A request Core's own parser refuses fails the read by its path rather than travelling half-read.
+  serve(held({ ...REQUEST, control: { name: "<b>Add</b>", kind: "button" } }));
+  await assert.rejects(control.getRunDetail("project.web", "run.one"), (error: unknown) => error instanceof RunnerFailure && error.message.includes("runDetail.metadata.permissionRequest"));
 });
 
 // A model that answers "there is nothing to repair" leaves Core's declined

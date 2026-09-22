@@ -424,7 +424,7 @@ test("reports a successful press with unchanged parsed evidence as no progress",
   assert.deepEqual(actionTypes, ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
 });
 
-test("keeps gateway action, disconnect, and malformed snapshot failures fatal", async () => {
+test("refuses an action the page did not take, and keeps disconnect and malformed snapshot failures fatal", async () => {
   const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
   const failedAction = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
@@ -432,7 +432,15 @@ test("keeps gateway action, disconnect, and malformed snapshot failures fatal", 
       ? { status: "succeeded", payload: { snapshot: { url: "https://example.test/", interactiveElements: [{ tagName: "button", selector: "#safe", attributes: { type: "button", "aria-expanded": "false" } }] } } }
       : { status: "failed", error: "private gateway detail" },
   });
-  await assert.rejects(failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } }), /interaction failed/u);
+  // A failure that names no reason is `action_failed`, with the page as it now
+  // is, and never the gateway's own words (`page-refusal.test.ts` has the rest).
+  const refused = await failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
+  assert.equal(refused.resultCode, "web.action.rejected.action_failed");
+  assert.equal(refused.effectApplied, false);
+  const refusal = refused.evidence as { schemaVersion: string; ok: boolean; code: string };
+  assert.deepEqual([refusal.schemaVersion, refusal.ok, refusal.code], ["web-llm-tool-result.v1", false, "action_failed"]);
+  assert.equal((refused.evidence as any).page.location, "https://example.test/");
+  assert.equal(JSON.stringify(refused).includes("private gateway detail"), false);
   const disconnected = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) });
   await assert.rejects(disconnected.executeTool({ ...base, callId: "call.disconnect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /exactly one/u);
   const malformed = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => ["session.one"], executeAction: async () => ({ status: "succeeded", payload: {} }) });

@@ -79,7 +79,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   const parameters: JsonObject = element?.frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: element.frameId };
   const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
   assertActive(request.signal);
-  if (result.status !== "succeeded") throw new Error("web structure detection capture failed");
+  if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === undefined ? undefined : new URL(current.evidence.location).origin;
   const page = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({

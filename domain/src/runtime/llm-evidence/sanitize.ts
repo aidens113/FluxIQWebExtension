@@ -35,10 +35,12 @@
 // `domain/src/recording/web-state/evidence/input.ts`.
 
 import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
+import { frontLayerFirst } from "./front-layer";
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { capturedTruncated, evidenceElementTotal, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
 import { present } from "./present";
+import { recoverable } from "./tool-rejection";
 import { boundedText, jsonRecord } from "./untrusted-json";
 import type { WebRepairCandidateProjection } from "./target";
 
@@ -139,7 +141,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const elements: WebLlmEvidenceElement[] = [];
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
-  for (const raw of snapshot.interactiveElements) {
+  // An open modal dialog's own controls first: nothing else can be pressed (`front-layer.ts`).
+  for (const raw of frontLayerFirst(snapshot, snapshot.interactiveElements)) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
     const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
     if (!described) continue;
@@ -277,6 +280,9 @@ function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map
       popElement();
       continue;
     }
-    throw new Error("web DOM snapshot exceeds the evidence byte limit");
+    // Not even an empty packet of this page fits: what is left of the
+    // exploration's evidence budget is spent. The model is told so, and can
+    // complete from what it already holds.
+    recoverable("evidence_budget_exhausted");
   }
 }

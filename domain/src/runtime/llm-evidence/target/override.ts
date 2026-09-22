@@ -38,6 +38,13 @@
 // Which action failed is read from the output it dispatches wherever Core
 // names one (`webFailedActionDefinitionId`), because a recorded action is
 // Core's generic `builtin.policy.action` whatever its verb.
+//
+// An accepted repair also says what it names, as a person would recognise it:
+// the element's name exactly as the packet printed it, and one plain word for
+// what it is. Core carries that only to its permission gate, so a repair that
+// would lastingly act can ask "may it press Add to queue?" rather than ask about
+// a control nobody can name. The gate withholds a name the model was never
+// shown, so this adds nothing to what leaves the domain.
 
 import { type WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
@@ -116,7 +123,30 @@ export function validateWebRuntimeTargetOverrideEvidence(
   // ever declared before something reads it -- and such an action has nothing
   // this contract can re-point, which is what the refusal says.
   if (resolved.size !== 1 || !element) return { status: "absent", reason: "action_not_repairable" };
-  return { status: "resolved", target: resolvedTarget(element, selectors) };
+  return present<Extract<AutomationStudioRuntimeTargetOverrideEvidenceValidation, { status: "resolved" }>>({
+    status: "resolved",
+    target: resolvedTarget(element, selectors),
+    control: repairedControl(element)
+  });
+}
+
+/**
+ * What the repaired target names, in the words the permission request carries:
+ * the name the packet printed for it, or its visible text where it has no
+ * name, and one plain word for what it is. Absent when the element carries
+ * neither, and the request then says "a control it cannot name here".
+ */
+function repairedControl(element: WebLlmEvidenceElement): { name: string; kind: string } | undefined {
+  const name = element.name ?? element.text;
+  return name && name.trim() ? { name, kind: plainControlKind(element) } : undefined;
+}
+
+/** One plain word for what the element is, as the person being asked would call it: the same words the exploration's press uses. */
+function plainControlKind(element: WebLlmEvidenceElement): string {
+  if (element.role && /^[a-z]+$/u.test(element.role)) return element.role;
+  if (element.tag === "a") return "link";
+  if ((element.tag === "input" && element.inputType === "checkbox") || element.role === "checkbox") return "checkbox";
+  return /^[a-z]+$/u.test(element.tag) ? element.tag : "control";
 }
 
 /**
