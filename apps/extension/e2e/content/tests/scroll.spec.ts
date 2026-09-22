@@ -96,7 +96,10 @@ test.describe("on long-document", () => {
       validation: { status: "passed", expected: "the target within the viewport" },
       element: { selector: TARGET }
     });
-    expect(comparedActual(reply)).toMatch(/^the target is at -?\d+,-?\d+ in a \d+x\d+ viewport$/);
+    // The position the scroll reached, and then what the actionability gate saw
+    // at that position: a scroll never refuses on the gate, it reports it, so
+    // a step that is about to be refused as covered says so here first.
+    expect(comparedActual(reply)).toMatch(/^the target is at -?\d+,-?\d+ in a \d+x\d+ viewport; the point -?\d+,-?\d+ landed on the target$/);
     expect(await page.locator(TARGET).evaluate((element) => {
       const rect = element.getBoundingClientRect();
       return rect.top >= 0 && rect.bottom <= window.innerHeight;

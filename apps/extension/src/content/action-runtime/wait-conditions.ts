@@ -12,7 +12,23 @@
 // a flattened `failed`. A request that could never be satisfied -- a condition
 // that needs a selector, asked without one -- does throw, because that is a
 // malformed command rather than a page that was too slow.
+//
+// A selector is looked for in the roots the recorded target's host chain
+// reaches, exactly as `resolveTarget` looks for the element the wait is about
+// (`selector/shadow/scope.ts`): the chain comes in on the request as
+// `shadowHosts`, and the scope is resolved on *every* evaluation rather than
+// once, because the widget whose control is being waited for may not have
+// attached its root yet -- which is the case a wait exists for. A request with
+// no chain looks in the document alone, which is the same answer
+// `resolveShadowScope` gives and what every wait did before.
+//
+// Until this was wired, every condition here ran a bare
+// `document.querySelector`, so a wait for a control inside an open shadow root
+// could never be satisfied: on the job-board fixture the consent platform's
+// "Accept all" timed out, and the click on that same control, with that same
+// recorded target, succeeded immediately afterwards.
 
+import { resolveShadowScope, type LookupRoot } from "../selector/shadow";
 import type { WebAutomationWaitCondition } from "../types";
 import { DEFAULT_WAIT_TIMEOUT_MS, pageText, waitUntil, type WaitProgress } from "./waits";
 
@@ -28,6 +44,8 @@ export type WaitConditionRequest = {
   timeoutMs?: number | undefined;
   /** How long the page must stop changing for, under the `stable` condition. */
   stableForMs?: number | undefined;
+  /** The recorded target's open shadow host chain, when its selector was written inside one. */
+  shadowHosts?: readonly string[] | undefined;
 };
 
 export type WaitConditionOutcome =
@@ -71,7 +89,7 @@ function noEvaluator(condition: never): never {
 
 function presentHit(request: WaitConditionRequest): ConditionHit | undefined {
   if (request.selector) {
-    const element = document.querySelector(request.selector);
+    const element = firstMatch(request, request.selector);
     return element ? { element, actual: "the element was found" } : undefined;
   }
   return pageText().includes(requireText(request)) ? { actual: "the text was found" } : undefined;
@@ -79,7 +97,7 @@ function presentHit(request: WaitConditionRequest): ConditionHit | undefined {
 
 function visibleHit(request: WaitConditionRequest): ConditionHit | undefined {
   if (request.selector) {
-    const element = document.querySelector(request.selector);
+    const element = firstMatch(request, request.selector);
     return element && isVisible(element) ? { element, actual: "the element was visible" } : undefined;
   }
   // `pageText()` is rendered text, so text that reads back is text the page is showing.
@@ -87,13 +105,13 @@ function visibleHit(request: WaitConditionRequest): ConditionHit | undefined {
 }
 
 function enabledHit(request: WaitConditionRequest): ConditionHit | undefined {
-  const element = document.querySelector(requireSelector(request));
+  const element = firstMatch(request, requireSelector(request));
   return element && isEnabled(element) ? { element, actual: "the element was enabled" } : undefined;
 }
 
 function absentHit(request: WaitConditionRequest): ConditionHit | undefined {
   if (request.selector) {
-    return document.querySelector(request.selector) ? undefined : { actual: "no element matched the selector" };
+    return firstMatch(request, request.selector) ? undefined : { actual: "no element matched the selector" };
   }
   return pageText().includes(requireText(request)) ? undefined : { actual: "the text was absent" };
 }
@@ -108,6 +126,30 @@ function stableHit(request: WaitConditionRequest, progress: WaitProgress): Condi
   const stableForMs = request.stableForMs ?? DEFAULT_STABLE_FOR_MS;
   if (Date.now() - progress.lastChangeAt < stableForMs) return undefined;
   return { actual: `the page stopped changing for ${stableForMs} ms` };
+}
+
+/**
+ * The first element the selector matches in the scope the recorded target
+ * names: the roots its host chain reaches, or the document when it named none.
+ *
+ * The scope is resolved here, per evaluation, so a widget that attaches its
+ * root after the wait began is seen the moment it does.
+ *
+ * A selector the browser cannot parse throws, and the throw is left to
+ * propagate: `waitUntil` ends the wait on it rather than retrying it until the
+ * timeout, and the verb reports a malformed command instead of a page that was
+ * too slow. That is what the bare `document.querySelector` here did too.
+ */
+function firstMatch(request: WaitConditionRequest, selector: string): Element | undefined {
+  for (const root of waitScopeRoots(request)) {
+    const element = root.querySelector(selector);
+    if (element) return element;
+  }
+  return undefined;
+}
+
+function waitScopeRoots(request: WaitConditionRequest): readonly LookupRoot[] {
+  return resolveShadowScope(request.shadowHosts).roots;
 }
 
 /** What the page showed when the condition never held. The verb reports it as the validation's `actual`. */

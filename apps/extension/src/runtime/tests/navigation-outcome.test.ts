@@ -1,11 +1,18 @@
 // T1 coverage of navigation-outcome.ts: the post-condition that decides whether
-// a navigation arrived where it was sent. A site's own rewriting of its address
-// is the same destination; a redirect somewhere else is not, which is the case
-// the plan cares about (an auth wall, a consent page, an error page).
+// a navigation arrived where it was sent, and whether it was any work at all.
+//
+// A site's own rewriting of its address is the same destination; a redirect
+// somewhere else is not, which is the case the plan cares about (an auth wall,
+// a consent page, an error page). The second half is the case the destination
+// check cannot see: a navigation to the page the tab already shows arrives by
+// definition, so "did the browser do anything?" is a separate question with a
+// separate answer, and it must say "I could not tell" rather than "no" when
+// the record does not hold the evidence.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compareNavigatedUrl } from "../navigation-outcome";
+import { compareNavigatedUrl, judgeTabMovement } from "../navigation-outcome";
+import type { TabDriveRecord } from "../automation-tab";
 
 test("the same URL, and the rewrites a site performs on its own address, match", () => {
   const same: Array<[string, string]> = [
@@ -77,4 +84,69 @@ test("an address that matches is still not an arrival when the browser could not
     expected: "http://127.0.0.1:64130/s?k=earbuds",
     actual: "the browser could not load http://127.0.0.1:64130/s?k=earbuds"
   });
+});
+
+/** A drive record with the fields a row is about, and the rest as a settled tab would report them. */
+function drive(fields: Partial<TabDriveRecord>): TabDriveRecord {
+  return { opened: false, reloaded: false, ...fields };
+}
+
+test("a tab that kept both its address and its document did nothing", () => {
+  const stayed = judgeTabMovement(drive({
+    urlBefore: "https://example.test/store",
+    urlAfter: "https://example.test/store",
+    documentBefore: "document.one",
+    documentAfter: "document.one",
+    reloaded: true
+  }));
+  assert.equal(stayed.moved, false);
+  assert.equal(stayed.known, true);
+  assert.match(stayed.detail, /did not load the page again/u);
+});
+
+test("a document the browser replaced is work, and a reload says so in its own words", () => {
+  const reloaded = judgeTabMovement(drive({
+    urlBefore: "https://example.test/store",
+    urlAfter: "https://example.test/store",
+    documentBefore: "document.one",
+    documentAfter: "document.two",
+    reloaded: true
+  }));
+  assert.equal(reloaded.moved, true);
+  assert.match(reloaded.detail, /loaded the page again/u);
+
+  const replaced = judgeTabMovement(drive({ documentBefore: "document.one", documentAfter: "document.two" }));
+  assert.equal(replaced.moved, true);
+  assert.match(replaced.detail, /loaded a new document/u);
+});
+
+test("an address that moved is work even when the document did not: a same-document navigation", () => {
+  const moved = judgeTabMovement(drive({
+    urlBefore: "https://example.test/store",
+    urlAfter: "https://example.test/store#offers",
+    documentBefore: "document.one",
+    documentAfter: "document.one"
+  }));
+  assert.equal(moved.moved, true);
+  assert.equal(moved.known, true);
+  assert.match(moved.detail, /moved from https:\/\/example\.test\/store/u);
+});
+
+test("a tab opened for the navigation is work by construction", () => {
+  const opened = judgeTabMovement(drive({ opened: true, urlAfter: "https://example.test/store", documentAfter: "document.one" }));
+  assert.equal(opened.moved, true);
+  assert.equal(opened.known, true);
+});
+
+test("evidence the browser would not give is unknown, never a no-op", () => {
+  const rows: Array<[string, TabDriveRecord | undefined]> = [
+    ["no drive was made at all", undefined],
+    ["no document before", drive({ urlBefore: "https://example.test/store", urlAfter: "https://example.test/store", documentAfter: "document.one" })],
+    ["no document after", drive({ urlBefore: "https://example.test/store", urlAfter: "https://example.test/store", documentBefore: "document.one" })]
+  ];
+  for (const [label, record] of rows) {
+    const judged = judgeTabMovement(record);
+    assert.equal(judged.moved, true, label);
+    assert.equal(judged.known, false, label);
+  }
 });

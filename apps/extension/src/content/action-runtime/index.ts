@@ -5,6 +5,7 @@
 
 export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
 export { executeAction } from "./execute-action";
+export { recordedShadowHosts } from "./recorded-shadow-hosts";
 export { actionFailure } from "./results";
 
 export type { ActionResultEvidence } from "./results";
