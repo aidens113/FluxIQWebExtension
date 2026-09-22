@@ -704,6 +704,27 @@ step is complete on compilation or on a worker's report.
 
 ## Worker Briefs
 
+### Implementation partition
+
+Six workers, partitioned so no two share a file. Core's `service.ts` is the
+serial bottleneck as always and belongs to exactly one of them, and it has **zero
+ratchet headroom**, so edits there may change lines and never add them.
+
+| Worker | Steps | Owns |
+| --- | --- | --- |
+| `fa-build-draft` | A1, A3, A4, A5, A6 | Core `runtime/llm/evidence-loop.ts`, `runtime/flow-bootstrap/**`, new `runtime/flow-draft/` |
+| `fa-service-seams` | A2, A10, B8 | Core `runtime/service.ts` (line-neutral), `runtime/llm/runtime-session-grant.ts`, `live-patch/**` |
+| `fa-domain-tools` | A8, A9, A11 | `domain/src/runtime/llm-evidence/**` and Core's harness-option registration only |
+| `fa-executor-ladder` | B0, B1, B1a, B2, B3, B4, B9 | Core `runtime/executor/**`, `runtime/recovery/**` |
+| `fa-extension-defenses` | B5, B6, B7 | `apps/extension/src/content/**`, `src/runtime/**` |
+| `fa-lab-measurement` | D0, D0a, A12 | `packages/test-runner/**` |
+
+`fa-executor-ladder` and `fa-extension-defenses` are the pair to start first:
+they are disjoint, they carry the user's stated requirements, and B5 to B7 are
+standalone defects that need nothing else to land.
+
+Workstream C waits on A5. Workstream D1 to D3 wait on D0 and B4.
+
 ### Brief: d1-exploration-to-flow-seam
 Dispatched 2026-09-22. How a model-driven exploration becomes a saved Flow in
 Core today, what is discarded between the two, whether a build can revise a node
