@@ -226,6 +226,48 @@ deferred.
 
 ---
 
+## The Contract
+
+Fixed by the supervisor before dispatch so four workers can build against it in
+parallel without negotiating. A worker that finds it wrong reports and stops
+rather than diverging quietly.
+
+### The thread
+
+```
+Conversation  { conversationId, projectId, subject: { kind: "project"|"flow"|"build"|"run", id },
+                status: "open"|"resolved", createdAt, updatedAt }
+Turn          { turnId, conversationId, author: "automation"|"person", createdAt,
+                text, ask?: Ask, attachment?: { kind, ref } }
+Ask           { askId, kind: "permission"|"choice"|"confirm"|"open",
+                status: "pending"|"answered"|"expired", parks: boolean,
+                timeoutMs?, onTimeout?: "deny"|"default", options?, missing?, control? }
+Answer        { askId, answeredAt, kind: "grant"|"deny"|"choice"|"text", value }
+```
+
+`attachment.ref` names something the panel renders itself — a Flow graph diff, a
+dataset preview, a screenshot. A turn must be able to carry one; the thread does
+not render it.
+
+### The rules
+
+- A turn is append-only. An `Ask` is answered once; a second answer is refused.
+- `parks: true` means the work waits. A parked run is resumable from the answer,
+  not restarted, wherever the runtime allows it.
+- `requestId` on today's permission payload **is** an `askId`. That payload was
+  written for this and does not change.
+- Prior turns reach the model inside `evidenceLoop.evidence[]`, under a
+  `core.conversation` tool id, beside the replies Core already writes there.
+  No new request field, no assistant role.
+
+### The endpoints
+
+`list-conversations(projectId)`, `get-conversation(conversationId, sinceTurnId?)`,
+`append-turn(conversationId, text)`, `answer-ask(askId, answer)`. Core writes
+automation turns internally; the API is what a person uses.
+
+---
+
 ## Worker Briefs
 
 ### Brief: conv-core-primitives
