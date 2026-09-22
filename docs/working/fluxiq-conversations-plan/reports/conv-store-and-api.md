@@ -158,7 +158,7 @@ this program works rather than chosen:
   It is not a second key: the ask is still found by `askId` alone.
 - **`get-conversation` takes a `limit` and answers `hasMore`.** A thread has no
   bound on its length. There is no cursor yet — see
-  [Not verified / not built](#not-verified--not-built).
+  [Not verified / not built](#not-verified).
 
 ### 5. The internal seam
 
