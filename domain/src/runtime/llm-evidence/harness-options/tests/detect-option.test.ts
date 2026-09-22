@@ -62,8 +62,17 @@ async function run(registry: AutomationStudioHarnessOptionRegistry, optionId: st
   return result as { evidence: JsonObject; effectApplied: boolean; resultCode: string };
 }
 
-function rejection(code: string): { kind: string; evidence: JsonObject; effectApplied: boolean; resultCode: string } {
-  return { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code }, effectApplied: false, resultCode: `web.action.rejected.${code}` };
+/**
+ * The refusal as the model receives it. `detail` is what tells one refusal from
+ * another -- the handle named nothing in this exploration's packet, or its page
+ * has been left, or the call was not the option's shape -- and each of those
+ * wants a different next call, so the expectations here name it.
+ */
+function rejection(code: string, detail?: JsonObject): { kind: string; evidence: JsonObject; effectApplied: boolean; resultCode: string } {
+  const evidence: JsonObject = detail === undefined
+    ? { schemaVersion: "web-llm-tool-result.v1", ok: false, code }
+    : { schemaVersion: "web-llm-tool-result.v1", ok: false, code, detail };
+  return { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode: `web.action.rejected.${code}` };
 }
 
 function linkHandle(packet: JsonObject): string {
@@ -128,15 +137,15 @@ test("refuses a target no recovery packet issued, or whose page has moved on, wi
   const { registry, commands, setPage } = harness();
   await run(registry, "web.recovery.inspect", {});
 
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.9" }), rejection("target_unobserved"));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "target.9" }));
   // Another Flow's exploration issued nothing this one can name.
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }, "flow.two"), rejection("target_unobserved"));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
   setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }), rejection("target_unobserved"));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "target.1" }));
   assert.equal(commands.some((command) => command.parameters.detectStructure !== undefined), false);
 
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "a" }), rejection("invalid_input"));
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { selector: LINK_SELECTOR }), rejection("invalid_input"));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "a" }), rejection("invalid_input", { reason: "malformed_handle", target: "a" }));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { selector: LINK_SELECTOR }), rejection("invalid_input", { reason: "unexpected_input_keys", instead: ["target"] }));
 });
 
 test("answers with a packet Core would carry: none of the domain's denied keys at any depth, and no selector", async () => {

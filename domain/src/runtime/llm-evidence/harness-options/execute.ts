@@ -20,8 +20,10 @@
 // qualifier before asking -- gets the selector hint behind exactly that
 // control.
 //
-// Every refusal returns a bare code. A refusal must never become a side channel
-// for the page content the refusal was protecting.
+// A refusal says why it refused, and never more than that: one closed reason,
+// the handle the call named, and the keys the tool's own schema declares. A
+// refusal must never become a side channel for the page content the refusal was
+// protecting, which is what `../tool-rejection.ts` bounds.
 
 import type { AutomationStudioExplorationScopePolicy, AutomationStudioHarnessOptionExecution, AutomationStudioHarnessOptionImplementation } from "fluxiq/automation-studio";
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
@@ -43,7 +45,7 @@ import { currentElementForReturnedTarget, pressControl } from "../press";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
-import { recoverable, RecoverableToolRejection, toolRejection } from "../tool-rejection";
+import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE } from "../vocabulary";
 import { webAutomationExplorationScope } from "./exploration-terms";
@@ -95,7 +97,8 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
   };
   // The packet a target handle was copied from. Before this exploration has
   // shown one, no handle can have been, whatever the current page numbers.
-  const shownPacket = (input: Handled): WebLlmSnapshotBinding => returned.get(input.scopeKey) ?? recoverable("target_unobserved");
+  const shownPacket = (input: Handled): WebLlmSnapshotBinding => returned.get(input.scopeKey)
+    ?? recoverable("target_unobserved", rejectionDetail({ reason: "nothing_observed_yet", target: undefined, instead: undefined, missing: undefined, requestId: undefined }));
   const run = (handler: (input: Handled) => Promise<WebLlmEvidenceToolExecution>): AutomationStudioHarnessOptionImplementation =>
     async (execution) => {
       const handled = prepare(context, execution);
@@ -106,7 +109,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
           // A refusal the page caused carries the page, shown like any packet
           // so its handles can be pressed next (`../capture.ts`).
           const page = error.page === undefined ? undefined : shown(handled, error.page);
-          return toolExecution(toolRejection(error.code, page?.evidence), false, webLlmToolRejectionResultCode(error.code));
+          return toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code));
         }
         throw error;
       }
@@ -176,7 +179,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       const after = await capture(context, input);
       // Nothing moved, so the wait bought nothing. Saying so is the point: a
       // packet identical to the last one reads to a model as fresh evidence.
-      if (sameEvidence(before, after)) recoverable("no_progress");
+      if (sameEvidence(before, after)) recoverable("no_progress", why("nothing_changed_while_waiting"));
       return toolExecution(shown(input, after).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_NAVIGATE_OPTION_ID]: run(async (input) => {
@@ -188,7 +191,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         currentScope: webAutomationExplorationScope(current.evidence.location),
         requestedScope: webAutomationExplorationScope(destination.href)
       })) recoverable("out_of_scope");
-      if (evidenceLocation(destination) === current.evidence.location) recoverable("no_progress");
+      if (evidenceLocation(destination) === current.evidence.location) recoverable("no_progress", why("already_at_destination"));
       // The recapture asserts it landed in the scope the policy allowed, not in
       // the one it started from: this is the one option permitted to move.
       const moved = await actAndCapture(context.gateway, input.sessionId, input.request, "web.browser.navigate", { url: destination.href }, current, input.request.signal, webAutomationExplorationScope(destination.href));
@@ -232,7 +235,7 @@ function sameEvidence(left: WebLlmSnapshotBinding, right: WebLlmSnapshotBinding)
 function boundedWait(value: JsonObject): number {
   exactKeys(value, ["maxWaitMs"]);
   const requested = value.maxWaitMs;
-  if (typeof requested !== "number" || !Number.isFinite(requested)) recoverable("invalid_input");
+  if (typeof requested !== "number" || !Number.isFinite(requested)) recoverable("invalid_input", why("not_a_number"));
   return Math.min(Math.max(Math.trunc(requested), WEB_RECOVERY_WAIT_BOUNDS.minMs), WEB_RECOVERY_WAIT_BOUNDS.maxMs);
 }
 
@@ -244,7 +247,9 @@ function targetHandle(value: JsonObject): string {
 /** The `target` handle in an input whose keys were already checked. */
 function handleIn(value: JsonObject): string {
   const target = value.target;
-  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) recoverable("invalid_input");
+  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) {
+    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof target === "string" ? target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  }
   return target;
 }
 
@@ -255,13 +260,28 @@ function requestedUrl(input: unknown): URL {
   try {
     return safeEvidenceUrl(input);
   } catch {
-    return recoverable("invalid_input");
+    return recoverable("invalid_input", why("not_a_url"));
   }
 }
 
 function exactKeys(value: JsonObject, allowed: string[]): void {
   const keys = new Set(allowed);
-  if (Object.keys(value).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) recoverable("invalid_input");
+  const unexpected = Object.keys(value).some((key) => !keys.has(key));
+  const missing = allowed.some((key) => !Object.prototype.hasOwnProperty.call(value, key));
+  if (!unexpected && !missing) return;
+  // The option's own declared keys, which is what it takes and all it takes.
+  recoverable("invalid_input", rejectionDetail({
+    reason: unexpected ? "unexpected_input_keys" : "missing_input_keys",
+    target: undefined,
+    instead: allowed,
+    missing: undefined,
+    requestId: undefined
+  }));
+}
+
+/** A refusal whose reason is the whole of what the model needs. */
+function why(reason: "nothing_changed_while_waiting" | "already_at_destination" | "not_a_number" | "not_a_url") {
+  return rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined });
 }
 
 async function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {

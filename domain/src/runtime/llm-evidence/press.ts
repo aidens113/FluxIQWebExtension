@@ -27,7 +27,7 @@ import { actAndCapture, type WebLlmEvidenceGateway, type WebLlmEvidenceToolReque
 import { webActionPermission } from "./permission";
 import type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
-import { recoverable } from "./tool-rejection";
+import { recoverable, rejectionDetail } from "./tool-rejection";
 
 /** One press a tool has already bound to a live element. */
 export type WebControlPress = {
@@ -59,14 +59,26 @@ export async function pressControl(press: WebControlPress): Promise<WebLlmSnapsh
     control: { name: press.element.name ?? press.element.text, kind: webControlKind(press.element) },
     verb: "press"
   });
-  if (permission === "invalid") recoverable("invalid_input");
-  if (permission === "refused") recoverable("permission_required");
+  if (permission.kind === "invalid") recoverable("invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  if (permission.kind === "refused") {
+    // Which classes, and whether anybody was asked. A bare code left the model
+    // with nothing to route around and the trace with nothing to explain.
+    recoverable("permission_required", rejectionDetail({
+      reason: permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted",
+      target: undefined,
+      instead: undefined,
+      missing: permission.missing,
+      requestId: permission.requestId ?? undefined
+    }));
+  }
   const target = { selector: press.element.selector };
   const pressed = press.restamp(await actAndCapture(press.gateway, press.sessionId, press.request, "web.dom.click", target, press.current, press.request.signal));
   // Put back before anything else can refuse, so a `no_progress` cannot leave
   // the row ticked.
   if (isCheckbox(press.element)) await restoreCheckbox(press, pressed);
-  if (JSON.stringify(pressed.evidence) === JSON.stringify(press.current.evidence)) recoverable("no_progress");
+  if (JSON.stringify(pressed.evidence) === JSON.stringify(press.current.evidence)) {
+    recoverable("no_progress", rejectionDetail({ reason: "page_unchanged_after_action", target: undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  }
   return pressed;
 }
 
@@ -99,7 +111,7 @@ function isCheckbox(element: WebLlmEvidenceElement): boolean {
 /** The one element a handle names, or a refusal: a handle that names none or several was never observed. */
 export function observedElement(evidence: WebLlmPageEvidence, target: string): WebLlmEvidenceElement {
   const matches = evidence.elements.filter((element) => element.target === target);
-  if (matches.length !== 1) recoverable("target_unobserved");
+  if (matches.length !== 1) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   return matches[0]!;
 }
 
@@ -116,11 +128,24 @@ export function currentElementForReturnedTarget(
   target: string
 ): ResolvedWebLlmEvidenceElement {
   const observedSnapshot = returned ?? current;
-  if (observedSnapshot.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  if (observedSnapshot.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
   observedElement(observedSnapshot.evidence, target);
   const selector = observedSnapshot.selectors.get(target);
-  if (!selector) recoverable("target_unobserved");
+  if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   const matches = current.evidence.elements.filter((element) => current.selectors.get(element.target) === selector);
-  if (matches.length !== 1) recoverable("target_unobserved");
+  if (matches.length !== 1) {
+    recoverable("target_unobserved", handleRefusal(matches.length === 0 ? "handle_no_longer_on_page" : "handle_names_several_now", target));
+  }
   return { ...matches[0]!, selector };
+}
+
+/**
+ * A refusal about the handle the call named. It carries the handle back and
+ * says which of the ways a handle stops naming one control happened, because
+ * each of them wants a different next call -- and a model told only
+ * `target_unobserved` makes the same call again until the build runs out of
+ * steps (`./tool-rejection.ts`).
+ */
+function handleRefusal(reason: "handle_not_in_packet" | "page_moved_since_packet" | "handle_no_longer_on_page" | "handle_names_several_now", target: string) {
+  return rejectionDetail({ reason, target, instead: undefined, missing: undefined, requestId: undefined });
 }
