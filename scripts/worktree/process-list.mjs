@@ -5,6 +5,7 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
+import { parseProcessListingJson } from "./process-listing-json.mjs";
 
 const execFileAsync = promisify(execFile);
 const WINDOWS_QUERY = "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress";
@@ -14,7 +15,7 @@ const MAX_BUFFER = 64 * 1024 * 1024;
 export async function listProcesses() {
   if (process.platform === "win32") {
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", WINDOWS_QUERY], { windowsHide: true, encoding: "utf8", maxBuffer: MAX_BUFFER });
-    const rows = JSON.parse(stdout);
+    const rows = parseProcessListingJson(stdout);
     return (Array.isArray(rows) ? rows : [rows]).map((row) => ({
       pid: Number(row.ProcessId),
       parentPid: row.ParentProcessId === null || row.ParentProcessId === undefined ? null : Number(row.ParentProcessId),

@@ -15,7 +15,36 @@ import { requireSecureGatewayUrl } from "../target-config.js";
 import { hardenWindowsPrivatePath } from "../windows-acl.js";
 import { type DemoWorkspaceConfiguration, explicitPort } from "./configuration.js";
 
-export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfiguration, operation: () => Promise<T>): Promise<T> {
+/** One running demo Core: the session it was started in, the ports it holds, and the way to stop it. */
+export type RunningDemoCore = {
+  readonly sessionId: string;
+  readonly webPort: number;
+  readonly gatewayPort: number;
+  /**
+   * Stops the Core tree, then removes its session directory. A removal failure
+   * after a stop failure is appended to the stop's error rather than replacing
+   * it. Every call after the first returns the first call's promise.
+   */
+  stop(): Promise<void>;
+};
+
+export type DemoCoreStartOptions = {
+  /**
+   * Skip the web panel host build, the domain setup and the identity check. Set
+   * only by a caller that already started a Core on this configuration in this
+   * process, so the files those steps write are known to be in place; a restart
+   * then costs the Core launch alone.
+   */
+  reusePreparedWorkspace?: boolean;
+};
+
+/**
+ * Starts the demo Core on the configuration's own ports and returns once its
+ * panel answers HTTP and its client gateway accepts a TCP connection. A start
+ * that fails part-way stops what it launched and removes its session before
+ * the failure is thrown, so a caller only ever holds a Core that is up.
+ */
+export async function startPersistentDemoCore(config: DemoWorkspaceConfiguration, options: DemoCoreStartOptions = {}): Promise<RunningDemoCore> {
   const sessionId = `run-${new Date().toISOString().replace(/[:.]/gu, "-")}-${randomBytes(4).toString("hex")}`;
   const sessionsDirectory = path.join(config.workspaceDirectory, process.platform === "win32" ? ".s" : ".sessions");
   const sessionDirectoryName = process.platform === "win32" ? randomBytes(6).toString("hex") : sessionId;
@@ -50,25 +79,28 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
   // Stop the Core tree, then remove the session. A failure after an earlier one
   // is appended as a labelled line instead of replacing it: an EBUSY on the
   // removal used to hide the lane's own error.
-  const cleanUp = () => runThenCleanUp(() => supervisor.cleanup(), () => removeDemoSession(sessionsDirectory, sessionDirectoryName), "Demo session removal also failed");
-  return runThenCleanUp(async () => {
-    await supervisor.run({
-      name: "demo-host-build",
-      command: executable("node"),
-      args: [path.join(config.repositoryRoot, "domain", "scripts", "build-web-panel-host.mjs")],
-      cwd: config.repositoryRoot,
-      env: process.env,
-      logPath: processLogPath(logsDirectory, `${sessionId}-host-build`),
-    });
-    await supervisor.run({
-      name: "demo-domain-setup",
-      command: executable("node"),
-      args: [path.join(config.repositoryRoot, "domain", "scripts", "setup-fluxiq.mjs")],
-      cwd: config.repositoryRoot,
-      env: { ...process.env, FLUXIQ_WEB_AUTOMATION_ROOT: config.fluxiqRoot },
-      logPath: processLogPath(logsDirectory, `${sessionId}-domain-setup`),
-    });
-    await ensureDemoIdentity(config);
+  let stopping: Promise<void> | undefined;
+  const stop = () => stopping ??= runThenCleanUp(() => supervisor.cleanup(), () => removeDemoSession(sessionsDirectory, sessionDirectoryName), "Demo session removal also failed");
+  try {
+    if (!options.reusePreparedWorkspace) {
+      await supervisor.run({
+        name: "demo-host-build",
+        command: executable("node"),
+        args: [path.join(config.repositoryRoot, "domain", "scripts", "build-web-panel-host.mjs")],
+        cwd: config.repositoryRoot,
+        env: process.env,
+        logPath: processLogPath(logsDirectory, `${sessionId}-host-build`),
+      });
+      await supervisor.run({
+        name: "demo-domain-setup",
+        command: executable("node"),
+        args: [path.join(config.repositoryRoot, "domain", "scripts", "setup-fluxiq.mjs")],
+        cwd: config.repositoryRoot,
+        env: { ...process.env, FLUXIQ_WEB_AUTOMATION_ROOT: config.fluxiqRoot },
+        logPath: processLogPath(logsDirectory, `${sessionId}-domain-setup`),
+      });
+      await ensureDemoIdentity(config);
+    }
     const coreWebBuild = await prepareCoreWebBuild({
       fluxiqRepositoryRoot: config.fluxiqRepositoryRoot,
       supervisor,
@@ -103,8 +135,18 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
     await waitForHttp(config.origin, { timeoutMs: 60_000 });
     await fetch(`${config.origin}/api/client-gateway/snapshot`, { signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
     await waitForTcpGateway(gatewayPort, 60_000);
-    return await operation();
-  }, cleanUp);
+  } catch (startError) {
+    try { await stop(); }
+    catch (cleanupError) { throw withFollowingFailure(startError, cleanupError, "Demo session cleanup also failed"); }
+    throw startError;
+  }
+  return { sessionId, webPort, gatewayPort, stop };
+}
+
+/** Runs `operation` against a demo Core started for it, and always stops that Core afterwards. */
+export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfiguration, operation: () => Promise<T>): Promise<T> {
+  const core = await startPersistentDemoCore(config);
+  return runThenCleanUp(operation, () => core.stop());
 }
 
 /** The removal errors Windows raises while a just-stopped process tree still releases its handles. */

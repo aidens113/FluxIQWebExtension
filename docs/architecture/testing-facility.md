@@ -1017,8 +1017,9 @@ option (`packages/test-runner/src/commands.ts`).
 
 The runner opens the scenario's start page, checks its page facts, and pairs
 the extension when the run has a Core identity. It runs the
-[Core action probe](#lane-rules), selects the project again, starts recording,
-and waits up to 15 seconds for the extension to report that it is recording. A
+[Core action probe](#core-action-probe), resets the fixture and loads the start
+page again, selects the project again, starts recording, and waits up to 15
+seconds for the extension to report that it is recording. A
 start that never arrives fails as `recording.persistence`, and writes the
 extension's own account of it, labels and reasons only, to
 `snapshots/recording-start.json`.
@@ -1256,17 +1257,26 @@ judged on, by the lane it runs on:
   lane published an observation with a created Flow. One that never reached
   the lane fails as `environment.missing` rather than passing on the
   recording's checks.
-- **The Core action probe** (`probe-step.ts`). Before recording, Core navigates
-  the extension's automation tab to the start page, then types a fixed probe
-  text into the first `type` step, in script order, whose target resolves to a
-  CSS selector visible on that page within one second. A field that only an
-  earlier step reveals cannot take it. With no such step the probe is skipped,
-  and a `runtime.settle` event publishes the reason (`no-css-type-step` or
-  `not-on-start-page`) and the step ids considered, never a value.
 - **Final-state facts** (`final-state-facts.ts`). A run's final state is judged
   on the resolved workflow's `finalState`, plus the scenario's playback-goal
   success facts only for the primary workflow expected to succeed. A negative
   run, one whose `expected.failure` is set, is not judged on the goal.
+
+### Core action probe
+
+The probe lives in `core-action-probe/`. Before recording, the runner plants a
+random mark as the `data-fluxiq-core-probe` attribute of the start page's root
+element, and Core issues `web.dom.extract` for that attribute through
+`execute-client-action`, in the tab the extension holds as active. The probe
+passes only when the read returns the mark, so it proves a Core-issued action
+reaches the page through the production gateway without depending on the site
+being free of overlays. A refused or failed command, or a missing result, fails
+as `action.dispatch`; a read that returns anything else, or a mark that cannot
+be removed, fails as `runtime.behavior`. The runner then resets the fixture,
+loads the start page again and checks its at-load facts, so recording starts
+from the page as it was first presented, whatever the round trip cost. The
+probe records one `web.dom.extract` action timing, which is the recording
+lane's reported verdict unless the run fails at the facility.
 
 ### Recording checks
 

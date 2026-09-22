@@ -1,6 +1,6 @@
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
-import { allTabFrames, sendToTab, unreachableFrameReason } from "../background/tabs";
+import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import {
   navigationUnexpectedFailure,
   workerActionFailedFailure,
@@ -21,6 +21,7 @@ import { runBrowserTabAction } from "./browser-tab";
 import { sendClickCheckingLanding } from "./click-landing";
 import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
 import { chooseFrame } from "./frame-address";
+import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
 import { compareNavigatedUrl } from "./navigation-outcome";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
@@ -257,6 +258,11 @@ const NAVIGATING_PAGE_ERRORS = [/Receiving end does not exist/i, /message (port|
  * `web.action.failed`. Only the assert is re-sent, because it only reads: a
  * click or a type may already have acted before the channel closed, and sending
  * it again would act twice. A second refusal is reported as the first would be.
+ *
+ * A paginated `web.dom.extract_list` presses controls and reads, so it is
+ * neither case: it is carried into each document its pagination loads by
+ * `extract-list-continuation.ts`, which re-sends it only from a checkpoint the
+ * page took before pressing anything.
  */
 async function sendAction(
   action: BrowserActionCommand,
@@ -264,6 +270,9 @@ async function sendAction(
   message: Record<string, unknown>,
   frameId: number
 ): Promise<BrowserActionResult> {
+  if (action.actionType === "web.dom.extract_list" && action.extractList?.paginate !== undefined) {
+    return await sendExtractListAcrossDocuments(action, tabId, message, frameId, { send: sendToTab, makeReady: ensureContentScript });
+  }
   try {
     return await sendToTab<BrowserActionResult>(tabId, message, frameId);
   } catch (error) {

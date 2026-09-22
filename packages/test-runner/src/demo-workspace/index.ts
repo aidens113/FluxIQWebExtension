@@ -4,7 +4,8 @@
 export { runDemoLlmAdaptation, inspectLatestDemoLlmAdaptationRun, controlPreparedDemoLlmTargetAdaptation } from "./adaptation-lane.js";
 export { prepareDemoLlmBlankWorkspace } from "./blank-preparation.js";
 export { type BoundExplorationApplyCheckpoint, runBoundDemoLlmExplorationApplyCheckpoint, type BoundExplorationRunCheckpoint, boundExplorationRunStages, type BoundExplorationRunStage, runBoundDemoLlmExplorationFlow } from "./bound-exploration.js";
-export { type DemoWorkspaceConfiguration, resolveDemoWorkspaceConfiguration } from "./configuration.js";
+export { type DemoWorkspaceConfiguration, type DemoWorkspaceTopologyOverrides, resolveDemoWorkspaceConfiguration } from "./configuration.js";
+export { authenticatedControl, type DemoCoreStartOptions, type RunningDemoCore, startPersistentDemoCore, withPersistentDemoCore } from "./core-process.js";
 export { runDemoLlmCreationSettingsProbe, runDemoLlmCreationReadinessProbe, runDemoLlmPendingCreationProbe, runDemoLlmAppliedCreationProbe, runDemoLlmAppliedCreationRevertProbe, runDemoLlmAppliedCreationReplayProbe, runDemoLlmCreation } from "./creation-lanes.js";
 export { prepareDemoLlmWorkspace, runDemoLlmDiagnosis } from "./diagnosis-lanes.js";
 export { runDemoLlmAdaptationReadinessProbe, runDemoLlmExplorationAdaptationReadinessProbe, runDemoLlmExplorationAdaptationRevert, runDemoLlmExplorationAdaptationReject, runDemoLlmExplorationAdaptationProposal, runDemoLlmExplorationAdaptationApply, runDemoLlmExplorationAdaptationValidation } from "./exploration-adaptation.js";
@@ -23,7 +24,6 @@ export { type DemoWorkspaceState } from "./workspace-state.js";
 // here because a consumer outside this directory may reach them only through
 // its barrel.
 export { credentialLiterals, explicitPort } from "./configuration.js";
-export { authenticatedControl, withPersistentDemoCore } from "./core-process.js";
 export { connectExtension, extensionStatus, pollStatus, withDemoBrowser } from "./browser-session.js";
 export { assertConnectedSession, recordingIds, waitForNewRecording, waitForRoutedRunDetail } from "./control-waits.js";
 export { openFlowInCurrentProject, openProjectInPanel, selectFlowInCurrentProject } from "./panel-navigation.js";
