@@ -39,8 +39,12 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  * site, Flow creation died on its first press because a promotion had opened
  * over the page after it loaded. They are read from the client's closed
  * failure code (`action-failure.ts`), never from its text:
- * - `blocked_by_dialog`: a modal dialog is open over the page, and the control
- *   is behind it. Answer or close the dialog first.
+ * - `blocked_by_dialog`: a dialog is open over the page, and the control is
+ *   behind it. Nothing on the dialog asks for what only a person can give, so
+ *   answer or close it first.
+ * - `needs_person`: what stands in the way is for a person alone to answer --
+ *   a robot check, a sign-in, a second-factor code, a payment confirmation --
+ *   or a value only the person can supply. Do not try to get past it.
  * - `target_covered`: something that is not a modal -- a banner, an overlay --
  *   lies over the control.
  * - `target_not_actionable`: the control is there but disabled or hidden.
@@ -62,6 +66,7 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value",
   "no_repeating_structure",
   "blocked_by_dialog",
+  "needs_person",
   "target_covered",
   "target_not_actionable",
   "target_not_found",

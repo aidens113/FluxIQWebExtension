@@ -18,8 +18,13 @@ export type WebFailedActionResult = {
   failure?: { code?: unknown; actual?: unknown } | undefined;
 };
 
+// A dialog anyone may close and a challenge only a person may answer are two
+// codes on the client's side, and they stay two here: the first invites the
+// model to deal with the dialog, and the second tells it not to try.
 const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Object.freeze({
-  [WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED]: "blocked_by_dialog",
+  [WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG]: "blocked_by_dialog",
+  [WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED]: "needs_person",
+  [WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED]: "needs_person",
   [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND]: "target_not_found",
   [WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS]: "target_not_found",
   [WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED]: "page_changed",

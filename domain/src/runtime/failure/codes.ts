@@ -47,16 +47,31 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The host wants a sign-in before the action can continue. */
   AUTH_REQUIRED: "web.auth.required",
   /**
-   * A person must act before the run can continue -- Core's category, stated no
-   * more narrowly here than Core states it. Two producers, and they are not the
-   * same shape of "act": `content/action-runtime/results.ts` reports it when a
-   * modal dialog is standing over the page and the target is behind it, and
-   * `runtime/adapter.ts` when no single paired client could be selected, which
-   * only the operator can fix. The narrower gloss this carried before -- "a
-   * captcha, or a native dialog waiting for an answer" -- described neither,
-   * and reading it as the definition made both look wrong.
+   * A person must act before the run can continue -- Core's category, and it
+   * means only what a person alone can answer. Three producers, and they are
+   * not the same shape of "act": `content/action-runtime/results.ts` reports it
+   * when a dialog over the page asks for what only a person can give -- a robot
+   * check, a credential or second-factor code, a payment confirmation -- or
+   * when the page itself is such a challenge and the target is not on it;
+   * `client/gateway-mapping.ts` when a command still needs a value the run never
+   * supplied; and `runtime/adapter.ts` when no single paired client could be
+   * selected, which only the operator can fix. A dialog that asks for none of
+   * that is BLOCKED_BY_DIALOG, never this: until 2026-09-21 every rendered modal
+   * was reported here, so a promotion with its own "Not now" stopped replay and
+   * repair alike, and Core refused to ask the model how to get past it.
    */
   USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /**
+   * A dialog is open over the page, the target is behind it, and nothing on the
+   * dialog asks for what only a person can give: a promotion, a survey, a
+   * notifications prompt, a spin-to-win wheel. Produced by
+   * `content/action-runtime/results.ts`, which draws the line in
+   * `blocking-dialog.ts`. The page is in a state the step did not expect, and
+   * answering or closing the dialog is a move recovery can make, so its Core
+   * category is `unexpected_state` -- not a person's job, and not a policy
+   * refusal. The model is told `web.action.rejected.blocked_by_dialog`.
+   */
+  BLOCKED_BY_DIALOG: "web.action.blocked_by_dialog",
   /** The client does not implement the requested action type at all. */
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
@@ -131,6 +146,7 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
   "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.blocked_by_dialog": { category: "unexpected_state", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },

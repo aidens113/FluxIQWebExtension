@@ -42,7 +42,8 @@
 // hold, a wait that expired, an action that threw or was refused. It never
 // overwrites a code that already says something the page moving does not
 // explain -- AUTH_REQUIRED (sign in; do not retry), USER_INTERVENTION_REQUIRED
-// (a person must act), or the two dispatch-stage refusals, which were decided
+// (a person must act), BLOCKED_BY_DIALOG (a dialog stopped it), or the two
+// dispatch-stage refusals, which were decided
 // before the page mattered at all. Nothing is lost either way: the superseded
 // code and its description ride in the new record's `actual`.
 //
@@ -103,14 +104,17 @@ export function reportPageChange(result: BrowserActionResult, before: PageIdenti
 /**
  * Codes a moved page does not explain, so PAGE_CHANGED never replaces one.
  *
- * The first two are page-decided already and both say something a retry cannot
- * fix: sign in, or fetch a person. The two dispatch-stage refusals were decided
- * before anything touched the page. NAVIGATION_UNEXPECTED is a navigation
+ * The first three are page-decided already and each says something a retry
+ * cannot fix: sign in, fetch a person, or deal with the dialog standing over
+ * the page -- which is what stopped the action, wherever the page then went.
+ * The two dispatch-stage refusals were decided before anything touched the
+ * page. NAVIGATION_UNEXPECTED is a navigation
  * judgement of its own, and PAGE_CHANGED cannot supersede itself.
  */
 const EXPLAINED_WITHOUT_THE_PAGE: ReadonlySet<string> = new Set<WebAutomationFailureCode>([
   WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED,
   WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED,
+  WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG,
   WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE,
   WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED,
   WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED,
