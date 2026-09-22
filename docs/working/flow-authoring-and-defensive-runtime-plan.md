@@ -1,7 +1,7 @@
 # Flow Authoring And Defensive Runtime
 
 Status: Active
-Status detail: Designs settled and all seven discovery reports folded in, 2026-09-22. The step table names real files; no implementation dispatched yet, and the Week 2 integration lands first.
+Status detail: Wave one dispatched 2026-09-22 — five workers on tasks t076-t080, after the Week 2 integration landed in both repositories. Wave two is held behind Core's service.ts, which has no ratchet headroom.
 Created: 2026-09-22
 Last updated: 2026-09-22
 Owner: Senior supervisor agent
@@ -95,8 +95,33 @@ binding constraint they found is that Core's `service.ts` sits *exactly* on its
 ratchet at 6,275 lines and 223 methods, so every step lands in a new module and
 no edit may add a line to the service.
 
-**Next:** write the Core-side paired document, then dispatch workstream A and B
-against the step table once the t075 integration lands.
+**Dispatched 2026-09-22.** The t075 integration landed in both repositories
+(downstream `c32d664`, Core `7952512`), so wave one went out — five workers, no
+two sharing a file, each on its own task branch and worktree:
+
+| Task | Worker | Steps |
+| --- | --- | --- |
+| t076 (Core-paired) | `fa-executor-ladder` | B0, B1, B1a, B2, B3, B4, B9 |
+| t077 (Core-paired) | `fa-build-draft` | A1, A3, A4, A5, A6 |
+| t078 | `fa-extension-defenses` | B5, B6, B7 |
+| t079 | `fa-domain-tools` | A8, A11 |
+| t080 | `fa-lab-measurement` | D0, A12 |
+
+Every brief puts the live proof **before** unit tests, and the four deterministic
+ones must show **zero provider calls**, since a paid call would mean the
+determinism did not work.
+
+**Held for wave two, deliberately.** A2 (the digest hook's call site), A9 (the
+missing wait tool), A10 (trace sanitization) and B8 (unblocking escalation for
+granted runs) all touch `runtime/service.ts`, which has zero ratchet headroom and
+belongs to exactly one worker; B8 additionally needs B4 first. D0a's Core half —
+publishing the node id and keeping the target-resolution strategy in the run
+detail — is briefed from `fa-lab-measurement`'s report. Workstream C waits on A5,
+and D1 to D3 wait on D0 and B4.
+
+**Next:** verify each worker's claim in source and by rerunning its proof, land
+the tasks one at a time, then dispatch wave two. The Core-side paired document is
+still owed.
 
 **Blockers:** none. The Week 2 integration branch should still land first, since
 this work edits the same Core files.
@@ -725,34 +750,10 @@ standalone defects that need nothing else to land.
 
 Workstream C waits on A5. Workstream D1 to D3 wait on D0 and B4.
 
-### Brief: d1-exploration-to-flow-seam
-Dispatched 2026-09-22. How a model-driven exploration becomes a saved Flow in
-Core today, what is discarded between the two, whether a build can revise a node
-it already proposed, and what a tool failure tells the model. Report:
-`reports/d1-exploration-to-flow-seam.md`.
-
-### Brief: d2-recording-artifact
-Dispatched 2026-09-22. The exact shape of a recorded step after t063, where it is
-captured and mapped, what expected-state checking exists at replay, and what a
-recording cannot express that a model would need. Report:
-`reports/d2-recording-artifact.md`.
-
-### Brief: d3-runtime-execution-and-failure
-Dispatched 2026-09-22. What happens when a Flow node fails: the execution path,
-every retry that exists, what state checking runs, the exact conditions under
-which the model is consulted, and what suppresses it. Report:
-`reports/d3-runtime-execution-and-failure.md`.
-
-### Brief: d4-target-resolution-defenses
-Dispatched 2026-09-22. Every defensive mechanism that already exists for finding
-and acting on an element, which are on by default, and whether the runtime keeps
-enough evidence to detect an action that reported success and changed nothing.
-Report: `reports/d4-target-resolution-defenses.md`.
-
-### Brief: d5-existing-coverage
-Dispatched 2026-09-22. Which parts of these designs the existing plans already
-cover, already built, or leave absent, and any place where they would contradict
-a decision already recorded. Report: `reports/d5-existing-coverage.md`.
+Discovery briefs d1 to d7 were all delivered on 2026-09-22 and are archived in
+[archive/delivered-briefs.md](./flow-authoring-and-defensive-runtime-plan/archive/delivered-briefs.md).
+Their findings are distilled in `## Discovery Findings` above and their full
+reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 
 ---
 
