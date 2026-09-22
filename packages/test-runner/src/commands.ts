@@ -9,7 +9,7 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 // A compare report is a bench id under `<runs>/bench/`, or a path to its `report.json` or bench directory.
 export type LabCommand =
   // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
-  // `replays` exists only with `llm.task` `repair` or `adapt`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
+  // `replays` exists only with `llm.task` `repair`, `adapt` or `create-flow`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
   | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; resumeBenchId: string }
@@ -127,7 +127,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow)] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -249,15 +249,17 @@ const MAX_REPLAYS = 10;
  * proof. Without the option none of it happens, so an existing repair run keeps
  * behaving exactly as it did.
  *
- * It belongs to the two tasks that repair a failed run. `create-flow` builds a
- * Flow rather than repairing one, and `diagnose` changes nothing, so neither has
- * anything to apply.
+ * It belongs to the tasks whose Flow runs under a repair grant: `repair` and
+ * `adapt`, which repair the Flow recorded from the run, and `create-flow`, whose
+ * built Flow's playback runs under a proposal-only repair grant. `diagnose`
+ * changes nothing, so it has nothing to apply.
  */
 function replaysOption(args: string[], llm: LlmExecutionProfile | undefined, flowLane: boolean): { replays?: number } {
   const value = optionalIntegerOption(args, "--replays");
   if (value === undefined) return {};
-  if (llm?.task !== "repair" && llm?.task !== "adapt") throw new Error("--replays requires --live-llm with --llm-task repair or --llm-task adapt: it applies and replays the repair that run produced");
-  if (!flowLane) throw new Error("--replays replays the Flow the lane built from this run's recording: pass --flow");
+  if (llm?.task !== "repair" && llm?.task !== "adapt" && llm?.task !== "create-flow") throw new Error("--replays requires --live-llm with --llm-task repair, adapt or create-flow: it applies and replays the repair that run produced");
+  // A created Flow is built from its instruction task, which `creationOptions` already holds to no --flow.
+  if (llm.task !== "create-flow" && !flowLane) throw new Error("--replays replays the Flow the lane built from this run's recording: pass --flow");
   if (value < 0 || value > MAX_REPLAYS) throw new Error(`--replays must be between 0 and ${MAX_REPLAYS}`);
   return { replays: value };
 }

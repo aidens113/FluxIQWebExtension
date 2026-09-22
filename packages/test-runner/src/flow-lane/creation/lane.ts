@@ -16,7 +16,7 @@ import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedF
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
-import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildWait } from "./build-proposal.js";
+import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
 import { assertCreatedFlowDataset, createdFlowDatasetHolds, judgeCreatedFlowDataset } from "./judgement.js";
 import type { CreatedFlowRequest } from "./request.js";
@@ -121,6 +121,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   await input.prepareFlowPage("build");
   const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, authorize: input.authorizeBuild }, bounds, input.buildWait);
   await input.settleBuild(build);
+  if (build.outcome === "permission_required" && build.permissionRequest) throw permissionRequired(build, build.permissionRequest);
   if (build.outcome !== "proposed" || build.adaptationId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})`, {
       details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation },
@@ -182,4 +183,24 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   if (extraction) assertCreatedFlowDataset(extraction);
   else if (!oracleHeld) throw new RunnerFailure("runtime.behavior", "The created Flow ran, but the scenario's playback goal did not hold afterwards");
   return evidence;
+}
+
+/**
+ * The build stopped to ask a person, which is an answer and not a transport
+ * failure: the run reports `permission.required` and the classes a later
+ * grant must add, and records no Flow, because Core built none. Codes only --
+ * the control's name stays on the build record, where Core already bounded it.
+ */
+function permissionRequired(build: CreatedFlowBuild, request: CreatedFlowPermissionRequest): RunnerFailure {
+  return new RunnerFailure("runtime.behavior", `FluxIQ asked for permission before building a Flow from the task's instruction (permission.required: ${request.missing.join(", ")})`, {
+    details: {
+      outcome: "permission.required",
+      missing: [...request.missing],
+      consequences: [...request.consequences],
+      action: { kind: request.actionKind, verb: request.verb },
+      failure: build.failure,
+      providerCalls: build.providerCalls,
+      providerInvocation: build.providerInvocation,
+    },
+  });
 }

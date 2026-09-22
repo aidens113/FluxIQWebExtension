@@ -31,6 +31,8 @@ export async function waitForHttp(url: string, options: { headers?: HeadersInit;
 
 export type FluxIQCredentials = { username: string; password: string; totp?: string; pin?: string };
 export type FluxIQHttpOptions = { signal?: AbortSignal; timeoutMs?: number };
+/** The longest one request may be held open. A caller that must wait longer holds the request this long and reads the result back after it. */
+export const FLUXIQ_HTTP_MAX_TIMEOUT_MS = 300_000;
 const HTTP_OPERATION_STAGES = ["auth.login", "auth.session.validate", "project.create", "project.select", "control.request"] as const;
 type FluxIQHttpOperationStage = typeof HTTP_OPERATION_STAGES[number];
 export type FluxIQLoginOptions = FluxIQHttpOptions & {
@@ -267,7 +269,7 @@ function boundedTransportCode(error: unknown): string | undefined {
 
 function boundedTimeout(value: number | undefined): number {
   const resolved = value ?? 30_000;
-  if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > 300_000) throw new Error("FluxIQ HTTP timeout must be between 1 and 300000 milliseconds");
+  if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > FLUXIQ_HTTP_MAX_TIMEOUT_MS) throw new Error(`FluxIQ HTTP timeout must be between 1 and ${FLUXIQ_HTTP_MAX_TIMEOUT_MS} milliseconds`);
   return resolved;
 }
 

@@ -26,6 +26,7 @@ import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilitie
 import {
   assertActive,
   captureEvidence,
+  pageRefusal,
   selectSession,
   toolExecution,
   toolMetadata,
@@ -51,7 +52,7 @@ import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmStateDigest } from "./state-digest";
 import { webLlmTargetsUnchanged } from "./target";
 import { currentElementForReturnedTarget, pressControl } from "./press";
-import { createWebLlmStableTargetHandles } from "./stable-handles";
+import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_PATTERN } from "./stable-handles";
 import {
   createWebLlmExtractionHandles,
   detectRepeatingStructure,
@@ -66,6 +67,7 @@ import {
   type WebLlmSnapshotBinding
 } from "./sanitize";
 import { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence } from "./target";
+import { webActionFailureRejectionCode } from "./action-failure";
 import { recoverable, RecoverableToolRejection, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
@@ -79,7 +81,9 @@ import {
   WEB_LLM_PRESS_TOOL_ID
 } from "./vocabulary";
 
-const TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
+// A handle the authoring tools issue: numbered for the whole Flow, so up to four digits (`./stable-handles.ts`).
+const TARGET_HANDLE_PATTERN = WEB_LLM_TARGET_HANDLE_PATTERN;
+const TARGET_HANDLE = new RegExp(TARGET_HANDLE_PATTERN, "u");
 
 export type WebLlmFailureEvidenceRequest = {
   projectId: string;
@@ -235,7 +239,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_PRESS_TOOL_ID,
-        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person.",
+        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person. A press the page would not take -- a dialog or banner over the control -- comes back with the page as it now is: deal with what is in the way, then press again.",
         inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
         effect: "mutate",
       },
@@ -278,7 +282,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
             metadata: toolMetadata(input),
           });
           assertActive(input.signal);
-          if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
+          if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, input, current, webActionFailureRejectionCode(result), input.signal);
           const snapshot = retain(stable(input, await captureEvidence(gateway, sessionId, input, input.signal, destination.origin)));
           shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
@@ -322,7 +326,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
-        if (error instanceof RecoverableToolRejection) return toolExecution(toolRejection(error.code), false, webLlmToolRejectionResultCode(error.code));
+        if (error instanceof RecoverableToolRejection) {
+          // A refusal the page caused carries the page: it is shown like any
+          // other packet, so the handles on it -- the dialog's close button --
+          // can be pressed next.
+          const page = error.page === undefined ? undefined : retain(stable(input, error.page));
+          if (page !== undefined) shown(input, sessionId, page);
+          return toolExecution(toolRejection(error.code, page?.evidence), false, webLlmToolRejectionResultCode(error.code));
+        }
         throw error;
       }
     },
@@ -432,6 +443,7 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
   }));
 }
 
+
 /** The sessions every evidence tool may use, narrowed to those that also declare `alsoDeclaring` when it is named. */
 function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[] {
   return fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
@@ -458,8 +470,9 @@ function keepNewest(window: Map<string, Map<string, string>>, key: string, selec
 
 /**
  * A packet's identity for the binding lookup: its location and every element
- * it describes, whole. Handles are numbered from 1 in every packet, so keyed on
- * handles alone two captures of one page with one element count collided, and
+ * it describes, whole. A failure packet numbers its handles from 1 -- only the
+ * authoring tools number them for the whole Flow (`./stable-handles.ts`) -- so
+ * keyed on handles alone two captures of one page with one element count collided, and
  * a repair got the hint of a different control. Keyed on the elements, equal
  * keys mean equal fingerprints at every handle. Core round-trips the packet
  * through JSON, which reproduces this serialization, so it is matched on what
@@ -483,7 +496,7 @@ function requestedUrl(input: unknown): URL {
 }
 
 function boundedTargetHandle(input: unknown): string {
-  if (typeof input !== "string" || !/^target\.[1-9][0-9]?$/u.test(input)) recoverable("invalid_input");
+  if (typeof input !== "string" || !TARGET_HANDLE.test(input)) recoverable("invalid_input");
   return input;
 }
 

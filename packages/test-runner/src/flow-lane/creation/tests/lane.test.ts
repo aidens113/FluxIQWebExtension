@@ -10,6 +10,7 @@ import { runCreatedFlowLane, type CreatedFlowLaneEvidence } from "../lane.js";
 import { resolveCreatedFlowRequest, type CreatedFlowRequest } from "../request.js";
 import { createdFlowLaneSnapshot } from "../snapshot.js";
 import { EXTRACTING_NODES, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
+import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
 import { catalogScenario, datasetTask, goalTask } from "./scenario-fixture.js";
 
 /**
@@ -134,6 +135,22 @@ test("a refused build is settled, then fails the run with Core's code, and nothi
   await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /FluxIQ did not build a Flow from the task's instruction \(flow_bootstrap\.evidence_repeat_without_progress\)/u.test(error.message));
   assert.equal(settled[0]?.outcome, "failed");
   for (const step of ["approve", "apply", "start", "publish"]) assert.equal(core.calls.includes(step), false, `${step} ran after a refused build`);
+});
+
+test("a build that stopped to ask a person reports permission.required with the missing classes, and nothing is applied", async () => {
+  const core = fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic: await permissionRequiredDiagnostic() } } });
+  const { run, settled } = await runLane(core);
+  await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
+    && /FluxIQ asked for permission before building a Flow from the task's instruction \(permission\.required: send_or_publish\)/u.test(error.message)
+    && !/generation_http/u.test(error.message)
+    && (error.details?.outcome === "permission.required")
+    && JSON.stringify(error.details?.missing) === JSON.stringify(["send_or_publish"])
+    // Codes only: the control's name stays on the build record.
+    && !JSON.stringify(error.details).includes("Schedule post"));
+  // The build is settled -- what it spent is published -- before the lane stops.
+  assert.equal(settled[0]?.outcome, "permission_required");
+  assert.deepEqual(settled[0]?.permissionRequest?.missing, ["send_or_publish"]);
+  for (const step of ["approve", "apply", "start", "publish"]) assert.equal(core.calls.includes(step), false, `${step} ran after a build that asked for permission`);
 });
 
 test("a settlement that refuses -- no provider reached, or a budget breached -- stops the lane before anything is applied", async () => {

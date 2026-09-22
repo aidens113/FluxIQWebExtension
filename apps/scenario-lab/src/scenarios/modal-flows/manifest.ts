@@ -75,10 +75,10 @@ export const modalFlowsManifest = createScenarioManifest({
       },
       variants: [{
         id: "armed",
-        description: "An unrecorded offer (role=dialog, aria-modal) appears after the first Add section and blocks the page until closed; the run must stop for the user rather than click through or dismiss it.",
+        description: "An unrecorded offer (role=dialog, aria-modal) appears after the first Add section and blocks the page until closed; a replay with no model must stop rather than click through or dismiss it on its own; because anyone can close it, the stop is a recoverable blocked-by-dialog state, not one only a person can answer.",
         arm: { operation: "arm-interstitial" },
         expected: {
-          failure: { category: "user_intervention_required" },
+          failure: { category: "unexpected_state" },
           finalState: [
             { id: "one-section", subject: "section-count", predicate: "text", value: "1 section" },
             { id: "offer-blocking", subject: "interstitial", predicate: "visible", value: true },

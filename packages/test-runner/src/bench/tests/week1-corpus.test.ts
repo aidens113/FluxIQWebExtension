@@ -21,7 +21,10 @@ const label = (entry: BenchPlanEntry): string => `${entry.corpusRowId} ${entry.s
 const UNRESOLVED_TODAY: string[] = [];
 /** The plan's corpus table: negative variants and the category each must be classified as. */
 const PLAN_NEGATIVE_VARIANTS: Record<string, string> = {
-  "W14 modal-flows/interstitial/armed": "user_intervention_required",
+  // Moved from user_intervention_required with the manifest by t062 (P9): the
+  // offer is a dialog anyone may close, so a model-free replay still stops
+  // there but reports the recoverable category, not one only a person answers.
+  "W14 modal-flows/interstitial/armed": "unexpected_state",
   "W19 auth-gate/primary/expired": "auth_required",
   "W24 intermediate-state/primary/unannounced": "output_not_observed",
   "W29 identity-drift/primary/save-and-exit": "target_not_found",

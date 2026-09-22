@@ -7,6 +7,7 @@
 // misplaced, saying where it was. Both need the same test for "is this one of
 // ours", so it is here once.
 
+import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 
@@ -15,7 +16,7 @@ export type WebPlanHandleKind = "target" | "extraction";
 /** Keys and array indexes from a value down to something inside it. */
 export type WebPlanValuePath = Array<string | number>;
 
-const TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
+const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /** How deep a parameter is searched for a handle written somewhere no handle belongs. */
 const MAX_SEARCH_DEPTH = 8;

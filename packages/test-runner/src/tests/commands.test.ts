@@ -100,7 +100,7 @@ test("--llm-task repair is a live task with the same budget options as adapt", (
   assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--llm-max-calls", "65"]), /from 1 to 64/u);
 });
 
-test("--replays applies and replays the repair, and only for the two tasks that produce one", () => {
+test("--replays applies and replays the repair, and only for the tasks whose Flow runs under a repair grant", () => {
   const repair = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "repair"];
   const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
   const create = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "create-flow"];
@@ -111,7 +111,12 @@ test("--replays applies and replays the repair, and only for the two tasks that 
   // Absent unless typed, so an existing repair run applies and replays nothing.
   const untyped = parseLabCommand(["run", "identity-drift", "--flow", ...adapt]);
   assert.equal(untyped.command === "run" ? "replays" in untyped : true, false);
-  assert.throws(() => parseLabCommand(["run", "identity-drift", ...create, "--instruction-task", "identity-drift-save", "--replays", "1"]), /--replays requires --live-llm with --llm-task repair or --llm-task adapt/u);
+  // A created Flow's playback runs under a proposal-only repair grant, so its repair is applied and replayed the same way, with no recorded Flow lane.
+  const created = parseLabCommand(["run", "identity-drift", "--variant", "renamed-redesign", ...create, "--instruction-task", "identity-drift-rename-redesigned-after-creation", "--replays", "1"]);
+  assert.deepEqual(created.command === "run" ? [created.replays, created.instructionTaskId, "flowLane" in created] : undefined, [1, "identity-drift-rename-redesigned-after-creation", false]);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...create, "--replays", "1"]), /drop --flow/u);
+  const diagnose = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "diagnose"];
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...diagnose, "--replays", "1"]), /--replays requires --live-llm with --llm-task repair, adapt or create-flow/u);
   assert.throws(() => parseLabCommand(["run", "identity-drift", "--replays", "1"]), /--replays requires --live-llm/u);
   assert.throws(() => parseLabCommand(["run", "identity-drift", ...repair, "--replays", "1"]), /--replays replays the Flow the lane built/u);
   assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", ...repair, "--replays", "11"]), /--replays must be between 0 and 10/u);

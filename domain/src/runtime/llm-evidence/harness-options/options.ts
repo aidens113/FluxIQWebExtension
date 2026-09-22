@@ -43,6 +43,7 @@ import type { AutomationStudioHarnessOption, AutomationStudioHarnessOptionBundle
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
+import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { webRecoveryHarnessImplementations, WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";
 import {
   WEB_RECOVERY_DETECT_OPTION_ID,
@@ -53,7 +54,9 @@ import {
   WEB_RECOVERY_WAIT_OPTION_ID
 } from "./vocabulary";
 
-const TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
+// The authoring tools' pattern: a recovery takes the same handle shape the
+// packets it reads were built to, so the two declare the same bounds.
+const TARGET_HANDLE_PATTERN = WEB_LLM_TARGET_HANDLE_PATTERN;
 
 /** Exploring is `gather`, and `iterate` is exploring again with what the last turn taught. */
 const EXPLORATION_STAGES = ["gather", "iterate"] as const;

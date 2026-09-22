@@ -1,4 +1,4 @@
-import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, type RunHarnessRecovery } from "./harness-recovery.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, type RunHarnessRecovery } from "./harness-recovery.js";
 import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
@@ -15,7 +15,7 @@ const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "ada
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
 const patchFlagKeys = ["proposalOnly", "executed", "preflightOk"] as const;
 const patchOutcomeKeys = ["adaptationCreated", "changeProposalCreated"] as const;
-const patchAttemptKeys = ["kind", ...patchFlagKeys, "issueCodes", ...patchOutcomeKeys, "verdict"] as const;
+const patchAttemptKeys = ["kind", ...patchFlagKeys, "issueCodes", ...patchOutcomeKeys, "permissionOutcome", "permissionRequired", "verdict"] as const;
 const verdictKeys = ["outcome", "basis"] as const;
 /** The outcomes that say the change's trial ran. */
 const ranOutcomes: readonly unknown[] = ["verified", "contradicted", "unverifiable"];
@@ -80,6 +80,11 @@ function checkPatchAttempt(input: unknown, path: string, issues: ValidationIssue
   for (const key of patchFlagKeys) nullableBoolean(value[key], `${path}.${key}`, issues);
   array(value.issueCodes, `${path}.issueCodes`, issues, checkCode);
   for (const key of patchOutcomeKeys) if (typeof value[key] !== "boolean") add(issues, `${path}.${key}`, "must be a boolean");
+  // Absent in a record written before the gate was asked about patches, and null when it was not asked.
+  if (value.permissionOutcome !== undefined && value.permissionOutcome !== null) enumeration(value.permissionOutcome, harnessPatchPermissionOutcomes, `${path}.permissionOutcome`, issues);
+  if (value.permissionRequired !== undefined) nullableBoolean(value.permissionRequired, `${path}.permissionRequired`, issues);
+  if (value.permissionRequired === true && value.permissionOutcome !== "required") add(issues, `${path}.permissionRequired`, "must be true only for a patch the gate held back as a request");
+  if (value.permissionRequired === true && value.executed === true) add(issues, `${path}.permissionRequired`, "cannot be true for a patch Core states it executed");
   // Absent in a record written before the verdict existed, and null when Core stated none: both unmeasured.
   if (value.verdict !== undefined && value.verdict !== null) checkVerdict(value, `${path}.verdict`, issues);
 }

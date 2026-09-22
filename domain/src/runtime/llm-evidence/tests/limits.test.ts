@@ -7,6 +7,7 @@ import test from "node:test";
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES, sanitizeAutomationStudioLlmFailureEvidence } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { sanitizeWebLlmSnapshot, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS, type WebLlmPageEvidence } from "..";
+import { WEB_LLM_TARGET_HANDLE_MAX_NUMBER } from "../stable-handles";
 
 const bytes = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
@@ -66,15 +67,19 @@ test("reports truncation and the element count exactly at the budget boundary", 
   assert.equal(whole.elements.length, 12);
   assert.equal(whole.truncated, false);
 
-  const exact = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: bytes(whole) });
+  // The boundary is the packet's size once the authoring tools have renumbered
+  // it with the widest handle a Flow can issue (`../stable-handles.ts`), which
+  // is what the budget is measured against.
+  const renumbered = bytes(whole) + whole.elements.reduce((total, element) => total + `target.${WEB_LLM_TARGET_HANDLE_MAX_NUMBER}`.length - element.target.length, 0);
+  const exact = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: renumbered });
   assert.equal(exact.elements.length, 12);
   assert.equal(exact.truncated, false);
   assert.equal(bytes(exact), bytes(whole));
 
-  const oneShort = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: bytes(whole) - 1 });
+  const oneShort = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: renumbered - 1 });
   assert.equal(oneShort.elements.length, 11);
   assert.equal(oneShort.truncated, true);
-  assert.equal(bytes(oneShort) <= bytes(whole) - 1, true);
+  assert.equal(bytes(oneShort) <= renumbered - 1, true);
 });
 
 // Three limits can set `truncated` on this packet and they are three different
@@ -165,7 +170,9 @@ test("gives up page facts before the last element, and refuses only when nothing
   const nothing = rung(bytes(noDialogs) - 1);
   assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
 
-  assert.throws(() => rung(bytes(nothing) - 1), /exceeds the evidence byte limit/u);
+  // Past the last rung the budget cannot hold the page at all: a refusal the
+  // model is told about (`evidence_budget_exhausted`), not a fault.
+  assert.throws(() => rung(bytes(nothing) - 1), /evidence_budget_exhausted/u);
 });
 
 test("a failure packet passes Core's failure-evidence gate whole", () => {

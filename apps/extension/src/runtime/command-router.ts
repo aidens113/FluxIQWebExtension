@@ -5,6 +5,8 @@ import { runSnapshotCapture } from "./snapshot-runner";
 export type ExtensionRuntimeCommandRouterOptions = {
   activeTabId(): number | undefined;
   unsupportedPageReason(): string | undefined;
+  /** The origins of FluxIQ's own pages, which a navigation never takes over. */
+  ownOrigins?(): readonly string[];
   attachTabForRecording(tabId: number): Promise<void>;
   captureActiveSnapshot(label: string): Promise<void>;
   sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void>;
@@ -26,6 +28,8 @@ export class ExtensionRuntimeCommandRouter {
     const unsupportedPageReason = this.options.unsupportedPageReason();
     if (activeTabId !== undefined) request.activeTabId = activeTabId;
     if (unsupportedPageReason !== undefined) request.unsupportedPageReason = unsupportedPageReason;
+    const ownOrigins = this.options.ownOrigins?.();
+    if (ownOrigins?.length) request.ownOrigins = ownOrigins;
     try {
       const { result, tabId, frameId } = await runBrowserActionCommand(request);
       await this.options.sendActionResult(result, tabId, frameId);

@@ -139,24 +139,42 @@ export class LiveLlmRun {
   }
 
   /**
-   * Whether this run's grant lets Core propose a repair and never apply it:
-   * `diagnose_and_adapt`, whose target override is a proposal and whose
-   * failed action is not retried. Such a run cannot end the way a repaired
-   * one would, so a scenario may hold it to what it declares instead.
+   * Whether the grant this run's Flow runs under lets Core propose a repair
+   * and never apply it: `diagnose_and_adapt`, whose target override is a
+   * proposal and whose failed action is not retried. Such a run cannot end the
+   * way a repaired one would, so a scenario may hold it to what it declares
+   * instead. A `create-flow` run qualifies: its build grant only builds, and
+   * the Flow it built runs under `repairPlan`, which has this purpose.
    */
   get proposesRepairOnly(): boolean {
-    return this.plan.purpose === "diagnose_and_adapt";
+    return this.repairPurpose === "diagnose_and_adapt";
   }
 
   /**
    * Whether this run's grant repairs a Flow that failed, and so whether the
    * repair it produced can be approved, applied and replayed: `adapt`, which
-   * proposes one target override, and `repair`, which explores first and whose
-   * patch Core may execute. A diagnosis changes nothing and a build has no
-   * failed run to repair, so neither qualifies.
+   * proposes one target override, `repair`, which explores first and whose
+   * patch Core may execute, and `create-flow`, whose built Flow runs under the
+   * proposal-only grant `repairAuthorizer` issues. A diagnosis changes
+   * nothing, so it does not qualify.
    */
   get repairsFlow(): boolean {
-    return this.plan.purpose === "diagnose_and_adapt" || this.plan.purpose === "explore_and_adapt";
+    return this.repairPurpose === "diagnose_and_adapt" || this.repairPurpose === "explore_and_adapt";
+  }
+
+  /**
+   * The task that produced a repair, and the purpose of the grant it was
+   * produced under, for the repair lane's record. A `create-flow` run's repair
+   * comes from its playback's grant, not its build's, so `describe()`'s
+   * `build_and_adapt` would name the wrong grant.
+   */
+  describeRepair(): { task: string; purpose: string } {
+    return { task: this.plan.task, purpose: this.repairPurpose };
+  }
+
+  /** The purpose of the grant this run's Flow runs under: the plan's own, or a created Flow's playback grant. */
+  private get repairPurpose(): LiveLlmPlan["purpose"] {
+    return this.createsFlow ? CREATED_FLOW_REPAIR_PURPOSE : this.plan.purpose;
   }
 
   /**
@@ -452,7 +470,7 @@ export class LiveLlmRun {
       // What Core actually issued, where it said. `null` for a run token budget
       // Core did not report.
       granted: this.grant
-        ? { maxCalls: this.grant.maxCalls, maxTotalTokensPerRun: this.grant.maxTotalTokensPerRun, maxEstimatedCostUsd: this.grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: this.grant.maxTotalEstimatedCostUsd, timeoutMs: this.grant.timeoutMs }
+        ? { maxCalls: this.grant.maxCalls, maxTotalTokensPerRun: this.grant.maxTotalTokensPerRun, maxEstimatedCostUsd: this.grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: this.grant.maxTotalEstimatedCostUsd, timeoutMs: this.grant.timeoutMs, permittedConsequences: [...this.grant.permittedConsequences] }
         : null,
       // Whether this run confirmed Core's high-token exposure on its own
       // behalf, and why: a confirmation nobody can see afterwards is consent

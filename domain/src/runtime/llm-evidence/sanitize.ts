@@ -33,12 +33,29 @@
 // reads one field; a reader deciding what to do next reads which. The rule and
 // the full set of limits on the evidence path are tabulated once, in
 // `domain/src/recording/web-state/evidence/input.ts`.
+//
+// No two elements of a packet read alike. Where the page repeats a control, the
+// copies are given what a person would tell them apart by -- the dialog, the
+// row's words, which of them from the top (`look-alikes.ts`) -- and that is
+// recounted after every trim, so it describes the packet the model is given
+// rather than the capture.
+//
+// The budget is also measured as though every handle had the widest number a
+// Flow can issue. The authoring tools renumber a packet after it is built, so
+// each handle names one control for the whole Flow (`stable-handles.ts`), and
+// a number can be longer than the positional one it replaces: measured on the
+// positional ones, a packet at its budget could leave the tool over the room
+// Core gave the call, which ends the build `evidence_limit`.
 
 import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
+import { frontLayerFirst, openDialogNameOf } from "./front-layer";
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
+import { tellWebLlmLookAlikesApart, type WebLlmLookAlikeCues } from "./look-alikes";
 import { capturedTruncated, evidenceElementTotal, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
 import { present } from "./present";
+import { WEB_LLM_TARGET_HANDLE_MAX_NUMBER } from "./stable-handles";
+import { recoverable } from "./tool-rejection";
 import { boundedText, jsonRecord } from "./untrusted-json";
 import type { WebRepairCandidateProjection } from "./target";
 
@@ -139,7 +156,12 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const elements: WebLlmEvidenceElement[] = [];
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
-  for (const raw of snapshot.interactiveElements) {
+  // What tells a look-alike apart, kept beside the packet and published only
+  // on an element that needs it.
+  const cues = new Map<string, WebLlmLookAlikeCues>();
+  const dialogOf = openDialogNameOf(snapshot);
+  // An open modal dialog's own controls first: nothing else can be pressed (`front-layer.ts`).
+  for (const raw of frontLayerFirst(snapshot, snapshot.interactiveElements)) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
     const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
     if (!described) continue;
@@ -147,6 +169,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     // The one place a selector is written down, and it is not the packet.
     selectors.set(described.element.target, described.selector);
     if (described.record !== undefined) records.set(described.element.target, described.record);
+    cues.set(described.element.target, present<WebLlmLookAlikeCues>({ within: described.within, dialog: dialogOf(raw), position: described.position }));
   }
 
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id): id is number => id !== undefined))].sort((left, right) => left - right);
@@ -187,8 +210,23 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     repairCandidates: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
-  trimToBudget(evidence, [selectors, records], maxEvidenceBytes);
+  trimToBudget(evidence, [selectors, records], maxEvidenceBytes, () => tellWebLlmLookAlikesApart(evidence.elements, cues));
   return { evidence, selectors, records };
+}
+
+/** The widest handle a Flow can issue (`stable-handles.ts`). */
+const WIDEST_HANDLE_LENGTH = `target.${WEB_LLM_TARGET_HANDLE_MAX_NUMBER}`.length;
+
+/**
+ * The packet's size once the authoring tools have renumbered it: its size now,
+ * plus what each handle -- and the failed target's mark, which names one --
+ * could grow by. A handle is ASCII, so its characters are its bytes.
+ */
+function renumberedBytes(evidence: WebLlmPageEvidence): number {
+  const handles = evidence.elements.map((element) => element.target);
+  if (evidence.failedTarget !== undefined) handles.push(evidence.failedTarget);
+  const growth = handles.reduce((total, handle) => total + Math.max(0, WIDEST_HANDLE_LENGTH - handle.length), 0);
+  return serializedBytes(evidence) + growth;
 }
 
 /**
@@ -241,8 +279,13 @@ type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading
  * `addresses` are the binding's handle-keyed maps -- the selectors and the
  * records -- and a popped element leaves every one of them, so no map names a
  * handle the packet no longer carries.
+ *
+ * `describe` writes what the packet says about its elements as a set -- which
+ * look-alikes there are and how many -- so it runs before the first measure
+ * and again after every element leaves, and what is measured is always what
+ * is sent.
  */
-function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map<string, string>>, maxEvidenceBytes: number): void {
+function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map<string, string>>, maxEvidenceBytes: number, describe: () => void): void {
   const markBudgetTruncated = (): void => {
     evidence.truncated = true;
     evidence.budgetTruncated = true;
@@ -258,9 +301,11 @@ function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map
       evidence.failedTargetMissing = true;
     }
     markBudgetTruncated();
+    describe();
   };
   const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
-  while (serializedBytes(evidence) > maxEvidenceBytes) {
+  describe();
+  while (renumberedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
       continue;
@@ -277,6 +322,9 @@ function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map
       popElement();
       continue;
     }
-    throw new Error("web DOM snapshot exceeds the evidence byte limit");
+    // Not even an empty packet of this page fits: what is left of the
+    // exploration's evidence budget is spent. The model is told so, and can
+    // complete from what it already holds.
+    recoverable("evidence_budget_exhausted");
   }
 }

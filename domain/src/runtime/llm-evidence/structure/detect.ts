@@ -36,13 +36,14 @@ import {
 import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
+import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { recoverable, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
 import { splitDetectedStructure } from "./packet";
 
-const TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
+const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 
 /** What the page's refusal means to the model. */
 const REFUSAL_CODES = {
@@ -79,7 +80,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   const parameters: JsonObject = element?.frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: element.frameId };
   const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
   assertActive(request.signal);
-  if (result.status !== "succeeded") throw new Error("web structure detection capture failed");
+  if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === undefined ? undefined : new URL(current.evidence.location).origin;
   const page = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({

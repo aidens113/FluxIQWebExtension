@@ -22,11 +22,18 @@ export type NavigationComparison = {
 
 const UNKNOWN_URL = "(unknown)";
 
-export function compareNavigatedUrl(requested: string, landed: string | undefined): NavigationComparison {
+/**
+ * `loadFailed` is the browser's word that the top frame's last navigation ended
+ * in an error. Chrome then shows its own error page but keeps the requested URL
+ * in the address bar, so the address alone would call a refused connection an
+ * arrival.
+ */
+export function compareNavigatedUrl(requested: string, landed: string | undefined, loadFailed = false): NavigationComparison {
   const actual = landed?.trim() ? landed.trim() : UNKNOWN_URL;
   // An unreadable URL is not proof of arrival. Reporting it as a match would
   // restore exactly the silent success this comparison exists to remove.
   if (actual === UNKNOWN_URL) return { matched: false, expected: requested, actual };
+  if (loadFailed) return { matched: false, expected: requested, actual: `the browser could not load ${actual}` };
   return { matched: sameDestination(requested, actual), expected: requested, actual };
 }
 

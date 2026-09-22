@@ -64,7 +64,7 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be selected in", report.detail, evidence());
+    return deps.rejected(action, startedAt, report.code, "a target that can be selected in", report.detail, { ...evidence(), blockedAt: report.point });
   }
 
   if (!request) {

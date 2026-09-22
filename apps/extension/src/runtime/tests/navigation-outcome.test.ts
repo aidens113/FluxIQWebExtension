@@ -66,3 +66,15 @@ test("a non-web scheme must match exactly", () => {
   assert.equal(compareNavigatedUrl("file:///tmp/report.html", "file:///tmp/report.html").matched, true);
   assert.equal(compareNavigatedUrl("https://example.test/", "file:///tmp/report.html").matched, false);
 });
+
+// Chrome keeps the requested URL in the address bar when it shows its own error
+// page -- a refused connection, an unknown host -- so the address matches and
+// only the browser's word that the load failed tells the two apart.
+test("an address that matches is still not an arrival when the browser could not load the page", () => {
+  const comparison = compareNavigatedUrl("http://127.0.0.1:64130/s?k=earbuds", "http://127.0.0.1:64130/s?k=earbuds", true);
+  assert.deepEqual(comparison, {
+    matched: false,
+    expected: "http://127.0.0.1:64130/s?k=earbuds",
+    actual: "the browser could not load http://127.0.0.1:64130/s?k=earbuds"
+  });
+});

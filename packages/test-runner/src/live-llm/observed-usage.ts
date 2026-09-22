@@ -60,6 +60,13 @@ export type LiveLlmObservedUsage = {
   accounting: ExistingRunLlmAccounting | null;
   /** Core's gate record: why it did or did not reach the provider. */
   gate: ExistingRunDetail["llmGate"] | null;
+  /**
+   * The question the run carried out to a person, as Core's own parser reads
+   * it (`metadata.permissionRequest`): the action, the classes it lacked, and
+   * the control's name only where Core found it in evidence the model was
+   * already shown. `null` when the run asked nothing, and absent for a build, which is no run.
+   */
+  permissionRequest?: ExistingRunDetail["permissionRequest"] | null;
 };
 
 /**
@@ -89,6 +96,7 @@ export function liveLlmObservedUsage(detail: ExistingRunDetail): LiveLlmObserved
       totalEstimatedCostUsd: accounting?.estimatedCostUsd ?? observedCalls.reduce((sum, call) => sum + (call.estimatedCostUsd ?? 0), 0),
       accounting,
       gate,
+      permissionRequest: detail.permissionRequest ?? null,
     };
   }
   const omitted = detail.providerCallsOmitted ?? 0;
@@ -105,6 +113,7 @@ export function liveLlmObservedUsage(detail: ExistingRunDetail): LiveLlmObserved
     totalEstimatedCostUsd: accounting?.estimatedCostUsd ?? lines.reduce((sum, line) => sum + line.charged.estimatedCostUsd, 0),
     accounting,
     gate,
+    permissionRequest: detail.permissionRequest ?? null,
   };
 }
 

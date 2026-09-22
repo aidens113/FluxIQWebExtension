@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
+import { harnessPatchPermissionOutcomes, LLM_LAB_MAX_CALLS_PER_RUN, type HarnessPatchPermissionOutcome } from "@fluxiq-web-extension/test-contracts";
+import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation-studio/action-permissions";
 import { RunnerFailure } from "./failure.js";
 import type { PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
@@ -14,14 +15,29 @@ export type ExistingRunSummary = { runId: string; projectId: string; flowId: str
 export type ExistingRouteDecision = { decisionId: string; routerId: string; selectedRuleId?: string; selectedSubflowId?: string; fallbackUsed?: boolean };
 export type ExistingSubflowExecution = { entryId: string; subflowId: string; status: RuntimeStatus; graphFlowId?: string; routeDecisionId?: string };
 export type ExistingRunIntervention = { interventionId: string; kind: "diagnosis" | "runtime_patch" | "router_patch" | "subflow_patch" | "expectation_patch" | "instruction_suggestion" | "change_proposal"; requestId?: string; promptVersion?: string; provider?: string; model?: string; validationOk?: boolean; validationCodes?: string[]; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number; createdAt?: number };
-export type ExistingRuntimePatchAttempt = { kind?: string; proposalOnly?: boolean; executed?: boolean; preflightOk?: boolean; issueCodes: string[]; adaptationCreated: boolean; changeProposalCreated: boolean };
+/**
+ * One runtime patch Core recorded. `permissionOutcome` is what the recovery's
+ * permission gate said about a patch that would lastingly act, and
+ * `permissionRequired` is `true` exactly when the patch was held back as the
+ * request a person answers; both are absent when Core asked no gate.
+ */
+export type ExistingRuntimePatchAttempt = { kind?: string; proposalOnly?: boolean; executed?: boolean; preflightOk?: boolean; issueCodes: string[]; adaptationCreated: boolean; changeProposalCreated: boolean; permissionOutcome?: HarnessPatchPermissionOutcome; permissionRequired?: boolean };
 /**
  * Why Core did or did not reach the provider on this run, read from the run
  * detail's `metadata.llmGate`. Counts and Core's own fixed sentence only: it is
  * what tells a live run that never called the provider apart from one that did,
  * so a run cannot report a green result on an unreached model.
  */
-export type ExistingRunLlmGate = { invoked: boolean; reason?: string; code?: string; patchSkippedCode?: string };
+export type ExistingRunLlmGate = {
+  invoked: boolean;
+  reason?: string;
+  code?: string;
+  patchSkippedCode?: string;
+  /** Why a patch the model wrote did not run although the patch call was made: `llm.runtime_patch_permission_required`. */
+  patchHeldCode?: string;
+  /** What the recovery's permission gate held, as Core's classes only: granted, instructed, and lapsed. */
+  permissions?: { granted: string[]; instructed: string[]; lapsed: string[] };
+};
 /**
  * Core's own per-run provider accounting (`metadata.llmGate.costAccounting`).
  * Counts and totals only, and the numbers a budget is actually held to: an
@@ -61,7 +77,13 @@ export type ExistingRunProviderCall = {
  * here says what each call was. `providerCallsOmitted` is present exactly when
  * `providerCalls` is: the calls Core counted past its own record limit.
  */
-export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting; providerCalls?: ExistingRunProviderCall[]; providerCallsOmitted?: number };
+/**
+ * `permissionRequest` is the question the run carries out to a person
+ * (`metadata.permissionRequest`), read through Core's own strict parser, so it
+ * holds exactly what Core built: the action, the classes it lacked, and a
+ * control name only where Core's gate found it in evidence the model was shown.
+ */
+export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting; providerCalls?: ExistingRunProviderCall[]; providerCallsOmitted?: number; permissionRequest?: AutomationStudioActionPermissionRequest };
 export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
 export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
 export type ExistingFlowAdaptationSummary = { adaptationId: string; flowId: string; projectId: string; status: string };
@@ -370,7 +392,8 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const accounting = costAccounting === undefined ? undefined : runLlmAccounting(costAccounting);
     const callRecords = llmGate === undefined ? undefined : runProviderCalls(llmGate);
     const runtimePatchAttempts = array(metadata?.runtimePatchAttempts ?? [], "runDetail.metadata.runtimePatchAttempts").map((value, index) => runtimePatchAttempt(value, `runDetail.metadata.runtimePatchAttempts[${index}]`));
-    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(providerCallCount === undefined ? {} : { providerCallCount }), ...(gate === undefined ? {} : { llmGate: gate }), ...(accounting === undefined ? {} : { llmAccounting: accounting }), ...(callRecords === undefined ? {} : { providerCalls: callRecords.calls, providerCallsOmitted: callRecords.omitted }) };
+    const permissionRequest = runPermissionRequest(metadata?.permissionRequest);
+    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(permissionRequest ? { permissionRequest } : {}), ...(providerCallCount === undefined ? {} : { providerCallCount }), ...(gate === undefined ? {} : { llmGate: gate }), ...(accounting === undefined ? {} : { llmAccounting: accounting }), ...(callRecords === undefined ? {} : { providerCalls: callRecords.calls, providerCallsOmitted: callRecords.omitted }) };
   }
 
   async listFlowRuns(projectId: string, flowId: string): Promise<ExistingRunSummary[]> {
@@ -632,7 +655,32 @@ function runLlmGate(value: JsonRecord): ExistingRunLlmGate {
     : value.patchSkipped !== undefined && diagnosis?.patchNeeded === false
       ? "llm.runtime_patch_not_requested"
       : undefined;
-  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}), ...(patchSkippedCode ? { patchSkippedCode } : {}) };
+  const publishedPatchHeldCode = bounded(value.patchHeldCode, "patchHeldCode", 128);
+  const patchHeldCode = publishedPatchHeldCode && /^llm\.runtime_patch_[a-z_]+$/u.test(publishedPatchHeldCode) ? publishedPatchHeldCode : undefined;
+  const permissions = gatePermissions(value.permissions, `${at}.permissions`);
+  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}), ...(patchSkippedCode ? { patchSkippedCode } : {}), ...(patchHeldCode ? { patchHeldCode } : {}), ...(permissions ? { permissions } : {}) };
+}
+
+/** Core's classes of lasting consequence, as the gate records them: lowercase words joined by underscores. */
+const CONSEQUENCE_CLASS = /^[a-z]+(?:_[a-z]+)*$/u;
+
+/** The gate's authority by class. Anything that is not a list of class words fails the read by its path. */
+function gatePermissions(value: unknown, at: string): ExistingRunLlmGate["permissions"] {
+  const permissions = optionalRecord(value, at);
+  if (!permissions) return undefined;
+  const classes = (field: "granted" | "instructed" | "lapsed") => stringArray(permissions[field] ?? [], `${at}.${field}`).map((item, index) => {
+    if (item.length > 64 || !CONSEQUENCE_CLASS.test(item)) invalid(`${at}.${field}[${index}] is not a consequence class`);
+    return item;
+  });
+  return { granted: classes("granted"), instructed: classes("instructed"), lapsed: classes("lapsed") };
+}
+
+/** The run's permission request as Core's own parser reads it; one it refuses fails the read rather than being carried half-read. */
+function runPermissionRequest(value: unknown): AutomationStudioActionPermissionRequest | undefined {
+  if (value === undefined || value === null) return undefined;
+  const parsed = parseAutomationStudioActionPermissionRequest(value);
+  if (!parsed) invalid("runDetail.metadata.permissionRequest is not a permission request Core built");
+  return parsed;
 }
 /**
  * Core's receipt for a repair the model declined (`automationStudioDeclinedRepairAttempt`):
@@ -653,7 +701,12 @@ function runtimePatchAttempt(value: unknown, at: string): ExistingRuntimePatchAt
   const recognizedKinds = ["temporary_action_sequence", "temporary_wait_retry", "temporary_target_override", "temporary_recovery_subflow_call", "temporary_reroute", "runtime_patch_response", DECLINED_REPAIR_KIND];
   const kind = typeof item.kind === "string" && recognizedKinds.includes(item.kind) ? item.kind : undefined;
   const issues = item.issues === undefined ? [] : stringArray(item.issues, `${at}.issues`);
-  const issueCodes = kind === DECLINED_REPAIR_KIND ? [declinedRepairCode(item.declinedReason)] : issues.map(issue => {
+  const permissionOutcome = typeof item.permissionOutcome === "string" && (harnessPatchPermissionOutcomes as readonly string[]).includes(item.permissionOutcome) ? item.permissionOutcome as HarnessPatchPermissionOutcome : undefined;
+  const permissionRequired = item.permissionRequired === true ? true : undefined;
+  // A patch the gate held back is read by its structured fields, never its
+  // sentence: the request is not a preflight refusal, and the sentence names a control.
+  const heldCode = permissionRequired ? "runtime_patch.permission_required" : permissionOutcome === "undeclared" ? "runtime_patch.consequences_undeclared" : undefined;
+  const issueCodes = heldCode ? [heldCode] : kind === DECLINED_REPAIR_KIND ? [declinedRepairCode(item.declinedReason)] : issues.map(issue => {
     if (/target node|targetNodeId/i.test(issue)) return "runtime_patch.target_node_invalid";
     if (/target override|action target/i.test(issue)) return "runtime_patch.target_override_rejected";
     if (/exactly one runtime patch/i.test(issue)) return "runtime_patch.patch_count_invalid";
@@ -669,6 +722,8 @@ function runtimePatchAttempt(value: unknown, at: string): ExistingRuntimePatchAt
     issueCodes,
     adaptationCreated: typeof item.adaptationId === "string" && item.adaptationId.length > 0,
     changeProposalCreated: typeof item.changeProposalId === "string" && item.changeProposalId.length > 0,
+    ...(permissionOutcome ? { permissionOutcome } : {}),
+    ...(permissionRequired ? { permissionRequired } : {}),
   };
 }
 function runAction(value: unknown, at: string): ExistingRunAction { const item = record(value, at); return { attemptId: text(item.attemptId, `${at}.attemptId`), nodeId: text(item.nodeId, `${at}.nodeId`), definitionId: text(item.definitionId, `${at}.definitionId`), order: integer(item.order, `${at}.order`), status: enumeration(item.status, ["queued", "running", "waiting", "succeeded", "failed", "cancelled", "unknown"] as const, `${at}.status`), startedAt: finite(item.startedAt, `${at}.startedAt`), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }), ...(typeof item.message === "string" ? { message: item.message } : {}) }; }
