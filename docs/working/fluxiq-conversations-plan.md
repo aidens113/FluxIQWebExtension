@@ -5,7 +5,7 @@ Status detail: Directed by the user 2026-09-22 and started the same day; two dis
 Created: 2026-09-22
 Last updated: 2026-09-22
 Owner: Senior supervisor agent
-Scope: A real conversation between FluxIQ and the person, with UI, as the general channel for anything the model needs from them — permission for a consequential act, a decision between readings of an instruction, approval of a repair, feedback on a Flow. Covers the thread's model and persistence, how the model reads and writes it, how a run or build parks on a question and resumes on the answer, and the panel surface. It deliberately does not remove or replace existing manual controls, does not redesign the panel, and does not own the web domain's own UI.
+Scope: A real conversation between FluxIQ and the person, with its chat window, as a first-class part of FluxIQ Core and the general channel for anything the model needs from them — permission for a consequential act, a decision between readings of an instruction, approval of a repair, feedback on a Flow. Covers the thread's model and persistence, how the model reads and writes it, how a run or build parks on a question and resumes on the answer, and the panel surface. It deliberately does not remove or replace existing manual controls, does not redesign the panel, and does not own the web domain's own UI.
 Paired document: none yet — conversations are generic framework behaviour and land in FluxIQ Core, so a Core-side document is required once the design is accepted.
 Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-defensive-runtime-plan.md) (whose permission-gate work is the first caller), [week2-exit-plan.md](./week2-exit-plan.md) (whose UI audit found the journeys with no surface)
 
@@ -18,6 +18,12 @@ for them, immediately, so the model "can actually see what was said & easily tak
 feedback or prompt the user for permissions or whatever", and that this "should
 generally be the primary way to interact with the user & get complex feedback
 without having complex UI for every single thing".
+
+**The chat window is a core part of Core** (user, 2026-09-22). The thread model,
+its persistence, the model's reading and writing of it, and the window itself are
+first-class FluxIQ Core, living in Core's own web application. Not a web-domain
+feature, not an extension-panel bolt-on, and not approximated downstream. A
+downstream surface may show a conversation; Core owns the capability.
 
 **It is additive.** In the user's words the same day, it is "just an addition and
 new central focus, NOT replacing existing or future manual UI controls". Existing
