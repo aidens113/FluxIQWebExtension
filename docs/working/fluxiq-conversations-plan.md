@@ -100,6 +100,55 @@ the exchange stays in one place, not that they stop existing.
 
 ---
 
+## Discovery Findings
+
+### From conv-panel-ui (2026-09-22)
+
+1. **Nothing can push to the browser. Verified.** There is no `EventSource` and
+   no client `WebSocket` anywhere in `apps/web/src` — the supervisor grepped and
+   found only a DOM-event type of a similar name. The gateway websocket serves
+   the *extension*, not the panel. The change feed (`sync/project-sync.ts`) is
+   **not polled**: it fires on start, on `hasMore`, and on a mutation event the
+   same tab dispatches, and pauses when the tab is hidden; its only timer is a
+   retry. **A turn written by a server-side run would therefore never arrive.**
+   This is the single constraint the design must answer, and it makes delivery —
+   not the thread model — the hard part.
+   The one working precedent for a server-originated question reaching an
+   unattended person is `GlobalClientGatewayPairing`
+   (`app/GlobalClientGatewayPairing.tsx:57-97`), an adaptive 1 s to 10 s backoff
+   mounted globally in the layout.
+2. **The same permission question is already rendered twice, by two features
+   that share no code** — `RunPermissionRequest.tsx:36-53` for a run, and a
+   separate modal in `authoring/BlankFlowAuthoringPanel.tsx:259-263` for a
+   build — although Core already distinguishes them by `reason.stage`. This is
+   the strongest concrete argument for a general channel: the second surface was
+   built because the first did not generalise. Worse, **the creation-stage dialog
+   has never once been observed in a live panel run**, so one of the two
+   duplicates is also unproven.
+3. **A turn must be able to carry a rendered component, not only text.** The
+   structural repair diff genuinely needs a visual surface — the existing
+   differ is scalar-only and capped at 50 leaf paths, while a node, edge or
+   route change honestly rendered is a graph. The panel already owns
+   `FlowGraphCanvas`, `FlowNode` and `FlowEdge` to reuse read-only.
+4. **"Improving an existing Flow" is not a rendering gap at all.** The authoring
+   model refuses any Flow that is not blank
+   (`blank-flow-authoring-model.ts:98-106`). The thread can host the
+   conversation, but the capability constraint is the actual blocker and the
+   resulting adaptation already has a good home.
+5. **A transcript is genuinely new work.** No reusable timestamped-list
+   component exists; nothing in the panel does auto-scroll or incremental
+   append. Adding a view touches nine places, two of them gate tests that fail
+   otherwise, and a view containing `setInterval` is failed by a source-text
+   test.
+6. Conventions to respect: plain global CSS in numbered sheets with role tokens
+   enforced by tests that read the CSS; state through a closed mutation union a
+   new kind must be added to; every view split into `XView`/`XViewContent` so
+   tests can inject commands. Borrow the adaptation review's data-driven copy
+   and its re-authentication step; do not copy burying a decision on a fifth
+   tab.
+
+---
+
 ## Worker Briefs
 
 ### Brief: conv-core-primitives
