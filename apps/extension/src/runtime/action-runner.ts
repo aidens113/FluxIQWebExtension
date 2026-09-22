@@ -23,12 +23,15 @@ import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } 
 import { chooseFrame } from "./frame-address";
 import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
 import { compareNavigatedUrl } from "./navigation-outcome";
+import { navigationTargetTab } from "./navigation-target";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
 export type BrowserActionRunRequest = {
   action: BrowserActionCommand;
   activeTabId?: number;
   unsupportedPageReason?: string;
+  /** The origins of FluxIQ's own pages, which a navigation never takes over (`navigation-target.ts`). */
+  ownOrigins?: readonly string[];
   attachTabForRecording(tabId: number): Promise<void>;
 };
 
@@ -60,7 +63,7 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
 
   const startedAt = Date.now();
   const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
-  const tabId = await resolveAutomationTab(tabRequestFor(action, request, isNavigation));
+  const tabId = await resolveAutomationTab(await tabRequestFor(action, request, isNavigation));
   const frameId = frameIdForAction(action);
 
   const unsupportedReason = await unsupportedPageReasonFor(action, request, tabId, isNavigation);
@@ -72,8 +75,11 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     setAutomationTab(tabId);
     await request.attachTabForRecording(tabId);
     // resolveAutomationTab has already waited for the tab to settle, so the URL
-    // read here is where the browser actually committed the navigation.
-    return withTarget(navigationResult(action, startedAt, action.url, await readTabUrl(tabId)), tabId, frameId);
+    // read here is where the browser actually committed the navigation -- and
+    // the top frame says whether what it committed was the page or Chrome's
+    // own error page, which keeps the requested URL in the address bar.
+    const loadFailed = (await allTabFrames(tabId)).some((frame) => frame.frameId === TOP_FRAME_ID && frame.errorOccurred);
+    return withTarget(navigationResult(action, startedAt, action.url, await readTabUrl(tabId), loadFailed), tabId, frameId);
   }
 
   if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
@@ -97,21 +103,29 @@ export function browserActionFailure(action: BrowserActionCommand, message: stri
 }
 
 /**
- * Which tab the action runs in. A navigation reuses the automation tab unless
- * it asked for a new one or named a tab of its own; before Phase 1.2 step 4 it
- * always opened a new tab, abandoning the page the Flow had reached.
+ * Which tab the action runs in. A navigation that asked for a new tab gets one
+ * and one that named a tab drives it; otherwise it drives the page every other
+ * action runs on, when that is a page it may take over (`navigation-target.ts`),
+ * and only failing that the automation tab, or a new one. Before Phase 1.2 step
+ * 4 it always opened a new tab, abandoning the page the Flow had reached; until
+ * P17 it preferred the automation tab even over the page in front, so the first
+ * navigation of a run opened a tab no later action or observation looked at.
  */
-function tabRequestFor(
+async function tabRequestFor(
   action: BrowserActionCommand,
   request: BrowserActionRunRequest,
   isNavigation: boolean
-): Parameters<typeof resolveAutomationTab>[0] {
+): Promise<Parameters<typeof resolveAutomationTab>[0]> {
   const tabRequest: Parameters<typeof resolveAutomationTab>[0] = { active: true };
   const namedTabId = tabIdForAction(action);
   if (isNavigation && action.url) {
     tabRequest.initialUrl = action.url;
     if (opensNewTab(action)) tabRequest.forceNew = true;
     else if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
+    else {
+      const inFront = await navigationTargetTab(request.activeTabId, request.ownOrigins ?? []);
+      if (inFront !== undefined) tabRequest.requestedTabId = inFront;
+    }
     return tabRequest;
   }
   if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
@@ -139,9 +153,10 @@ function navigationResult(
   action: BrowserActionCommand,
   startedAt: number,
   requested: string,
-  landed: string | undefined
+  landed: string | undefined,
+  loadFailed: boolean
 ): BrowserActionResult {
-  const comparison = compareNavigatedUrl(requested, landed);
+  const comparison = compareNavigatedUrl(requested, landed, loadFailed);
   if (comparison.matched) {
     return workerActionResult(action, startedAt, {
       status: "succeeded",
@@ -152,7 +167,7 @@ function navigationResult(
   }
   return workerActionResult(action, startedAt, {
     status: "failed",
-    message: `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
+    message: loadFailed ? `The browser could not load ${comparison.expected}.` : `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
     validation: { status: "failed", expected: comparison.expected, actual: comparison.actual },
     failure: navigationUnexpectedFailure(comparison.expected, comparison.actual),
     ...(landed !== undefined ? { url: landed } : {})
