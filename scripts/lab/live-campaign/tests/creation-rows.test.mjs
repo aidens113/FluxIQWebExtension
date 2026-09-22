@@ -39,7 +39,7 @@ test("a creation row reads the build's reported totals and the created Flow's no
 
   const summary = { campaignId: "c", startedAt: "s", finishedAt: "f", options: { profiles: { create: "lab-create-flow", repair: "lab-adapt-repair" }, provider: "deepseek", model: "deepseek-chat", maxAttempts: 3 }, totals: { tasks: 2, passed: 2, succeeded: 2, failed: 0, noResult: 0, judgementsPassed: 2, providerCalls: 2, reportedTokens: 4389, reportedCostUsd: 0.00234036 }, tasks: [built, refused] };
   const markdown = renderSummaryMarkdown(summary);
-  assert.match(markdown, /\| yes \| 5 nodes: \(unrecognized\) ×1, web\.dom\.click ×2, web\.dom\.type ×1 \| builtin\.control\.start, web\.dom\.type \| playback goal \| yes \| 1 \| 4389 \| 0\.00234036 \|/u);
-  assert.match(markdown, /\| playback goal \| yes \| 1 \| not recorded \| not recorded \|/u);
+  assert.match(markdown, /\| yes \| 5 nodes: \(unrecognized\) ×1, web\.dom\.click ×2, web\.dom\.type ×1 \| builtin\.control\.start, web\.dom\.type \| playback goal \| yes \| — \| 1 \| 4389 \| 0\.00234036 \|/u);
+  assert.match(markdown, /\| playback goal \| yes \| — \| 1 \| not recorded \| not recorded \|/u);
   assert.doesNotMatch(markdown, /Press the Save button/u);
 });

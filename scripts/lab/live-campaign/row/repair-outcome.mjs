@@ -11,8 +11,10 @@ const TARGET_FIELDS = new Set(["tagName", "accessibleName", "controlType"]);
  * of it: no patch accepted or executed, no proposal, no adaptation.
  * `refusedAt` says where: `preflight` (a patch was returned and rejected, with
  * `refusalCodes`), `no-patch` (a validated diagnosis and no patch), or
- * `no-validated-diagnosis`. `replayProviderCalls` stays `null`: the Lab's adapt
- * lane only proposes, so nothing is applied or replayed to count.
+ * `no-validated-diagnosis`. `replayProviderCalls` is the repair lane's count
+ * over its replays (`replay-summary.mjs`), and `null` unless the run was given
+ * `--replays` and replayed: the adapt lane alone only proposes, so nothing is
+ * applied or replayed to count.
  *
  * `targetJudgement` is the Lab's own judgement of a declared repair
  * (`snapshots/flow-lane.json` `repair`, from the scenario's `repair.js`): the
@@ -20,9 +22,10 @@ const TARGET_FIELDS = new Set(["tagName", "accessibleName", "controlType"]);
  * the names of the target fields that differed. `null` where the Lab judged
  * none.
  */
-export function repairOutcome(recovery, providerCalls, flowLane) {
+export function repairOutcome(recovery, providerCalls, flowLane, repairLane = null) {
+  const replayProviderCalls = repairLane?.replayProviderCalls ?? null;
   const targetJudgement = labRepairJudgement(flowLane);
-  if (!recovery) return { measured: false, consulted: null, diagnosisValidated: null, patchKinds: [], accepted: [], patchExecuted: null, refused: null, refusedAt: null, refusalCodes: [], changeProposalCreated: null, adaptationCreated: null, targetJudgement, replayProviderCalls: null };
+  if (!recovery) return { measured: false, consulted: null, diagnosisValidated: null, patchKinds: [], accepted: [], patchExecuted: null, refused: null, refusedAt: null, refusalCodes: [], changeProposalCreated: null, adaptationCreated: null, targetJudgement, replayProviderCalls };
   const interventions = recovery.interventions ?? [];
   const attempts = recovery.runtimePatchAttempts ?? [];
   const isAccepted = (attempt) => attempt.preflightOk === true && (attempt.issueCodes ?? []).length === 0;
@@ -42,7 +45,7 @@ export function repairOutcome(recovery, providerCalls, flowLane) {
     measured: true, consulted, diagnosisValidated,
     patchKinds: distinct(attempts.map((attempt) => attempt.kind)),
     accepted: attempts.filter(isAccepted).map((attempt) => ({ kind: attempt.kind ?? null, executed: attempt.executed === true, produced: attempt.changeProposalCreated === true || attempt.adaptationCreated === true })),
-    patchExecuted, refused, refusedAt, refusalCodes, changeProposalCreated, adaptationCreated, targetJudgement, replayProviderCalls: null,
+    patchExecuted, refused, refusedAt, refusalCodes, changeProposalCreated, adaptationCreated, targetJudgement, replayProviderCalls,
   };
 }
 

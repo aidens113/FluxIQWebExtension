@@ -38,3 +38,11 @@ test("each task becomes one create-flow Lab run naming its scenario, variant and
   ]);
   assert.equal(labRunArguments(CATALOG[0], options).includes("--variant"), false);
 });
+
+test("--replays after -- reaches a creation task's run, which applies and replays its created Flow's repair", () => {
+  const options = parseCampaignArgs(["--", "--target", "persistent-isolated", "--workspace", "w", "--replays", "1"]);
+  const creation = labRunArguments({ id: "identity-drift-rename-redesigned-after-creation", scenarioId: "identity-drift", variantId: "renamed-redesign", kind: "form", judgeBy: "playback-goal" }, options);
+  assert.deepEqual(creation.slice(-6), ["--target", "persistent-isolated", "--workspace", "w", "--replays", "1"]);
+  assert.equal(creation[creation.indexOf("--llm-task") + 1], "create-flow");
+  assert.equal(creation.includes("--flow"), false, "a created Flow's repair lane needs no recorded Flow lane");
+});

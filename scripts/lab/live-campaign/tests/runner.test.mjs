@@ -58,7 +58,7 @@ test("a campaign runs tasks one at a time, retries only RAM faults, and writes i
   const markdown = await readFile(path.join(outputDir, "summary.md"), "utf8");
   assert.equal(markdown, renderSummaryMarkdown(written));
   assert.match(markdown, /\*\*1 of 4 runs passed\*\*/u);
-  assert.match(markdown, /\| form-goal \| instruction-only-form \| form \| run-ok \| passed \| yes \| — \| web\.dom\.type \| playback goal \| yes \| 2 \| 15 \| 0\.75 \| — \| — \| 2 \(exit 3221225477 \(access violation\)\) \|/u);
+  assert.match(markdown, /\| form-goal \| instruction-only-form \| form \| run-ok \| passed \| yes \| — \| web\.dom\.type \| playback goal \| yes \| — \| 2 \| 15 \| 0\.75 \| — \| — \| 2 \(exit 3221225477 \(access violation\)\) \|/u);
   assert.match(markdown, /\| table-read-reordered \| data-table \/ column-reorder \|/u);
 }));
 

@@ -177,6 +177,21 @@ test("a create-flow run fits only a scenario run that carries an instruction tas
   assert.equal(JSON.stringify(described).includes(CREDENTIAL.value), false);
 });
 
+test("a create-flow run's Flow runs under the proposal-only repair grant, so its repair can be held, applied and replayed", () => {
+  const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  assert.deepEqual([create.repairsFlow, create.proposesRepairOnly], [true, true]);
+  // The repair lane names the playback's grant; the dry run still describes the build's.
+  assert.deepEqual(create.describeRepair(), { task: "create-flow", purpose: "diagnose_and_adapt" });
+  assert.equal(create.describe().purpose, "build_and_adapt");
+  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  assert.deepEqual([adapt.repairsFlow, adapt.proposesRepairOnly, adapt.describeRepair()], [true, true, { task: "adapt", purpose: "diagnose_and_adapt" }]);
+  const repair = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "repair" }), CREDENTIAL);
+  assert.deepEqual([repair.repairsFlow, repair.proposesRepairOnly, repair.describeRepair().purpose], [true, false, "explore_and_adapt"]);
+  // A diagnosis changes nothing, so it has no repair to apply.
+  const diagnose = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "diagnose" }), CREDENTIAL);
+  assert.deepEqual([diagnose.repairsFlow, diagnose.proposesRepairOnly], [false, false]);
+});
+
 test("a build grant authorizes only a build, and a run grant only a run", async () => {
   const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   await assert.rejects(create.authorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A build_and_adapt grant authorizes a Flow build, never a Flow run/u);

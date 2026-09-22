@@ -5,6 +5,7 @@ import { datasetJudgement } from "./dataset-judgement.mjs";
 import { describeFacilityFailure } from "./facility-failure.mjs";
 import { isIssueCode } from "./issue-code.mjs";
 import { repairJudgement } from "./repair-judgement.mjs";
+import { replaySummary } from "./replay-summary.mjs";
 import { repairOutcome } from "./repair-outcome.mjs";
 import { reportedSpend } from "./reported-spend.mjs";
 
@@ -27,7 +28,9 @@ export function summarizeTask(task, attempts, final, bundle) {
   const observedCalls = liveLlm?.observed?.calls;
   const providerCalls = typeof observedCalls === "number" ? observedCalls + (liveLlm?.repair?.observed?.calls ?? 0) : evaluation?.llm?.calls ?? null;
   const repairing = task.kind === "repair";
-  const repair = repairing ? repairOutcome(recovery, providerCalls, flowLane) : null;
+  // What `--replays` did, for either kind: a creation task's Flow runs under a repair grant too.
+  const repairLane = replaySummary(bundle.repairLane);
+  const repair = repairing ? repairOutcome(recovery, providerCalls, flowLane, repairLane) : null;
   let judgement;
   if (repairing) judgement = repairJudgement(task, repair, oracleVerdict);
   else {
@@ -63,6 +66,8 @@ export function summarizeTask(task, attempts, final, bundle) {
     createdFlowShape: createdFlowShape(flowLane),
     judgement,
     repair,
+    /** `null` unless the run was given `--replays`; then whether its repair was applied, and whether each replay with no model met the goal. */
+    repairLane,
     providerCalls,
     reportedTokens: spend.tokens,
     reportedCostUsd: spend.costUsd,
