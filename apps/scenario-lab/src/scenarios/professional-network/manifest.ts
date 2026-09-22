@@ -17,16 +17,33 @@ const CLOSE_CONVERSATION = "role:button:Close your conversation with Priya Nair"
 const sentRow = (urn: string) => `li[data-entity-urn="${urn}"]`;
 
 /**
+ * What every recording meets on the feed it starts on, answered in the one
+ * order that holds however late the first step comes: the app prompt, whose
+ * scrim covers everything, the cookie banner included, 2.5 s into the page;
+ * then the conversation, 3.5 s in, over the lower right, where the banner's
+ * Accept sits; then the cookie banner. Each answer lasts for the session: a
+ * put-off prompt and a conversation once shown never come back, so no later
+ * page brings them. A Flow replayed from the recording starts long after both
+ * have arrived, and meets them in this order too. Both are certain to come, so
+ * each is waited for generously: on a loaded machine their timers fire late.
+ */
+const ARRIVE: ScenarioStep[] = [
+  { id: "app-prompt-shown", operation: "waitForState", target: `div:text-is("Not now")`, timeoutMs: 15_000 },
+  { id: "put-off-app", operation: "click", target: `div:text-is("Not now")` },
+  { id: "conversation-opened", operation: "waitForState", target: CLOSE_CONVERSATION, timeoutMs: 15_000 },
+  { id: "close-conversation", operation: "click", target: CLOSE_CONVERSATION },
+  { id: "accept-cookies", operation: "click", target: "role:button:Accept" },
+];
+
+/**
  * The recorded withdrawal: open the Sent invitations, narrow them to people,
  * load all of them -- the first "Show more" needs its Retry -- and withdraw
  * each request sent a month or more ago through the dialog's confirm control,
  * then wait until the list no longer holds the last of them.
  */
 const WITHDRAW_SCRIPT: ScenarioStep[] = [
-  { id: "accept-cookies", operation: "click", target: "role:button:Accept" },
+  ...ARRIVE,
   { id: "open-sent-invitations", operation: "navigate", path: `${ROOT}mynetwork/invitation-manager/sent/` },
-  { id: "conversation-opened", operation: "waitForState", target: CLOSE_CONVERSATION, timeoutMs: 8000 },
-  { id: "close-conversation", operation: "click", target: CLOSE_CONVERSATION },
   { id: "only-people", operation: "click", target: `role:button:People (${PEOPLE_SENT.length})` },
   { id: "people-listed", operation: "waitForState", target: "role:button:Show more", timeoutMs: 5000 },
   { id: "show-more", operation: "click", target: "role:button:Show more" },
@@ -55,24 +72,20 @@ const ORGANIC_RESULTS_SHOWN = `section[aria-label="Search results"] ul[role="lis
 const VISIBLE_SHOW_RESULTS = `div:text-is("Show results") >> visible=true`;
 
 /**
- * The recorded people search, as a person does it: search from the global
- * bar, open all people results, put off the app prompt and close the
- * conversation that opens over the pager, filter to second-degree connections,
+ * The recorded people search, as a person does it: answer the feed's
+ * interruptions, search from the global bar, open all people results, filter
+ * to second-degree connections,
  * then add Rotterdam in the Netherlands through the location typeahead --
  * which closes the dropdown when a suggestion is chosen, so it is opened again
  * to apply -- and read every page by its number, because Next never leaves
  * page 2.
  */
 const SEARCH_SCRIPT: ScenarioStep[] = [
-  { id: "search-accept-cookies", operation: "click", target: "role:button:Accept" },
+  ...ARRIVE,
   { id: "type-keywords", operation: "type", target: "role:combobox:Search", value: ROTTERDAM_ENGINEERS.keywords },
   { id: "submit-search", operation: "press", target: "role:combobox:Search", value: "Enter" },
   { id: "all-results-shown", operation: "waitForState", target: "role:link:See all people results", timeoutMs: 5000 },
   { id: "open-people-results", operation: "click", target: "role:link:See all people results" },
-  { id: "app-prompt-shown", operation: "waitForState", target: `div:text-is("Not now")`, timeoutMs: 6000 },
-  { id: "put-off-app", operation: "click", target: `div:text-is("Not now")` },
-  { id: "search-conversation-opened", operation: "waitForState", target: CLOSE_CONVERSATION, timeoutMs: 6000 },
-  { id: "search-close-conversation", operation: "click", target: CLOSE_CONVERSATION },
   { id: "open-connections", operation: "click", target: `div[tabindex="0"]:text-is("Connections ▾")` },
   { id: "choose-second-degree", operation: "check", target: "role:checkbox:2nd", value: true },
   { id: "apply-connections", operation: "click", target: VISIBLE_SHOW_RESULTS },

@@ -1,15 +1,6 @@
 import { REPLY_TICKET, TRIAGE_AGENT } from "./support-desk/index.js";
 import { LINE_ITEM_ORDER, REFUND_ORDER } from "./order-operations/index.js";
-import { EVERYTHING_STORE_LIVE_TASKS } from "./everything-store/index.js";
-import { CROSSBORDER_MARKETPLACE_LIVE_TASKS } from "./crossborder-marketplace/index.js";
-import { BIGBOX_RETAIL_LIVE_TASKS } from "./bigbox-retail/index.js";
-import { JOB_BOARD_LIVE_TASKS } from "./job-board/index.js";
-import { LOCAL_CLASSIFIEDS_LIVE_TASKS } from "./local-classifieds/index.js";
-import { AUCTION_MARKETPLACE_LIVE_TASKS } from "./auction-marketplace/index.js";
-import { PHOTO_SOCIAL_LIVE_TASKS } from "./photo-social/index.js";
-import { SOCIAL_NETWORK_FEED_TASKS } from "./social-network-feed/index.js";
-import { COMPANY_WEBSITE_LIVE_TASKS } from "./company-website/index.js";
-import { PROFESSIONAL_NETWORK_LIVE_TASKS } from "./professional-network/index.js";
+import { REALISTIC_SITE_LIVE_TASKS } from "./realistic-site-live-tasks.js";
 
 /**
  * Plain-English instructions for live Flow creation against the scenario
@@ -760,16 +751,7 @@ const TASKS: LiveInstructionTask[] = [
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-conversation",
   },
-  ...EVERYTHING_STORE_LIVE_TASKS,
-  ...CROSSBORDER_MARKETPLACE_LIVE_TASKS,
-  ...BIGBOX_RETAIL_LIVE_TASKS,
-  ...JOB_BOARD_LIVE_TASKS,
-  ...LOCAL_CLASSIFIEDS_LIVE_TASKS,
-  ...AUCTION_MARKETPLACE_LIVE_TASKS,
-  ...PHOTO_SOCIAL_LIVE_TASKS,
-  ...SOCIAL_NETWORK_FEED_TASKS,
-  ...COMPANY_WEBSITE_LIVE_TASKS,
-  ...PROFESSIONAL_NETWORK_LIVE_TASKS,
+  ...REALISTIC_SITE_LIVE_TASKS,
 ];
 
 export const LIVE_INSTRUCTION_TASKS: readonly LiveInstructionTask[] = Object.freeze(TASKS.map((task) => Object.freeze({ ...task })));

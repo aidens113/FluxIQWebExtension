@@ -79,7 +79,7 @@ describe("an honest shopper passes every oracle", { concurrency: true }, () => {
       await page.getByRole("button", { name: "Minimize chat" }).click();
       await page.locator(`[title="Click to select Sage Green"]`).click();
       await page.waitForURL(/\/dp\/B0D7KXS4G7$/u);
-      await kit.pause(STORE_TIMINGS.productHydrate + 300);
+      await kit.awaitLiveProductPage(page);
       await page.getByLabel("Quantity:").selectOption("2");
       await page.getByRole("button", { name: "Add to Cart", exact: true }).click();
       await page.getByRole("dialog", { name: "Added to cart" }).waitFor();
@@ -105,7 +105,7 @@ describe("an honest shopper passes every oracle", { concurrency: true }, () => {
       await page.getByRole("button", { name: "Minimize chat" }).click();
       await page.locator(`[title="Click to select Matte Black"]`).click();
       await page.waitForURL(/\/dp\/B0D7KX9MBL$/u);
-      await kit.pause(STORE_TIMINGS.productHydrate + 300);
+      await kit.awaitLiveProductPage(page);
       await page.getByRole("button", { name: "Buy Now" }).click();
       await page.waitForURL(/\/checkout$/u);
       await Promise.all([page.waitForEvent("load"), page.getByLabel(/FREE Standard Delivery/u).check()]);

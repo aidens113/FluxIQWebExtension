@@ -142,7 +142,8 @@ export const jobBoardManifest = createScenarioManifest({
         { id: "open-posting", operation: "click", target: `${card(APPLY_TARGET.id)} h2 a` },
         { id: "posting-shown", operation: "waitForState", target: "role:link:Apply on company site", timeoutMs: 6000 },
         { id: "apply-on-company-site", operation: "click", target: "role:link:Apply on company site" },
-        { id: "careers-site", operation: "switchTab", path: "/scenarios/job-board/careers/quillmark/jobs/QM-4471", timeoutMs: 10000 },
+        // A new tab is waited for as long as a browser can take to start one: up to 30 s on a loaded machine.
+        { id: "careers-site", operation: "switchTab", path: "/scenarios/job-board/careers/quillmark/jobs/QM-4471", timeoutMs: 30_000 },
         { id: "accept-careers-cookies", operation: "click", target: "role:button:Accept" },
         { id: "first-name", operation: "type", target: frame(`input[name="first_name"]`), value: CANDIDATE.firstName },
         { id: "last-name", operation: "type", target: frame(`input[name="last_name"]`), value: CANDIDATE.lastName },

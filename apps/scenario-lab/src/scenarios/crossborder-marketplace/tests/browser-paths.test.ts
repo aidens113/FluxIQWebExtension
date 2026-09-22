@@ -39,14 +39,36 @@ async function centreOf(session: Session, target: string): Promise<{ x: number; 
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+const OVERLAY_ROLES = { consent: c.consent, chatPill: c.chatPill, chatPanel: c.chatPanel, addCart: c.addCart, buyNow: c.buyNow, scrim: c.scrim };
+
 /** Which overlay, if any, is the topmost element at a point: the answer a real click gets. */
 async function hitAt(session: Session, point: { x: number; y: number }): Promise<string> {
   return session.page.evaluate(`(() => {
     const hit = document.elementFromPoint(${point.x}, ${point.y});
-    const roles = ${JSON.stringify({ consent: c.consent, chatPill: c.chatPill, chatPanel: c.chatPanel, addCart: c.addCart, buyNow: c.buyNow, scrim: c.scrim })};
+    const roles = ${JSON.stringify(OVERLAY_ROLES)};
     for (const [role, name] of Object.entries(roles)) if (hit && hit.closest('.' + name)) return role;
     return hit ? hit.tagName : 'nothing';
   })()`);
+}
+
+/** Every overlay stacked at a point, topmost first, each named once: the order the page paints them in, whatever arrives on top later. */
+async function stackAt(session: Session, point: { x: number; y: number }): Promise<string[]> {
+  return session.page.evaluate(`(() => {
+    const roles = ${JSON.stringify(OVERLAY_ROLES)};
+    const stack = [];
+    for (const element of document.elementsFromPoint(${point.x}, ${point.y})) {
+      for (const [role, name] of Object.entries(roles)) if (element.closest('.' + name) && !stack.includes(role)) stack.push(role);
+    }
+    return stack;
+  })()`);
+}
+
+/** Polls `condition` every 100 ms until it holds, failing with `what` after `timeoutMs`. */
+async function until(condition: () => boolean | Promise<boolean>, what: string, timeoutMs = 8000): Promise<void> {
+  for (const deadline = Date.now() + timeoutMs; !(await condition());) {
+    assert.ok(Date.now() < deadline, `${what} never happened`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 /** Every card on the active results page, fully loaded, as a person reads it. */
@@ -115,10 +137,11 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
 
   test("on a first visit the consent banner sits over the buy bar, and the welcome coupons over everything", () => withSession(async (session) => {
     await session.page.goto(`${session.lab.origin}${itemHref(VOLTBAY_OFFICIAL_ID)}`);
-    await session.page.waitForTimeout(1300);
+    // The chat arrives a second in, over the same corner; the stack is read once it has, by paint order rather than by what happens to be on top at that moment, because the welcome coupons follow a second later.
+    await locate(session.page, `.${c.chatPill}`).waitFor({ state: "visible", timeout: 6000 });
     const point = await centreOf(session, "testid:add-to-cart");
-    assert.equal(await hitAt(session, point), "consent");
-    await locate(session.page, 'text="Welcome back, Mara!"').waitFor({ state: "visible", timeout: 3000 });
+    assert.deepEqual((await stackAt(session, point)).filter((role) => role !== "scrim"), ["consent", "chatPill", "addCart"]);
+    await locate(session.page, 'text="Welcome back, Mara!"').waitFor({ state: "visible", timeout: 6000 });
     assert.equal(await hitAt(session, point), "scrim");
   }));
 
@@ -137,9 +160,8 @@ describe("crossborder-marketplace in a browser", { concurrency: true }, () => {
     const pages = [await readResultsPage(session)];
     const firstUrl = session.page.url();
     await locate(session.page, `.${c.pager} >> text="Next ›"`).click();
-    await session.page.waitForTimeout(800);
+    await until(() => session.errors.some((error) => error.includes("reading 'current'")), "Next's handler failing");
     assert.equal(session.page.url(), firstUrl, "Next is broken on the live site and goes nowhere");
-    assert.ok(session.errors.some((error) => error.includes("reading 'current'")));
     await locate(session.page, `.${c.pager} >> text="2"`).click();
     pages.push(await readResultsPage(session));
     await locate(session.page, `.${c.pager} >> text="3"`).click();
