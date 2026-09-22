@@ -99,8 +99,12 @@ async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObjec
     : { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value, maxEvidenceBytes: options.maxEvidenceBytes });
 }
 
-function rejection(code: string) {
-  return { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code }, effectApplied: false, resultCode: `web.action.rejected.${code}` };
+/** The refusal as the model receives it, with the reason that says what to do next. */
+function rejection(code: string, detail?: JsonObject) {
+  const evidence: JsonObject = detail === undefined
+    ? { schemaVersion: "web-llm-tool-result.v1", ok: false, code }
+    : { schemaVersion: "web-llm-tool-result.v1", ok: false, code, detail };
+  return { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode: `web.action.rejected.${code}` };
 }
 
 /** Every key at every depth of a JSON value. */
@@ -217,13 +221,13 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assertNothingAddressable(around.evidence, page.structure as WebAutomationStructureDetection);
 
   // A handle the model was never shown.
-  assert.deepEqual(await detect(runtime, { target: "target.9" }), rejection("target_unobserved"));
+  assert.deepEqual(await detect(runtime, { target: "target.9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "target.9" }));
   // The element has left the page.
   page = { ...page, elements: [next] };
-  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
+  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved", { reason: "handle_no_longer_on_page", target: "target.2" }));
   // The page itself has moved on.
   page = { ...page, url: "http://127.0.0.1:4173/scenarios/product-catalog/page/2", elements: [next, link(), link()] };
-  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
+  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "target.2" }));
 
   // An element in a child frame is detected in that frame, and the handle remembers it.
   // The handle is read out of the packet rather than assumed: a page keeps a
@@ -254,8 +258,16 @@ test("the page's refusals and a malformed call reach the model as bare codes", a
   }
   const { gateway, commands } = fakeGateway(() => captured("data-table-largest"));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  for (const value of [{ extra: 1 }, { target: "nope" }, { target: 3 }, { target: "target.1", extra: true }] as JsonObject[]) {
-    assert.deepEqual(await detect(runtime, value), rejection("invalid_input"), JSON.stringify(value));
+  // Each malformed call is told which way it was malformed, and a call whose
+  // keys are wrong is told the keys the tool takes.
+  const malformed: ReadonlyArray<readonly [JsonObject, JsonObject]> = [
+    [{ extra: 1 }, { reason: "unexpected_input_keys", instead: ["target"] }],
+    [{ target: "nope" }, { reason: "malformed_handle", target: "nope" }],
+    [{ target: 3 }, { reason: "malformed_handle" }],
+    [{ target: "target.1", extra: true }, { reason: "unexpected_input_keys", instead: ["target"] }]
+  ];
+  for (const [value, detail] of malformed) {
+    assert.deepEqual(await detect(runtime, value), rejection("invalid_input", detail), JSON.stringify(value));
   }
   assert.deepEqual(commands, [], "a malformed call reaches no page");
 });

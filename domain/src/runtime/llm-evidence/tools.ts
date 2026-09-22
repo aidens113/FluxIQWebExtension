@@ -7,7 +7,9 @@
 // observes
 // too: it finds the repeating structure a scraping step needs and hands back an
 // opaque extraction handle for it (`structure/`). Everything they return is a
-// sanitized packet; everything they refuse returns a bare code. Press refuses nothing on its own judgement of
+// sanitized packet; everything they refuse returns a code and one closed reason
+// for it, and nothing of the page beyond what a packet already shows
+// (`./tool-rejection.ts`). Press refuses nothing on its own judgement of
 // what a control looks like; see `./press.ts` for why, and for the seam where
 // a lasting press will ask the person for permission once Core carries it.
 
@@ -68,7 +70,7 @@ import {
 } from "./sanitize";
 import { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence } from "./target";
 import { webActionFailureRejectionCode } from "./action-failure";
-import { recoverable, RecoverableToolRejection, toolRejection } from "./tool-rejection";
+import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
   webLlmToolRejectionResultCode,
@@ -239,7 +241,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       },
       {
         toolId: WEB_LLM_PRESS_TOOL_ID,
-        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person. A press the page would not take -- a dialog or banner over the control -- comes back with the page as it now is: deal with what is in the way, then press again.",
+        description: "Press an observed control by copying its opaque target handle exactly, then get the page it produces. Use it to see what exists only after a press: the form behind a New post, Compose, Reply or Edit button, a tab, a menu, the actions a row shows once its checkbox is ticked, another page of this site. Never press a submit, save, schedule, send, publish, delete or confirm control after entering the requested workflow values: put that press in the Flow and complete the result instead. A checkbox is pressed again afterwards, so the page is left as found: tick it in the Flow yourself. Say in consequences what this press itself would lastingly do -- move_money, delete, send_or_publish, modify_existing, create_new. Opening, showing, revealing, expanding or ticking only to expose controls always has consequences: [], even when the Flow you later author will create, modify, send or publish something. A lasting press the instruction did not ask for is not made: it is put to the person. A press the page would not take -- a dialog or banner over the control -- comes back with the page as it now is: deal with what is in the way, then press again. A call this tool turns down says why in detail.reason -- the handle was not in the packet you were shown, its page has been left, the control is gone, or it now names several: do what the reason says, and never make the same call twice.",
         inputSchema: { type: "object", required: ["target", "consequences"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN }, consequences: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES] } } }, additionalProperties: false },
         effect: "mutate",
       },
@@ -274,8 +276,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           const current = stable(input, await captureEvidence(gateway, sessionId, input, input.signal));
           const currentUrl = new URL(current.evidence.location);
           const destination = requestedUrl(input.value.url);
-          if (destination.origin !== currentUrl.origin) recoverable("cross_origin");
-          if (evidenceLocation(destination) === current.evidence.location) recoverable("no_progress");
+          if (destination.origin !== currentUrl.origin) recoverable("cross_origin", why("another_origin"));
+          if (evidenceLocation(destination) === current.evidence.location) recoverable("no_progress", why("already_at_destination"));
           const result = await gateway.executeAction(sessionId, {
             actionType: "web.browser.navigate",
             parameters: { url: destination.href },
@@ -332,7 +334,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           // can be pressed next.
           const page = error.page === undefined ? undefined : retain(stable(input, error.page));
           if (page !== undefined) shown(input, sessionId, page);
-          return toolExecution(toolRejection(error.code, page?.evidence), false, webLlmToolRejectionResultCode(error.code));
+          return toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code));
         }
         throw error;
       }
@@ -491,16 +493,33 @@ function requestedUrl(input: unknown): URL {
   try {
     return safeEvidenceUrl(input);
   } catch {
-    return recoverable("invalid_input");
+    return recoverable("invalid_input", why("not_a_url"));
   }
 }
 
 function boundedTargetHandle(input: unknown): string {
-  if (typeof input !== "string" || !TARGET_HANDLE.test(input)) recoverable("invalid_input");
+  if (typeof input !== "string" || !TARGET_HANDLE.test(input)) {
+    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof input === "string" ? input : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  }
   return input;
 }
 
 function exactToolKeys(input: JsonObject, allowed: string[]): void {
   const keys = new Set(allowed);
-  if (Object.keys(input).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key))) recoverable("invalid_input");
+  const unexpected = Object.keys(input).some((key) => !keys.has(key));
+  const missing = allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key));
+  if (!unexpected && !missing) return;
+  // The tool's own declared keys: what it takes, and all it takes.
+  recoverable("invalid_input", rejectionDetail({
+    reason: unexpected ? "unexpected_input_keys" : "missing_input_keys",
+    target: undefined,
+    instead: allowed,
+    missing: undefined,
+    requestId: undefined
+  }));
+}
+
+/** A refusal whose reason is the whole of what the model needs. */
+function why(reason: "another_origin" | "already_at_destination" | "not_a_url") {
+  return rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined });
 }

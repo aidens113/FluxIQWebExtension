@@ -37,7 +37,7 @@ import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
-import { recoverable, type WebLlmToolRejectionCode } from "../tool-rejection";
+import { recoverable, rejectionDetail, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
@@ -91,7 +91,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   }));
   // A top-frame detection must describe the page the target was bound on; a
   // frame's own document has its own location, and its origin is held above.
-  if (current !== undefined && element?.frameId === undefined && page.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  if (current !== undefined && element?.frameId === undefined && page.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
 
   const detection = webAutomationStructureDetectionValue(payload.structure);
   if (detection === undefined) throw new Error("the web client answered the capture without a structure detection");
@@ -123,21 +123,30 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
  */
 function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLlmSnapshotBinding, target: string): { selector: string; frameId: number | undefined } {
   const observed = returned ?? current;
-  if (observed.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  if (observed.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
   const element = observedElement(observed.evidence, target);
   const selector = observed.selectors.get(target);
-  if (!selector) recoverable("target_unobserved");
+  if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   const stillThere = current.evidence.elements.some((candidate) => candidate.frameId === element.frameId && current.selectors.get(candidate.target) === selector);
-  if (!stillThere) recoverable("target_unobserved");
+  if (!stillThere) recoverable("target_unobserved", handleRefusal("handle_no_longer_on_page", target));
   return { selector, frameId: element.frameId };
+}
+
+/** Which of the ways a handle stops naming one control happened here, and the handle it was. */
+function handleRefusal(reason: "handle_not_in_packet" | "page_moved_since_packet" | "handle_no_longer_on_page", target: string | undefined) {
+  return rejectionDetail({ reason, target, instead: undefined, missing: undefined, requestId: undefined });
 }
 
 /** `{}` or `{ target }`, and nothing else. */
 function requestedTarget(value: JsonObject): string | undefined {
   const keys = Object.keys(value);
-  if (keys.some((key) => key !== "target")) recoverable("invalid_input");
+  if (keys.some((key) => key !== "target")) {
+    recoverable("invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: ["target"], missing: undefined, requestId: undefined }));
+  }
   if (!keys.includes("target")) return undefined;
   const target = value.target;
-  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) recoverable("invalid_input");
+  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) {
+    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof target === "string" ? target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  }
   return target;
 }
