@@ -60,7 +60,8 @@ test("the runner checks page facts only from the schedule, and the armed set onl
   const source = await runScenarioSource();
   const calls = [...source.matchAll(/assertExpectedFacts\(([^,]+),/gu)].map((match) => ({ argument: (match[1] ?? "").trim(), index: match.index }));
   const pageFactCalls = calls.filter((call) => call.argument.includes("pageFacts"));
-  assert.deepEqual(pageFactCalls.map((call) => call.argument), ["pageFacts.atLoad", "pageFacts.afterArm"]);
+  // The third is the recording lane's at-load check after the Core action probe resets and reloads the start page.
+  assert.deepEqual(pageFactCalls.map((call) => call.argument), ["pageFacts.atLoad", "pageFacts.afterArm", "pageFacts.atLoad"]);
   // Nothing reaches around the schedule into a resolved workflow's merged
   // facts, which say nothing about which rendering they describe.
   assert.deepEqual(calls.filter((call) => /expected\.pageFacts/u.test(call.argument)), []);
@@ -71,8 +72,14 @@ test("the runner checks page facts only from the schedule, and the armed set onl
   assert.match(source, /const pageFacts = scenarioPageFactSchedule\(scenario, workflowSelection\(options\), armingOf\(options, workflow\)\);/u);
 
   const arms = [...source.matchAll(/armScenarioVariant\(/gu)].map((match) => match.index);
-  const [beforeLoad, afterRecording] = arms;
-  assert.equal(arms.length, 2, "one arm before the first load (existing and clone), one after the recording (the Flow lane)");
+  const [beforeLoad, afterRecording, afterProbeReset] = arms;
+  assert.equal(arms.length, 3, "one arm before the first load (existing and clone), one after the recording (the Flow lane), and the first again after the probe's reset");
+  // The probe's reset disarms the fixture; the recording must still start on the armed rendering, so the
+  // same pre-load arm is repeated between the reset and the reload, under the same condition.
+  const reset = source.indexOf("await resetScenarioLab(topology.scenarioOrigin, topology.allocation.controllerToken);");
+  const probeReload = source.indexOf("await openScenarioStart(page, topology.scenarioOrigin, scenario);", reset);
+  assert.ok(afterProbeReset !== undefined && reset > 0 && reset < afterProbeReset && afterProbeReset < probeReload, "the variant is armed again after the probe's reset and before its reload");
+  assert.equal(source.match(/if \(workflow\.variant && !flowLane\) await armScenarioVariant\(/gu)?.length, 2, "the re-arm uses the pre-load arm's own condition");
   assert.ok(beforeLoad !== undefined && afterRecording !== undefined);
   const flowLoad = source.indexOf("await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);");
   assert.ok(flowLoad > 0, "the Flow lane loads the page every Flow run starts on, armed or not, through openScenarioStart");
@@ -108,7 +115,7 @@ test("the Flow lane's load before every run lands on the scenario's startPath, n
 
   const source = await runScenarioSource();
   const loads = [...source.matchAll(/await openScenarioStart\(/gu)].map((match) => match.index);
-  assert.equal(loads.length, 2, "the recording lane's load and the Flow lane's load before every run, and no other way of opening the fixture");
+  assert.equal(loads.length, 3, "the recording lane's load, the Flow lane's load before every run, and the reload after the Core action probe's reset, and no other way of opening the fixture");
   assert.equal(/await page\.reload\(/u.test(source), false, "nothing in the runner re-presents the page it happens to be on");
   const [firstLoad, flowLoad] = loads;
   assert.ok(firstLoad !== undefined && flowLoad !== undefined);

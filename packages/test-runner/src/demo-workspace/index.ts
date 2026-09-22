@@ -4,7 +4,8 @@
 export { runDemoLlmAdaptation, inspectLatestDemoLlmAdaptationRun, controlPreparedDemoLlmTargetAdaptation } from "./adaptation-lane.js";
 export { prepareDemoLlmBlankWorkspace } from "./blank-preparation.js";
 export { type BoundExplorationApplyCheckpoint, runBoundDemoLlmExplorationApplyCheckpoint, type BoundExplorationRunCheckpoint, boundExplorationRunStages, type BoundExplorationRunStage, runBoundDemoLlmExplorationFlow } from "./bound-exploration.js";
-export { type DemoWorkspaceConfiguration, resolveDemoWorkspaceConfiguration } from "./configuration.js";
+export { type DemoWorkspaceConfiguration, type DemoWorkspaceTopologyOverrides, resolveDemoWorkspaceConfiguration } from "./configuration.js";
+export { authenticatedControl, type DemoCoreStartOptions, type RunningDemoCore, startPersistentDemoCore, withPersistentDemoCore } from "./core-process.js";
 export { runDemoLlmCreationSettingsProbe, runDemoLlmCreationReadinessProbe, runDemoLlmPendingCreationProbe, runDemoLlmAppliedCreationProbe, runDemoLlmAppliedCreationRevertProbe, runDemoLlmAppliedCreationReplayProbe, runDemoLlmCreation } from "./creation-lanes.js";
 export { prepareDemoLlmWorkspace, runDemoLlmDiagnosis } from "./diagnosis-lanes.js";
 export { runDemoLlmAdaptationReadinessProbe, runDemoLlmExplorationAdaptationReadinessProbe, runDemoLlmExplorationAdaptationRevert, runDemoLlmExplorationAdaptationReject, runDemoLlmExplorationAdaptationProposal, runDemoLlmExplorationAdaptationApply, runDemoLlmExplorationAdaptationValidation } from "./exploration-adaptation.js";
@@ -16,3 +17,17 @@ export { type DemoLlmPreparationState, parseDemoLlmPreparationState, assertDemoL
 export { startPersistentScenarioLabWithRecovery, requireDemoScenarioUrl } from "./scenario-lab.js";
 export { setupDemoWorkspaceDeepSeekKey, recordDemoWorkspace, runDemoWorkspaceFlow } from "./workspace-lanes.js";
 export { type DemoWorkspaceState } from "./workspace-state.js";
+
+// The building blocks the UI end-to-end journeys compose (`ui-e2e/journeys`):
+// the persistent Core and its signed-in control client, the extension, panel
+// and scenario pages, and the panel steps a journey drives. They are exported
+// here because a consumer outside this directory may reach them only through
+// its barrel.
+export { credentialLiterals, explicitPort } from "./configuration.js";
+export { connectExtension, extensionStatus, pollStatus, withDemoBrowser } from "./browser-session.js";
+export { assertConnectedSession, recordingIds, waitForNewRecording, waitForRoutedRunDetail } from "./control-waits.js";
+export { openFlowInCurrentProject, openProjectInPanel, selectFlowInCurrentProject } from "./panel-navigation.js";
+export { runDemoFlowFromPanel } from "./panel-run.js";
+export { type DemoFlowProfile, generateDemoSubflowFromRecording, provisionDemoFlow } from "./provisioning.js";
+export { stableHierarchyNodeId } from "./selectors.js";
+export { withWorkspaceLock } from "./workspace-state.js";

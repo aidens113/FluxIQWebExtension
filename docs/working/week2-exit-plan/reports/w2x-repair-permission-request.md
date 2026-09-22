@@ -368,3 +368,317 @@ Downstream:
      because the patch call was made.
    - I edited the `llm/harness/index.ts` barrel (one export line). The new file
      is otherwise unreachable without a ratcheted barrel bypass.
+
+---
+
+## Scope extension (2026-09-21): the four blockers, and the live proofs again
+
+The supervisor asked me to fix the four blockers above, then run the brief's
+live proofs again. Same worktrees; nothing is committed.
+
+### Outcome of the extension
+
+**Partial.** All four blockers are fixed and tested, and the first is proven
+live: a Flow that fails 90 seconds after it starts now keeps its recovery.
+
+No run reached Generate Repair with a patch, so Recover, Validate, Persist and
+the keyless replay were still not observed. Three things stopped the chain, all
+outside the files these briefs gave me:
+
+- **The diagnosis ends the recovery with no request, most of the time.** Two of
+  the four new runs that reached a diagnosis ended there (S1, O4).
+  - The model answers `stillAchievable: "no"`, at confidence 0.55 both times.
+  - `plan.ts:174` then requests no patch.
+  - `annotate.ts:290` runs an exploration only when a patch is requested. So
+    even S1's own `explorationNeeded: true` was never acted on.
+- **With a permit, the social-scheduler diagnosis times out.** It ran into the
+  25-second per-call limit in both attempts (S2, S2b). Without a permit, S1's
+  diagnosis returned 599 output tokens within the limit.
+- **A per-call timeout can take the grant down with it.** In O3, after call 3
+  timed out, calls 4 and 5 were refused as `llm.provider_request_failed`. That
+  code is what a refusal from the grant becomes, and the store does not keep
+  the reason.
+
+### What changed and why
+
+**(1) Grant claim window**, fixed at the cause in Core.
+
+- **`AS/runtime/llm/execution-grants.ts`: new `holdForRun(scope)`.**
+  - A runtime grant is held for the run it authorizes from the moment that run
+    starts.
+  - It validates exactly as `inspectAvailable` does: the grant is available,
+    in scope, the actor's session is live, and the key and Flow binding are
+    unchanged.
+  - It then extends the grant's claim window to the run's own lease: now plus
+    `AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`, 600 seconds.
+  - A grant can be held once, by one run.
+  - When the recovery claims the grant, the claim starts the same 600-second
+    lease as before. The host's revoke when the run ends is unchanged.
+- **A latent bug that holding would have exposed.** `ensureLiveAuthorization`
+  compared `grant.expiresAtMs` to decide whether the reveal authorizations
+  minted at issue were still live.
+  - A held grant's `expiresAtMs` is no longer those authorizations' expiry.
+  - A new stored field, `authorizationsExpireAtMs`, now carries that expiry.
+    The one-for-one exchange reads it, so a call after the issue TTL still
+    exchanges its lapsed authorization.
+  - The new test would have failed without this: the reveal refuses a lapsed
+    authorization.
+- **Headroom.** `execution-grants.ts` was 792 lines. The public metadata type
+  and its projection moved to a new `llm/execution-grant-metadata.ts`, and the
+  type is re-exported, so the public surface is unchanged. The file is now 772
+  lines.
+- **`AS/api/handlers/runtime-execution.ts`**: the run endpoint calls
+  `holdForRun` before `service.runRuntimeSession`. A grant that cannot be held
+  (lapsed, spent, another run's, or out of scope) refuses the run with Core's
+  message, and nothing runs.
+  - `service.ts` is not touched: 6,275 lines.
+  - `api/contracts/llm.ts`: only the `ttlMs` doc comment changed.
+- **The panel.** The panel issues its run grant at
+  `apps/web/src/features/automation-studio/runtime/FlowRunView.tsx:164`
+  (N3-owned, not edited). It sends no `ttlMs` and calls the same run endpoint
+  immediately. The Core hold therefore covers the panel with no edit there, and
+  there is nothing to route.
+- **The Lab** (`TR/live-llm/execution-grant.ts`): the grant request now sends
+  `ttlMs` explicitly as `LIVE_LLM_GRANT_CLAIM_WINDOW_MS = 60_000`.
+  - That covers only the wait between issuing the grant and the run starting.
+    The Lab issues every grant immediately before its run, and from the start
+    the hold governs.
+  - It is stated rather than left to Core's default, so the two cannot drift
+    apart unnoticed.
+  - The preflight carries no TTL.
+
+**(2) The conjunction rule**
+(`domain/src/runtime/llm-evidence/target/equivalence.ts`), fixed at its cause.
+
+- **The cause.** The rule counted conjunctions without asking what they join.
+- **The fix.** A new `joinsAnotherActionToRecorded` treats a name as joining
+  another action to the recorded one only when:
+  - split at its conjunctions, it has more parts than the recorded name; and
+  - one of those parts agrees with a recorded part from the front (one is the
+    other shortened or extended, as in "Save" and "Save changes").
+- **What that means for the names in question.**
+  - "Pick and pack" standing where "Dispatch run" stood is one control's name.
+  - "Dispatch run and export", "Export and dispatch run", "Dispatch and export"
+    and "Dispatch run then print labels" are still two actions.
+- **The form anchor keeps the old count.** It vouches for a control's place,
+  never for what its name adds, so the existing refusal of "Apply and close" as
+  the only control in the recorded form still holds.
+- **Nothing previously refused is now accepted.** Only the reason changes, for
+  a name that shares no part with the recording.
+- **"Pick and pack" is still refused, now honestly.** The reason is
+  `target_unanchored`: no test id, no name and no form ties it to the
+  recording.
+  - The recorder keeps no anchor for "the same place in the header's action
+    group". Its context holds form, landmark, heading, list or table position
+    and record, and this module deliberately rejects landmark, heading and
+    position as identity.
+  - So this fix alone cannot let order-operations pass. That needs a decision
+    on a new anchor (for example, a recorder-captured group plus position),
+    which is beyond this brief.
+
+**(3) The Lab reader.**
+
+- **`TR/existing-fluxiq-control.ts`**:
+  - A patch attempt carries `permissionOutcome` (closed words) and
+    `permissionRequired`.
+  - A held patch's issue code is taken from those structured fields:
+    `runtime_patch.permission_required` or
+    `runtime_patch.consequences_undeclared`. It used to be derived from the
+    sentence as `preflight_rejected`.
+  - `ExistingRunLlmGate` carries `patchHeldCode` (the same shape check as
+    `patchSkippedCode`) and `permissions` (the class lists).
+  - `ExistingRunDetail` carries `permissionRequest`, read through Core's own
+    strict client parser
+    (`fluxiq/automation-studio/action-permissions`,
+    `parseAutomationStudioActionPermissionRequest`). A request that parser
+    refuses fails the read by its path.
+- **The evaluation contract** (`packages/test-contracts/src/harness-recovery{,-validation}.ts`):
+  - `RunHarnessPatchAttempt` gains an optional `permissionOutcome` (the closed
+    list `harnessPatchPermissionOutcomes`) and `permissionRequired`.
+  - Validation refuses `permissionRequired: true` unless the outcome is
+    `required`, and on an executed patch.
+  - Records written before the fields existed still read.
+  - The evaluation carries closed words only. The control name and Core's
+    sentence stay out of it, and a test asserts this.
+- **The live snapshot.** `snapshots/live-llm.json` now carries:
+  - `observed.gate.patchHeldCode` and `observed.gate.permissions`;
+  - `observed.permissionRequest`: the request as Core built it, with the
+    control name only where Core's gate found it in evidence the model was
+    shown;
+  - `granted.permittedConsequences`.
+
+  `TR/flow-lane/harness-recovery.ts`, `TR/live-llm/observed-usage.ts` and
+  `TR/live-llm/live-llm-run.ts` carry these through.
+
+**(4) Core `docs/architecture/automation-studio.md`.**
+
+- The recovery section no longer says the patch preflight reads the flag. It
+  now describes:
+  - the `consequences` declaration;
+  - the four `permissionOutcome`s;
+  - `sideEffectPermission`;
+  - the `flow_step` request at stage `recovery`;
+  - `patchHeldCode`;
+  - that a patch call which may run is told `actionPermissions`, while a
+    proposal-only call keeps the flag;
+  - that only a direct `executeAutomationStudioRuntimePatch` caller passing no
+    `sideEffectPermission` is still judged by the flag;
+  - that exploration observes a failed tool rather than ending on it.
+- The grant-lifetime section now describes the hold, and the new rule that a
+  hold does not extend the authorizations minted at issue.
+
+**Tests added or changed for the extension.**
+
+- Core:
+  - new `llm/tests/execution-grant-hold.test.ts` (5);
+  - `api/handlers/tests/runtime-execution.test.ts` +2: the grant is held
+    before the run starts, and an unholdable grant refuses the run with nothing
+    run;
+  - `api/handlers/tests/llm-generation.test.ts`: two partial grant mocks gained
+    `holdForRun`. They failed with a TypeError turned into a refusal until then.
+- Domain: `target/tests/equivalence.test.ts` +1, covering both halves of the
+  conjunction rule.
+- Downstream:
+  - `flow-lane/tests/harness-recovery.test.ts` +1: a held repair carries its
+    outcome, codes, gate fields and request; the evaluation holds no name; and
+    a request Core's parser refuses fails the read.
+  - `live-llm/tests/execution-grant.test.ts`: the issue request sends
+    `ttlMs: 60_000`, and the preflight sends none.
+  - New `packages/test-contracts/tests/harness-recovery-permission.test.mjs` (2).
+
+### Live runs
+
+The same command as above, with `--replays 1` added so any validated repair
+would be approved, applied and replayed with no grant.
+`FLUXIQ_TEST_ENV_FILES=none` was set on every run, and
+`FLUXIQ_LAB_ALLOW_BEHIND_CORE` never was. Core was rebuilt from these sources
+before the first run.
+
+| Run | Task, permit | Calls | Recorded cost (USD) | What happened |
+|---|---|---|---|---|
+| S1 `run-mubtirs0-5d5cf2d4` | social-scheduler, none | 1 (diagnosis: 4,915 in, 599 out) | 0.00295 | The run went from 22:34:13.6 to 22:35:47.6, and the Flow failed about 90 s in. **The recovery resolved its provider** (it did not end in `llm.provider_resolution_failed`), so the grant hold is proven live. The diagnosis was `stillAchievable: "no"`, `patchNeeded: false`, `explorationNeeded: true`, confidence 0.55. The plan was `explore` with no patch, so no exploration ran either. `patchSkippedCode: llm.runtime_patch_not_requested`; `permissions: {granted:[], instructed:[], lapsed:[]}`. |
+| S2 `run-mubtvk7u-436132df` | social-scheduler, `send_or_publish,create_new` | 1 | 0.0769, a reservation only | `permissions.granted` was both classes. The diagnosis ended `llm.provider_timeout` at the 25 s per-call limit. |
+| S2b `run-mubu79bt-de8d3304` | same, retried | 1 | 0.0769, a reservation only | Identical: the diagnosis timed out. |
+| O3 `run-mubupb9m-5160a27e` | order-operations, none | 5 | 0.00445 reported, plus reservations for 3 failed calls | The diagnosis was `stillAchievable: "unknown"`, `explorationNeeded: true`, confidence 0.35. Exploration: 2 actions observed, then decision call 3 timed out (`llm.provider_timeout`). Decision call 4 and the patch call (5) failed as `llm.provider_request_failed`. Exploration ended `invalid_decision` and resolution `patch_failed`. |
+| O4 `run-mubuylev-1eb8863d` | order-operations, `modify_existing` | 1 (diagnosis 4,491 tokens) | 0.00232 | `permissions.granted: ["modify_existing"]`. The diagnosis was `stillAchievable: "no"`, `explorationNeeded: false`, `patchNeeded: false`, confidence 0.55. The recovery ended with no patch. |
+
+**Accounting.** In every run, the snapshot's `observed.calls` equals Core's
+`accounting.calls` (1, 1, 1, 5 and 1). Tokens actually reported add up to about
+USD 0.010. The rest of the recorded 0.39 is the grant's worst-case reservation
+for 4 calls that did not return (a charge Core records, not tokens reported).
+
+**The exit chain, link by link, across the four tasks:**
+
+| Link | Observed? |
+|---|---|
+| Fail | Yes, in every run (`web.target.not_found`). |
+| Diagnose | Yes in S1, O3 and O4. S2 and S2b timed out. |
+| Explore | Yes in O3 only (2 actions). |
+| Generate Repair | No. No patch call returned in any run: in S1 and O4 none was made, and in O3 the grant refused it. |
+| Recover | No. |
+| Validate | No. |
+| Persist | No. `adaptationIds: []` everywhere, so `--replays 1` had nothing to apply. |
+| Keyless replay | No. |
+| Permission request, at the patch or exploration stage | No. |
+
+The new reader was exercised live: every run's `live-llm.json` carried
+`observed.gate.permissions` and `granted.permittedConsequences`. No request or
+held code occurred to carry.
+
+### Checks for the extension
+
+- **Core, from `packages/fluxiq`:**
+  - `npx tsc --noEmit -p tsconfig.json`: exit 0.
+  - `npx vitest run` over the 21 earlier paths plus the new grant-hold test and
+    `api/handlers/tests` and `api/contracts/tests`: 55 of 56 files passed on the
+    first run. The 2 failures were the partial mocks above. After fixing them,
+    `npx vitest run src/programs/automation-studio/api` gave "16 passed (16),
+    65 passed (65)".
+  - The grant tests (`execution-grant-hold`, `execution-grants`,
+    `execution-grant-permissions`): "37 passed (37)".
+  - `service-bootstrap/tests/adaptation.test.ts`: 9 of 9.
+- **Core root:**
+  - `pnpm check`: exit 0, "# fail 0" twice, "structure-audit: passed (172
+    warning(s), 361 baselined)".
+  - `pnpm build`: exit 0.
+- **Domain:**
+  - `tsc --noEmit`: exit 0.
+  - `target/tests/{equivalence,override}.test.ts`, bundled as
+    `scripts/test-domain.mjs` does into a scratch directory I have since
+    deleted: "# tests 31, # pass 31".
+  - `host-runtime.test.ts` passed earlier.
+- **Test contracts:** built; the three harness-recovery test files gave
+  "# tests 11, # pass 11".
+- **Test runner:** `tsc` exit 0. Fifteen affected test files (harness-recovery,
+  execution-grant, existing-fluxiq-control, granted-run-settlement,
+  persisted-flow-run, live-repair-lane, lane-observation, run-flow-lane,
+  bench/evaluate-run, single-run-evaluation, judge-repair, run-repair-lane,
+  budget, lane-settlement, demo-llm-exploration-adaptation-wait):
+  "# tests 171, # pass 171".
+- **Downstream root `pnpm check`: exit 1**, from two tests in
+  `scripts/worktree/tests/remove.test.mjs` (95 and 100). Both fail at
+  `process-list.mjs:17` `JSON.parse`: "Bad control character in string literal
+  in JSON at position 71721".
+  - That is the PowerShell listing of every process on this machine, and one
+    process running at the time has a raw control character in its command
+    line.
+  - I have not changed anything under `scripts/` (`git diff --stat HEAD --
+    scripts/` is empty), so this is environmental and pre-existing.
+  - The steps of the chain after it, run separately, passed:
+    `node scripts/structure-audit.mjs` gave "passed (84 warning(s), 122
+    baselined)", and `pnpm -r check` exited 0 with every workspace `Done`.
+  - The steps before it, `structure:test` and `lab:test`, passed inside the
+    chain.
+
+### Not verified (extension)
+
+- **Recover, Generate Repair, Validate, Persist, the keyless replay and the
+  permission request, live.** No run produced a patch.
+- **The panel's run with a hold, live.** The panel uses the same endpoint;
+  only the endpoint test and the Lab exercise it.
+- **Why O3's grant refused calls 4 and 5.** Core's grant keeps a timed-out call
+  as a spent call unless the credential had not yet been released or the grant
+  no longer validates. The run store keeps codes only, so I cannot tell which.
+  - Candidates:
+    - the adapter's own 25-second timer fired during secret resolution
+      (`validateClaimedGrant` plus the reveal), which counts as "not
+      released" and revokes;
+    - or the post-failure `validateClaimedGrant` failed.
+  - The real-adapter test that makes decisions hang past their deadline passes
+    with these changes and still sends the patch, so the joined signal is not
+    implicated as far as I can see.
+- **Why the permitted social-scheduler diagnosis times out.** Two for two, and
+  a different outcome from the unpermitted run. The response is never stored.
+  A reply that runs to its 8,000-token limit (DeepSeek's JSON-mode whitespace
+  padding, which the system prompt already warns against) would explain it; so
+  would provider latency near the limit.
+
+### Open questions or contradictions (extension)
+
+1. **The diagnosis-stage stop is now the first blocker in the chain.** It
+   needs a decision in `recovery/plan.ts` and `annotate.ts`, the first of which
+   is not mine. My recommendation:
+   - When the diagnosis asks for exploration, explore first, whatever its
+     `stillAchievable`, since "no" was said before looking.
+   - Then make the patch call, which can answer `no_repair` as a first-class,
+     recorded decline.
+   - Today `annotate.ts:290` needs `patchRequest.request` to explore, and
+     `plan.ts:174` drops the patch on "no".
+   - The diagnosis instruction (`llm/diagnosis-instructions.ts`) also still
+     tells the model to answer "no" when "what it acted on is gone with nothing
+     that does the same thing". A relabelled control looks like exactly that
+     before anything has been explored.
+2. **The 25-second per-call ceiling is below what Core's grant allows (45 s).**
+   It is set by the Flow settings check (`AS/api/handlers/llm-execution-settings.ts:25`,
+   `boundedWholeNumber(value.timeoutMs, 1, 25_000)`) and mirrored by the Lab
+   (`TR/live-llm/live-llm-plan.ts:37`). Raising both to 45 s would tell latency
+   apart from runaway output.
+3. **order-operations `relabelled-dispatch` needs an anchor, not only the
+   conjunction fix.** See (2) above.
+4. **O3's grant refusal after a timeout** needs its reason recorded. Adding the
+   grant's refusal code to the provider call record, in place of the generic
+   `llm.provider_request_failed`, would make this diagnosable. That is in
+   `execution-grants.ts` or `run.ts`.
+5. **The worktree process lister** (`scripts/worktree/process-list.mjs`) fails
+   on a process whose command line holds a raw control character, so the
+   downstream `pnpm check` can fail on another lane's process.

@@ -18,6 +18,23 @@
 // result, and the domain's `WEB_AUTOMATION_EXTRACT_MAX_ITEMS` bounds it when the
 // request names no bound.
 //
+// The two modes that move to another page -- `next` and `numbered` -- also
+// leave out a record that repeats one an earlier page already yielded, field
+// for field. An element cannot say that: a page replaced in place, or loaded
+// as a new document, shows only new elements, so the listing a search's index
+// shifted onto the top of the next page would otherwise be read twice, and
+// only when the page happened to be replaced rather than reloaded. Two equal
+// records on the same page are still two records, as the page shows them.
+//
+// A read can outlive its document. With a `checkpoint`, the records and pages
+// read so far are handed over, and awaited, before each control is followed;
+// with `resume`, a new document goes on from such a checkpoint -- its records
+// count toward the bound, its pages toward `maxPages`, and in every mode none
+// of its records is read again, since a new document can only show them as new
+// elements -- after waiting for the page to show its records
+// (`page-render.ts`). The worker's side of that is
+// `runtime/extract-list-continuation.ts`.
+//
 // A record carries every included field: its value, or `null` for an optional
 // field the page could not read. `missingFields` names every required field
 // some record lacked, which is what makes the verb's validation fail instead of
@@ -38,9 +55,11 @@
 // for each page.
 
 import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
-import type { WebAutomationExtractListRequest } from "../types";
+import type { ExtractionCheckpoint } from "../../shared/extraction-continuation";
+import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
+import { awaitPageRendered } from "./page-render";
 import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
 
 /** One record: each included field's value, or `null` for an optional field the page could not read. */
@@ -58,8 +77,18 @@ export type ListExtractionOutcome = {
   missingFields: string[];
 };
 
-/** What the command adds to the request: how long the whole read may take. */
-export type ListExtractionOptions = { timeoutMs?: number | undefined };
+/**
+ * What the command adds to the request: how long the whole read may take, and,
+ * when the worker carries the read across documents, where it goes on from and
+ * where it hands its progress.
+ */
+export type ListExtractionOptions = {
+  timeoutMs?: number | undefined;
+  /** The read another document began, which this one continues. */
+  resume?: ExtractionCheckpoint | undefined;
+  /** Takes the read so far before each control is followed; the control is followed once it resolves. */
+  checkpoint?: ((progress: ExtractionCheckpoint) => Promise<void>) | undefined;
+};
 
 type FieldReaders = ReadonlyArray<readonly [name: string, reader: ExtractFieldReader]>;
 
@@ -73,25 +102,54 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const paginate = request.paginate;
   const maxItems = itemBound(request.maxItems);
   const contentAware = paginate?.mode === "scroll";
+  const resume = options.resume;
 
-  const records: ExtractedListRecord[] = [];
-  const missing = new Set<string>();
+  const records: ExtractedListRecord[] = resume ? resume.records.map((record) => ({ ...record })) : [];
+  const missing = new Set<string>(resume?.missingFields ?? []);
   // Every item already read, kept across pages, with its content key when
   // content counts (scroll mode) and "" when only the element does.
   const read = new Map<Element, string>();
+  // The content of every record that must not be read again: each record an
+  // earlier page yielded, in the modes that move to another page, and in every
+  // mode each record a continued read carried here from another document.
+  const pageByPage = movesToAnotherPage(paginate);
+  const earlierPages = pageByPage || resume ? new Set(records.map((record) => contentKey(record, fields))) : undefined;
   const keyOf = (itemRead: ItemRead): string => (contentAware ? contentKey(itemRead.record, fields) : "");
   const hasUnreadItem = (): boolean => Array.from(document.querySelectorAll(item)).some((element) => {
     const seen = read.get(element);
     return seen === undefined || (contentAware && seen !== keyOf(readRecord(element, fields)));
   });
-  const progress: PaginationProgress = { item, shown: [], pagesRead: 0, scrolls: 0, deadline: deadlineFor(options.timeoutMs), hasUnreadItem };
+  const progress: PaginationProgress = {
+    item,
+    shown: [],
+    pagesRead: resume?.pagesRead ?? 0,
+    scrolls: resume?.scrolls ?? 0,
+    deadline: deadlineFor(options.timeoutMs),
+    hasUnreadItem
+  };
+  const checkpoint = options.checkpoint;
+  if (checkpoint) {
+    progress.beforeFollow = () => checkpoint({
+      records: records.map((record) => ({ ...record })),
+      pagesRead: progress.pagesRead,
+      scrolls: progress.scrolls,
+      missingFields: [...missing].sort()
+    });
+  }
   let truncated = false;
   let timedOut = false;
+
+  // A document continuing a read was reached by the control the last one
+  // followed, so it is waited on as that control's page would have been.
+  if (resume && paginate && await awaitPageRendered(paginate, progress) === "timed_out") {
+    return { records, pagesRead: progress.pagesRead, truncated, timedOut: true, missingFields: [...missing].sort() };
+  }
 
   for (;;) {
     const shown = Array.from(document.querySelectorAll(item));
     progress.shown = shown;
     progress.pagesRead += 1;
+    const thisPage: string[] = [];
     for (const element of shown) {
       const seen = read.get(element);
       if (seen !== undefined && !contentAware) continue;
@@ -104,14 +162,21 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       const itemRead = readRecord(element, fields);
       const key = keyOf(itemRead);
       if (seen === key) continue;
+      const content = earlierPages ? contentKey(itemRead.record, fields) : "";
+      if (earlierPages?.has(content)) {
+        read.set(element, key);
+        continue;
+      }
       if (records.length >= maxItems) {
         truncated = true;
         break;
       }
       read.set(element, key);
       records.push(itemRead.record);
+      thisPage.push(content);
       for (const name of itemRead.missing) missing.add(name);
     }
+    if (pageByPage) for (const content of thisPage) earlierPages?.add(content);
     if (truncated || !paginate) break;
 
     const advance = await advancePage(paginate, progress);
@@ -122,6 +187,11 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
 
   return { records, pagesRead: progress.pagesRead, truncated, timedOut, missingFields: [...missing].sort() };
+}
+
+/** Whether the read moves from page to page -- replaced in place or loaded anew -- rather than growing one list. */
+function movesToAnotherPage(paginate: WebAutomationExtractListPagination | undefined): boolean {
+  return paginate !== undefined && (paginate.mode === undefined || paginate.mode === "next" || paginate.mode === "numbered");
 }
 
 /** The included fields' readers, in declaration order, refusing a request that names none or reads none. */

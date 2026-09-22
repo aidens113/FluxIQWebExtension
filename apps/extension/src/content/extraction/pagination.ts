@@ -15,7 +15,13 @@
 //   first item detached or replaced, or its length changed -- within ten
 //   seconds, or the page ignored its own control and the read fails. The old
 //   page staying on screen while the new one loads reads as "not yet changed",
-//   never as a second read of the same page.
+//   never as a second read of the same page; the followed control detaching,
+//   as a pager redrawn with its results does, is a change too. A document
+//   that began unloading after the click has not ignored it, so it gets a
+//   second window: its replacement is the change, and
+//   `runtime/extract-list-continuation.ts` carries the read into it. Once the
+//   list has changed, the read waits for the new page to show its records
+//   (`page-render.ts`) before reading it.
 // - `loadMore`: press `control`, then wait until an item appears that the read
 //   has not taken, or the control detaches. An absent, disabled or
 //   `aria-disabled="true"` control is the list ending. A live control that
@@ -32,7 +38,7 @@
 //   control marked `aria-current`, or that control's next sibling among them
 //   when it carries no number, or, when none is marked, the control after the
 //   ones already read, in document order. No following control is the list
-//   ending.
+//   ending. The change and the wait for records are those of `next`.
 //
 // For `next`, `loadMore` and `numbered`, having read `maxPages` pages while a
 // way forward is still there is truncation; for `scroll`, having scrolled
@@ -43,6 +49,8 @@
 
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../types";
+import { waitUntil, type WaitOutcome } from "./list-wait";
+import { awaitPageRendered } from "./page-render";
 
 /** What one advance did: see the header. */
 export type PageAdvance = "advanced" | "ended" | "truncated" | "timed_out";
@@ -61,15 +69,14 @@ export type PaginationProgress = {
   deadline: number | undefined;
   /** Whether the page shows an item the read has not taken. */
   hasUnreadItem(): boolean;
+  /** Called, and awaited, just before a control is followed: the last moment the read so far is certainly still here. */
+  beforeFollow?: (() => Promise<void>) | undefined;
 };
 
 type NextPagination = Extract<WebAutomationExtractListPagination, { next: string }>;
 type LoadMorePagination = Extract<WebAutomationExtractListPagination, { mode: "loadMore" }>;
 type ScrollPagination = Extract<WebAutomationExtractListPagination, { mode: "scroll" }>;
 type NumberedPagination = Extract<WebAutomationExtractListPagination, { mode: "numbered" }>;
-
-/** What a wait saw: its condition, nothing within its window, or the command's deadline. */
-type WaitOutcome = "changed" | "unchanged" | "timed_out";
 
 /** How long the list has to change after a control was followed. */
 const LIST_CHANGE_TIMEOUT_MS = 10_000;
@@ -123,8 +130,8 @@ async function followNext(paginate: NextPagination, progress: PaginationProgress
   if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
   const control = clickable(next, paginate.next);
   if (pastDeadline(progress.deadline)) return "timed_out";
-  control.click();
-  return await afterListChange(progress, `following ${JSON.stringify(paginate.next)} to page ${progress.pagesRead + 1}`);
+  await progress.beforeFollow?.();
+  return await afterListChange(paginate, progress, control, `following ${JSON.stringify(paginate.next)} to page ${progress.pagesRead + 1}`);
 }
 
 async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationProgress): Promise<PageAdvance> {
@@ -133,6 +140,7 @@ async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationP
   if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
   const control = clickable(found, paginate.control);
   if (pastDeadline(progress.deadline)) return "timed_out";
+  await progress.beforeFollow?.();
   control.click();
   const outcome = await waitUntil(() => progress.hasUnreadItem() || !control.isConnected, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
   if (outcome === "unchanged") {
@@ -162,8 +170,8 @@ async function visitNumberedPage(paginate: NumberedPagination, progress: Paginat
   if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
   const control = clickable(following, paginate.pages);
   if (pastDeadline(progress.deadline)) return "timed_out";
-  control.click();
-  return await afterListChange(progress, `choosing page ${progress.pagesRead + 1} from ${JSON.stringify(paginate.pages)}`);
+  await progress.beforeFollow?.();
+  return await afterListChange(paginate, progress, control, `choosing page ${progress.pagesRead + 1} from ${JSON.stringify(paginate.pages)}`);
 }
 
 /** The page control that follows the current page, or `undefined` when the list has no further page. */
@@ -199,41 +207,61 @@ function pastDeadline(deadline: number | undefined): boolean {
   return deadline !== undefined && Date.now() >= deadline;
 }
 
-/** Waits for the list to become a different list after `action`, failing the read when the page ignored its control. */
-async function afterListChange(progress: PaginationProgress, action: string): Promise<PageAdvance> {
+/**
+ * Clicks `control`, then waits for the list to become a different list and for
+ * the page it became to show its records, failing the read when the page
+ * ignored its control.
+ *
+ * A document that starts unloading after the click has not ignored it: the
+ * page it is loading is the change, however slow the server. It is given one
+ * more window, and if it does unload within it, this script and the wait go
+ * with it and the worker carries the read into the next document.
+ */
+async function afterListChange(paginate: WebAutomationExtractListPagination, progress: PaginationProgress, control: HTMLElement, action: string): Promise<PageAdvance> {
   const { item, shown, deadline } = progress;
-  const outcome = await waitUntil(() => listChanged(item, shown), LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
+  const leaving = watchUnload();
+  let outcome: WaitOutcome;
+  try {
+    control.click();
+    const changed = (): boolean => listChanged(item, shown) || !control.isConnected;
+    outcome = await waitUntil(changed, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
+    if (outcome === "unchanged" && leaving.started()) outcome = await waitUntil(changed, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
+  } finally {
+    leaving.stop();
+  }
   if (outcome === "unchanged") throw new Error(`The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of ${action}.`);
-  return outcome === "changed" ? "advanced" : "timed_out";
+  if (outcome === "timed_out") return "timed_out";
+  return await awaitPageRendered(paginate, progress) === "arrived" ? "advanced" : "timed_out";
+}
+
+/** Notices this document beginning to unload, until stopped. */
+function watchUnload(): { started(): boolean; stop(): void } {
+  let unloading = false;
+  const notice = (): void => { unloading = true; };
+  window.addEventListener("beforeunload", notice);
+  window.addEventListener("pagehide", notice);
+  return {
+    started: () => unloading,
+    stop: () => {
+      window.removeEventListener("beforeunload", notice);
+      window.removeEventListener("pagehide", notice);
+    }
+  };
 }
 
 /**
  * Whether the list became a different list. A page that replaces its results
  * detaches the old items, and one that appends changes their number, so both
- * are observed without knowing how the page loads.
+ * are observed without knowing how the page loads. The followed control
+ * detaching says the same of a page whose pager is redrawn with its results,
+ * which is the only sign a page that showed no item can give (see
+ * `afterListChange`).
  */
 function listChanged(itemSelector: string, previous: readonly Element[]): boolean {
   const current = document.querySelectorAll(itemSelector);
   const first = previous[0];
   if (!first) return current.length > 0;
   return !first.isConnected || current.length !== previous.length || current[0] !== first;
-}
-
-/**
- * Polls `condition` until it holds, its window closes, or the command's
- * deadline passes, and says which: the window closing first is the page not
- * responding, the deadline passing first is the read running out of time.
- */
-async function waitUntil(condition: () => boolean, windowMs: number, pollMs: number, actionDeadline: number | undefined): Promise<WaitOutcome> {
-  const windowEnd = Date.now() + windowMs;
-  const commandEndsFirst = actionDeadline !== undefined && actionDeadline <= windowEnd;
-  const end = commandEndsFirst ? actionDeadline : windowEnd;
-  while (!condition()) {
-    const now = Date.now();
-    if (now >= end) return commandEndsFirst ? "timed_out" : "unchanged";
-    await delay(Math.min(pollMs, end - now));
-  }
-  return "changed";
 }
 
 /** The nearest ancestor of `element` that scrolls its own content, or `null` for the window. */
@@ -258,8 +286,4 @@ function atBottom(scroller: Element | null): boolean {
 
 function documentHeight(): number {
   return Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => { setTimeout(resolve, ms); });
 }

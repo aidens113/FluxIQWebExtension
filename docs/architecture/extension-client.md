@@ -385,10 +385,23 @@ fed by `recorded-event-intake.ts`). The general rules are these:
 - Any other navigation, a history-state update included, is dropped when a
   click or submit in the same tab preceded it within 5 s.
 
+A target captured inside an open shadow root keeps its **host chain**
+(`context.shadowHosts`, outermost first): each host's selector, so replay
+resolves the element inside the same root rather than the light DOM. Replay
+walks the chain, widening the scope only when a positional host selector
+misses; the element's own selector, the recorded fingerprint veto and the
+ambiguity rule then decide, and more than one equal match is refused with a
+closed `web.target.ambiguous` result rather than guessed. Closed shadow roots
+are not reachable.
+
 A navigation the page made itself is different. That is a Chrome transition of
 `link` or `form_submit`, script navigation such as `location.assign` included.
 It is recorded only as the **landing** of the executable click that caused it,
-in the same tab and within 5 s after that click. A form submit extends the
+in the same tab, within 5 s after that click, and before any later recorded
+action other than a scroll: a key press, typed text or a change ends the
+click's window. A navigation is judged by the action in force when it
+committed, so a step's expected post-state never comes from a later step's
+page. A form submit extends the
 window and keeps the click it follows, provided that click was inside the
 submit's own window; a submit never names a click of its own. A click nothing
 can replay names nothing, and a new recording forgets the previous one's
