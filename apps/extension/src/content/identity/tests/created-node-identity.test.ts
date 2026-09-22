@@ -61,7 +61,8 @@ async function resolvedNode(nodeDefinitionId: string, parameters: JsonObject): P
       : { status: "succeeded" }
   });
   await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  const resolution = runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters });
+  // A press step says what it would lastingly do; these rows are about identity, so they say it does nothing.
+  const resolution = await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters, declaredConsequences: [] });
   assert.equal(resolution.status, "resolved", JSON.stringify(resolution));
   return resolution.status === "resolved" ? resolution.parameters : {};
 }

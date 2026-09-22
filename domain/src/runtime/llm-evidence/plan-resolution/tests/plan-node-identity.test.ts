@@ -23,6 +23,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
@@ -71,8 +72,8 @@ async function inspect(runtime: WebAutomationLlmEvidenceRuntime): Promise<void> 
   await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: `call.inspect.${calls}`, toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
 }
 
-function resolvedParameters(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionId: string, parameters: JsonObject): JsonObject {
-  const resolution = runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters });
+async function resolvedParameters(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionId: string, parameters: JsonObject): Promise<JsonObject> {
+  const resolution = await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters, declaredConsequences: NOTHING_LASTING });
   assert.equal(resolution.status, "resolved", JSON.stringify(resolution));
   return resolution.status === "resolved" ? resolution.parameters : {};
 }
@@ -93,17 +94,24 @@ function dispatchedElement(actionType: string, parameters: JsonObject): JsonObje
   return (command as unknown as { element?: JsonObject }).element;
 }
 
+/**
+ * These rows are about handles, not permission. Every step they stand for
+ * declared that it causes nothing lasting, which is what a build writes for a
+ * press that only reveals: `plan-step-permission.test.ts` holds the rest.
+ */
+const NOTHING_LASTING: readonly AutomationStudioActionConsequence[] = [];
+
 test("a resolved type and click node carry the identity of the element the model was shown, in the recorded shape", async () => {
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameInput, submit] }));
   await inspect(runtime);
 
-  const typed = resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada Lovelace" });
+  const typed = await resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada Lovelace" });
   assert.deepEqual(typed, {
     selector: NAME_SELECTOR,
     text: "Ada Lovelace",
     element: { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR, context: { formId: "signup" } }
   });
-  const clicked = resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
+  const clicked = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
   assert.deepEqual(clicked, {
     selector: submit.selector,
     element: { tagName: "button", accessibleName: "Submit", selector: submit.selector }
@@ -122,7 +130,7 @@ test("the identity stops Core reading the typed text as the element's visible te
 
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameInput, submit] }));
   await inspect(runtime);
-  const element = dispatchedElement("web.dom.type", resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada Lovelace" }));
+  const element = dispatchedElement("web.dom.type", await resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada Lovelace" }));
   // Read signal by signal: which of the recorded and the re-derived copies of
   // this identity the dispatch prefers is not this row's subject, and both
   // carry these.
@@ -149,12 +157,12 @@ test("no value reaches the identity: not a control's contents, not a cut name, n
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [notes, plan, card, password] }));
   await inspect(runtime);
 
-  assert.deepEqual(resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "x" }).element, { tagName: "textarea", accessibleName: "Notes", selector: "#notes" });
-  assert.deepEqual(resolvedParameters(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "team" }).element, { tagName: "select", accessibleName: "Plan", selector: "#plan" });
-  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.3" } }).element, { tagName: "a", selector: "#card" });
+  assert.deepEqual((await resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "x" })).element, { tagName: "textarea", accessibleName: "Notes", selector: "#notes" });
+  assert.deepEqual((await resolvedParameters(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "team" })).element, { tagName: "select", accessibleName: "Plan", selector: "#plan" });
+  assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.3" } })).element, { tagName: "a", selector: "#card" });
   // The sanitizer never describes the password field, so no handle names it.
   assert.deepEqual(
-    runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "target.4" } } }),
+    await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "target.4" } }, declaredConsequences: NOTHING_LASTING }),
     { status: "refused", issueCodes: ["web.handle.unknown", "web.handle.unknown:selector"] }
   );
 
@@ -179,7 +187,7 @@ test("a list item and a child frame's element keep their place in the identity",
   };
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [framed] }));
   await inspect(runtime);
-  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), {
+  assert.deepEqual(await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), {
     selector: '[data-testid="product-link"]',
     element: { tagName: "a", accessibleName: "Lamp", selector: '[data-testid="product-link"]', context: { listPosition: { index: 2, total: 9 } } },
     browserFrameId: 4
@@ -209,29 +217,29 @@ test("the handle decides the identity: a model-written element beside it is repl
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameInput, submit] }));
   await inspect(runtime);
   const claimed: JsonObject = { accessibleName: "Delete account", testId: "danger" };
-  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: claimed }).element, {
+  assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: claimed })).element, {
     tagName: "button",
     accessibleName: "Submit",
     selector: submit.selector
   });
   assert.deepEqual(
-    runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: "#literal", element: claimed } }),
+    await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: "#literal", element: claimed }, declaredConsequences: NOTHING_LASTING }),
     { status: "unchanged" }
   );
   // A handle written into the element names the element, never an identity to
   // keep: the identity is still the handle's, and it must be the element the
   // selector's handle names.
-  assert.deepEqual(resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: { handle: "target.2" } }).element, {
+  assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: { handle: "target.2" } })).element, {
     tagName: "button",
     accessibleName: "Submit",
     selector: submit.selector
   });
   assert.deepEqual(
-    runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: { handle: "target.2" }, element: { handle: "target.1" } } }),
+    await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: { handle: "target.2" }, element: { handle: "target.1" } }, declaredConsequences: NOTHING_LASTING }),
     { status: "refused", issueCodes: ["web.handle.ambiguous", "web.handle.ambiguous:element"] }
   );
   // A resolved identity is the caller's own copy: changing it changes nothing the store holds.
-  const first = resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
+  const first = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
   (first.element as JsonObject).accessibleName = "tampered";
-  assert.equal((resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } }).element as JsonObject).accessibleName, "Submit");
+  assert.equal(((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } })).element as JsonObject).accessibleName, "Submit");
 });

@@ -16,6 +16,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "..";
@@ -52,10 +53,17 @@ async function inspect(runtime: WebAutomationLlmEvidenceRuntime): Promise<Array<
   return elements.map((element) => ({ target: element.target, name: element.name ?? element.text ?? "" }));
 }
 
-function selectorFor(runtime: WebAutomationLlmEvidenceRuntime, handle: string): string | undefined {
-  const resolved = runtime.resolvePlanNodeParameters({ projectId: "p", flowId: "f", nodeDefinitionId: CLICK_NODE, parameters: { target: { handle } } });
+async function selectorFor(runtime: WebAutomationLlmEvidenceRuntime, handle: string): Promise<string | undefined> {
+  const resolved = await runtime.resolvePlanNodeParameters({ projectId: "p", flowId: "f", nodeDefinitionId: CLICK_NODE, parameters: { target: { handle } }, declaredConsequences: NOTHING_LASTING });
   return resolved.status === "resolved" ? resolved.parameters.selector as string : undefined;
 }
+
+/**
+ * These rows are about handles, not permission. Every step they stand for
+ * declared that it causes nothing lasting, which is what a build writes for a
+ * press that only reveals: `plan-step-permission.test.ts` holds the rest.
+ */
+const NOTHING_LASTING: readonly AutomationStudioActionConsequence[] = [];
 
 test("a control keeps its handle when the page around it is recaptured", async () => {
   let elements = [banner, beds, band, search];
@@ -68,7 +76,7 @@ test("a control keeps its handle when the page around it is recaptured", async (
     { target: "target.3", name: "Price band" },
     { target: "target.4", name: "Search" }
   ]);
-  assert.equal(selectorFor(runtime, "target.2"), "#beds");
+  assert.equal(await selectorFor(runtime, "target.2"), "#beds");
 
   // The banner is dismissed, exactly as a successful reveal leaves the page,
   // and the page is captured again.
@@ -79,8 +87,8 @@ test("a control keeps its handle when the page around it is recaptured", async (
     { target: "target.3", name: "Price band" },
     { target: "target.4", name: "Search" }
   ], "the surviving controls keep the numbers the model already read");
-  assert.equal(selectorFor(runtime, "target.2"), "#beds", "and the plan resolver still answers with the same control");
-  assert.equal(selectorFor(runtime, "target.4"), "#search");
+  assert.equal(await selectorFor(runtime, "target.2"), "#beds", "and the plan resolver still answers with the same control");
+  assert.equal(await selectorFor(runtime, "target.4"), "#search");
 });
 
 test("a control the page adds is given a number the page has never spent", async () => {
@@ -95,8 +103,8 @@ test("a control the page adds is given a number the page has never spent", async
     { target: "target.3", name: "Price band" },
     { target: "target.2", name: "Search" }
   ], "the new control takes the next free number rather than one already read");
-  assert.equal(selectorFor(runtime, "target.2"), "#search");
-  assert.equal(selectorFor(runtime, "target.3"), "#band");
+  assert.equal(await selectorFor(runtime, "target.2"), "#search");
+  assert.equal(await selectorFor(runtime, "target.3"), "#band");
 });
 
 test("another page's controls are given numbers no page has spent, so a bare handle names one control", async () => {
@@ -110,10 +118,10 @@ test("another page's controls are given numbers no page has spent, so a bare han
   ]);
   // The plan names them bare, as the Flow script format writes a step's target,
   // and every one of them resolves -- none is `web.handle.ambiguous`.
-  assert.equal(selectorFor(runtime, "target.1"), "#cookies");
-  assert.equal(selectorFor(runtime, "target.2"), "#beds");
-  assert.equal(selectorFor(runtime, "target.3"), "#search");
-  assert.equal(selectorFor(runtime, "target.4"), "#band");
+  assert.equal(await selectorFor(runtime, "target.1"), "#cookies");
+  assert.equal(await selectorFor(runtime, "target.2"), "#beds");
+  assert.equal(await selectorFor(runtime, "target.3"), "#search");
+  assert.equal(await selectorFor(runtime, "target.4"), "#band");
   // Back on the first page, its controls still have the numbers the model read.
   page = { url: PAGE_URL, elements: [banner, beds] };
   assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.1", "target.2"]);
@@ -126,8 +134,8 @@ test("the same selector on two pages is two pages' controls, each with its own n
   assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.1"]);
   page = { url: OTHER_URL, elements: [search] };
   assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.2"]);
-  assert.equal(selectorFor(runtime, "target.1"), "#search");
-  assert.equal(selectorFor(runtime, "target.2"), "#search");
+  assert.equal(await selectorFor(runtime, "target.1"), "#search");
+  assert.equal(await selectorFor(runtime, "target.2"), "#search");
 });
 
 test("numbers belong to one Flow: another Flow's first control is target.1 again", async () => {
@@ -155,8 +163,8 @@ test("an exploration that sees more than ninety-nine controls is handed numbers 
   page = crowdedPage(3);
   const third = await inspect(runtime);
   assert.deepEqual([third[0]?.target, third.at(-1)?.target], ["target.81", "target.120"]);
-  assert.equal(selectorFor(runtime, "target.120"), "#p3-b39");
-  assert.equal(selectorFor(runtime, "target.1"), "#p1-b0", "the first page's controls still resolve, bare");
+  assert.equal(await selectorFor(runtime, "target.120"), "#p3-b39");
+  assert.equal(await selectorFor(runtime, "target.1"), "#p1-b0", "the first page's controls still resolve, bare");
 
   // Every authoring tool that names a target declares the same pattern.
   for (const tool of runtime.tools) {
@@ -242,13 +250,13 @@ test("a row control whose row now holds another record is given a number of its 
     { target: "target.1", name: "Retry" },
     { target: "target.3", name: "Select the post for Mon 21 Sep 2026, 06:00" }
   ], "the second post's checkbox is not handed the first post's number");
-  assert.equal(selectorFor(runtime, "target.2"), undefined, "the first post's number now resolves to nothing, not to the second post");
-  assert.equal(selectorFor(runtime, "target.3"), ROW_ONE_CHECKBOX);
+  assert.equal(await selectorFor(runtime, "target.2"), undefined, "the first post's number now resolves to nothing, not to the second post");
+  assert.equal(await selectorFor(runtime, "target.3"), ROW_ONE_CHECKBOX);
 
   // The filter is cleared and the first post is back in row one: it has its own number back.
   elements = [retry, rowOneCheckbox("pst_a", "Mon 21 Sep 2026, 09:00")];
   assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.1", "target.2"]);
-  assert.equal(selectorFor(runtime, "target.2"), ROW_ONE_CHECKBOX);
+  assert.equal(await selectorFor(runtime, "target.2"), ROW_ONE_CHECKBOX);
 });
 
 test("a row control that stays in its record keeps its number, as every other control does", async () => {
@@ -258,5 +266,5 @@ test("a row control that stays in its record keeps its number, as every other co
   // The bulk bar comes and goes above the table; the row does not change.
   elements = [rowOneCheckbox("pst_a", "Mon 21 Sep 2026, 09:00")];
   assert.deepEqual((await inspect(runtime)).map((element) => element.target), ["target.2"]);
-  assert.equal(selectorFor(runtime, "target.2"), ROW_ONE_CHECKBOX);
+  assert.equal(await selectorFor(runtime, "target.2"), ROW_ONE_CHECKBOX);
 });
