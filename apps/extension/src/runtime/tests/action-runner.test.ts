@@ -23,6 +23,7 @@ import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { browserActionFailure, runBrowserActionCommand } from "../action-runner";
+import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
 import { browserActionFromGatewayCommand } from "../result-mapping";
 import type { ListedFrame } from "../frame-address";
 
@@ -574,4 +575,95 @@ test("a click whose tab lands on a page served 404 fails as navigation_unexpecte
   });
   assert.equal(run.tabId, TAB_ID);
   assert.equal(run.frameId, 0);
+});
+
+// Which tab a navigation drives, and whether it arrived. A navigation that named
+// no tab used to go to the tab this worker last drove, or to a new one, while
+// the next action ran on the page in front and Core's snapshot read that page
+// too: the created Flow of E1 lane B, E9, "navigated" in a tab nobody looked at
+// and then failed on the start page it had never left.
+
+type BrowserTab = { url: string | undefined; loadFailed?: boolean };
+
+/** Tabs whose URL a navigation changes, with every update and creation recorded. */
+function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: number[]; created: string[] } {
+  const calls = { updated: [] as number[], created: [] as string[] };
+  (globalThis as { chrome?: unknown }).chrome = {
+    runtime: {},
+    tabs: {
+      get: (tabId: number) => tabs[tabId] ? Promise.resolve({ id: tabId, url: tabs[tabId]!.url, status: "complete" }) : Promise.reject(new Error(`No tab with id: ${tabId}.`)),
+      update: (tabId: number, properties: { url?: string }) => {
+        calls.updated.push(tabId);
+        if (properties.url !== undefined) tabs[tabId]!.url = properties.url;
+        return Promise.resolve({ id: tabId, url: tabs[tabId]!.url });
+      },
+      reload: () => Promise.resolve(),
+      create: (properties: { url: string }) => {
+        calls.created.push(properties.url);
+        tabs[900] = { url: properties.url };
+        return Promise.resolve({ id: 900, url: properties.url });
+      },
+      onUpdated: { addListener: () => undefined, removeListener: () => undefined }
+    },
+    webNavigation: {
+      getAllFrames: (details: { tabId: number }, callback: (found: unknown[]) => void) =>
+        callback([{ frameId: 0, errorOccurred: tabs[details.tabId]?.loadFailed === true }])
+    }
+  };
+  return calls;
+}
+
+async function navigate(url: string, activeTabId: number | undefined, ownOrigins?: readonly string[]): Promise<Awaited<ReturnType<typeof runBrowserActionCommand>>> {
+  try {
+    return await runBrowserActionCommand({
+      action: { commandId: "c-nav", actionType: "web.browser.navigate", url },
+      ...(activeTabId !== undefined ? { activeTabId } : {}),
+      ...(ownOrigins ? { ownOrigins } : {}),
+      attachTabForRecording: () => Promise.resolve()
+    });
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  }
+}
+
+const STORE = "http://127.0.0.1:64130/scenarios/everything-store/";
+const RESULTS = "http://127.0.0.1:64130/scenarios/everything-store/s?k=wireless+earbuds";
+
+test("a navigation drives the page in front, not the tab it last drove, and that page is where it reports arriving", async () => {
+  forgetAutomationTab();
+  setAutomationTab(12);
+  const calls = installNavigationStub({ 12: { url: "http://127.0.0.1:64130/elsewhere" }, 41: { url: STORE } });
+  const run = await navigate(RESULTS, 41);
+  assert.deepEqual(calls.updated, [41]);
+  assert.deepEqual(calls.created, []);
+  assert.equal(run.tabId, 41);
+  assert.equal(run.result.status, "succeeded");
+  assert.equal(run.result.url, RESULTS);
+  assert.equal(currentAutomationTabId(), 41, "the page driven is the automation tab from here on");
+});
+
+test("with FluxIQ's own panel in front, a navigation opens a page of its own instead of taking the panel over", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 5: { url: "http://127.0.0.1:3300/programs/automation-studio" } });
+  const run = await navigate(RESULTS, 5, ["http://127.0.0.1:3300"]);
+  assert.deepEqual(calls.updated, []);
+  assert.deepEqual(calls.created, [RESULTS]);
+  assert.equal(run.tabId, 900);
+  assert.equal(run.result.status, "succeeded");
+});
+
+test("a navigation whose page the browser could not load fails, though the address bar shows the URL", async () => {
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: STORE, loadFailed: true } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.message, `The browser could not load ${RESULTS}.`);
+  assert.deepEqual(run.result.failure, {
+    category: "navigation_unexpected",
+    code: "web.navigation.unexpected",
+    retryable: false,
+    stage: "confirmation",
+    expected: RESULTS,
+    actual: `the browser could not load ${RESULTS}`
+  });
 });

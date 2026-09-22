@@ -25,6 +25,7 @@ import type {
   RuntimeCommandStatus,
   ServerCommandPayload
 } from "../../shared/protocol";
+import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import { ExtensionRuntimeCommandRouter, gatewayActionResultFromBrowserResult } from "../../runtime";
 import type { ActivePage } from "./active-page";
 import type { ActiveRecording } from "./active-recording";
@@ -175,6 +176,9 @@ export class ServerCommandChannel {
     return new ExtensionRuntimeCommandRouter({
       activeTabId: () => this.deps.page.tabId(),
       unsupportedPageReason: () => this.deps.page.unsupported()?.reason,
+      // The panel is served from Core's own origin, and a run is usually started
+      // from it: a navigation must never take that page over.
+      ownOrigins: () => [this.deps.settings().coreApiUrl || DEFAULT_CORE_API_URL],
       attachTabForRecording: (tabId) => this.deps.attachment.attachTabForRecording(tabId),
       captureActiveSnapshot: (label) => this.deps.evidence.captureActiveSnapshot(label),
       sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
