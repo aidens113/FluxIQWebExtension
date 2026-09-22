@@ -52,7 +52,7 @@ import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmStateDigest } from "./state-digest";
 import { webLlmTargetsUnchanged } from "./target";
 import { currentElementForReturnedTarget, pressControl } from "./press";
-import { createWebLlmStableTargetHandles } from "./stable-handles";
+import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_PATTERN } from "./stable-handles";
 import {
   createWebLlmExtractionHandles,
   detectRepeatingStructure,
@@ -81,7 +81,9 @@ import {
   WEB_LLM_PRESS_TOOL_ID
 } from "./vocabulary";
 
-const TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
+// A handle the authoring tools issue: numbered for the whole Flow, so up to four digits (`./stable-handles.ts`).
+const TARGET_HANDLE_PATTERN = WEB_LLM_TARGET_HANDLE_PATTERN;
+const TARGET_HANDLE = new RegExp(TARGET_HANDLE_PATTERN, "u");
 
 export type WebLlmFailureEvidenceRequest = {
   projectId: string;
@@ -441,6 +443,7 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
   }));
 }
 
+
 /** The sessions every evidence tool may use, narrowed to those that also declare `alsoDeclaring` when it is named. */
 function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[] {
   return fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
@@ -467,8 +470,9 @@ function keepNewest(window: Map<string, Map<string, string>>, key: string, selec
 
 /**
  * A packet's identity for the binding lookup: its location and every element
- * it describes, whole. Handles are numbered from 1 in every packet, so keyed on
- * handles alone two captures of one page with one element count collided, and
+ * it describes, whole. A failure packet numbers its handles from 1 -- only the
+ * authoring tools number them for the whole Flow (`./stable-handles.ts`) -- so
+ * keyed on handles alone two captures of one page with one element count collided, and
  * a repair got the hint of a different control. Keyed on the elements, equal
  * keys mean equal fingerprints at every handle. Core round-trips the packet
  * through JSON, which reproduces this serialization, so it is matched on what
@@ -492,7 +496,7 @@ function requestedUrl(input: unknown): URL {
 }
 
 function boundedTargetHandle(input: unknown): string {
-  if (typeof input !== "string" || !/^target\.[1-9][0-9]?$/u.test(input)) recoverable("invalid_input");
+  if (typeof input !== "string" || !TARGET_HANDLE.test(input)) recoverable("invalid_input");
   return input;
 }
 

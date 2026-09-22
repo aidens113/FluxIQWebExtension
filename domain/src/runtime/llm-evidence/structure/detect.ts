@@ -36,13 +36,14 @@ import {
 import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
+import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { recoverable, type WebLlmToolRejectionCode } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
 import { splitDetectedStructure } from "./packet";
 
-const TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
+const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 
 /** What the page's refusal means to the model. */
 const REFUSAL_CODES = {

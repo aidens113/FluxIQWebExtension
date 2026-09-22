@@ -14,9 +14,16 @@
 // both in viewport coordinates -- because nothing else on the wire says which
 // dialog an element belongs to.
 
+//
+// The same geometry also names the dialog an element sits in, which is how two
+// look-alike controls -- a dialog's "Close" and a banner's -- are told apart
+// (`look-alikes.ts`). It is read for every open dialog the page names, modal or
+// not, and the top-most one containing the element wins.
+
 import type { PageEvidenceWire, WebAutomationDialogEvidence, WebAutomationDialogEvidenceItem, WebAutomationEvidenceRect, WebAutomationPageEvidence } from "../../page-evidence";
 import { pageEvidenceWire } from "../../page-evidence";
-import { isJsonRecord } from "./untrusted-json";
+import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
+import { boundedText, isJsonRecord } from "./untrusted-json";
 
 /** The capture's elements with the top-most open modal dialog's own ahead of the rest; the same array when there is none. */
 export function frontLayerFirst(snapshot: Record<string, unknown>, elements: readonly unknown[]): readonly unknown[] {
@@ -27,17 +34,35 @@ export function frontLayerFirst(snapshot: Record<string, unknown>, elements: rea
   return [...inside, ...elements.filter((element) => !inside.has(element))];
 }
 
+/**
+ * For this capture, the name of the open dialog a raw element sits in, cut to
+ * the placement bound, or `undefined` when it is in none the page named. A
+ * dialog with no name or no box names nothing: there is nothing to call it by,
+ * or no way to say what is inside it.
+ */
+export function openDialogNameOf(snapshot: Record<string, unknown>): (element: unknown) => string | undefined {
+  const named = openDialogs(snapshot).flatMap((dialog) => {
+    const bounds = rect(dialog.bounds);
+    const name = boundedText(dialog.label, WEB_LLM_EVIDENCE_BOUNDS.placement);
+    return bounds && name ? [{ bounds, name }] : [];
+  });
+  return (element) => named.find((dialog) => centreInside(element, dialog.bounds))?.name;
+}
+
 function topModalDialogBounds(snapshot: Record<string, unknown>): WebAutomationEvidenceRect | undefined {
+  const top = openDialogs(snapshot).find((dialog) => dialog.modal === true);
+  return top ? rect(top.bounds) : undefined;
+}
+
+/** The open dialogs the capture reports, top-most first as the producer orders them. */
+function openDialogs(snapshot: Record<string, unknown>): Array<PageEvidenceWire<WebAutomationDialogEvidenceItem>> {
   const evidence = pageEvidenceWire<WebAutomationPageEvidence>(snapshot.evidence);
   const dialogs: PageEvidenceWire<WebAutomationDialogEvidence> | undefined = pageEvidenceWire<WebAutomationDialogEvidence>(evidence?.dialogs);
   const open = Array.isArray(dialogs?.open) ? dialogs.open : [];
-  // Top-most first, as the producer orders them.
-  for (const item of open) {
+  return open.flatMap((item) => {
     const dialog = pageEvidenceWire<WebAutomationDialogEvidenceItem>(item);
-    if (dialog?.modal !== true) continue;
-    return rect(dialog.bounds);
-  }
-  return undefined;
+    return dialog ? [dialog] : [];
+  });
 }
 
 function centreInside(element: unknown, box: WebAutomationEvidenceRect): boolean {
