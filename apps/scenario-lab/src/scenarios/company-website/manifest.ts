@@ -20,7 +20,8 @@ const FIRST_VISIT: ScenarioStep[] = [
   { id: "await-chat-greeting", operation: "waitForState", target: 'div[title="Close"]', timeoutMs: 6000 },
   { id: "close-chat-greeting", operation: "click", target: 'div[title="Close"]' },
   { id: "accept-cookies", operation: "click", target: 'button:text-is("Accept all")' },
-  { id: "await-newsletter", operation: "waitForState", target: '[aria-label="Newsletter"]', timeoutMs: 9000 },
+  // Four seconds after consent has been saved, so the budget covers the save's round trip as well as the delay.
+  { id: "await-newsletter", operation: "waitForState", target: '[aria-label="Newsletter"]', timeoutMs: 15_000 },
   { id: "decline-newsletter", operation: "click", target: 'span:text-is("No thanks, I will pay full price")' },
 ];
 

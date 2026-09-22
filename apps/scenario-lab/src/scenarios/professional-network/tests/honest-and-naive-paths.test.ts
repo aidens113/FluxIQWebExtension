@@ -4,7 +4,8 @@ import type { Browser, Page } from "@playwright/test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { MEMBERS } from "../data/index.js";
 import { professionalNetworkManifest, ROTTERDAM_NL, staleConnectionRequests, STORE_AFTER_WITHDRAWAL, STORE_AT_START } from "../index.js";
-import { arm, closeSession, factText, launchBrowser, openSession, readingPause, ROOT, textOf, type Session } from "./browser-session.js";
+import { RETRY_AFTER_SECONDS } from "../search/index.js";
+import { closeSession, factText, launchBrowser, openSession, postToSite, readingPause, ROOT, textOf, type Session } from "./browser-session.js";
 
 const search = resolveScenarioWorkflow(professionalNetworkManifest, { workflowId: "people-search" });
 const extractStep = search.recordingScript.find(({ id }) => id === "extract-rotterdam-engineers")!;
@@ -32,19 +33,31 @@ async function session<T>(work: (session: Session) => Promise<T>, prepare?: (ses
   }
 }
 
-/** Opens the site, answers the cookie banner, and goes to `path`. */
+/** Arms a variant the way the Lab does: one authorized POST of its `arm`. */
+const arm = (current: Session, mode: string) => postToSite(current, "set-mode", { mode });
+
+/**
+ * Answers the cookie banner and opens the site at `path`, where the app prompt
+ * and the conversation are still to come. The banner is answered with the
+ * request its Accept sends, before any page opens: pressing Accept races the
+ * app prompt, which covers the banner 2.5 seconds after a page loads, and these
+ * specs are about what comes after the banner.
+ */
 async function arrive(current: Session, path: string): Promise<Page> {
   const { page } = current;
-  await page.goto(`${current.lab.origin}${ROOT}`);
-  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  await postToSite(current, "set-consent", { choice: "accepted" });
   await page.goto(`${current.lab.origin}${path}`);
   return page;
 }
 
-/** Puts off the app prompt and closes the conversation, which open 2.5 and 3.5 seconds after the page loads. */
+/**
+ * Puts off the app prompt and closes the conversation, which open 2.5 and 3.5
+ * seconds after the page loads, each waited for in the order it arrives. Both
+ * are answered for the session, so no later page brings them back.
+ */
 async function clearInterruptions(page: Page): Promise<void> {
-  await page.locator('div:text-is("Not now")').click({ timeout: 8_000 });
-  await page.getByRole("button", CLOSE_CONVERSATION).click({ timeout: 8_000 });
+  await page.locator('div:text-is("Not now")').click({ timeout: 15_000 });
+  await page.getByRole("button", CLOSE_CONVERSATION).click({ timeout: 15_000 });
 }
 
 /** The records the recording's own extract fields read off the current page's organic results. */
@@ -72,11 +85,12 @@ function firstSeen(records: Array<Record<string, string>>): Array<Record<string,
 describe("professional-network in a browser", { concurrency: 4 }, () => {
   test("an honest person filters through the page's own controls and collects exactly the expected people", () => session(async (current) => {
     const page = await arrive(current, ROOT);
+    // Answered on the first page, as they arrive, so no press later in the search can race them.
+    await clearInterruptions(page);
     const box = page.getByRole("combobox", { name: "Search" });
     await box.fill("data engineer");
     await box.press("Enter");
     await page.getByRole("link", { name: "See all people results" }).click();
-    await clearInterruptions(page);
     await page.locator('div[tabindex="0"]:text-is("Connections ▾")').click();
     await page.getByRole("checkbox", { name: "2nd", exact: true }).check();
     await page.locator('div:text-is("Show results") >> visible=true').click();
@@ -126,20 +140,32 @@ describe("professional-network in a browser", { concurrency: 4 }, () => {
     assert.notDeepEqual(firstSeen(names.map((name) => ({ name }))).map(({ name }) => name), EXPECTED.map(({ name }) => name));
   }));
 
-  test("paging faster than a person reads meets the security check, which clears for someone who waits", () => session(async (current) => {
+  test("paging faster than a person reads -- four tabs turning the page at once -- meets the security check, which clears for someone who waits", () => session(async (current) => {
     const page = await arrive(current, FILTERED);
     await clearInterruptions(page);
     await page.locator(ORGANIC).first().waitFor({ timeout: 8_000 });
-    // As fast as the page lets a script: each page number the moment the page before it has rendered, until the check answers.
-    const check = page.getByRole("heading", { name: "Let’s do a quick security check" });
-    for (const label of ["2", "3", "1", "2", "3", "1"]) {
-      await pagerButton(page, label).or(check).first().waitFor({ timeout: 8_000 });
-      if (await check.isVisible()) break;
-      await pagerButton(page, label).click();
+    // The search checks a fourth results request inside three seconds. One tab cannot be relied on to ask that fast:
+    // each page waits 0.7 s, fetches, and renders before its pager can be pressed again, which a loaded machine
+    // stretches past a second a page. Four tabs, each on its first page, pressing "2" together always ask four times
+    // at once. Opening them asks only three times, and not within the window of the first tab's request.
+    const tabs = [page];
+    for (let index = 0; index < 3; index += 1) {
+      const tab = await current.context.newPage();
+      tab.on("console", (message) => { if (message.type() === "error") current.consoleErrors.push(message.text()); });
+      tab.on("pageerror", (error) => current.consoleErrors.push(error.message));
+      await tab.goto(`${current.lab.origin}${FILTERED}`);
+      await pagerButton(tab, "2").waitFor({ timeout: 8_000 });
+      tabs.push(tab);
     }
-    await check.waitFor({ timeout: 8_000 });
-    await page.getByText("I’m not a robot", { exact: true }).click();
-    await page.locator(ORGANIC).first().waitFor({ timeout: 10_000 });
+    await Promise.all(tabs.map((tab) => pagerButton(tab, "2").click()));
+    const checkIn = (tab: Page) => tab.getByRole("heading", { name: "Let’s do a quick security check" });
+    const checked = await Promise.any(tabs.map(async (tab) => { await checkIn(tab).waitFor({ timeout: 8_000 }); return tab; }));
+    // The other tabs retry on their own and would keep the window full; the person carries on in the one tab.
+    await Promise.all(tabs.filter((tab) => tab !== checked).map((tab) => tab.close()));
+    await checked.getByText("I’m not a robot", { exact: true }).click();
+    // The box retries two seconds later; while the burst's requests are still inside the window that retry meets the
+    // check again, and the page's own retry, Retry-After seconds on, clears it. The budget covers both.
+    await checked.locator(ORGANIC).first().waitFor({ timeout: (RETRY_AFTER_SECONDS + 2) * 1_000 + 8_000 });
     assert.ok(current.consoleErrors.every((error) => error.includes("status of 429")), current.consoleErrors.join("\n"));
   }));
 

@@ -81,11 +81,29 @@ async function factFailures(page: Page, facts: readonly ExpectedFact[]): Promise
   return failures;
 }
 
-/** What a patient shopper does first: accept cookies, then turn down the notifications prompt when it arrives. */
+/**
+ * What a patient shopper does first, in the recording's order
+ * (`SHARED_STEPS.openStore`): turn down the notifications prompt when it
+ * arrives, whose backdrop covers the page, cookie banner and all, until it is
+ * answered; then accept cookies. Accepting first races the prompt, which a
+ * loaded machine loses.
+ */
 async function settleIn(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Accept" }).click();
-  await page.getByRole("dialog", { name: "Never miss a deal" }).waitFor({ timeout: 8000 });
+  await page.getByRole("dialog", { name: "Never miss a deal" }).waitFor({ timeout: 15_000 });
   await page.getByRole("button", { name: "Not now" }).click();
+  await page.getByRole("button", { name: "Accept" }).click();
+}
+
+/**
+ * Waits until a product page has come alive, as the recordings do: the app
+ * banner arrives two seconds into the page, after the buy box has hydrated
+ * (`STORE_TIMINGS.appBanner` > `productHydrate`, both timed from the same
+ * page load), and is closed. A press made before then is lost, so the banner
+ * is the page's own sign that a press will count.
+ */
+async function awaitLiveProductPage(page: Page): Promise<void> {
+  await page.getByTitle("Close", { exact: true }).waitFor({ timeout: 6000 });
+  await page.getByTitle("Close", { exact: true }).click();
 }
 
 /** Types the words into the search box, searches, and passes the browser check the first search meets. */
@@ -118,6 +136,7 @@ export const BROWSER_KIT = {
   storeState,
   factFailures,
   settleIn,
+  awaitLiveProductPage,
   search,
   readWholePage,
   readCart: (page: Page) => page.evaluate(READ_CART) as Promise<Array<Record<string, string>>>,

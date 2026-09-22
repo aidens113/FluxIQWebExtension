@@ -45,16 +45,31 @@ const watchControlShown: ExpectedFact = { id: "watch-control-shown", subject: "x
 const watchControlGone: ExpectedFact = { id: "watch-control-gone", subject: "x-watch-cta", predicate: "exists", value: false };
 const HOME_AT_LOAD = [...accountLists(FRESH, "start"), watchControlShown];
 
-/** Steps every workflow opens with: answer the cookie banner, then search. */
+/**
+ * Steps every workflow opens with: what the home page throws at a visit,
+ * answered in the one order that holds however late the first step comes.
+ * First the app promotion, whose scrim covers everything, the cookie banner
+ * included, 2.5 s into the page; then the assistant's greeting, 3.5 s in,
+ * over the lower right of every page, the bid drawer's foot among it; then
+ * the cookie banner. Each answer lasts for the session, so no later page
+ * brings them back. A Flow replayed from the recording starts long after all
+ * three have arrived, and meets them in this order too. The two that arrive
+ * on a timer are certain to come, so each is waited for generously: on a
+ * loaded machine their timers fire late.
+ */
 const SEARCH_BOX = `form[role="search"] input[name="_nkw"]`;
-const ACCEPT_COOKIES: ScenarioStep = { id: "accept-cookies", operation: "click", target: "role:button:Accept all" };
+const ARRIVE: ScenarioStep[] = [
+  { id: "promotion-shown", operation: "waitForState", target: "role:dialog:Bid on the go", timeoutMs: 15_000 },
+  { id: "decline-promotion", operation: "click", target: `div[role="dialog"] span:text-is("Not now")` },
+  { id: "greeting-shown", operation: "waitForState", target: "#hal-greeting", timeoutMs: 15_000 },
+  { id: "close-greeting", operation: "click", target: "#hal-greeting .hal-close" },
+  { id: "accept-cookies", operation: "click", target: "role:button:Accept all" },
+];
 const SEARCH_STEPS: ScenarioStep[] = [
-  ACCEPT_COOKIES,
+  ...ARRIVE,
   { id: "search-for-camera", operation: "type", target: SEARCH_BOX, value: "kestrel 35" },
   { id: "run-search", operation: "press", target: SEARCH_BOX, value: "Enter" },
   { id: "results-hydrated", operation: "waitForState", target: `ul[aria-busy="false"]`, timeoutMs: 5000 },
-  { id: "promotion-shown", operation: "waitForState", target: "role:dialog:Bid on the go", timeoutMs: 6000 },
-  { id: "decline-promotion", operation: "click", target: `div[role="dialog"] span:text-is("Not now")` },
 ];
 
 /** A rail checkbox link by its label, and the same link once it is ticked. */
@@ -144,8 +159,6 @@ export const auctionMarketplaceManifest = createScenarioManifest({
     { id: "open-bid", operation: "click", target: "role:button:Place bid" },
     { id: "enter-max-bid", operation: "type", target: `input[name="maxbid"]`, value: BID_AMOUNT },
     { id: "review-bid", operation: "click", target: `div[role="dialog"] div:text-is("Review bid")` },
-    { id: "greeting-shown", operation: "waitForState", target: "#hal-greeting", timeoutMs: 6000 },
-    { id: "close-greeting", operation: "click", target: "#hal-greeting .hal-close" },
     { id: "confirm-bid", operation: "click", target: "role:button:Confirm bid" },
     { id: "bid-settled", operation: "waitForState", target: `div[role="dialog"] [role="status"]`, timeoutMs: 5000 },
     { id: "bid-placed", operation: "checkpoint" },
@@ -167,7 +180,7 @@ export const auctionMarketplaceManifest = createScenarioManifest({
       id: "watch-endings",
       description: "Watch the three original Kestrel 35 auctions under £100 that end before Tuesday midnight and are not watched yet, leave the one already watched alone, and read the watchlist back.",
       recordingScript: [
-        ACCEPT_COOKIES,
+        ...ARRIVE,
         ...watchSteps(WATCH_ADDITIONS[0]!, "first"),
         ...watchSteps(WATCH_ADDITIONS[1]!, "second"),
         ...watchSteps(WATCH_ADDITIONS[2]!, "third"),

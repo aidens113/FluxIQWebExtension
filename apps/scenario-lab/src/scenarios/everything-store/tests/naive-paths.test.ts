@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { TIDEWELL_KETTLES } from "../catalog/index.js";
-import { STORE_TIMINGS } from "../client/index.js";
 import { everythingStoreScenario as scenario } from "../scenario.js";
 import { BROWSER_KIT as kit } from "./browser-kit.js";
 
 const manifest = scenario.manifest;
 const FAMILY_CARD = `[data-component="search-result"][data-sku="${TIDEWELL_KETTLES[0]!.sku}"]:not([data-ad-id]) h2 a`;
+/** On a product page, press Add to Cart the moment the document is parsed, and note that it did. */
+const EARLY_PRESS = String.raw`if (location.pathname.includes('/dp/')) document.addEventListener('DOMContentLoaded', () => {
+  const add = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Add to Cart');
+  if (add) add.click();
+  window.earlyPress = add ? 'pressed' : 'no button';
+});`;
 
 /**
  * The shortcuts an automation takes that a person would not, each failing the
@@ -22,7 +27,7 @@ describe("a naive shopper fails", { concurrency: true }, () => {
     const session = await kit.openStore();
     try {
       const { page } = session;
-      await page.getByRole("button", { name: "Accept" }).click();
+      await kit.settleIn(page);
       for (const field of await page.locator(`form[role="search"] input[type="text"]`).all()) await field.fill("wireless earbuds");
       await Promise.all([page.waitForURL(/\/s\?/u), page.getByRole("textbox", { name: "Search Brightaisle" }).press("Enter")]);
       assert.ok(await page.getByTestId("robot-check").isVisible(), "the store answers with its robot check");
@@ -59,9 +64,12 @@ describe("a naive shopper fails", { concurrency: true }, () => {
       const { page } = session;
       await kit.settleIn(page);
       await kit.search(page, "tidewell kettle");
-      await Promise.all([page.waitForEvent("domcontentloaded"), page.locator(FAMILY_CARD).click()]);
-      await page.getByRole("button", { name: "Add to Cart", exact: true }).click();
-      await kit.pause(STORE_TIMINGS.productHydrate + STORE_TIMINGS.addToCart + 500);
+      // The press is made by the page itself the moment its document is parsed, which is always before the buy box
+      // hydrates (`productHydrate` later); a press sent from here after the load event races that timer.
+      await page.addInitScript(EARLY_PRESS);
+      await page.locator(FAMILY_CARD).click();
+      await kit.awaitLiveProductPage(page);
+      assert.equal(await page.evaluate("window.earlyPress"), "pressed");
       assert.equal((await kit.storeState(session.lab)).cart.length, 2, "the early press was lost");
     } finally { await session.close(); }
   });

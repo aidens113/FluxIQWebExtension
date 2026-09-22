@@ -7,18 +7,23 @@ const SEARCH_BOX = `form[role="search"] input[name="k"]`;
  * The steps every recording shares, and the facts every unarmed rendering of
  * the home page holds.
  *
- * `openStore` answers what a visit's first seconds throw at it: the cookie
- * banner, then the notifications prompt, which arrives four seconds after the
- * page loads and makes the page inert until it is answered. `search` types
- * the words, presses the header's search button -- the recording's one test
- * id -- and passes the browser check the session's first search meets, whose
- * button unlocks after a moment.
+ * `openStore` answers what a visit's first seconds throw at it, in the one
+ * order that holds however long the visit took to get going: first the
+ * notifications prompt, which arrives four seconds after the page loads and
+ * whose backdrop covers the whole page, the cookie banner included, until it
+ * is answered; then the cookie banner, which stays until it is answered. A
+ * cookie click made first races the prompt, and loses whenever the page had
+ * been open four seconds before the click came. The prompt is certain to
+ * come, so it is waited for generously: on a loaded machine its timer fires
+ * late. `search` types the words, presses the header's search button -- the
+ * recording's one test id -- and passes the browser check the session's first
+ * search meets, whose button unlocks after a moment.
  */
 export const SHARED_STEPS = {
   openStore: [
-    { id: "accept-cookies", operation: "click", target: "role:button:Accept" },
-    { id: "notifications-asked", operation: "waitForState", target: "role:dialog:Never miss a deal", timeoutMs: 8000 },
+    { id: "notifications-asked", operation: "waitForState", target: "role:dialog:Never miss a deal", timeoutMs: 15_000 },
     { id: "decline-notifications", operation: "click", target: "role:button:Not now" },
+    { id: "accept-cookies", operation: "click", target: "role:button:Accept" },
   ] satisfies ScenarioStep[],
   search: (prefix: string, keywords: string): ScenarioStep[] => [
     { id: `${prefix}-type-search`, operation: "type", target: SEARCH_BOX, value: keywords },

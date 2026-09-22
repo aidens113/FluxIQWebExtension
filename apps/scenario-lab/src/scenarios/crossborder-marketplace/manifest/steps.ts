@@ -27,11 +27,17 @@ const ARRIVE: ScenarioStep[] = [
   { id: "submit-search", operation: "press", target: 'input[name="q"]', value: "Enter" },
 ];
 
-/** Open the official listing -- it opens in a new tab -- and minimise the chat that sits over its buy bar. */
+/**
+ * Open the official listing -- it opens in a new tab -- and minimise the chat
+ * that sits over its buy bar. The new tab is waited for as long as a browser
+ * can take to start one: on a loaded machine that was measured at six to
+ * thirty seconds after the click, when each tab gets a renderer process of
+ * its own.
+ */
 const OPEN_OFFICIAL_LISTING: ScenarioStep[] = [
   { id: "results-drawn", operation: "waitForState", target: 'text="Voltbay Official Store"', timeoutMs: 6000 },
   { id: "open-listing", operation: "click", target: `a[href="${itemHref(VOLTBAY_OFFICIAL_ID)}"] >> nth=1` },
-  { id: "listing-tab", operation: "switchTab", path: itemHref(VOLTBAY_OFFICIAL_ID), timeoutMs: 8000 },
+  { id: "listing-tab", operation: "switchTab", path: itemHref(VOLTBAY_OFFICIAL_ID), timeoutMs: 30_000 },
   { id: "chat-arrives", operation: "waitForState", target: '[title="Minimize chat"] >> nth=0', timeoutMs: 6000 },
   { id: "minimize-chat", operation: "click", target: '[title="Minimize chat"] >> nth=0' },
 ];

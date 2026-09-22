@@ -51,19 +51,29 @@ async function serverState(lab: RunningScenarioLab): Promise<AuctionState> {
   return (await response.json() as { state: AuctionState }).state;
 }
 
-/** Answer the cookie banner, search, wait for the cards to fill in, and decline the app promotion when it arrives. */
-async function acceptAndSearch(page: Page, query = "kestrel 35"): Promise<void> {
+async function closeGreeting(page: Page): Promise<void> {
+  await page.locator("#hal-greeting").waitFor({ state: "visible", timeout: 15_000 });
+  await page.locator("#hal-greeting .hal-close").click();
+}
+
+/**
+ * Answer what the home page throws at a visit as the recordings do, in the
+ * order it arrives: the app promotion, the assistant's greeting, then the
+ * cookie banner. Each answer lasts for the session.
+ */
+async function arrive(page: Page): Promise<void> {
+  await locate(page, "role:dialog:Bid on the go").waitFor({ timeout: 15_000 });
+  await page.locator(`div[role="dialog"] span:text-is("Not now")`).click();
+  await closeGreeting(page);
   await locate(page, "role:button:Accept all").click();
+}
+
+/** Arrive, search, and wait for the cards to fill in. */
+async function arriveAndSearch(page: Page, query = "kestrel 35"): Promise<void> {
+  await arrive(page);
   await page.locator(`form[role="search"] input[name="_nkw"]`).fill(query);
   await page.locator(`form[role="search"] input[name="_nkw"]`).press("Enter");
   await page.locator(`ul[aria-busy="false"]`).waitFor({ timeout: 5000 });
-  await locate(page, "role:dialog:Bid on the go").waitFor({ timeout: 6000 });
-  await page.locator(`div[role="dialog"] span:text-is("Not now")`).click();
-}
-
-async function closeGreeting(page: Page): Promise<void> {
-  await page.locator("#hal-greeting").waitFor({ state: "visible", timeout: 6000 });
-  await page.locator("#hal-greeting .hal-close").click();
 }
 
 const workflow = (workflowId: string) => resolveScenarioWorkflow(manifest, { workflowId });
@@ -145,8 +155,7 @@ function endKey(end: string): number {
 test("a person reading the keyword results page by page, by the numbered links, reaches the same ten auctions", { timeout: TEST_TIMEOUT_MS }, async () => {
   const run = await session();
   try {
-    await acceptAndSearch(run.page);
-    await closeGreeting(run.page);
+    await arriveAndSearch(run.page);
     const seen = new Map<string, Card>();
     let repeats = 0;
     for (let pageNumber = 1; ; pageNumber += 1) {
@@ -173,8 +182,7 @@ test("a person reading the keyword results page by page, by the numbered links, 
 test("a naive read -- Next arrow, every card, prices parsed as plain numbers -- misses the answer", { timeout: TEST_TIMEOUT_MS }, async () => {
   const run = await session();
   try {
-    await acceptAndSearch(run.page);
-    await closeGreeting(run.page);
+    await arriveAndSearch(run.page);
     const rows: Array<{ title: string; price: string; bids: string; postage: string }> = [];
     const pagesVisited: string[] = [];
     for (let hop = 0; hop < 3; hop += 1) {
@@ -204,17 +212,27 @@ async function openBidDrawer(page: Page, amount: string): Promise<void> {
   await page.locator(`div[role="dialog"] div:text-is("Review bid")`).click();
 }
 
+/**
+ * The same drawer, opened without a pointer: each press is dispatched on its
+ * control, so the greeting that opens over the drawer's foot 3.5 s into the
+ * page cannot take it, however long the page took to get here. Only the press
+ * the test aims at a point meets the greeting.
+ */
+async function openBidDrawerWithoutPointer(page: Page, amount: string): Promise<void> {
+  await locate(page, "role:button:Place bid").dispatchEvent("click");
+  await page.locator(`input[name="maxbid"]`).fill(amount);
+  await page.locator(`div[role="dialog"] div:text-is("Review bid")`).dispatchEvent("click");
+  await locate(page, "role:button:Confirm bid").waitFor({ state: "visible", timeout: 5000 });
+}
+
 const goalFacts = manifest.playbackGoal!.successFacts;
 
 test("bidding on the auction the home page offers first bids on a 35S below its minimum and meets no goal", { timeout: TEST_TIMEOUT_MS }, async () => {
   const run = await session();
   try {
-    await locate(run.page, "role:button:Accept all").click();
-    await locate(run.page, "role:dialog:Bid on the go").waitFor({ timeout: 6000 });
-    await run.page.locator(`div[role="dialog"] span:text-is("Not now")`).click();
+    await arrive(run.page);
     await run.page.locator(`section[aria-label="Pick up where you left off"] a:text-is("Place bid")`).click();
     await openBidDrawer(run.page, "85.00");
-    await closeGreeting(run.page);
     await locate(run.page, "role:button:Confirm bid").click();
     await run.page.locator(`div[role="dialog"] [role="alert"]:text-is("Enter £90.00 or more.")`).waitFor({ timeout: 5000 });
     assert.notDeepEqual(await failingFacts(run.page, goalFacts), []);
@@ -227,11 +245,11 @@ test("filling the hidden reference box gets the bid refused and the account rest
   try {
     await run.page.goto(`${run.lab.origin}${MARKET_ROOT}itm/${listingByHandle("m7").id}`);
     await locate(run.page, "role:button:Accept all").click();
+    await closeGreeting(run.page);
     await locate(run.page, "role:button:Place bid").click();
     await run.page.locator(`input[name="maxbid"]`).fill("85.00");
     await run.page.locator(`input[name="reference"]`).fill("85.00", { force: true });
     await run.page.locator(`div[role="dialog"] div:text-is("Review bid")`).click();
-    await closeGreeting(run.page);
     await locate(run.page, "role:button:Confirm bid").click();
     await run.page.locator(`div[role="dialog"] [role="status"]:has-text("couldn't place your bid")`).waitFor({ timeout: 5000 });
     await locate(run.page, "role:button:Done").click();
@@ -250,7 +268,7 @@ test("clicking Confirm where it is drawn while the greeting covers it opens the 
   try {
     await run.page.goto(`${run.lab.origin}${MARKET_ROOT}itm/${listingByHandle("m7").id}`);
     await locate(run.page, "role:button:Accept all").click();
-    await openBidDrawer(run.page, "85.00");
+    await openBidDrawerWithoutPointer(run.page, "85.00");
     await run.page.locator("#hal-greeting").waitFor({ state: "visible", timeout: 6000 });
     const box = (await locate(run.page, "role:button:Confirm bid").boundingBox())!;
     await run.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -263,7 +281,7 @@ test("clicking Confirm where it is drawn while the greeting covers it opens the 
 test("pressing every qualifying heart takes the watched one off, and a fourth press in five seconds is refused", { timeout: TEST_TIMEOUT_MS }, async () => {
   const run = await session();
   try {
-    await acceptAndSearch(run.page);
+    await arriveAndSearch(run.page);
     for (const handle of ["m1", "m2", "m3", "l2"]) {
       await run.page.locator(`hl-watch[data-item="${listingByHandle(handle).id}"] div`).click();
     }
@@ -280,7 +298,7 @@ const filteredResults = `${MARKET_ROOT}sch/i.html?_nkw=kestrel+35&LH_Auction=1&L
 test("the gallery layout owes the same ten listings, and the list layout's card positions find none of them", { timeout: TEST_TIMEOUT_MS }, async () => {
   const run = await session("grid-view");
   try {
-    await locate(run.page, "role:button:Accept all").click();
+    await arrive(run.page);
     await run.page.goto(`${run.lab.origin}${filteredResults}`);
     await run.page.locator(`ul[aria-busy="false"]`).waitFor({ timeout: 5000 });
     const { recordingScript, expected } = workflow("kestrel-auctions");
@@ -306,7 +324,7 @@ test("the gallery layout owes the same ten listings, and the list layout's card 
 test("the survey interrupts the second results page until declined, and not again after", { timeout: TEST_TIMEOUT_MS }, async () => {
   const run = await session("feedback-survey");
   try {
-    await acceptAndSearch(run.page);
+    await arriveAndSearch(run.page);
     await run.page.locator(`nav[aria-label="Buying format"] a:text-is("Auction")`).click();
     await locate(run.page, "role:dialog:How are your search results?").waitFor({ timeout: 5000 });
     await assert.rejects(run.page.locator(`section[aria-label="Condition"] a[role="checkbox"]`).first().click({ timeout: 1500 }), /intercepts pointer events|Timeout/u);
@@ -323,6 +341,7 @@ test("the redesigned listing has no watch hook; Save this seller saves a seller,
   try {
     await run.page.goto(`${run.lab.origin}${MARKET_ROOT}itm/${listingByHandle("m1").id}`);
     await locate(run.page, "role:button:Accept all").click();
+    await closeGreeting(run.page);
     assert.equal(await run.page.locator(`[data-testid="x-watch-cta"]`).count(), 0);
     await locate(run.page, "role:button:Save this seller").click();
     await run.page.locator(`button[aria-pressed="true"]:text-is("Seller saved")`).waitFor({ timeout: 4000 });

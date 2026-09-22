@@ -36,8 +36,9 @@ describe("a naive path fails the oracles", { concurrency: 4 }, () => {
     const box = await locate(page, 'button:text-is("Accept all")').boundingBox();
     assert.ok(box);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(300);
-    const state = await serverState(lab);
+    // The chat reports its opening to the site; the state is judged once that report has landed, not after a guess at how long it takes.
+    let state = await serverState(lab);
+    for (const deadline = Date.now() + 8000; state.chat.opened === 0 && Date.now() < deadline; state = await serverState(lab)) await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual({ consent: state.consent, chatOpened: state.chat.opened }, { consent: "pending", chatOpened: 1 });
   }));
 

@@ -37,7 +37,10 @@ let browser: Promise<Browser> | undefined;
 
 export async function openSession(): Promise<Session> {
   // Full Chromium in headless mode, as `e2e/playwright.config.ts` launches it: the separate headless shell crashes on launch on this Windows host.
-  browser ??= chromium.launch({ headless: true, channel: "chromium" });
+  // Same-site tabs share one renderer process. The honest paths open a page in a new tab, and Chromium's default, a
+  // new renderer process for each such tab, was measured at 24 to 30 s a tab on a CPU-saturated machine against under
+  // 1.2 s with the flag. These specs judge the site, not the browser's process model.
+  browser ??= chromium.launch({ headless: true, channel: "chromium", args: ["--process-per-site"] });
   const runToken = `t042-${Math.random().toString(36).slice(2, 12)}-browser`;
   const lab = await startScenarioLab({ runToken, seed: MARKET_SEED });
   const context = await (await browser).newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
@@ -126,7 +129,7 @@ async function switchTab(context: BrowserContext, pathname: string, timeoutMs: n
   for (;;) {
     const page = [...context.pages()].reverse().find((candidate) => !candidate.isClosed() && new URL(candidate.url(), "http://x").pathname === pathname);
     if (page) { await page.waitForLoadState("domcontentloaded"); await page.bringToFront(); return page; }
-    if (Date.now() >= deadline) throw new Error(`No tab opened ${pathname}`);
+    if (Date.now() >= deadline) throw new Error(`No tab opened ${pathname}; open tabs: ${context.pages().map((open) => open.url()).join(", ")}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
