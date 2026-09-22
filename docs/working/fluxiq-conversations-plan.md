@@ -52,7 +52,27 @@ read-only discovery workers are reading Core's existing ways of telling a person
 something and the panel's shell and conventions. Their reports land in
 `reports/`.
 
-**Next:** fold the two reports into a design and a phase table, then dispatch.
+**Dispatched 2026-09-22**, four workers in parallel against the fixed contract
+below, partitioned so no two share a file:
+
+| Task | Worker | Doing |
+| --- | --- | --- |
+| t083 | `conv-service-headroom` | Bring `service.ts` under its ratchet by behaviour-unchanged moves and lower the baseline |
+| t084 | `conv-store-and-api` | The thread model, its persistence, and the four endpoints |
+| t085 | `conv-chat-window` | The chat window, transcript, inline answering, attachments, and reachability |
+| t086 | `conv-parking-and-resume` | Make the dormant approval node answerable and parking a general capability |
+
+Three constraints are written into every brief, each from a discovery finding:
+**nobody but t083 touches `service.ts`**, because one added line fails the check
+and the others must instead say what line to add and where; **new code goes in a
+subdirectory**, because `automation-studio/runtime/` holds 24 of its 25 permitted
+entries; and the chat window's view **must not sleep in the background** or an
+answer never arrives, while a view containing `setInterval` is failed by a
+source-text test.
+
+**Next:** verify each worker's claim by rerunning it, wire the four
+`service.ts` lines once t083 lands, then reconcile t081's held permission work
+onto the thread.
 
 **Blockers:** none. Task t082 is rewriting the build loop's vocabulary and t081
 is held pending it, so the permission caller this serves is in motion; the
