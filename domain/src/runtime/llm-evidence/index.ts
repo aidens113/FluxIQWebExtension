@@ -53,9 +53,12 @@ export { webLlmStateDigest } from "./state-digest";
 export { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence, WEB_REPAIR_CANDIDATE_LIMIT, type WebRepairCandidateMatch, type WebRepairCandidateProjection, type WebRepairCandidateRefusal } from "./target";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,
+  WEB_LLM_TOOL_REJECTION_REASONS,
   WEB_LLM_TOOL_RESULT_SCHEMA_VERSION,
   type WebLlmToolRejection,
-  type WebLlmToolRejectionCode
+  type WebLlmToolRejectionCode,
+  type WebLlmToolRejectionDetail,
+  type WebLlmToolRejectionReason
 } from "./tool-rejection";
 export {
   webLlmToolRejectionResultCode,

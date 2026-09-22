@@ -105,7 +105,9 @@ test("refuses a target handle before this exploration has shown any packet, and 
 
   for (const optionId of ["web.recovery.press", "web.recovery.detect_repeating_structure"]) {
     const refused = await run(registry, optionId, optionId === "web.recovery.press" ? { target: "target.1", consequences: [] } : { target: "target.1" });
-    assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved" }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" }, optionId);
+    // The refusal says which of the ways a handle names nothing this was, so
+    // the model calls inspect rather than the same option again.
+    assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved", detail: { reason: "nothing_observed_yet" } }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" }, optionId);
   }
   assert.equal(commands.includes("web.dom.click"), false);
 });
@@ -128,7 +130,7 @@ test("refuses a bounded wait that changed nothing rather than returning the same
   const still = registeredWith({ sleep: async () => {} });
   const unchanged = await run(still.registry, "web.recovery.wait_for_change", { maxWaitMs: 250 });
 
-  assert.deepEqual(unchanged, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress" }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
+  assert.deepEqual(unchanged, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress", detail: { reason: "nothing_changed_while_waiting" } }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
 
   const settling = registeredWith({ sleep: async () => { settling.setTitle("Loaded"); } });
   const changed = await run(settling.registry, "web.recovery.wait_for_change", { maxWaitMs: 9_999_999 });

@@ -51,7 +51,7 @@ test("rejects navigation to the already inspected location without applying an e
     },
   });
   const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/start" } });
-  assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress" }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
+  assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress", detail: { reason: "already_at_destination" } }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
 });
 
@@ -66,8 +66,8 @@ test("returns content-free recoverable results for policy/input rejection while 
     eligibleSessionIds: () => ["one"],
     executeAction: async () => ({ status: "succeeded", payload: { snapshot: snapshot("https://example.test/") } }),
   });
-  assert.deepEqual(await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/private-value" } }), { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "cross_origin" }, effectApplied: false, resultCode: "web.action.rejected.cross_origin" });
-  assert.deepEqual(await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.three", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: "private-value" } }), { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "invalid_input" }, effectApplied: false, resultCode: "web.action.rejected.invalid_input" });
+  assert.deepEqual(await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/private-value" } }), { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "cross_origin", detail: { reason: "another_origin" } }, effectApplied: false, resultCode: "web.action.rejected.cross_origin" });
+  assert.deepEqual(await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.three", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: "private-value" } }), { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "invalid_input", detail: { reason: "unexpected_input_keys", instead: [] } }, effectApplied: false, resultCode: "web.action.rejected.invalid_input" });
   const controller = new AbortController(); controller.abort(new Error("cancelled"));
   await assert.rejects(one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {}, signal: controller.signal }), /cancelled/);
 });
@@ -108,6 +108,10 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.match(pressDescription, /see what exists only after a press/u);
   assert.match(pressDescription, /the form behind a New post, Compose, Reply or Edit button/u);
   assert.match(pressDescription, /tick it in the Flow yourself/u);
+  // And it says where the reason for a turned-down call is, because a model
+  // that cannot tell one from another makes the same call until the build runs
+  // out of steps (`../tool-rejection.ts`).
+  assert.match(pressDescription, /detail\.reason/u);
   // And it no longer lists controls it refuses: FluxIQ refuses nothing on its
   // own judgement of what a control looks like, so saying otherwise would be
   // the old rule surviving in the prompt.
@@ -375,7 +379,7 @@ test("presses any observed control, refuses only a handle it never showed, and n
   assert.equal(genericAction.resultCode, "web.action.rejected.no_progress");
   assert.deepEqual(actionParameters, [{ selector: "#details" }, { selector: "#submit" }, { selector: "#action" }]);
   // The one refusal left is a handle the model was never shown.
-  assert.deepEqual(missing, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved" }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" });
+  assert.deepEqual(missing, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved", detail: { reason: "handle_not_in_packet", target: "target.40" } }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" });
   assert.doesNotMatch(JSON.stringify([submit, genericAction, missing]), /submit|run action|missing-private-value/u);
 });
 
@@ -424,7 +428,7 @@ test("reports a successful press with unchanged parsed evidence as no progress",
     },
   });
   const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
-  assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress" }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
+  assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress", detail: { reason: "page_unchanged_after_action" } }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
   assert.deepEqual(actionTypes, ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
 });
 

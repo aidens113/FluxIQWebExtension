@@ -155,12 +155,12 @@ export async function pageRefusal(
   signal?: AbortSignal
 ): Promise<RecoverableToolRejection> {
   const budget = request.maxEvidenceBytes === undefined ? undefined : request.maxEvidenceBytes - PAGE_REFUSAL_ENVELOPE_BYTES;
-  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(code);
+  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(code, undefined);
   try {
     const page = await captureEvidence(gateway, sessionId, budget === undefined ? request : { ...request, maxEvidenceBytes: budget }, signal, new URL(current.evidence.location).origin);
-    return new RecoverableToolRejection(code, page);
+    return new RecoverableToolRejection(code, undefined, page);
   } catch (error) {
     if (signal?.aborted) throw error;
-    return new RecoverableToolRejection(code);
+    return new RecoverableToolRejection(code, undefined);
   }
 }
