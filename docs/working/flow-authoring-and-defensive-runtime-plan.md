@@ -544,6 +544,7 @@ marked `after P0` is blocked until it merges.
 | A9 | Register a wait tool on the authoring path: Core's builtins are never registered for a build (`runtime/service.ts:1881` passes no `host`), and the domain's wait is stage-pinned to `gather`/`iterate` while bootstrap carries no stage. | C, D | — |
 | A10 | Stop `sanitizeEvidenceLoopTrace` dropping `resultCode` and `effectApplied` from a successful build's stored trace (`runtime/service.ts:5931-5944`). | C | — |
 | A11 | Make an unpermitted action on the authoring path a recoverable `permission_required` that reaches the person, instead of a throw (`action-permissions.ts:72-80`). The domain already models it this way (`press.ts:63`). | C, D | — |
+| A13 | **Cross-check what a step declared against the instruction the person gave.** The instruction-authority derivation is already computed and is never compared with the model's own declaration, so a build whose instruction plainly asks to publish, all of whose presses declare nothing lasting, passes without anyone noticing the contradiction. This is the independent signal the self-report needs; it does not require inferring anything from a control, which was deleted on 2026-09-18 and must not come back. | C | t081 |
 
 ### Workstream B — the defensive runtime
 
@@ -659,6 +660,16 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Validation: t082's live run `run-mudavyub-d34e3c9b` (real DeepSeek, everything-store): `build.providerCalls` 23 == `observed.calls` 23, and the proposed Flow's four steps were exactly the four nodes that succeeded while exploring, replayed with no model attached. Two things that run did **not** show: a correct answer — the replayed extraction returned 0 records against 16 expected — and a Flow that replays untouched, since `run-muddtosq-b92a4d5c` needed a paid repair mid-replay. Core's `service.ts` re-measured at 4,637 lines, so the zero-headroom constraint this plan was partitioned around no longer holds.
 - Outcome: Partial
 - Follow-up: wave two went out the same day as four Core-paired tasks — t081 continued (the Flow-step gate and its grammar, now satisfiable), t087 (A2, A9, A10, A11's Core half, B8, B0's line), t088 (A7, whose dry run is the direct answer to the 0-of-16 extraction that shipped inside a proposal), t089 (D0a, A12, D1 to D3, which is what will finally give the ladder something to absorb). Workstream C stays held behind A7.
+
+---
+
+### 2026-09-22 — The Flow-step permission gate landed, and does not yet bite
+- Agent: supervisor; worker `fa-flow-permission-gate`
+- Changed: t081 merged in both repositories (downstream `d3be870`, Core `a968ccd`), both pushed. A Flow's own steps now meet the permission check its exploration does, an undeclared press cannot be authored, and the model is finally told the declaration key exists.
+- Why: a plan whose second step pressed "Schedule post" built under an empty grant with nobody asked (`run-mud4ywy4-45c2002f`). The carrier the refusal needed had landed inside t082, so the task that was unsatisfiable this morning became landable.
+- Validation: the supervisor re-ran the proof rather than trusting the report. Downstream `pnpm check` exit 0; `domain` `# pass 744 / # fail 0`; `apps/extension` `# pass 731 / # fail 0`; Core `harness-options` plus `flow-bootstrap/plan` 608 tests passed. Both `task finish` runs reported `"command":"pnpm check","passed":true`. Four live DeepSeek builds, 33 provider calls, $0.154.
+- Outcome: Done, with a finding that outranks it
+- Follow-up: **the gate was never asked anything in four live builds** — every press declared that it causes nothing lasting, including the press that schedules a public post, so two Flows containing presses built and replayed with no request raised. Three causes, three owners, all relayed: the prompt in `node-tools/run-node.ts` demonstrates the empty answer three times and never shows a press that must declare (t088); a declared class today dead-ends in a refusal while `none` costs nothing, and the conversation ask that would let the request park already exists with nothing outside `conversations/` calling it (t087, as A11); and the Lab records `perCallRecords: "not recorded"`, so the declarations had to be deduced rather than read (t089). A13 below adds the independent cross-check. Until those land, the step table must not describe this gate as a defence.
 
 ## Open Questions
 
