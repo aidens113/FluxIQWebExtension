@@ -21,6 +21,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationExtractListRequestValue } from "../../../../actions/extraction";
 import { webAutomationOutputNodeId } from "../../../../output-nodes";
@@ -73,8 +74,8 @@ async function detect(runtime: WebAutomationLlmEvidenceRuntime, flowId = "flow.o
   return result.evidence as WebLlmRepeatingStructure;
 }
 
-function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionId: string, parameters: JsonObject, flowId = "flow.one") {
-  return runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId, nodeDefinitionId, parameters });
+async function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionId: string, parameters: JsonObject, flowId = "flow.one") {
+  return await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId, nodeDefinitionId, parameters, declaredConsequences: NOTHING_LASTING });
 }
 
 function resolvedList(extractList: JsonObject) {
@@ -86,12 +87,19 @@ function refusedAt(reason: string, position: string, hint?: string) {
   return { status: "refused", issueCodes: [reason, ...(hint ? [hint] : []), `${reason}:${position}`] };
 }
 
+/**
+ * These rows are about handles, not permission. Every step they stand for
+ * declared that it causes nothing lasting, which is what a build writes for a
+ * press that only reveals: `plan-step-permission.test.ts` holds the rest.
+ */
+const NOTHING_LASTING: readonly AutomationStudioActionConsequence[] = [];
+
 test("a detected list keeps the columns the plan names, under the plan's keys, on the page shown", async () => {
   const runtime = runtimeOver(CATALOG);
   const shown = await detect(runtime);
   assert.deepEqual(shown.fields.map((field) => field.key), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
 
-  const resolved = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: RENAMED, paginate: false } });
+  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: RENAMED, paginate: false } });
   assert.deepEqual(resolved, resolvedList({ item: CARD, fields: CARD_FIELDS }));
 
   // What runs is a request the page reads as written, saved under the instruction's column names.
@@ -103,7 +111,7 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
 
   // The link column itself is the absolute address; only `@href` is the href as written.
   assert.deepEqual(
-    resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" }, paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" }, paginate: false } }),
     resolvedList({ item: CARD, fields: { url: { kind: "link", selector: testId("product-link"), required: true } } })
   );
 });
@@ -111,7 +119,7 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
 test("the handle keeps every detected column and the detected pagination unless the plan says otherwise", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
-  const whole = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction } });
+  const whole = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction } });
   const request = whole.status === "resolved" ? whole.parameters.extractList as JsonObject : {};
   assert.deepEqual(Object.keys(request.fields as JsonObject), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
   assert.deepEqual(request.paginate, NEXT);
@@ -126,13 +134,13 @@ test("the handle keeps every detected column and the detected pagination unless 
   ];
   for (const [paginate, expected] of rows) {
     assert.deepEqual(
-      resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, paginate } }),
+      await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, paginate } }),
       resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: expected }),
       JSON.stringify(paginate)
     );
   }
   // A column may be read twice, and the plan's bounds still apply.
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: "product-name" }, paginate: false, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: "product-name" }, paginate: false, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }), {
     status: "resolved",
     parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 20_000 }
   });
@@ -164,15 +172,15 @@ test("the list may be named with the location its evidence reported, at the item
     }
   ];
   for (const extractList of placements) {
-    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ item: CARD, fields: CARD_FIELDS }), JSON.stringify(extractList));
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ item: CARD, fields: CARD_FIELDS }), JSON.stringify(extractList));
   }
   // A bare reference names the column its own key names; an array keeps columns under their detected keys; a field may be made optional.
   assert.deepEqual(
-    resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { "product-price": { handle: extraction }, name: { key: "product-name", required: false } }, paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { "product-price": { handle: extraction }, name: { key: "product-name", required: false } }, paginate: false } }),
     resolvedList({ item: CARD, fields: { "product-price": CARD_FIELDS.price, name: { ...CARD_FIELDS.name, required: false } } })
   );
   assert.deepEqual(
-    resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", "product-link@href"], paginate: false } }),
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", "product-link@href"], paginate: false } }),
     resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-link": CARD_FIELDS.url } })
   );
 });
@@ -188,17 +196,17 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
     ["product", "category", "price", "stock"],
     { product: { handle: rows.extraction }, category: { handle: rows.extraction }, price: { handle: rows.extraction }, stock: { handle: rows.extraction } }
   ] as JsonValue[]) {
-    assert.deepEqual(resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields } }), resolvedList({ item, fields: inventory }), JSON.stringify(fields));
+    assert.deepEqual(await resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields } }), resolvedList({ item, fields: inventory }), JSON.stringify(fields));
   }
-  assert.deepEqual(resolve(table, EXTRACT_LIST_NODE, { extractList: { item: { handle: rows.extraction }, fields: { cheapest: "column:Price" }, maxItems: 1 } }), resolvedList({ item, fields: { cheapest: inventory.price }, maxItems: 1 }));
+  assert.deepEqual(await resolve(table, EXTRACT_LIST_NODE, { extractList: { item: { handle: rows.extraction }, fields: { cheapest: "column:Price" }, maxItems: 1 } }), resolvedList({ item, fields: { cheapest: inventory.price }, maxItems: 1 }));
   // A table cell has no one element whose attribute could be read.
-  assert.deepEqual(resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields: { price: "price@title" } } }), refusedAt("web.handle.malformed", "extractList.fields.0", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields: { price: "price@title" } } }), refusedAt("web.handle.malformed", "extractList.fields.0", EXTRACTION_HINT));
 
   const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
   const posts = await detect(feed);
   assert.equal(posts.pagination, "infinite_scroll");
   assert.deepEqual(
-    resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, fields: { title: "feed-item-title", author: "feed-item-author", published: "feed-item-time@datetime" }, paginate: { mode: "scroll", maxScrolls: 10 }, maxItems: 40 } }),
+    await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, fields: { title: "feed-item-title", author: "feed-item-author", published: "feed-item-time@datetime" }, paginate: { mode: "scroll", maxScrolls: 10 }, maxItems: 40 } }),
     resolvedList({
       item: testId("feed-item"),
       fields: {
@@ -210,19 +218,19 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
       maxItems: 40
     })
   );
-  assert.deepEqual(resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll", maxScrolls: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll", maxScrolls: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
 });
 
 test("a Run Output node naming a web output resolves its payload as that output's own node would", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
-  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED, paginate: false } }, timeoutMs: 30_000 }), {
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED, paginate: false } }, timeoutMs: 30_000 }), {
     status: "resolved",
     parameters: { outputId: "web.dom.extract_list", parameters: { extractList: { item: CARD, fields: CARD_FIELDS } }, timeoutMs: 30_000 }
   });
   // An output that is not the web domain's, or a handle beside the payload, is not.
-  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "other.output", parameters: { extractList: { handle: extraction } } }), refusedAt("web.handle.misplaced", "parameters.extractList", EXTRACTION_HINT));
-  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: {}, recordOutput: { handle: extraction } }), refusedAt("web.handle.misplaced", "recordOutput", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "other.output", parameters: { extractList: { handle: extraction } } }), refusedAt("web.handle.misplaced", "parameters.extractList", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: {}, recordOutput: { handle: extraction } }), refusedAt("web.handle.misplaced", "recordOutput", EXTRACTION_HINT));
 });
 
 test("what cannot name one detected list or column is refused with where the handle goes and where it went wrong", async () => {
@@ -239,7 +247,7 @@ test("what cannot name one detected list or column is refused with where the han
     { handle: extraction, fields: { name: { handle: extraction } } }
   ];
   for (const extractList of unknownField) {
-    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.unknown_field", "extractList.fields.0", EXTRACTION_HINT), JSON.stringify(extractList));
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.unknown_field", "extractList.fields.0", EXTRACTION_HINT), JSON.stringify(extractList));
   }
   const malformed: Array<[JsonObject, string]> = [
     [{ handle: extraction, fields: {} }, "extractList.fields"],
@@ -266,14 +274,14 @@ test("what cannot name one detected list or column is refused with where the han
     [{ item: 7, fields: { name: { handle: extraction, key: "product-name" } } }, "extractList.item"]
   ];
   for (const [extractList, position] of malformed) {
-    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
   }
   // Two lists in one request cannot be read as one.
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: second, key: "product-name" } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction }, fields: { name: { handle: second } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: second, key: "product-name" } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction }, fields: { name: { handle: second } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
   // A location the handle was not issued at is not this handle; a handle not issued to this Flow is unknown to it.
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, location: "http://127.0.0.1:4173/elsewhere" } }), refusedAt("web.handle.unknown", "extractList.location"));
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction } } }, "flow.two"), refusedAt("web.handle.unknown", "extractList.item"));
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, location: "http://127.0.0.1:4173/elsewhere" } }), refusedAt("web.handle.unknown", "extractList.location"));
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction } } }, "flow.two"), refusedAt("web.handle.unknown", "extractList.item"));
   // A handle anywhere else in the request, or of the wrong kind, is misplaced.
   const misplaced: Array<[JsonObject, string]> = [
     [{ extractList: { handle: extraction, paginate: { next: { handle: extraction } } } }, "extractList.paginate.next"],
@@ -284,22 +292,22 @@ test("what cannot name one detected list or column is refused with where the han
     [{ selector: { handle: "target.1" } }, "selector"]
   ];
   for (const [parameters, position] of misplaced) {
-    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, parameters), refusedAt("web.handle.misplaced", position, EXTRACTION_HINT), JSON.stringify(parameters));
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, parameters), refusedAt("web.handle.misplaced", position, EXTRACTION_HINT), JSON.stringify(parameters));
   }
   // An extraction handle on an element node belongs in an extraction node; a target handle on one belongs in its selector.
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", EXTRACTION_HINT));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "target.1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "target.1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
 });
 
 test("a refusal quotes where it went wrong by position, never a key or value the model chose", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
-  const refusal = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { Jane_Doe: "product-name", "Card 4111": "Card 4111" } } });
+  const refusal = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { Jane_Doe: "product-name", "Card 4111": "Card 4111" } } });
   assert.deepEqual(refusal, refusedAt("web.handle.unknown_field", "extractList.fields.1", EXTRACTION_HINT));
   assert.equal(JSON.stringify(refusal).includes("Jane"), false);
   assert.equal(JSON.stringify(refusal).includes("4111"), false);
   // Every code is one Core admits: at most 100 characters of `[a-z0-9_.:-]`.
-  const deep = resolve(runtime, "builtin.data.transform", { records: [{ nested: { deeper: { deepest: { again: { handle: extraction } } } } }] });
+  const deep = await resolve(runtime, "builtin.data.transform", { records: [{ nested: { deeper: { deepest: { again: { handle: extraction } } } } }] });
   assert.equal(deep.status, "refused");
   for (const code of deep.status === "refused" ? deep.issueCodes : []) assert.match(code, /^[a-z0-9_.:-]{1,100}$/iu, code);
   assert.deepEqual(deep, refusedAt("web.handle.misplaced", "records.0.0.0.0.0", EXTRACTION_HINT));
@@ -310,12 +318,12 @@ test("once the Flow was shown a detected list, a literal request is refused as a
   const literal = { item: "li", fields: RENAMED };
   // No detection yet in this Flow: the literal is left exactly as written, as it passed live on the numbered-pages build.
   await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), { status: "unchanged" });
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), { status: "unchanged" });
 
   await detect(runtime);
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), refusedAt("web.handle.extraction_required", "extractList", EXTRACTION_HINT));
-  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: literal } }), refusedAt("web.handle.extraction_required", "parameters.extractList", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), refusedAt("web.handle.extraction_required", "extractList", EXTRACTION_HINT));
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: literal } }), refusedAt("web.handle.extraction_required", "parameters.extractList", EXTRACTION_HINT));
   // Another Flow was shown nothing, and a node without a request is not a guess.
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
-  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5_000 }), { status: "unchanged" });
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
+  assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5_000 }), { status: "unchanged" });
 });

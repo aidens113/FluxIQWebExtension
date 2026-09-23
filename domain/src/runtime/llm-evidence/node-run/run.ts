@@ -48,6 +48,7 @@ import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
 import { webNodeReadResult } from "./read-result";
+import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 
 const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
@@ -111,6 +112,12 @@ export type WebNodeRun = {
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
   const value = run.request.value;
+  // A call Core made rather than the model: the draft being run again before it
+  // may be proposed (`./replay.ts`). It goes to the same executor so it passes
+  // the same permission gate, and it is answered in Core's closed replay
+  // vocabulary rather than this domain's, because Core reads the answer.
+  const replaying = webNodeReplayCall(value);
+  if (replaying) return await replayWebOutputNode(run, replaying);
   const node = webRunnableNode(value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
@@ -138,7 +145,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false })
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined })
       );
     }
     current = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
@@ -152,8 +159,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // form is what the draft keeps, so the step the Flow gains resolves the
     // same way this run did.
     const written = withHandleShape(parameters);
-    const resolved = resolveWebPlanNodeParameters(
-      { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written },
+    // `gatedByCaller`, because this call's permission is decided a few lines
+    // below against the page the model is looking at, with a refusal that
+    // carries that page back to it. Resolution gates a *step of a Flow*, which
+    // is a different question asked at a different time.
+    const resolved = await resolveWebPlanNodeParameters(
+      { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written, gatedByCaller: true },
       run.stores
     );
     if (resolved.status === "refused") {
@@ -267,7 +278,19 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Written out by name, not spread: the record this function carries holds
       // the raw call for a refusal to fall back on, and Core reads a draft
       // statement strictly -- an extra key and the whole result is not one.
-      present<WebNodeDraftStatement>({ actionId: record.actionId, effect: record.effect, input: safeCall(value, written), ranWith: nodeCall(value, flowParameters(written, ran)), proposes: node.proposes })
+      // What running this step again would need, so the whole draft can be run
+      // once more before it is proposed (`./replay.ts`). The page it found is
+      // recorded on every step and only the first proposed one's is used; what
+      // it read is recorded so a replay that reads nothing can be told from one
+      // that reads the same rows in another order.
+      present<WebNodeDraftStatement>({
+        actionId: record.actionId,
+        effect: record.effect,
+        input: safeCall(value, written),
+        ranWith: nodeCall(value, flowParameters(written, ran)),
+        proposes: node.proposes,
+        replay: webNodeReplayStatement({ location: current.evidence.location, payload: result.payload as JsonValue | undefined, reads: node.proposes })
+      })
     );
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
@@ -311,7 +334,10 @@ function refusal(
     // the node and not of this attempt. That it did not work is said by
     // `effectApplied: false`, and the two are held apart so a failed step stays
     // on the draft the model is shown with `inResult: false` beside it.
-    proposes: record.proposes
+    proposes: record.proposes,
+    // A step that did not work is a step nothing will run again: the replay
+    // gate reads the absence of this as "not replayable", which is right.
+    replay: undefined
   }));
 }
 
