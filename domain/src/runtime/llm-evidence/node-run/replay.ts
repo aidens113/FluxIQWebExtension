@@ -143,11 +143,11 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     verb: node.definition.label.toLowerCase()
   });
   if (permission.kind === "refused" || permission.kind === "invalid") return answer(REPLAY_RESULT_CODES.failed, "the step was not permitted");
-  // Awaited although the resolver answers synchronously today: t081 makes it
-  // async, because a Flow step is put to the permission gate before it
-  // resolves, and awaiting a plain value is the same call either way.
+  // `gatedByCaller`, because the step was put to the gate a few lines above,
+  // against this replay’s own declaration. Resolution would otherwise ask the
+  // same question a second time and raise a second request for one act.
   const resolved = await resolveWebPlanNodeParameters(
-    { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters },
+    { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters, gatedByCaller: true },
     run.stores
   );
   // A parameter that cannot be made real is a Flow that cannot run, which is
