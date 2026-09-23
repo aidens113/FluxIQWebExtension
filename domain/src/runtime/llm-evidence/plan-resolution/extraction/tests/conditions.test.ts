@@ -120,6 +120,52 @@ test("a condition may be written every way a column may be named, on its own or 
   }
 });
 
+test("a condition may name a column by the key this plan keeps it under, which is the name the plan has just invented for it", async () => {
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+
+  // The live shape, on a site whose detected keys are hashed class paths: the
+  // plan renames the columns it keeps and then says what it wants of them in
+  // its own words. Refused as `web.handle.unknown_field` until 2026-09-23, so
+  // the only condition that ever survived a live build was the one over a
+  // column the plan did not keep and therefore did not rename -- the
+  // advertisement mark (`run-mudwci8d-de88aa32`, `run-mudw1ktb-0557816b`).
+  assert.deepEqual(
+    await resolve(instance, {
+      handle: extraction,
+      fields: { title: "product-name", cost: "product-price" },
+      where: [{ field: "cost", lessThan: 50 }, { field: "stock-badge", is: "absent" }],
+      paginate: false
+    }),
+    {
+      status: "resolved",
+      parameters: {
+        extractList: {
+          item: CARD,
+          fields: { title: NAME, cost: PRICE },
+          // Still the column's own read: a saved request needs no field map,
+          // whichever vocabulary named the column.
+          where: [{ read: PRICE, lessThan: 50 }, { read: BADGE, is: "absent" }]
+        }
+      }
+    }
+  );
+
+  // The detection's vocabulary is still read first, so a name that means
+  // something to the detection goes on meaning it, whatever the plan calls its
+  // own columns. Here `stock-badge` is both a detected key and this plan's key
+  // for the price, and it resolves to the column the detection showed.
+  assert.deepEqual(
+    await resolve(instance, {
+      handle: extraction,
+      fields: { "stock-badge": "product-price" },
+      where: [{ field: "stock-badge", is: "absent" }],
+      paginate: false
+    }),
+    { status: "resolved", parameters: { extractList: { item: CARD, fields: { "stock-badge": PRICE }, where: [{ read: BADGE, is: "absent" }] } } }
+  );
+});
+
 test("a condition that names no one detected column, or contradicts itself, is refused where it was written", async () => {
   const instance = runtime();
   const { extraction } = await detect(instance);
