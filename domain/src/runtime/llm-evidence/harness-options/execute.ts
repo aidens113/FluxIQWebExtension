@@ -219,6 +219,11 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
       value: execution.value,
       maxEvidenceBytes: execution.maxEvidenceBytes,
       signal: execution.signal,
+      // These options explore a Flow that is already running and already
+      // somewhere. A start location belongs to a build that has not started
+      // yet, so there is never one here, and it is named rather than omitted
+      // because `present` takes every field by name (`../present.ts`).
+      startLocation: undefined,
       permission: execution.permission
     })
   };

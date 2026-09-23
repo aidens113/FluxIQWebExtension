@@ -44,6 +44,7 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     workflow,
     facilityRunId: "run-lab-1",
     scenarioOrigin: "http://127.0.0.1:4100",
+    startLocation: "http://127.0.0.1:4100/scenarios/catalog/",
     runToken: "run-token",
     secrets: options.secrets ?? [],
     authorizeBuild: async () => { core.calls.push("authorize"); return { grantId: "llm-grant:build" }; },
