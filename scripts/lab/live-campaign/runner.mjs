@@ -92,7 +92,7 @@ function labRefusal(output) {
       const value = JSON.parse(line);
       if (typeof value?.why === "string" && value.why.length > 0) refusal = value.why;
       else if (value?.status === "failed" && typeof value.message === "string" && value.message.length > 0) refusal = value.message;
-    } catch { /* the Lab prints many lines; one that does not parse is not a refusal */ }
+    } catch { /* best-effort: the Lab prints many lines and only some are JSON, so a line that does not parse is simply not a refusal */ }
   }
   return refusal;
 }
