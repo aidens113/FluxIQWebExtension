@@ -59,7 +59,7 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
-import { awaitPageRendered } from "./page-render";
+import { awaitListPresent, awaitPageRendered } from "./page-render";
 import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
 
 /** One record: each included field's value, or `null` for an optional field the page could not read. */
@@ -144,6 +144,17 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   if (resume && paginate && await awaitPageRendered(paginate, progress) === "timed_out") {
     return { records, pagesRead: progress.pagesRead, truncated, timedOut: true, missingFields: [...missing].sort() };
   }
+  // The page this read starts on gets the same wait as every page it moves to
+  // (`page-render.ts`): a read dispatched at a page still rendering its list
+  // used to read the empty one and report it as a clean read of nothing. It is
+  // a ceiling, not a sleep -- a page that already holds its items is read at
+  // once -- and what it waits for is what the request said the page must hold.
+  if (!resume) {
+    // A paginated read waits only for its first item: the rest may legitimately
+    // be on a later page, and `pagination.ts` already waits for each of those.
+    const required = requiredItems(request.minItems);
+    await awaitListPresent(item, paginate ? Math.min(1, required) : required, paginate === undefined, progress);
+  }
 
   for (;;) {
     const shown = Array.from(document.querySelectorAll(item));
@@ -204,6 +215,16 @@ function fieldReaders(fields: WebAutomationExtractListRequest["fields"]): FieldR
   });
   if (readers.length === 0) throw new Error("An extract_list request reads no fields: every field it names is excluded.");
   return readers;
+}
+
+/**
+ * How many items the request says the page must hold, which is what the first
+ * read waits for. It is `extract-list.ts`'s own `minItems` rule -- 1 when the
+ * request names none, so a list that matched nothing is not a success -- read
+ * here so the wait and the post-condition cannot disagree.
+ */
+function requiredItems(requested: number | undefined): number {
+  return typeof requested === "number" && Number.isFinite(requested) ? Math.max(0, Math.trunc(requested)) : 1;
 }
 
 /** The request's `maxItems` held to the domain's record bound, which is also the bound when it names none. */
