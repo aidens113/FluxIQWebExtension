@@ -82,6 +82,15 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  * - `page_unreadable`: the page could not be captured at all.
  * - `evidence_budget_exhausted`: what is left of the exploration's evidence
  *   budget cannot hold even an empty packet of this page.
+ *
+ * `not_at_start_location` is the one refusal that is about where the Flow is
+ * rather than about what is on the page. A build that was told where its Flow
+ * starts (`AS/runtime/flow-bootstrap/start-location.ts`) begins nowhere: no
+ * page was opened for it, so there is nothing to read, nothing to press and no
+ * handle that could have come from anywhere. The only call that works is the
+ * one that goes to the start location, and this says so and names it. It is
+ * deliberately not a stopping refusal -- the model is meant to act on it, not
+ * to be ended by it -- which is why it is not `out_of_scope`.
  */
 export const WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
@@ -101,7 +110,8 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "action_timed_out",
   "action_failed",
   "page_unreadable",
-  "evidence_budget_exhausted"
+  "evidence_budget_exhausted",
+  "not_at_start_location"
 ] as const;
 
 export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[number];
@@ -125,6 +135,12 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   page any more -- it was removed, or the page re-rendered. Look again.
  * - `handle_names_several_now`: the control that handle named has become more
  *   than one element, so acting on it would be a guess. Look again and choose.
+ *
+ * Where the Flow is (`not_at_start_location`):
+ * - `start_location_not_reached`: the Flow has not reached the place it starts
+ *   from, and nothing was opened for it. `startLocation` names that place. Run
+ *   the node that goes there, with that as its destination; it is also the
+ *   Flow's own first step, because the Flow is built from the steps that ran.
  *
  * The input the call wrote (`invalid_input`):
  * - `unexpected_input_keys` and `missing_input_keys`: the call's keys are not
@@ -154,6 +170,7 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   so there is nobody it could be put to. `missing` still names the classes.
  */
 export const WEB_LLM_TOOL_REJECTION_REASONS = [
+  "start_location_not_reached",
   "nothing_observed_yet",
   "handle_not_in_packet",
   "page_moved_since_packet",
@@ -201,6 +218,16 @@ export type WebLlmToolRejectionDetail = {
   missing?: string[];
   /** Core's id for the permission request now in front of the person. */
   requestId?: string;
+  /**
+   * Where the Flow starts, when the refusal is that it has not got there yet.
+   *
+   * It belongs in a refusal for the same reason `requestId` does: it is not a
+   * word of the page. It was declared by whoever asked for the build and
+   * carried in by Core (`AS/runtime/flow-bootstrap/start-location.ts`); no
+   * capture produced it, and repeating it tells the model nothing about a page
+   * it has not been shown -- it tells it where to go so it can be shown one.
+   */
+  startLocation?: string;
 };
 
 export type WebLlmToolRejection = {
@@ -236,6 +263,7 @@ export function rejectionDetail(fields: {
   instead?: readonly string[] | undefined;
   missing?: readonly string[] | undefined;
   requestId?: string | undefined;
+  startLocation?: string | undefined;
 }): WebLlmToolRejectionDetail {
   return present<WebLlmToolRejectionDetail>({
     reason: fields.reason,
@@ -243,7 +271,8 @@ export function rejectionDetail(fields: {
     // Copied, so a caller's own list cannot be changed by what goes on the wire, and the packet stays plain JSON.
     instead: fields.instead === undefined ? undefined : [...fields.instead],
     missing: fields.missing === undefined ? undefined : [...fields.missing],
-    requestId: fields.requestId
+    requestId: fields.requestId,
+    startLocation: fields.startLocation
   });
 }
 

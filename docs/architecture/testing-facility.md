@@ -160,6 +160,21 @@ must provide an explicit target-tab handoff before evidence-guided generation;
 same-origin navigation deliberately cannot recover from choosing the panel tab
 as the initial target.
 
+**A build may instead begin nowhere.** Since 2026-09-23 the bootstrap request
+carries an optional `startLocation`: where the Flow it writes starts, in the
+bound domain's own spelling, which Core carries and never parses
+(`!FluxIQ/.../runtime/flow-bootstrap/start-location.ts`). Given one, Core shows
+it in the bootstrap context and passes it to this domain on every tool call, and
+the domain refuses every call with `not_at_start_location` -- naming where to go
+-- until the Flow has got there. The only call that runs from nowhere is the
+navigation whose destination is on the start location's origin; it runs with no
+current page, records the start location as the step's replay origin, and the
+state digest answers nothing rather than failing the step that reaches the page.
+Because the plan is assembled from the steps that ran, the step that reaches the
+page is the Flow's own first step. Omitted, a build explores whatever was put in
+front of it, exactly as before -- which is right when a person is asking about
+the page they are looking at.
+
 ## Current status
 
 This repository contains a working, finite FluxIQ web testing facility. Its
@@ -1437,6 +1452,49 @@ judged on, by the lane it runs on:
   on the resolved workflow's `finalState`, plus the scenario's playback-goal
   success facts only for the primary workflow expected to succeed. A negative
   run, one whose `expected.failure` is set, is not judged on the goal.
+- **Where a Flow starts** (`flow-start-page.ts`). For a task whose instruction
+  begins by going somewhere -- `navigate` and `navigate-and-extract` -- the
+  harness opens nothing. Both the build and the run are left on `about:blank`,
+  the tab a browser opens on, and the run tells Core where the Flow starts
+  instead of loading it. For a `form` or `extract` task, and for the
+  recorded-Flow lane, the fixture's entry point is loaded as it always was: the
+  person asking about the form in front of them is on that page, so starting
+  anywhere else would start them where no user ever is. Which it is comes from
+  the same predicate the judgement uses (`flow-lane/creation/own-page.ts`), so
+  the harness cannot present a page the judgement then holds the Flow to
+  reaching. A variant's rendering is still proved on a loaded page first, and
+  the tab is blanked after the check.
+
+  The address is `scenarioStartUrl(origin, scenario)`, one expression used both
+  by the load the harness makes and by the start location it tells Core, so the
+  page opened and the page named can never be two different pages.
+
+#### Why the build starts blank
+
+A Flow is assembled from the steps the build's exploration ran, so a model
+standing on the fixture's home page never runs the step that reaches it and
+cannot write one into the Flow it proposes. Measured on 2026-09-23,
+`run-mudwci8d-de88aa32` built a seven-node Flow for "search the store for
+wireless earbuds" holding no navigation node and no address anywhere; its first
+action was a press that resolved only because the harness had just loaded the
+page.
+
+The build could not be blanked while the destination existed nowhere the model
+could read it: no instruction in the catalog names an address -- they are
+written as a shopper would type them -- and the fixture's origin is a loopback
+port drawn per run, so nothing written down beforehand could carry one. So the
+run passes it to Core as the bootstrap's **start location**
+(`generate-flow-bootstrap-adaptation`, `startLocation`). Core shows it to the
+model in the bootstrap context and passes it to the web domain on every tool
+call; the domain then refuses every call with `not_at_start_location`, naming
+where to go, until the Flow has got there
+(`domain/src/runtime/llm-evidence/node-run/start-location.ts`). The step that
+gets there is a step that ran, so it is in the draft, so it is in the Flow.
+
+That refusal is the same condition the finished Flow meets at playback, where
+the extension refuses every action on a blank tab except a navigation, judged by
+its destination (`apps/extension/src/runtime/unsupported-page.ts`). A build
+cannot succeed under a rule its Flow will not face.
 
 ### Core action probe
 

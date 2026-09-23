@@ -213,7 +213,7 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
  */
 test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the Core action probe, and the final-state facts", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage \} from "\.\/lane-rules\/index\.js";/u);
+  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl \} from "\.\/lane-rules\/index\.js";/u);
   // L1: the probe reads a mark it planted on the start page, which no overlay can refuse, instead of typing into a
   // field in a fresh tab that restarted the site's load-timed overlays. It lives in its own module and is tested there.
   assert.match(source, /import \{ proveCoreActionRoundTrip \} from "\.\/core-action-probe\/index\.js";/u);
@@ -397,11 +397,27 @@ test("the runner leaves a Flow that must reach its own page on a blank tab, and 
     decide: source.indexOf("const startPage = flowStartPage({"),
     load: source.indexOf('if (startPage !== "blank-tab") {'),
     armedFacts: source.indexOf("if (!unarmedBuild) await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));"),
-    blank: source.indexOf('if (startPage !== "scenario-start-page") await page.goto(BLANK_TAB_URL);'),
+    blank: source.indexOf('if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL);'),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
   assert.ok(at.decide < at.load && at.load < at.armedFacts && at.armedFacts < at.blank, "the armed rendering is proved on a loaded page, and only then is the tab blanked");
   assert.match(source, /const BLANK_TAB_URL = "about:blank";/u, "the blank tab is a browser page the extension refuses to automate, so only a navigation can leave it");
+  // Every fixture tab, because an exploration run from a blank tab can end in a tab the extension opened for it.
+  assert.ok(at.blank > 0, "the blanking blanks every page on the scenario origin, not only the one the runner holds");
   // The one remaining load in the hook is the conditional one: nothing reaches the fixture for a Flow that was told to.
   assert.equal(source.slice(at.decide, at.blank).match(/await openScenarioStart\(/gu)?.length, 1);
+});
+
+/**
+ * The build starts blank as well, so the destination has to reach Core some
+ * other way: the run tells it where the Flow starts, and the address it names
+ * is the address the harness would have opened
+ * (`lane-rules/flow-start-page.ts`, `AS/runtime/flow-bootstrap/start-location.ts`).
+ */
+test("the runner tells the created-Flow lane where the Flow starts, using the address it would have opened", async () => {
+  const source = await runnerSource();
+  assert.match(source, /startLocation: scenarioStartUrl\(topology\.scenarioOrigin, scenario\),/u, "the created lane is told where its Flow starts");
+  // The harness's own load goes through the same expression, so the page it
+  // opens and the page Core names can never be two different pages.
+  assert.match(source, /await page\.goto\(scenarioStartUrl\(scenarioOrigin, scenario\)\);/u);
 });

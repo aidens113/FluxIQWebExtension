@@ -35,6 +35,8 @@ test("the build saves the instruction, then authorizes, selects the context and 
   assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation"]);
   assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
   assert.deepEqual(authorized, [FLOW_ID]);
+  // No start location was named, so the request carries none and Core builds
+  // from whatever is in front of it, exactly as it did before t103.
   assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true }]);
   assert.deepEqual(record, {
     outcome: "proposed",
@@ -273,4 +275,32 @@ test("a build's reported calls are every call it made, with the loop's own besid
   assert.equal(record.providerCalls, 18);
   assert.equal(record.loopProviderCalls, 17);
   assert.equal(record.evidenceLoop?.decisionCount, 17);
+});
+
+/**
+ * Where the Flow starts, told to Core rather than loaded for the build.
+ *
+ * No instruction in the catalog names an address -- they are written as a
+ * shopper would type them -- and the fixture's origin is a loopback port drawn
+ * per run, so nothing written down beforehand could have carried one. This is
+ * the only channel it has (`AS/runtime/flow-bootstrap/start-location.ts`), and
+ * without it a build that starts on a blank tab has nowhere to go.
+ */
+test("the build tells Core where the Flow starts, when the run named a start location", async () => {
+  const core = fakeCreationCore();
+  await buildCreatedFlowProposal(core.control, {
+    projectId: PROJECT_ID,
+    flowId: FLOW_ID,
+    instruction: INSTRUCTION,
+    startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
+    authorize: async () => ({ grantId: "llm-grant:build" }),
+  }, {}, { now: () => 0, sleep: async () => {} });
+
+  assert.deepEqual(core.generationRequests, [{
+    projectId: PROJECT_ID,
+    flowId: FLOW_ID,
+    llmExecutionGrantId: "llm-grant:build",
+    evidenceGuided: true,
+    startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
+  }]);
 });
