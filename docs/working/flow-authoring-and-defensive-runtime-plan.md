@@ -128,6 +128,59 @@ this work edits the same Core files.
 
 ---
 
+## Correction, 2026-09-22: exploration runs the real output nodes
+
+**Design One as written below is not what the user asked for, and the work built
+from it missed the point.** Recorded here rather than quietly rewritten, because
+the distinction is the whole lesson.
+
+The user's instruction on 2026-09-18 was that the exploratory tool calls must not
+be different from the Flow the model creates. Design One answered that with a
+draft that *accrues* from exploration — but the model still explored with five
+invented verbs (`web.inspect_current_page`, `web.press_control`,
+`web.enter_field`, `web.navigate_same_origin`,
+`web.detect_repeating_structure`) while the Flow was still made of the **18 real
+output nodes** in `domain/src/output-nodes/definitions.ts`. Two vocabularies, so
+what was proven while exploring is not what ships, and a node can enter a Flow
+having never been executed. Faithful accrual of the wrong artifact.
+
+On 2026-09-22 the user corrected it directly: the model must have access to **all
+the output nodes** and be able to **test them in live time**; the tool calls are
+for **editing the Flow**; the exploratory output is the **actual same output
+nodes with the same functionality and real parameters**, so the Flow is put
+together from nodes that 100% worked during exploring.
+
+**The architecture, superseding Design One's tool model:**
+
+1. The model's catalog is the real output-node catalog with its real parameter
+   schemas — not a translation and not a subset we choose.
+2. A decision is "run this node with these parameters", executed through the
+   same path the runtime uses, against the live page.
+3. A node that ran successfully is in the Flow, with the exact parameters it ran
+   with. The Flow is correct by construction.
+4. The editing decisions operate on the Flow: amend and re-run, remove, reorder,
+   mark a node run-only-to-look.
+
+**A consequence worth noting:** several capabilities the model appeared to lack
+were only walled off by the split. `web.dom.wait_for_selector`,
+`web.dom.wait_for_text`, `web.dom.scroll`, `web.dom.select`, `web.dom.check` and
+`web.dom.assert` all already exist as nodes. Step A9, "there is no wait tool on
+the authoring path", dissolves rather than needing to be built.
+
+**The three-strike rule is deleted.** `maxStepsWithoutProgress` defaults to three
+and ends a build after three non-productive steps
+(`runtime/llm/evidence-loop.ts:445,469`, documented at `:239`). The user did not
+ask for it and rejected it explicitly; it also contradicts the standing rule that
+the loop iterates as far as cost, tokens, deadline and genuine progress allow.
+Looking at the page again after a setback is correct behaviour and must not be
+scored as failure. Only a far backstop that cannot fire during ordinary work
+remains.
+
+This is task **t082**, worker `fa-explore-with-output-nodes`. Steps A5, A8's
+value and A9 are subsumed by it.
+
+---
+
 ## Design One: Authoring By Accrual
 
 Today a build has two separate acts. The model explores by making tool calls, and
