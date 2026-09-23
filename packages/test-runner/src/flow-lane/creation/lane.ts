@@ -19,6 +19,7 @@ import { createBlankCreationFlow } from "./blank-flow.js";
 import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
 import { assertCreatedFlowDataset, createdFlowDatasetHolds, judgeCreatedFlowDataset } from "./judgement.js";
+import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
 import type { CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
@@ -69,6 +70,14 @@ export type CreatedFlowLaneInput = {
    * so FluxIQ explores the page the Flow will meet, and again after the
    * fixture's state is reset, before the run. `moment` says which: a task
    * whose variant is armed after the build is explored unarmed.
+   *
+   * **At `"playback"` it presents the page the Flow is about to be judged on --
+   * except for a task whose instruction begins by going somewhere, which is
+   * left the blank tab a browser opens on, because loading that page is the one
+   * step such a Flow is being measured on.** Which it is belongs to the caller
+   * (`lane-rules/flow-start-page.ts`), taken from the same rule the lane judges
+   * by (`own-page.ts`); either way the tab no longer shows whatever the
+   * exploration left on screen, which is what the lane needs from it.
    */
   prepareFlowPage: (moment: "build" | "playback") => Promise<void>;
   /** Records what the Flow did, before any expectation is judged. */
@@ -87,6 +96,8 @@ export type CreatedFlowLaneEvidence = Readonly<{
   review: CreatedFlowReview;
   flowId: string;
   shape: CreatedFlowShape;
+  /** Whether the Flow can reach the page it works on, or whether the harness reached it for the Flow. */
+  ownPage: CreatedFlowOwnPage;
   run: PersistedFlowRunOutcome;
   observation: RunLaneObservation;
   extraction: FlowExtractionJudgement | null;
@@ -131,6 +142,10 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   const nodes = await readFlowNodes(input.control, { projectId, flowId }, bounds);
   const actionTypes = createdFlowActionTypes(nodes, flowId);
   const shape = createdFlowShape(nodes, actionTypes);
+  // Stated before the run and judged after it: the run publishes what the Flow
+  // did either way, and a Flow that cannot reach its own page is the first
+  // thing said about it.
+  const ownPage = createdFlowOwnPage(request.task, shape);
   // A node on a sensitive control asks the run for its value under a path;
   // each request is answered by exactly one declared secret, or the run fails
   // here, before it starts.
@@ -176,8 +191,12 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, run, observation, extraction });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, ownPage, run, observation, extraction });
   await input.recordEvidence(evidence);
+  // First of the judgements: a Flow that could not have started without the
+  // harness produced its records from a page it never chose, so what those
+  // records match or miss says nothing about the Flow.
+  assertCreatedFlowReachesItsOwnPage(ownPage, { flowId, taskId: request.task.id, taskKind: request.task.kind });
   assertFlowDidNotStopEarly(run);
   assertFlowFailure(workflow.expected.failure, run.failure);
   if (extraction) assertCreatedFlowDataset(extraction);

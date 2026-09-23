@@ -71,7 +71,9 @@ test("a Flow whose result nobody judged reports neither passed nor failed", () =
   // Core fails the session it refutes, so this is belt and braces.
   const refuted = flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", run: run({ resultVerification: "refuted" }), automationFailureExpected: null });
   assert.equal(refuted.reportedVerdict, "failed");
-  assert.deepEqual(refuted.automationFailureReported, { category: "ambiguous_or_unknown" });
+  // Nothing was ambiguous: Core judged the result and said no. The category
+  // stays inside Core's closed list and the code says which fact it is.
+  assert.deepEqual(refuted.automationFailureReported, { category: "unexpected_state", code: "flow_lane.result_refuted" });
   assertRunEvaluation(evaluationFrom(refuted));
 });
 
@@ -85,7 +87,7 @@ test("a Flow that ran clean reports passed with no failure", () => {
   assertRunEvaluation(evaluationFrom(observation));
 });
 
-test("a failed Flow carries Core's structured category, and an uncategorised one is ambiguous_or_unknown", () => {
+test("a failed Flow carries the category of the failure that decided it, and one with no failure says what is known instead", () => {
   const structured = flowLaneObservation({
     flowCreated: true, oracleVerdict: "passed", automationFailureExpected: { category: "auth_required" },
     run: run({ status: "failed", failure: { category: "auth_required", code: "web.auth.session_expired", retryable: false }, actions: [{ actionType: "web.dom.click", nodeId: "node-1", attemptIndex: 0, status: "failed", startedAt: new Date(0).toISOString(), durationMs: 5, failure: { category: "auth_required", code: "web.auth.session_expired", retryable: false } }] }),
@@ -95,8 +97,51 @@ test("a failed Flow carries Core's structured category, and an uncategorised one
   assert.deepEqual(structured.automationFailureReported, { category: "auth_required", code: "web.auth.session_expired" });
   assertRunEvaluation(evaluationFrom(structured));
 
+  // Core failed the run, no attempt failed, and nothing this lane can read says
+  // why. That is the one genuinely undetermined case, and it now says so under
+  // a code rather than as a bare word that three other producers also write.
   const uncategorised = flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", automationFailureExpected: null, run: run({ status: "failed" }) });
-  assert.deepEqual(uncategorised.automationFailureReported, { category: "ambiguous_or_unknown" });
+  assert.deepEqual(uncategorised.automationFailureReported, { category: "ambiguous_or_unknown", code: "flow_lane.no_failed_attempt" });
+});
+
+/**
+ * `run-mudw1ktb-0557816b` and `run-mudwci8d-de88aa32`, 2026-09-23. Both Flows
+ * ran and answered wrongly; the campaign filed the first under
+ * `ambiguous_or_unknown` with no code and the second under a
+ * `target_not_found` its retry had already recovered. Neither word was the
+ * reason either run failed.
+ */
+test("a Flow that ran clean and answered wrongly says so, and one that recovered every fault is not blamed for the fault", () => {
+  const succeeded = (nodeId: string, attemptIndex: number) => ({ actionType: "web.dom.extract_list", nodeId, attemptIndex, status: "succeeded" as const, startedAt: new Date(0).toISOString(), durationMs: 5, failure: null });
+  const missed = { category: "target_not_found" as const, code: "web.target.not_found", retryable: true };
+
+  // Five attempts, every one succeeded, and Core refuted what they produced.
+  const refutedClean = flowLaneObservation({
+    flowCreated: true, oracleVerdict: "failed", automationFailureExpected: null,
+    run: run({ status: "failed", resultVerification: "refuted", failure: null, actions: [succeeded("node.s4", 0), succeeded("node.s5", 1)] }),
+  });
+  assert.equal(refutedClean.reportedVerdict, "failed");
+  assert.deepEqual(refutedClean.automationFailureReported, { category: "unexpected_state", code: "flow_lane.result_refuted" });
+  assertRunEvaluation(evaluationFrom(refutedClean));
+
+  // A node that missed its target and was recovered on retry. The recovered
+  // record travels, and it is never the reported category.
+  const recoveredAnyway = flowLaneObservation({
+    flowCreated: true, oracleVerdict: "failed", automationFailureExpected: null,
+    run: run({
+      status: "failed", resultVerification: null, failure: null, recoveredFailures: [missed],
+      actions: [{ ...succeeded("node.s1", 0), status: "failed", failure: missed }, succeeded("node.s1", 1)],
+    }),
+  });
+  assert.deepEqual(recoveredAnyway.automationFailureReported, { category: "ambiguous_or_unknown", code: "flow_lane.every_failure_recovered" });
+  assertRunEvaluation(evaluationFrom(recoveredAnyway));
+
+  // A run that stopped with action nodes it never visited names that, not the verdict on a result it never finished producing.
+  const stopped = flowLaneObservation({
+    flowCreated: true, oracleVerdict: "failed", automationFailureExpected: null,
+    run: run({ status: "failed", resultVerification: "refuted", failure: null, stoppedWithoutFailedAttempt: { attemptedActions: 2, unvisitedActions: 3 } }),
+  });
+  assert.deepEqual(stopped.automationFailureReported, { category: "unexpected_state", code: "flow_lane.stopped_without_failed_attempt" });
 });
 
 test("no Flow was created, so FluxIQ reported no verdict", () => {

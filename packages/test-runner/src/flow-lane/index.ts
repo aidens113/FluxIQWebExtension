@@ -9,6 +9,7 @@ export * from "./flow-action-types.js";
 export * from "./harness-recovery.js";
 export * from "./lab-project-domain.js";
 export * from "./lane-observation.js";
+export * from "./node-recovery.js";
 export * from "./persisted-attempt.js";
 export * from "./persisted-flow-run.js";
 export * from "./terminal-run-wait.js";

@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Waves one and two landed 2026-09-22, t076 to t082 and t087 to t089. The ladder is measured absorbing 6 of 6 adversarial conditions at zero provider calls. t090 (branches and loops in the draft) and t091 (the permission gate is built and has never been asked anything) are out.
 Created: 2026-09-22
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 Owner: Senior supervisor agent
 Scope: Make a model-authored Flow faithful to what the model actually did, and make a Flow's execution survive a site we do not control. Covers the build loop's authoring model, the draft Flow and its edit and dry-run tools, branch and loop authoring, the runtime's deterministic recovery ladder, and the adversarial fixture conditions that measure both. It deliberately does not cover the real-site lane itself, the campaign measurement, new extraction capabilities, or the Week 2 exit criteria, which stay in their own documents.
 Paired document: `F:\!FluxIQ\docs\working\flow-authoring-and-defensive-runtime-plan.md`
@@ -71,12 +71,23 @@ with no model attached and returns **0 records against 16 expected**. Round 1's
 number — one Flow in about seventy attempts across the ten sites — predates every
 change above and **has not been re-measured**.
 
-**Next, and only this.** The ten-site campaign is running. Why a built
-extraction Flow returned nothing is answered and fixed on two of its three
-counts: the read never waited for the page it was sent to, and field inference
-could not name a value nested in an item. The third is open — the model can
-choose a list’s columns but not its items, so sponsored cards join the results
-and positional matching fails.
+**Next, and only this.** The campaign is stopped at two runs, and those two
+runs are the whole evidence base. Both have been diagnosed from artifacts
+already on disk, and three tasks are in flight against what they showed: t095
+makes a field read the page's own tightest statement of a value rather than the
+sentence containing it (`"3.7 out of 5 stars"` where `"3.7"` was expected, which
+alone cost every one of twelve rows); t096 makes a read wait for a lazily loaded
+list to be *complete* rather than merely present, and finds out why the model
+writes no `where` although the mechanism for it landed; and a read-only
+post-mortem walks both runs action by action for the causes the first pass did
+not name -- `web.target.not_found`, `ambiguous_or_unknown`, a built Flow holding
+no `navigate` node on a navigate-and-extract scenario, and why each run stopped
+at one attempt of an allowed three instead of repairing itself.
+
+**The standing rule this works under, restated by the user on 2026-09-23.**
+Every run is diagnosed to its cause and the cause is fixed directly. Runs exist
+to prove a specific fix, never to produce a score, and a mass or campaign-scale
+run is never launched without asking first.
 
 **Blockers:** none.
 
@@ -638,6 +649,18 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Validation: t092's defect measured model-free — the same request read 20 records on a settled page, **0** on a fresh one, 15 a second and a half later; after the fix, 15 at once on a fresh page, and detection offers the instruction's four columns at full coverage where it offered five junk ones. Before landing, the supervisor re-ran domain `# pass 752 / # fail 0` and extension `# pass 731 / # fail 0` for each task, and every `task finish` reported `"command":"pnpm check","passed":true`. `run-mudpkd77-e780792e` is the run whose own error names the call ceiling.
 - Outcome: Partial — the fixes are in, the number is not yet taken
 - Follow-up: the ten-site campaign is running against a tree carrying all of it. The remaining named product defect is that the model can choose a list's **columns** but not its **items**, so four sponsored cards join sixteen results and positional matching fails; that is t093, holding its live runs until the campaign ends, because two live runs on this machine corrupt each other — which is what produced t092's own `performance.budget` stall.
+
+
+---
+
+### 2026-09-23 — Why a built Flow gives the wrong answer, diagnosed from two runs
+- Agent: supervisor; workers `fa-extraction-answer`, `fa-extraction-items`, `fa-campaign-can-measure`
+- Changed: t092 (a read waits for the page it was sent to; field inference can name a nested value; detection waits before saying a page has no list), t093 (a Flow can say which **items** belong in its list, not only which columns), t094 (a campaign can measure today's loop: it answers a permission ask where the instruction is the authority, and no longer fails a build whose recovery record Core never wrote) — all merged in both repositories and pushed.
+- Why: the user narrowed everything to instruction-driven Flow creation on the ten sites, then stopped a wide campaign and said to debug the single failing case instead. That was right, and the answer was already on disk.
+- Validation: **the Flows are not the problem.** `run-mudwci8d-de88aa32` replayed a nine-node Flow with no model attached, branched correctly around a banner that is not always there, and extracted twelve records carrying all four requested columns — and matched **zero**, because every row read `rating` as `"3.7 out of 5 stars"` where `"3.7"` was expected. Seven of the twelve differ on nothing else. It also returned 12 rows against 16 expected: the store lazy-loads the tail and the read did not wait for it. `run-mudw1ktb-0557816b` returned **24 rows against 13 expected**, eleven of them `observed-not-expected` — the instruction's filter (Plus eligible, 4.0+, under $50, no sponsored) was not applied at all, although t093 landed the mechanism for it; its own report had flagged that nothing verified the model *uses* it.
+- Outcome: Partial — diagnosed, not fixed
+- Follow-up: two tasks were briefed and then stopped unstarted, so they are free to pick up. One: prefer the page's own tightest statement of a value (an attribute, a microdata property, a child holding the value alone) over the sentence containing it — **no word list and no suffix stripping**, which `domain/src/actions/extraction/request.ts` explains. Two: wait for a lazily loaded list to be *complete*, not merely present, and find out why the model does not write a `where`. Both must be proved model-free in the content harness, and the fixtures must not be edited to match the code.
+- Standing rule, from the user: **never launch a mass or campaign-scale run without asking first**, state its cost and duration beforehand, and debug the single failing case from artifacts already on disk before measuring the many.
 
 ## Open Questions
 
