@@ -90,9 +90,13 @@ retains `fluxiq-root/.fluxiq` after the run; nothing else about the run changes.
 
 ```bash
 cd <this repository>
-export DEEPSEEK_API_KEY="$(sed -n 's/^DEEPSEEK_API_KEY=//p' .env.local | tr -d '
-')"
-FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=persistent-isolated FLUXIQ_TEST_PERSISTENT_WORKSPACE=t091c FLUXIQ_LAB_INSTANCE=t091 pnpm lab:campaign social-scheduler-schedule-post
+# the key, without printing it; the tr strips the CR a Windows .env.local leaves
+export DEEPSEEK_API_KEY="$(sed -n 's/^DEEPSEEK_API_KEY=//p' .env.local | tr -d '\r')"
+FLUXIQ_TEST_ENV_FILES=none \
+FLUXIQ_TEST_TARGET=persistent-isolated \
+FLUXIQ_TEST_PERSISTENT_WORKSPACE=t091c \
+FLUXIQ_LAB_INSTANCE=t091 \
+pnpm lab:campaign social-scheduler-schedule-post
 ```
 
 **2. Read the proposal out of Core's own store.** The workspace is at
@@ -143,9 +147,11 @@ db.all("select data from \"automation.state\" where id like \"%/bootstrap\" and 
 step the saved Flow runs. On `run-mudngxpd-b9a4648e` it reads
 `{"action":{"kind":"flow_step","id":"web.output.dom-click","ref":"main.s6","verb":"press"},"control":{"name":"Schedule post","kind":"button"},"consequences":["send_or_publish"],"permitted":true}`.
 
-Run verbatim against the workspace of `run-mudngxpd-b9a4648e`, which is still on
-disk, the script prints the 21 lines of the table above — 20 declarations plus
-the cross-check and call counts. **The conversation turn is a separate store**:
+**This recipe was run exactly as printed above**, with only the two placeholders
+substituted, against the workspace of `run-mudngxpd-b9a4648e`, which is still on
+disk. It prints the 23 lines of the table above — 20 declarations plus
+`adaptationId`, the cross-check verdict with its `undeclared` list, and the
+call counts. **The conversation turn is a separate store**:
 the `confirm` ask is a row in that project's `project.sqlite`, tables
 `conversation_turns` and `conversation_asks`, under
 `artifacts/automation-studio/projects/<projectId>/`.
@@ -390,6 +396,20 @@ The structure audit caught four violations of mine and all four are fixed: two
 right, the field it would have hidden is the one this task is about), a
 `swallowed-failure` in the thread write, and `service.ts` over its baseline,
 which is what prompted the extraction above.
+
+### Two things the merge needed, for the record
+
+Both found by the supervisor merging this branch, and both kept:
+
+- **`packages/test-contracts/dist` predated the `recovery` field**, so the
+  scenario lab would not compile on the merged tree until it was rebuilt. It is
+  a stale build artifact, not a source conflict; `pnpm --filter
+  @fluxiq-web-extension/test-contracts build` clears it.
+- **`evidence-trace.test.ts` collided add/add** with a suite another task wrote
+  for the same module. Both were kept and my fixture renamed to `SPEND_TRACE`;
+  the merged file passes **10 of 10**, and the three rows about the provider
+  count that cost a live run are intact. That was the right call: they are the
+  only thing standing between the next person and `run-mudna2ng-ceadeb69`.
 
 ## Not verified
 
