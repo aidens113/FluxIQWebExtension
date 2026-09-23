@@ -33,7 +33,7 @@ import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } 
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
-import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage } from "./lane-rules/index.js";
+import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
@@ -284,7 +284,11 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           if (!unarmedBuild) await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
         }
         // Blanking also clears whatever the exploration left on screen, which is the other half of what the load was for.
-        if (startPage !== "scenario-start-page") await page.goto(BLANK_TAB_URL);
+        // Every fixture tab, not just this one: a navigation run from a blank tab cannot take over the page in front
+        // (`apps/extension/src/runtime/navigation-target.ts`), so it drives the last tab the worker drove -- or opens
+        // one -- and an exploration can therefore end somewhere other than here. A Flow left one fixture tab open
+        // would start on a page it never reached, which is the thing this whole rule exists to stop.
+        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL);
       },
       recordEvidence: async (evidence: E) => {
         // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:
@@ -374,6 +378,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
+        // Where the built Flow starts: the page the harness would have opened, told to Core instead of loaded, so the build has to reach it itself (`lane-rules/flow-start-page.ts`).
+        startLocation: scenarioStartUrl(topology.scenarioOrigin, scenario),
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
         // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
@@ -753,7 +759,7 @@ async function findScenarioPageWithExpectedState(context: BrowserContext, fallba
  * `startPath` anyway.
  */
 export async function openScenarioStart(page: Pick<Page, "goto">, scenarioOrigin: string, scenario: Pick<WebScenario, "startPath">): Promise<void> {
-  await page.goto(`${scenarioOrigin}${scenario.startPath}`);
+  await page.goto(scenarioStartUrl(scenarioOrigin, scenario));
 }
 
 /** The same workflow with no variant applied: what the Flow lane records. */

@@ -17,6 +17,12 @@
 // that exploration stays on the origin it started on, which is the scope policy
 // the authoring navigation has always had.
 //
+// **A build may begin nowhere.** When Core says where the Flow starts
+// (`AS/runtime/flow-bootstrap/start-location.ts`), nothing was opened for this
+// build: the capture every call makes first comes back refused, and the only
+// call that gets past that is the move that goes there. `./start-location.ts`
+// holds the whole of that rule and why it is a rule at all.
+//
 // **A failure is a result, never an exception.** Every refusal this module can
 // produce comes back as the call's result, carrying the page as it now stands
 // so whatever got in the way has a handle the model can act on next, and
@@ -48,6 +54,7 @@ import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
 import { webNodeReadResult } from "./read-result";
+import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 
 const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
@@ -138,7 +145,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       const looking = run.request.maxEvidenceBytes === undefined
         ? run.request
         : { ...run.request, maxEvidenceBytes: Math.max(1, run.request.maxEvidenceBytes - LOOK_ENVELOPE_BYTES) };
-      const looked = run.restamp(await captureEvidence(run.gateway, run.sessionId, looking, run.request.signal));
+      const looked = await currentPage(run, looking);
+      // Nothing to look at: this build was told where its Flow starts and has
+      // not got there. The free first look is where that is said, so the
+      // model's first paid decision is made knowing where it is meant to be.
+      if (!looked) return notThereYet(run, record);
       run.shown(looked);
       return toolExecution(
         nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, control: undefined, read: undefined, inFlow: false })),
@@ -148,8 +159,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined })
       );
     }
-    current = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
-    run.shown(current);
+    current = await currentPage(run, run.request);
+    // From nowhere, the only call that runs is the one that goes to the start
+    // location. Everything else is refused with where to go, rather than with
+    // `page_unreadable`, which says what happened and not what to do about it.
+    if (!current && !webMovesThePage(node)) return notThereYet(run, record);
+    if (current) run.shown(current);
     // A handle written bare -- `selector: target.3` -- is the shape the Flow
     // script writes and the shape a model reaches for, and the resolver only
     // knows `{handle}`. Left alone it is not a handle at all: it goes to the
@@ -182,7 +197,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       }), run.request.maxEvidenceBytes, record);
     }
     const ran = resolved.status === "resolved" ? resolved.parameters : written;
-    const control = observedControl(current.evidence, written);
+    // No page, no control to have observed: the move that goes to the start
+    // location acts on the browser rather than on anything in front of it.
+    const control = current ? observedControl(current.evidence, written) : { name: undefined, kind: "step" };
     // A node that acts must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -211,7 +228,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Exploration stays where it started. The URL is the node's own parameter
     // and is run as written; where it may go is this domain's scope policy,
     // which the authoring navigation has always had.
-    const leaving = crossOrigin(node, ran, current.evidence.location);
+    const leaving = crossOrigin(node, ran, webScopeAnchor(current?.evidence.location, run.request.startLocation));
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
     }
@@ -222,7 +239,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // it -- whatever stood in the way is on it, with a handle to act on --
       // captured to fit inside what this call was allowed, which is what
       // `pageRefusal` is for.
-      throw await pageRefusal(run.gateway, run.sessionId, run.request, current, webActionFailureRejectionCode(result), run.request.signal);
+      // A refusal carries the page so the model can act on whatever got in the
+      // way. From nowhere there is no such page, and the code alone is the
+      // whole of what can honestly be said.
+      throw current
+        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, webActionFailureRejectionCode(result), run.request.signal)
+        : new RecoverableToolRejection(webActionFailureRejectionCode(result), webStartLocationRefusal(run.request.startLocation ?? ""));
     }
     const after = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
     run.shown(after);
@@ -233,7 +255,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // is. Returning it would be the one path by which a page's own markup
     // reached a decision.
     const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4))) : undefined;
-    const changed = JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
+    // Arriving from nowhere changed the page by definition: there was none.
+    const changed = current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
     // The page, with what the node did to it written on the same packet rather
     // than around it. One shape, the one every other packet has: a handle is
     // read out of `elements` wherever it is read, and a consumer that knew
@@ -289,7 +312,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         input: safeCall(value, written),
         ranWith: nodeCall(value, flowParameters(written, ran)),
         proposes: node.proposes,
-        replay: webNodeReplayStatement({ location: current.evidence.location, payload: result.payload as JsonValue | undefined, reads: node.proposes })
+        // Where this step found the page. The draft's first step is the one a
+        // replay resets to, and for a Flow that starts by going somewhere that
+        // step found no page at all -- so what it records is where it was sent,
+        // which is what a reset has to put the page back to (`./replay.ts`).
+        replay: webNodeReplayStatement({ location: current?.evidence.location ?? run.request.startLocation ?? after.evidence.location, payload: result.payload as JsonValue | undefined, reads: node.proposes })
       })
     );
   } catch (error) {
@@ -495,13 +522,42 @@ function elementHandle(value: JsonValue | undefined): string | undefined {
 }
 
 /** Whether a navigation would leave the origin the exploration is on. */
-function crossOrigin(node: WebRunnableNode, parameters: JsonObject, location: string): boolean {
-  if (node.actionType !== "web.browser.navigate" || typeof parameters.url !== "string") return false;
+function crossOrigin(node: WebRunnableNode, parameters: JsonObject, location: string | undefined): boolean {
+  if (node.actionType !== WEB_NAVIGATION_ACTION || typeof parameters.url !== "string" || location === undefined) return false;
   try {
     return new URL(parameters.url).origin !== new URL(location).origin;
   } catch {
     return false;
   }
+}
+
+/**
+ * The page as it stands, or nothing at all.
+ *
+ * A build that was told where its Flow starts has had nothing opened for it:
+ * the tab is the blank one a browser opens on, the extension refuses to read it
+ * (`apps/extension/src/runtime/unsupported-page.ts`), and the capture comes back
+ * `page_unreadable`. That is not a fault to report, it is the situation, and
+ * `undefined` is how this module says so.
+ *
+ * A build that was told no start location is unchanged in every respect: the
+ * refusal is raised as it always was, because there is nowhere to send the
+ * model and "the page could not be read" is then the whole truth.
+ */
+async function currentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest): Promise<WebLlmSnapshotBinding | undefined> {
+  const capture = async () => run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal));
+  if (run.request.startLocation === undefined) return await capture();
+  try {
+    return await capture();
+  } catch (error) {
+    if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
+    throw error;
+  }
+}
+
+/** The refusal for a call made before the Flow has reached where it starts. */
+function notThereYet(run: WebNodeRun, record: Parameters<typeof refusal>[4]): WebLlmEvidenceToolExecution {
+  return refusal(undefined, "not_at_start_location", webStartLocationRefusal(run.request.startLocation ?? ""), run.request.maxEvidenceBytes, record);
 }
 
 /** Republished so the runtime's tool table and this module cannot disagree. */
