@@ -13,6 +13,19 @@ Related: [week2-exit-plan.md](./week2-exit-plan.md) (the campaign this defers), 
 
 ## Current State
 
+**Scope, set by the user on 2026-09-22 and binding on everything below.** The
+only path that counts is: a person writes an instruction, the model explores the
+live page by running real Flow nodes, and the Flow it builds then runs
+deterministically and produces the right answer. **Recording-built Flows are not
+to be tested, measured, or reported as progress.** Do not choose a recorded Flow
+as the subject of a run, a lane or a campaign when the same question can be
+asked of an instruction-built one; do not offer recording evidence as proof that
+something works; and do not count recording capability toward progress. Every
+stage downstream — failure, diagnosis, exploration, repair, validation,
+persistence, resumption, and cheap deterministic re-running — is measured on
+Flows that came from an instruction. Recording stays in the product; it is not
+the subject of testing while the instruction path is the open question.
+
 The user asked on 2026-09-22 for a side plan to execute **before** live testing
 continues, so that Flow creation and Flow execution work defensively on sites we
 do not control. This document owns that work. The Week 2 exit campaign is paused
