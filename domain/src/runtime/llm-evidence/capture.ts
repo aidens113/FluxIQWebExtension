@@ -56,7 +56,20 @@ export type WebLlmEvidenceToolExecution = {
    * should contain it are properties of the call rather than of the tool. Core
    * carries all of it opaquely (`AS/runtime/flow-draft/`).
    */
-  draft?: { actionId?: string; input?: JsonObject; ranWith?: JsonObject; effect?: "observe" | "mutate"; proposes?: boolean };
+  draft?: {
+    actionId?: string;
+    input?: JsonObject;
+    ranWith?: JsonObject;
+    effect?: "observe" | "mutate";
+    proposes?: boolean;
+    /**
+     * What running this call again would need: where it found the target, and
+     * how much it read (`./node-run/replay.ts`). Saying it is what puts the
+     * step under Core's dry run -- the draft is run again from the start before
+     * it may be proposed -- and a step that says nothing is simply not replayed.
+     */
+    replay?: { from?: JsonObject; produced?: JsonObject };
+  };
 };
 
 export type WebLlmEvidenceToolRequest = {
