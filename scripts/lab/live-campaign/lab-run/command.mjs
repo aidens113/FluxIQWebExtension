@@ -37,6 +37,20 @@ const REPAIR_LIMITS = Object.freeze([
  */
 const CREATE_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "48000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "56000"],
+  // The same story as the input tokens above, one limit along, and it has to be
+  // stated here for the same reason. Leaving the call count unnamed inherited
+  // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`, which mirrors Core's grant
+  // default of a diagnosis, a patch and 24 exploration decisions -- a shape
+  // that predates a build exploring by running the library's own nodes. On
+  // 2026-09-23 the first six tasks of a ten-site campaign each made 19 to 28
+  // calls and every one that passed 26 was failed as `performance.budget`
+  // after the model had already done the work: `run-mudpkd77-e780792e` made 27
+  // against an authorized 26, and $0.90 bought six runs that measured nothing.
+  // 48 is above what a build of these pages has been observed to need and below
+  // the contract ceiling of 64. What bounds the run stays what always bounded
+  // it -- the per-run token budget and the cost ceiling below, not a count set
+  // for a different shape of loop.
+  ["--llm-max-calls", "48"],
   ["--llm-max-run-tokens", "600000"], ["--llm-max-cost-usd", "0.25"],
 ]);
 

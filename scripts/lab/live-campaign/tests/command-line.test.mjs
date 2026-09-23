@@ -92,8 +92,8 @@ test("the command line: a dry run prints commands and runs nothing", () => withT
   assert.equal(dry.code, 0, dry.stderr);
   const commands = dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#"));
   assert.deepEqual(commands, [
-    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
-    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
+    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 48 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
+    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 48 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
   ]);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });

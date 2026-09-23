@@ -23,10 +23,14 @@ test("each repair task becomes one adapt run of the recorded Flow, with the live
   assert.deepEqual(overridden.slice(-4), ["--llm-max-cost-usd", "0.1", "--target", "isolated"]);
   assert.ok(overridden.includes("--llm-max-calls") && overridden.includes("--llm-max-run-tokens"));
 
-  // Creation tasks carry no default limits and keep their own profile.
+  // A creation task keeps its own profile, and builds a Flow rather than
+  // running one, so it is never a `--flow` run. It does carry a call ceiling:
+  // the default it used to inherit was set for a loop that no longer exists and
+  // failed six of six live tasks that had already built something.
   const creation = labRunArguments(CATALOG[0], parseCampaignArgs([]));
   assert.equal(creation[creation.indexOf("--llm-profile") + 1], "lab-create-flow");
-  assert.equal(creation.includes("--llm-max-calls") || creation.includes("--flow"), false);
+  assert.equal(creation.includes("--flow"), false);
+  assert.equal(creation[creation.indexOf("--llm-max-calls") + 1], "48");
 });
 
 test("each task becomes one create-flow Lab run naming its scenario, variant and catalog id", () => {
