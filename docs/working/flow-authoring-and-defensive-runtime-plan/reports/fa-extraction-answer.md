@@ -1,21 +1,43 @@
 # fa-extraction-answer — why a built extraction Flow returns nothing (task t092)
 
 Worktrees `F:\fxwork\t092\!FluxIQWebExtension` and `F:\fxwork\t092\!FluxIQ`, both
-on `task/t092-extraction-answer`, off `f205e0d`. **No commit was made, and Core
-was not changed**: the cause is entirely in the extension's own extraction
-engine, and it was named from measurement before anything was edited.
+on `task/t092-extraction-answer`. **Core was not changed**: all three causes are
+in the extension's own extraction engine, and each was named from measurement
+before anything was edited.
+
+**What landed and what did not.** The supervisor landed the first two fixes as
+`f8b6d28` (downstream `9791935` on `dev`). **The third — the detection wait —
+is still uncommitted in this worktree**, across five files:
+`extraction/detect-structure.ts`, `extraction/index.ts`,
+`actions/capture-snapshot.ts`, `actions/types.ts` and
+`action-runtime/execute-action.ts`. It type-checks, the extension's 731 unit
+tests pass with it and the whole content-harness suite passes with it
+(339 passed, 1 pre-existing failure), but `pnpm check` has **not** been re-run
+since it, and it has no live measurement, because a ten-site campaign owns the
+machine and this worker was told — rightly — to stop starting Lab runs.
 
 ## Outcome
 
-**Partial, and the part that is done is the part the brief was about.** The
-`0 records` is gone and the columns the model can ask for are now the columns
-the instruction asks for, both proved model-free and then live. What is *not*
-done is `everything-store-first-page-plus-earbuds` returning its expected 16
-records, and the reason is a third defect on the same path that this brief's
-ownership does not cover and that no amount of extraction work can reach: **the
-model can choose which columns to read but not which items**, so a page whose
-results are interleaved with four sponsored placements is read as twenty
-records. That is named in *Open questions* with what it would take.
+**Partial.** Three defects found on one path, all measured; two fixed and
+landed, one fixed and waiting.
+
+- **The `0 records` is explained and fixed.** A read never waited for the list
+  it was sent to. Measured model-free: the same request read 20 records on a
+  settled page, **0** on a freshly loaded one, 15 a second and a half later.
+- **The answer's columns are fixed.** Field inference could not name a nested
+  value, so the proposal for a product card omitted its name, price, rating and
+  link — the four columns the instruction asks for. It now offers all four at
+  coverage 1, and a live build used them.
+- **A third defect ends the build entirely**, found by the first live run that
+  reached a judged extraction: detection had the same blind spot, and a
+  detection refused once cannot be retried. Fixed, not landed, not measured
+  live.
+
+**What still does not work** is a built Flow returning the expected records, and
+no run has ever reached that. The blocker on `everything-store` is a fourth
+thing, a contract gap this brief does not cover: **the model can choose which
+columns to read but not which items**, so four sponsored placements join the
+sixteen results in one run of twenty. That is now its own task.
 
 ## The cause, ranked by evidence
 
@@ -74,6 +96,26 @@ whose every value carries a `data-testid` that always holds — which is why eve
 existing extraction spec passed and why this survived to a live campaign. On a
 real card, whose values sit three and four levels down among many sibling
 `span`s, it almost never holds, so almost every field was silently dropped.
+
+### 3. Detection had the same blind spot, and there it ends the build
+
+Found by the first live run that reached a judged extraction, and it is the
+same root cause one step earlier. `detectStructure` answered for the page as it
+stood at that instant. A page that has not drawn its list yet has no repeating
+run, so it was told `no_repeating_run`.
+
+For a read, reading early costs the answer. For a detection it costs the
+*Flow*: the model asked again and the evidence loop's repeat cache answered
+`already_answered` five times in a row, so looking at the page again — the one
+correct instinct — was impossible. The build then completed with a plan
+containing a single `navigate` node, and the Lab's own verdict was
+**"The created Flow has no extract node, so it could not collect the records the
+task asks for"** (`run-mudrimhl-47dee201`, `company-website`, 10 provider calls,
+`build.outcome: "proposed"`).
+
+Model-free, the same page detects perfectly well once it has rendered: 4
+leadership cards immediately, the 12-card grid at 2.5 s, 16 after a scroll. So
+the refusal was a race, not a judgement about the page.
 
 ### What rules the other three candidates out
 
@@ -160,6 +202,23 @@ Two smaller changes follow:
 The label is still page structure and never a value read inside an item (D3): a
 test id where there is one, otherwise the path.
 
+### `detect-structure.ts` — `detectStructureWhenPresent`
+
+The same bounded wait, for the same reason, with the same ceiling: poll until a
+run is there, answer the moment one is, so a page that already has one costs
+nothing. Only the two refusals that a moment later could stop being true are
+waited on — `no_repeating_run`, and a `target_not_found` for an element the page
+has not rendered. A sensitive region and an ambiguous target are facts about the
+page as authored and are answered at once.
+
+`STRUCTURE_WINDOW_MS` is 5 s rather than the read's 10: a read that waits has
+somewhere to put the time, while a detection that waits spends part of a
+build's deadline on a page that may genuinely hold no list.
+
+`captureSnapshotAction` becomes `async` and takes the detection **before** the
+snapshot, so the packet the model is shown is the page the detection answered
+for. A snapshot not asked to detect waits for nothing and is unchanged.
+
 ### `list-reader.ts`
 
 Calls `awaitListPresent` before the first read, with the required count and
@@ -230,14 +289,34 @@ Three things are true of that node and all three matter:
 
 | # | run | observed |
 | --- | --- | --- |
-| 3 | `everything-store-first-page-plus-earbuds`, `company-website-gas-engineers`, `job-board-remote-rust-roles`, workspace `t092c` | **All three `no-result`, 0 provider calls, 0 tokens.** Each Lab process ended silently right after its `lab:paths` line, leaving no run bundle and no error. **I caused this**: I ran `pnpm check` in the same worktree while the campaign was in flight, which rebuilds and re-emits the very artefacts the running Lab had loaded. `AGENTS.md` says this in as many words — a worktree exists for exactly this case — and I did it anyway. Recorded rather than quietly re-run, because the failure mode is invisible (no error, three `no-result` rows) and the next person to do it will read those rows as a product failure. |
-| 4 | the same three tasks, workspace `t092d`, nothing else running | see below |
+| 3 | the three tasks as one campaign, workspace `t092c` | **All three `no-result`, 0 provider calls, 0 tokens.** Each Lab process ended right after its `lab:paths` line, leaving no run bundle and no error line. |
+| 4 | the same three, workspace `t092d`, with nothing else running in the tree | **The campaign itself exited 1 during task 1**, again straight after `lab:paths`, printing no per-task row at all. |
+| 5 | `run-mudrimhl-47dee201` — `company-website-gas-engineers`, run directly through `run-lab.mjs` rather than through the campaign, workspace `t092e` | **A judged run at last.** `flowCreated: true`, `build.outcome: "proposed"`, 10 provider calls, 66 s. Verdict `failed / runtime.behavior`, and the reason is defect 3 above: extraction `status: "not_run"`, `expectedRecords: 8`, `observedRecords: 0`, one action in the whole replay (`web.browser.navigate`). The Lab's own words: *"The created Flow has no extract node, so it could not collect the records the task asks for."* Running one task directly is also what got past whatever kills the campaign wrapper. |
+| 6 | `company-website-gas-engineers` again, workspace `t092f`, after the detection wait | Killed before it produced a record. **The detection fix has no live measurement.** A seventh attempt was stopped by this worker as soon as the coordinator said to stop. |
+
+**The runs that died silently were killed, and I should have asked sooner.**
+Runs 3, 4 and 6 ended within a second of their `lab:paths` line — exit 1, no
+error, no bundle. I looked for a cause in the tree, in memory, in the campaign
+wrapper, and blamed myself for a concurrent `pnpm check`. The actual cause was
+outside the run: **a ten-site campaign owns this machine, and the coordinator
+killed my Lab runs twice for competing with it over browsers, ports and CPU.**
+The same contention is what produced run 2's ten-minute stall and the
+`performance.budget` that failed an otherwise-good build.
+
+The lesson is the one already written into `AGENTS.md` about worktrees, one step
+further: a worktree isolates the *files*, not the machine. One live Lab run at a
+time, whoever owns it, and a worker that finds its runs dying for no reason in
+the tree should ask what else is running before it theorises.
+
 
 ### Checks
 
 | Command | Observed |
 | --- | --- |
-| `pnpm check` (this repository) | **exit 0**; `structure-audit: passed (94 warning(s), 122 baselined)` |
+| `pnpm check` (this repository) | **exit 0**; `structure-audit: passed (94 warning(s), 122 baselined)` — **run before the detection fix, not after** |
+| `pnpm test:content` (whole suite), after the detection fix | **339 passed, 1 failed** — the same pre-existing t082 failure |
+| `node apps/extension/scripts/test-extension.mjs`, after the detection fix | `# tests 731 / # pass 731 / # fail 0` |
+| `npx tsc -p apps/extension/tsconfig.json --noEmit`, after the detection fix | clean |
 | `pnpm check` (`F:xwork	092\!FluxIQ`) | **exit 0**; `structure-audit: passed (177 warning(s), 360 baselined)`. Core has no change in it; this is a clean-tree confirmation. |
 
 ## Not verified
@@ -263,6 +342,8 @@ Three things are true of that node and all three matter:
   after the bottom of the list scrolls into view. The growth settle will pick
   them up *if the Flow scrolls first*; no live Flow has put a `web.dom.scroll`
   node before its extraction, so this is untested end to end.
+- **The detection fix has no live run and no `pnpm check` behind it**, and is
+  not on `dev`. Everything else in this report is landed.
 - **No browser-level validation beyond the Lab's own Chromium and the
   content-script harness.** No Firefox run.
 - **`pnpm check` in Core.** Core was not changed; the check was not run.

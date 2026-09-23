@@ -19,7 +19,7 @@ import { dispatchInputEvents } from "./input-events";
 import { checkActionability } from "./actionability";
 import { keyboard } from "./keyboard";
 import { setCheckedState } from "./checkable-state";
-import { detectStructure } from "../extraction";
+import { detectStructureWhenPresent } from "../extraction";
 import { setInputFiles } from "./file-input";
 import { dialogControl } from "./dialog-control";
 import { evaluateAssertion } from "./assertion-evaluation";
@@ -40,7 +40,7 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     checkActionability,
     keyboard,
     setCheckedState,
-    detectStructure,
+    detectStructure: detectStructureWhenPresent,
     extractList: listReadFor(extractionContinuation),
     setInputFiles,
     dialogControl,
