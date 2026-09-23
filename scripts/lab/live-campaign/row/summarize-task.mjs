@@ -8,12 +8,18 @@ import { repairJudgement } from "./repair-judgement.mjs";
 import { replaySummary } from "./replay-summary.mjs";
 import { repairOutcome } from "./repair-outcome.mjs";
 import { reportedSpend } from "./reported-spend.mjs";
+import { rungAttribution } from "./rung-attribution.mjs";
 
 /**
  * One summary row: what the run did, read from its bundle. Counts, codes and
  * identifiers only -- no page data, prompt or response.
+ *
+ * `timing` is what the campaign itself measured around this task, which
+ * nothing in the bundle can say: the bundle knows the run, and the campaign
+ * knows what the run cost the campaign. Omitted, the row reports no campaign
+ * duration and every other member is unchanged.
  */
-export function summarizeTask(task, attempts, final, bundle) {
+export function summarizeTask(task, attempts, final, bundle, timing = {}) {
   const result = parseLabResult(final.stdout);
   const refusal = parseRunnerRefusal(final.stderr);
   const { evaluation, run, liveLlm, flowLane } = bundle;
@@ -31,6 +37,10 @@ export function summarizeTask(task, attempts, final, bundle) {
   const repairing = task.kind === "repair";
   // What `--replays` did, for either kind: a creation task's Flow runs under a repair grant too.
   const repairLane = replaySummary(bundle.repairLane);
+  // Which recovery answered for each node of the Flow this run executed. Read
+  // beside `providerCalls` below, the two are the adversarial measurement: the
+  // rung that absorbed the condition, and what it cost in model calls.
+  const recoveryRungs = rungAttribution(flowLane);
   const repair = repairing ? repairOutcome(recovery, providerCalls, flowLane, repairLane) : null;
   let judgement;
   if (repairing) judgement = repairJudgement(task, repair, oracleVerdict);
@@ -58,6 +68,20 @@ export function summarizeTask(task, attempts, final, bundle) {
     // so a repair task succeeds on its judgement instead.
     succeeded: repairing ? judgement.passed === true : verdict === "passed",
     exitCode: final.code,
+    /**
+     * The campaign's own wall clock for this task: every attempt, every retry
+     * and the Lab's process startup, which is the number a dry run has to be
+     * judged against. `null` when the caller measured none.
+     */
+    durationMs: isCount(timing.durationMs) ? timing.durationMs : null,
+    /**
+     * The runner's measurement of the one attempt that produced this row, from
+     * its own `evaluation.json`. It excludes the retries and the startup that
+     * `durationMs` includes, which is why both are here under distinct names:
+     * a task that is slow because it ran twice and a task that is slow because
+     * the run is slow are different problems and used to look identical.
+     */
+    runDurationMs: isCount(evaluation?.durationMs) ? evaluation.durationMs : null,
     attempts: attempts.length,
     ramFaults: attempts.map((attempt) => attempt.ramFault).filter(Boolean),
     /** A classified failure that came back identical on retry: deterministic, and never a RAM fault. */
@@ -90,6 +114,15 @@ export function summarizeTask(task, attempts, final, bundle) {
      */
     declaredProviderCalls: declaredSpend === null ? null : declaredSpend.count,
     declaredProviderCallsBecause: declaredSpend === null ? null : declaredSpend.because,
+    /**
+     * Which recovery absorbed what this run met, from the Flow lane's own
+     * attribution: the ladder rungs that ran, the ones that resolved a node,
+     * and the busiest node's attempt count. `null` for a run that reached no
+     * Flow lane. A row with `providerCalls: 0` and an empty `resolvedBy` is a
+     * run where nothing had to recover -- which is the correct answer for a
+     * control and a defect in an armed condition.
+     */
+    recoveryRungs,
     issueCodes: distinct([
       ...calls.flatMap((call) => call.validationCodes ?? []),
       ...(recovery?.interventions ?? []).flatMap((item) => item.validationCodes ?? []),
@@ -103,6 +136,10 @@ export function summarizeTask(task, attempts, final, bundle) {
     // finished bundle recorded.
     runnerMessage: result ? (verdict === "passed" ? null : describeFacilityFailure(evaluation?.facilityFailure)) : shortMessage(refusal?.message),
   };
+}
+
+function isCount(value) {
+  return Number.isSafeInteger(value) && value >= 0;
 }
 
 /** A failure as `category/code`, its category alone when it carries no code, and `null` for none. */

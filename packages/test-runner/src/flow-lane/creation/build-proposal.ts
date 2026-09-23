@@ -55,10 +55,23 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   allowed -- not a failure of the build, and never an HTTP failure, but the
  *   question FluxIQ puts to the person, carried in `permissionRequest`;
  *   `failed` for every other ending.
- * - `providerCalls`: the calls Core counted, from the proposal's evidence-loop
- *   audit or the refusal's decision count; `null` when Core did not say. Core
- *   does not itemize a build's calls one by one, so this count and
- *   `accounting`'s totals are all a build's per-call record can hold.
+ * - `providerCalls`: the **evidence loop's** decisions, from the proposal's
+ *   audit or the refusal's diagnostic; `null` when Core did not say. Core does
+ *   not itemize a build's calls one by one, so this count and `accounting`'s
+ *   totals are all a build's per-call record can hold.
+ *
+ *   It is not the build's total spend, and the difference is real rather than
+ *   theoretical. Core makes provider calls outside the loop -- the instruction
+ *   authority derivation asks the model what the person's instruction already
+ *   asks for (`runtime/action-permissions/`, `deriveInstructed`) -- and those
+ *   calls are spent against the grant's token and cost budget without
+ *   appearing in any count Core publishes for the build. Measured: a build
+ *   that died on its token budget for calls no count explained. So
+ *   `accounting`'s totals are the honest measure of what a build spent, and
+ *   this number is the honest measure of how many decisions it took; a reader
+ *   dividing one by the other will find more tokens than these calls explain,
+ *   and that is the derivation. Closing it properly is Core's: a call count on
+ *   the build's own accounting record, covering every call the grant paid for.
  * - `providerInvocation`: whether Core says it sent a provider request at all;
  *   `unknown` when the build outlived its request and no proposal appeared.
  * - `failure.code`: Core's own closed code for a refusal, or a `lab.` code
@@ -68,11 +81,10 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   only; the plan paths and page content they refer to are never kept.
  * - `evidenceLoop.steps`: every decision of the build, in order, as Core
  *   recorded it; `toolIds` are the tools among them. A refused build carries
- *   them on its failure diagnostic. A proposed build carries them only where
- *   Core publishes them on the proposal, which it does not do today, so the
- *   successful builds most worth studying still read `null` -- the Lab half of
- *   this is in place and the Core half is specified in
- *   `docs/working/flow-authoring-and-defensive-runtime-plan/reports/fa-lab-measurement.md`.
+ *   them on its failure diagnostic, and a proposed build now carries them on
+ *   the created audit event of its proposal, so the successful builds most
+ *   worth studying read alike with the refused ones. `null` only for a build
+ *   Core published no trace for at all.
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
  * - `instructedConsequences`: the lasting consequences Core found the person's

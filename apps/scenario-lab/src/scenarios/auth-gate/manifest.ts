@@ -82,6 +82,18 @@ export const authGateManifest = createScenarioManifest({
       ],
       extracted: [],
       failure: { category: "auth_required" },
+      /**
+       * The adversarial measurement on this row: a session that expires
+       * partway through a Flow is absorbed by nothing the runtime has. The
+       * domain marks `web.auth.required` non-retryable and gives it the
+       * `confirmation` stage, so the ladder's retry rung is never offered the
+       * node -- correctly, since signing in again needs a credential the Flow
+       * was never given and a branch the recording never took.
+       */
+      recovery: {
+        absorbedBy: "none",
+        because: "web.auth.required is non-retryable at the confirmation stage, and no deterministic rung can sign a session back in, so nothing absorbs an expiry mid-Flow.",
+      },
     },
   }],
   /**

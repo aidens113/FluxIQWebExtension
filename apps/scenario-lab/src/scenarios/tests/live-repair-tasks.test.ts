@@ -14,6 +14,8 @@ const PATCH_KINDS = new Set(["temporary_target_override"]);
  * which of the two a correct model does, so neither can be judged from it.
  */
 const EXCLUDED_ROWS: Readonly<Record<string, string>> = {
+  "dynamic-list/remove-a-row/rows-per-visit": "The refusal is the resolver's record rule, which will not press one row's button for another's. A model could re-point the click at the row by its text, which is a legitimate repair, and the variant declares no repaired run to judge one by. It exists to measure that no deterministic recovery survives per-visit row identifiers.",
+  "basic-form/primary/timed-overlay": "The refusal is the actionability gate's, as member-directory's support drawer is: dismissing the interstitial and pressing Submit again is a legitimate repair a model could propose, and the variant declares no repaired run to judge one by. It exists to measure that no deterministic rung absorbs it, which the row's own recovery declaration states.",
   "delayed-ui/primary/too-slow": "The content still arrives, twenty seconds late, so a longer wait is a legitimate repair, yet the variant declares the unrepaired timeout as its outcome. A refusal task would fail a correct wait-and-retry proposal, and a repair task has no repaired run to judge by.",
   "intermediate-state/primary/unannounced": "The manifest does not say whether ticking and continuing past a confirmation step the recording never saw is an acceptable repair or a trap, so neither outcome can be judged.",
   "member-directory/remove-invitations/support-drawer": "The refusal this row declares is the actionability gate's. Closing the support widget and pressing Remove again is a legitimate repair a model could propose, and the variant declares no repaired run to judge it by.",
