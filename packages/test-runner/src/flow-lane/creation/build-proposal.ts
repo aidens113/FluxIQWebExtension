@@ -36,7 +36,7 @@ const CORE_DECISION_STEP_PREFIX = "core.";
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
-  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
+  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true; startLocation?: string }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
   listFlowAdaptations(projectId: string, flowId: string, status?: string): Promise<ExistingFlowAdaptationSummary[]>;
   getFlowAdaptation(projectId: string, flowId: string, adaptationId: string): Promise<ExistingFlowAdaptation>;
 };
@@ -181,7 +181,7 @@ export type CreatedFlowPermissionRequest = Readonly<{
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; authorize: (flowId: string) => Promise<{ grantId: string }> },
+  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<{ grantId: string }> },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
@@ -195,7 +195,12 @@ export async function buildCreatedFlowProposal(
   let envelope: FlowBootstrapGenerationEnvelope;
   try {
     envelope = await control.generateFlowBootstrapAdaptation(
-      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true },
+      // Where the Flow starts. No instruction in the catalog names it -- they
+      // are written as a shopper would type them, and the fixture's origin is a
+      // port drawn per run -- so the run tells Core directly, and the build has
+      // to reach the page itself before it may explore it
+      // (`AS/runtime/flow-bootstrap/start-location.ts`).
+      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true, ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }) },
       { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {

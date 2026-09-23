@@ -81,6 +81,20 @@ export type WebLlmEvidenceToolRequest = {
   maxEvidenceBytes?: number;
   signal?: AbortSignal;
   /**
+   * Where the Flow this build is writing starts, when the build was told
+   * (`AS/runtime/flow-bootstrap/start-location.ts`). Core carries the value
+   * from whoever asked for the build and never reads it; for this domain it is
+   * a URL.
+   *
+   * Its presence says something about the world as well as about the request:
+   * nothing was opened for this build, so there is no page until the Flow has
+   * gone there. `node-run/start-location.ts` is where that has consequences --
+   * the only call that works from nowhere is the one that goes there, and
+   * because the Flow is assembled from the steps that ran, that call is then
+   * the Flow's own first step.
+   */
+  startLocation?: string;
+  /**
    * Core's check for an action with a lasting consequence, passed with every
    * tool call and harness option (`AS/runtime/action-permissions/`). Absent,
    * any declared consequence is refused rather than taken.
