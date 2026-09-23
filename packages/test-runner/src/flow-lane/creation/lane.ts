@@ -38,6 +38,18 @@ export type CreatedFlowLaneInput = {
   workflow: ResolvedScenarioWorkflow;
   facilityRunId: string;
   scenarioOrigin: string;
+  /**
+   * The fixture's entry point, as the harness would have opened it, told to
+   * Core as where the built Flow starts.
+   *
+   * It is the run's own value and not the catalog's: no instruction names a
+   * destination, and the origin is a loopback port drawn at allocation time, so
+   * nothing written down before the run could have carried it. The build is
+   * then not given this page -- it has to go there itself, and because a Flow
+   * is assembled from the steps that ran, the step that goes there is the
+   * Flow's own first step (`AS/runtime/flow-bootstrap/start-location.ts`).
+   */
+  startLocation: string;
   runToken: string;
   /** The declared secrets the task's workflow needs (`resolveCreatedFlowSecrets`); the runner also adds their values to the evidence redaction list. */
   secrets: readonly DeclaredSecret[];
@@ -130,7 +142,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   }
   const flowId = await createBlankCreationFlow(input.control, { projectId, name: `Lab created flow ${facilityRunId}`, authorizationPin }, bounds);
   await input.prepareFlowPage("build");
-  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, authorize: input.authorizeBuild }, bounds, input.buildWait);
+  const build = await buildCreatedFlowProposal(input.control, { projectId, flowId, instruction: request.task.instruction, startLocation: input.startLocation, authorize: input.authorizeBuild }, bounds, input.buildWait);
   await input.settleBuild(build);
   if (build.outcome === "permission_required" && build.permissionRequest) throw permissionRequired(build, build.permissionRequest);
   if (build.outcome !== "proposed" || build.adaptationId === null) {

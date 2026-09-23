@@ -125,6 +125,12 @@ export type WebLlmStateDigestRequest = {
   toolId: string;
   /** Whether the action is about to run, or has just run. */
   phase: "before" | "after";
+  /**
+   * Where the Flow being built starts, when the build was told
+   * (`AS/runtime/flow-bootstrap/start-location.ts`). Present, nothing was
+   * opened for this build, so before its first step there is no page to digest.
+   */
+  startLocation?: string;
   signal?: AbortSignal;
 };
 
@@ -159,7 +165,7 @@ export type WebAutomationLlmEvidenceRuntime = {
    * nothing -- the input is the same packet the model would have been shown, and
    * what leaves is a hash of less of it.
    */
-  captureStateDigest(input: WebLlmStateDigestRequest): Promise<string>;
+  captureStateDigest(input: WebLlmStateDigestRequest): Promise<string | undefined>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
   validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
   /**
@@ -310,7 +316,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // letting it into the packet windows would age out a packet the model
       // does read. No expected origin either -- an exploration action may
       // legitimately move the page, and this has to describe wherever it landed.
-      const snapshot = await captureEvidence(gateway, sessionId, present<WebLlmEvidenceToolRequest>({
+      const request = present<WebLlmEvidenceToolRequest>({
         projectId: input.projectId,
         flowId: input.flowId,
         callId: input.callId,
@@ -318,9 +324,22 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         value: {},
         permission: undefined,
         maxEvidenceBytes: undefined,
+        startLocation: input.startLocation,
         signal: input.signal,
-      }), input.signal);
-      return webLlmStateDigest(snapshot.evidence);
+      });
+      // A build that was told where its Flow starts has had nothing opened for
+      // it, so the state before its first step is no state at all. Answering
+      // "nothing" leaves that step undigested, which the reduction reports;
+      // throwing would make the step that goes there a recorded failure of
+      // every such build, before the Flow had done anything wrong
+      // (`AS/runtime/llm/evidence-loop.ts`: a hook that throws fails the step).
+      if (input.startLocation === undefined) return webLlmStateDigest((await captureEvidence(gateway, sessionId, request, input.signal)).evidence);
+      try {
+        return webLlmStateDigest((await captureEvidence(gateway, sessionId, request, input.signal)).evidence);
+      } catch (error) {
+        if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
+        throw error;
+      }
     },
     async captureSanitizedFailureEvidence(input) {
       assertActive(input.signal);
