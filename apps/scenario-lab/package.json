@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-scenario-lab.mjs",
+    "build": "pnpm --filter @fluxiq-web-extension/test-contracts build && node scripts/build-scenario-lab.mjs",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json",
     "start": "node dist/server.js",
     "test": "pnpm build && node --test dist/**/*.test.js",
