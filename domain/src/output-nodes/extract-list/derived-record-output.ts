@@ -17,8 +17,8 @@
 //   gets its own rows under a name that stays stable across runs;
 // - two extraction nodes of one Flow that read the same shape append into one
 //   dataset, while two that read different shapes -- including one that
-//   excludes a column the other keeps -- never share an id, since Core refuses
-//   one id with two schemas;
+//   excludes a column the other keeps, or one that keeps different items
+//   (C5) -- never share an id, since Core refuses one id with two schemas;
 // - an element fingerprint is left out of the digest. It identifies where a
 //   field was picked, not what the column holds, and it carries the element's
 //   text (`actions/extraction/recorded-definition.ts`).
@@ -58,9 +58,28 @@ function derivedLabel(request: WebAutomationExtractListRequest): string {
   return `${LABEL_PREFIX}${kept.join(", ")}`.slice(0, LABEL_MAX_LENGTH);
 }
 
-/** A digest of what shapes the rows, in field order, since the schema keeps that order. */
+/**
+ * A digest of what shapes the rows, in field order, since the schema keeps that
+ * order -- and of which items are rows at all (C5). Two nodes that read the
+ * same columns from the same list and keep different items produce different
+ * tables, and without the conditions in the digest they would append into one
+ * dataset, so an unfiltered read and a read that left the sponsored placements
+ * out would be indistinguishable once saved.
+ */
 function shapeDigest(request: WebAutomationExtractListRequest): string {
-  const shape = JSON.stringify([request.item, Object.entries(request.fields).map(([key, field]) => [key, fieldShape(field)])]);
+  const shape = JSON.stringify([
+    request.item,
+    Object.entries(request.fields).map(([key, field]) => [key, fieldShape(field)]),
+    (request.where ?? []).map((condition) => [
+      condition.field ?? null,
+      condition.read === undefined ? null : fieldShape(condition.read),
+      condition.is ?? null,
+      condition.atLeast ?? null,
+      condition.atMost ?? null,
+      condition.lessThan ?? null,
+      condition.greaterThan ?? null
+    ])
+  ]);
   return DIGEST_SEEDS.map((seed) => fnv1a(shape, seed)).join("");
 }
 

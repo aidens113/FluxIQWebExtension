@@ -1,7 +1,8 @@
 // Reading a repeating structure into records: the page half of
 // `web.dom.extract_list`.
 //
-// `item` selects each record's root, and `fields` maps a record field key to
+// `item` selects each record's root, `where` says which of those items are
+// records at all (`item-filter.ts`), and `fields` maps a record field key to
 // what is read inside it: `field-spec.ts` normalizes each field and
 // `field-reader.ts` reads it. Every field is normalized before anything on the
 // page is read, so an excluded field is never read (decision D12), and an
@@ -35,6 +36,12 @@
 // (`page-render.ts`). The worker's side of that is
 // `runtime/extract-list-continuation.ts`.
 //
+// An item a `where` condition rejects is not a record and never becomes one:
+// it is left out of the records, it does not count toward `maxItems`, and a
+// required field it lacks is not reported missing, because the request never
+// asked to read it. `filtered` counts them, so a read says how much of the run
+// it left out rather than only how much it kept.
+//
 // A record carries every included field: its value, or `null` for an optional
 // field the page could not read. `missingFields` names every required field
 // some record lacked, which is what makes the verb's validation fail instead of
@@ -59,6 +66,7 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
+import { itemFilterFor } from "./item-filter";
 import { awaitListPresent, awaitPageRendered } from "./page-render";
 import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
 
@@ -75,6 +83,8 @@ export type ListExtractionOutcome = {
   timedOut: boolean;
   /** Required fields that at least one record did not yield. */
   missingFields: string[];
+  /** Items of the run that a `where` condition left out, so they are not records (C5). */
+  filtered: number;
 };
 
 /**
@@ -99,6 +109,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const item = request.item.trim();
   if (!item) throw new Error("An extract_list request needs an item selector.");
   const fields = fieldReaders(request.fields);
+  // Before anything on the page is read, as every field is: a condition the
+  // page cannot honour refuses the read rather than emptying a list midway.
+  const keeps = itemFilterFor(request);
   const paginate = request.paginate;
   const maxItems = itemBound(request.maxItems);
   const contentAware = paginate?.mode === "scroll";
@@ -133,16 +146,18 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       records: records.map((record) => ({ ...record })),
       pagesRead: progress.pagesRead,
       scrolls: progress.scrolls,
-      missingFields: [...missing].sort()
+      missingFields: [...missing].sort(),
+      filtered
     });
   }
   let truncated = false;
   let timedOut = false;
+  let filtered = resume?.filtered ?? 0;
 
   // A document continuing a read was reached by the control the last one
   // followed, so it is waited on as that control's page would have been.
   if (resume && paginate && await awaitPageRendered(paginate, progress) === "timed_out") {
-    return { records, pagesRead: progress.pagesRead, truncated, timedOut: true, missingFields: [...missing].sort() };
+    return { records, pagesRead: progress.pagesRead, truncated, timedOut: true, missingFields: [...missing].sort(), filtered };
   }
   // The page this read starts on gets the same wait as every page it moves to
   // (`page-render.ts`): a read dispatched at a page still rendering its list
@@ -173,6 +188,14 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       const itemRead = readRecord(element, fields);
       const key = keyOf(itemRead);
       if (seen === key) continue;
+      // An item a condition rejects is not a record: it is remembered as read
+      // so a growing list still knows it has been looked at, and nothing else
+      // about it -- not its content, not the fields it lacked -- is kept.
+      if (keeps && !keeps(element, itemRead.record)) {
+        if (seen === undefined) filtered += 1;
+        read.set(element, key);
+        continue;
+      }
       const content = earlierPages ? contentKey(itemRead.record, fields) : "";
       if (earlierPages?.has(content)) {
         read.set(element, key);
@@ -197,7 +220,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     break;
   }
 
-  return { records, pagesRead: progress.pagesRead, truncated, timedOut, missingFields: [...missing].sort() };
+  return { records, pagesRead: progress.pagesRead, truncated, timedOut, missingFields: [...missing].sort(), filtered };
 }
 
 /** Whether the read moves from page to page -- replaced in place or loaded anew -- rather than growing one list. */

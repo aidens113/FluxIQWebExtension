@@ -99,7 +99,8 @@ test("the summary counts the read and names the declared fields, excluded ones l
     pagesRead: 2,
     truncated: true,
     timedOut: false,
-    missingFields: ["price", "sku"]
+    missingFields: ["price", "sku"],
+    filtered: 0
   };
   const { deps, calls } = dependencies(outcome);
   await extractListAction(COMMAND, deps, 1);
@@ -119,7 +120,7 @@ test("the summary counts the read and names the declared fields, excluded ones l
 
 test("a string-grammar request's field names are its keys in declaration order, and a clean read misses none", async () => {
   const request: WebAutomationExtractListRequest = { item: ".row", fields: { url: "a@href", name: "", price: "column:Price" } };
-  const { deps, calls } = dependencies({ records: [{ url: "/a", name: "A", price: "1" }], pagesRead: 1, truncated: false, timedOut: false, missingFields: [] });
+  const { deps, calls } = dependencies({ records: [{ url: "/a", name: "A", price: "1" }], pagesRead: 1, truncated: false, timedOut: false, missingFields: [], filtered: 0 });
   await extractListAction({ ...COMMAND, extractList: request }, deps, 1);
 
   const [call] = calls;
@@ -133,7 +134,7 @@ test("a string-grammar request's field names are its keys in declaration order, 
 test("an optional field's null rides in the records to the wire, and fails nothing", async () => {
   const request: WebAutomationExtractListRequest = { item: ".row", fields: { name: ".name", rating: { kind: "text", selector: ".rating", required: false } } };
   const records = [{ name: "Lamp", rating: null }, { name: "Mug", rating: "4.8 out of 5" }];
-  const { deps, calls } = dependencies({ records, pagesRead: 1, truncated: false, timedOut: false, missingFields: [] });
+  const { deps, calls } = dependencies({ records, pagesRead: 1, truncated: false, timedOut: false, missingFields: [], filtered: 0 });
   await extractListAction({ ...COMMAND, extractList: request }, deps, 1);
 
   const [call] = calls;
@@ -155,7 +156,7 @@ test("an optional field's null rides in the records to the wire, and fails nothi
 });
 
 test("a read that ran out of time carries its summary beside the records it read", async () => {
-  const outcome: ListExtractionOutcome = { records: [{ name: "Lamp", price: "$49.00", sku: "L-1" }], pagesRead: 1, truncated: false, timedOut: true, missingFields: [] };
+  const outcome: ListExtractionOutcome = { records: [{ name: "Lamp", price: "$49.00", sku: "L-1" }], pagesRead: 1, truncated: false, timedOut: true, missingFields: [], filtered: 0 };
   const { deps, calls } = dependencies(outcome);
   await extractListAction(COMMAND, deps, 1);
 

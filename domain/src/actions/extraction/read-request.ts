@@ -1,5 +1,6 @@
 // Reading an extraction request off an untrusted value: the field map, the
-// pagination, and the single-value read.
+// pagination, the conditions that say which items are records, and the
+// single-value read.
 //
 // These readers were the extraction half of `client/gateway-action-parameters.ts`,
 // where they served the parameter lift alone. They live here because two callers
@@ -28,6 +29,8 @@ import { elementFingerprint } from "../../output-nodes/targets";
 import type { WebAutomationElementFingerprint } from "../types";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import {
+  WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
+  WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE,
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
@@ -36,6 +39,7 @@ import {
   WEB_AUTOMATION_EXTRACT_READ_MODES,
   type WebAutomationExtractField,
   type WebAutomationExtractFieldSpec,
+  type WebAutomationExtractItemCondition,
   type WebAutomationExtractListPagination,
   type WebAutomationExtractListRequest,
   type WebAutomationExtractRead
@@ -77,15 +81,91 @@ export function webAutomationExtractListRequestValue(value: unknown): WebAutomat
   const minItems = nonNegativeInteger(request.minItems);
   if (request.minItems !== undefined && minItems === undefined) return undefined;
   if (minItems !== undefined && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return undefined;
+  // Sent but unreadable refuses the whole request, as `paginate` does and for
+  // the same reason: dropped, the page would read every item of a run the
+  // author asked it to narrow, and report success having done it.
+  const where = request.where === undefined ? undefined : conditionsValue(request.where, fields);
+  if (request.where !== undefined && where === undefined) return undefined;
   return {
     item,
     ...(itemElement !== undefined ? { itemElement } : {}),
     fields,
     ...(paginate !== undefined ? { paginate } : {}),
     ...(maxItems !== undefined ? { maxItems } : {}),
-    ...(minItems !== undefined ? { minItems } : {})
+    ...(minItems !== undefined ? { minItems } : {}),
+    ...(where !== undefined ? { where } : {})
   };
 }
+
+/**
+ * The conditions an item must satisfy (C5). One condition written on its own is
+ * read as a list of one, because a model asked for "the items that are not
+ * sponsored" has one thing to say and writing `[{...}]` is a shape to remember
+ * rather than a meaning to express.
+ *
+ * Every condition must name its value once and be able to read it: `field` must
+ * name a field of this request that is actually read, since an excluded column
+ * is never read from the page (D12) and a condition over it could only ever be
+ * false; `read` must be a field the page can honour. A list that is empty, or
+ * that holds one unreadable condition, refuses the whole request.
+ */
+function conditionsValue(value: unknown, fields: Record<string, WebAutomationExtractField>): WebAutomationExtractItemCondition[] | undefined {
+  const written = Array.isArray(value) ? value : [value];
+  if (written.length === 0) return undefined;
+  const conditions: WebAutomationExtractItemCondition[] = [];
+  for (const entry of written) {
+    const condition = conditionValue(entry, fields);
+    if (condition === undefined) return undefined;
+    conditions.push(condition);
+  }
+  return conditions;
+}
+
+function conditionValue(value: unknown, fields: Record<string, WebAutomationExtractField>): WebAutomationExtractItemCondition | undefined {
+  const written = jsonObject(value);
+  if (!written || Object.keys(written).some((key) => !CONDITION_KEYS.includes(key))) return undefined;
+  const field = optionalValue(written.field, (entry) => readableFieldKey(entry, fields));
+  const read = optionalValue(written.read, (entry) => readableCondition(entry));
+  if (field === REFUSED || read === REFUSED) return undefined;
+  // One value, named once. Neither, and there is nothing to test; both, and two
+  // readings of the same condition would disagree on which value it is about.
+  if ((field === undefined) === (read === undefined)) return undefined;
+  const is = optionalValue(written.is, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE));
+  if (is === REFUSED) return undefined;
+  const bounds: Partial<Record<(typeof WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS)[number], number>> = {};
+  for (const key of WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS) {
+    const bound = optionalValue(written[key], finiteNumber);
+    if (bound === REFUSED) return undefined;
+    if (bound !== undefined) bounds[key] = bound;
+  }
+  // "The value is absent" and "the number in the value is under 50" cannot both
+  // be what was meant, so the pair is refused rather than read one way.
+  if (is === "absent" && Object.keys(bounds).length > 0) return undefined;
+  return {
+    ...(field !== undefined ? { field } : {}),
+    ...(read !== undefined ? { read } : {}),
+    ...(is !== undefined ? { is } : {}),
+    ...bounds
+  };
+}
+
+/** A condition's `field`: a key this request reads. A key it excludes is never read, so a condition over it could only be false. */
+function readableFieldKey(value: unknown, fields: Record<string, WebAutomationExtractField>): string | undefined {
+  const key = nonEmptyString(value);
+  if (key === undefined || !Object.hasOwn(fields, key)) return undefined;
+  const field = fields[key];
+  return field !== undefined && (typeof field === "string" || field.handling === undefined || field.handling === "include") ? key : undefined;
+}
+
+/** A condition's `read`: a field the page reads, in either form, and never one whose column handling would stop it being read. */
+function readableCondition(value: unknown): WebAutomationExtractField | undefined {
+  const field = fieldValue(value);
+  if (field === undefined) return undefined;
+  return typeof field === "string" || field.handling === undefined || field.handling === "include" ? field : undefined;
+}
+
+/** Every key one condition may carry: the two that name its value, and what it says about it. */
+const CONDITION_KEYS: readonly string[] = ["field", "read", "is", ...WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS];
 
 /**
  * `web.dom.extract`'s structured read (C3), copied field by field.
@@ -221,6 +301,10 @@ function optionalValue<T>(value: unknown, read: (entry: unknown) => T | undefine
 
 function booleanValue(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function nonNegativeInteger(value: unknown): number | undefined {

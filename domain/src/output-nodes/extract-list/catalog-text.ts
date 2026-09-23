@@ -66,12 +66,25 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
 /**
  * The shape of `extractList`, for a model to write one: the handle of a
  * detected list first, then the literal request.
+ *
+ * **What `where` costs here, and where the rest of it went.** Core cuts a
+ * parameter description at 600 characters and the string was already at 595, so
+ * the conditions that say which items are records (C5) are shown as the one
+ * shape a model copies and nothing more. What each condition may say --
+ * `is: "present"`, `is: "absent"`, and `atLeast`, `atMost`, `lessThan`,
+ * `greaterThan` on the number in the column -- is written out in the detect
+ * tool's own description (`runtime/llm-evidence/tools.ts`), which has no bound
+ * and which a model must read before it can name a handle at all. Two things
+ * were given up for the room, both in the literal branch the text itself calls
+ * a guess: `required?: false` in its field spec, and its own `where` example.
+ * The resolver still accepts both, and a literal request is the fallback for a
+ * list nothing detected -- the path this text exists to steer a model away from.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `Detected: {handle: "extraction.N", fields?: {key: "detectedKey" | "detectedKey@href"}, paginate?: false (this page only)};`,
-  "fields: only those columns, renamed; a link column reads the absolute URL, @href the raw href.",
-  `Else {item: css, fields: {key: "css" | "css@attr" | "column:Header" | {kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false}},`,
-  `paginate?: {mode: "next", next: css, maxPages} ("loadMore": control, "numbered": pages) | {mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
+  `Detected: {handle: "extraction.N", fields?: {key: "detectedKey" | "detectedKey@href"}, where?: [{field: "detectedKey", is: "absent"}], paginate?: false (this page only)};`,
+  "fields: those columns renamed; link reads the absolute URL, @href the raw href.",
+  `Else {item: css, fields: {key: "css"|"css@attr"|"column:Header"|{kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?}},`,
+  `paginate?: {mode: "next", next: css, maxPages} (loadMore: control, numbered: pages)|{mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
   `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
 ].join(" ");
 
@@ -86,10 +99,17 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * key a Flow needs whenever the correct answer may be no rows at all, which is
  * every filtered read, and the campaign of 2026-09-17 had two such tasks return
  * whole unfiltered lists.
+ *
+ * `where` is here for the same reason and it is the sharper case: a key the
+ * example omits is a key the model is refused for writing beside `extractList`,
+ * so an example with no `where` is an example that cannot be narrowed to the
+ * rows a person asked for. It shows the literal form, since the example is a
+ * literal request; the detected form names a detected column by `field`.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   item: "li.product",
   fields: { name: ".name", price: ".price", url: "a@href" },
+  where: [{ read: ".sponsored-label", is: "absent" }],
   paginate: { mode: "next", next: "a.next", maxPages: 5 },
   minItems: 1
 };

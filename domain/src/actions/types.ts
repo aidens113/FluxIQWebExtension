@@ -192,6 +192,7 @@ export type {
   WebAutomationExtractFieldKind,
   WebAutomationExtractFieldSpec,
   WebAutomationExtractionSummary,
+  WebAutomationExtractItemCondition,
   WebAutomationExtractListPagination,
   WebAutomationExtractListRequest,
   WebAutomationExtractRead,

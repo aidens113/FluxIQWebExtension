@@ -3,7 +3,7 @@
 // The detection showed the model each column's `key` (and, for a table, its
 // header as the label), never a selector. So a field of a handle-named list can
 // only name a detected column, and every way of naming one that has a single
-// reading is taken (`extraction-slot.ts` says where the list itself is named):
+// reading is taken (`./slot.ts` says where the list itself is named):
 //
 // - `fields` as `{ yourKey: column }`, the documented direction; an entry whose
 //   value names no column but whose key does, and whose value is a key, is the
@@ -26,10 +26,10 @@ import {
   isWebAutomationExtractFieldKey,
   type WebAutomationExtractField,
   type WebAutomationExtractFieldSpec
-} from "../../../actions/extraction";
-import { present } from "../present";
-import { isJsonRecord } from "../untrusted-json";
-import type { WebPlanValuePath } from "./handle-tokens";
+} from "../../../../actions/extraction";
+import { present } from "../../present";
+import { isJsonRecord } from "../../untrusted-json";
+import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionColumnIssue = "web.handle.malformed" | "web.handle.ambiguous" | "web.handle.unknown_field";
 
@@ -38,7 +38,11 @@ export type WebExtractionColumns =
   | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
 
 type Detected = Record<string, WebAutomationExtractField>;
-type Column = { ok: true; key: string; field: WebAutomationExtractField } | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+
+/** One detected column a plan named, with the detected key it was found under, or why it named none. */
+export type WebExtractionColumn = { ok: true; key: string; field: WebAutomationExtractField } | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+
+type Column = WebExtractionColumn;
 
 /** The keys a column object may carry beside the ones that name its column. */
 const COLUMN_OBJECT_KEYS: ReadonlySet<string> = new Set(["handle", "location", "key", "field", "column", "header", "attribute", "required", "kind"]);
@@ -82,6 +86,19 @@ export function keptWebExtractionColumns(fields: unknown, detected: Detected, pa
     if (refused) return refused;
   }
   return { ok: true, fields: kept };
+}
+
+/**
+ * The detected column a name names, read for a caller outside this module.
+ *
+ * `./conditions.ts` needs it because a condition says which *items* a
+ * read wants in the same vocabulary a field says which columns it keeps (C5):
+ * the model was shown detected keys and labels and nothing else, so the column
+ * a condition tests has to be named the same ways, and be refused the same
+ * ways, as the column a field keeps.
+ */
+export function webExtractionNamedColumn(name: string, detected: Detected, path: WebPlanValuePath): WebExtractionColumn {
+  return namedColumn(name, undefined, detected, path);
 }
 
 /** One column a field names, with the detected key it was found under. `ownKey` is the field's key, which a bare handle reference names its column by. */

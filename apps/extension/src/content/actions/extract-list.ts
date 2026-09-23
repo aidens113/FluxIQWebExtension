@@ -2,7 +2,9 @@
 //
 // The records become the result's `extracted`; the post-condition is that at
 // least `minItems` records were read and every record carries every required
-// field. An optional field the page could not read is `null` in its record and
+// field. A request that names `where` conditions counts only the items it kept
+// (C5), so `minItems` says how many rows the answer must have rather than how
+// many items the page must render. An optional field the page could not read is `null` in its record and
 // fails nothing (D16). Either shortfall is a failed validation -- `output_not_observed` --
 // because an empty list or a record list that quietly dropped a column looks
 // exactly like a successful extraction to everything downstream. `minItems`
@@ -94,8 +96,16 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
     : { status: "failed", expected, actual: `${readSummary(outcome)}; ${shortfalls.join("; ")}` };
 }
 
+/**
+ * What the read did, in one phrase. The items a `where` condition left out are
+ * said as well as the records kept: a read that answered with sixteen rows
+ * because four of the twenty items on the page were advertisements has done
+ * something different from one that found sixteen items, and the number of rows
+ * alone cannot tell the two apart.
+ */
 function readSummary(outcome: Outcome): string {
-  return `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}`;
+  const left = outcome.filtered > 0 ? `, ${count(outcome.filtered, "item")} left out by where` : "";
+  return `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${left}`;
 }
 
 function count(value: number, noun: string): string {

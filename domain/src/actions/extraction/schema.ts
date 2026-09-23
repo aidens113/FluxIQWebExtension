@@ -11,10 +11,12 @@
 // be declared as "a string or a spec". `fields` stays `type: "object"`, the
 // lift (`client/gateway-action-parameters.ts`) enforces the union, and the spec
 // form is described under `metadata`, the one free-form keyword Core's schema
-// dialect admits, for an editor to read.
+// dialect admits, for an editor to read. A `where` condition's `read` is the
+// same union and is declared the same way.
 
 import type { JsonObject } from "fluxiq/core";
 import {
+  WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE,
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
@@ -64,6 +66,28 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
           pages: { type: "string", label: "Page controls" },
           maxPages: { ...pageBound, label: "Maximum pages" },
           maxScrolls: { ...pageBound, label: "Maximum scrolls" }
+        }
+      },
+      // Which items are records (C5). A condition names its value by a field
+      // key or by a field of its own, so `read` carries the same shape a
+      // `fields` entry does, described under `metadata` for the same reason:
+      // Core's dialect has no `oneOf`, and the lift enforces the union.
+      where: {
+        type: "array",
+        label: "Only items where",
+        description: "Each condition names a value by `field` (a key of `fields`) or `read` (a field of its own), and says `is: \"present\" | \"absent\"` or a numeric bound. Every condition must hold or the item is not read.",
+        items: {
+          type: "object",
+          label: "Condition",
+          properties: {
+            field: { type: "string", label: "Field key" },
+            is: { type: "string", label: "Value", enum: [...WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE] },
+            atLeast: { type: "number", label: "At least" },
+            atMost: { type: "number", label: "At most" },
+            lessThan: { type: "number", label: "Less than" },
+            greaterThan: { type: "number", label: "Greater than" }
+          },
+          metadata: { read: fieldSpecSchema }
         }
       },
       maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },

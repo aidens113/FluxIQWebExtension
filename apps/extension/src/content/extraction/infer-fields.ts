@@ -4,10 +4,26 @@
 // - a table row's cells are read by the header above them, as `column` fields,
 //   so the proposal survives a column reorder exactly as a hand-written
 //   `column:` field does;
-// - otherwise each descendant that names itself or carries a value: an `<img>`
+// - otherwise the item's own `data-*` attributes, which are what a page states
+//   *about* an item rather than inside it -- `data-ad-id` on a sponsored card,
+//   `data-item-id` on a listing -- read as `attribute` fields off the item;
+// - and each descendant that names itself or carries a value: an `<img>`
 //   gives its `src` and its `alt`, an `<a href>` gives a `link`, a form control
 //   gives its live `value`, an element with a test id gives its `text`, and a
 //   remaining leaf with words in it gives its `text`.
+//
+// **Sources come from the run, not from one item of it, and until 2026-09-23
+// they came from one.** A mark is a value only some items carry -- the ad label
+// on a sponsored card, the "Sponsored" tag on a promoted tile -- and the item
+// the walk starts from is the run's first, so a mark the first item happens not
+// to carry was invisible: measured model-free, the bigbox retailer's results
+// page puts its advertisements at the second, seventh and eleventh tiles, and
+// its "Sponsored" tag appeared in no proposal at all, while the everything
+// store's was proposed only because its first card is an advertisement. A
+// column nothing proposes is a column the model cannot ask for, and with no
+// column naming the mark there is no way to say which items a read wants (C5).
+// So every item of the run offers its sources, each is kept once, and each sits
+// at the position it had in the item that first offered it.
 //
 // Coverage is the share of the run's items the field resolves in, and a field
 // that does not resolve in every item is proposed optional, so a record that
@@ -89,8 +105,42 @@ const VALUE_TAGS = new Set(["input", "textarea", "select"]);
  */
 const MAX_PROPOSED_FIELDS = 24;
 
+/**
+ * How many of those places are held for columns that only *some* items have.
+ *
+ * Coverage decides the rest, and coverage alone is exactly the wrong judge
+ * here: a column every item carries is the fullest column and says nothing
+ * about *which* items a read wants, so a bound that keeps the widest-covering
+ * fields cuts the marks first. A mark is by construction a partial column --
+ * four sponsored cards among twenty -- so a few places are held for partial
+ * columns before coverage spends the rest.
+ */
+const RESERVED_PARTIAL_FIELDS = 8;
+
 /** How many sources are collected before coverage decides between them. Bounds the walk on a large item. */
 const MAX_CANDIDATE_FIELDS = 64;
+
+/** How many items of a run are walked for sources. Every item still counts toward each source's coverage. */
+const MAX_SCANNED_ITEMS = 12;
+
+/** How many of an item's own attributes become fields, so a container dense with data attributes cannot crowd out its values. */
+const MAX_ITEM_ATTRIBUTES = 8;
+
+/** A `data-*` attribute a field can name as written. `data-` alone names nothing, and a name a selector could not hold is not named. */
+const ITEM_ATTRIBUTE = /^data-[A-Za-z][\w-]*$/u;
+
+/**
+ * The attributes that name an element rather than say anything about it.
+ *
+ * A test id is how this module already names elements -- it is the label and
+ * the selector (`testIdName`) -- so reading it again as a column would add a
+ * column of the item's own name to every record. It also has a worse effect
+ * than clutter: a run of nothing but a password is refused `sensitive_region`
+ * because it has no readable field (D12), and a test id proposed as a column
+ * would give it one, so the row would be proposed with the secret's column
+ * excluded and its id read instead.
+ */
+const IDENTITY_ATTRIBUTES: ReadonlySet<string> = new Set(["data-testid", "data-test", "data-cy"]);
 
 /** A tag a path step can name without escaping, so a proposal never depends on `CSS.escape` being reachable. */
 const PLAIN_TAG = /^[a-z][a-z0-9-]*$/u;
@@ -114,10 +164,12 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
   // a Sponsored label, an image -- and its value is further down. `sort` is
   // stable, so equal coverage keeps document order, and the survivors are put
   // back into document order so a record's columns read as the page reads.
-  const measured = fieldSources(item).map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
-  const kept = [...measured]
-    .sort((left, right) => right.coverage - left.coverage)
-    .slice(0, MAX_PROPOSED_FIELDS)
+  // Before coverage spends the bound, a few places go to the columns only some
+  // items have, which are the ones a read narrowing the run has to name.
+  const measured = fieldSources(item, run).map((source, position) => ({ source, position, coverage: coverageOf(source, run) }));
+  const byCoverage = [...measured].sort((left, right) => right.coverage - left.coverage);
+  const reserved = new Set(byCoverage.filter((entry) => entry.coverage > 0 && entry.coverage < 1).slice(0, Math.min(RESERVED_PARTIAL_FIELDS, MAX_PROPOSED_FIELDS)));
+  const kept = [...reserved, ...byCoverage.filter((entry) => !reserved.has(entry)).slice(0, MAX_PROPOSED_FIELDS - reserved.size)]
     .sort((left, right) => left.position - right.position);
   const taken = new Set<string>();
   return kept.map(({ source, coverage }) => {
@@ -142,10 +194,53 @@ export function proposedFieldSpec(source: FieldSource, coverage: number): WebAut
   };
 }
 
-/** A table row reads its cells by header; anything else reads what its descendants offer. */
-function fieldSources(item: Element): FieldSource[] {
+/**
+ * A table row reads its cells by header; anything else reads what the run's
+ * items offer -- their own marks and their descendants.
+ *
+ * A source is kept once, under the position it had in the item that first
+ * offered it, and the sort is stable, so a mark that is an item's first child
+ * sorts to the front of the proposal wherever in the run it was found, while
+ * values two items share keep the order the page draws them in. The item the
+ * caller named is walked first, so a run whose items are all alike proposes
+ * exactly what it proposed before this existed.
+ */
+function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
   const columns = columnSources(item);
-  return columns.length > 0 ? columns : elementSources(item);
+  if (columns.length > 0) return columns;
+  const taken = new Set<string>();
+  const collected: Array<{ source: FieldSource; position: number }> = [];
+  for (const candidate of [item, ...run.slice(0, MAX_SCANNED_ITEMS)]) {
+    if (collected.length >= MAX_CANDIDATE_FIELDS) break;
+    let position = 0;
+    for (const source of [...itemAttributeSources(candidate), ...elementSources(candidate)]) {
+      position += 1;
+      const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? ""].join("\u0000");
+      if (taken.has(identity)) continue;
+      taken.add(identity);
+      if (collected.length >= MAX_CANDIDATE_FIELDS) break;
+      collected.push({ source, position });
+    }
+  }
+  return collected.sort((left, right) => left.position - right.position).map(({ source }) => source);
+}
+
+/**
+ * The item's own `data-*` attributes, read off the item itself.
+ *
+ * This is the one part of a card's markup that says what the card *is* rather
+ * than what it shows, and it is the mark a real results page puts on an
+ * advertisement: `data-ad-id` on the everything store's sponsored cards,
+ * `data-adid` on the auction marketplace's. It is also the one label a model
+ * can read on a page whose class names are hashed -- the attribute's own name,
+ * which the page's author wrote, and never a value read inside the item (D3).
+ */
+function itemAttributeSources(item: Element): FieldSource[] {
+  const sensitive = isWithinSensitiveControl(item);
+  return Array.from(item.attributes)
+    .filter((attribute) => ITEM_ATTRIBUTE.test(attribute.name) && !IDENTITY_ATTRIBUTES.has(attribute.name))
+    .slice(0, MAX_ITEM_ATTRIBUTES)
+    .map((attribute) => ({ kind: "attribute" as const, label: attribute.name, attribute: attribute.name, sensitive }));
 }
 
 /**
@@ -180,6 +275,14 @@ function elementSources(item: Element): FieldSource[] {
   for (const element of item.querySelectorAll("*")) {
     if (sources.length >= MAX_CANDIDATE_FIELDS) break;
     const tag = element.tagName.toLowerCase();
+    // What is inside a form control belongs to the control: a `<select>`'s
+    // options are what its value may be rather than values of the record, and
+    // the control itself is already a `value` source below. Scanning the whole
+    // run made this visible -- a run of three labels, each holding a different
+    // control, proposed the select's three options as text columns and so
+    // stopped reading as the form it is (`detect-structure.ts`,
+    // `isFormNotData`).
+    if (withinValueControl(item, element)) continue;
     const named = selectorWithinItem(item, element);
     if (named === undefined) continue;
     const { selector, label } = named;
@@ -196,6 +299,15 @@ function elementSources(item: Element): FieldSource[] {
     }
   }
   return sources;
+}
+
+/** Whether the element sits inside a form control of this item, whose contents are the control's own. */
+function withinValueControl(item: Element, element: Element): boolean {
+  for (let current: Element | null = element.parentElement; current; current = current.parentElement) {
+    if (VALUE_TAGS.has(current.tagName.toLowerCase())) return true;
+    if (current === item) return false;
+  }
+  return false;
 }
 
 /**

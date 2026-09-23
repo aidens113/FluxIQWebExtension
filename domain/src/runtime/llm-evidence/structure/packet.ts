@@ -130,7 +130,10 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       fields: Object.fromEntries(kept.map((field) => [field.key, readableSpec(field.spec)])),
       paginate,
       maxItems: undefined,
-      minItems: undefined
+      minItems: undefined,
+      // A detection describes a list; which of its items a read wants is the
+      // plan's to say, and `plan-resolution/extraction/conditions.ts` writes it there (C5).
+      where: undefined
     }),
     itemCount: proposal.itemCount
   });
