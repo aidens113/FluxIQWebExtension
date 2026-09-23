@@ -111,20 +111,39 @@ Every brief puts the live proof **before** unit tests, and the four deterministi
 ones must show **zero provider calls**, since a paid call would mean the
 determinism did not work.
 
-**Held for wave two, deliberately.** A2 (the digest hook's call site), A9 (the
-missing wait tool), A10 (trace sanitization) and B8 (unblocking escalation for
-granted runs) all touch `runtime/service.ts`, which has zero ratchet headroom and
-belongs to exactly one worker; B8 additionally needs B4 first. D0a's Core half —
-publishing the node id and keeping the target-resolution strategy in the run
-detail — is briefed from `fa-lab-measurement`'s report. Workstream C waits on A5,
-and D1 to D3 wait on D0 and B4.
+**Wave one landed, all six tasks.** t076 and t077 were Core-only and merged there
+alone (`cda4bb1`, `bf8792b`); t078, t079 and t080 merged in both repositories
+(`a772560`, `cdb038e`, `387b314`). The correction below then went out as t082,
+`fa-explore-with-output-nodes`, and merged (`9393cbd`, Core `1987317`), rebuilding
+the build loop around the real node registry. The recovery ladder is built and
+runs live, but its own worker found that **no variant in the scenario corpus is
+absorbable by a deterministic ladder**, so it has never been shown to absorb
+anything. That is workstream D's job now, not a defect in the ladder.
 
-**Next:** verify each worker's claim in source and by rerunning its proof, land
-the tasks one at a time, then dispatch wave two. The Core-side paired document is
-still owed.
+**Two constraints stated above are out of date.** Core's `service.ts` is **4,637
+lines**, not the 6,275 quoted throughout this document: the headroom tasks landed,
+so wave two may add lines there within reason. And the four `flow-bootstrap` edits
+that `fa-flow-permission-gate` was blocked on landed inside t082 (`0607038`), so a
+consequence declaration now has a carrier and t081 is no longer unsatisfiable.
 
-**Blockers:** none. The Week 2 integration branch should still land first, since
-this work edits the same Core files.
+**Wave two dispatched 2026-09-22** — four workers, partitioned by file, each on
+its own task branch and Core-paired worktree:
+
+| Task | Worker | Steps |
+| --- | --- | --- |
+| t081 (continued) | `fa-flow-permission-gate` | the Flow-step gate and its grammar, reconciled onto t082's path |
+| t087 | `fa-service-seams` | A2, A9, A10, A11's Core half, B8, B0's missing line |
+| t088 | `fa-draft-dry-run` | A7 |
+| t089 | `fa-adversarial-measurement` | D0a, A12, D1, D2, D3 |
+
+`runtime/service.ts` belongs to t087 alone; t088 names the line it needs there in
+its report rather than writing it. Workstream C stays held behind A7, which owns
+`runtime/flow-draft/`.
+
+**Next:** verify each claim in source and by rerunning its proof, land the four one
+at a time, then dispatch workstream C. The Core-side paired document is still owed.
+
+**Blockers:** none.
 
 ---
 
@@ -630,6 +649,16 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Validation: the supervisor re-ran both worktrees rather than trusting the reports. t080: every package `# fail 0`, `test-runner # pass 1286`. t079: every package `# fail 0`, `domain # pass 730`. Both `task finish` runs reported `"command":"pnpm check","passed":true`. t080's live proof stands: `run-mud4xk2c-18c83d3d` undeclared failed `runtime.behavior` with its oracle passing, `run-mud4zvw9-2d497834` declared passed; `budget.ts` is byte-for-byte unchanged and `settleBuild` passes no declaration, both confirmed by the supervisor.
 - Outcome: Partial
 - Follow-up: the permission-gate hole (finding 1) needs its own task; A12's Core half and the strategy field join wave two; `fa-domain-tools`' three named Core edits fold into the A11 successor.
+
+---
+
+### 2026-09-22 — Wave one closed; the correction landed; wave two dispatched
+- Agent: supervisor; workers `fa-executor-ladder`, `fa-build-draft`, `fa-extension-defenses`, `fa-explore-with-output-nodes`
+- Changed: t076 and t077 merged in Core alone (`cda4bb1`, `bf8792b`); t078 merged in both (`a772560`); t082, the correction that makes exploration run the real registry nodes, merged in both (`9393cbd`, Core `1987317`). A1, A3, A4, A5, A6, B1, B1a, B2, B3, B4, B5, B6, B7 and B9 are built; B0 is short one line in `service.ts`.
+- Why: wave one was dispatched before the user's correction on 2026-09-22 that the model must explore by running the real output nodes, so t082 both replaced the second tool vocabulary and, incidentally, supplied the consequence carrier that t081 was blocked on.
+- Validation: t082's live run `run-mudavyub-d34e3c9b` (real DeepSeek, everything-store): `build.providerCalls` 23 == `observed.calls` 23, and the proposed Flow's four steps were exactly the four nodes that succeeded while exploring, replayed with no model attached. Two things that run did **not** show: a correct answer — the replayed extraction returned 0 records against 16 expected — and a Flow that replays untouched, since `run-muddtosq-b92a4d5c` needed a paid repair mid-replay. Core's `service.ts` re-measured at 4,637 lines, so the zero-headroom constraint this plan was partitioned around no longer holds.
+- Outcome: Partial
+- Follow-up: wave two went out the same day as four Core-paired tasks — t081 continued (the Flow-step gate and its grammar, now satisfiable), t087 (A2, A9, A10, A11's Core half, B8, B0's line), t088 (A7, whose dry run is the direct answer to the 0-of-16 extraction that shipped inside a proposal), t089 (D0a, A12, D1 to D3, which is what will finally give the ladder something to absorb). Workstream C stays held behind A7.
 
 ## Open Questions
 
