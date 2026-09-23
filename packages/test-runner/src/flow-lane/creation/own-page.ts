@@ -1,12 +1,12 @@
 // Whether the created Flow can reach the page it works on, or whether the
 // harness reached it for the Flow.
 //
-// The lane presents the task's page before the run -- `prepareFlowPage`
+// The lane used to present the task's page before every run -- `prepareFlowPage`
 // "loads the scenario's start page", after the fixture reset and before the
 // Flow starts (`lane.ts`). For a task whose instruction begins by going
-// somewhere, that hands the Flow the one step it is being measured on. A Flow
-// with no navigation node then plays back as though it had one, and the
-// measurement over-states what it can do by exactly the amount the harness
+// somewhere, that handed the Flow the one step it is being measured on. A Flow
+// with no navigation node then played back as though it had one, and the
+// measurement over-stated what it can do by exactly the amount the harness
 // supplied.
 //
 // Measured on `run-mudwci8d-de88aa32` (2026-09-23): a `navigate-and-extract`
@@ -18,8 +18,11 @@
 // wrong records; what it should have said first is that the Flow cannot get to
 // the page those records came from.
 //
-// This states the fact and holds the run to it. It fixes neither half of the
-// harness's navigation, which belongs to whoever supplies `prepareFlowPage`.
+// This states the fact and holds the run to it. Since t101 the harness no
+// longer supplies the page either: whoever supplies `prepareFlowPage` leaves
+// exactly these tasks on a blank tab, by the rule below
+// (`lane-rules/flow-start-page.ts`), so such a Flow now fails on the page as
+// well as on the record. The build still explores the page the lane presents.
 
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowShape } from "./flow-shape.js";
@@ -36,6 +39,19 @@ import type { LiveInstructionTask } from "./instruction-task.js";
  */
 const KINDS_THAT_MUST_REACH_THEIR_PAGE: ReadonlySet<LiveInstructionTask["kind"]> = new Set(["navigate", "navigate-and-extract"]);
 
+/**
+ * Whether a task of this kind must carry its own navigation.
+ *
+ * Exported because the harness asks the same question before the run: it leaves
+ * exactly these tasks the blank tab a browser opens on, and presents the page
+ * for the rest (`lane-rules/flow-start-page.ts`). Two copies of the rule would
+ * either fail a task that was handed its page or pass a Flow the harness
+ * carried, so there is one.
+ */
+export function createdFlowMustReachItsOwnPage(task: Pick<LiveInstructionTask, "kind">): boolean {
+  return KINDS_THAT_MUST_REACH_THEIR_PAGE.has(task.kind);
+}
+
 /** Whether this Flow has to reach its own page, and whether it can. */
 export type CreatedFlowOwnPage = Readonly<{
   /** Whether the task's kind means the Flow must carry its own navigation. */
@@ -47,7 +63,7 @@ export type CreatedFlowOwnPage = Readonly<{
 }>;
 
 export function createdFlowOwnPage(task: LiveInstructionTask, shape: CreatedFlowShape): CreatedFlowOwnPage {
-  const required = KINDS_THAT_MUST_REACH_THEIR_PAGE.has(task.kind);
+  const required = createdFlowMustReachItsOwnPage(task);
   return Object.freeze({ required, navigationNodes: shape.navigationNodes, reached: !required || shape.navigationNodes > 0 });
 }
 
