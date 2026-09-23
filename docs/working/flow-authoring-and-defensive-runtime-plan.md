@@ -639,6 +639,18 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Outcome: Partial — the fixes are in, the number is not yet taken
 - Follow-up: the ten-site campaign is running against a tree carrying all of it. The remaining named product defect is that the model can choose a list's **columns** but not its **items**, so four sponsored cards join sixteen results and positional matching fails; that is t093, holding its live runs until the campaign ends, because two live runs on this machine corrupt each other — which is what produced t092's own `performance.budget` stall.
 
+
+---
+
+### 2026-09-23 — Why a built Flow gives the wrong answer, diagnosed from two runs
+- Agent: supervisor; workers `fa-extraction-answer`, `fa-extraction-items`, `fa-campaign-can-measure`
+- Changed: t092 (a read waits for the page it was sent to; field inference can name a nested value; detection waits before saying a page has no list), t093 (a Flow can say which **items** belong in its list, not only which columns), t094 (a campaign can measure today's loop: it answers a permission ask where the instruction is the authority, and no longer fails a build whose recovery record Core never wrote) — all merged in both repositories and pushed.
+- Why: the user narrowed everything to instruction-driven Flow creation on the ten sites, then stopped a wide campaign and said to debug the single failing case instead. That was right, and the answer was already on disk.
+- Validation: **the Flows are not the problem.** `run-mudwci8d-de88aa32` replayed a nine-node Flow with no model attached, branched correctly around a banner that is not always there, and extracted twelve records carrying all four requested columns — and matched **zero**, because every row read `rating` as `"3.7 out of 5 stars"` where `"3.7"` was expected. Seven of the twelve differ on nothing else. It also returned 12 rows against 16 expected: the store lazy-loads the tail and the read did not wait for it. `run-mudw1ktb-0557816b` returned **24 rows against 13 expected**, eleven of them `observed-not-expected` — the instruction's filter (Plus eligible, 4.0+, under $50, no sponsored) was not applied at all, although t093 landed the mechanism for it; its own report had flagged that nothing verified the model *uses* it.
+- Outcome: Partial — diagnosed, not fixed
+- Follow-up: two tasks were briefed and then stopped unstarted, so they are free to pick up. One: prefer the page's own tightest statement of a value (an attribute, a microdata property, a child holding the value alone) over the sentence containing it — **no word list and no suffix stripping**, which `domain/src/actions/extraction/request.ts` explains. Two: wait for a lazily loaded list to be *complete*, not merely present, and find out why the model does not write a `where`. Both must be proved model-free in the content harness, and the fixtures must not be edited to match the code.
+- Standing rule, from the user: **never launch a mass or campaign-scale run without asking first**, state its cost and duration beforehand, and debug the single failing case from artifacts already on disk before measuring the many.
+
 ## Open Questions
 
 - Does the dry run reset the page, the workspace, or the whole browser context?
