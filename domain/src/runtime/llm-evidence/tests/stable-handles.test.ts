@@ -19,7 +19,9 @@ import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, type WebAutomationLlmEvidenceRuntime,
+  WEB_LLM_RUN_NODE_TOOL_ID
+} from "..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_MAX_NUMBER, WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 
@@ -48,7 +50,7 @@ function runtimeOver(page: () => { url: string; elements: JsonObject[] }): WebAu
 let calls = 0;
 async function inspect(runtime: WebAutomationLlmEvidenceRuntime): Promise<Array<{ target: string; name: string }>> {
   calls += 1;
-  const result = await runtime.executeTool({ projectId: "p", flowId: "f", callId: `call.${calls}`, toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const result = await runtime.executeTool({ projectId: "p", flowId: "f", callId: `call.${calls}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const elements = (result as unknown as { evidence: { elements: Array<{ target: string; name?: string; text?: string }> } }).evidence.elements;
   return elements.map((element) => ({ target: element.target, name: element.name ?? element.text ?? "" }));
 }
@@ -141,7 +143,7 @@ test("the same selector on two pages is two pages' controls, each with its own n
 test("numbers belong to one Flow: another Flow's first control is target.1 again", async () => {
   const runtime = runtimeOver(() => ({ url: PAGE_URL, elements: [banner, beds] }));
   await inspect(runtime);
-  const result = await runtime.executeTool({ projectId: "p", flowId: "another", callId: "call.other", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const result = await runtime.executeTool({ projectId: "p", flowId: "another", callId: "call.other", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const targets = (result as unknown as { evidence: { elements: Array<{ target: string }> } }).evidence.elements.map((element) => element.target);
   assert.deepEqual(targets, ["target.1", "target.2"]);
 });
@@ -178,8 +180,10 @@ test("an exploration that sees more than ninety-nine controls is handed numbers 
   // A press on a three-digit handle is bound and pressed: the fixture page does
   // not change, so it comes back `no_progress` -- not `invalid_input`, which is
   // a handle the tool would not read, nor `target_unobserved`, one it could not bind.
-  const pressed = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.120", consequences: [] } });
-  assert.equal((pressed as { resultCode?: string }).resultCode, "web.action.rejected.no_progress");
+  const pressed = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.120" } }, consequences: [] } });
+  // The press runs: a node that ran and succeeded is a step of the Flow
+  // whatever the packet then looks like.
+  assert.equal((pressed as { resultCode?: string }).resultCode, "web.action.succeeded");
 });
 
 test("a Flow that has spent every number starts again rather than handing one control's number to another", () => {
@@ -207,7 +211,7 @@ test("a packet renumbered with the widest handles still fits the budget it was b
   }
   page = crowdedPage(99);
   const maxEvidenceBytes = 2_000;
-  const result = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.budget", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {}, maxEvidenceBytes });
+  const result = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.budget", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] }, maxEvidenceBytes });
   const evidence = (result as unknown as { evidence: { elements: Array<{ target: string }>; budgetTruncated?: boolean } }).evidence;
   assert.equal(evidence.budgetTruncated, true);
   assert.ok(evidence.elements.every((element) => element.target.length === "target.1041".length), "every handle here has four digits");

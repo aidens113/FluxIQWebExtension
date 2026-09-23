@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { WebLlmEvidenceGateway } from "../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
-import { WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_PRESS_TOOL_ID } from "../vocabulary";
+import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 
 const BASE = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 16_000 } as const;
 const ROWS = `[data-testid="order-rows"]`;
@@ -78,7 +78,7 @@ type EvidenceRuntime = ReturnType<typeof createWebAutomationLlmEvidenceRuntime>;
 
 /** The handles the model was given, read back by the name a person would see. */
 async function handlesByName(runtime: EvidenceRuntime): Promise<Map<string, string>> {
-  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const elements = (inspected.evidence as { elements: PacketElement[] }).elements;
   const named = elements.filter((element): element is PacketElement & { name: string } => typeof element.name === "string");
   return new Map(named.map((element) => [element.name, element.target]));
@@ -93,7 +93,7 @@ test("opens the composer behind a plain New post button, which is the press thre
   const runtime = createWebAutomationLlmEvidenceRuntime(lab.gateway);
   const handles = await handlesByName(runtime);
 
-  const pressed = await runtime.executeTool({ ...BASE, callId: "call.open", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get("New post")!, consequences: [] } });
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.open", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("New post")! } }, consequences: [] } });
 
   assert.equal(pressed.resultCode, "web.action.succeeded");
   assert.equal(pressed.effectApplied, true);
@@ -102,20 +102,24 @@ test("opens the composer behind a plain New post button, which is the press thre
   assert.equal(namesIn(pressed.evidence).includes("Post text"), true);
 });
 
-test("ticks a row so the actions for chosen rows appear, then ticks it back", async () => {
+// The tick is no longer put back. While a press was an *exploratory* verb,
+// leaving a row ticked would have turned the Flow's own tick into an untick; now
+// the press is the Flow's step, run once, and putting it back would undo the
+// step the build had just made.
+test("ticks a row so the actions for chosen rows appear, and leaves the tick as the step it is", async () => {
   const lab = queueLab();
   const runtime = createWebAutomationLlmEvidenceRuntime(lab.gateway);
   const handles = await handlesByName(runtime);
 
-  const pressed = await runtime.executeTool({ ...BASE, callId: "call.tick", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get("Select order ORD-40100")!, consequences: [] } });
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.tick", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Select order ORD-40100")! } }, consequences: [] } });
 
   assert.equal(pressed.resultCode, "web.action.succeeded");
   // What the tick was for: the Retry button exists only while a row is chosen,
   // so the model cannot author a retry Flow without seeing it once.
   assert.equal(namesIn(pressed.evidence).includes("Retry failed orders"), true);
-  // And the page is left as it was found, so the Flow's own tick is a tick.
-  assert.deepEqual(lab.clicked, [`${ROWS} #row-1-select`, `${ROWS} #row-1-select`]);
-  assert.equal(lab.state.rowTicked, false);
+  // Pressed once, and left ticked: this press is the Flow's own tick.
+  assert.deepEqual(lab.clicked, [`${ROWS} #row-1-select`]);
+  assert.equal(lab.state.rowTicked, true);
 });
 
 test("presses a row's menu and a row's link, under a test id full of the word order", async () => {
@@ -124,10 +128,10 @@ test("presses a row's menu and a row's link, under a test id full of the word or
     const runtime = createWebAutomationLlmEvidenceRuntime(lab.gateway);
     const handles = await handlesByName(runtime);
 
-    const pressed = await runtime.executeTool({ ...BASE, callId: "call.row", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get(label)!, consequences: [] } });
+    const pressed = await runtime.executeTool({ ...BASE, callId: "call.row", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get(label)! } }, consequences: [] } });
 
     assert.equal(pressed.resultCode, "web.action.succeeded", label);
-    // Pressed once, and only a checkbox is pressed back.
+    // Pressed once, and never pressed back.
     assert.deepEqual(lab.clicked, [selector], label);
   }
 });
@@ -158,10 +162,10 @@ for (const [label, consequences] of PERMISSION_CASES) {
         return permitted ? { permitted: true as const } : { permitted: false as const, missing: [...consequences], requestId: "permission-request:test" };
       };
 
-      const result = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get(label)!, consequences: [...consequences] }, permission });
+      const result = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get(label)! } }, consequences: [...consequences] }, permission });
 
       // Core is asked with the words the model was shown and the model's own classes.
-      assert.deepEqual(asked, [{ consequences: [...consequences], control: { name: label, kind: "button" }, verb: "press" }], label);
+      assert.deepEqual(asked, [{ consequences: [...consequences], control: { name: label, kind: "button" }, verb: "click" }], label);
       if (permitted) {
         assert.equal(result.resultCode, "web.action.succeeded", label);
         assert.equal(lab.clicked.length, 1, label);
@@ -180,11 +184,11 @@ test("a press that declares nothing lasting asks nothing, and an unreadable decl
   const asked: unknown[] = [];
   const permission = async (declaration: unknown) => { asked.push(declaration); return { permitted: true as const }; };
 
-  const opened = await runtime.executeTool({ ...BASE, callId: "call.open", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get("New post")!, consequences: [] }, permission });
+  const opened = await runtime.executeTool({ ...BASE, callId: "call.open", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("New post")! } }, consequences: [] }, permission });
   assert.equal(opened.resultCode, "web.action.succeeded");
   assert.deepEqual(asked, []);
 
-  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.bad", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get("Send reply")!, consequences: ["spend_a_little"] }, permission });
+  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.bad", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["spend_a_little"] }, permission });
   assert.equal(unreadable.resultCode, "web.action.rejected.invalid_input");
   assert.deepEqual(lab.clicked, [`${ROWS} #new-post`]);
 });
@@ -194,13 +198,18 @@ test("with no permission check to ask, a declared consequence is refused rather 
   const runtime = createWebAutomationLlmEvidenceRuntime(lab.gateway);
   const handles = await handlesByName(runtime);
 
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get("Send reply")!, consequences: ["send_or_publish"] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["send_or_publish"] } });
 
   assert.equal(refused.resultCode, "web.action.rejected.permission_required");
   assert.deepEqual(lab.clicked, []);
 });
 
-test("reports a press that changed nothing as no progress, and still presses", async () => {
+// A press that leaves the page looking the same is no longer refused. It was,
+// while a press existed only to reveal something; a node that ran and succeeded
+// is a step of the Flow whatever the sanitized packet then looks like -- a press
+// that applies a filter can leave it identical -- so what changed is reported
+// as a fact (`pageChanged`) and the step stands.
+test("reports a press that changed nothing as a page that did not change, and keeps the step", async () => {
   const clicked: string[] = [];
   const gateway: WebLlmEvidenceGateway = {
     eligibleSessionIds: () => ["session.one"],
@@ -217,8 +226,9 @@ test("reports a press that changed nothing as no progress, and still presses", a
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const handles = await handlesByName(runtime);
 
-  const pressed = await runtime.executeTool({ ...BASE, callId: "call.inert", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handles.get("Nothing happens")!, consequences: [] } });
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.inert", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Nothing happens")! } }, consequences: [] } });
 
-  assert.equal(pressed.resultCode, "web.action.rejected.no_progress");
+  assert.equal(pressed.resultCode, "web.action.succeeded");
+  assert.equal((pressed.evidence as { pageChanged?: boolean }).pageChanged, false);
   assert.deepEqual(clicked, ["#inert"]);
 });

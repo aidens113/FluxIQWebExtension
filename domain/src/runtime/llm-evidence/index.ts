@@ -60,6 +60,7 @@ export {
   type WebLlmToolRejectionDetail,
   type WebLlmToolRejectionReason
 } from "./tool-rejection";
+export { webRunnableNode, webRunnableNodeIds, type WebRunnableNode } from "./node-run";
 export {
   webLlmToolRejectionResultCode,
   WEB_LLM_ACTION_RESULT_CODE,
@@ -71,6 +72,7 @@ export {
   WEB_LLM_PRESS_TOOL_ID,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_ENTER_FIELD_TOOL_ID,
+  WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebLlmEvidenceResultCode,
   type WebLlmEvidenceToolId,

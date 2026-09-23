@@ -28,7 +28,9 @@ import type { JsonObject } from "fluxiq/core";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { elementFingerprint, outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_INSPECT_TOOL_ID, type WebAutomationLlmEvidenceRuntime } from "../..";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_INSPECT_TOOL_ID, type WebAutomationLlmEvidenceRuntime,
+  WEB_LLM_RUN_NODE_TOOL_ID
+} from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import { createWebLlmTargetPackets } from "..";
 
@@ -69,7 +71,7 @@ function runtimeOver(page: () => Page): WebAutomationLlmEvidenceRuntime {
 let calls = 0;
 async function inspect(runtime: WebAutomationLlmEvidenceRuntime): Promise<void> {
   calls += 1;
-  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: `call.inspect.${calls}`, toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: `call.inspect.${calls}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 }
 
 async function resolvedParameters(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionId: string, parameters: JsonObject): Promise<JsonObject> {

@@ -7,8 +7,9 @@ import {
   sanitizeWebLlmSnapshot,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_ENTER_FIELD_TOOL_ID,
-  WEB_LLM_EVIDENCE_BYTE_BUDGETS,
   WEB_LLM_INSPECT_TOOL_ID,
+  WEB_LLM_EVIDENCE_BYTE_BUDGETS,
+  WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
   WEB_LLM_PRESS_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
@@ -29,19 +30,25 @@ test("captures through the generic action bridge and keeps navigation on the ins
     },
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const inspected = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.equal(inspected.effectApplied, false);
   assert.equal(inspected.resultCode, "web.inspect.succeeded");
   assert.deepEqual((inspected.evidence as any).location, "https://example.test/start");
-  const navigated = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/next?private=yes" } });
+  const navigated = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/next?private=yes" }, consequences: [] } });
   assert.equal(navigated.effectApplied, true);
   assert.equal(navigated.resultCode, "web.action.succeeded");
   assert.deepEqual((navigated.evidence as any).location, "https://example.test/next");
+  // A look is one capture. An action captures to bind what it acts on, acts,
+  // and captures again to show what it produced.
   assert.deepEqual(commands.map(command => command.actionType), ["web.dom.capture_snapshot", "web.dom.capture_snapshot", "web.browser.navigate", "web.dom.capture_snapshot"]);
   assert.equal(JSON.stringify(commands).includes("llm-evidence-runtime"), true);
 });
 
-test("rejects navigation to the already inspected location without applying an effect", async () => {
+// Navigating to where the page already is is no longer refused. It was, while
+// a navigation was an exploratory move and arriving nowhere was wasted effort;
+// it is now a node, and the Flow replays from wherever the run starts, so the
+// step that puts the page on the right address is a step worth having.
+test("navigating to the location already shown runs, because the Flow will replay from elsewhere", async () => {
   const commands: string[] = [];
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
@@ -50,9 +57,11 @@ test("rejects navigation to the already inspected location without applying an e
       return { status: "succeeded", payload: { snapshot: snapshot("https://example.test/start?private=yes") } };
     },
   });
-  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://example.test/start" } });
-  assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress", detail: { reason: "already_at_destination" } }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
-  assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
+  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/start" }, consequences: [] } });
+  assert.equal(result.resultCode, "web.action.succeeded");
+  assert.equal(result.effectApplied, true);
+  assert.equal(result.draft?.proposes, true);
+  assert.deepEqual(commands, ["web.dom.capture_snapshot", "web.browser.navigate", "web.dom.capture_snapshot"]);
 });
 
 test("returns content-free recoverable results for policy/input rejection while session and cancellation failures remain fatal", async () => {
@@ -60,16 +69,21 @@ test("returns content-free recoverable results for policy/input rejection while 
     eligibleSessionIds: () => ["one", "two"],
     executeAction: async () => ({ status: "succeeded", payload: { snapshot: snapshot("https://example.test/") } }),
   });
-  await assert.rejects(runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /exactly one/);
+  await assert.rejects(runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } }), /exactly one/);
 
   const one = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["one"],
     executeAction: async () => ({ status: "succeeded", payload: { snapshot: snapshot("https://example.test/") } }),
   });
-  assert.deepEqual(await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/private-value" } }), { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "cross_origin", detail: { reason: "another_origin" } }, effectApplied: false, resultCode: "web.action.rejected.cross_origin" });
-  assert.deepEqual(await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.three", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: "private-value" } }), { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "invalid_input", detail: { reason: "unexpected_input_keys", instead: [] } }, effectApplied: false, resultCode: "web.action.rejected.invalid_input" });
+  const offOrigin = await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://outside.test/private-value" }, consequences: [] } });
+  assert.deepEqual(offOrigin.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "cross_origin", detail: { reason: "another_origin" } });
+  assert.equal(offOrigin.resultCode, "web.action.rejected.cross_origin");
+  assert.equal(offOrigin.effectApplied, false);
+  const extra = await one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [], extra: "private-value" } });
+  assert.equal(extra.resultCode, "web.action.rejected.invalid_input");
+  assert.deepEqual(extra.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "invalid_input", detail: { reason: "unexpected_input_keys", instead: ["node", "parameters", "consequences"] } });
   const controller = new AbortController(); controller.abort(new Error("cancelled"));
-  await assert.rejects(one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {}, signal: controller.signal }), /cancelled/);
+  await assert.rejects(one.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.four", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] }, signal: controller.signal }), /cancelled/);
 });
 
 test("binds from the production host seam and selects the sole trusted web client without requiring stale pairing project metadata", async () => {
@@ -85,37 +99,22 @@ test("binds from the production host seam and selects the sole trusted web clien
     },
   };
   bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
-  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, WEB_LLM_ENTER_FIELD_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  // One tool of this domain's own. Everything else a build does is a node of
+  // the library, which Core offers because Core is what enumerates the registry.
+  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.deepEqual(bound?.runsNodes, { initial: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
-    { toolId: WEB_LLM_INSPECT_TOOL_ID, effect: "observe", repeatPolicy: "after_mutation", initialObservation: { input: {} } },
-    { toolId: WEB_LLM_NAVIGATE_TOOL_ID, effect: "mutate", repeatPolicy: undefined, initialObservation: undefined },
-    { toolId: WEB_LLM_PRESS_TOOL_ID, effect: "mutate", repeatPolicy: undefined, initialObservation: undefined },
-    { toolId: WEB_LLM_ENTER_FIELD_TOOL_ID, effect: "mutate", repeatPolicy: undefined, initialObservation: undefined },
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
-  // A live build authored the right narrowing steps and named each control by a
-  // handle it had invented from the Flow-script example, so every one was refused
-  // web.handle.malformed. The extraction handle went in correctly, because the
-  // detection tool states its shape; inspect now states this one the same way.
-  const inspectDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_INSPECT_TOOL_ID)?.description ?? "";
-  assert.match(inspectDescription, /copy that handle exactly into the step's target/u);
-  const pressDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_PRESS_TOOL_ID)?.description ?? "";
-  // Named by what pressing is for rather than by the handful of ARIA shapes the
-  // tool used to accept. A live slice across three fixtures built nothing that
-  // changed a page: the composer behind "New post" was refused as unsafe, so
-  // the model never saw the form it had to fill.
-  assert.match(pressDescription, /see what exists only after a press/u);
-  assert.match(pressDescription, /the form behind a New post, Compose, Reply or Edit button/u);
-  assert.match(pressDescription, /tick it in the Flow yourself/u);
-  // And it says where the reason for a turned-down call is, because a model
-  // that cannot tell one from another makes the same call until the build runs
-  // out of steps (`../tool-rejection.ts`).
-  assert.match(pressDescription, /detail\.reason/u);
-  // And it no longer lists controls it refuses: FluxIQ refuses nothing on its
-  // own judgement of what a control looks like, so saying otherwise would be
-  // the old rule surviving in the prompt.
-  assert.doesNotMatch(pressDescription, /refused|Send, Save|Delete, Confirm/u);
+  // The detection tool states the shape its handle is written in, because a
+  // live build that was shown only a code invented a handle of its own and had
+  // every acting step refused `web.handle.malformed`.
+  const detectDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID)?.description ?? "";
+  assert.match(detectDescription, /extractList: \{handle/u);
+  // It also says plainly that it is never a step of the Flow: it is an
+  // observation about the page, and the Flow is made of nodes that ran.
+  assert.match(detectDescription, /never a step of the Flow/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     title: "Form",
@@ -134,7 +133,7 @@ test("binds from the production host seam and selects the sole trusted web clien
   });
   // A handle nobody minted is refused: nothing is put in its place.
   assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.9" } }, clickAction), { status: "absent", reason: "handle_not_issued" });
-  const result = await bound!.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const result = await bound!.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.equal(result.effectApplied, false);
   assert.equal(result.resultCode, "web.inspect.succeeded");
   assert.deepEqual((result.evidence as any).location, "https://example.test/right");
@@ -363,24 +362,35 @@ test("presses any observed control, refuses only a handle it never showed, and n
   };
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
-  const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
+  const applied = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   assert.deepEqual({ kind: applied.kind, effectApplied: applied.effectApplied, resultCode: applied.resultCode }, { kind: "llm_evidence_tool_execution", effectApplied: true, resultCode: "web.action.succeeded" });
   assert.deepEqual(actionTypes, [
     "web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot",
   ]);
-  assert.deepEqual(actionParameters, [{ selector: "#details" }]);
-  const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.2", consequences: [] } });
-  const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.3", consequences: [] } });
-  const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.40", consequences: [] } });
+  // The resolved parameters carry who the element is beside its address: Core
+  // derives the adapted target from it, as it does for a recorded node.
+  assert.deepEqual(actionParameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
+  assert.deepEqual((actionParameters[0] as { element?: unknown }).element, { tagName: "button", visibleText: "Show details", selector: "#details" });
+  const submit = await runtime.executeTool({ ...base, callId: "call.submit", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.2" } }, consequences: [] } });
+  const genericAction = await runtime.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.3" } }, consequences: [] } });
+  const missing = await runtime.executeTool({ ...base, callId: "call.missing", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } });
   // A submit and a generic action are pressed like anything else. This fake page
   // does not change under them, so each reports no progress -- but each was
   // pressed, which the old rule refused on its own judgement.
-  assert.equal(submit.resultCode, "web.action.rejected.no_progress");
-  assert.equal(genericAction.resultCode, "web.action.rejected.no_progress");
-  assert.deepEqual(actionParameters, [{ selector: "#details" }, { selector: "#submit" }, { selector: "#action" }]);
+  assert.equal(submit.resultCode, "web.action.succeeded");
+  assert.equal(genericAction.resultCode, "web.action.succeeded");
+  assert.deepEqual(actionParameters.map((entry) => (entry as { selector?: string }).selector), ["#details", "#submit", "#action"]);
   // The one refusal left is a handle the model was never shown.
-  assert.deepEqual(missing, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "target_unobserved", detail: { reason: "handle_not_in_packet", target: "target.40" } }, effectApplied: false, resultCode: "web.action.rejected.target_unobserved" });
-  assert.doesNotMatch(JSON.stringify([submit, genericAction, missing]), /submit|run action|missing-private-value/u);
+  assert.equal(missing.resultCode, "web.action.rejected.target_unobserved");
+  assert.equal((missing.evidence as { code?: string }).code, "target_unobserved");
+  assert.equal((missing.evidence as { detail?: { target?: string } }).detail?.target, "target.40");
+  // A press no longer refuses a control on what it looks like, so the page's
+  // own control names are in the packets as they always were. What must never
+  // appear is an address, and the surface to hold to that is the evidence --
+  // what the model is shown. The record beside it (`draft.ranWith`) is what the
+  // node ran with, which is a selector by necessity; Core keeps it for writing
+  // the Flow down and never shows it back (`AS/runtime/flow-draft/entry.ts`).
+  assert.doesNotMatch(JSON.stringify([submit.evidence, genericAction.evidence, missing.evidence]), /missing-private-value|#submit|#action/u);
 });
 
 test("keeps an opaque press target bound to the returned element when fresh snapshot ranking changes", async () => {
@@ -409,11 +419,11 @@ test("keeps an opaque press target bound to the returned element when fresh snap
     },
   });
   const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
-  const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", text: "Details", controlType: "button", revealKind: "disclosure", expanded: false });
-  const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
+  const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   assert.equal(revealed.effectApplied, true);
-  assert.deepEqual(parameters, [{ selector: "#details" }]);
+  assert.deepEqual(parameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);
 });
 
 test("reports a successful press with unchanged parsed evidence as no progress", async () => {
@@ -427,8 +437,12 @@ test("reports a successful press with unchanged parsed evidence as no progress",
         : { status: "succeeded" };
     },
   });
-  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
-  assert.deepEqual(result, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "no_progress", detail: { reason: "page_unchanged_after_action" } }, effectApplied: false, resultCode: "web.action.rejected.no_progress" });
+  const result = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  // The press ran and the page looks the same, which is a fact about the page
+  // rather than a refusal: the step stands and the Flow keeps it.
+  assert.equal(result.resultCode, "web.action.succeeded");
+  assert.equal((result.evidence as { pageChanged?: boolean }).pageChanged, false);
+  assert.equal(result.draft?.proposes, true);
   assert.deepEqual(actionTypes, ["web.dom.capture_snapshot", "web.dom.click", "web.dom.capture_snapshot"]);
 });
 
@@ -442,7 +456,7 @@ test("refuses an action the page did not take, and keeps disconnect and malforme
   });
   // A failure that names no reason is `action_failed`, with the page as it now
   // is, and never the gateway's own words (`page-refusal.test.ts` has the rest).
-  const refused = await failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
+  const refused = await failedAction.executeTool({ ...base, callId: "call.action", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   assert.equal(refused.resultCode, "web.action.rejected.action_failed");
   assert.equal(refused.effectApplied, false);
   const refusal = refused.evidence as { schemaVersion: string; ok: boolean; code: string };
@@ -450,9 +464,9 @@ test("refuses an action the page did not take, and keeps disconnect and malforme
   assert.equal((refused.evidence as any).page.location, "https://example.test/");
   assert.equal(JSON.stringify(refused).includes("private gateway detail"), false);
   const disconnected = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) });
-  await assert.rejects(disconnected.executeTool({ ...base, callId: "call.disconnect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /exactly one/u);
+  await assert.rejects(disconnected.executeTool({ ...base, callId: "call.disconnect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } }), /exactly one/u);
   const malformed = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => ["session.one"], executeAction: async () => ({ status: "succeeded", payload: {} }) });
-  await assert.rejects(malformed.executeTool({ ...base, callId: "call.malformed", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /snapshot/u);
+  await assert.rejects(malformed.executeTool({ ...base, callId: "call.malformed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } }), /snapshot/u);
 });
 
 function snapshot(url: string): JsonObject {

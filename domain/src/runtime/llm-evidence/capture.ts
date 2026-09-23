@@ -48,6 +48,15 @@ export type WebLlmEvidenceToolExecution = {
   effectApplied: boolean;
   targetsUnchanged?: boolean;
   resultCode?: string;
+  /**
+   * What this one call did, for the draft Core is accruing.
+   *
+   * One tool runs whichever node of the library the call names, so the name to
+   * record the step under, whether it looked or changed, and whether the Flow
+   * should contain it are properties of the call rather than of the tool. Core
+   * carries all of it opaquely (`AS/runtime/flow-draft/`).
+   */
+  draft?: { actionId?: string; input?: JsonObject; ranWith?: JsonObject; effect?: "observe" | "mutate"; proposes?: boolean };
 };
 
 export type WebLlmEvidenceToolRequest = {
@@ -77,8 +86,14 @@ export function toolMetadata(input: WebLlmEvidenceToolRequest): JsonObject {
   return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
 }
 
-export function toolExecution(evidence: JsonValue, effectApplied: boolean, resultCode: string, targetsUnchanged?: boolean): WebLlmEvidenceToolExecution {
-  return present<WebLlmEvidenceToolExecution>({ kind: "llm_evidence_tool_execution", evidence, effectApplied, targetsUnchanged, resultCode });
+export function toolExecution(
+  evidence: JsonValue,
+  effectApplied: boolean,
+  resultCode: string,
+  targetsUnchanged?: boolean,
+  draft?: WebLlmEvidenceToolExecution["draft"]
+): WebLlmEvidenceToolExecution {
+  return present<WebLlmEvidenceToolExecution>({ kind: "llm_evidence_tool_execution", evidence, effectApplied, targetsUnchanged, resultCode, draft });
 }
 
 /** Cancellation is fatal, never a recoverable rejection: nothing is left to tell the model. */

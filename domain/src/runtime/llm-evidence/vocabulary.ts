@@ -10,18 +10,52 @@
 // beside it, so the set is exhaustive by construction and a code that is added
 // here cannot fail to appear in the set a consumer derives.
 
+import { AUTOMATION_STUDIO_LLM_RUN_NODE_TOOL_ID } from "fluxiq/automation-studio";
 import { WEB_LLM_TOOL_REJECTION_CODES, type WebLlmToolRejectionCode } from "./tool-rejection";
 
-/** Every tool `createWebAutomationLlmEvidenceRuntime` offers, in the order it offers them. */
-export const WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.press_control", "web.enter_field", "web.detect_repeating_structure"] as const;
+/**
+ * The verb that runs a node of the library, named by Core rather than here.
+ *
+ * It is Core's because the argument shape is Core's: the call names a node of
+ * the registry and carries that node's own parameters, and Core both builds the
+ * declaration and reads the step back out of the draft
+ * (`AS/runtime/llm/node-tools/`). Restating the id would be one more place for
+ * the two halves of one call to drift apart.
+ */
+export const WEB_LLM_RUN_NODE_TOOL_ID = AUTOMATION_STUDIO_LLM_RUN_NODE_TOOL_ID;
+
+/**
+ * Every tool id this domain puts on the wire.
+ *
+ * Two are offered today. `core.run_node` runs whichever node of the library the
+ * call names -- which is now the whole of how a build acts on a page, because
+ * the exploratory verbs and the Flow's nodes were made the same thing on
+ * 2026-09-22. `web.detect_repeating_structure` stays beside it because an
+ * extraction node cannot be written without the handle it issues, and finding a
+ * list is an observation about the page rather than a step of any Flow.
+ *
+ * The four retired ids stay in the list. It is read by `packages/test-runner`
+ * to decide which recorded steps of a run it may show, and a run recorded
+ * before this change still names them; dropping them would silently blank those
+ * steps, which is the exact defect this list was made exhaustive to prevent.
+ */
+export const WEB_LLM_EVIDENCE_TOOL_IDS = [
+  WEB_LLM_RUN_NODE_TOOL_ID,
+  "web.detect_repeating_structure",
+  "web.inspect_current_page",
+  "web.navigate_same_origin",
+  "web.press_control",
+  "web.enter_field"
+] as const;
 
 export type WebLlmEvidenceToolId = (typeof WEB_LLM_EVIDENCE_TOOL_IDS)[number];
 
-export const WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
-export const WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
-export const WEB_LLM_PRESS_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
-export const WEB_LLM_ENTER_FIELD_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
-export const WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[4];
+export const WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
+/** Retired 2026-09-22, when the library's own nodes became what a build runs. Kept so a recorded run still reads. */
+export const WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+export const WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
+export const WEB_LLM_PRESS_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[4];
+export const WEB_LLM_ENTER_FIELD_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[5];
 
 /** An observation succeeded: evidence was captured and nothing on the page moved. */
 export const WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded" as const;

@@ -29,7 +29,7 @@ import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-  WEB_LLM_INSPECT_TOOL_ID,
+  WEB_LLM_RUN_NODE_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmRepeatingStructure
 } from "../..";
@@ -317,7 +317,7 @@ test("once the Flow was shown a detected list, a literal request is refused as a
   const runtime = runtimeOver(CATALOG);
   const literal = { item: "li", fields: RENAMED };
   // No detection yet in this Flow: the literal is left exactly as written, as it passed live on the numbered-pages build.
-  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), { status: "unchanged" });
 
   await detect(runtime);
