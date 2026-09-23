@@ -18,6 +18,23 @@
 //
 // `infiniteScroll` is reported only for a run whose page declares a feed and
 // offers no pagination control (`feed-signal.ts`).
+//
+// **A page that has not drawn its list yet has no repeating run, and saying so
+// is worse than waiting.** `detectStructureWhenPresent` is the same bounded
+// wait the read makes (`page-render.ts`), for the same reason and with the same
+// ceiling: it polls until a run is there and answers the moment one is, so a
+// page that already has one costs nothing. Only the two refusals that a moment
+// later could stop being true are waited on -- `no_repeating_run`, and a
+// `target_not_found` for an element the page has not rendered yet. A sensitive
+// region and an ambiguous target are facts about the page as authored, so they
+// are answered at once.
+//
+// Live, this ended a build rather than spoiling an answer: on `company-website`
+// the model detected one moment too early, was told `no_repeating_structure`,
+// asked again five times and was answered `already_answered` by the loop's
+// repeat cache each time, then completed with a Flow that had no extract node
+// at all (`run-mudrimhl-47dee201`). A refusal a caller cannot usefully retry
+// has to be right the first time.
 
 import type {
   WebAutomationExtractionProposal,
@@ -28,12 +45,58 @@ import { isWithinSensitiveControl } from "../sensitive-text";
 import { isDeclaredFeed } from "./feed-signal";
 import { inferListFromElement } from "./infer-list";
 import { largestRunsFirst } from "./largest-runs";
+import { waitUntil } from "./list-wait";
 
 type Refusal = Extract<WebAutomationStructureDetection, { ok: false }>;
 
-/** Detect the structure the request names, or the page's largest readable one. */
+/**
+ * How long a detection waits for a page to draw a list before answering that
+ * it has none.
+ *
+ * Shorter than the read's own window: a read that waits has somewhere to put
+ * the time, while a detection that waits spends part of a build's deadline on a
+ * page that may genuinely hold no list. Long enough for the render delays the
+ * campaign's own fixtures keep -- 700 ms for a results grid, a batch of cards
+ * behind skeletons -- with room over.
+ */
+const STRUCTURE_WINDOW_MS = 5_000;
+const STRUCTURE_POLL_MS = 100;
+
+/** The refusals a moment later could stop being true. The rest are facts about the page as authored. */
+const WORTH_WAITING_FOR: ReadonlySet<string> = new Set(["no_repeating_run", "target_not_found"]);
+
+/** Detect the structure the request names, or the page's largest readable one, as the page stands now. */
 export function detectStructure(request: WebAutomationStructureDetectionRequest): WebAutomationStructureDetection {
   return request.selector === undefined ? detectLargest() : detectAround(request.selector);
+}
+
+/**
+ * The same detection, waiting for the page to draw a list first; see the
+ * header. Answers the moment there is one, and answers the page's own refusal
+ * when the window closes on it.
+ */
+export async function detectStructureWhenPresent(
+  request: WebAutomationStructureDetectionRequest,
+  timeoutMs?: number
+): Promise<WebAutomationStructureDetection> {
+  let answer = detectStructure(request);
+  if (settled(answer)) return answer;
+  const deadline = typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? Date.now() + timeoutMs : undefined;
+  await waitUntil(
+    () => {
+      answer = detectStructure(request);
+      return settled(answer);
+    },
+    STRUCTURE_WINDOW_MS,
+    STRUCTURE_POLL_MS,
+    deadline
+  );
+  return answer;
+}
+
+/** Whether this answer is one waiting could not improve on. */
+function settled(answer: WebAutomationStructureDetection): boolean {
+  return answer.ok || !WORTH_WAITING_FOR.has(answer.refused);
 }
 
 /**
