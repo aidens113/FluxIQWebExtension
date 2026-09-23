@@ -172,7 +172,16 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "another_origin",
   "consequences_unreadable",
   "consequences_not_granted",
-  "nobody_to_ask"
+  "nobody_to_ask",
+  // The library verb names a node, and two things can be wrong with the naming.
+  // `instead` carries what the call could have written: the nodes this domain
+  // can run, or the resolver's own codes for a handle it would not make real.
+  "node_not_runnable_here",
+  "parameters_not_resolved",
+  // The node acts on an element and its parameters named no handle. The model
+  // has never been shown a locator, so whatever it wrote is one it invented;
+  // `instead` carries the shape a handle is written in.
+  "target_not_a_handle"
 ] as const;
 
 export type WebLlmToolRejectionReason = (typeof WEB_LLM_TOOL_REJECTION_REASONS)[number];

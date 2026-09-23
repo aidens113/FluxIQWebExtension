@@ -19,7 +19,8 @@ import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-st
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
-import { WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_PRESS_TOOL_ID } from "../vocabulary";
+import { WEB_LLM_RUN_NODE_TOOL_ID,
+  WEB_LLM_PRESS_TOOL_ID } from "../vocabulary";
 
 const BASE = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 16_000 } as const;
 
@@ -81,27 +82,34 @@ test("each way a handle stops naming one control is a different reason, and the 
   const pages = standingPage(QUEUE);
   const { gateway, clicks } = labWith(pages);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
   // A handle no packet ever carried.
-  const invented = await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.40", consequences: [] } });
+  const invented = await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } });
   assert.equal(codeOf(invented), "target_unobserved");
-  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "target.40" });
+  // The resolver's own codes now say which way the handle stopped naming one
+  // control, because the handle is made real by the same resolver the built
+  // Flow's parameters go through. Each still implies a different next call,
+  // and the shapes a handle is accepted in ride with them, because a code is
+  // a name for a mistake and never a statement of what is accepted instead.
+  assert.deepEqual(detailOf(invented), { reason: "parameters_not_resolved", target: "target.40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // The control the handle named has left the page.
   pages.set({ url: QUEUE.url, elements: [QUEUE.elements[1]!] });
-  const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
-  assert.deepEqual(detailOf(gone), { reason: "handle_no_longer_on_page", target: "target.1" });
+  const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  assert.deepEqual(detailOf(gone), { reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // The page the packet described has been left.
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
-  const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "page_moved_since_packet", target: "target.1" });
+  const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  assert.deepEqual(detailOf(moved), { reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // Not a handle this domain issues at all.
-  const malformed = await runtime.executeTool({ ...BASE, callId: "call.malformed", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "the schedule button", consequences: [] } });
-  assert.equal(codeOf(malformed), "invalid_input");
-  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", target: "the schedule button" });
+  const malformed = await runtime.executeTool({ ...BASE, callId: "call.malformed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "the schedule button" } }, consequences: [] } });
+  // A token that is not a handle this domain mints is a locator the model
+  // invented, and an acting node is refused for naming one.
+  assert.equal(codeOf(malformed), "target_unobserved");
+  assert.deepEqual(detailOf(malformed), { reason: "parameters_not_resolved", instead: ["web.handle.malformed", "web.handle.expected.selector.handle_location", "web.handle.malformed:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   assert.deepEqual(clicks, [], "nothing was pressed on a handle that named nothing");
 });
@@ -110,13 +118,13 @@ test("a handle the page has turned into several elements says so, rather than be
   const pages = standingPage(QUEUE);
   const { gateway, clicks } = labWith(pages);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
   pages.set(TWINNED);
-  const several = await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
+  const several = await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
 
   assert.equal(codeOf(several), "target_unobserved");
-  assert.deepEqual(detailOf(several), { reason: "handle_names_several_now", target: "target.1" });
+  assert.deepEqual(detailOf(several), { reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
   assert.deepEqual(clicks, []);
 });
 
@@ -124,12 +132,15 @@ test("a call whose keys are not the tool's is told the keys the tool takes", asy
   const { gateway } = labWith(standingPage(QUEUE));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
 
-  const extra = await runtime.executeTool({ ...BASE, callId: "call.extra", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [], selector: "#schedule" } });
+  const extra = await runtime.executeTool({ ...BASE, callId: "call.extra", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [], selector: "#schedule" } });
   assert.equal(codeOf(extra), "invalid_input");
-  assert.deepEqual(detailOf(extra), { reason: "unexpected_input_keys", instead: ["target", "consequences"] });
+  assert.deepEqual(detailOf(extra), { reason: "unexpected_input_keys", instead: ["node", "parameters", "consequences"] });
 
-  const short = await runtime.executeTool({ ...BASE, callId: "call.short", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } });
-  assert.deepEqual(detailOf(short), { reason: "missing_input_keys", instead: ["target", "consequences"] });
+  const short = await runtime.executeTool({ ...BASE, callId: "call.short", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } } } });
+  // A node that acts must say what acting would lastingly do. A call that says
+  // nothing is refused rather than read as saying it causes nothing, and it is
+  // told all three keys rather than only the one it left out.
+  assert.deepEqual(detailOf(short), { reason: "missing_input_keys", instead: ["node", "parameters", "consequences"] });
 });
 
 /**
@@ -149,12 +160,12 @@ test("a press the run is not permitted names the classes it lacks and the reques
     return { permitted: false, missing: ["send_or_publish"], requestId: "permission-request:abc" };
   };
 
-  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, permission, value: { target: "target.1", consequences: ["send_or_publish"] } });
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish"] } });
 
   assert.equal(codeOf(refused), "permission_required");
   assert.deepEqual(detailOf(refused), { reason: "consequences_not_granted", missing: ["send_or_publish"], requestId: "permission-request:abc" });
-  assert.deepEqual(asked, [{ consequences: ["send_or_publish"], verb: "press" }]);
+  assert.deepEqual(asked, [{ consequences: ["send_or_publish"], verb: "click" }]);
   assert.deepEqual(clicks, [], "a press that was not permitted did not happen");
 });
 
@@ -162,15 +173,15 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   const { gateway, clicks } = labWith(standingPage(QUEUE));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
 
-  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: ["send_or_publish", "create_new"] } });
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish", "create_new"] } });
 
   assert.equal(codeOf(refused), "permission_required");
   assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["send_or_publish", "create_new"] });
   assert.deepEqual(clicks, []);
 
   // A declaration Core could not read is not a refusal to ask about: nothing was asked and nothing was pressed.
-  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: ["sell_the_company"] } });
+  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["sell_the_company"] } });
   assert.equal(codeOf(unreadable), "invalid_input");
   assert.deepEqual(detailOf(unreadable), { reason: "consequences_unreadable" });
 });
@@ -179,14 +190,14 @@ test("no refusal carries a word of the page, whatever it refused", async () => {
   const pages = standingPage(QUEUE);
   const { gateway } = labWith(pages);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
   const refusals: unknown[] = [];
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.40", consequences: [] } }));
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.keys", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1" } }));
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.permission", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: ["delete"] } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.keys", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } } } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.permission", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["delete"] } }));
   pages.set(TWINNED);
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } }));
 
   const serialized = JSON.stringify(refusals);
   for (const word of PAGE_WORDS) assert.equal(serialized.includes(word), false, word);

@@ -5,7 +5,7 @@ import { webActionFailureRejectionCode } from "../action-failure";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import {
   createWebAutomationLlmEvidenceRuntime,
-  WEB_LLM_INSPECT_TOOL_ID,
+  WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
   WEB_LLM_PRESS_TOOL_ID,
   type WebLlmEvidenceGateway
@@ -73,11 +73,11 @@ function handleFor(evidence: unknown, text: string): string {
 test("a press behind a modal is refused blocked_by_dialog with the page, whose dialog control can be pressed next", async () => {
   const { state, gateway } = promptPage();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const search = handleFor(inspected.evidence, "Search people");
   state.prompt = true;
 
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press.1", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: search, consequences: [] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press.1", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: search } }, consequences: [] } });
   assert.equal(refused.resultCode, "web.action.rejected.blocked_by_dialog");
   assert.equal(refused.effectApplied, false);
   const refusal = refused.evidence as { schemaVersion: string; ok: boolean; code: string; page: { elements: unknown[]; dialogs?: unknown } };
@@ -88,9 +88,9 @@ test("a press behind a modal is refused blocked_by_dialog with the page, whose d
   assert.equal(JSON.stringify(refused).includes("ember789"), false);
   assert.equal(JSON.stringify(refused).includes("Download"), false);
 
-  const dismissed = await runtime.executeTool({ ...BASE, callId: "call.press.2", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handleFor(refusal.page, "Not now"), consequences: [] } });
+  const dismissed = await runtime.executeTool({ ...BASE, callId: "call.press.2", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(refusal.page, "Not now") } }, consequences: [] } });
   assert.equal(dismissed.resultCode, "web.action.succeeded");
-  const pressed = await runtime.executeTool({ ...BASE, callId: "call.press.3", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handleFor(dismissed.evidence, "Search people"), consequences: [] } });
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.press.3", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(dismissed.evidence, "Search people") } }, consequences: [] } });
   assert.notEqual(pressed.resultCode, "web.action.rejected.blocked_by_dialog");
   assert.deepEqual(state.clicks, ["#open-search", "#not-now", "#open-search"]);
 });
@@ -98,9 +98,9 @@ test("a press behind a modal is refused blocked_by_dialog with the page, whose d
 test("a refusal and the page inside it stay within the call's budget", async () => {
   const { state, gateway } = promptPage();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const inspected = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 1_500, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 1_500, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   state.prompt = true;
-  const refused = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 1_500, callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handleFor(inspected.evidence, "Search people"), consequences: [] } });
+  const refused = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 1_500, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(inspected.evidence, "Search people") } }, consequences: [] } });
   assert.equal(refused.resultCode, "web.action.rejected.blocked_by_dialog");
   assert.ok(new TextEncoder().encode(JSON.stringify(refused.evidence)).byteLength <= 1_500);
   assert.equal(((refused.evidence as { page: { elements: Array<{ text?: string }> } }).page.elements[0])?.text, "Not now");
@@ -116,20 +116,25 @@ test("a refusal whose page cannot be captured again is the bare code", async () 
       return result;
     }
   });
-  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   state.prompt = true;
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handleFor(inspected.evidence, "Search people"), consequences: [] } });
-  assert.deepEqual(refused, { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "blocked_by_dialog" }, effectApplied: false, resultCode: "web.action.rejected.blocked_by_dialog" });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(inspected.evidence, "Search people") } }, consequences: [] } });
+  assert.deepEqual(refused.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "blocked_by_dialog" });
+  assert.equal(refused.effectApplied, false);
+  assert.equal(refused.resultCode, "web.action.rejected.blocked_by_dialog");
+  // The step is recorded under the node's own name and never reaches the Flow.
+  assert.equal(refused.draft?.actionId, "web.output.dom-click");
+  assert.equal(refused.effectApplied, false);
 });
 
 test("a page that cannot be captured, or cannot fit what is left of the budget, is refused rather than thrown", async () => {
   const { state, gateway } = promptPage();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const tiny = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 40, callId: "call.tiny", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const tiny = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 40, callId: "call.tiny", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.deepEqual(tiny.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "evidence_budget_exhausted" });
   assert.equal(tiny.resultCode, "web.action.rejected.evidence_budget_exhausted");
   state.captureFails = true;
-  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.deepEqual(unreadable.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "page_unreadable" });
   assert.equal(JSON.stringify(unreadable).includes("ember789"), false);
 });
@@ -141,7 +146,7 @@ test("a navigation that landed somewhere else is refused page_changed, with the 
       ? { status: "succeeded", payload: { snapshot: { url: "https://network.test/feed", interactiveElements: [{ tagName: "a", selector: "#home", visibleText: "Home" }] } } }
       : { status: "failed", error: PRIVATE, failure: { category: "state_mismatch", code: WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED, retryable: false, stage: "verification", actual: PRIVATE } }
   });
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.navigate", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://network.test/search" } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.navigate", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://network.test/search" }, consequences: [] } });
   assert.equal(refused.resultCode, "web.action.rejected.page_changed");
   assert.equal((refused.evidence as { page: { location: string } }).page.location, "https://network.test/feed");
   assert.equal(JSON.stringify(refused).includes("ember789"), false);
@@ -160,9 +165,9 @@ test("cancellation during the refusal's look at the page still ends the call", a
       return await gateway.executeAction(sessionId, command);
     }
   });
-  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   state.prompt = true;
-  await assert.rejects(runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: handleFor(inspected.evidence, "Search people"), consequences: [] }, signal: controller.signal }), /cancelled by the run/u);
+  await assert.rejects(runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(inspected.evidence, "Search people") } }, consequences: [] }, signal: controller.signal }), /cancelled by the run/u);
 });
 
 test("a failed action's refusal code is read from the client's closed code, never its words", () => {
