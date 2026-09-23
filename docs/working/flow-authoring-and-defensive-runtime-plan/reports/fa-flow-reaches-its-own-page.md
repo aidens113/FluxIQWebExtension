@@ -335,3 +335,160 @@ Nothing under `apps/extension/src/content/**`, `domain/src/**`,
 4. **t097's two remaining producers of a bare `ambiguous_or_unknown`**
    (`lane-observation.ts:84`, `bench/evaluate-run.ts:224`) are still open; I did
    not touch them.
+
+---
+
+# Follow-up: should the build start blank too?
+
+Asked by the coordinator after `aaa740f`, to settle open question 1 without
+spending a live run. The deciding question was put precisely: **during a build,
+does the model actually receive the destination — a URL, or something it can
+navigate by — from the instruction or from its context?** Make the change if it
+does; change nothing and say what is missing if it does not.
+
+## Answer: no. The code is unchanged.
+
+The model receives the destination from exactly one place, and that place is the
+page it is standing on. Start the build blank and there is no destination
+anywhere — and the exploration does not merely wander, it **cannot take a single
+step**, because its first look at the page throws.
+
+### 1. The instruction never carries a destination
+
+Across every `instruction:` in the live task catalog — 136 occurrences in
+`apps/scenario-lab/src/scenarios/*/live-tasks.ts` and `live-instructions.ts` —
+**zero** match `http`, `localhost`, `127.0.0.1` or `www.`. The instructions are
+written as the shopper would type them and assume the person is already there:
+"Search *the store* for wireless earbuds…", "…move the phone case that is already
+in *my cart*…". Only three mention "url" at all, and all three mean an output
+*column* ("with columns name, price, rating and url").
+
+Nor could a static instruction carry it. The fixture's origin is
+`http://127.0.0.1:` plus `allocation.scenarioPort` (`coordinator.ts:127`), and
+that port is drawn per run by `allocateDistinctPorts(3)` (`allocation.ts:76`). No
+text written in the catalog can name a port that does not exist until the run
+starts.
+
+### 2. The context the model gets is the page packet, and a blank page has none
+
+The only page data a language model ever sees is the sanitized packet built in
+`domain/src/runtime/llm-evidence/` (the structure-audit config says so in as many
+words). The packet's one location field is `evidenceLocation(url)` —
+origin plus pathname — and it is derived from the live snapshot's own URL through
+`safeEvidenceUrl`, which **refuses any non-HTTP(S) URL**. Executed against the
+built domain package, not read:
+
+```
+"about:blank" -> THROWS: web evidence URL must be an HTTP(S) URL without credentials
+"http://127.0.0.1:53017/scenarios/everything-store/" -> location: http://127.0.0.1:53017/scenarios/everything-store/
+```
+
+(`domain/src/runtime/llm-evidence/location.ts:9-14`, via `t101-evidence-url.mjs`
+in this session's scratchpad.)
+
+That single refusal is what makes a blank build impossible rather than merely
+unproductive, because every tool captures before it acts:
+
+- `captureEvidence` (`llm-evidence/capture.ts:118-143`) hands every snapshot to
+  `sanitizeWebLlmSnapshotWithBindings`, whose first act is
+  `safeEvidenceUrl(snapshot.url)` (`sanitize.ts:145`). Every evidence tool in the
+  repository ends up there — the module's own header says a second copy is how
+  two callers would drift apart.
+- The **run-a-real-node** tool, which is how a build's exploration performs
+  anything (`llm-evidence/node-run/run.ts:151`), captures the current page
+  *before* running the node, and derives `crossOrigin` from
+  `current.evidence.location` (`run.ts:214`, `crossOrigin` at 497-505).
+- The **navigate** option itself (`harness-options/execute.ts:186-198`) captures
+  first (`const current = await capture(context, input)`), then scope-checks the
+  destination with
+  `currentScope: webAutomationExplorationScope(current.evidence.location)`.
+
+So from `about:blank` the exploration throws on its first look; it never reaches
+the point of choosing a destination, and a navigation would be scope-checked
+against a location that does not exist. Blanking the build would not produce
+Flows that navigate — it would produce no Flows at all, and a corpus-wide build
+failure that says nothing about the product.
+
+### 3. What would have to carry the destination
+
+One of these three, and which is right is a product decision rather than a
+harness one:
+
+1. **The instruction names it.** The run's origin would have to be interpolated
+   into the task's instruction at build time — a change to the catalog and to
+   `CreatedFlowRequest`, and a decision that the corpus's instructions stop being
+   "what a shopper would type". It is the smallest change and the least faithful
+   one: nobody types a loopback port.
+2. **The bootstrap is given a starting point.** `generateFlowBootstrapAdaptation`
+   takes `{ projectId, flowId, llmExecutionGrantId, evidenceGuided }`
+   (`creation/build-proposal.ts`) and carries no "where this Flow starts". A
+   first-class start location on the Flow or on the bootstrap request — which the
+   model is shown and is required to navigate to before it may do anything else —
+   would make "reach your own page" the first step of the build as well as of the
+   run. This is a **Core** change, and it is the one that matches the product: a
+   Flow that is meant to start somewhere should record where.
+3. **The evidence layer learns to say "you are nowhere yet".** `safeEvidenceUrl`
+   would need a defined meaning for a blank tab, `captureEvidence` a packet that
+   represents no page, and the navigate option a scope rule for a model that has
+   no current scope. Three modules that today each assume a live HTTP page.
+
+Nothing in (2) or (3) is available to this repository's harness, which is why the
+honest answer to the brief is that the code stays as it is.
+
+### 4. Two things this settles, and one it raises
+
+- **The playback fix is still the right half to have made**, and it is
+  unaffected: at playback the Flow carries its own navigation or it does not, and
+  nothing about it depends on what the model could see during the build.
+- **Open question 1 is answered, not deferred.** The build hands the model its
+  page because the product hands a person their page: in the real product a
+  person is *on* the site when they ask. The measurement wants more than the
+  product currently promises, and closing that gap is a Core capability, not a
+  harness flag.
+- **Raised, and new:** a Flow's navigate node holds an absolute URL on a per-run
+  loopback origin (`run-mudw1ktb`'s did). It is valid only inside the run that
+  built it. That is harmless for the Lab, which builds and plays back in one run
+  — it is why the playback change works — but it means an instruction-built Flow
+  against a fixture is not portable across runs, and any future "save the Flow
+  and replay it tomorrow" measurement will meet it.
+
+## Commands run and observed results (follow-up)
+
+No code changed, and both were re-run to prove the tree is still clean at
+`aaa740f`.
+
+**`pnpm --filter @fluxiq-web-extension/test-runner test`** — exit 0:
+
+```
+# tests 1326
+# pass 1326
+# fail 0
+# duration_ms 52878.9328
+```
+
+**`pnpm check`** — exit 0:
+
+```
+# pass 182     (structure:test)
+# pass 88      (lab:test)
+# pass 116     (task:test)
+structure-audit: passed (100 warning(s), 121 baselined).
+... 10 of 11 workspace projects: check: Done
+```
+
+`git status --porcelain` is empty apart from this report; `git log --oneline -1`
+is `aaa740f Make a navigate-and-extract Flow start where its user would`.
+
+## Not verified (follow-up)
+
+- **Still nothing ran in a browser or against a provider.** The refusal above is
+  executed against the built domain package; the three call sites that reach it
+  are read from source.
+- **Core's prompt assembly was not read end to end.** I established that no
+  *page* context can carry the origin (the packet is the only page data, and its
+  location refuses a blank page) and that no *instruction* carries it. If Core
+  puts some other text in the build's prompt, it would still have to have been
+  told the origin by someone, and nothing in this repository tells it.
+- **Whether a blank build would fail cleanly** — as a build refusal with a code —
+  or as an unhandled throw. I did not trace `safeEvidenceUrl`'s throw up to the
+  tool boundary, because the decision did not turn on it.
