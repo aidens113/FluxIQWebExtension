@@ -8,8 +8,16 @@
 // structures had no representation at all, and the forms model, navigation
 // state, element change, interaction recency and the truncation totals existed
 // only inside the recorder or not as fields anyone downstream could read.
+//
+// `controls.ts` is the one module here whose answer is not carried as a field.
+// It says which of the page's controls change what the page shows and which
+// are the site's standing footer, and the snapshot's ranking reads it to decide
+// what the bounded element list describes first -- which is the difference
+// between a model being shown a filter rail and being shown twenty footer
+// links.
 
 export { markElementActivity, forgetElementActivity, type SnapshotElementEntry } from "./changes";
+export { isFrontLayer, isPageStateControl, isSiteChrome } from "./controls";
 export { dialogEvidence } from "./dialogs";
 export { formEvidence } from "./forms";
 export { forgetInteractedElements, recentlyInteractedElements, rememberInteractedElement } from "./interactions";
