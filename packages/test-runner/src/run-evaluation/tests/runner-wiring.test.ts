@@ -213,7 +213,7 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
  */
 test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the Core action probe, and the final-state facts", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts \} from "\.\/lane-rules\/index\.js";/u);
+  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage \} from "\.\/lane-rules\/index\.js";/u);
   // L1: the probe reads a mark it planted on the start page, which no overlay can refuse, instead of typing into a
   // field in a fresh tab that restarted the site's load-timed overlays. It lives in its own module and is tested there.
   assert.match(source, /import \{ proveCoreActionRoundTrip \} from "\.\/core-action-probe\/index\.js";/u);
@@ -377,4 +377,31 @@ test("the same workflow is not refused on the recording lane, which records it",
     await rm(runsDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     await rm(scenarioLab, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
+});
+
+/**
+ * The harness stops reaching the page for a Flow that was asked to reach it.
+ *
+ * `prepareFlowPage` loaded the fixture's entry point before every Flow run, so
+ * a `navigate-and-extract` Flow with no navigation node in it played back as
+ * though it had one (`run-mudwci8d-de88aa32`, 2026-09-23). The rule is in
+ * `lane-rules/flow-start-page.ts` and tested there; what no unit can show is
+ * that the runner obeys it -- that the load is now conditional, and that the
+ * tab really is left blank -- so the call site is pinned here.
+ */
+test("the runner leaves a Flow that must reach its own page on a blank tab, and proves any arming before it does", async () => {
+  const source = await runnerSource();
+  assert.match(source, /const startPage = flowStartPage\(\{ task: creation\?\.task, moment, armedFacts: pageFacts\.afterArm \}\);/u, "the runner asks the rule rather than deciding again");
+  assert.equal(source.match(/flowStartPage\(/gu)?.length, 1, "one decision, taken in the one hook both Flow lanes and the repair lane prepare through");
+  const at = {
+    decide: source.indexOf("const startPage = flowStartPage({"),
+    load: source.indexOf('if (startPage !== "blank-tab") {'),
+    armedFacts: source.indexOf("if (!unarmedBuild) await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));"),
+    blank: source.indexOf('if (startPage !== "scenario-start-page") await page.goto(BLANK_TAB_URL);'),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.decide < at.load && at.load < at.armedFacts && at.armedFacts < at.blank, "the armed rendering is proved on a loaded page, and only then is the tab blanked");
+  assert.match(source, /const BLANK_TAB_URL = "about:blank";/u, "the blank tab is a browser page the extension refuses to automate, so only a navigation can leave it");
+  // The one remaining load in the hook is the conditional one: nothing reaches the fixture for a Flow that was told to.
+  assert.equal(source.slice(at.decide, at.blank).match(/await openScenarioStart\(/gu)?.length, 1);
 });

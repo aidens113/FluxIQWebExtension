@@ -11,8 +11,18 @@
 import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
 import { array, integer, invalid, record, stringArray, text, type JsonRecord } from "./api-readings.js";
 
-/** Core's own ceiling on a published trace: one entry per evidence-loop iteration, plus the deterministic iteration 0. */
+/** Core's own ceiling on a build's decisions: its evidence-loop iterations, plus the deterministic iteration 0. */
 const MAX_EVIDENCE_LOOP_STEPS = 65;
+/**
+ * Core's ceiling on the *rows* of a published trace, which is a different
+ * number from the decisions above. One decision writes one row, except the kind
+ * that edits the draft and re-runs a step: that writes its own row and then the
+ * row for the call the rerun makes, both under the single iteration that paid
+ * for them. A build may therefore publish up to two rows per decision, and
+ * `traceStepCount` and `steps` are held to that rather than to the decision
+ * count.
+ */
+const MAX_EVIDENCE_LOOP_TRACE_ROWS = 129;
 /** Core's ceiling on the evidence one build may accumulate, in bytes. */
 const MAX_EVIDENCE_BYTES = 7_340_032;
 
@@ -31,7 +41,14 @@ export type ExistingAdaptationEvidenceLoop = {
    */
   additionalProviderCallCount?: number;
   totalProviderCallCount?: number;
+  /**
+   * The rows of Core's published trace, which is not a call count and must not
+   * be read as one. A decision that edits the draft and re-runs a step writes
+   * two rows under one iteration, so this sits above `iterationCount` by
+   * however many decisions did that.
+   */
   traceStepCount?: number;
+  /** The loop's decisions, plus the deterministic observation it may make before the first. */
   iterationCount: number;
   toolCallCount: number;
   evidenceBytes: number;
@@ -74,7 +91,12 @@ function outsideItsContract(loop: ExistingAdaptationEvidenceLoop): boolean {
       || loop.totalProviderCallCount !== loop.providerCallCount + (loop.additionalProviderCallCount ?? 0)
       || loop.totalProviderCallCount > LLM_LAB_MAX_CALLS_PER_RUN))
     || (loop.additionalProviderCallCount !== undefined && loop.totalProviderCallCount === undefined)
-    || (loop.traceStepCount !== undefined && loop.traceStepCount !== loop.iterationCount)
+    // The rows are at least the decisions they record and at most two per
+    // decision. This read `traceStepCount === iterationCount`, which was true
+    // only while Core counted rows as decisions: a build that corrected a step
+    // and re-ran it published more rows than iterations and was rejected here
+    // as malformed, although it was the first record of the two that was right.
+    || (loop.traceStepCount !== undefined && (loop.traceStepCount < loop.iterationCount || loop.traceStepCount > MAX_EVIDENCE_LOOP_TRACE_ROWS))
     || (loop.providerCallCount !== undefined && (loop.iterationCount < loop.providerCallCount || loop.iterationCount > loop.providerCallCount + 1))
     // Core's own ceiling, not a number of our own. A build now explores by
     // running the node library's nodes, so it makes one tool call per step it
@@ -84,7 +106,9 @@ function outsideItsContract(loop: ExistingAdaptationEvidenceLoop): boolean {
     // more calls than decisions.
     || loop.toolCallCount > MAX_EVIDENCE_LOOP_STEPS || loop.toolCallCount > loop.iterationCount
     || loop.evidenceBytes > MAX_EVIDENCE_BYTES || loop.toolIds.length > MAX_EVIDENCE_LOOP_STEPS
-    || (loop.steps !== undefined && loop.steps.length > MAX_EVIDENCE_LOOP_STEPS);
+    // One published step per trace row, so bounded by the rows and not by the
+    // decisions.
+    || (loop.steps !== undefined && loop.steps.length > MAX_EVIDENCE_LOOP_TRACE_ROWS);
 }
 
 /**

@@ -33,12 +33,21 @@ import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } 
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
-import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts } from "./lane-rules/index.js";
+import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
+
+/**
+ * The blank tab a browser opens on, and where a Flow that must reach its own
+ * page is left to start. The extension refuses to automate it
+ * (`runtime/unsupported-page.ts`) except by navigating away from it, which is
+ * exactly the split wanted: a Flow whose first node is its navigation leaves,
+ * and one that has no navigation cannot do anything here at all.
+ */
+const BLANK_TAB_URL = "about:blank";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number };
@@ -260,13 +269,22 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // and the armed facts are not checked against a page that was not armed.
         const unarmedBuild = moment === "build" && creation?.task.variantArmedAfterBuild === true;
         if (workflow.variant && !unarmedBuild) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
+        // Where this leaves the tab (`lane-rules/flow-start-page.ts`): the fixture's entry point, or, for a task whose
+        // instruction is to go somewhere, the blank tab a browser opens on -- so reaching the page is the Flow's own
+        // first step rather than the harness's, and a Flow that cannot reach it fails where a person would see it fail.
+        const startPage = flowStartPage({ task: creation?.task, moment, armedFacts: pageFacts.afterArm });
         // Runs before every Flow run and every exploration. The reset and any arm are server-side, and the tab still shows
         // wherever the recording or the exploration ended, so it is loaded again: unarmed, or the Flow starts on that last
         // page; armed, or a drift variant is judged against a page that never drifted. Load the entry point, not a reload.
-        await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
-        // The rendering the Flow meets is now on screen. Check the armed facts here (none for an unarmed run), so
-        // "the fixture did not arm as declared" cannot arrive disguised as "the generated Flow failed".
-        if (!unarmedBuild) await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
+        if (startPage !== "blank-tab") {
+          await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
+          // The rendering the Flow meets is now on screen. Check the armed facts here (none for an unarmed run), so
+          // "the fixture did not arm as declared" cannot arrive disguised as "the generated Flow failed". A tab that is
+          // about to be blanked loads only for this proof, and pays one extra load of the entry point for it.
+          if (!unarmedBuild) await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
+        }
+        // Blanking also clears whatever the exploration left on screen, which is the other half of what the load was for.
+        if (startPage !== "scenario-start-page") await page.goto(BLANK_TAB_URL);
       },
       recordEvidence: async (evidence: E) => {
         // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:

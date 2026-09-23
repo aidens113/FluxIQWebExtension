@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR } from "../catalog-text";
+import { WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR } from "../catalog-text";
 
 test("the node says to detect the list, name it by its handle, and that it saves its own rows", () => {
   assert.match(WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, /web\.detect_repeating_structure/u);
@@ -23,9 +23,29 @@ test("the node says to detect the list, name it by its handle, and that it saves
 test("the grammar leads with the handle form, and says how to keep, rename and read columns and pages", () => {
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   assert.equal(grammar.length <= 600, true, `${grammar.length} characters`);
-  for (const term of ['handle: "extraction.N"', 'fields?: {key: "detectedKey" | "detectedKey@href"}', "paginate?: false (this page only)", "renamed", "absolute URL", "raw href"]) {
+  for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "paginate?: false (this page)", "absolute URL", "raw href"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
   assert.equal(grammar.indexOf("handle") < grammar.indexOf("item: css"), true, "the handle form comes before the literal request");
   assert.match(grammar, /Both take minItems \(default 1; 0 allows none\), maxItems/u);
+});
+
+test("the shape a model copies shows a bound as well as a mark, over a column under the plan's own key", () => {
+  // Both first-page reads of the 2026-09-23 campaign wrote the one condition
+  // this text showed -- the advertisement mark -- and no bound at all, under
+  // instructions asking for items rated 4.0 or higher and priced under $50.
+  const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
+  assert.equal(grammar.includes('{field: "colKey", is: "absent"}'), true, "the mark condition is still shown");
+  assert.equal(grammar.includes('{field: "yourKey", atLeast: 4, lessThan: 50}'), true, "a bound is shown, over a column under the plan's own key");
+  assert.equal(grammar.indexOf("where?:") < grammar.indexOf("item: css"), true, "the conditions belong to the handle form, before the literal request");
+
+  // The example carries one of each too. A key the example omits is a key the
+  // model is refused for writing beside `extractList`, and what the example
+  // shows inside `where` is the shape a model copies.
+  const where = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.where as ReadonlyArray<Record<string, unknown>>;
+  assert.equal(where.length, 2);
+  assert.equal(where[0]?.is, "absent");
+  assert.deepEqual(where[1], { field: "price", lessThan: 50 });
+  const fields = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.fields as Record<string, unknown>;
+  assert.equal(Object.hasOwn(fields, String(where[1]?.field)), true, "a literal condition names a column the request reads");
 });

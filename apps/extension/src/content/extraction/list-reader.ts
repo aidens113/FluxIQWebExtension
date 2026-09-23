@@ -11,6 +11,16 @@
 // `pagination.ts`, which stops at the list's end, the mode's bound, or the
 // command's deadline.
 //
+// The page a read starts on is waited for in three steps that ask different
+// questions. `page-render.ts` asks whether the list is *there* -- drawn, and no
+// longer arriving on its own. `list-wait.ts` asks whether it is *all* there, by
+// revealing the end of the list and seeing what that brings, because a page
+// that loads its last results on scroll is stable, unfinished and
+// indistinguishable from a finished one until something scrolls. Only then is
+// the request's own `minItems` asked for. A read that pages asks only the
+// first, for its first item: it reaches the rest of the list by its own
+// mechanism.
+//
 // An item already read is not read again, so a page that appends its next
 // items rather than replacing them yields each item once. In `scroll` mode an
 // item is its element and its content together (decision D16): a virtualised
@@ -67,6 +77,7 @@ import type { WebAutomationExtractListPagination, WebAutomationExtractListReques
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { itemFilterFor } from "./item-filter";
+import { awaitListComplete } from "./list-wait";
 import { awaitListPresent, awaitPageRendered } from "./page-render";
 import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
 
@@ -165,10 +176,27 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // a ceiling, not a sleep -- a page that already holds its items is read at
   // once -- and what it waits for is what the request said the page must hold.
   if (!resume) {
-    // A paginated read waits only for its first item: the rest may legitimately
-    // be on a later page, and `pagination.ts` already waits for each of those.
+    // Three waits, in this order, and the order is the point. First the list is
+    // there and has stopped arriving on its own -- a paginated read waits only
+    // for its first item, since the rest may legitimately be on a later page
+    // and `pagination.ts` waits for each of those. Then, for a read of one
+    // page, the end of the list is revealed until nothing more comes
+    // (`list-wait.ts`): the results a page loads only once its bottom is
+    // scrolled to are the rest of this page, not another one, and no live Flow
+    // has ever carried a scroll node before its extraction. Only then is the
+    // request's own minimum waited for, because before the reveal a page that
+    // is one scroll from holding sixteen items holds twelve, and waiting there
+    // spends the whole command on a sixteenth that was never going to come.
     const required = requiredItems(request.minItems);
-    await awaitListPresent(item, paginate ? Math.min(1, required) : required, paginate === undefined, progress);
+    await awaitListPresent(item, 1, paginate === undefined, progress);
+    if (paginate === undefined) {
+      // `maxItems` bounds records rather than items, so only a read with no
+      // condition can tell from the page that it has already seen every item it
+      // could keep -- which is how the picker's five-row preview is read
+      // without scrolling the page a person is looking at.
+      await awaitListComplete(item, keeps ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
+      if (required > 1) await awaitListPresent(item, required, false, progress);
+    }
   }
 
   for (;;) {

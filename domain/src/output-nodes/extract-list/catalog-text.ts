@@ -67,22 +67,31 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * The shape of `extractList`, for a model to write one: the handle of a
  * detected list first, then the literal request.
  *
- * **What `where` costs here, and where the rest of it went.** Core cuts a
- * parameter description at 600 characters and the string was already at 595, so
- * the conditions that say which items are records (C5) are shown as the one
- * shape a model copies and nothing more. What each condition may say --
- * `is: "present"`, `is: "absent"`, and `atLeast`, `atMost`, `lessThan`,
- * `greaterThan` on the number in the column -- is written out in the detect
- * tool's own description (`runtime/llm-evidence/tools.ts`), which has no bound
- * and which a model must read before it can name a handle at all. Two things
- * were given up for the room, both in the literal branch the text itself calls
- * a guess: `required?: false` in its field spec, and its own `where` example.
- * The resolver still accepts both, and a literal request is the fallback for a
- * list nothing detected -- the path this text exists to steer a model away from.
+ * **A model writes the shape it is shown, and until 2026-09-23 the shape it was
+ * shown could only leave advertisements out.** `where` appeared here as one
+ * condition, `{field, is: "absent"}`. The numeric bounds -- `atLeast`, `atMost`,
+ * `lessThan`, `greaterThan` on the number in a column -- were written out only
+ * in the detect tool's own description (`runtime/llm-evidence/tools.ts`), whose
+ * paragraph about conditions is about telling an advertisement from a result.
+ * Both first-page reads of the 2026-09-23 campaign did exactly that and no
+ * more: each left the sponsored cards out and carried no other condition, under
+ * instructions asking for items "rated 4.0 or higher and priced under $50"
+ * (`run-mudwci8d-de88aa32`, `run-mudw1ktb-0557816b`). So the shape now shows a
+ * bound beside the mark, and shows it over a column named by the plan's own
+ * key, which is what a plan calls a column it keeps and the name it reaches for
+ * next (`plan-resolution/extraction/conditions.ts`).
+ *
+ * **What the room for it cost.** Core cuts a parameter description at 600
+ * characters. Three things went, each said better elsewhere or said by the
+ * shape itself: "those columns renamed", which `{yourKey: "colKey"}` now shows;
+ * and, in the literal branch the text itself calls a guess, `required?: false`
+ * in its field spec and its own `where` example. The resolver still accepts
+ * every one of them, and a literal request is the fallback for a list nothing
+ * detected -- the path this text exists to steer a model away from.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `Detected: {handle: "extraction.N", fields?: {key: "detectedKey" | "detectedKey@href"}, where?: [{field: "detectedKey", is: "absent"}], paginate?: false (this page only)};`,
-  "fields: those columns renamed; link reads the absolute URL, @href the raw href.",
+  `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false (this page)};`,
+  "link gives the absolute URL, @href the raw href.",
   `Else {item: css, fields: {key: "css"|"css@attr"|"column:Header"|{kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?}},`,
   `paginate?: {mode: "next", next: css, maxPages} (loadMore: control, numbered: pages)|{mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
   `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
@@ -105,11 +114,18 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * so an example with no `where` is an example that cannot be narrowed to the
  * rows a person asked for. It shows the literal form, since the example is a
  * literal request; the detected form names a detected column by `field`.
+ *
+ * It shows two conditions, and the second is the one the campaign of
+ * 2026-09-23 never wrote: a bound on the number in a column, over a column the
+ * request itself keeps. An instruction's filter is usually a number -- under
+ * fifty, four stars and up, in stock -- and a model shown only "leave the
+ * advertisements out" wrote only that, twice, while the rows it returned
+ * included a $79.99 pair asked for under $50.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   item: "li.product",
   fields: { name: ".name", price: ".price", url: "a@href" },
-  where: [{ read: ".sponsored-label", is: "absent" }],
+  where: [{ read: ".sponsored-label", is: "absent" }, { field: "price", lessThan: 50 }],
   paginate: { mode: "next", next: "a.next", maxPages: 5 },
   minItems: 1
 };
