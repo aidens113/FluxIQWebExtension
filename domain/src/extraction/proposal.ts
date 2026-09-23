@@ -40,7 +40,24 @@ export type WebAutomationExtractionProposal = {
   /** How many items the run holds on the page as it was proposed. */
   itemCount: number;
   fields: WebAutomationExtractionProposalField[];
-  /** How the list continues past this page, when a control for it was detected. `scroll` is never proposed; only the user picks it. */
+  /**
+   * How the list continues past this page, when a control for it was detected.
+   * `scroll` is never proposed; only the user picks it.
+   *
+   * It stays unproposed, and the reason is worth writing down, because a
+   * campaign run of 2026-09-23 made this line look like the cause of an answer
+   * four rows short. A results page that draws twelve of its sixteen results
+   * and fetches the rest when the bottom of the list is scrolled to continues
+   * by its *Next* control, not by scrolling: proposing `scroll` for it would
+   * say the list goes on by scrolling where it goes on by a control, and
+   * `scroll` mode also makes a read content-aware, so a page that recycles a
+   * row would count it again. The lazily loaded tail is not another page of
+   * the list, it is the rest of *this* one, and the read completes the page it
+   * is on rather than paginating into it
+   * (`apps/extension/src/content/extraction/list-wait.ts`). So a detected
+   * pagination still means "a control moves to the next page", and nothing
+   * here has to guess which of the two a page is doing.
+   */
   pagination?: WebAutomationExtractListPagination | undefined;
   /** How sure the inference is, from 0 to 1. */
   confidence: number;

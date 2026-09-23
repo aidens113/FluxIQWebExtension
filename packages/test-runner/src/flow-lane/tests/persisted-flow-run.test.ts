@@ -144,6 +144,57 @@ test("a failed Flow is a result, not a runner fault: the structured failure surv
   assert.equal(outcome.actions[0]?.status, "failed");
 });
 
+/**
+ * `run-mudwci8d-de88aa32`, 2026-09-23. The first click missed a dialog the
+ * fixture opens on a four-second timer; the retry found it 2.4 seconds later
+ * and the run went on to store its records. That miss became the run's
+ * `automationFailure`, the campaign's only issue code and its `firstFailure`
+ * line, while the defect that decided the run -- twelve wrong records -- was
+ * readable only inside `extraction.steps[0]`.
+ */
+test("the run's failure is the one that decided it, and a fault the ladder recovered from is reported as recovered", async () => {
+  const missed = { category: "target_not_found", code: "web.target.not_found", retryable: true };
+  const channel = { category: "action_failed", code: "web.action.failed", retryable: true };
+  const recoveredRun = control(
+    { runPersistedFlow: async () => ({ session: { runId: "run.one", status: "failed" } }) },
+    {
+      summary: { runId: "run.one", status: "failed" },
+      actionAttempts: [
+        attempt({ attemptId: "a0", nodeId: "node.s1", order: 0, status: "failed", failure: missed }),
+        attempt({ attemptId: "a1", nodeId: "node.s1", order: 1, status: "succeeded", metadata: { retry: { attemptNumber: 2, maxAttempts: 3, backoffMs: 250, rung: "retry_node" } } }),
+        attempt({ attemptId: "a2", nodeId: "node.s7", order: 2, status: "failed", failure: channel }),
+        attempt({ attemptId: "a3", nodeId: "node.s7", order: 3, status: "succeeded" }),
+      ],
+    },
+  );
+  const recovered = await executeRecordedFlowRun(recoveredRun.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.equal(recovered.status, "failed");
+  assert.equal(recovered.failure, null, "every node ended on a successful attempt, so no failure decided the run");
+  assert.deepEqual(recovered.recoveredFailures, [missed, channel], "both faults are kept, in attempt order, as faults that were absorbed");
+
+  // A node the ladder never rescued is where the run stopped, and it is the
+  // failure reported -- even though an earlier, recovered node failed first.
+  const stopped = control(
+    { runPersistedFlow: async () => ({ session: { runId: "run.one", status: "failed" } }) },
+    {
+      summary: { runId: "run.one", status: "failed" },
+      actionAttempts: [
+        attempt({ attemptId: "a0", nodeId: "node.s1", order: 0, status: "failed", failure: missed }),
+        attempt({ attemptId: "a1", nodeId: "node.s1", order: 1, status: "succeeded" }),
+        attempt({ attemptId: "a2", nodeId: "node.s7", order: 2, status: "failed", failure: channel }),
+      ],
+    },
+  );
+  const outcome = await executeRecordedFlowRun(stopped.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(outcome.failure, channel);
+  assert.deepEqual(outcome.recoveredFailures, [missed]);
+
+  // A run that met no fault states none of either kind.
+  const clean = await executeRecordedFlowRun(control().client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.equal(clean.failure, null);
+  assert.equal(clean.recoveredFailures, undefined, "a run that recovered nothing says nothing, rather than claiming an empty recovery");
+});
+
 test("a bounded run timeout or abort waits through an empty running detail for terminal durable attempts", async () => {
   for (const bounded of ["timeout", "abort"] as const) {
     const original = new RunnerFailure("runtime.behavior", `synthetic ${bounded}`, { details: { bounded, timeoutMs: 30_000 } });

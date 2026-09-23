@@ -7,7 +7,17 @@ import type { CreatedFlowBuild } from "../flow-lane/index.js";
 import type { LiveLlmObservedUsage } from "./observed-usage.js";
 
 /**
- * `calls` is Core's count. Where Core gave none, a build it says it sent a
+ * `calls` is Core's count: `totalProviderCallCount`, which is one per loop
+ * decision plus whatever the build spent outside the loop. It is per
+ * *decision*, never per published trace row. Core counted rows until t098, and
+ * the one kind of decision that edits the draft and re-runs a step writes two
+ * of them under a single iteration, so a build that made 16 provider calls was
+ * reported here as having made 22 and every per-call figure anyone derived from
+ * it -- input tokens, money, seconds -- came out 27% too low
+ * (`run-mudw1ktb-0557816b`). Nothing changed in this function for that; the
+ * number arriving in `providerCalls` is simply the right one now.
+ *
+ * Where Core gave none, a build it says it sent a
  * request for counts as one call and a build it says it never sent counts as
  * none, so an unknown count can neither pass as spend-free nor hide a refusal
  * behind a guess. `observedCalls` is empty and `perCallRecords` is

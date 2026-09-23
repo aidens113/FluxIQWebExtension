@@ -12,6 +12,21 @@
 //   gives its live `value`, an element with a test id gives its `text`, and a
 //   remaining leaf with words in it gives its `text`.
 //
+// **A value the page draws twice is proposed once, as the page's own tightest
+// statement of it.** The everything store's rating is
+// `<span aria-hidden="true">3.7</span>` beside `<i><span>3.7 out of 5 stars
+// </span></i>`: two text leaves, both covering every item, sitting next to each
+// other under labels that are hashed class names, so a model choosing columns
+// has nothing to tell them apart with. It chose the sentence, and a nine-node
+// Flow that branched correctly and read every requested column matched zero
+// rows because every rating read `3.7 out of 5 stars` where `3.7` was expected
+// (`test-runs/instances/r5/run-mudwci8d-de88aa32`). A leaf the page states more
+// tightly elsewhere is no longer offered at all, so the trap is not put in
+// front of the model rather than being explained to it. What counts as the same
+// value stated twice is the page's own `aria-hidden` mark and never a reading
+// of the words; `value-statement.ts` holds that rule and why it has to be a
+// mark.
+//
 // **Sources come from the run, not from one item of it, and until 2026-09-23
 // they came from one.** A mark is a value only some items carry -- the ad label
 // on a sponsored card, the "Sponsored" tag on a promoted tile -- and the item
@@ -65,6 +80,7 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import { testIdFor } from "../describe-element";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
+import { statedMoreTightly } from "./value-statement";
 
 /**
  * One place a record's value comes from, before it is keyed and measured. The
@@ -294,7 +310,9 @@ function elementSources(item: Element): FieldSource[] {
       sources.push({ kind: "link", label, selector, sensitive });
     } else if (VALUE_TAGS.has(tag)) {
       sources.push({ kind: "value", label, selector, sensitive });
-    } else if (testIdFor(element) !== undefined || isTextLeaf(element)) {
+    } else if (testIdFor(element) !== undefined) {
+      sources.push({ kind: "text", label, selector, sensitive });
+    } else if (isTextLeaf(element) && !statedMoreTightly(item, element)) {
       sources.push({ kind: "text", label, selector, sensitive });
     }
   }

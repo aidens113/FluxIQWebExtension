@@ -8,6 +8,13 @@
 // after every distinct element (`repeat-exemplars.ts`), so a many-row page's
 // template cannot crowd its own buttons out of the head of the list.
 //
+// After what was touched come the controls that change what this page shows --
+// its facets, its sort, its pager -- and the controls of whatever is painted
+// over it; then the page's own controls, its links, and last of all its
+// footer's. `evidence/controls.ts` holds those rules and the measurement that
+// forced them: a store's filter rail ranked 56th of 611 elements, behind twenty
+// footer links, and reached no packet a model was ever given.
+//
 // A list of elements is not a picture of a page, so the snapshot also carries
 // `evidence`: the dialogs in front of it, what is covering its controls,
 // whether it is still loading, its landmarks, what repeats on it, its forms,
@@ -22,7 +29,7 @@
 // this file, using the same shared rule rather than a second one.
 
 import { compactObject } from "./compact-object";
-import { pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
+import { isFrontLayer, isPageStateControl, isSiteChrome, pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { isEventBackedElement, observedEventElementQueue } from "./event-elements";
 import {
@@ -191,16 +198,24 @@ function snapshotElements(): { entries: SnapshotElementEntry[]; counts: Snapshot
     included.push(element);
   }
   const repeats = repeatExemplars(included, touchedElements());
-  const followerRank = (element: Element): number => (repeats.followers.has(element) ? 1 : 0);
-  const entries = included
+  // Each element is asked what it is once, before the sort rather than inside
+  // it. A comparator that asked would ask O(n log n) times, and every question
+  // here reads computed style or walks ancestors.
+  const ranked = included.map((element) => ({
+    element,
+    follower: repeats.followers.has(element) ? 1 : 0,
+    bucket: snapshotElementBucket(element),
+    priority: elementPriority(element)
+  }));
+  const entries = ranked
     .sort((left, right) =>
-      followerRank(left) - followerRank(right) ||
-      snapshotElementBucket(left) - snapshotElementBucket(right) ||
-      elementPriority(right) - elementPriority(left) ||
-      documentOrder(left, right)
+      left.follower - right.follower ||
+      left.bucket - right.bucket ||
+      right.priority - left.priority ||
+      documentOrder(left.element, right.element)
     )
     .slice(0, MAX_SNAPSHOT_CANDIDATES)
-    .map((element) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element)) }));
+    .map(({ element }) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element)) }));
   return { entries, counts: { scanned, candidates: candidates.length, matched: included.length } };
 }
 
@@ -268,21 +283,49 @@ function shouldIncludeSnapshotElement(element: Element): boolean {
  * Coarse relevance, applied before the priority score. A bucket says what an
  * element is for; the score only orders within one.
  *
- * The page's own controls come before its links (`isPageControlElement` says
- * why). A button satisfies both tests and the first one wins, so it stays with
- * the fields it applies; what falls through to the primary-control bucket is
- * links, summaries, menu items and tabs.
+ * What changes the page comes first, ahead even of the page's own form controls
+ * (`evidence/controls.ts` says why, and what it costs to get this wrong): a
+ * facet, a price band, a sort order, a page of results. A bounded list has to
+ * describe the controls nothing else describes, and a refinement the model is
+ * never shown is a refinement it cannot apply.
+ *
+ * The page's own controls come next, before its links (`isPageControlElement`
+ * says why). A button satisfies both tests and the first one wins, so it stays
+ * with the fields it applies; what falls through to the primary-control bucket
+ * is links, summaries, menu items and tabs.
+ *
+ * The site's footer comes after all of them. It is the same on every page of
+ * the site and changes nothing about this one, so its twenty legal and
+ * corporate links rank behind the page's own content instead of ahead of it --
+ * and still ahead of the page's prose, because a footer link is at least
+ * something to act on.
  */
 function snapshotElementBucket(element: Element): number {
   if (isEventBackedElement(element)) return 0;
-  if (isPageControlElement(element)) return 1;
-  if (isPrimaryControlElement(element)) return 2;
-  if (isInteractableUiElement(element)) return 3;
-  if (isSemanticTextElement(element)) return 4;
-  if (meaningfulText(directVisibleText(element))) return 5;
-  if (hasVisualMedia(element)) return 6;
-  if (meaningfulText(visibleText(element))) return 7;
-  return 8;
+  if (isPageStateControl(element)) return 1;
+  const control = controlBucket(element);
+  if (control !== undefined) {
+    // A control of whatever is painted over the page joins them: the page
+    // behind a consent banner cannot be clicked until the banner is answered.
+    // Only a page control asks, so a sticky header's links stay links.
+    if (control === 2 && isFrontLayer(element)) return 1;
+    // Only a control is demoted for sitting in the footer. Footer prose is text
+    // like any other text and is ranked as text, which it would be anyway.
+    return isSiteChrome(element) ? 5 : control;
+  }
+  if (isSemanticTextElement(element)) return 6;
+  if (meaningfulText(directVisibleText(element))) return 7;
+  if (hasVisualMedia(element)) return 8;
+  if (meaningfulText(visibleText(element))) return 9;
+  return 10;
+}
+
+/** Which of the three control bands the element is in, or `undefined` for something that is not a control. */
+function controlBucket(element: Element): number | undefined {
+  if (isPageControlElement(element)) return 2;
+  if (isPrimaryControlElement(element)) return 3;
+  if (isInteractableUiElement(element)) return 4;
+  return undefined;
 }
 
 function hasMeaningfulInteractableIdentity(element: Element): boolean {

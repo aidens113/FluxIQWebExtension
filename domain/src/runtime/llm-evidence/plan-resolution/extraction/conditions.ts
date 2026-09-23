@@ -29,6 +29,25 @@
 // the table does not keep, and leaves the saved request able to run with no
 // reference to its own field map.
 //
+// **A condition may also name a column by the key the plan keeps it under**,
+// and until 2026-09-23 it could not. A plan that keeps a column renames it --
+// `fields: { rating: "css-1f32dgn", price: "css-00egoa7" }` -- and the next
+// thing it writes is `where: [{ field: "rating", atLeast: 4 }]`, in the words
+// it has just this moment invented. That named no detected column and was
+// refused `web.handle.unknown_field`, so the one condition that survived a live
+// build was the one over a column the plan did *not* keep and therefore did not
+// rename: the advertisement mark, named by its detected key. Both first-page
+// reads of the 2026-09-23 campaign left the sponsored cards out and applied no
+// other condition at all (`run-mudwci8d-de88aa32`, `run-mudw1ktb-0557816b`,
+// twelve rows of an unnarrowed page), which is exactly the shape of a
+// vocabulary that accepts the mark and refuses "rated 4.0 or higher".
+//
+// The plan's own keys are not a guess: they are declared in the same object,
+// two lines above, and each names one detected column. The detected vocabulary
+// is still read first, so a key that means something to the detection keeps
+// meaning it; only a name the detection does not know is looked for among the
+// columns the plan kept.
+//
 // **A bare string is refused rather than read.** `where: ["ad_label"]` could
 // only mean `is: "present"`, which is the opposite of what a person writing it
 // about sponsored placements means, and a filter that silently keeps the
@@ -38,12 +57,21 @@ import type { WebAutomationExtractField, WebAutomationExtractItemCondition } fro
 import { WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS, WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE } from "../../../../actions/extraction";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
-import { webExtractionNamedColumn, type WebExtractionColumnIssue } from "./columns";
+import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnIssue } from "./columns";
 import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionConditions =
   | { ok: true; where: WebAutomationExtractItemCondition[] }
   | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+
+/**
+ * The columns a condition may name: the ones the detection showed the model,
+ * and the ones this same plan keeps, under the model's own keys.
+ */
+export type WebExtractionConditionColumns = {
+  detected: Record<string, WebAutomationExtractField>;
+  kept: Record<string, WebAutomationExtractField>;
+};
 
 /** The keys a condition may use to name its column, in the order they are read. The first one written wins, and two that disagree are malformed. */
 const COLUMN_KEYS = ["field", "read", "column", "key"] as const;
@@ -68,13 +96,13 @@ const HEADER_PREFIX = "column:";
  * one thing to say about which items it wants should not have to remember a
  * shape to say it in.
  */
-export function keptWebExtractionConditions(where: unknown, detected: Record<string, WebAutomationExtractField>, path: WebPlanValuePath): WebExtractionConditions {
+export function keptWebExtractionConditions(where: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): WebExtractionConditions {
   const written = Array.isArray(where) ? where : [where];
   if (written.length === 0) return { ok: false, issue: "web.handle.malformed", path };
   const conditions: WebAutomationExtractItemCondition[] = [];
   for (const [index, entry] of written.entries()) {
     const at = Array.isArray(where) ? [...path, index] : path;
-    const condition = readCondition(entry, detected, at);
+    const condition = readCondition(entry, columns, at);
     if (!condition.ok) return condition;
     conditions.push(condition.condition);
   }
@@ -83,13 +111,13 @@ export function keptWebExtractionConditions(where: unknown, detected: Record<str
 
 type OneCondition = { ok: true; condition: WebAutomationExtractItemCondition } | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
 
-function readCondition(entry: unknown, detected: Record<string, WebAutomationExtractField>, path: WebPlanValuePath): OneCondition {
+function readCondition(entry: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): OneCondition {
   if (!isJsonRecord(entry)) return { ok: false, issue: "web.handle.malformed", path };
   const stray = Object.keys(entry).find((key) => !CONDITION_KEYS.has(key));
   if (stray !== undefined) return { ok: false, issue: "web.handle.malformed", path: [...path, stray] };
   const named = columnName(entry);
   if (named === undefined) return { ok: false, issue: "web.handle.malformed", path };
-  const column = webExtractionNamedColumn(named, detected, path);
+  const column = conditionColumn(named, columns, path);
   if (!column.ok) return column;
   const is = entry.is === undefined ? undefined : presenceOf(entry.is);
   if (entry.is !== undefined && is === undefined) return { ok: false, issue: "web.handle.malformed", path: [...path, "is"] };
@@ -115,6 +143,19 @@ function readCondition(entry: unknown, detected: Record<string, WebAutomationExt
       greaterThan: bounds.greaterThan
     })
   };
+}
+
+/**
+ * The column a condition names, read in the detection's vocabulary first and
+ * then in the plan's own: a name the detection knows always means the column
+ * the detection showed, and only a name it does not know is looked for among
+ * the columns this plan keeps. A name neither knows is refused as before.
+ */
+function conditionColumn(named: string, columns: WebExtractionConditionColumns, path: WebPlanValuePath): WebExtractionColumn {
+  const detected = webExtractionNamedColumn(named, columns.detected, path);
+  if (detected.ok || detected.issue !== "web.handle.unknown_field") return detected;
+  const kept = webExtractionNamedColumn(named, columns.kept, path);
+  return kept.ok || kept.issue !== "web.handle.unknown_field" ? kept : detected;
 }
 
 /** The column the condition names: one of the naming keys, or a table header. Two that disagree name no one column. */
