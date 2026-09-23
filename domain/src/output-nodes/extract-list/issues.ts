@@ -63,7 +63,16 @@ export function webAutomationExtractListIssues(value: unknown): WebAutomationExt
   addPaginateIssues(value.paginate, keys.paginate, issues);
   // One code, not two: the reader refuses a condition carrying a key it does
   // not know, so an unknown key is already an unreadable `where`.
-  if (value.where !== undefined && !readable({ where: value.where })) issues.add("web.extract_list.invalid_where");
+  //
+  // The probe keeps the request's own `fields`, because a condition naming one
+  // of them by `field` is read against them and cannot be read against the
+  // probe's. Without them, every literal `where: [{field: "price", lessThan:
+  // 50}]` -- the shape a model writes when the instruction says "under $50" --
+  // was refused `invalid_where` for naming a column the probe does not have,
+  // while the page would have run the request as written. A `fields` the
+  // reader refuses carries its own code already, so the probe keeps its own
+  // rather than reporting one fault twice.
+  if (value.where !== undefined && !readable({ ...conditionFields(value.fields), where: value.where })) issues.add("web.extract_list.invalid_where");
   addItemBoundIssues(value, issues);
   if (issues.size === 0 && webAutomationExtractListRequestValue(value) === undefined) issues.add("web.extract_list.unreadable");
   return [...issues];
@@ -118,6 +127,11 @@ function addItemBoundIssues(value: JsonObject, issues: IssueSet): void {
 
 function readable(overrides: JsonObject): boolean {
   return webAutomationExtractListRequestValue({ ...PROBE_REQUEST, ...overrides }) !== undefined;
+}
+
+/** The request's own fields for a `where` probe to read `field` conditions against, or none when the reader refuses them. */
+function conditionFields(fields: JsonValue | undefined): JsonObject {
+  return fields !== undefined && readable({ fields }) ? { fields } : {};
 }
 
 type DeclaredKeys = { request: ReadonlySet<string>; paginate: ReadonlySet<string>; fieldSpec: ReadonlySet<string> };

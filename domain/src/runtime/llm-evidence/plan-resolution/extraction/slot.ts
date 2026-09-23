@@ -88,10 +88,14 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   const fieldsKey = value.columns !== undefined ? "columns" : "fields";
   const columns = keptWebExtractionColumns(value[fieldsKey], binding.extractList.fields, [fieldsKey]);
   if (!columns.ok) return refused(columns.issue, columns.path);
-  // Conditions are read against the columns the *detection* found, not the ones
-  // the plan kept: the mark that tells a sponsored card from an organic one is
-  // exactly the column a table of products does not want.
-  const where = value.where === undefined ? undefined : keptWebExtractionConditions(value.where, binding.extractList.fields, ["where"]);
+  // Conditions are read against the columns the *detection* found, because the
+  // mark that tells a sponsored card from an organic one is exactly the column
+  // a table of products does not want -- and against the columns this plan
+  // keeps, because a plan that renames a detected column to `rating` then says
+  // `{field: "rating", atLeast: 4}` in the words it has itself just written.
+  const where = value.where === undefined
+    ? undefined
+    : keptWebExtractionConditions(value.where, { detected: binding.extractList.fields, kept: columns.fields }, ["where"]);
   if (where !== undefined && !where.ok) return refused(where.issue, where.path);
   const paginate = keptPagination(value.paginate, binding);
   if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
