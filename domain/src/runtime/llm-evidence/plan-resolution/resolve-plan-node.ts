@@ -60,7 +60,10 @@
 // publishes, buys, edits or deletes something a person is asked about rather
 // than something that happens every time it runs. That is a different answer
 // from a refusal and is reported as one: `needs_permission` is nobody's to
-// correct but the person's.
+// correct but the person's. A caller running a node against the live page has
+// already gated that call against the page the model is looking at, and says so
+// with `gatedByCaller`, so one act is not put to the gate twice under two
+// different rules.
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -128,6 +131,27 @@ export type WebPlanNodeResolutionInput = {
    * causes nothing lasting. Never this domain's reading of the control.
    */
   declaredConsequences?: readonly AutomationStudioActionConsequence[] | undefined;
+  /**
+   * That this resolution is for a call the caller is about to make and has
+   * gated itself, rather than for a step of a Flow.
+   *
+   * There are two moments a web action meets the gate and they are not the
+   * same event. `node-run/run.ts` runs a node against the live page, and gates
+   * that call against the page in front of the model: it requires a
+   * declaration on *every* acting node rather than only a committing one, and
+   * refuses with the page attached so whatever was in the way has a handle the
+   * model can act on next. A step of a Flow is gated here instead, because a
+   * Flow runs every time with nobody watching and the question is about the
+   * step rather than about one call. Asking twice would put the same act to
+   * the gate under two different rules, and the run-node path would be refused
+   * for not declaring something it had already declared.
+   *
+   * Absent is the safe answer on purpose. A caller that forgets it is gated
+   * here as well as wherever else it gates, which costs a refusal; a caller
+   * that had to opt *in* and forgot would pass ungated, which is the defect
+   * this whole seam exists to close.
+   */
+  gatedByCaller?: true;
 };
 
 export type WebPlanNodeResolution =
@@ -238,6 +262,7 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
   if (outcome.status === "refused") return refusal(input.parameters, outcome.refusals);
   // The step is asked about with the parameters it would really run with, so
   // the request names the control the model was shown rather than a handle.
+  if (input.gatedByCaller) return outcome;
   const acting = actingStep(input.nodeDefinitionId, outcome.status === "resolved" ? outcome.parameters : input.parameters);
   const permission = await webPlanStepPermission({
     nodeDefinitionId: acting.nodeDefinitionId,
