@@ -31,12 +31,27 @@ export type ExistingAdaptationDeclaredAction = {
   /** The call id, or the step's ref: what joins this record to the build's trace. */
   ref: string;
   verb: string;
+  /**
+   * Whether taking the action changes anything: `observe` for one that reads,
+   * waits or asserts, `mutate` for one that acts. `null` from a Core older than
+   * the field, which is not the same as an action that said it reads.
+   */
+  effect: string | null;
   /** Withheld by Core as `null` when the model was never shown that name. */
   controlName: string | null;
   controlKind: string | null;
   consequences: string[];
   permitted: boolean;
   missing?: string[];
+  /**
+   * Classes an observing action named that Core did not treat as lasting.
+   *
+   * The measurement this exists for: a model that calls reading a page
+   * `create_new` is no longer refused for it, and this is where that stays
+   * visible -- rather than being invisible until a build stops to ask
+   * permission to read a list (`run-mueozmp8-348a2057`).
+   */
+  disregarded?: string[];
 };
 
 /** Core's reading of what the build declared against what the person's instruction asks for. */
@@ -109,10 +124,12 @@ function declaredAction(entry: unknown, at: string): ExistingAdaptationDeclaredA
     actionId: text(action.id, `${at}.action.id`),
     ref: text(action.ref, `${at}.action.ref`),
     verb: text(action.verb, `${at}.action.verb`),
+    effect: typeof action.effect === "string" ? action.effect : null,
     controlName: typeof control.name === "string" ? control.name : null,
     controlKind: typeof control.kind === "string" ? control.kind : null,
     consequences: stringArray(item.consequences ?? [], `${at}.consequences`),
     permitted: item.permitted === true,
     ...(item.missing === undefined ? {} : { missing: stringArray(item.missing, `${at}.missing`) }),
+    ...(item.disregarded === undefined ? {} : { disregarded: stringArray(item.disregarded, `${at}.disregarded`) }),
   };
 }

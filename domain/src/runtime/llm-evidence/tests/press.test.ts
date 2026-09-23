@@ -165,7 +165,7 @@ for (const [label, consequences] of PERMISSION_CASES) {
       const result = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get(label)! } }, consequences: [...consequences] }, permission });
 
       // Core is asked with the words the model was shown and the model's own classes.
-      assert.deepEqual(asked, [{ consequences: [...consequences], control: { name: label, kind: "button" }, verb: "click" }], label);
+      assert.deepEqual(asked, [{ consequences: [...consequences], control: { name: label, kind: "button" }, verb: "click", effect: "mutate" }], label);
       if (permitted) {
         assert.equal(result.resultCode, "web.action.succeeded", label);
         assert.equal(lab.clicked.length, 1, label);
@@ -190,7 +190,7 @@ test("a press that declares nothing lasting is still put to Core, and an unreada
   // every press in four measured live builds gave, and it used to stop here:
   // the check was never called, so what a permitted press had declared could
   // only be deduced from the absence of a refusal.
-  assert.deepEqual(asked, [{ consequences: [], control: { name: "New post", kind: "button" }, verb: "click" }]);
+  assert.deepEqual(asked, [{ consequences: [], control: { name: "New post", kind: "button" }, verb: "click", effect: "mutate" }]);
 
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.bad", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["spend_a_little"] }, permission });
   assert.equal(unreadable.resultCode, "web.action.rejected.invalid_input");

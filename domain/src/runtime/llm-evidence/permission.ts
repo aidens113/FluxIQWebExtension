@@ -9,6 +9,18 @@
 // it asks for, and answers; when the answer is no it has already raised the
 // request that goes to the person, so this module only reports the refusal.
 //
+// **An action that only reads is never gated, whatever it declared.** The
+// model's word is the authority on what a press means on this page; it is not
+// the authority on whether the action acts at all, and this domain already
+// knows that from its own safety table. On 2026-09-23 a build was told to
+// collect a page of products into a table, ran the list-reading node, declared
+// `create_new` for it because a dataset felt like something new, and was
+// refused -- so FluxIQ stopped and asked a person for permission to read the
+// page the instruction told it to read (`run-mueozmp8-348a2057`: 21 provider
+// calls, 233,440 tokens, no Flow). The instruction is the authority: if it says
+// to read the list, reading the list is the work. So `effect` travels with
+// every declaration, and Core disregards the classes an observing action named.
+//
 // An action that declares no lasting consequence has nothing to be permitted:
 // moving about, opening, ticking a row are undone by looking away. It is still
 // put to Core, which is the change of 2026-09-22 and is not a formality. Saying
@@ -56,21 +68,31 @@ export type WebActionPermission =
  * `control.name` must be the words the model was shown for the control -- Core
  * carries it to the person only when it can find it in evidence already shown.
  * `kind` is one plain word for what the control is; `verb` what the action does to it.
+ *
+ * `effect` is the one field here that is not the model's word: it is what this
+ * domain knows about the action from its own safety table
+ * (`actions/effect.ts`), and Core reads it as the fact that an action which
+ * only looks at the page cannot have done anything lasting, whatever the model
+ * declared for it. Every caller states it, because a caller that forgot would
+ * be gating a read.
  */
 export async function webActionPermission(input: {
   check: AutomationStudioActionPermissionCheck | undefined;
   declared: unknown;
   control: { name: string | undefined; kind: string };
   verb: string;
+  effect: "observe" | "mutate";
 }): Promise<WebActionPermission> {
   if (input.declared === undefined) return { kind: "no_consequence" };
   if (!Array.isArray(input.declared) || input.declared.length > 10 || !input.declared.every(isAutomationStudioActionConsequence)) return { kind: "invalid" };
   const declared: readonly AutomationStudioActionConsequence[] = input.declared;
   // Nobody to ask, so the whole declaration is what is missing: none of it was
-  // put to anyone. An empty one asks for nothing, so there is nothing to miss.
-  if (input.check === undefined) return declared.length ? { kind: "refused", missing: declared, requestId: null } : { kind: "no_consequence" };
+  // put to anyone. An empty one asks for nothing, so there is nothing to miss,
+  // and neither has a read: nothing it named could outlast it, so refusing it
+  // would be refusing the instruction's own work with nobody able to allow it.
+  if (input.check === undefined) return declared.length && input.effect !== "observe" ? { kind: "refused", missing: declared, requestId: null } : { kind: "no_consequence" };
   const name = boundedName(input.control.name) || `an unlabelled ${input.control.kind}`;
-  const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: boundedVerb(input.verb) });
+  const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: boundedVerb(input.verb), effect: input.effect });
   if (verdict.permitted) return { kind: "permitted" };
   return { kind: "refused", missing: verdict.missing, requestId: verdict.requestId };
 }

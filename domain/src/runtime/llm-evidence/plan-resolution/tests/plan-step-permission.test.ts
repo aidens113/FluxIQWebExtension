@@ -26,6 +26,11 @@
 //   closing a banner or applying a filter needs no permission -- and Core still
 //   hears the empty answer and keeps it, which is what makes the declaration
 //   readable rather than deducible;
+// - a step that only reads the page is never put to a person at all, whatever
+//   class the model wrote on it. That is the fault of `run-mueozmp8-348a2057`:
+//   a build told to collect a page of products into a table declared
+//   `create_new` for the node that reads the list, and stopped to ask a person
+//   for permission to read the page its instruction told it to read;
 // - the declaration never reaches the node the Flow runs;
 // - it is read off the node's own `consequences` field, which is where the
 //   draft a build accrues writes it and where the Flow script's reserved step
@@ -45,6 +50,8 @@ import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type W
 const TYPE_NODE = webAutomationOutputNodeId("web.dom.type");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
 const SNAPSHOT_NODE = webAutomationOutputNodeId("web.dom.capture_snapshot");
+/** A step that only reads: it waits for the page to say something and changes nothing. */
+const READ_NODE = webAutomationOutputNodeId("web.dom.wait_for_text");
 
 const COMPOSER_URL = "https://scheduler.test/compose";
 const body: JsonObject = { tagName: "textarea", selector: "#body", accessibleName: "Post body", attributes: { name: "body" } };
@@ -193,6 +200,41 @@ test("a press that causes nothing lasting builds with nobody asked, and the decl
   assert.equal(node?.parameters?.selector, "#schedule");
   // The step beside it only enters text, which is not a consequence and is never asked about.
   assert.equal(resolved.ok && resolved.plan.subflows[0]?.nodes[0]?.parameters?.text, "Hello");
+});
+
+test("a step that only reads builds with nobody asked, whatever class was written on it", async () => {
+  const gate = gateHolding([]);
+  const runtime = await explored(gate);
+  const resolved = await resolveAutomationStudioFlowBootstrapPlanParameters({
+    plan: {
+      schemaVersion: "0.1" as const,
+      router: { name: "Router", rules: [], fallback: { kind: "fail" as const } },
+      subflows: [{
+        key: "main",
+        name: "Main",
+        role: "primary" as const,
+        nodes: [{ key: "read", definitionId: READ_NODE, definitionVersion: "1.0.0", parameters: { text: "Results" }, consequences: ["create_new"] }],
+        edges: []
+      }]
+    },
+    projectId: "project.one",
+    flowId: "flow.one",
+    binding: runtime,
+    handlesIssued: true,
+    permissionFor: (step) => gate.checkFor({ kind: "flow_step", id: step.definitionId, ref: step.ref })
+  });
+
+  // The Flow this step belongs to is the one whose instruction asked for the
+  // reading. Waiting for text, asserting, extracting a list: none of them
+  // leaves anything behind, so none of them is a question for anybody.
+  assert.equal(resolved.ok, true);
+  assert.equal(gate.request, undefined);
+  assert.deepEqual(
+    gate.declarations.map((entry) => ({ ref: entry.action.ref, effect: entry.action.effect, consequences: entry.consequences, disregarded: entry.disregarded, permitted: entry.permitted })),
+    [{ ref: "main.read", effect: "observe", consequences: [], disregarded: ["create_new"], permitted: true }]
+  );
+  const node = resolved.ok ? resolved.plan.subflows[0]?.nodes[0] : undefined;
+  assert.equal(node?.parameters && "consequences" in node.parameters, false, "the declaration is read by Core, never run by the Flow");
 });
 
 test("a declaration Core cannot read is not a declaration, and the step is refused", async () => {
