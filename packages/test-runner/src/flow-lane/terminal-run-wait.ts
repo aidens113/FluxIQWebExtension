@@ -13,6 +13,7 @@
 // fetching it.
 
 import { RunnerFailure } from "../failure.js";
+import { everyNodeEndedSucceeded, type NodeAttempt } from "./node-recovery.js";
 
 /**
  * A timed-out synchronous Core run can keep executing after its HTTP client has
@@ -46,6 +47,32 @@ export const TERMINAL_DETAIL_POLL_MS = 250;
  * wait; it never fails the run.
  */
 export const RECOVERY_RECORD_WAIT_MS = 300_000;
+
+/**
+ * How long the recovery record is waited for when the run has no failed
+ * attempt left for a recovery to work from.
+ *
+ * Core's recovery plans from the deterministic diagnosis of an attempt that
+ * failed. With none, it takes the unclassified path and its whole plan is one
+ * `stop` step, under its own refusal: *"No failed attempt reached the
+ * diagnosis, so there is nothing to plan."*
+ * (`runtime/recovery/plan.ts`, `unclassifiedPlan`). There is no exploration,
+ * no patch and no provider call, so there is nothing in flight that a wait
+ * could catch.
+ *
+ * Both runs of `ten-sites-r5` (2026-09-23) were exactly that run and both spent
+ * the full five minutes on it. `run-mudw1ktb-0557816b`'s five attempts all
+ * succeeded; `run-mudwci8d-de88aa32` met two faults and the ladder recovered
+ * both, so no node was left failed either. Each waited 5 min 11 s of a run of
+ * 7 to 8 minutes -- 622 s of the campaign's 959 s of run time -- for a record
+ * that was never going to be written.
+ *
+ * It is a short grace rather than nothing, because the test is about what Core
+ * *can* plan from and not about what Core has already written: if Core is a
+ * poll away from saving a record this rule did not expect, the record is still
+ * read. What it never does is spend five minutes finding that out.
+ */
+export const RECOVERY_RECORD_GRACE_MS = 5_000;
 
 /**
  * The closed code for a granted run Core was still finishing when the wait for
@@ -82,15 +109,25 @@ export type PersistedFlowTerminalWait = {
    * read terminal (`RECOVERY_RECORD_WAIT_MS`). Its expiry never fails the run.
    */
   recoveryWaitMs?: number;
+  /**
+   * How long the recovery record is waited for when the run left no failed
+   * attempt for a recovery to plan from (`RECOVERY_RECORD_GRACE_MS`).
+   */
+  recoveryGraceMs?: number;
 };
 
 /** What Core may still owe a reader about a run it has already ended. */
 export type PendingWork = "verdict" | "recovery";
 
-/** As much of a run detail as this rule reads. */
+/**
+ * As much of a run detail as this rule reads. `actions` is narrowed to the two
+ * members `recoveryCouldBeRunning` reads -- Core's status word and the node the
+ * attempt ran -- and to nothing else: this module still knows nothing about
+ * what an attempt is, only whether one was left failed.
+ */
 export type TerminalRunCandidate = {
   summaryStatus: string | undefined;
-  actions: readonly unknown[];
+  actions: readonly NodeAttempt[];
   resultVerification: unknown;
   runDetail: Readonly<Record<string, unknown>>;
 };
@@ -125,6 +162,7 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const intervalMs = wait.intervalMs ?? TERMINAL_DETAIL_POLL_MS;
   const recoveryWaitMs = wait.recoveryWaitMs ?? RECOVERY_RECORD_WAIT_MS;
+  const recoveryGraceMs = wait.recoveryGraceMs ?? RECOVERY_RECORD_GRACE_MS;
   const started = now();
   let deadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_WAIT_MS);
   // What Core was still doing at the last terminal read, if anything: the
@@ -141,8 +179,12 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
         if (!pending) return { detail };
         // From the first terminal read the run itself is complete and only
         // Core's own note is outstanding, so the recovery record takes its
-        // own, shorter bound.
-        if (pending === "recovery" && terminal === undefined) deadline = Math.min(deadline, now() + recoveryWaitMs);
+        // own, shorter bound -- shorter again when the run left no failed
+        // attempt for a recovery to plan from, since then there is nothing in
+        // flight to wait for.
+        if (pending === "recovery" && terminal === undefined) {
+          deadline = Math.min(deadline, now() + (recoveryCouldBeRunning(detail) ? recoveryWaitMs : recoveryGraceMs));
+        }
         terminal = detail;
       }
     } catch { /* best-effort: the original timeout or abort stays authoritative until exact terminal evidence arrives, so a diagnostic read that fails must never replace what stopped the run */ }
@@ -182,6 +224,25 @@ export function pendingWork(
   if (wait.awaitVerdict && detail.summaryStatus === "succeeded" && detail.resultVerification === null) return "verdict";
   if (wait.awaitRecovery && detail.summaryStatus === "failed" && !recoveryRecordWritten(detail.runDetail)) return "recovery";
   return undefined;
+}
+
+/**
+ * Whether a recovery could still be running for this run: some node it
+ * attempted ended on an attempt that did not succeed.
+ *
+ * Core's recovery is planned from the deterministic diagnosis of a *failed
+ * attempt*. A run whose every node ended on a successful attempt hands it
+ * none, whether because nothing failed or because the ladder recovered
+ * everything that did, and Core's own refusal for that case says so: "No
+ * failed attempt reached the diagnosis, so there is nothing to plan."
+ *
+ * It is deliberately the run's attempts and not its interventions. The ladder's
+ * diagnosis placeholder is written with the run's first save, so an
+ * intervention says nothing about whether a recovery is running -- which is
+ * exactly why the wait could not tell the two apart before.
+ */
+function recoveryCouldBeRunning(detail: TerminalRunCandidate): boolean {
+  return !everyNodeEndedSucceeded(detail.actions);
 }
 
 /** Whether Core's recovery wrote its record: the gate that decided it, or the trace of its stages. */

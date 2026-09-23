@@ -8,6 +8,7 @@ import { FLUXIQ_HTTP_MAX_TIMEOUT_MS, isBoundedHttpFailure, type FluxIQHttpOption
 import { runActionStatus } from "../run-manifest/index.js";
 import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
+import { recoveredByNode } from "./node-recovery.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
 import { awaitTerminalRunDetail, pendingWork, TERMINAL_DETAIL_POLL_MS, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
@@ -227,8 +228,33 @@ export type PersistedFlowRunOutcome = {
   actions: PersistedFlowAction[];
   /** Core's own account of whether the result was judged, and how it came out. */
   resultVerification: PersistedResultVerification;
-  /** The first structured failure Core recorded, read from its `failure` field. `null` when none was recorded. */
+  /**
+   * The failure that decided the run: the first structured failure Core
+   * recorded on a node whose last attempt did **not** succeed. `null` when the
+   * run met no failure, and `null` when it met one and every node it met one on
+   * still ended on a successful attempt.
+   *
+   * It was the first failure record on any attempt, and that reported a run's
+   * headline failure as whatever it stumbled over first, however completely the
+   * ladder then rescued it. Measured on `run-mudwci8d-de88aa32` (2026-09-23):
+   * the first click missed a dialog the fixture opens on a 4-second timer,
+   * attempt 2 found it 2.4 seconds later and the run went on to produce its
+   * records -- and `web.target.not_found` became the run's `automationFailure`,
+   * the campaign's only issue code and its `firstFailure` line, while the defect
+   * that actually decided the run, twelve wrong records, was readable only
+   * inside `extraction.steps[0]`.
+   *
+   * A recovered failure is still evidence of what the page did, so it is kept:
+   * it moves to `recoveredFailures` rather than being dropped.
+   */
   failure: AutomationStudioFailureRecord | null;
+  /**
+   * Every failure Core recorded on a node that then ended on a successful
+   * attempt, in attempt order. Absent when the run recovered from none, so its
+   * presence is the positive statement "this run met these faults and absorbed
+   * them" rather than a silence.
+   */
+  recoveredFailures?: AutomationStudioFailureRecord[];
   /** LLM interventions Core recorded for the run. Week 1 runs provider-free, so this must stay 0. */
   harnessActivations: number;
   /**
@@ -447,7 +473,11 @@ function outcomeFromDetail(
 ): PersistedFlowRunOutcome {
   const actions = detail.actions;
   if (!actions.length) throw new RunnerFailure("action.dispatch", "The approved Flow produced no durable action attempt");
-  const failure = actions.map((action) => action.failure).find((record): record is AutomationStudioFailureRecord => record !== null) ?? null;
+  // Which attempts belong to a node that recovered, so the run's failure is the
+  // one that decided it and a recovered one is legible as recovered.
+  const recovered = recoveredByNode(actions);
+  const failure = actions.find((action, index) => action.failure !== null && recovered[index] !== true)?.failure ?? null;
+  const recoveredFailures = actions.flatMap((action, index) => (action.failure !== null && recovered[index] === true ? [action.failure] : []));
   const status = runStatus(detail.summaryStatus ?? sessionStatus);
   const stop = stopWithoutFailedAttempt(status, actions, new Set(detail.attemptNodeIds), actionTypes);
   // The attempts are in Core's `order`, so the first one on a node the recording's order names is where the run started.
@@ -459,6 +489,7 @@ function outcomeFromDetail(
     actions,
     resultVerification: detail.resultVerification,
     failure,
+    ...(recoveredFailures.length === 0 ? {} : { recoveredFailures }),
     harnessActivations: detail.harnessActivations,
     harnessRecovery,
     extracted: datasets,
