@@ -23,6 +23,12 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     review: evidence.review,
     flowId: evidence.flowId,
     flowShape: evidence.shape,
+    // Whether the Flow can reach the page it works on, or whether
+    // `prepareFlowPage("playback")` reached it for the Flow. A
+    // `navigate-and-extract` Flow with no navigation node is measured on a page
+    // somebody else opened, so the reading of everything after it depends on
+    // this line.
+    ownPage: evidence.ownPage,
     runtimeRunId: evidence.run.runId,
     status: evidence.run.status,
     // Core's own word for whether the result was judged, and how it came out.
@@ -31,7 +37,11 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     resultVerification: evidence.run.resultVerification,
     reportedVerdict: evidence.observation.reportedVerdict,
     harnessActivations: evidence.run.harnessActivations,
+    // The failure that decided the run, which is not the first one it met: a
+    // fault the ladder recovered from moves to `recoveredFailures`, so a
+    // transient miss cannot become the run's headline.
     failure: evidence.run.failure,
+    recoveredFailures: evidence.run.recoveredFailures ?? [],
     stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
     // Which route the Router took, and each rule's verdict and reason. Ids and
     // Core's matcher reasons only: a reason names the path and the test, never

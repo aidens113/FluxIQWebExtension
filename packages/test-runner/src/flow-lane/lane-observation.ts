@@ -191,10 +191,65 @@ function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedV
   return run.resultVerification === "unverified" ? "unverified" : "passed";
 }
 
-/** A failed run always carries a category; `ambiguous_or_unknown` when Core recorded no structured record. A run nobody judged reported no failure to categorize. */
+/**
+ * The codes this lane writes when a failed run carries no structured failure
+ * record of Core's, so the category is never the whole account of why it
+ * failed.
+ *
+ * The category is Core's one closed list
+ * (`AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES`), which this facility may not
+ * add to, and none of its members says "the steps worked and the answer was
+ * wrong". The code does, and a `flow_lane.` prefix is how a reader tells a
+ * facility finding from one of Core's own codes -- the same rule
+ * `flow_lane.granted_run_unsettled` already follows.
+ */
+export const FLOW_LANE_REPORTED_FAILURE_CODES = Object.freeze({
+  /** Core ran the Flow, judged what it produced, and said it does not answer the request. */
+  resultRefuted: "flow_lane.result_refuted",
+  /** Core failed the run with action nodes it never visited, and no attempt failed. */
+  stoppedWithoutFailedAttempt: "flow_lane.stopped_without_failed_attempt",
+  /** Core failed the run, it met faults, and every node it met one on still ended on a successful attempt. */
+  everyFailureRecovered: "flow_lane.every_failure_recovered",
+  /** Core failed the run, no attempt failed, and nothing this lane can read says why. */
+  noFailedAttempt: "flow_lane.no_failed_attempt",
+} as const);
+
+/**
+ * What a failed run is reported as.
+ *
+ * Core's own record when there is one that decided the run
+ * (`PersistedFlowRunOutcome.failure`). Otherwise what *is* known, which used to
+ * be the bare word `ambiguous_or_unknown` with no code at all -- and that is
+ * the case this lane exists to measure. A created Flow that runs clean and
+ * answers wrongly fails exactly here, and both runs of `ten-sites-r5`
+ * (2026-09-23) reached it: `run-mudw1ktb-0557816b` had five successful attempts
+ * and no failure record, Core's verification refuted its result twice with
+ * `core.result.does_not_answer_request`, and the campaign filed it under a word
+ * meaning "the producer could not determine a cause". Nothing was ambiguous;
+ * nobody had written down what was known.
+ *
+ * Every branch below is a fact read from the run, not an inference:
+ *
+ * - it stopped with action nodes unvisited and nothing failed;
+ * - Core judged the result and refuted it;
+ * - it met faults and recovered from all of them, and Core failed it anyway;
+ * - none of those, which is the one case that is genuinely unknown -- and it
+ *   now says so under a code, so a reader can tell "nothing said why" from
+ *   "nobody asked".
+ *
+ * The category stays inside Core's closed list, so `unexpected_state` -- "the
+ * run reached a route, status, or state other than the expected one" -- carries
+ * the two that are a wrong outcome rather than an undetermined one. A run
+ * nobody judged reported no failure to categorize at all.
+ */
 function reportedFailure(run: PersistedFlowRunOutcome): RunEvaluation["automationFailureReported"] {
   if (reportedVerdict(run) !== "failed") return null;
   const record: AutomationStudioFailureRecord | null = run.failure;
-  if (!record) return { category: "ambiguous_or_unknown" };
-  return { category: record.category, ...(record.code === undefined ? {} : { code: record.code }) };
+  if (record) return { category: record.category, ...(record.code === undefined ? {} : { code: record.code }) };
+  if (run.stoppedWithoutFailedAttempt) return { category: "unexpected_state", code: FLOW_LANE_REPORTED_FAILURE_CODES.stoppedWithoutFailedAttempt };
+  if (run.resultVerification === "refuted") return { category: "unexpected_state", code: FLOW_LANE_REPORTED_FAILURE_CODES.resultRefuted };
+  // Named, never blamed: the recovered miss is not what decided the run, so it
+  // is reported as a run that recovered and failed anyway, not as its cause.
+  if (run.recoveredFailures?.length) return { category: "ambiguous_or_unknown", code: FLOW_LANE_REPORTED_FAILURE_CODES.everyFailureRecovered };
+  return { category: "ambiguous_or_unknown", code: FLOW_LANE_REPORTED_FAILURE_CODES.noFailedAttempt };
 }

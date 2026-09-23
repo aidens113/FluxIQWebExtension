@@ -88,8 +88,12 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
   assert.deepEqual(evidence, [outcome]);
   assert.equal(core.calls.includes("oracle"), false, "a dataset task does not consult the page oracle");
 
+  assert.deepEqual(outcome.ownPage, { required: false, navigationNodes: 1, reached: true }, "an extract task works on the page it was given");
+
   const snapshot = createdFlowLaneSnapshot(outcome);
   assert.equal(snapshot.lane, "created-flow");
+  assert.deepEqual(snapshot.ownPage, { required: false, navigationNodes: 1, reached: true });
+  assert.deepEqual(snapshot.recoveredFailures, [], "a run that absorbed nothing says so, rather than leaving the field out");
   assert.equal(snapshot.flowId, FLOW_ID);
   assert.deepEqual(snapshot.flowShape.actionTypes, { "web.browser.navigate": 1, "web.dom.extract_list": 1 });
   assert.deepEqual(snapshot.actions.map((action) => action.actionType), ["web.browser.navigate", "web.dom.extract_list"]);
@@ -112,6 +116,31 @@ test("a dataset task whose Flow has no extract node fails as exactly that", asyn
   const { run, evidence } = await runLane(core);
   await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /The created Flow has no extract node, so it could not collect the records the task asks for/u.test(error.message));
   assert.equal(evidence[0]?.observation.extraction?.[0]?.status, "not_run");
+});
+
+/**
+ * `run-mudwci8d-de88aa32`, 2026-09-23. The lane resets the fixture and then
+ * calls `prepareFlowPage("playback")`, which loads the scenario's start page
+ * before the Flow runs -- so a Flow with no navigation node plays back as
+ * though it had one. This run's records were right and it still cannot reach
+ * the page they came from, which is the point: the harness's page is not the
+ * Flow's achievement.
+ */
+test("a navigate-and-extract Flow that holds no navigation node fails on that, ahead of what its records said", async () => {
+  const core = fakeCreationCore({ graphNodes: [EXTRACTING_NODES[0], EXTRACTING_NODES[2]], attempts: [{ nodeId: "node.extract", status: "succeeded" }] });
+  const request = resolveCreatedFlowRequest(catalogScenario, datasetTask({ kind: "navigate-and-extract" }));
+  const { run, evidence } = await runLane(core, { request });
+  await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure
+    && error.category === "runtime.behavior"
+    && /holds no node that reaches its own page/u.test(error.message)
+    && error.details?.code === "flow_lane.flow_does_not_reach_its_page");
+  // Published first, as every judgement here is: the run states what it did.
+  assert.equal(evidence.length, 1);
+  assert.deepEqual(evidence[0]?.ownPage, { required: true, navigationNodes: 0, reached: false });
+  assert.deepEqual(createdFlowLaneSnapshot(evidence[0]!).ownPage, { required: true, navigationNodes: 0, reached: false });
+  // Its records matched, and that is not the same as the Flow having worked.
+  assert.equal(evidence[0]?.observation.extraction?.[0]?.matchedRecords, 2);
+  assert.equal(evidence[0]?.observation.oracleVerdict, "passed");
 });
 
 test("a goal task is judged by the fixture oracle, and fails when the goal did not hold", async () => {
