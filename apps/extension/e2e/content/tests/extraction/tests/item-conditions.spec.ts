@@ -129,14 +129,6 @@ test("a where condition on the store's own ad mark reads the results and leaves 
   const harness = await openHarness("everything-store");
   await open(harness, STORE_SEARCH);
 
-  // What the page holds, read off it directly, so the assertions below are
-  // against the store rather than against themselves.
-  const shown = await page.evaluate(() => ({
-    total: document.querySelectorAll('[data-component="search-result"][data-sku]').length,
-    sponsored: document.querySelectorAll("[data-component=\"search-result\"][data-ad-id]").length
-  }));
-  expect(shown.sponsored, "the store interleaves sponsored cards with its results").toBeGreaterThan(0);
-
   const structure = await detect(harness);
   const request = requestFrom(structure);
   // The mark is the card's own `data-ad-id`, which the store's author wrote on
@@ -146,6 +138,17 @@ test("a where condition on the store's own ad mark reads the results and leaves 
   expect(mark.coverage, "the ad mark is on some cards and not others").toBeLessThan(1);
 
   const all = await read(harness, request, "extract-all");
+
+  // What the page holds, read off it directly, so the assertions below are
+  // against the store rather than against themselves -- and read *after* the
+  // first extraction, because a read completes the page it is on: the store
+  // draws twelve of its sixteen results and loads the rest when the end of the
+  // list is revealed, which the read now does for itself (task t096).
+  const shown = await page.evaluate(() => ({
+    total: document.querySelectorAll('[data-component="search-result"][data-sku]').length,
+    sponsored: document.querySelectorAll("[data-component=\"search-result\"][data-ad-id]").length
+  }));
+  expect(shown.sponsored, "the store interleaves sponsored cards with its results").toBeGreaterThan(0);
   expect(all.count, "an unfiltered read is every item of the run").toBe(shown.total);
 
   const results = await read(harness, { ...request, where: [{ field: mark.key, is: "absent" }] }, "extract-results");
@@ -219,10 +222,6 @@ test("the model names which items it wants in the vocabulary the detection showe
   test.setTimeout(120_000);
   const harness = await openHarness("everything-store");
   await open(harness, STORE_SEARCH);
-  const shown = await page.evaluate(() => ({
-    total: document.querySelectorAll('[data-component="search-result"][data-sku]').length,
-    sponsored: document.querySelectorAll("[data-component=\"search-result\"][data-ad-id]").length
-  }));
 
   const dispatched: Array<{ actionType: string; parameters: JsonObject; recordCount: number | undefined }> = [];
   let command = 0;
@@ -294,6 +293,16 @@ test("the model names which items it wants in the vocabulary the detection showe
   expect(sent.where?.[0]?.field, "the resolved condition carries the column, not a reference to the table's fields").toBeUndefined();
   expect(JSON.stringify(sent.where?.[0]?.read)).toContain("data-ad-id");
   expect(Object.keys(sent.fields)).toEqual(columns);
+
+  // What the page holds, read off it after the extraction: a read completes the
+  // page it is on, so the store's lazily loaded results are there by now and
+  // the rows the model asked for are every card that is not an advertisement
+  // (task t096).
+  const shown = await page.evaluate(() => ({
+    total: document.querySelectorAll('[data-component="search-result"][data-sku]').length,
+    sponsored: document.querySelectorAll("[data-component=\"search-result\"][data-ad-id]").length
+  }));
+  expect(shown.sponsored, "the store interleaves sponsored cards with its results").toBeGreaterThan(0);
   expect(extraction?.recordCount).toBe(shown.total - shown.sponsored);
 
   // And the step the Flow keeps is the model's own words, handle and all, which
