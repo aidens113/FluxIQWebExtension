@@ -5,13 +5,19 @@
 //
 // What each kind reads, from the element its selector finds inside the item,
 // or from the item itself when it names none:
-// - `text`: the element's whitespace-collapsed text, with the contents of every
-//   sensitive control inside it left out. The text comes from
-//   `textOutsideSensitiveControls` (`content/sensitive-text.ts`), the one text
-//   reader snapshots, accessible names and the extract verb share, collapsed
-//   exactly as the extract verb's `readableText` collapses it. That function is
-//   not imported: `action-runtime/` wires this directory in, and reaching past
-//   its barrel into `extract.ts` would be a crossing the structure audit counts;
+// - `text`: the page's own tightest statement of the value the element shows
+//   (`value-statement.ts`) and otherwise the element's whitespace-collapsed
+//   text, with the contents of every sensitive control inside it left out. The
+//   text comes from `textOutsideSensitiveControls` (`content/sensitive-text.ts`),
+//   the one text reader snapshots, accessible names and the extract verb share,
+//   collapsed exactly as the extract verb's `readableText` collapses it. That
+//   function is not imported: `action-runtime/` wires this directory in, and
+//   reaching past its barrel into `extract.ts` would be a crossing the
+//   structure audit counts. The tightest statement is what the page declares --
+//   microdata's `content`, `aria-valuenow`, an `aria-label` restating its own
+//   text, or the copy of a paired rendering the page marked `aria-hidden` --
+//   never anything read out of the words, so an element that declares nothing
+//   tighter reads exactly as it always did;
 // - `attribute`: that attribute, unreadable when the element does not carry it;
 // - `link`: the `href` resolved against the element's base URL, unreadable when
 //   there is none or it resolves to anything but http or https, so a
@@ -33,6 +39,7 @@
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { ExtractFieldReader } from "./field-spec";
+import { tightestStatedValue } from "./value-statement";
 
 type ElementFieldReader = Exclude<ExtractFieldReader, { kind: "column" }>;
 
@@ -75,7 +82,7 @@ function readColumn(item: Element, name: string, header: string): string | undef
 }
 
 function readText(element: Element): string {
-  return normalizeText(textOutsideSensitiveControls(element));
+  return tightestStatedValue(element) ?? normalizeText(textOutsideSensitiveControls(element));
 }
 
 /** The `href` as an absolute http(s) URL, or `undefined` when there is none or it is not one. */
