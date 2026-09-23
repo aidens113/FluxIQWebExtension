@@ -71,8 +71,12 @@ with no model attached and returns **0 records against 16 expected**. Round 1's
 number — one Flow in about seventy attempts across the ten sites — predates every
 change above and **has not been re-measured**.
 
-**Next, and only this.** Re-run the ten sites to replace a number that is now
-five landings out of date, and find why a built extraction Flow returns nothing.
+**Next, and only this.** The ten-site campaign is running. Why a built
+extraction Flow returned nothing is answered and fixed on two of its three
+counts: the read never waited for the page it was sent to, and field inference
+could not name a value nested in an item. The third is open — the model can
+choose a list’s columns but not its items, so sponsored cards join the results
+and positional matching fails.
 
 **Blockers:** none.
 
@@ -623,6 +627,17 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Validation: **the supervisor re-ran the adversarial lane itself: 6/6 conditions absorbed as declared, 0 provider calls** — `renamed-submit` absorbed by `host_target_resolution`, `late-recoverable` by `retry_node` on its second attempt, `rows-per-visit` and `too-slow` over three attempts each. Domain `# pass 752 / # fail 0` on both branches; extension `# pass 731 / # fail 0`; Core service plus flow-bootstrap 363 passed with one timeout that passes alone in 4.5 s; all four `task finish` runs reported `"command":"pnpm check","passed":true`. A first lane run returned 0/6 because the machine's `FLUXIQ_TEST_TARGET=existing` leaked in; `FLUXIQ_TEST_ENV_FILES=none` is required and the lane does exit non-zero on disagreement.
 - Outcome: Done
 - Follow-up: t089 found the Lab had been reading **every absorbed run as a failure**, since Core keeps the first failure record beside a succeeded status — the measurement would have reported the exact opposite of the truth — and that the host target resolution was read one nesting level too shallow, so it was `null` in every real run while its unit tests passed. Three of the four rungs still have no input written and have never fired. A11's ask has never fired live, because the model still declares that nothing it authors is consequential. t090 (workstream C) and t091 (the permission loop's remaining holes) went out on the back of this.
+
+
+---
+
+### 2026-09-23 — The instruction path becomes the only work, and three things were stopping it being measured
+- Agent: supervisor; workers `fa-draft-routing`, `fa-permission-loop-holes`, `fa-extraction-answer`
+- Changed: t090 (branches, loops and a Flow's own recovery edge), t091 (a declaration carried through the gate, cross-checked against the instruction, and a repair that asks instead of throwing) and t092 (the two extraction defects) all merged in both repositories and pushed. Plus three Lab fixes that are the reason any number can be trusted: the scenario lab builds its contracts before the fixtures typed by them; a campaign stops after two consecutive runs that never start, quoting the Lab's own refusal; and a creation run declares its own 48-call ceiling.
+- Why: the user set the scope — only instruction-driven Flow creation, measured only on the ten campaign sites, nothing else until it works. Re-measuring those ten sites was therefore the first job, and it could not be done: the first attempt refused all 55 runs against a Core build 1,995 minutes behind its source and still printed a totals line; the second failed six of six as `performance.budget` because a creation run inherited a 26-call default shaped for a loop that no longer exists, after the model had already done the work. $0.90 bought nothing.
+- Validation: t092's defect measured model-free — the same request read 20 records on a settled page, **0** on a fresh one, 15 a second and a half later; after the fix, 15 at once on a fresh page, and detection offers the instruction's four columns at full coverage where it offered five junk ones. Before landing, the supervisor re-ran domain `# pass 752 / # fail 0` and extension `# pass 731 / # fail 0` for each task, and every `task finish` reported `"command":"pnpm check","passed":true`. `run-mudpkd77-e780792e` is the run whose own error names the call ceiling.
+- Outcome: Partial — the fixes are in, the number is not yet taken
+- Follow-up: the ten-site campaign is running against a tree carrying all of it. The remaining named product defect is that the model can choose a list's **columns** but not its **items**, so four sponsored cards join sixteen results and positional matching fails; that is t093, holding its live runs until the campaign ends, because two live runs on this machine corrupt each other — which is what produced t092's own `performance.budget` stall.
 
 ## Open Questions
 
