@@ -25,6 +25,10 @@ const PARAMETER_ID = /^[a-z][A-Za-z0-9]{0,39}$/u;
 const GRAMMAR_KEYS: ReadonlySet<string> = new Set([
   "handle", "location", "item", "itemElement", "fields", "columns", "paginate", "minItems", "maxItems",
   "key", "field", "column", "header", "attribute", "required", "kind", "selector",
+  // Which items are records (C5): the clause, the two keys that name its
+  // value, and what it may say about it. Each is the grammar's own word, so
+  // spelling it quotes nothing the model read off the page.
+  "where", "read", "is", "atLeast", "atMost", "lessThan", "greaterThan",
   "mode", "next", "control", "pages", "maxPages", "maxScrolls",
   "parameters", "extractList", "target", "element", "recordOutput", "outputId"
 ]);

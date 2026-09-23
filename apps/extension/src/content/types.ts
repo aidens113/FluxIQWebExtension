@@ -35,6 +35,7 @@ export type {
   WebAutomationAssertRequest,
   WebAutomationDialogRequest,
   WebAutomationDownloadRequest,
+  WebAutomationExtractItemCondition,
   WebAutomationExtractListPagination,
   WebAutomationExtractListRequest,
   WebAutomationKeyModifiers,

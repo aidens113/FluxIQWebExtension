@@ -32,6 +32,8 @@ export type ExtractionCheckpoint = {
   scrolls: number;
   /** Required fields some record read so far lacked. */
   missingFields: string[];
+  /** Items a `where` condition left out so far, which are not records (C5). Absent in a checkpoint written before conditions existed. */
+  filtered?: number | undefined;
 };
 
 /**
@@ -60,11 +62,20 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
-  return { records: records.map((record) => ({ ...record })), pagesRead, scrolls, missingFields: [...missingFields] };
+  // Sent but unreadable is refused, as every other member is; absent is a
+  // checkpoint from a document that had no conditions to count.
+  if (filtered !== undefined && !isCount(filtered)) return undefined;
+  return {
+    records: records.map((record) => ({ ...record })),
+    pagesRead,
+    scrolls,
+    missingFields: [...missingFields],
+    ...(filtered === undefined ? {} : { filtered })
+  };
 }
 
 function isRecord(value: unknown): value is ExtractionCheckpointRecord {

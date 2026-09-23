@@ -16,7 +16,7 @@
 //   misplaced, malformed, and in a different frame from the node -- followed by
 //   where a handle of that kind goes, when the refusal is about where or how it
 //   was written, and the position each reason applied at. The extraction
-//   node's own placements and refusals are `extraction-slot.test.ts`.
+//   node's own placements and refusals are `extraction/tests/slot.test.ts`.
 
 import assert from "node:assert/strict";
 import test from "node:test";

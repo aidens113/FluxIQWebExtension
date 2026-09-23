@@ -20,7 +20,7 @@
 //   `ambiguous`;
 // - the extraction node's `extractList` naming an `extraction.N` becomes the
 //   `web.dom.extract_list` request the detection tool kept behind it, cut to the
-//   columns and pages the plan asks for (`extraction-slot.ts`);
+//   columns and pages the plan asks for (`extraction/slot.ts`);
 // - Core's Run Output node (`builtin.policy.action`) naming a web output is
 //   resolved in its payload exactly as that output's own node is, since the
 //   payload is what the output runs with.
@@ -72,7 +72,7 @@ import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
-import { resolveWebExtractionSlot } from "./extraction-slot";
+import { resolveWebExtractionSlot } from "./extraction";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";

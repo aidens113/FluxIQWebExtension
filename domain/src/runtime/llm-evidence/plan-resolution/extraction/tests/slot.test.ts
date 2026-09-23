@@ -23,17 +23,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutomationStudioActionConsequence } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webAutomationExtractListRequestValue } from "../../../../actions/extraction";
-import { webAutomationOutputNodeId } from "../../../../output-nodes";
-import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../output-nodes/extract-list";
+import { webAutomationExtractListRequestValue } from "../../../../../actions/extraction";
+import { webAutomationOutputNodeId } from "../../../../../output-nodes";
+import { webAutomationDerivedRecordOutput, webAutomationExtractListIssues } from "../../../../../output-nodes/extract-list";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmRepeatingStructure
-} from "../..";
-import { CAPTURED_DETECTIONS, type CapturedDetection } from "../../structure/tests/captured-detections";
+} from "../../..";
+import { CAPTURED_DETECTIONS, type CapturedDetection } from "../../../structure/tests/captured-detections";
 
 const EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
 const CLICK_NODE = webAutomationOutputNodeId("web.dom.click");

@@ -3,7 +3,8 @@
 // and page) and the extraction handles the detection tool issued, into the
 // selectors and `extractList` requests the node runs with
 // (`resolve-plan-node.ts`, with the extraction node's list in
-// `extraction-slot.ts` and its columns in `extraction-columns.ts`).
+// `extraction/slot.ts`, its columns in `extraction/columns.ts` and the
+// conditions that say which items are records in `extraction/conditions.ts`).
 
 export {
   resolveWebPlanNodeParameters,

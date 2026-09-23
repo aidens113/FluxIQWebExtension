@@ -40,6 +40,7 @@ export type WebAutomationExtractListIssueCode =
   | "web.extract_list.all_fields_excluded"
   | "web.extract_list.invalid_paginate"
   | "web.extract_list.unknown_paginate_key"
+  | "web.extract_list.invalid_where"
   | "web.extract_list.invalid_max_items"
   | "web.extract_list.invalid_min_items"
   | "web.extract_list.min_items_exceed_max"
@@ -60,6 +61,9 @@ export function webAutomationExtractListIssues(value: unknown): WebAutomationExt
   if (value.itemElement !== undefined && !readable({ itemElement: value.itemElement })) issues.add("web.extract_list.invalid_item_element");
   addFieldIssues(value.fields, keys.fieldSpec, issues);
   addPaginateIssues(value.paginate, keys.paginate, issues);
+  // One code, not two: the reader refuses a condition carrying a key it does
+  // not know, so an unknown key is already an unreadable `where`.
+  if (value.where !== undefined && !readable({ where: value.where })) issues.add("web.extract_list.invalid_where");
   addItemBoundIssues(value, issues);
   if (issues.size === 0 && webAutomationExtractListRequestValue(value) === undefined) issues.add("web.extract_list.unreadable");
   return [...issues];

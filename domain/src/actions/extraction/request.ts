@@ -48,6 +48,56 @@ export type WebAutomationExtractFieldSpec = {
 export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
 
 /**
+ * One condition an item must satisfy to be read as a record (contract C5).
+ *
+ * **Which items, not just which columns.** A detected run is every element the
+ * page renders from one template, and a results page renders its advertisements
+ * from the same template as its results: the everything store's four sponsored
+ * placements are the same card as its sixteen results, with a grey "Sponsored"
+ * label pushed in front. So a read of "every product on the first page, leaving
+ * out sponsored placements" returned twenty rows where sixteen were asked for,
+ * and the columns were right while the row set was wrong.
+ *
+ * What the condition tests is **a value the page states**, named the way every
+ * other read here is named: a field of this request by key, or a field of its
+ * own for a value the record does not carry. A sponsored card is told apart
+ * from an organic one by the mark its own author put on it -- the ad label it
+ * carries, the `data-ad-id` on its container -- and never by reading its words
+ * and guessing. This repository deleted a word-list heuristic on 2026-09-18
+ * and does not want it back under another name, so there is deliberately no
+ * substring or equality test over page text here; see `where` below.
+ *
+ * `is` tests whether the page has the value at all, which is what a mark is:
+ * `absent` keeps the items that do not carry it. A numeric bound tests the
+ * number in the value -- `$1,299.00` is 1299, `4.5 out of 5 stars` is 4.5 --
+ * and an item whose value is missing or holds no number fails it, because a row
+ * with no price is not a row under $50.
+ *
+ * An empty condition -- neither `is` nor a bound -- means `is: "present"`.
+ */
+export type WebAutomationExtractItemCondition = {
+  /** A key of this request's `fields`, whose value the condition tests. Exactly one of `field` and `read`. */
+  field?: string | undefined;
+  /** What the condition reads inside the item, for a value the record does not carry. Exactly one of `field` and `read`. */
+  read?: WebAutomationExtractField | undefined;
+  /** Whether the item must have the value or must not. Refused beside a bound, which already requires one. */
+  is?: "present" | "absent" | undefined;
+  /** The number in the value must be at least this. */
+  atLeast?: number | undefined;
+  /** The number in the value must be at most this. */
+  atMost?: number | undefined;
+  /** The number in the value must be below this. */
+  lessThan?: number | undefined;
+  /** The number in the value must be above this. */
+  greaterThan?: number | undefined;
+};
+
+/** What a condition may say about its value, beside naming it. Every key a condition may carry is one of these or names the value. */
+export const WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS = ["atLeast", "atMost", "lessThan", "greaterThan"] as const satisfies readonly (keyof WebAutomationExtractItemCondition)[];
+
+export const WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE = ["present", "absent"] as const satisfies readonly NonNullable<WebAutomationExtractItemCondition["is"]>[];
+
+/**
  * How `web.dom.extract_list` reaches records past the first page, named as the
  * scenario contract's `ScenarioExtractPagination` names them (D14):
  *
@@ -139,8 +189,26 @@ export type WebAutomationExtractListRequest = {
    * nothing is never a success; a workflow where an empty list is a valid
    * answer declares `0`. A request whose minimum exceeds its maximum is
    * refused whole, since no page could satisfy it.
+   *
+   * It counts the records the read **kept**, so a filtered read declares how
+   * many rows the answer must have, not how many the page must render.
    */
   minItems?: number | undefined;
+  /**
+   * Which items are records. Every condition must hold, or the item is not
+   * read at all: it is absent from the records, from `maxItems`, from the
+   * dataset and from `missingFields`, exactly as if the page had not rendered
+   * it. Absent, every item of the run is a record, which is what a read with
+   * no `where` has always meant.
+   *
+   * There is no condition that matches page text, and that is the contract
+   * rather than an omission. A mark the page's own author wrote -- an ad label,
+   * a `data-ad-id`, a pinned badge -- is a fact about the item; a word found in
+   * its prose is a guess about what the words mean, and this repository has
+   * already paid for one of those. A read that can only be expressed by
+   * matching words is a read this contract deliberately cannot express.
+   */
+  where?: WebAutomationExtractItemCondition[] | undefined;
 };
 
 /** Upper bound on the pages one `web.dom.extract_list` may follow, mirroring the scenario contract's own. */

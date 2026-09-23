@@ -4,8 +4,9 @@
 // column's `key`, and how the list continues (`structure/packet.ts`). The model
 // is never shown a selector, so what it may say about the list is which
 // detected columns to keep and under which of its own keys
-// (`extraction-columns.ts`), whether to read past the page shown, and how many
-// items to expect. The request it gets is the one the detection kept
+// (`./columns.ts`), which of the list's items are records at all
+// (`./conditions.ts`), whether to read past the page shown, and how
+// many items to expect. The request it gets is the one the detection kept
 // (`structure/handles.ts`), cut to that.
 //
 // The list is named by its handle in each place a model was seen or is told to
@@ -15,7 +16,13 @@
 // - as the whole value, beside `fields` (or `columns`), `paginate`, `minItems`
 //   and `maxItems`;
 // - as the `item`, the literal request's name for which elements are the list;
-// - on a field, as `extraction-columns.ts` reads it.
+// - on a field, as `./columns.ts` reads it.
+//
+// `where` says which items are records, in the same column vocabulary
+// (`./conditions.ts`): a detected run holds a page's advertisements
+// as well as its results, because a results page renders both from one
+// template, and without it a read of "every product, leaving out sponsored
+// placements" returns every advertisement too.
 //
 // `paginate: false` reads only the page shown. Absent or `true`, the detected
 // pagination is read. A pagination the model wrote itself names controls it
@@ -32,11 +39,12 @@ import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   webAutomationExtractListRequestValue,
   type WebAutomationExtractListPagination
-} from "../../../actions/extraction";
-import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../structure";
-import { isJsonRecord } from "../untrusted-json";
-import { keptWebExtractionColumns, type WebExtractionColumnIssue } from "./extraction-columns";
-import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "./handle-tokens";
+} from "../../../../actions/extraction";
+import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
+import { isJsonRecord } from "../../untrusted-json";
+import { keptWebExtractionColumns, type WebExtractionColumnIssue } from "./columns";
+import { keptWebExtractionConditions } from "./conditions";
+import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
 
 /** Why an `extractList` names no one detected list. Each is a plan resolver issue code. */
 export type WebExtractionSlotIssue = WebExtractionColumnIssue | "web.handle.misplaced" | "web.handle.unknown" | "web.handle.stale";
@@ -48,7 +56,7 @@ export type WebExtractionSlotResolution =
   /** `path` is where inside the value it was refused. */
   | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath };
 
-const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "paginate", "minItems", "maxItems"]);
+const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "paginate", "minItems", "maxItems"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
 
 type Reference = { handle: unknown; location: unknown; path: WebPlanValuePath };
@@ -80,10 +88,16 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   const fieldsKey = value.columns !== undefined ? "columns" : "fields";
   const columns = keptWebExtractionColumns(value[fieldsKey], binding.extractList.fields, [fieldsKey]);
   if (!columns.ok) return refused(columns.issue, columns.path);
+  // Conditions are read against the columns the *detection* found, not the ones
+  // the plan kept: the mark that tells a sponsored card from an organic one is
+  // exactly the column a table of products does not want.
+  const where = value.where === undefined ? undefined : keptWebExtractionConditions(value.where, binding.extractList.fields, ["where"]);
+  if (where !== undefined && !where.ok) return refused(where.issue, where.path);
   const paginate = keptPagination(value.paginate, binding);
   if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
+  if (where !== undefined) request.where = where.where as unknown as JsonValue;
   if (paginate !== undefined) request.paginate = paginate as unknown as JsonObject;
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
