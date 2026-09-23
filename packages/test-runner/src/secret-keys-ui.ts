@@ -2,6 +2,7 @@ import type { Page, Response } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "./browser-evidence.js";
 import { redactText } from "@fluxiq-web-extension/test-evidence";
 import { RunnerFailure } from "./failure.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export const TESTING_LAB_DEEPSEEK_KEY_NAME = "FluxIQ Testing Lab DeepSeek";
 const SECRET_KEYS_PATH = "/programs/secret-keys";
@@ -108,7 +109,7 @@ async function createDeepSeekKey(
     await evidence.step("panel", "secret-key-name", "Name the Testing Lab DeepSeek key", () => form.getByLabel("Name").fill(keyName));
     await evidence.step("panel", "secret-key-type", "Choose the LLM key type", () => form.getByLabel("Type").selectOption("llm"));
     await evidence.step("panel", "secret-key-provider", "Choose the DeepSeek provider", () => form.getByLabel("Provider").selectOption("DeepSeek"));
-    await evidence.step("panel", "secret-key-model", "Scope the key to the DeepSeek chat model", () => form.getByLabel("Model").fill("deepseek-chat"));
+    await evidence.step("panel", "secret-key-model", "Scope the key to the DeepSeek chat model", () => form.getByLabel("Model").fill(DEFAULT_LLM_MODEL));
     await evidence.step("panel", "secret-key-scope", "Use global runtime scope for the Testing Lab key", () => form.getByLabel("Scope").selectOption("global"));
     await evidence.step("panel", "secret-key-description", "Describe the Testing Lab key", () => form.getByLabel("Description").fill("Testing Lab live-provider certification"));
     await evidence.step("panel", "secret-key-value", "Enter the DeepSeek secret value", () => form.getByLabel("Secret value").fill(secretValue), { sensitive: true });
@@ -189,7 +190,7 @@ function parseKey(input: unknown, redactionLiterals: readonly string[]): SecretK
 }
 
 function assertReusableDeepSeekKey(key: SecretKeyMetadata): void {
-  if (key.kind !== "llm" || key.provider !== "DeepSeek" || key.scope !== "global" || key.scopeRef !== undefined || key.enabled !== true || (key.model !== undefined && key.model !== "deepseek-chat")) {
+  if (key.kind !== "llm" || key.provider !== "DeepSeek" || key.scope !== "global" || key.scopeRef !== undefined || key.enabled !== true || (key.model !== undefined && key.model !== DEFAULT_LLM_MODEL)) {
     throw new Error("the named Secret Key is incompatible");
   }
 }

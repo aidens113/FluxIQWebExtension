@@ -18,6 +18,7 @@ import { configureFirstLiveDiagnosisViaUi } from "./diagnosis-ui.js";
 import { openFlowInCurrentProject, openProjectInPanel } from "./panel-navigation.js";
 import { readTargetProposalStructure } from "./adapting-run/index.js";
 import { type DemoWorkspaceState, SCHEMA_VERSION, withWorkspaceLock } from "./workspace-state.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export async function runDemoLlmAdaptation(config: DemoWorkspaceConfiguration): Promise<DemoLlmAdaptationResult> {
   return withWorkspaceLock(config, async () => withPersistentDemoCore(config, async () => {
@@ -199,13 +200,13 @@ export function adaptationCertificateCalls(
     const line = lines[index]!;
     const name = `call ${index + 1}`;
     if (line.taskKind !== taskKind) refuse(`${name} is ${line.taskKind ?? "an unnamed task"}, not ${taskKind}`);
-    if (line.provider !== "deepseek" || line.model !== "deepseek-chat") refuse(`${name} was not a deepseek-chat call`);
+    if (line.provider !== "deepseek" || line.model !== DEFAULT_LLM_MODEL) refuse(`${name} was not a deepseek/${DEFAULT_LLM_MODEL} call`);
     if (line.validationOk !== true) refuse(`${name} did not validate`);
     const { inputTokens, outputTokens, totalTokens, estimatedCostUsd, promptVersion } = line;
     if (inputTokens === null || outputTokens === null || totalTokens === null || estimatedCostUsd === null) return refuse(`${name} has no provider-reported usage`);
     if (promptVersion === null) return refuse(`${name} has no prompt version`);
     return {
-      requestId: line.requestId, purpose, provider: "deepseek", model: "deepseek-chat", promptSchemaVersion: promptVersion, sequence,
+      requestId: line.requestId, purpose, provider: "deepseek", model: DEFAULT_LLM_MODEL, promptSchemaVersion: promptVersion, sequence,
       attempt: 1, retryCount: 0, providerCallCount: 1, inputTokens, outputTokens, totalTokens, estimatedCostUsd, latencyMs: 0,
     };
   };

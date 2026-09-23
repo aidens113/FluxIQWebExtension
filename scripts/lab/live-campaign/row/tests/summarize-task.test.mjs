@@ -107,7 +107,7 @@ test("a run that reports the failure its scenario declared reads as a pass, with
 function summaryOf(tasks) {
   return {
     campaignId: "campaign-test", startedAt: "2026-09-17T18:00:00.000Z", finishedAt: "2026-09-17T19:00:00.000Z",
-    options: { profiles: { create: "create", repair: "repair" }, provider: "deepseek", model: "deepseek-chat", maxAttempts: 2 },
+    options: { profiles: { create: "create", repair: "repair" }, provider: "deepseek", model: "deepseek-flash", maxAttempts: 2 },
     totals: totalsOf(tasks), tasks,
   };
 }

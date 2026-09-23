@@ -36,7 +36,7 @@ test("a creation row carries its repair lane, and a repair row counts its replay
   assert.equal(summarizeTask(CATALOG[0], [{ attempt: 1, exitCode: 0, ramFault: null }], attempt({ stdout: resultLine({}) }), bundle(null)).repairLane, null);
   const repaired = summarizeTask(REPAIRS[0], [{ attempt: 1, exitCode: 0, ramFault: null }], attempt({ stdout: resultLine({}) }), bundle({ ...applied([replay(1)]), task: "adapt" }));
   assert.equal(repaired.repair.replayProviderCalls, 0);
-  const markdown = renderSummaryMarkdown({ campaignId: "c", startedAt: "t", finishedAt: "t", options: { profiles: { create: "p", repair: "q" }, provider: "deepseek", model: "deepseek-chat", maxAttempts: 1 }, totals: totalsOf([created]), tasks: [created] });
+  const markdown = renderSummaryMarkdown({ campaignId: "c", startedAt: "t", finishedAt: "t", options: { profiles: { create: "p", repair: "q" }, provider: "deepseek", model: "deepseek-flash", maxAttempts: 1 }, totals: totalsOf([created]), tasks: [created] });
   assert.match(markdown, /\| Repair and replays \|/u);
   assert.match(markdown, /\| applied; 1 of 1 replay\(s\) passed, 0 call\(s\) \|/u);
 });

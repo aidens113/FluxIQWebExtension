@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
 import { explorationProgressOrderIssue, refuseEvidenceGuidedCreationPermissionViaUi, settleObservedResponseText } from "../explore-proposal-ui.js";
@@ -21,8 +21,8 @@ import { readCreateUiSource } from "./module-source.js";
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 
 test("evidence-guided proposal parser retains only bounded proposal accounting", () => {
-  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
-  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: "deepseek-chat", inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4 });
+  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
+  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4 });
   assert.equal("maxCalls" in EVIDENCE_GUIDED_CREATION_LIMITS, false);
   assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, status: "applied" } } }, "project.one", "flow.one"), /escaped its checkpoint scope/u);
   // The aggregate bound is the run's token budget, not per-call tokens times a call count.
@@ -71,7 +71,7 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   // input plus output fitting one. Pinning the numbers is how ten copies of
   // them came to disagree.
   assert.deepEqual(EVIDENCE_GUIDED_CREATION_LIMITS, {
-    provider: "deepseek", model: "deepseek-chat",
+    provider: "deepseek", model: DEFAULT_LLM_MODEL,
     maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
     maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
     maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
@@ -82,7 +82,7 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   // restating a triple of their own. The 8,000 input tokens they used to carry
   // is the size measured as unable to describe a real page: the guard fired
   // before the request was sent and the run built nothing.
-  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens, maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
+  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens, maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
   assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).find(([label]) => label === "Timeout (seconds)"), ["Timeout (seconds)", "25"]);
   assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.timeoutSeconds, 45);
   // The panel's command timeout: a 60 s claim window, Core's 600 s run lease, and 15 s for the reply.

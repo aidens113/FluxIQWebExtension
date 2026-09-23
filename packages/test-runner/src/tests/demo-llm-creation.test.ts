@@ -6,6 +6,7 @@ import test from "node:test";
 import { FIRST_LIVE_CREATION_LIMITS } from "../demo-llm-create-ui/index.js";
 import { FIRST_LIVE_CREATION_PROFILE, evaluateDemoLlmCreation, persistDemoLlmCreationResult } from "../demo-llm-creation.js";
 import { DEFAULT_DEMO_LLM_CREATION_PROFILE } from "../demo-llm-profile.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 function validInput(): any {
   return {
@@ -17,7 +18,7 @@ function validInput(): any {
       recordingCount: 2, recordingProvenanceAbsent: true,
     },
     invocations: [{
-      requestId: "request.one", purpose: "flow_bootstrap", provider: "deepseek", model: "deepseek-chat",
+      requestId: "request.one", purpose: "flow_bootstrap", provider: "deepseek", model: DEFAULT_LLM_MODEL,
       promptSchemaVersion: "automation-studio.flow-bootstrap.v1", attempt: 1, retryCount: 0, providerCallCount: 1,
       inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500, estimatedCostUsd: 0.02, latencyMs: 500,
     }],
@@ -47,7 +48,7 @@ test("first creation profile enforces the one-call strict live ceiling", () => {
     maxCallsPerRun: 26, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, {
-    provider: "deepseek", model: "deepseek-chat", maxInputTokens: 4_000, maxOutputTokens: 1_000,
+    provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: 4_000, maxOutputTokens: 1_000,
     maxTotalTokens: 5_000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0,
   });
   const twoCalls = validInput();

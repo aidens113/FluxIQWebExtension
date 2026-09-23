@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST } from "@fluxiq-web-extension/test-contracts";
 import { expandMatrix, parseLabCommand } from "../commands.js";
 
 test("parses finite run options", () => assert.deepEqual(parseLabCommand(["run", "basic-form", "--seed", "7", "--evidence", "events"]), { command: "run", scenarioId: "basic-form", seed: 7, evidence: "events" }));
@@ -89,7 +89,7 @@ test("live LLM CLI takes a run token budget only when one is typed", () => {
 });
 
 test("--llm-task repair is a live task with the same budget options as adapt", () => {
-  const repair = ["--live-llm", "--llm-profile", "lab-explore-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "repair"];
+  const repair = ["--live-llm", "--llm-profile", "lab-explore-repair", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "repair"];
   // The campaign's own repair limits, which an iterating repair needs room for.
   const command = parseLabCommand(["run", "identity-drift", "--variant", "renamed-redesign", "--flow", ...repair, "--llm-max-input-tokens", "42000", "--llm-max-output-tokens", "8000", "--llm-max-total-tokens", "50000", "--llm-max-calls", "26", "--llm-max-run-tokens", "600000"]);
   assert.equal(command.command === "run" ? command.llm?.task : undefined, "repair");
@@ -228,7 +228,7 @@ test("--variant arms one variant and requires the Flow lane", () => {
 });
 
 test("create-flow runs one instruction task without the recorded Flow lane, with its variant, and can be dry-run", () => {
-  const live = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "create-flow"];
+  const live = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "create-flow"];
   const plain = parseLabCommand(["run", "product-catalog", ...live]);
   assert.equal(plain.command === "run" && plain.llm?.task, "create-flow");
   assert.equal(plain.command === "run" && ("instructionTaskId" in plain || "dryRun" in plain || "flowLane" in plain), false);

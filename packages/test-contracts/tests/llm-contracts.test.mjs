@@ -30,7 +30,7 @@ const liveProfile = {
 };
 
 test("exports conservative defaults and a non-overridable request ceiling", () => {
-  // Sized to deepseek-chat's own 64k context rather than to a number chosen
+  // Sized to Core's own 64k per-request ceiling rather than to a number chosen
   // here. At 8,000 input tokens a real page could not be described at all:
   // measured across thirty-six live creation tasks, the guard fired before the
   // request was ever sent on every realistic page in the corpus.

@@ -9,7 +9,7 @@ import { summarizeTask } from "../index.mjs";
 // both, from the same record its tokens and dollars come from, so the three
 // figures describe the same spend. Shaped like run-mu7fas8b-66a630b1: six
 // build calls, then a repair of six.
-const build = { adaptationId: "adaptation.bootstrap.1", providerCalls: 6, providerInvocation: "attempted", accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 57117, outputTokens: 1436, totalTokens: 58553, estimatedCostUsd: 0.0270204 }, evidenceLoop: { decisionCount: 6, toolCallCount: 4, evidenceBytes: 22121, toolIds: ["web.inspect_current_page"], steps: null }, recoveredAfterTimeout: false, durationMs: 80590, outcome: "proposed", failure: null };
+const build = { adaptationId: "adaptation.bootstrap.1", providerCalls: 6, providerInvocation: "attempted", accounting: { provider: "deepseek", model: "deepseek-flash", inputTokens: 57117, outputTokens: 1436, totalTokens: 58553, estimatedCostUsd: 0.0270204 }, evidenceLoop: { decisionCount: 6, toolCallCount: 4, evidenceBytes: 22121, toolIds: ["web.inspect_current_page"], steps: null }, recoveredAfterTimeout: false, durationMs: 80590, outcome: "proposed", failure: null };
 const repairCalls = [{ totalTokens: 4797, estimatedCostUsd: 0.00244948 }, { totalTokens: 3939, estimatedCostUsd: 0.00180532 }, { totalTokens: 4199, estimatedCostUsd: 0.00191972 }, { totalTokens: 4337, estimatedCostUsd: 0.00199188 }, { totalTokens: 4822, estimatedCostUsd: 0.002398 }, { totalTokens: 7986, estimatedCostUsd: 0.00362032 }];
 const bundle = (repair) => ({
   evaluation: { flowCreated: true, oracleVerdict: "failed", actions: [], extraction: [], llm: { mode: "live", calls: 6 + (repair?.observed?.calls ?? 0) } },

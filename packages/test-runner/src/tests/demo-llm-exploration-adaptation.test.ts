@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation, unexecutedTargetProposalIsSound } from "../demo-llm-exploration-adaptation.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
@@ -16,7 +17,7 @@ function fixture() {
   const intervention = (kind: "diagnosis" | "runtime_patch", index: number) => ({
     interventionId: `intervention.${index}`, kind, requestId: `request.${index}`,
     promptVersion: kind === "diagnosis" ? "automation-studio.runtime-diagnosis.v1" : "automation-studio.runtime-patch.v1",
-    provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 100, outputTokens: 50,
+    provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50,
     totalTokens: 150, estimatedCostUsd: 0.01, createdAt: index,
   });
   const summary = { runId: "run.failed", projectId: "project.one", flowId: "flow.checkpoint", status: "failed", updatedAt: 1, actionAttemptCount: 1, routeDecisionCount: 1, subflowEntryCount: 1, interventionCount: 2, adaptationCount: 1 };

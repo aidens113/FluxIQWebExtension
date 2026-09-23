@@ -29,6 +29,7 @@ import { finite, identifier, integer, record, text } from "./json-shapes.js";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "./limits.js";
 import { exactVirtualizedHierarchyObject, exactVisible } from "./panel-interaction.js";
 import { fail } from "./runner-fail.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 type ExplorationInput = Omit<BuildApproveApplyCreationInput, "pin" | "flowTreeItemId"> & { flowTreeItemId: string; flowName: string; instruction: string; targetPage: Page };
 
@@ -317,8 +318,8 @@ export function parseEvidenceGuidedCreationProposal(body: unknown, projectId: st
   if (text(value.projectId) !== projectId || text(value.flowId) !== flowId || value.status !== "proposed") fail("Evidence-guided proposal escaped its checkpoint scope");
   const inputTokens = integer(accounting.inputTokens), outputTokens = integer(accounting.outputTokens), totalTokens = integer(accounting.totalTokens), estimatedCostUsd = finite(accounting.estimatedCostUsd);
   if (inputTokens + outputTokens !== totalTokens || totalTokens > EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun || estimatedCostUsd > EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd) fail("Evidence-guided accounting exceeded its aggregate bounds");
-  if (text(accounting.provider) !== "deepseek" || text(accounting.model) !== "deepseek-chat") fail("Evidence-guided proposal used an unexpected provider or model");
-  return Object.freeze({ adaptationId: identifier(value.adaptationId), status: "proposed" as const, provider: "deepseek" as const, model: "deepseek-chat" as const, inputTokens, outputTokens, totalTokens, estimatedCostUsd });
+  if (text(accounting.provider) !== "deepseek" || text(accounting.model) !== DEFAULT_LLM_MODEL) fail("Evidence-guided proposal used an unexpected provider or model");
+  return Object.freeze({ adaptationId: identifier(value.adaptationId), status: "proposed" as const, provider: "deepseek" as const, model: DEFAULT_LLM_MODEL, inputTokens, outputTokens, totalTokens, estimatedCostUsd });
 }
 
 type ExplorationTerminal = { kind: "response"; response: Response } | { kind: "proposal"; adaptationId: string } | ExplorationUiTerminal | { kind: "timeout" };

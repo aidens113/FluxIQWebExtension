@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import { issueLiveLlmExecutionGrant } from "../execution-grant.js";
 import { planLiveLlmExecution, type LiveLlmPlan } from "../live-llm-plan.js";
@@ -24,7 +24,7 @@ function plan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutionPro
     profileId: `lab-${task}`,
     mode: "live",
     provider: "deepseek",
-    model: "deepseek-chat",
+    model: DEFAULT_LLM_MODEL,
     task,
     scenarioNetworkPolicy: "loopback-only",
     providerEgressPolicy: "core-trusted-provider-only",

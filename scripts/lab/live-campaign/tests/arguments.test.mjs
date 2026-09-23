@@ -4,7 +4,7 @@ import { parseCampaignArgs } from "../index.mjs";
 
 test("arguments: defaults, ids, kinds, limits and the Lab passthrough", () => {
   const defaults = parseCampaignArgs([]);
-  assert.deepEqual({ ...defaults }, { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: "deepseek-chat", output: undefined, labArgs: [], help: false });
+  assert.deepEqual({ ...defaults }, { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: "deepseek-flash", output: undefined, labArgs: [], help: false });
   assert.deepEqual(parseCampaignArgs(["--kind", "repair"]).kinds, ["repair"]);
   assert.throws(() => parseCampaignArgs(["--", "--flow"]), /sets --flow itself/u);
   assert.deepEqual(parseCampaignArgs(["table-read", "form-goal"]).taskIds, ["table-read", "form-goal"]);

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { type DemoLlmAdaptationCertificationInput, FIRST_LIVE_ADAPTATION_PROFILE, evaluateDemoLlmAdaptation, persistDemoLlmAdaptationResult } from "../demo-llm-adaptation.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 function validInput(): any {
   return {
@@ -21,11 +22,11 @@ function validInput(): any {
     failedAction: { runId: "run.adapt.one", attemptId: "attempt.failed.one", sequence: 10, status: "failed", providerCallCountBeforeFailure: 0 },
     providerCallCount: 2,
     invocations: [{
-      requestId: "request.diagnosis.one", purpose: "runtime_diagnosis", provider: "deepseek", model: "deepseek-chat",
+      requestId: "request.diagnosis.one", purpose: "runtime_diagnosis", provider: "deepseek", model: DEFAULT_LLM_MODEL,
       promptSchemaVersion: "automation-studio.runtime-diagnosis.v1", sequence: 20, attempt: 1, retryCount: 0, providerCallCount: 1,
       inputTokens: 1_400, outputTokens: 300, totalTokens: 1_700, estimatedCostUsd: 0.02, latencyMs: 600,
     }, {
-      requestId: "request.adapt.one", purpose: "runtime_patch", provider: "deepseek", model: "deepseek-chat",
+      requestId: "request.adapt.one", purpose: "runtime_patch", provider: "deepseek", model: DEFAULT_LLM_MODEL,
       promptSchemaVersion: "automation-studio.runtime-patch.v1", sequence: 25, attempt: 1, retryCount: 0, providerCallCount: 1,
       inputTokens: 1_500, outputTokens: 320, totalTokens: 1_820, estimatedCostUsd: 0.03, latencyMs: 700,
     }],
@@ -54,7 +55,7 @@ function validInput(): any {
 function withEvidenceCalls(input: any, count: number): any {
   const [diagnosis, patch] = input.invocations;
   const evidence = Array.from({ length: count }, (_, index) => ({
-    requestId: `request.evidence.${index + 1}`, purpose: "runtime_evidence", provider: "deepseek", model: "deepseek-chat",
+    requestId: `request.evidence.${index + 1}`, purpose: "runtime_evidence", provider: "deepseek", model: DEFAULT_LLM_MODEL,
     promptSchemaVersion: "automation-studio.evidence-tool-decision.v1+stage.gather", sequence: diagnosis.sequence + index + 1, attempt: 1, retryCount: 0, providerCallCount: 1,
     inputTokens: 1_000 + index, outputTokens: 100, totalTokens: 1_100 + index, estimatedCostUsd: 0.01, latencyMs: 400,
   }));

@@ -1,5 +1,6 @@
 import type { ExistingFlowAdaptation, ExistingFlow, ExistingFlowSummary, ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { RunnerFailure } from "./failure.js";
+import { DEFAULT_LLM_MODEL, type LlmModel } from "@fluxiq-web-extension/test-contracts";
 
 export const EXPLORATION_CHECKPOINT_FLOW_PREFIX = "Website Exploration Checkpoint ";
 
@@ -30,7 +31,7 @@ export type AppliedEvidenceGuidedCreation = Readonly<{
 
 export type RecoverablePendingEvidenceGuidedCreation = PendingEvidenceGuidedCreation & Readonly<{
   checkpoint: Readonly<{
-    adaptationId: string; status: "proposed"; provider: "deepseek"; model: "deepseek-chat";
+    adaptationId: string; status: "proposed"; provider: "deepseek"; model: LlmModel;
     providerCallCount: number; toolCallCount: number; evidenceBytes: number; toolIds: string[];
     inputTokens: number; outputTokens: number; totalTokens: number; estimatedCostUsd: number;
   }>;
@@ -58,7 +59,7 @@ export async function findPendingEvidenceGuidedCreationForFlow(
     projectId, flowId: summary.flowId, flowName: summary.name, adaptationId: adaptation.adaptationId,
     blankContentHash: flow.contentHash, baseExecutionDigest: binding.baseExecutionDigest!,
     checkpoint: Object.freeze({
-      adaptationId: adaptation.adaptationId, status: "proposed" as const, provider: "deepseek" as const, model: "deepseek-chat" as const,
+      adaptationId: adaptation.adaptationId, status: "proposed" as const, provider: "deepseek" as const, model: DEFAULT_LLM_MODEL,
       providerCallCount: evidence.providerCallCount!, toolCallCount: evidence.toolCallCount, evidenceBytes: evidence.evidenceBytes,
       toolIds: [...evidence.toolIds], inputTokens: accounting.inputTokens!, outputTokens: accounting.outputTokens!,
       totalTokens: accounting.totalTokens!, estimatedCostUsd: accounting.estimatedCostUsd!,
@@ -199,7 +200,7 @@ function assertExactEvidenceGuidedProposal(adaptation: ExistingFlowAdaptation): 
     || adaptation.validationSucceededCount !== undefined && adaptation.validationSucceededCount < 1) {
     fail("Pending checkpoint proposal did not retain successful validation", "exploration_apply.validation_invalid");
   }
-  if (!accounting || accounting.provider !== "deepseek" || accounting.model !== "deepseek-chat"
+  if (!accounting || accounting.provider !== "deepseek" || accounting.model !== DEFAULT_LLM_MODEL
     || accounting.inputTokens === undefined || accounting.outputTokens === undefined || accounting.totalTokens === undefined
     || accounting.inputTokens + accounting.outputTokens !== accounting.totalTokens) {
     fail("Pending checkpoint proposal has unexpected or inconsistent provider accounting", "exploration_apply.accounting_invalid");

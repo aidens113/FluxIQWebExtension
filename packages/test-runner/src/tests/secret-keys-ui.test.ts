@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Page, Response } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { TESTING_LAB_DEEPSEEK_KEY_NAME, deepSeekSecretFromDriverEnvironment, ensureDeepSeekKeyViaUi } from "../secret-keys-ui.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 type RecordedStep = { id: string; summary: string; sensitive: boolean };
 
@@ -55,7 +56,7 @@ const metadata = {
   provider: "DeepSeek",
   scope: "global",
   enabled: true,
-  metadata: { model: "deepseek-chat" },
+  metadata: { model: DEFAULT_LLM_MODEL },
 };
 const envelope = (payload: unknown) => ({ ok: true, payload });
 const origin = "http://127.0.0.1:3210";

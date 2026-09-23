@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { FIRST_LIVE_DIAGNOSIS_PROFILE, evaluateDemoLlmDiagnosis } from "../demo-llm-live.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const root = path.resolve(import.meta.dirname, "../../../..");
 const summary = (runId: string, status: "failed" | "succeeded", interventions: number) => ({
@@ -26,7 +27,7 @@ test("certifies one diagnosis only after the failed action and a zero-call repla
   const result = evaluateDemoLlmDiagnosis({
     diagnosis: {
       summary: summary("run.diagnosis", "failed", 1), routeDecisions: [], subflows: [], actionAttempts: [action("failed")],
-      interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
+      interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
       adaptationIds: [], changeProposalIds: [], providerCallCount: 1,
     },
     diagnosisEvents: [
@@ -43,7 +44,7 @@ test("certifies one diagnosis only after the failed action and a zero-call repla
 test("fails closed on provider, prompt, usage, mutation, ordering, and replay violations", () => {
   const source = {
     summary: summary("run.diagnosis", "failed", 1), routeDecisions: [], subflows: [], actionAttempts: [action("failed")],
-    interventions: [{ interventionId: "intervention.one", kind: "diagnosis" as const, promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
+    interventions: [{ interventionId: "intervention.one", kind: "diagnosis" as const, promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 }],
     adaptationIds: [], changeProposalIds: [], providerCallCount: 1,
   };
   const events = [{ sequence: 1, eventId: "event.action", eventKind: "action_attempt" as const, timestampMs: 15, title: "Action", status: "failed" }, { sequence: 2, eventId: "event.llm", eventKind: "intervention" as const, timestampMs: 20, title: "Diagnosis" }];

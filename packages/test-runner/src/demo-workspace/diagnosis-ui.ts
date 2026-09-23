@@ -11,6 +11,7 @@ import { assertLlmDiagnosisRecordingDerivedFlow } from "./flow-document.js";
 import { waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
 import type { DemoFlowProfile } from "./provisioning.js";
 import { escapeCssAttribute, escapeRegExp } from "./selectors.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export const LLM_DIAGNOSIS_FLOW_NAME = "Web Extension LLM Target Drift Diagnosis";
 
@@ -196,7 +197,7 @@ export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemI
   await evidence.step("panel", "llm-settings-provider", "Select DeepSeek", () => provider.selectOption("deepseek"));
   const model = llmSection.getByLabel("Model", { exact: true });
   if (await model.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact LLM Model field is unavailable");
-  await evidence.step("panel", "llm-settings-model", "Select deepseek-chat", () => model.selectOption("deepseek-chat"));
+  await evidence.step("panel", "llm-settings-model", `Select ${DEFAULT_LLM_MODEL}`, () => model.selectOption(DEFAULT_LLM_MODEL));
   await evidence.step("panel", "llm-settings-key", "Select the opaque Testing Lab DeepSeek key summary", async () => {
     const key = workspace.getByRole("combobox", { name: "Encrypted API key", exact: true });
     await key.fill(TESTING_LAB_DEEPSEEK_KEY_NAME);

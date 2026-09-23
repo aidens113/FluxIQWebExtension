@@ -8,6 +8,7 @@ import type { ExistingFlowAdaptation } from "../../../existing-fluxiq-control.js
 import { RunnerFailure } from "../../../failure.js";
 import type { CreatedFlowLaneControl } from "../lane.js";
 import { PAGE_ONE_RECORDS } from "./scenario-fixture.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export const PROJECT_ID = "project.lab";
 export const FLOW_ID = "flow.created";
@@ -56,7 +57,7 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
     flowId: FLOW_ID,
     status,
     adaptationKind: "flow_bootstrap",
-    accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
     ...(options.evidenceLoop === null ? {} : { evidenceLoop: options.evidenceLoop ?? { providerCallCount: 4, decisionCount: 4, traceStepCount: 5, iterationCount: 5, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect", "WEB.Unrecognized.Tool"] } }),
     ...(options.consequences === undefined ? {} : { consequences: options.consequences }),
     ...extra,

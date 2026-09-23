@@ -169,7 +169,7 @@ test("adaptationCost states Core's accounting whole or not at all, and never a f
     "$.adaptationCost.estimatedCostUsd": (run) => { run.adaptationCost.estimatedCostUsd = -0.01; },
     "$.adaptationCost.reservedCalls": (run) => { run.adaptationCost.reservedCalls = 4; },
     "$.adaptationCost.totalTokens": (run) => { run.adaptationCost.totalTokens = 5000; },
-    "$.adaptationCost.model": (run) => { run.adaptationCost.model = "deepseek-chat"; },
+    "$.adaptationCost.model": (run) => { run.adaptationCost.model = "deepseek-flash"; },
     "$.adaptationCost.providerCalls": (run) => { delete run.adaptationCost.providerCalls; },
   });
   // Partial accounting would be a figure the run did not measure: the four totals are one reading.

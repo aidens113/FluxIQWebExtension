@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { locateExactAppliedEvidenceGuidedCreation, requireExplorationBaselineDriftExplanation } from "../demo-llm-exploration-adaptation-readiness.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
@@ -11,7 +12,7 @@ function fixture() {
   const adaptation = {
     projectId: "project.one", flowId: flow.flowId, adaptationId: "adaptation.bootstrap", status: "applied", adaptationKind: "flow_bootstrap",
     evidenceLoop: { providerCallCount: 1, iterationCount: 2, toolCallCount: 1, evidenceBytes: 900, toolIds: ["web.inspect_current_page"] },
-    accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 100, outputTokens: 50, totalTokens: 150 },
     bootstrapBinding: { baseExecutionDigest: "digest.blank", appliedExecutionDigest: "digest.applied", currentExecutionDigest: "digest.applied" },
   };
   return {

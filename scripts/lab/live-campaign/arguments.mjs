@@ -2,15 +2,22 @@
 // it becomes. Lab options go after `--` and pass through untouched, except the
 // ones the campaign sets itself for each task, which are refused there.
 
+// Mirrors `DEFAULT_LLM_MODEL` in `packages/test-contracts/src/llm.ts`, which is
+// where the Lab and Core agree what a run gets when nobody names a model. It is
+// repeated rather than imported because `scripts/` resolves no workspace
+// package; a copy that drifts is refused by name at `planLiveLlmExecution`
+// before a key is read, rather than reaching DeepSeek as an opaque 400.
+const DEFAULT_LLM_MODEL = "deepseek-flash";
+
 const KINDS = ["form", "navigate", "extract", "navigate-and-extract", "repair"];
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const CAMPAIGN_OWNED_OPTIONS = new Set(["--live-llm", "--llm-task", "--llm-profile", "--llm-provider", "--llm-model", "--instruction-task", "--variant", "--workflow", "--flow"]);
 
-export const CAMPAIGN_USAGE = "Usage: pnpm lab:campaign [task-id ...] [--kind form|navigate|extract|navigate-and-extract|repair[,...]] [--all] [--limit N] [--dry-run] [--no-build] [--max-attempts N] [--llm-profile ID (default lab-create-flow, or lab-adapt-repair for repair tasks)] [--llm-provider NAME] [--llm-model NAME] [--output DIR] [-- LAB-OPTIONS]";
+export const CAMPAIGN_USAGE = `Usage: pnpm lab:campaign [task-id ...] [--kind form|navigate|extract|navigate-and-extract|repair[,...]] [--all] [--limit N] [--dry-run] [--no-build] [--max-attempts N] [--llm-profile ID (default lab-create-flow, or lab-adapt-repair for repair tasks)] [--llm-provider NAME] [--llm-model NAME (default ${DEFAULT_LLM_MODEL})] [--output DIR] [-- LAB-OPTIONS]`;
 
 /** @param {string[]} argv */
 export function parseCampaignArgs(argv) {
-  const options = { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: "deepseek-chat", output: undefined, labArgs: [], help: false };
+  const options = { taskIds: [], kinds: [], all: false, limit: undefined, dryRun: false, build: true, maxAttempts: 3, profile: undefined, provider: "deepseek", model: DEFAULT_LLM_MODEL, output: undefined, labArgs: [], help: false };
   const value = (index, name) => { const next = argv[index + 1]; if (next === undefined || next.startsWith("--")) throw new Error(`${name} requires a value`); return next; };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];

@@ -1,4 +1,4 @@
-import { DEFAULT_LLM_LAB_BUDGET, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, assertLlmExecutionProfile, llmActionConsequences, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
 
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
@@ -152,7 +152,11 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
   const required = (name: string): string => option(args, name) ?? (() => { throw new Error(name + " is required with --live-llm"); })();
   const profileId = required("--llm-profile");
   const provider = required("--llm-provider");
-  const model = required("--llm-model");
+  // Optional, unlike the rest: the model is a setting with a default, and the
+  // default lives once, in the Lab contract. Requiring it here is how the
+  // retired `deepseek-chat` alias came to be typed into every recorded command
+  // line in the repository.
+  const model = option(args, "--llm-model") ?? DEFAULT_LLM_MODEL;
   const task = required("--llm-task");
   if (!["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt", "repair"].includes(task)) throw new Error("--llm-task is invalid");
   const cost = option(args, "--llm-max-cost-usd");

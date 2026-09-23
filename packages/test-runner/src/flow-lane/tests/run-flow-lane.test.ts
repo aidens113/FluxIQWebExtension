@@ -6,6 +6,7 @@ import { deterministicUploadBytes } from "../../trusted-input/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";
 import type { HarnessRecoveryDetail } from "../harness-recovery.js";
 import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 /**
  * The regression this file exists for.
@@ -559,7 +560,7 @@ test("the lane publishes what Core's recovery did, and a run that needed none sa
   const parsed: HarnessRecoveryDetail = {
     // As the parser returns them: with the request id, provider, model and tokens the record leaves behind.
     interventions: [
-      { interventionId: "intervention.diagnosis", kind: "diagnosis", requestId: "llm.request.private", provider: "deepseek", model: "deepseek-chat", validationOk: true, totalTokens: 1_020 },
+      { interventionId: "intervention.diagnosis", kind: "diagnosis", requestId: "llm.request.private", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, totalTokens: 1_020 },
       { interventionId: "intervention.patch", kind: "runtime_patch", validationOk: true },
     ],
     runtimePatchAttempts: [{ kind: "temporary_wait_retry", proposalOnly: false, executed: true, preflightOk: true, issueCodes: [], adaptationCreated: true, changeProposalCreated: false }],
@@ -579,7 +580,7 @@ test("the lane publishes what Core's recovery did, and a run that needed none sa
   assert.deepEqual(snapshot.harnessRecovery, recovered);
   assert.equal(snapshot.harnessActivations, 2);
   const serialized = JSON.stringify(snapshot);
-  for (const text of ["PRIVATE-PROMPT", "PRIVATE-RESPONSE", "llm.request.private", "deepseek-chat", "intervention.diagnosis"]) assert.equal(serialized.includes(text), false, text);
+  for (const text of ["PRIVATE-PROMPT", "PRIVATE-RESPONSE", "llm.request.private", DEFAULT_LLM_MODEL, "intervention.diagnosis"]) assert.equal(serialized.includes(text), false, text);
 
   const quiet = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 });
   const quietEvidence: FlowLaneEvidence[] = [];
