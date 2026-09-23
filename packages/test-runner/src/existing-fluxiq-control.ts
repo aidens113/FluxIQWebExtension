@@ -495,8 +495,15 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
     || (evidenceLoop.providerCallCount !== undefined && evidenceLoop.decisionCount !== evidenceLoop.providerCallCount)
     || (evidenceLoop.traceStepCount !== undefined && evidenceLoop.traceStepCount !== evidenceLoop.iterationCount)
     || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.iterationCount < evidenceLoop.providerCallCount || evidenceLoop.iterationCount > evidenceLoop.providerCallCount + 1))
-    || evidenceLoop.toolCallCount > 16 || evidenceLoop.toolCallCount > evidenceLoop.iterationCount
-    || evidenceLoop.evidenceBytes > 7_340_032 || evidenceLoop.toolIds.length > 16
+    // Core's own ceiling, not a number of our own. A build now explores by
+    // running the node library's nodes, so it makes one tool call per step it
+    // tries rather than a handful before writing a script: 16 was measured
+    // cutting off a live build that had already produced a Flow. The only
+    // ceiling a record can honestly be held to is the one Core enforces on
+    // its own loop, and `toolCallCount > iterationCount` already refuses a
+    // record that claims more calls than decisions.
+    || evidenceLoop.toolCallCount > MAX_EVIDENCE_LOOP_STEPS || evidenceLoop.toolCallCount > evidenceLoop.iterationCount
+    || evidenceLoop.evidenceBytes > 7_340_032 || evidenceLoop.toolIds.length > MAX_EVIDENCE_LOOP_STEPS
     || (evidenceLoop.steps !== undefined && evidenceLoop.steps.length > MAX_EVIDENCE_LOOP_STEPS)
   )) invalid(`${at}.metadata.phase9 created evidence audit exceeded its bounded contract`);
   const patchKinds = item.patch === undefined ? undefined : array(item.patch, `${at}.patch`).map((value, index) => text(record(value, `${at}.patch[${index}]`).kind, `${at}.patch[${index}].kind`));

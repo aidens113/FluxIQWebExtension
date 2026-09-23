@@ -8,7 +8,7 @@ const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], r
 
 const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRunOutcome => ({
   runId: "run.one", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, resultVerification: "confirmed", extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(), route: null,
-  actions: [{ actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), durationMs: 12, failure: null }],
+  actions: [{ actionType: "web.dom.type", nodeId: "node-1", attemptIndex: 0, status: "succeeded", startedAt: new Date(0).toISOString(), durationMs: 12, failure: null }],
   ...overrides,
 });
 
@@ -88,7 +88,7 @@ test("a Flow that ran clean reports passed with no failure", () => {
 test("a failed Flow carries Core's structured category, and an uncategorised one is ambiguous_or_unknown", () => {
   const structured = flowLaneObservation({
     flowCreated: true, oracleVerdict: "passed", automationFailureExpected: { category: "auth_required" },
-    run: run({ status: "failed", failure: { category: "auth_required", code: "web.auth.session_expired", retryable: false }, actions: [{ actionType: "web.dom.click", status: "failed", startedAt: new Date(0).toISOString(), durationMs: 5, failure: { category: "auth_required", code: "web.auth.session_expired", retryable: false } }] }),
+    run: run({ status: "failed", failure: { category: "auth_required", code: "web.auth.session_expired", retryable: false }, actions: [{ actionType: "web.dom.click", nodeId: "node-1", attemptIndex: 0, status: "failed", startedAt: new Date(0).toISOString(), durationMs: 5, failure: { category: "auth_required", code: "web.auth.session_expired", retryable: false } }] }),
   });
   assert.equal(structured.reportedVerdict, "failed");
   // The producer-owned code travels with the category; only an absent record falls back to a bare one.

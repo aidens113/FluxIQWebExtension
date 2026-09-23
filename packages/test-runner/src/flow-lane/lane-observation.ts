@@ -1,5 +1,6 @@
 import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunActionTiming, RunAutomationFailure, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
+import { absorbedEveryFailure } from "./recovery-attribution.js";
 
 /**
  * The `RunEvaluation` fields a run can only be observed to have, published by
@@ -179,7 +180,13 @@ export function selectLaneObservation(input: {
  * none.
  */
 function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedVerdict"] {
-  if (!(run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded") && !run.failure)) return "failed";
+  // A run the recovery ladder rescued carries both a failed attempt and Core's
+  // record of the first failure it met, beside a `succeeded` status. Reading
+  // either as the run's outcome reported every correct absorption as a failed
+  // run -- which is what this lane exists to measure, so it would have
+  // measured the opposite of the truth.
+  if (run.status !== "succeeded") return "failed";
+  if (!((run.actions.every((action) => action.status === "succeeded") && !run.failure) || absorbedEveryFailure(run.actions))) return "failed";
   if (run.resultVerification === "refuted") return "failed";
   return run.resultVerification === "unverified" ? "unverified" : "passed";
 }

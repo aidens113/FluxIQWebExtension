@@ -4,3 +4,4 @@
 
 export { EMPTY_BUNDLE, readRunBundle } from "./bundle.mjs";
 export { summarizeTask } from "./summarize-task.mjs";
+export * from "./rung-attribution.mjs";

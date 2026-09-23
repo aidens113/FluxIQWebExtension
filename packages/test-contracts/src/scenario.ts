@@ -167,6 +167,63 @@ export type ExpectedFailure = { category: AutomationStudioAdaptiveFailureClass; 
  * facility failure. A run that declares no call and then makes one fails.
  */
 export type ExpectedProviderCalls = { count: 0; because: string };
+
+/**
+ * The deterministic recoveries an adversarial condition can be absorbed by,
+ * as the run records them.
+ *
+ * Four of them are FluxIQ Core's own ladder rungs, in ladder order
+ * (`AUTOMATION_STUDIO_LADDER_RUNG_KINDS`): the run publishes the rung that
+ * asked for each attempt after the first, so naming one here is a claim about
+ * a word the run wrote, not an inference from its shape.
+ *
+ * `host_target_resolution` is the recovery that has no rung, and leaving it
+ * out would have made the most common real-site fault unmeasurable. The
+ * executor deliberately implements no re-resolve-the-target rung, because the
+ * browser has already re-resolved before Core is ever told the action failed.
+ * Its evidence is therefore on a **succeeded** attempt: a `strategy` of
+ * `fingerprint` or `scored-candidate` where the recording matched a
+ * `selector`. A condition absorbed this way costs no attempt and no rung, and
+ * would otherwise read as a run that simply worked.
+ *
+ * `none` is the declaration that nothing had to recover at all: every node
+ * succeeded on its first attempt by the strategy the recording used. It is
+ * worth declaring because it is the control -- a fixture whose arming turned
+ * out to change nothing the run could see is a fixture that measures nothing,
+ * and saying so makes that visible instead of green.
+ */
+export const expectedRecoveryRungs = ["none", "host_target_resolution", "skip_satisfied_node", "await_recorded_state", "clear_interference", "retry_node"] as const;
+export type ExpectedRecoveryRung = (typeof expectedRecoveryRungs)[number];
+
+/**
+ * What must absorb the condition this scenario or variant arms, and at what
+ * cost.
+ *
+ * It exists because `providerCalls` alone cannot tell a correct absorption
+ * from an accident. A run that spends nothing because the ladder retried the
+ * node and a run that spends nothing because the fixture's arming never
+ * reached the page both report zero calls and both pass; the difference is the
+ * whole measurement. `absorbedBy` names the rung that must appear in the run's
+ * own attribution, so a condition that stops being absorbed -- or starts being
+ * absorbed by a different rung than the one it was written for -- fails
+ * instead of passing quietly.
+ *
+ * `maxAttemptsPerNode` bounds the cost. A rung that absorbs the condition on
+ * its third attempt when it used to take two is still green under
+ * `absorbedBy`, and is still a regression worth seeing.
+ *
+ * Like `failure` and `providerCalls`, this narrows one judgement and no other.
+ * It says nothing about the oracle, the declared final state, the extraction
+ * judgement or a facility failure, all of which are judged exactly as they
+ * were.
+ */
+export type ExpectedRecovery = {
+  absorbedBy: ExpectedRecoveryRung;
+  /** The fixture author's one sentence: what is armed, and why that rung is the one that should answer it. */
+  because: string;
+  /** The most attempts any one node may take. Omitted, the attempt count is reported and not judged. */
+  maxAttemptsPerNode?: number;
+};
 export type ScenarioGoal = { id: string; description: string; successFacts: ExpectedFact[] };
 
 /**
@@ -193,6 +250,7 @@ export type ScenarioExpected = {
   extracted?: ExpectedExtraction[];
   failure?: ExpectedFailure;
   providerCalls?: ExpectedProviderCalls;
+  recovery?: ExpectedRecovery;
 };
 
 /**
@@ -349,6 +407,7 @@ export const webScenarioJsonSchema = {
         extracted: { type: "array", items: { $ref: "#/$defs/extraction" } },
         failure: { $ref: "#/$defs/failure" },
         providerCalls: { $ref: "#/$defs/providerCalls" },
+        recovery: { $ref: "#/$defs/recovery" },
       },
     },
     fact: {
@@ -381,6 +440,14 @@ export const webScenarioJsonSchema = {
     providerCalls: {
       type: "object", additionalProperties: false, required: ["count", "because"],
       properties: { count: { const: 0 }, because: { type: "string", minLength: 1, maxLength: 200 } },
+    },
+    recovery: {
+      type: "object", additionalProperties: false, required: ["absorbedBy", "because"],
+      properties: {
+        absorbedBy: { enum: expectedRecoveryRungs },
+        because: { type: "string", minLength: 1, maxLength: 200 },
+        maxAttemptsPerNode: { type: "integer", minimum: 1, maximum: 16 },
+      },
     },
     secret: {
       type: "object", additionalProperties: false, required: ["id", "step"],
