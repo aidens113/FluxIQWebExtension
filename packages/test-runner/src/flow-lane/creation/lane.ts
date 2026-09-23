@@ -71,12 +71,13 @@ export type CreatedFlowLaneInput = {
    * fixture's state is reset, before the run. `moment` says which: a task
    * whose variant is armed after the build is explored unarmed.
    *
-   * **At `"playback"` this loads the page the Flow is about to be judged on,
-   * which for a task whose instruction begins by going somewhere is the one
-   * step the Flow is being measured on.** The lane cannot leave it out -- the
-   * reset and any arm are server-side, so without it the Flow would start on
-   * whatever the exploration left on screen, which is worse -- so it holds the
-   * Flow to reaching its own page instead (`own-page.ts`).
+   * **At `"playback"` it presents the page the Flow is about to be judged on --
+   * except for a task whose instruction begins by going somewhere, which is
+   * left the blank tab a browser opens on, because loading that page is the one
+   * step such a Flow is being measured on.** Which it is belongs to the caller
+   * (`lane-rules/flow-start-page.ts`), taken from the same rule the lane judges
+   * by (`own-page.ts`); either way the tab no longer shows whatever the
+   * exploration left on screen, which is what the lane needs from it.
    */
   prepareFlowPage: (moment: "build" | "playback") => Promise<void>;
   /** Records what the Flow did, before any expectation is judged. */

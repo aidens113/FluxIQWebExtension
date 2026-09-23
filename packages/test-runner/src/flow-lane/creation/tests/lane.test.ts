@@ -120,11 +120,13 @@ test("a dataset task whose Flow has no extract node fails as exactly that", asyn
 
 /**
  * `run-mudwci8d-de88aa32`, 2026-09-23. The lane resets the fixture and then
- * calls `prepareFlowPage("playback")`, which loads the scenario's start page
- * before the Flow runs -- so a Flow with no navigation node plays back as
+ * called `prepareFlowPage("playback")`, which loaded the scenario's start page
+ * before the Flow ran -- so a Flow with no navigation node played back as
  * though it had one. This run's records were right and it still cannot reach
  * the page they came from, which is the point: the harness's page is not the
- * Flow's achievement.
+ * Flow's achievement. t101 stopped the harness loading it for such a task
+ * (`lane-rules/flow-start-page.ts`); this judgement stays, because it must hold
+ * whatever the caller's hook does.
  */
 test("a navigate-and-extract Flow that holds no navigation node fails on that, ahead of what its records said", async () => {
   const core = fakeCreationCore({ graphNodes: [EXTRACTING_NODES[0], EXTRACTING_NODES[2]], attempts: [{ nodeId: "node.extract", status: "succeeded" }] });
