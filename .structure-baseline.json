@@ -139,7 +139,6 @@
       "packages/test-runner/src/demo-workspace/core-process.ts": 1,
       "packages/test-runner/src/demo-workspace/provisioning.ts": 1,
       "packages/test-runner/src/demo-workspace/workspace-lanes.ts": 1,
-      "packages/test-runner/src/flow-lane/persisted-flow-run.ts": 1,
       "packages/test-runner/src/persistent-identity.ts": 1,
       "packages/test-runner/src/run-manifest/create-run-manifest.ts": 1,
       "packages/test-runner/src/scenario-steps/extract-records.ts": 1,

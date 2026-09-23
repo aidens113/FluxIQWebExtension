@@ -38,7 +38,9 @@ export function assertFlowActions(expected: readonly ExpectedAction[] | undefine
  *
  * The caller passes `null` for a failure the recovery ladder absorbed
  * (`absorbedEveryFailure`), which is not the same thing as a run that never
- * met one. Core records the first failure it meets and keeps the failed
+ * met one. Since t097 the run's own `failure` is already the failure that
+ * decided it, so a caller that passes it directly is passing the same thing;
+ * the absorbed ones are kept under `recoveredFailures`. Core records the first failure it meets and keeps the failed
  * attempt, so a node the retry rung rescued leaves a failure record on a run
  * whose status is `succeeded`; reading that as the run's outcome failed every
  * correct absorption. A workflow that *declares* a failure and then has it

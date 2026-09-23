@@ -81,7 +81,7 @@ test("an answered request is still read until the recovery is in, should Core ev
   assert.equal(outcome.status, "failed");
 });
 
-test("a run whose recovery record never arrives is still the run that happened, marked as unsettled", async () => {
+test("a run left with a failed attempt waits the full recovery record wait, and is still the run that happened", async () => {
   // Core's recovery record is evidence *about* a run whose outcome is already
   // written, and nothing that judges a created Flow reads it. Failing the run
   // for its absence threw away a complete product result and reported
@@ -96,6 +96,41 @@ test("a run whose recovery record never arrives is still the run that happened, 
   // Bounded by the recovery record's own wait, measured from the first
   // terminal read, rather than by the grant's whole run lease.
   assert.ok(lab.clock.value >= 300_000 && lab.clock.value <= 301_000, `waited ${lab.clock.value} ms`);
+});
+
+/**
+ * `run-mudwci8d-de88aa32` and `run-mudw1ktb-0557816b`, 2026-09-23. Neither run
+ * left a failed attempt: the first recovered both faults it met on retry, and
+ * the second's five attempts all succeeded and Core simply refuted the answer.
+ * Core's recovery plans from a failed attempt's diagnosis, so for both the
+ * whole plan was one `stop` -- and both spent 5 min 11 s of a run of 7 to 8
+ * minutes waiting for the record of it.
+ */
+test("a failed run that left no failed attempt has no recovery to wait for, so it settles instead of spending five minutes", async () => {
+  const succeeded = { ...failedAttempt, status: "succeeded" };
+  const cleanRun = { summary: { status: "failed" }, actionAttempts: [succeeded], interventions: [ladderPlaceholder] };
+  const lab = granted({ purpose: "explore_and_adapt", request: "times out", details: [cleanRun] });
+  const outcome = await lab.run();
+
+  assert.equal(outcome.status, "failed");
+  // Reported exactly as it was, and as honestly: Core never said, and that is
+  // still the difference between "Core recovered nothing" and "Core never said".
+  assert.equal(outcome.unsettled, "recovery");
+  assert.ok(lab.clock.value <= 6_000, `waited ${lab.clock.value} ms`);
+
+  // The same run, with the ladder having recovered the one fault it met, is
+  // still a run with nothing left to diagnose.
+  const recoveredRun = { ...cleanRun, actionAttempts: [failedAttempt, { ...failedAttempt, attemptId: "attempt.two", order: 1, status: "succeeded" }] };
+  const absorbed = granted({ purpose: "explore_and_adapt", request: "times out", details: [recoveredRun] });
+  assert.equal((await absorbed.run()).unsettled, "recovery");
+  assert.ok(absorbed.clock.value <= 6_000, `waited ${absorbed.clock.value} ms`);
+
+  // And the record is still read when it does arrive inside the grace, because
+  // the rule is about what Core can plan from, not about what it has written.
+  const late = granted({ purpose: "explore_and_adapt", request: "times out", details: [cleanRun, cleanRun, { ...recovered, actionAttempts: [succeeded] }] });
+  const settled = await late.run();
+  assert.equal(settled.unsettled, undefined);
+  assert.equal(late.reads(), 3);
 });
 
 test("a run still missing its verdict when the wait runs out fails, because reading it would report a pass the verdict may take away", async () => {
