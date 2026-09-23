@@ -17,158 +17,62 @@ Related: [week2-exit-plan.md](./week2-exit-plan.md) (the campaign this defers), 
 only path that counts is: a person writes an instruction, the model explores the
 live page by running real Flow nodes, and the Flow it builds then runs
 deterministically and produces the right answer. **Recording-built Flows are not
-to be tested, measured, or reported as progress.** Do not choose a recorded Flow
-as the subject of a run, a lane or a campaign when the same question can be
-asked of an instruction-built one; do not offer recording evidence as proof that
-something works; and do not count recording capability toward progress. Every
-stage downstream — failure, diagnosis, exploration, repair, validation,
-persistence, resumption, and cheap deterministic re-running — is measured on
-Flows that came from an instruction. Recording stays in the product; it is not
-the subject of testing while the instruction path is the open question.
+to be tested, measured, or reported as progress**, and **the ten realistic
+campaign sites are the only test surface** — a fixture chosen because it passes
+is not evidence. Nothing else is worked on until language-driven Flow creation
+works properly; something that genuinely blocks that path is in scope precisely
+because it blocks it, and should be named as such.
 
-The user asked on 2026-09-22 for a side plan to execute **before** live testing
-continues, so that Flow creation and Flow execution work defensively on sites we
-do not control. This document owns that work. The Week 2 exit campaign is paused
-behind it; its integration branch and its cut-off workers still need landing, but
-no further live measurement runs until the phases here are built.
+**Why this plan exists.** Round 1 of the live campaign, 2026-09-21, across those
+ten sites: about seventy attempts to build a Flow from an instruction, one Flow
+produced, and it failed on replay (`week2-exit-plan/reports/w2x-e2e-lane-{a..e}.md`).
+Two findings made it a design problem rather than a defect list. **The Flow the
+model saved was not what the model did** — on `everything-store` the build
+dismissed a cookie banner and a notification prompt, proposed a Flow containing
+neither, and its `navigate` node reported success while the tab never left the
+start page. And **a failing node had no cheap way to recover**: retries repeated
+the same attempt, the recorded expected state was read by nothing, and the model
+was the only escalation, itself blocked for granted runs.
 
-**The evidence this plan answers.** Round 1 of the live campaign, 2026-09-21,
-across ten realistic sites: about seventy attempts to build a Flow from an
-instruction, one Flow produced, and that one failed on replay. The per-lane
-reports are in `week2-exit-plan/reports/w2x-e2e-lane-{a..e}.md`. Two findings in
-that round are the reason this document exists rather than another round of
-defect fixes:
+**What was settled, and by whom.** The user's direction was that exploring should
+be like taking a recording the model can edit and retry in flight, with the
+exploratory calls being the Flow's own nodes rather than a second vocabulary.
+Recorded state must drive execution: retries on by default, the recorded state
+read at execution time, and a recorded delay treated as a *maximum wait* for the
+expected state rather than a sleep. Core edits were authorized ("yes good, i want
+to edit core"), so the framework half lives in `F:\!FluxIQ` and is recorded in
+its paired document; the web-specific judgements stay here.
 
-1. **The Flow the model saved was not what the model did.** On `everything-store`
-   the build explored successfully, then proposed a Flow that kept none of the
-   cookie and notification dismissals exploration had performed, and whose
-   `navigate` node reported success while the tab never left the start page
-   (identical before and after screenshot hashes, Core's after-location still the
-   start page). Authoring is a separate act from exploring, so the two diverge.
-2. **A failing node has no cheap way to recover.** Retries repeat the same
-   attempt, the recorded expected state is not consulted, and the model — the
-   expensive last resort — is the only escalation, and is itself blocked for
-   granted runs.
+**Everything planned has landed, in both repositories.** Waves one and two, then
+the routing work: tasks t076 to t082 and t087 to t091. Workstream A is complete
+except A13's successor work, workstream B except the three ladder rungs that
+have no input written, workstream C, and workstream D. Each was verified by the
+supervisor re-running its proof rather than reading its report; the ledger
+carries the run ids and observed output.
 
-**The user's direction, in their words.** Exploration should behave like taking a
-recording, except the model can remove, edit and retry parts of that recording in
-flight, iterate on the final Flow, and actually test the node settings it chose,
-rather than the exploratory tool calls being different from the Flow it creates.
-At run time the model should be operating the same recording with more direct
-control of timeline and branches than a human has; and when a node fails
-repeatedly the runtime should try the state checker first and only then pass to
-the model.
+**What now works that did not this morning.** Exploration runs the real node
+registry, so a proposed Flow is assembled from steps that provably worked. A
+build must replay its draft from a reset page, with no model attached, and may
+not propose until that replay is clean — live, the first proposal was refused,
+the model amended it, and the second passed. A draft can carry a branch, a loop
+and its own recovery edge; one live Flow holds two join nodes and dismissals the
+model marked optional itself. The recovery ladder measurably absorbs **6 of 6
+adversarial conditions at zero provider calls**. And the permission gate bites:
+verified in the supervisor's own run, the press that publishes declares
+`send_or_publish` in all three places it appears while nineteen other actions
+correctly declare nothing, and a blocked act now opens a conversation ask that
+parks the build until the person answers.
 
-**What is decided.** The two designs below — *Authoring By Accrual* and the
-*Recovery Ladder* — are the shape of the work. Both are generic framework
-behaviour, so both land in FluxIQ Core, with the web-specific judgements
-(which actions change a page, how a DOM state digest is taken, how an overlay is
-recognised) owned here.
+**The one thing that does not work, and it is the whole question.** A Flow built
+from an instruction still does not reliably produce the right answer. A
+form-filling instruction does: `run-mudny8g6-7eb38ec5` built a six-node Flow and
+passed its goal. An extraction instruction does not: the Flow replays every step
+with no model attached and returns **0 records against 16 expected**. Round 1's
+number — one Flow in about seventy attempts across the ten sites — predates every
+change above and **has not been re-measured**.
 
-**Core is authorized** (user, 2026-09-22). The supervisor raised that the build
-loop, the draft Flow and its edit tools, the dry run, and the ladder's
-orchestration are framework behaviour that must be built in `F:\!FluxIQ` rather
-than approximated downstream, and the user answered "yes good, i want to edit
-core". A Core-side paired document is therefore required, and this work follows
-Core's own agent instructions while in that repository.
-
-**What discovery changed.** Seven read-only workers reported, and every
-load-bearing claim below was re-checked in source by the supervisor. Three things
-moved the plan materially:
-
-- **Most of Design One already exists in Core and is wired to the wrong entry
-  point.** `runtime/exploration-reduction/` holds exactly the step shape and the
-  minimum-replayable-sequence reduction this plan asks for, used only by
-  *recovery* exploration, with its output discarded. Nothing under
-  `runtime/flow-bootstrap/` imports it.
-- **The `everything-store` Flow's missing dismissals are explained, and it was
-  not forgetfulness.** The build's evidence window keeps the newest entry *per
-  tool*, and every dismissal shares one tool id, so only the last was visible
-  when the model wrote the Flow. It could not see what it had done.
-- **Design Two's premise was wrong and is corrected below: no per-node retry
-  exists at all.** The ladder must bring its own retry loop.
-
-**Settled by the user, 2026-09-22, after reading the above.** Recorded state is
-the product's central selling point, so three things are requirements rather than
-options: **retries are on by default** with a real default attempt count; the
-**recorded state is read at execution time**, not merely stored; and a **recorded
-delay is a maximum wait for the expected state, not a sleep** — if the state
-appears sooner the node runs immediately, and if it never appears the node is
-attempted at the deadline anyway rather than failed. This is Design Two's
-opening section and steps B0, B1 and B1a.
-
-**Supervisor finding, same day.** The delay data needed for that ceiling already
-exists: Core's recording entries carry `timestamp` **and `monotonicOffsetMs`**
-(`model/recording-framework.ts:20-22`), the latter being the clock that survives
-a wall-clock change. Nothing carries the gap between consecutive entries onto the
-Flow node, which is step B0 and is small.
-
-**All seven discovery reports are in**, and the plan below names real files. The
-binding constraint they found is that Core's `service.ts` sits *exactly* on its
-ratchet at 6,275 lines and 223 methods, so every step lands in a new module and
-no edit may add a line to the service.
-
-**Dispatched 2026-09-22.** The t075 integration landed in both repositories
-(downstream `c32d664`, Core `7952512`), so wave one went out — five workers, no
-two sharing a file, each on its own task branch and worktree:
-
-| Task | Worker | Steps |
-| --- | --- | --- |
-| t076 (Core-paired) | `fa-executor-ladder` | B0, B1, B1a, B2, B3, B4, B9 |
-| t077 (Core-paired) | `fa-build-draft` | A1, A3, A4, A5, A6 |
-| t078 | `fa-extension-defenses` | B5, B6, B7 |
-| t079 | `fa-domain-tools` | A8, A11 |
-| t080 | `fa-lab-measurement` | D0, A12 |
-
-Every brief puts the live proof **before** unit tests, and the four deterministic
-ones must show **zero provider calls**, since a paid call would mean the
-determinism did not work.
-
-**Wave one landed, all six tasks.** t076 and t077 were Core-only and merged there
-alone (`cda4bb1`, `bf8792b`); t078, t079 and t080 merged in both repositories
-(`a772560`, `cdb038e`, `387b314`). The correction below then went out as t082,
-`fa-explore-with-output-nodes`, and merged (`9393cbd`, Core `1987317`), rebuilding
-the build loop around the real node registry. The recovery ladder was built and
-ran live, and its own worker found that no variant in the scenario corpus was
-absorbable by a deterministic ladder, so it had never been shown to absorb
-anything. Workstream D has since settled that; see below.
-
-**Two constraints stated above are out of date.** Core's `service.ts` is **4,637
-lines**, not the 6,275 quoted throughout this document: the headroom tasks landed,
-so wave two may add lines there within reason. And the four `flow-bootstrap` edits
-that `fa-flow-permission-gate` was blocked on landed inside t082 (`0607038`), so a
-consequence declaration now has a carrier and t081 is no longer unsatisfiable.
-
-**Wave two is in.** All four tasks landed and pushed in both repositories on
-2026-09-22, each verified by the supervisor re-running its proof rather than
-reading its report: t081 (the Flow-step permission gate and its grammar), t087
-(the service seams, and the escalation that makes a blocked action ask rather
-than fail), t088 (A7, the draft dry run), t089 (the adversarial conditions and
-the measured lane). Workstream A is complete except A13; workstream B is complete
-except the three ladder rungs that have no input written yet; workstream D is
-complete.
-
-**The result this plan was built to get.** The recovery ladder absorbs, and it is
-measured: **6 of 6 adversarial conditions absorbed as declared, for 0 provider
-calls**, re-run by the supervisor. A renamed control is recovered by the
-browser's visual-target strategy where unrenamed fields match by selector; a wait
-that runs out is rescued by a retry that succeeds 1,885 ms into its second
-attempt. Before this the ladder had never been shown to recover anything.
-
-**And the thing that is built and does not yet work.** A Flow's steps meet the
-permission gate, an undeclared press cannot be authored, a request now opens a
-conversation ask that parks the build until the person answers — and in every
-live build so far **the gate has been asked nothing**, because the model declares
-that every press it authors causes nothing lasting, including the press that
-schedules a public post. The prompt that taught it that answer has been
-rebalanced; whether that is enough is unmeasured. Until it is, this gate must not
-be described as a defence.
-
-**Out now:** t090 for the draft's branches and loops (workstream C, unblocked by
-A5 and A7), and t091 for the three things between the gate and a gate worth
-trusting — a permitted action's declaration discarded before anything can read
-it, A13's cross-check against what the instruction actually asked for, and the
-repair path still throwing where the build now parks and asks.
+**Next, and only this.** Re-run the ten sites to replace a number that is now
+five landings out of date, and find why a built extraction Flow returns nothing.
 
 **Blockers:** none.
 
