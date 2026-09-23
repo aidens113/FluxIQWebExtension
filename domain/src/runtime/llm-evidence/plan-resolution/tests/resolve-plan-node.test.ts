@@ -29,7 +29,8 @@ import {
   WEB_LLM_PRESS_TOOL_ID,
   WEB_PLAN_HANDLE_ISSUE_CODES,
   type WebAutomationLlmEvidenceRuntime,
-  type WebLlmRepeatingStructure
+  type WebLlmRepeatingStructure,
+  WEB_LLM_RUN_NODE_TOOL_ID
 } from "../..";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
@@ -73,7 +74,7 @@ function runtimeOver(page: () => Page, onAction: (actionType: string) => void = 
 let calls = 0;
 async function inspect(runtime: WebAutomationLlmEvidenceRuntime, flowId = "flow.one") {
   calls += 1;
-  return await runtime.executeTool({ projectId: "project.one", flowId, callId: `call.inspect.${calls}`, toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  return await runtime.executeTool({ projectId: "project.one", flowId, callId: `call.inspect.${calls}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 }
 
 function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionId: string, parameters: JsonObject, scope: { projectId?: string; flowId?: string } = {}) {
@@ -269,7 +270,7 @@ test("a handle is this project and Flow's alone, and a reveal's recapture is wha
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }, { projectId: "project.two" }), refusedAt("web.handle.unknown", "selector"));
 
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), refusedAt("web.handle.unknown", "selector"));
-  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_PRESS_TOOL_ID, value: { target: "target.1", consequences: [] } });
+  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   assert.equal(revealed.resultCode, "web.action.succeeded");
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR, element: NAME_IDENTITY } });
 });

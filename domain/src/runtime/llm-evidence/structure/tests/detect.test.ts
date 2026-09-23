@@ -27,7 +27,7 @@ import {
   createWebAutomationLlmEvidenceRuntime,
   RETAINED_EXTRACTION_HANDLES,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
-  WEB_LLM_INSPECT_TOOL_ID,
+  WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway,
@@ -206,7 +206,7 @@ test("a target handle an inspect issued is bound through its selector, even one 
   let page: FakePage = withElements(captured("product-catalog-largest"), [next, link(), link()]);
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const handles = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements;
   assert.deepEqual(handles.map((element) => [element.target, element.tag]), [["target.1", "button"], ["target.2", "a"], ["target.3", "a"]]);
 
@@ -235,7 +235,7 @@ test("a target handle an inspect issued is bound through its selector, even one 
   // control this page has not addressed before takes the next number it has
   // not spent, whatever position it is in (see ../../stable-handles.ts).
   page = withElements(captured("product-catalog-largest"), [link(7)]);
-  const framedPacket = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  const framedPacket = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const framedHandle = (framedPacket.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
   commands.length = 0;
   const framed = await detect(runtime, { target: framedHandle });
