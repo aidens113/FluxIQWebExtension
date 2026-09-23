@@ -29,7 +29,7 @@
 // this file, using the same shared rule rather than a second one.
 
 import { compactObject } from "./compact-object";
-import { isFrontLayer, isPageStateControl, isSiteChrome, pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
+import { isDrawnControl, isFrontLayer, isPageStateControl, isSiteChrome, pageEvidence, recentlyInteractedElements, repeatsTheDocumentAddress, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { isEventBackedElement, observedEventElementQueue } from "./event-elements";
 import {
@@ -235,6 +235,7 @@ function touchedElements(): ReadonlySet<Element> {
 function snapshotDescriptor(element: Element, repeatCount: number | undefined): DomElementDescriptor {
   const descriptor = describeElement(element);
   if (repeatCount !== undefined) descriptor.repeatCount = repeatCount;
+  if (repeatsTheDocumentAddress(element, descriptor)) delete descriptor.href;
   return descriptor;
 }
 
@@ -320,12 +321,22 @@ function snapshotElementBucket(element: Element): number {
   return 10;
 }
 
-/** Which of the three control bands the element is in, or `undefined` for something that is not a control. */
+/**
+ * Which of the three control bands the element is in, or `undefined` for
+ * something that is not a control.
+ *
+ * The last band is where a control the page drew out of a `<div>` lands, behind
+ * every link on the page. `isDrawnControl` lifts the ones the page dressed to
+ * be pressed and nothing else claims into the page's own band: the browser
+ * makes nothing of them, but the reader can still press them, and on a page
+ * whose narrowing controls are all drawn that way the last band is the same as
+ * not being described at all.
+ */
 function controlBucket(element: Element): number | undefined {
   if (isPageControlElement(element)) return 2;
   if (isPrimaryControlElement(element)) return 3;
-  if (isInteractableUiElement(element)) return 4;
-  return undefined;
+  if (!isInteractableUiElement(element)) return undefined;
+  return isDrawnControl(element) ? 2 : 4;
 }
 
 function hasMeaningfulInteractableIdentity(element: Element): boolean {
