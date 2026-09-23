@@ -50,3 +50,32 @@ test("a build that made only loop calls still reads, and says nothing about call
   assert.equal(read?.additionalProviderCallCount, undefined);
   assert.equal(read?.decisionCount, 17);
 });
+
+// A decision that edits the draft and re-runs a step writes two rows under one
+// iteration, so a build's rows sit above its decisions. This held them equal,
+// which was only ever true while Core counted rows as decisions -- and the
+// moment Core started counting calls correctly, every build that had corrected
+// itself would have been rejected here as malformed.
+test("more trace rows than iterations is a build that corrected itself, not a malformed record", () => {
+  const read = adaptationEvidenceLoop(loop({ providerCallCount: 16, decisionCount: 16, iterationCount: 17, traceStepCount: 21 }), "detail");
+
+  assert.equal(read?.providerCallCount, 16);
+  assert.equal(read?.traceStepCount, 21);
+  assert.equal(read?.iterationCount, 17);
+});
+
+test("fewer trace rows than iterations is refused: every iteration wrote at least one", () => {
+  assert.throws(() => adaptationEvidenceLoop(loop({ traceStepCount: 17, iterationCount: 18 }), "detail"), /exceeded its bounded contract/u);
+});
+
+test("more rows than two per decision is refused, and exactly two per decision is not", () => {
+  assert.equal(adaptationEvidenceLoop(loop({ providerCallCount: 64, decisionCount: 64, iterationCount: 65, traceStepCount: 129 }), "detail")?.traceStepCount, 129);
+  assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 64, decisionCount: 64, iterationCount: 65, traceStepCount: 130 }), "detail"), /exceeded its bounded contract/u);
+});
+
+test("a build publishes one step per trace row, so its steps are bounded by the rows", () => {
+  const steps = (count: number) => Array.from({ length: count }, () => ({ toolId: "core.run_node" }));
+
+  assert.equal(adaptationEvidenceLoop(loop({ steps: steps(100) }), "detail")?.steps?.length, 100);
+  assert.throws(() => adaptationEvidenceLoop(loop({ steps: steps(130) }), "detail"), /exceeded its bounded contract/u);
+});
