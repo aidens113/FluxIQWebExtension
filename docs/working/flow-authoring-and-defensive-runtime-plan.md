@@ -3,7 +3,7 @@
 Status: Active
 Status detail: Waves one and two landed 2026-09-22, t076 to t082 and t087 to t089. The ladder is measured absorbing 6 of 6 adversarial conditions at zero provider calls. t090 (branches and loops in the draft) and t091 (the permission gate is built and has never been asked anything) are out.
 Created: 2026-09-22
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 Owner: Senior supervisor agent
 Scope: Make a model-authored Flow faithful to what the model actually did, and make a Flow's execution survive a site we do not control. Covers the build loop's authoring model, the draft Flow and its edit and dry-run tools, branch and loop authoring, the runtime's deterministic recovery ladder, and the adversarial fixture conditions that measure both. It deliberately does not cover the real-site lane itself, the campaign measurement, new extraction capabilities, or the Week 2 exit criteria, which stay in their own documents.
 Paired document: `F:\!FluxIQ\docs\working\flow-authoring-and-defensive-runtime-plan.md`
@@ -71,12 +71,23 @@ with no model attached and returns **0 records against 16 expected**. Round 1's
 number — one Flow in about seventy attempts across the ten sites — predates every
 change above and **has not been re-measured**.
 
-**Next, and only this.** The ten-site campaign is running. Why a built
-extraction Flow returned nothing is answered and fixed on two of its three
-counts: the read never waited for the page it was sent to, and field inference
-could not name a value nested in an item. The third is open — the model can
-choose a list’s columns but not its items, so sponsored cards join the results
-and positional matching fails.
+**Next, and only this.** The campaign is stopped at two runs, and those two
+runs are the whole evidence base. Both have been diagnosed from artifacts
+already on disk, and three tasks are in flight against what they showed: t095
+makes a field read the page's own tightest statement of a value rather than the
+sentence containing it (`"3.7 out of 5 stars"` where `"3.7"` was expected, which
+alone cost every one of twelve rows); t096 makes a read wait for a lazily loaded
+list to be *complete* rather than merely present, and finds out why the model
+writes no `where` although the mechanism for it landed; and a read-only
+post-mortem walks both runs action by action for the causes the first pass did
+not name -- `web.target.not_found`, `ambiguous_or_unknown`, a built Flow holding
+no `navigate` node on a navigate-and-extract scenario, and why each run stopped
+at one attempt of an allowed three instead of repairing itself.
+
+**The standing rule this works under, restated by the user on 2026-09-23.**
+Every run is diagnosed to its cause and the cause is fixed directly. Runs exist
+to prove a specific fix, never to produce a score, and a mass or campaign-scale
+run is never launched without asking first.
 
 **Blockers:** none.
 
