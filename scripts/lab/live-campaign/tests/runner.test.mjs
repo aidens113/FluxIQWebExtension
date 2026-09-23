@@ -173,3 +173,37 @@ test("a startup failure that does not come back is retried as a possible memory 
   const [row] = summary.tasks;
   assert.deepEqual([row.verdict, row.attempts, row.ramFaults, row.repeatedFailure], ["passed", 2, ["process.startup facility failure"], null]);
 }));
+
+test("two tasks in a row that never start end the campaign, naming the Lab's own refusal", () => withTemp(async (directory) => {
+  // The run that provoked this spent all 55 tasks printing one refusal each,
+  // because Core's build was 1,995 minutes behind its source, and finished on a
+  // totals line that read like a product result.
+  const runPath = path.join(directory, "run-ok");
+  const stale = `${JSON.stringify({ lab: "core-build", state: "stale", why: "FluxIQ Core's build is 1995 minute(s) behind its source. Rebuild Core first." })}\n`;
+  const scripted = {
+    "form-goal": [attempt({ stdout: resultLine({ runId: "run-ok", path: runPath }) })],
+    "table-read": [attempt({ code: 1, stdout: stale })],
+    "table-read-reordered": [attempt({ code: 1, stdout: stale })],
+    "catalog-pages": [attempt({ stdout: resultLine({ runId: "run-never", path: runPath }) })],
+  };
+  const seen = [];
+  const execute = async ({ args }) => {
+    const id = args[args.indexOf("--instruction-task") + 1];
+    seen.push(id);
+    return scripted[id].shift();
+  };
+  const readBundle = async () => ({ evaluation: { flowCreated: true, oracleVerdict: "passed", actions: [], extraction: null }, run: null, flowLane: null, liveLlm: null });
+  const lines = [];
+  const summary = await runCampaign({ tasks: CATALOG, options: parseCampaignArgs(["--all", "--max-attempts", "1"]), outputDir: path.join(directory, "campaigns", "stopped"), execute, readBundle, log: (line) => lines.push(line) });
+
+  // The fourth task would have passed, and is never reached.
+  assert.deepEqual(seen, ["form-goal", "table-read", "table-read-reordered"]);
+  assert.deepEqual(summary.abandoned.tasks, ["table-read", "table-read-reordered"]);
+  assert.equal(summary.abandoned.after, 3);
+  assert.equal(summary.abandoned.of, 4);
+  assert.match(summary.abandoned.why, /1995 minute\(s\) behind its source/u);
+  assert.ok(lines.some((line) => line.includes("never started") && line.includes("Rebuild Core first")), lines.join("\n"));
+
+  // A task that did start clears the count, so one bad scenario does not stop a campaign.
+  assert.equal(summary.tasks[0].runId, "run-ok");
+}));

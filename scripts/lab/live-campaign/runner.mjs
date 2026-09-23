@@ -20,6 +20,8 @@ export async function runCampaign({ tasks, options, outputDir, execute, secretsF
   const profiles = { create: options.profile ?? DEFAULT_PROFILES.create, repair: options.profile ?? DEFAULT_PROFILES.repair };
   const summary = { schemaVersion: "0.1", campaignId: path.basename(outputDir), startedAt: now().toISOString(), finishedAt: null, options: { profiles, provider: options.provider, model: options.model, maxAttempts: options.maxAttempts, labArgs: options.labArgs }, environment: { npm_config_workspace_concurrency: "1", labInstance: process.env.FLUXIQ_LAB_INSTANCE?.trim() || null }, totals: totalsOf([]), tasks: [] };
   await mkdir(path.join(outputDir, "logs"), { recursive: true });
+  /** Consecutive tasks whose run never started, cleared by any task that did. */
+  const neverStarted = [];
   for (const [position, task] of tasks.entries()) {
     const args = labRunArguments(task, options);
     const attempts = [];
@@ -54,10 +56,43 @@ export async function runCampaign({ tasks, options, outputDir, execute, secretsF
     const row = summarizeTask(task, attempts, final, runPath ? await readBundle(runPath) : EMPTY_BUNDLE, { durationMs: Math.max(0, Number(now()) - taskStartedAt) });
     summary.tasks.push(row);
     summary.totals = totalsOf(summary.tasks);
+    // A task whose run never started measured nothing. One can be a bad
+    // scenario; two in a row, on different sites, is the environment -- a stale
+    // Core build, a missing project id, a Lab that cannot boot. Carrying on
+    // spends the whole list printing one refusal per task and ends on a totals
+    // line that reads like a product result: the run that provoked this stopped
+    // 55 times over a Core build that was 1,995 minutes behind its source.
+    if (row.runId) neverStarted.length = 0;
+    else neverStarted.push({ id: task.id, why: labRefusal(final.stdout) ?? labRefusal(final.stderr) ?? `exit ${final.code}` });
     log(`[campaign] ${task.id}: ${row.verdict}${row.runId ? ` (${row.runId})` : ""}, judgement ${row.judgement.passed === null ? "not measured" : row.judgement.passed ? "passed" : "failed"}`);
     await writeSummary(outputDir, summary);
+    if (neverStarted.length >= 2) {
+      const ids = neverStarted.map((entry) => entry.id).join(" and ");
+      summary.abandoned = { after: position + 1, of: tasks.length, why: neverStarted.at(-1).why, tasks: neverStarted.map((entry) => entry.id) };
+      log(`[campaign] stopping after ${position + 1} of ${tasks.length}: ${ids} never started (${neverStarted.at(-1).why}). Nothing measured here is a product result until that is fixed.`);
+      break;
+    }
   }
   summary.finishedAt = now().toISOString();
   await writeSummary(outputDir, summary);
   return summary;
+}
+
+/**
+ * The Lab's own reason for refusing to run, when it printed one. It emits a
+ * `{"lab":...}` line for each guard it applies, and the refusal is the last one
+ * carrying a `why` -- written for a person to act on, so it is the right thing
+ * to repeat back rather than an exit code.
+ */
+function labRefusal(output) {
+  let refusal = null;
+  for (const line of String(output ?? "").split(/\r?\n/u)) {
+    if (!line.trim().startsWith("{")) continue;
+    try {
+      const value = JSON.parse(line);
+      if (typeof value?.why === "string" && value.why.length > 0) refusal = value.why;
+      else if (value?.status === "failed" && typeof value.message === "string" && value.message.length > 0) refusal = value.message;
+    } catch { /* the Lab prints many lines; one that does not parse is not a refusal */ }
+  }
+  return refusal;
 }
