@@ -1,12 +1,12 @@
 # Flow Authoring And Defensive Runtime
 
 Status: Active
-Status detail: Wave one dispatched 2026-09-22 — five workers on tasks t076-t080, after the Week 2 integration landed in both repositories. Wave two is held behind Core's service.ts, which has no ratchet headroom.
+Status detail: Wave one landed 2026-09-22, tasks t076-t080 plus the t082 correction. Wave two is out as four Core-paired tasks: t081 continued, t087, t088 and t089.
 Created: 2026-09-22
 Last updated: 2026-09-22
 Owner: Senior supervisor agent
 Scope: Make a model-authored Flow faithful to what the model actually did, and make a Flow's execution survive a site we do not control. Covers the build loop's authoring model, the draft Flow and its edit and dry-run tools, branch and loop authoring, the runtime's deterministic recovery ladder, and the adversarial fixture conditions that measure both. It deliberately does not cover the real-site lane itself, the campaign measurement, new extraction capabilities, or the Week 2 exit criteria, which stay in their own documents.
-Paired document: none yet — the build loop and the recovery ladder are generic framework behaviour and land in FluxIQ Core, so a Core-side document is required once the phases below are accepted.
+Paired document: `F:\!FluxIQ\docs\working\flow-authoring-and-defensive-runtime-plan.md`
 Related: [week2-exit-plan.md](./week2-exit-plan.md) (the campaign this defers), [mvp-week2-automation-loop-plan.md](./mvp-week2-automation-loop-plan.md) (the adaptation loop this hardens), [AGENTS.md](../../AGENTS.md)
 
 ---
