@@ -9,7 +9,10 @@ both on `task/t091-permission-loop-holes`. No commit was made.
 
 > **On `social-scheduler-schedule-post`, with no grant, the press on "Schedule
 > post" now declares `send_or_publish`. Read off the stored proposal, not
-> deduced. Twice, on two independent live runs.** 20 actions were put to the
+> deduced. Twice, on two independent live runs.** It cannot be read out of a run
+> bundle — the Lab surfaces none of it, for the reason in *Open questions* 1 —
+> so *How to read this yourself* below is the exact command, store and field,
+> and it still prints this from the run's workspace, which is on disk. 20 actions were put to the
 > gate; 17 declared nothing lasting and all 17 are correct (opening a composer,
 > choosing an account, entering text, reading the queue); 3 declared
 > `send_or_publish` — the press while exploring, the same press as a Flow step,
@@ -72,12 +75,80 @@ And in the project's real conversation store, one turn and one pending ask:
 > would cause that; 17 of them said they would cause nothing lasting. Apply it
 > as it stands?
 
-**How I read it.** `FLUXIQ_TEST_TARGET=persistent-isolated` keeps Core's
-workspace after the run, and the proposal is a row in
-`fluxiq-root/.fluxiq/global.sqlite`. That was necessary because **the Lab's own
-`instructedConsequences` field reads nothing and always has** — see *Open
-questions* 1. Both live runs' Lab records say `instructedConsequences: []` while
-the stored proposal holds two entries with quotes.
+## How to read this yourself, until the Lab surfaces it
+
+**None of the table above is in a run bundle.** `events.ndjson`, the campaign
+summary, `snapshots/flow-lane.json` and Core's log carry no `consequences` field
+and no `send_or_publish`, because the Lab reads the declaration from a field the
+bootstrap projection never carried — *Open questions* 1. A run on the default
+`isolated` target cannot be read at all afterwards: its FluxIQ install is
+deleted when the run ends. So the reading has two requirements, and the first is
+part of the run, not of the reading.
+
+**1. Run it on a target that keeps Core's workspace.** `persistent-isolated`
+retains `fluxiq-root/.fluxiq` after the run; nothing else about the run changes.
+
+```bash
+cd <this repository>
+export DEEPSEEK_API_KEY="$(sed -n 's/^DEEPSEEK_API_KEY=//p' .env.local | tr -d '
+')"
+FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=persistent-isolated FLUXIQ_TEST_PERSISTENT_WORKSPACE=t091c FLUXIQ_LAB_INSTANCE=t091 pnpm lab:campaign social-scheduler-schedule-post
+```
+
+**2. Read the proposal out of Core's own store.** The workspace is at
+`test-runs/instances/<FLUXIQ_LAB_INSTANCE>/persistent-isolated/<workspace>/`
+when a Lab instance is named, and `test-runs/persistent-isolated/<workspace>/`
+when one is not. A Flow-Bootstrap proposal is **not** in `project.sqlite` — its
+`adaptations` table is empty for this path — it is one row of the
+`automation.state` table in `fluxiq-root/.fluxiq/global.sqlite`, under the id
+`projects/<projectId>/flows/<flowId>/adaptations/<adaptationId>/bootstrap`, with
+the whole adaptation as JSON in its `data` column.
+
+`sqlite3` is a dependency of Core's `packages/fluxiq`, not of this repository, so
+run node from there and pass the database path:
+
+```bash
+cd ../!FluxIQ/packages/fluxiq
+node -e '
+const sqlite3 = require("sqlite3");
+const db = new sqlite3.Database(process.argv[1], sqlite3.OPEN_READONLY);
+db.all("select data from \"automation.state\" where id like \"%/bootstrap\" and data like \"%declaredConsequences%\"", (e, rows) => {
+  if (e) throw e;
+  for (const row of rows) {
+    const a = JSON.parse(row.data);
+    console.log("adaptationId", a.adaptationId);
+    console.log("crossCheck  ", a.consequenceCrossCheck.verdict, a.consequenceCrossCheck.undeclared);
+    console.log("calls       ", JSON.stringify(a.auditEvents[0].detail));
+    for (const d of a.declaredConsequences) {
+      console.log(`${d.action.kind.padEnd(16)} ${d.action.ref.padEnd(18)} ${String(d.control.name).padEnd(14)} ${JSON.stringify(d.consequences)}`);
+    }
+  }
+});
+' "<abs path>/test-runs/instances/t091/persistent-isolated/t091c/fluxiq-root/.fluxiq/global.sqlite"
+```
+
+**Which fields say what.** On the parsed adaptation:
+
+| Field | Holds |
+| --- | --- |
+| `declaredConsequences[]` | one record per action put to the gate, in the order asked: `action.{kind,id,ref,verb}`, `control.{name,kind}`, `consequences[]`, `permitted`, and `missing`/`requestId` only on a refusal |
+| `declaredConsequences[].action.kind` | `exploration_step` for a `run_node` call (including a dry-run replay, whose `ref` starts `dryrun.`), `flow_step` for a step of the Flow being authored |
+| `consequenceCrossCheck` | `verdict`, `declared`, `instructed`, `undeclared`, `beyondInstruction`, `actions`, `declaredNothing`, `quotes`, `sentence` |
+| `instructedConsequences[]` | what the instruction was read as asking for, each with the person's quoted words and the instruction digest |
+| `permissionRequest` | the request a refusal raised, absent when none was |
+| `auditEvents[0].detail` | `providerCallCount`, `decisionCount` (the loop's own, equal), `additionalProviderCallCount`, `totalProviderCallCount` |
+
+**The one line that answers the headline** is the record whose
+`control.name` is `Schedule post` and whose `action.kind` is `flow_step` — the
+step the saved Flow runs. On `run-mudngxpd-b9a4648e` it reads
+`{"action":{"kind":"flow_step","id":"web.output.dom-click","ref":"main.s6","verb":"press"},"control":{"name":"Schedule post","kind":"button"},"consequences":["send_or_publish"],"permitted":true}`.
+
+Run verbatim against the workspace of `run-mudngxpd-b9a4648e`, which is still on
+disk, the script prints the 21 lines of the table above — 20 declarations plus
+the cross-check and call counts. **The conversation turn is a separate store**:
+the `confirm` ask is a row in that project's `project.sqlite`, tables
+`conversation_turns` and `conversation_asks`, under
+`artifacts/automation-studio/projects/<projectId>/`.
 
 ## What changed and why
 
@@ -360,6 +431,14 @@ which is what prompted the extraction above.
    right home; **the Lab reading them is a few lines in t089's file** and until
    it lands the adversarial lane cannot see any of this. That is why this
    report's central table was read out of SQLite.
+
+   **Confirmed independently by the supervisor** on `run-mudny8g6-7eb38ec5`:
+   the build passes and the Flow is created, and `events.ndjson`, the campaign
+   summary and Core's log contain no `consequences` field and no
+   `send_or_publish` anywhere. So until t089 lands, this task's central claim is
+   reproducible only by hand, and only from a `persistent-isolated` run — the
+   default `isolated` target deletes the install that holds the answer. The
+   procedure is *How to read this yourself* above.
 2. **`providerCalls` in every Lab record is short by one per build**, and the fix
    is one line in `existing-fluxiq-control.ts` — read `totalProviderCallCount`
    when present, and stop requiring `decisionCount === providerCallCount` to
