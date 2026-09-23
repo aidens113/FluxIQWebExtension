@@ -43,6 +43,12 @@ export function consequenceSummary(liveLlm) {
   const request = build.permissionRequest && typeof build.permissionRequest === "object" ? build.permissionRequest : null;
   const crossCheck = build.consequenceCrossCheck && typeof build.consequenceCrossCheck === "object" ? build.consequenceCrossCheck : null;
   const lasting = declared === null ? [] : declared.filter((entry) => classesOf(entry?.consequences).length > 0);
+  // The actions that only read the page. Core permits them whatever they
+  // named, so none of them can be `lasting`; they are counted apart so
+  // `declaredNothing` keeps meaning "acted, and said it would cause nothing",
+  // and so a model calling a page read `create_new` stays visible as a number
+  // instead of costing a build (`run-mueozmp8-348a2057`).
+  const reads = declared === null ? [] : declared.filter((entry) => entry?.effect === "observe");
   return {
     /** How the run's permission question was answered, or that there was none to answer. */
     answeredBy: declared === null ? "not recorded" : answeredBy({ request, lasting, instructed, granted }),
@@ -52,9 +58,12 @@ export function consequenceSummary(liveLlm) {
     instructed,
     /** Every class any action declared for itself. */
     declared: classesOf(lasting.flatMap((entry) => entry.consequences)),
-    /** How many actions were put to the gate, and how many said they would cause nothing lasting. */
+    /** How many actions were put to the gate, and how many of the acting ones said they would cause nothing lasting. */
     actions: declared === null ? null : declared.length,
-    declaredNothing: declared === null ? null : declared.length - lasting.length,
+    declaredNothing: declared === null ? null : declared.length - lasting.length - reads.length,
+    /** How many of them only read the page, and how many of those named a class Core disregarded for it. */
+    reads: declared === null ? null : reads.length,
+    readsOverDeclared: declared === null ? null : reads.filter((entry) => classesOf(entry?.disregarded).length > 0).length,
     /** Core's reading of the declarations against the instruction: `undeclared` is the one nothing else catches. */
     crossCheckVerdict: typeof crossCheck?.verdict === "string" ? crossCheck.verdict : null,
     crossCheckUndeclared: classesOf(crossCheck?.undeclared ?? []),

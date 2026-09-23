@@ -145,11 +145,15 @@ export type CreatedFlowDeclaredAction = Readonly<{
   actionId: string;
   ref: string;
   verb: string;
+  /** `observe` for an action that only reads, `mutate` for one that acts; `null` from a Core older than the field. */
+  effect: string | null;
   controlName: string | null;
   controlKind: string | null;
   consequences: readonly string[];
   permitted: boolean;
   missing?: readonly string[];
+  /** Classes an observing action named that Core did not treat as lasting, so an over-declared read stays countable. */
+  disregarded?: readonly string[];
 }>;
 
 /** Core's verdict on the two self-reports held against each other, cut to what a measurement reads. */
@@ -279,11 +283,13 @@ function declaredActionOf(entry: ExistingAdaptationDeclaredAction): CreatedFlowD
     actionId: entry.actionId,
     ref: entry.ref,
     verb: entry.verb,
+    effect: entry.effect,
     controlName: entry.controlName,
     controlKind: entry.controlKind,
     consequences: Object.freeze([...entry.consequences]),
     permitted: entry.permitted,
     ...(entry.missing === undefined ? {} : { missing: Object.freeze([...entry.missing]) }),
+    ...(entry.disregarded === undefined ? {} : { disregarded: Object.freeze([...entry.disregarded]) }),
   });
 }
 

@@ -214,7 +214,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       check: run.request.permission,
       declared: value.consequences,
       control,
-      verb: node.definition.label.toLowerCase()
+      verb: node.definition.label.toLowerCase(),
+      // Not the model's word, and the reason a read is never refused: a node
+      // that only looks at the page cannot have left anything behind, so what
+      // it declared is recorded and disregarded (`../permission.ts`).
+      effect: node.effect
     });
     if (permission.kind === "invalid") {
       return refusal(undefined, "invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);

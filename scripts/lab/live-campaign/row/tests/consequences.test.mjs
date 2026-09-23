@@ -84,6 +84,23 @@ test("the cross-check's finding travels, because a class the instruction asks fo
   assert.deepEqual(summary.crossCheckUndeclared, ["create_new"]);
 });
 
+test("an action that only read the page is counted as a read, not as an act that declared nothing", () => {
+  // The shape `run-mueozmp8-348a2057` would have had, had the fix existed: the
+  // model still called reading a list `create_new`, Core disregarded it, and
+  // the build carried on. What stays measurable is the over-declaration itself,
+  // which is a fact about the guidance rather than about the product.
+  const extraction = {
+    actionKind: "exploration_step", actionId: "core.run_node", ref: "extract.list.1", verb: "extract list", effect: "observe",
+    controlName: null, controlKind: "step", consequences: [], permitted: true, disregarded: ["create_new"],
+  };
+  const summary = consequenceSummary(snapshot({ outcome: "proposed", declaredConsequences: [read, extraction] }));
+
+  assert.equal(summary.answeredBy, "nothing lasting");
+  assert.deepEqual([summary.actions, summary.declaredNothing, summary.reads, summary.readsOverDeclared], [2, 1, 1, 1]);
+  assert.deepEqual(summary.declared, []);
+  assert.deepEqual(summary.lastingActions, []);
+});
+
 test("nothing free-text reaches the row: a control kind or verb that is not a closed word is withheld", () => {
   const summary = consequenceSummary(snapshot({
     outcome: "permission_required",

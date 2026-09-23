@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AutomationStudioActionPermissionGate } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import {
   createWebAutomationLlmEvidenceRuntime,
@@ -17,6 +18,8 @@ import { webObservationNodeId } from "../catalog";
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
+/** A node that only reads: it waits for the page to say something, and changes nothing. */
+const WAIT_FOR_TEXT = "web.output.dom-wait_for_text";
 
 test("the runnable library is derived from the domain's own node definitions", () => {
   const ids = webRunnableNodeIds();
@@ -119,6 +122,60 @@ test("a declared consequence nobody granted refuses the run, and nothing is disp
   assert.equal(evidence.detail.requestId, "request.one");
   // Only the look the refusal itself took; nothing was clicked.
   assert.equal(stubbed.commands.some((command, index) => index >= before && command.actionType === "web.dom.click"), false);
+});
+
+// Against Core's own gate rather than a stub check, because the fault these two
+// rows close was a disagreement between the two sides: the domain's safety
+// table calls a list read safe, the model called it `create_new`, and nothing
+// joined them -- so a build told to "collect every product on the first page
+// ... into a table" stopped and asked a person for permission to read the page
+// (`run-mueozmp8-348a2057`, 21 provider calls, no Flow). The instruction is the
+// authority; reading the list is the instruction being carried out.
+test("a node that only reads runs under a grant that permits nothing, whatever it declared", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const gate = new AutomationStudioActionPermissionGate({ stage: "authoring", permittedConsequences: [] });
+  await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+
+  const read = await runtime.executeTool({
+    ...PROJECT,
+    callId: "call.two",
+    toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    value: { node: WAIT_FOR_TEXT, parameters: { text: "Go" }, consequences: ["create_new"] },
+    permission: gate.checkFor({ kind: "exploration_step", id: WEB_LLM_RUN_NODE_TOOL_ID, ref: "call.two" })
+  });
+
+  assert.equal(read.resultCode, "web.inspect.succeeded");
+  assert.equal(read.effectApplied, true);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.wait_for_text"), true);
+  // Nobody was asked anything, and what the model named is kept where it can be
+  // counted rather than acted on.
+  assert.equal(gate.request, undefined);
+  assert.equal(gate.declarations[0]?.action.effect, "observe");
+  assert.deepEqual(gate.declarations[0]?.consequences, []);
+  assert.deepEqual(gate.declarations[0]?.disregarded, ["create_new"]);
+});
+
+test("a press that would move money still stops and asks, under that same gate", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const gate = new AutomationStudioActionPermissionGate({ stage: "authoring", permittedConsequences: [] });
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+
+  const refused = await runtime.executeTool({
+    ...PROJECT,
+    callId: "call.two",
+    toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    value: { node: CLICK, parameters: { target: { handle } }, consequences: ["move_money"] },
+    permission: gate.checkFor({ kind: "exploration_step", id: WEB_LLM_RUN_NODE_TOOL_ID, ref: "call.two" })
+  });
+
+  const evidence = refused.evidence as JsonObject & { code: string; detail: { missing: string[] } };
+  assert.equal(evidence.code, "permission_required");
+  assert.deepEqual(evidence.detail.missing, ["move_money"]);
+  assert.deepEqual(gate.request?.missing, ["move_money"]);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.dom.click"), false);
 });
 
 function stub(options: { failClick?: boolean } = {}) {

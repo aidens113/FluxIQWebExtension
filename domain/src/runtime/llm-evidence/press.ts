@@ -57,7 +57,10 @@ export async function pressControl(press: WebControlPress): Promise<WebLlmSnapsh
     check: press.request.permission,
     declared: press.consequences,
     control: { name: press.element.name ?? press.element.text, kind: webControlKind(press.element) },
-    verb: "press"
+    verb: "press",
+    // A press acts by definition, which is exactly why its consequence is the
+    // model's to state and Core's to answer.
+    effect: "mutate"
   });
   if (permission.kind === "invalid") recoverable("invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }));
   if (permission.kind === "refused") {
