@@ -59,6 +59,36 @@ test("a declared zero-call expectation is accepted, and anything but an absence 
   assert.ok(!strange.valid && strange.issues.some((entry) => entry.path === "$.expected.providerCalls.reason"));
 });
 
+test("a declared absorbing rung is accepted from the closed list, with a reason and an attempt ceiling", () => {
+  // The rung is compared against the word the run itself publishes, so a word
+  // no run can write would validate and never be met -- an expectation that
+  // measures nothing. The list is therefore closed, and the ceiling is bounded
+  // well above Core's three attempts and well below a number nothing reaches.
+  const declared = { ...validScenario, expected: { ...validScenario.expected, recovery: { absorbedBy: "retry_node", because: "a wait that ran out is attempted again", maxAttemptsPerNode: 2 } } };
+  assert.equal(validateWebScenario(declared).valid, true);
+  assert.equal(resolveScenarioWorkflow(declared).expected.recovery.absorbedBy, "retry_node");
+
+  // "none" is the control: a fixture whose arming turns out to change nothing
+  // the run can see measures nothing, and saying so makes that visible.
+  assert.equal(validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, recovery: { absorbedBy: "none", because: "nothing in the ladder can sign a session back in" } } }).valid, true);
+
+  const invented = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, recovery: { absorbedBy: "clairvoyance", because: "it just works" } } });
+  assert.equal(invented.valid, false);
+  assert.ok(!invented.valid && invented.issues.some((entry) => entry.path === "$.expected.recovery.absorbedBy"));
+
+  const unexplained = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, recovery: { absorbedBy: "retry_node" } } });
+  assert.equal(unexplained.valid, false);
+  assert.ok(!unexplained.valid && unexplained.issues.some((entry) => entry.path === "$.expected.recovery.because"));
+
+  const unbounded = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, recovery: { absorbedBy: "retry_node", because: "again and again", maxAttemptsPerNode: 500 } } });
+  assert.equal(unbounded.valid, false);
+  assert.ok(!unbounded.valid && unbounded.issues.some((entry) => entry.path === "$.expected.recovery.maxAttemptsPerNode"));
+
+  const strange = validateWebScenario({ ...validScenario, expected: { ...validScenario.expected, recovery: { absorbedBy: "retry_node", because: "why", rung: "retry_node" } } });
+  assert.equal(strange.valid, false);
+  assert.ok(!strange.valid && strange.issues.some((entry) => entry.path === "$.expected.recovery.rung"));
+});
+
 test("a variant's declaration replaces the workflow's, like every other expectation", () => {
   const scenario = {
     ...validScenario,
@@ -67,6 +97,14 @@ test("a variant's declaration replaces the workflow's, like every other expectat
   };
   assert.equal(validateWebScenario(scenario).valid, true);
   assert.equal(resolveScenarioWorkflow(scenario, { variantId: "slow-render" }).expected.providerCalls.because, "rung 2 waits for readiness");
+
+  const rungs = {
+    ...validScenario,
+    expected: { ...validScenario.expected, recovery: { absorbedBy: "none", because: "the unarmed page needs no recovery" } },
+    variants: [{ id: "slow-render", description: "Content arrives late.", arm: { operation: "delay" }, expected: { recovery: { absorbedBy: "retry_node", because: "the wait is attempted again" } } }],
+  };
+  assert.equal(validateWebScenario(rungs).valid, true);
+  assert.equal(resolveScenarioWorkflow(rungs, { variantId: "slow-render" }).expected.recovery.absorbedBy, "retry_node");
 });
 
 test("rejects malformed JSON with a contract error", () => {

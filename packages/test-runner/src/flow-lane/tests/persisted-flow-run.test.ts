@@ -437,7 +437,12 @@ test("a failed run whose every attempt succeeded, with action nodes never attemp
   const outcome = await executeRecordedFlowRun(client, { ...run, actionTypes });
   assert.deepEqual(outcome.stoppedWithoutFailedAttempt, { attemptedActions: 1, unvisitedActions: 3 });
   assert.equal(outcome.failure, null);
-  for (const left of ["recorded.scroll.two", "outgoing edge"]) assert.equal(JSON.stringify(outcome).includes(left), false, `${left} must not travel`);
+  // Core's sentence about why it stopped never travels; the counts are the
+  // record. The node id on the attempt does travel now (`nodeId` on the
+  // action), because a retried node cannot otherwise be joined back to itself,
+  // so the stop is stated by counts rather than by an absence of identifiers.
+  assert.equal(JSON.stringify(outcome).includes("outgoing edge"), false, "Core's sentence must not travel");
+  assert.equal(outcome.actions[0]?.nodeId, "recorded.scroll.two", "the attempt names the node it ran");
   const { client: retried } = control({}, { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.click.one" }), attempt({ attemptId: "attempt.two", nodeId: "recorded.click.one", order: 1 })] });
   assert.deepEqual((await executeRecordedFlowRun(retried, { ...run, actionTypes })).stoppedWithoutFailedAttempt, { attemptedActions: 1, unvisitedActions: 3 }, "a node attempted twice is one action");
 
@@ -476,7 +481,12 @@ test("the run's start is the recording position of its first attempt on a record
   const { client } = control({}, { actionAttempts: attempts });
   const outcome = await executeRecordedFlowRun(client, { ...run, candidateOrder });
   assert.equal(outcome.startCandidateIndex, 2);
-  assert.equal(JSON.stringify(outcome).includes("recorded.close"), false, "a position, never a node id");
+  // The *start* is a position, which is what this test is about: it is stated
+  // against the recording's candidate order and never as the node that
+  // happened to be first. Each attempt separately names the node it ran, which
+  // is what joins a retried node back to itself.
+  assert.equal(typeof outcome.startCandidateIndex, "number", "a position, never a node id");
+  assert.deepEqual(outcome.actions.map((action) => action.nodeId), ["builtin.start", null, "recorded.close", "recorded.close", "recorded.click.one"], "in Core's attempt order, with the unnamed attempt naming none");
   const { client: first } = control({}, { actionAttempts: [attempt({ nodeId: "recorded.click.one" })] });
   assert.equal((await executeRecordedFlowRun(first, { ...run, candidateOrder })).startCandidateIndex, 0, "position 0 is a start, not an absence");
   const { client: unordered } = control({}, { actionAttempts: attempts });

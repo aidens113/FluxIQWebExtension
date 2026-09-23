@@ -23,7 +23,9 @@
 //   own instruction asked for it, which is the standing rule that FluxIQ is
 //   capable by default and the instruction is the authority;
 // - a press that says it causes nothing lasting builds with nobody asked, so
-//   closing a banner or applying a filter needs no permission;
+//   closing a banner or applying a filter needs no permission -- and Core still
+//   hears the empty answer and keeps it, which is what makes the declaration
+//   readable rather than deducible;
 // - the declaration never reaches the node the Flow runs;
 // - it is read off the node's own `consequences` field, which is where the
 //   draft a build accrues writes it and where the Flow script's reserved step
@@ -179,6 +181,13 @@ test("a press that causes nothing lasting builds with nobody asked, and the decl
 
   assert.equal(resolved.ok, true);
   assert.equal(gate.request, undefined);
+  // And Core heard it. Until 2026-09-22 this domain returned "no consequence"
+  // without calling the check, so an empty declaration reached nobody and the
+  // only record a permitted press left was that it had not been refused --
+  // which is why four live builds could not say what any press had declared.
+  assert.deepEqual(gate.declarations.map((entry) => ({ ref: entry.action.ref, name: entry.control.name, consequences: entry.consequences, permitted: entry.permitted })), [
+    { ref: "main.post", name: "Schedule post", consequences: [], permitted: true }
+  ]);
   const node = resolved.ok ? resolved.plan.subflows[0]?.nodes[1] : undefined;
   assert.equal(node?.parameters && "consequences" in node.parameters, false, "the declaration is read by Core, never run by the Flow");
   assert.equal(node?.parameters?.selector, "#schedule");

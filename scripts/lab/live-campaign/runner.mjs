@@ -23,6 +23,10 @@ export async function runCampaign({ tasks, options, outputDir, execute, secretsF
   for (const [position, task] of tasks.entries()) {
     const args = labRunArguments(task, options);
     const attempts = [];
+    // Before the attempt loop, so a task retried after this machine's memory
+    // fault is measured as what it cost the campaign rather than as its last
+    // attempt alone.
+    const taskStartedAt = Number(now());
     let final;
     for (let attempt = 1; attempt <= options.maxAttempts; attempt += 1) {
       log(`[campaign] ${position + 1}/${tasks.length} ${task.id}, attempt ${attempt}/${options.maxAttempts}: ${displayCommand(args)}`);
@@ -47,7 +51,7 @@ export async function runCampaign({ tasks, options, outputDir, execute, secretsF
     }
     const result = parseLabResult(final.stdout);
     const runPath = result?.path ? path.resolve(repositoryRoot, result.path) : null;
-    const row = summarizeTask(task, attempts, final, runPath ? await readBundle(runPath) : EMPTY_BUNDLE);
+    const row = summarizeTask(task, attempts, final, runPath ? await readBundle(runPath) : EMPTY_BUNDLE, { durationMs: Math.max(0, Number(now()) - taskStartedAt) });
     summary.tasks.push(row);
     summary.totals = totalsOf(summary.tasks);
     log(`[campaign] ${task.id}: ${row.verdict}${row.runId ? ` (${row.runId})` : ""}, judgement ${row.judgement.passed === null ? "not measured" : row.judgement.passed ? "passed" : "failed"}`);

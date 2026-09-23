@@ -1,6 +1,6 @@
 import { isAutomationStudioAdaptiveFailureClass } from "./failure-category.js";
 import { recordableActionTypes } from "./recordable-actions.js";
-import { SCENARIO_EXTRACT_MAX_PAGES, expectedActionOutcomes, scenarioCapabilities, scenarioExtractPaginationModes, scenarioStepOperations, type ScenarioExtractPaginationMode, type WebScenario } from "./scenario.js";
+import { SCENARIO_EXTRACT_MAX_PAGES, expectedActionOutcomes, expectedRecoveryRungs, scenarioCapabilities, scenarioExtractPaginationModes, scenarioStepOperations, type ScenarioExtractPaginationMode, type WebScenario } from "./scenario.js";
 
 export type ValidationIssue = { path: string; message: string };
 export type ValidationResult<T> = { valid: true; value: T } | { valid: false; issues: ValidationIssue[] };
@@ -171,9 +171,35 @@ const validateProviderCalls: Validator = (value, path, issues) => {
 /** One sentence, which is what the run record has room to carry. */
 const MAX_BECAUSE_CHARS = 200;
 
+/**
+ * `expected.recovery`, the declaration naming which deterministic recovery
+ * must absorb the condition this scenario or variant arms.
+ *
+ * `absorbedBy` is held to the closed list rather than to any word, because the
+ * point of the declaration is that it is compared against the rung the run
+ * itself published. A word no run can write would pass validation and never
+ * be met, which is the shape of an expectation that measures nothing.
+ *
+ * `maxAttemptsPerNode` is bounded well below any policy Core will resolve, so
+ * a fixture cannot declare a ceiling so high that it is never reached.
+ */
+const validateRecovery: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["absorbedBy", "because", "maxAttemptsPerNode"], path, issues);
+  if (!(expectedRecoveryRungs as readonly string[]).includes(String(value.absorbedBy))) issue(issues, `${path}.absorbedBy`, `must be one of ${expectedRecoveryRungs.join(", ")}`);
+  requiredString(value, "because", path, issues);
+  if (typeof value.because === "string" && value.because.length > MAX_BECAUSE_CHARS) issue(issues, `${path}.because`, `must be at most ${MAX_BECAUSE_CHARS} characters`);
+  if (value.maxAttemptsPerNode !== undefined && (!Number.isInteger(value.maxAttemptsPerNode) || Number(value.maxAttemptsPerNode) < 1 || Number(value.maxAttemptsPerNode) > MAX_ATTEMPTS_PER_NODE)) {
+    issue(issues, `${path}.maxAttemptsPerNode`, `must be an integer between 1 and ${MAX_ATTEMPTS_PER_NODE}`);
+  }
+};
+
+/** Far above Core's default of three attempts, and far below a ceiling nothing could reach. */
+const MAX_ATTEMPTS_PER_NODE = 16;
+
 const validateExpected: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["pageFacts", "recordingEvents", "actions", "finalState", "allowedConsoleErrors", "extracted", "failure", "providerCalls"], path, issues);
+  checkKeys(value, ["pageFacts", "recordingEvents", "actions", "finalState", "allowedConsoleErrors", "extracted", "failure", "providerCalls", "recovery"], path, issues);
   if (value.pageFacts !== undefined) arrayOf(value.pageFacts, `${path}.pageFacts`, issues, validateFact);
   if (value.finalState !== undefined) arrayOf(value.finalState, `${path}.finalState`, issues, validateFact);
   if (value.recordingEvents !== undefined) arrayOf(value.recordingEvents, `${path}.recordingEvents`, issues, (event, eventPath, target) => {
@@ -197,6 +223,7 @@ const validateExpected: Validator = (value, path, issues) => {
   if (value.extracted !== undefined) arrayOf(value.extracted, `${path}.extracted`, issues, validateExtraction);
   if (value.failure !== undefined) validateFailure(value.failure, `${path}.failure`, issues);
   if (value.providerCalls !== undefined) validateProviderCalls(value.providerCalls, `${path}.providerCalls`, issues);
+  if (value.recovery !== undefined) validateRecovery(value.recovery, `${path}.recovery`, issues);
 };
 
 const validateVariant: Validator = (value, path, issues) => {

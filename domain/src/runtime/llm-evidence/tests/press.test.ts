@@ -177,7 +177,7 @@ for (const [label, consequences] of PERMISSION_CASES) {
   });
 }
 
-test("a press that declares nothing lasting asks nothing, and an unreadable declaration presses nothing", async () => {
+test("a press that declares nothing lasting is still put to Core, and an unreadable declaration presses nothing", async () => {
   const lab = queueLab();
   const runtime = createWebAutomationLlmEvidenceRuntime(lab.gateway);
   const handles = await handlesByName(runtime);
@@ -186,7 +186,11 @@ test("a press that declares nothing lasting asks nothing, and an unreadable decl
 
   const opened = await runtime.executeTool({ ...BASE, callId: "call.open", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("New post")! } }, consequences: [] }, permission });
   assert.equal(opened.resultCode, "web.action.succeeded");
-  assert.deepEqual(asked, []);
+  // Nothing is asked *for*, and Core is still told. Saying `[]` is the answer
+  // every press in four measured live builds gave, and it used to stop here:
+  // the check was never called, so what a permitted press had declared could
+  // only be deduced from the absence of a refusal.
+  assert.deepEqual(asked, [{ consequences: [], control: { name: "New post", kind: "button" }, verb: "click" }]);
 
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.bad", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["spend_a_little"] }, permission });
   assert.equal(unreadable.resultCode, "web.action.rejected.invalid_input");

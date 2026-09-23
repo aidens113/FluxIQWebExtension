@@ -129,7 +129,12 @@ function safeId(value: string): string { return /^[A-Za-z0-9._:-]+$/.test(value)
  * `failure`. The type is sanitized, as every id this module names in a message is.
  */
 function expectationAttempts(actions: readonly ExistingRunAction[], actionTypes: ReadonlyMap<string, string>): PersistedFlowAction[] {
-  return flowActionTimings(actions, actionTypes).map(timing => ({ ...timing, actionType: safeId(timing.actionType), failure: null }));
+  // `nodeId: null` is the honest answer here rather than an omission: this lane
+  // reads the existing-Flow control's action list, which is already reduced to
+  // timings and keeps no node id, so nothing in this lane could join a retried
+  // node back to its node. The Flow lane, which reads Core's attempts directly,
+  // is where a rung is attributed.
+  return flowActionTimings(actions, actionTypes).map((timing, attemptIndex) => ({ ...timing, actionType: safeId(timing.actionType), nodeId: null, attemptIndex, failure: null }));
 }
 async function attemptCancellation(control: ExistingFluxIQControlClient, projectId: string, runId: string, timeoutMs = 5_000): Promise<ExistingFlowCancellationReport["cancellation"]> {
   try {

@@ -35,6 +35,14 @@ export function assertFlowActions(expected: readonly ExpectedAction[] | undefine
  * `failure` record, so nothing is inferred from a message. A workflow that
  * expects a failure and gets none fails; so does an unexpected failure, which
  * would otherwise let a broken run pass as long as it broke differently.
+ *
+ * The caller passes `null` for a failure the recovery ladder absorbed
+ * (`absorbedEveryFailure`), which is not the same thing as a run that never
+ * met one. Core records the first failure it meets and keeps the failed
+ * attempt, so a node the retry rung rescued leaves a failure record on a run
+ * whose status is `succeeded`; reading that as the run's outcome failed every
+ * correct absorption. A workflow that *declares* a failure and then has it
+ * absorbed still fails here, which is right: its declaration has gone stale.
  */
 export function assertFlowFailure(expected: ExpectedFailure | undefined, failure: AutomationStudioFailureRecord | null): void {
   if (!expected) {

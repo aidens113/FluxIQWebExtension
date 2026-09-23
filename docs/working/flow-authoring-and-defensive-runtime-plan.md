@@ -1,7 +1,7 @@
 # Flow Authoring And Defensive Runtime
 
 Status: Active
-Status detail: Wave one landed 2026-09-22, tasks t076-t080 plus the t082 correction. Wave two is out as four Core-paired tasks: t081 continued, t087, t088 and t089.
+Status detail: Waves one and two landed 2026-09-22, t076 to t082 and t087 to t089. The ladder is measured absorbing 6 of 6 adversarial conditions at zero provider calls. t090 (branches and loops in the draft) and t091 (the permission gate is built and has never been asked anything) are out.
 Created: 2026-09-22
 Last updated: 2026-09-22
 Owner: Senior supervisor agent
@@ -12,6 +12,19 @@ Related: [week2-exit-plan.md](./week2-exit-plan.md) (the campaign this defers), 
 ---
 
 ## Current State
+
+**Scope, set by the user on 2026-09-22 and binding on everything below.** The
+only path that counts is: a person writes an instruction, the model explores the
+live page by running real Flow nodes, and the Flow it builds then runs
+deterministically and produces the right answer. **Recording-built Flows are not
+to be tested, measured, or reported as progress.** Do not choose a recorded Flow
+as the subject of a run, a lane or a campaign when the same question can be
+asked of an instruction-built one; do not offer recording evidence as proof that
+something works; and do not count recording capability toward progress. Every
+stage downstream — failure, diagnosis, exploration, repair, validation,
+persistence, resumption, and cheap deterministic re-running — is measured on
+Flows that came from an instruction. Recording stays in the product; it is not
+the subject of testing while the instruction path is the open question.
 
 The user asked on 2026-09-22 for a side plan to execute **before** live testing
 continues, so that Flow creation and Flow execution work defensively on sites we
@@ -115,10 +128,10 @@ determinism did not work.
 alone (`cda4bb1`, `bf8792b`); t078, t079 and t080 merged in both repositories
 (`a772560`, `cdb038e`, `387b314`). The correction below then went out as t082,
 `fa-explore-with-output-nodes`, and merged (`9393cbd`, Core `1987317`), rebuilding
-the build loop around the real node registry. The recovery ladder is built and
-runs live, but its own worker found that **no variant in the scenario corpus is
-absorbable by a deterministic ladder**, so it has never been shown to absorb
-anything. That is workstream D's job now, not a defect in the ladder.
+the build loop around the real node registry. The recovery ladder was built and
+ran live, and its own worker found that no variant in the scenario corpus was
+absorbable by a deterministic ladder, so it had never been shown to absorb
+anything. Workstream D has since settled that; see below.
 
 **Two constraints stated above are out of date.** Core's `service.ts` is **4,637
 lines**, not the 6,275 quoted throughout this document: the headroom tasks landed,
@@ -126,22 +139,36 @@ so wave two may add lines there within reason. And the four `flow-bootstrap` edi
 that `fa-flow-permission-gate` was blocked on landed inside t082 (`0607038`), so a
 consequence declaration now has a carrier and t081 is no longer unsatisfiable.
 
-**Wave two dispatched 2026-09-22** — four workers, partitioned by file, each on
-its own task branch and Core-paired worktree:
+**Wave two is in.** All four tasks landed and pushed in both repositories on
+2026-09-22, each verified by the supervisor re-running its proof rather than
+reading its report: t081 (the Flow-step permission gate and its grammar), t087
+(the service seams, and the escalation that makes a blocked action ask rather
+than fail), t088 (A7, the draft dry run), t089 (the adversarial conditions and
+the measured lane). Workstream A is complete except A13; workstream B is complete
+except the three ladder rungs that have no input written yet; workstream D is
+complete.
 
-| Task | Worker | Steps |
-| --- | --- | --- |
-| t081 (continued) | `fa-flow-permission-gate` | the Flow-step gate and its grammar, reconciled onto t082's path |
-| t087 | `fa-service-seams` | A2, A9, A10, A11's Core half, B8, B0's missing line |
-| t088 | `fa-draft-dry-run` | A7 |
-| t089 | `fa-adversarial-measurement` | D0a, A12, D1, D2, D3 |
+**The result this plan was built to get.** The recovery ladder absorbs, and it is
+measured: **6 of 6 adversarial conditions absorbed as declared, for 0 provider
+calls**, re-run by the supervisor. A renamed control is recovered by the
+browser's visual-target strategy where unrenamed fields match by selector; a wait
+that runs out is rescued by a retry that succeeds 1,885 ms into its second
+attempt. Before this the ladder had never been shown to recover anything.
 
-`runtime/service.ts` belongs to t087 alone; t088 names the line it needs there in
-its report rather than writing it. Workstream C stays held behind A7, which owns
-`runtime/flow-draft/`.
+**And the thing that is built and does not yet work.** A Flow's steps meet the
+permission gate, an undeclared press cannot be authored, a request now opens a
+conversation ask that parks the build until the person answers — and in every
+live build so far **the gate has been asked nothing**, because the model declares
+that every press it authors causes nothing lasting, including the press that
+schedules a public post. The prompt that taught it that answer has been
+rebalanced; whether that is enough is unmeasured. Until it is, this gate must not
+be described as a defence.
 
-**Next:** verify each claim in source and by rerunning its proof, land the four one
-at a time, then dispatch workstream C. The Core-side paired document is still owed.
+**Out now:** t090 for the draft's branches and loops (workstream C, unblocked by
+A5 and A7), and t091 for the three things between the gate and a gate worth
+trusting — a permitted action's declaration discarded before anything can read
+it, A13's cross-check against what the instruction actually asked for, and the
+repair path still throwing where the build now parks and asks.
 
 **Blockers:** none.
 
@@ -681,6 +708,17 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Validation: live `run-muditxzh-a7ae883d` (everything-store, real DeepSeek) — the dry run ran twice, **attempt one refused the proposal, the model amended and asked again, attempt two passed**; `build.providerCalls` 16 == `observed.calls` 16, so the replay itself spent **zero** calls; 7,262 ms and 7,108 ms for a reset plus five steps, about 1.2 s per act and 14% of a 105 s build. The supervisor re-ran everything after merging `dev`: domain `# pass 752 / # fail 0`, extension `# pass 731 / # fail 0`, Core `flow-draft` plus `llm` 2,736 passed, and both `task finish` runs reported `"command":"pnpm check","passed":true`. Seven domain failures seen before the rebuild were a stale Core `dist` in that worktree, not an integration defect.
 - Outcome: Done
 - Follow-up: the hard refusal is proved by unit test only — no live run has yet produced a `failed` or `changed` step, so the soft `unreproducible` path is what was exercised live. The plan's open question is answered: **the reset is the page**, because workspace and browser-context resets are unreachable through a gateway that only runs page actions, and a step the site itself remembers cannot be put back; that soft edge closes properly only with C1. Two Lab caps now fail correct work and are relayed to t089 — the created-adaptation audit caps tool calls at 16, and the instruction-authority derivation spends about four provider calls the grant never sees, which also corrupts any per-condition call count.
+
+
+---
+
+### 2026-09-22 — A blocked action now asks the person, and the ladder is finally shown to absorb
+- Agent: supervisor; workers `fa-service-seams`, `fa-adversarial-measurement`
+- Changed: t087 and t089 merged in both repositories (downstream `58286ad`, Core `494fef9`), both pushed. A2, A10, A11's Core half, A12, B0's missing line, B8, D0a and D1 to D3 are done; A9 was dropped as already satisfied — `core.run_node` reaches 18 runnable nodes, two of them waits, so a Core wait option would have been a second path to one capability. Core's `service.ts` went **down** to 4,614 lines while gaining this.
+- Why: FluxIQ's standing rule is that a blocked action escalates to the person rather than failing, and it was unimplementable while the gate's request and the conversation ask that answers it sat one call apart with nothing between them. Separately, the recovery ladder had never been shown to recover anything, because every variant in the corpus was built to prove model repair.
+- Validation: **the supervisor re-ran the adversarial lane itself: 6/6 conditions absorbed as declared, 0 provider calls** — `renamed-submit` absorbed by `host_target_resolution`, `late-recoverable` by `retry_node` on its second attempt, `rows-per-visit` and `too-slow` over three attempts each. Domain `# pass 752 / # fail 0` on both branches; extension `# pass 731 / # fail 0`; Core service plus flow-bootstrap 363 passed with one timeout that passes alone in 4.5 s; all four `task finish` runs reported `"command":"pnpm check","passed":true`. A first lane run returned 0/6 because the machine's `FLUXIQ_TEST_TARGET=existing` leaked in; `FLUXIQ_TEST_ENV_FILES=none` is required and the lane does exit non-zero on disagreement.
+- Outcome: Done
+- Follow-up: t089 found the Lab had been reading **every absorbed run as a failure**, since Core keeps the first failure record beside a succeeded status — the measurement would have reported the exact opposite of the truth — and that the host target resolution was read one nesting level too shallow, so it was `null` in every real run while its unit tests passed. Three of the four rungs still have no input written and have never fired. A11's ask has never fired live, because the model still declares that nothing it authors is consequential. t090 (workstream C) and t091 (the permission loop's remaining holes) went out on the back of this.
 
 ## Open Questions
 

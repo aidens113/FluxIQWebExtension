@@ -64,7 +64,7 @@ test("runs the stored Flow deterministically and requires successful durable act
 test("the existing and clone lanes judge an expected action by the Flow lane's own rule", async () => {
   // The same attempt as the Flow lane holds it. This lane must throw exactly
   // what `assertFlowActions` throws, or not throw, for every expectation.
-  const flowLaneAttempts = [{ actionType: "web.dom.type", startedAt: new Date(2).toISOString(), durationMs: 1, status: "succeeded" as const, failure: null }];
+  const flowLaneAttempts = [{ actionType: "web.dom.type", nodeId: "node-1", attemptIndex: 0, startedAt: new Date(2).toISOString(), durationMs: 1, status: "succeeded" as const, failure: null }];
   const verdictOf = (error: unknown) => error instanceof RunnerFailure ? { category: error.category, message: error.message, details: error.details } : error;
   const cases: ExpectedAction[][] = [
     [{ action: "web.dom.type" }],

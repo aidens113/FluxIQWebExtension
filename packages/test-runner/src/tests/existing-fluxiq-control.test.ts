@@ -307,6 +307,39 @@ test("holds an evidence-guided creation's provider calls to Core's backstop, not
   }
 });
 
+/**
+ * A build that explores by running the node library's nodes makes one tool
+ * call per step it tries, not a handful before writing a script. The reader's
+ * own ceiling of 16 was measured cutting off a live build that had already
+ * produced a Flow, so the only ceiling a record is held to is Core's own on
+ * its loop -- and a record claiming more calls than it had decisions is still
+ * refused.
+ */
+test("a build's tool calls are held to Core's own loop ceiling, not to a number of the reader's", async (t) => {
+  const withTools = (toolCallCount: number, toolIds: string[]) => ({
+    adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed",
+    metadata: { adaptationKind: "flow_bootstrap", phase9: { auditEvents: [{ eventType: "created", detail: {
+      evidenceGuided: true, providerCallCount: 40, decisionCount: 40, iterationCount: 41, traceStepCount: 41,
+      toolCallCount, evidenceBytes: 100, toolIds,
+    } }] } },
+  });
+  let detail = withTools(1, ["web.inspect_current_page"]);
+  const client = await mockedClient(t, url => endpoint(url) === "get-flow-adaptation"
+    ? json({ ok: true, payload: { adaptation: detail } })
+    : (() => { throw new Error(`unexpected ${url.pathname}`); })());
+
+  // Forty tool calls and twenty distinct nodes: ordinary for a build that runs
+  // the library, and refused before this change.
+  detail = withTools(40, Array.from({ length: 20 }, (_, index) => `web.node.${index}`));
+  const read = await client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending");
+  assert.equal(read.evidenceLoop?.toolCallCount, 40);
+  assert.equal(read.evidenceLoop?.toolIds.length, 20);
+
+  // More tool calls than the loop had decisions is still not a record Core writes.
+  detail = withTools(42, ["web.inspect_current_page"]);
+  await assert.rejects(() => client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending"), /bounded contract/u);
+});
+
 test("a Flow build answers with Core's whole envelope, so a refusal's diagnostic survives the HTTP status", async (t) => {
   const requests: Array<{ path: string; body: unknown }> = [];
   const diagnostic = { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation" };
