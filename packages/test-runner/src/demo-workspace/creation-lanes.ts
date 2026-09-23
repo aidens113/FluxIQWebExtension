@@ -14,6 +14,7 @@ import { authenticatedControl, withPersistentDemoCore } from "./core-process.js"
 import { openFlowInCurrentProject, openProjectInPanel } from "./panel-navigation.js";
 import { runDemoFlowFromPanel } from "./panel-run.js";
 import { type DemoWorkspaceState, SCHEMA_VERSION, withWorkspaceLock } from "./workspace-state.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export async function runDemoLlmCreationSettingsProbe(config: DemoWorkspaceConfiguration): Promise<Readonly<{ status: "passed" }>> {
   return withWorkspaceLock(config, async () => withPersistentDemoCore(config, async () => {
@@ -81,7 +82,7 @@ export async function runDemoLlmPendingCreationProbe(config: DemoWorkspaceConfig
       proposedCount: 1,
       bootstrap: adaptation.adaptationKind === "flow_bootstrap",
       providerMatches: adaptation.accounting?.provider === "deepseek",
-      modelMatches: adaptation.accounting?.model === "deepseek-chat",
+      modelMatches: adaptation.accounting?.model === DEFAULT_LLM_MODEL,
       ...(adaptation.accounting?.inputTokens === undefined ? {} : { inputTokens: adaptation.accounting.inputTokens }),
       ...(adaptation.accounting?.outputTokens === undefined ? {} : { outputTokens: adaptation.accounting.outputTokens }),
       ...(adaptation.accounting?.totalTokens === undefined ? {} : { totalTokens: adaptation.accounting.totalTokens }),

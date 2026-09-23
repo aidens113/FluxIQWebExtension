@@ -5,6 +5,7 @@ import { buildCreatedFlowProposal } from "../build-proposal.js";
 import { ADAPTATION_ID, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
 import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
 import { parkedProposalConsequences } from "./parked-proposal.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 /**
  * The build is the one paid step of a created-Flow run, and whatever Core
@@ -43,7 +44,7 @@ test("the build saves the instruction, then authorizes, selects the context and 
     providerCalls: 4,
     loopProviderCalls: 4,
     providerInvocation: "attempted",
-    accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
     // A tool id without an identifier's shape is not kept.
     evidenceLoop: { decisionCount: 4, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"], steps: null },
     failure: null,
@@ -95,7 +96,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     retryable: false,
     providerInvocation: "attempted",
     providerResponse: "received",
-    accounting: { requestId: "evidence.one", estimatedInputTokens: 900, provider: "deepseek", model: "deepseek-chat", inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
+    accounting: { requestId: "evidence.one", estimatedInputTokens: 900, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
     evidenceLoop: { iterationCount: 6, decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }, { toolId: "WEB.Recovery.Shout" }] },
   };
   const { core, record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
@@ -106,7 +107,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     providerCalls: 5,
     loopProviderCalls: 5,
     providerInvocation: "attempted",
-    accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
     evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }] },
     failure: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 },
     recoveredAfterTimeout: false,
@@ -155,7 +156,7 @@ test("a build stopped on refused plans keeps what refused them, decision by deci
     retryable: false,
     providerInvocation: "attempted",
     providerResponse: "received",
-    accounting: { requestId: "evidence.two", estimatedInputTokens: 9_000, provider: "deepseek", model: "deepseek-chat", inputTokens: 13_000, outputTokens: 1_500, totalTokens: 14_500, estimatedCostUsd: 0.008 },
+    accounting: { requestId: "evidence.two", estimatedInputTokens: 9_000, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 13_000, outputTokens: 1_500, totalTokens: 14_500, estimatedCostUsd: 0.008 },
     evidenceLoop: {
       iterationCount: 3,
       decisionCount: 4,

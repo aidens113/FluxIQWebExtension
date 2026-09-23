@@ -5,7 +5,7 @@
 // limit below is at or inside the profile's own, so a cap the operator typed
 // can only ever bind harder, never less.
 
-import { DEFAULT_LLM_LAB_BUDGET, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, type LlmActionConsequence, type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 
@@ -32,7 +32,7 @@ const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, expl
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */
-/** Core's per-request ceiling, which is deepseek-chat's own 64k context. Derived: a tenth copy of this number is how the previous nine happened. */
+/** Core's own per-request ceiling -- once `deepseek-chat`'s whole context, now a budget Core sets, since the configured models carry a million tokens. Derived: a tenth copy of this number is how the previous nine happened. */
 const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;
@@ -63,7 +63,7 @@ const CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD = DEFAULT_LLM_LAB_BUDGET.maxTotalTo
 export type LiveLlmPlan = {
   profileId: string;
   provider: "deepseek";
-  model: "deepseek-chat";
+  model: LlmModel;
   task: LlmTaskKind;
   purpose: LiveLlmPurpose;
   /**
@@ -125,7 +125,11 @@ export type LiveLlmPlan = {
 export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan {
   if (profile.mode !== "live") throw refusal("only a live LLM profile can reach a provider");
   if (profile.provider !== "deepseek") throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; Core resolves only deepseek`);
-  if (profile.model !== "deepseek-chat") throw refusal(`--llm-model ${describe(profile.model)} is unsupported; Core resolves only deepseek-chat`);
+  const model = profile.model ?? DEFAULT_LLM_MODEL;
+  // A model neither repository is configured for is refused here by name,
+  // before a key is read: Core would refuse it too, but only after the run had
+  // started and a grant had been taken out.
+  if (!isLlmModel(model)) throw refusal(`--llm-model ${describe(profile.model)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
   const purpose = purposeOf(profile.task);
   const budget = profile.budget;
   if (budget.maxRetries !== 0) throw refusal(`--llm-max-retries ${budget.maxRetries} is unsupported; a live provider run permits no retries`);
@@ -150,7 +154,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   return {
     profileId: profile.profileId,
     provider: "deepseek",
-    model: "deepseek-chat",
+    model,
     task: profile.task,
     purpose,
     maxCalls,

@@ -8,7 +8,7 @@ import { CATALOG, REPAIR_LIMIT_ARGS, CREATE_LIMIT_ARGS, REPAIRS } from "./tasks.
 test("each repair task becomes one adapt run of the recorded Flow, with the live limits unless they are given after --", () => {
   assert.deepEqual(labRunArguments(REPAIRS[0], parseCampaignArgs([])), [
     "run", "identity-drift", "--variant", "renamed-redesign", "--flow",
-    "--live-llm", "--llm-profile", "lab-adapt-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat",
+    "--live-llm", "--llm-profile", "lab-adapt-repair", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash",
     "--llm-task", "adapt", ...REPAIR_LIMIT_ARGS,
   ]);
   const workflowOnly = labRunArguments(REPAIRS[2], parseCampaignArgs(["--llm-profile", "p"]));
@@ -37,7 +37,7 @@ test("each task becomes one create-flow Lab run naming its scenario, variant and
   const options = parseCampaignArgs(["--llm-profile", "p", "--", "--target", "persistent-isolated"]);
   assert.deepEqual(labRunArguments(CATALOG[2], options), [
     "run", "data-table", "--variant", "column-reorder",
-    "--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat",
+    "--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "deepseek-flash",
     "--llm-task", "create-flow", "--instruction-task", "table-read-reordered", ...CREATE_LIMIT_ARGS, "--target", "persistent-isolated",
   ]);
   assert.equal(labRunArguments(CATALOG[0], options).includes("--variant"), false);

@@ -13,9 +13,10 @@ import { FIRST_LIVE_CREATION_LIMITS, buildApproveApplyCreationViaUi, readProvide
 import { readCreateUiBuildOutput } from "./module-source.js";
 import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "../../secret-keys-ui.js";
 import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 test("Phase 3 UI driver pins exact one-call limits and explicit review actions", async () => {
-  assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 4000, maxOutputTokens: 1000, maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
+  assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, { provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: 4000, maxOutputTokens: 1000, maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
   const source = await readCreateUiBuildOutput();
   for (const seam of ["Build Flow from instructions", "authenticated session", "the generated Flow's Adaptations table", "Select the exact generated Flow bootstrap proposal", "Approve Adaptation", "Apply Adaptation", "Apply Changes", "Flow mutated before explicit human approval"]) assert.match(source, new RegExp(seam));
   assert.equal(TESTING_LAB_DEEPSEEK_KEY_NAME, "FluxIQ Testing Lab DeepSeek");

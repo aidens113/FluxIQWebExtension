@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile, type ScenarioExpected } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile, type ScenarioExpected } from "@fluxiq-web-extension/test-contracts";
 import { assertProviderCallsAsDeclared, declaredProviderCalls } from "../declared-provider-calls.js";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
 import type { LiveLlmObservedUsage } from "../observed-usage.js";
@@ -23,7 +23,7 @@ const plan = planLiveLlmExecution({
   profileId: "lab-adapt",
   mode: "live",
   provider: "deepseek",
-  model: "deepseek-chat",
+  model: DEFAULT_LLM_MODEL,
   task: "adapt",
   scenarioNetworkPolicy: "loopback-only",
   providerEgressPolicy: "core-trusted-provider-only",
@@ -52,7 +52,7 @@ function usage(overrides: Partial<LiveLlmObservedUsage> = {}): LiveLlmObservedUs
 const spent: Partial<LiveLlmObservedUsage> = {
   calls: 1,
   interventions: 1,
-  observedCalls: [{ requestId: "request.diagnosis", taskKind: "runtime_diagnosis", stage: "gather", provider: "deepseek", model: "deepseek-chat", promptVersion: "automation-studio.runtime-diagnosis.v1", validationOk: true, validationCodes: [], inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004 }],
+  observedCalls: [{ requestId: "request.diagnosis", taskKind: "runtime_diagnosis", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.runtime-diagnosis.v1", validationOk: true, validationCodes: [], inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.0004 }],
   perCallRecords: "recorded",
   unrecordedCalls: 0,
   totalEstimatedCostUsd: 0.0004,

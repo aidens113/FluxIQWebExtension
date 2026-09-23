@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.js";
 import { catalogScenario, datasetTask } from "../flow-lane/creation/tests/scenario-fixture.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..", "..", "src");
 const source = (relative: string) => readFile(path.join(sourceRoot, relative), "utf8");
@@ -47,7 +48,7 @@ async function liveRun(argv: readonly string[]): Promise<{ code: number; stderr:
   try {
     const code = await runCli([
       ...argv, "--live-llm", "--llm-profile", "deepseek-lab",
-      "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "diagnose",
+      "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "diagnose",
     ], { FLUXIQ_WEB_EXTENSION_ROOT: repositoryRoot, FLUXIQ_TEST_ENV_FILES: "none" });
     return { code, stderr: stderr.join("") };
   } finally {
@@ -63,7 +64,7 @@ async function liveRun(argv: readonly string[]): Promise<{ code: number; stderr:
  * scenario lab build, prints what it would do, and exits. A stub build stands
  * in for the scenario lab, so these read no real catalog and no real key.
  */
-const CREATE_FLOW = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "create-flow"];
+const CREATE_FLOW = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", DEFAULT_LLM_MODEL, "--llm-task", "create-flow"];
 const DUMMY_KEY = "dummy-provider-key-for-a-dry-run";
 
 async function stubLab(t: test.TestContext): Promise<{ root: string; env: NodeJS.ProcessEnv }> {

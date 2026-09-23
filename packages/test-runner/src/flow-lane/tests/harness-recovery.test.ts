@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { validateRunHarnessRecovery, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, type RunHarnessRecovery, validateRunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { ExistingFluxIQControlClient, type ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { flowLaneObservation } from "../lane-observation.js";
@@ -13,7 +13,7 @@ import { flowLaneSnapshot, type FlowLaneEvidence } from "../run-flow-lane.js";
  * request id, model and prompt version the parser keeps and the record leaves
  * behind.
  */
-const MUST_NOT_TRAVEL = ["PRIVATE-PROMPT", "PRIVATE-RESPONSE", "#private-selector", "PRIVATE-PAGE-TEXT", "PRIVATE-ISSUE", "llm.request.private", "deepseek-chat", "runtime-diagnosis.v1"];
+const MUST_NOT_TRAVEL = ["PRIVATE-PROMPT", "PRIVATE-RESPONSE", "#private-selector", "PRIVATE-PAGE-TEXT", "PRIVATE-ISSUE", "llm.request.private", DEFAULT_LLM_MODEL, "runtime-diagnosis.v1"];
 
 const ADAPTATION_ID = "adaptation.run.one.temporary_wait_retry.1700";
 const PROPOSAL_ID = "proposal.adaptation.run.one.temporary_target_override.1600";
@@ -32,14 +32,14 @@ function recoveredDetail(): Record<string, unknown> {
     interventions: [
       {
         interventionId: "intervention.diagnosis", kind: "diagnosis",
-        promptVersion: "automation-studio.runtime-diagnosis.v1+stage.gather", provider: "deepseek", model: "deepseek-chat",
+        promptVersion: "automation-studio.runtime-diagnosis.v1+stage.gather", provider: "deepseek", model: DEFAULT_LLM_MODEL,
         validation: { ok: true, issues: ["diagnosis.evidence_partial: PRIVATE-ISSUE about PRIVATE-PAGE-TEXT"] },
         tokenUsage: { inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.001 },
         createdAt: 1_100, metadata: { requestId: "llm.request.private" },
         reason: "PRIVATE-ISSUE", prompt: "PRIVATE-PROMPT", response: { text: "PRIVATE-RESPONSE" },
       },
       {
-        interventionId: "intervention.patch", kind: "runtime_patch", provider: "deepseek", model: "deepseek-chat",
+        interventionId: "intervention.patch", kind: "runtime_patch", provider: "deepseek", model: DEFAULT_LLM_MODEL,
         validation: { ok: true, issues: ["PRIVATE-ISSUE: a sentence is not a code"] },
         createdAt: 1_200, response: { patches: [{ selector: "#private-selector" }] },
       },

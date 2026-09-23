@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail, ExistingRunProviderCall } from "../../existing-fluxiq-control.js";
 import { assertLiveLlmBudgetHeld, liveLlmBudgetBreaches } from "../budget.js";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
@@ -19,7 +19,7 @@ const adapting = planLiveLlmExecution({
   profileId: "lab-adapt",
   mode: "live",
   provider: "deepseek",
-  model: "deepseek-chat",
+  model: DEFAULT_LLM_MODEL,
   task: "adapt",
   scenarioNetworkPolicy: "loopback-only",
   providerEgressPolicy: "core-trusted-provider-only",
@@ -41,7 +41,7 @@ function line(sequence: number, taskKind: string, overrides: Partial<ExistingRun
     allowance: taskKind === "evidence_tool_decision" ? "exploration" : "run",
     promptVersion: `automation-studio.${taskKind}.v1+stage.gather`,
     provider: "deepseek",
-    model: "deepseek-chat",
+    model: DEFAULT_LLM_MODEL,
     validationOk: true,
     validationCodes: [],
     ...reported,
@@ -60,8 +60,8 @@ function detail(lines: ExistingRunProviderCall[] | undefined, calls: number, omi
     subflows: [],
     actionAttempts: [],
     interventions: [
-      { interventionId: "i-1", kind: "diagnosis", requestId: "llm.runtime_diagnosis.1", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
-      { interventionId: "i-2", kind: "runtime_patch", requestId: `llm.runtime_patch.${calls}`, provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+      { interventionId: "i-1", kind: "diagnosis", requestId: "llm.runtime_diagnosis.1", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+      { interventionId: "i-2", kind: "runtime_patch", requestId: `llm.runtime_patch.${calls}`, provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
     ],
     providerCallCount: calls,
     llmAccounting: { calls, inputTokens: sum("inputTokens"), outputTokens: sum("outputTokens"), totalTokens: sum("totalTokens"), estimatedCostUsd: sum("estimatedCostUsd"), budgetBreaches: 0, pendingCalls: 0 },
@@ -107,7 +107,7 @@ test("a figure the provider did not report stays unknown, while Core's charged t
   });
   const observed = liveLlmObservedUsage(detail(unreported, 4));
 
-  assert.deepEqual(observed.observedCalls[1], { requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: "gather", provider: "deepseek", model: "deepseek-chat", promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", validationOk: true, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null });
+  assert.deepEqual(observed.observedCalls[1], { requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: "gather", provider: "deepseek", model: DEFAULT_LLM_MODEL, promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", validationOk: true, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null });
   // Summed in Core's order, as its accounting was.
   const charged = [0.001, 0.0769, 0.001, 0.001].reduce((total, cost) => total + cost, 0);
   assert.equal(observed.totalEstimatedCostUsd, charged);

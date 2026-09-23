@@ -17,6 +17,7 @@ import test from "node:test";
 import { readSanitizedGenerationFailure, readSanitizedSettingsSaveFailure, sanitizeGenerationFailureBody } from "../index.js";
 import { readCreateUiSource } from "./module-source.js";
 import { WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_EVIDENCE_RESULT_CODES, WEB_LLM_EVIDENCE_TOOL_IDS, WEB_LLM_INSPECT_TOOL_ID } from "@fluxiq-web-extension/domain/node";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 
 test("settings save failures retain only bounded stable diagnostics", async () => {
@@ -60,7 +61,7 @@ test("generation failures retain only Core-validated bounded diagnostics", async
       requestId: "request.one",
       estimatedInputTokens: 1200,
       provider: "deepseek",
-      model: "deepseek-chat",
+      model: DEFAULT_LLM_MODEL,
       providerStatus: 400,
       inputTokens: 900,
       outputTokens: 100,

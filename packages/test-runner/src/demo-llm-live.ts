@@ -1,14 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  LLM_LAB_SCHEMA_VERSION,
-  assertLlmExecutionProfile,
-  validateLlmRunEvaluation,
-  type LlmExecutionProfile,
-  type LlmInvocationProvenance,
-  type LlmRunEvaluation,
-} from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmInvocationProvenance, type LlmRunEvaluation, validateLlmRunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail, ExistingRunEvent } from "./existing-fluxiq-control.js";
 import { RunnerFailure } from "./failure.js";
 import { attestWorkspaceSecretAbsence } from "./secret-leak-attestation.js";
@@ -19,7 +12,7 @@ export const FIRST_LIVE_DIAGNOSIS_PROFILE: Readonly<LlmExecutionProfile> = Objec
   profileId: "deepseek-diagnosis-first-live",
   mode: "live",
   provider: "deepseek",
-  model: "deepseek-chat",
+  model: DEFAULT_LLM_MODEL,
   task: "diagnose",
   scenarioNetworkPolicy: "loopback-only",
   providerEgressPolicy: "core-trusted-provider-only",
@@ -70,7 +63,7 @@ export function evaluateDemoLlmDiagnosis(input: {
     || !input.diagnosis.actionAttempts.some(action => action.status === "failed")
     || failedActionSequence === undefined || diagnosisSequence === undefined || failedActionSequence >= diagnosisSequence
     || interventions.length !== 1 || input.diagnosis.summary.interventionCount !== 1
-    || !intervention || intervention.kind !== "diagnosis" || intervention.provider !== "deepseek" || intervention.model !== "deepseek-chat"
+    || !intervention || intervention.kind !== "diagnosis" || intervention.provider !== "deepseek" || intervention.model !== DEFAULT_LLM_MODEL
     || intervention.promptVersion !== "automation-studio.runtime-diagnosis.v1"
     || intervention.validationOk !== true
     || (input.diagnosis.adaptationIds?.length ?? 0) !== 0 || (input.diagnosis.changeProposalIds?.length ?? 0) !== 0

@@ -9,7 +9,7 @@ import { CATALOG } from "./tasks.mjs";
 test("a creation row reads the build's reported totals and the created Flow's nodes, and never shows a missing figure as zero", () => {
   // Shaped like run-mu4t20d1-93b60760: Core itemizes no build call, so the totals are the build's.
   const build = (accounting, failure = null) => ({ adaptationId: "adaptation.bootstrap.1", providerCalls: 1, providerInvocation: "attempted", accounting, evidenceLoop: { decisionCount: 1, toolCallCount: 1, evidenceBytes: 2087, toolIds: ["web.inspect_current_page"], steps: null }, recoveredAfterTimeout: false, durationMs: 7607, outcome: failure ? "failed" : "proposed", failure });
-  const accounting = { provider: "deepseek", model: "deepseek-chat", inputTokens: 3924, outputTokens: 465, totalTokens: 4389, estimatedCostUsd: 0.00234036 };
+  const accounting = { provider: "deepseek", model: "deepseek-flash", inputTokens: 3924, outputTokens: 465, totalTokens: 4389, estimatedCostUsd: 0.00234036 };
   const flowShape = { nodeCount: 5, actionNodeCount: 3, actionTypes: { "web.dom.type": 1, "web.dom.click": 2, "Press the Save button": 1, "(unrecognized)": 1 }, extractNodes: 0, navigationNodes: 0 };
   const bundle = (buildRecord, observed = { calls: 1, observedCalls: [], perCallRecords: "not recorded", accounting: { calls: 1, totalTokens: 999999, estimatedCostUsd: 9.99 } }) => ({
     evaluation: { flowCreated: true, oracleVerdict: "passed", actions: [{ actionType: "builtin.control.start" }, { actionType: "web.dom.type" }], extraction: [], llm: { mode: "live", calls: 1 } },
@@ -37,7 +37,7 @@ test("a creation row reads the build's reported totals and the created Flow's no
   assert.deepEqual([noCalls.spendSource, noCalls.reportedTokens, noCalls.reportedCostUsd], ["no calls", 0, 0]);
   assert.equal(row({ evaluation: null, run: null, liveLlm: null, flowLane: null }).spendSource, null);
 
-  const summary = { campaignId: "c", startedAt: "s", finishedAt: "f", options: { profiles: { create: "lab-create-flow", repair: "lab-adapt-repair" }, provider: "deepseek", model: "deepseek-chat", maxAttempts: 3 }, totals: { tasks: 2, passed: 2, succeeded: 2, failed: 0, noResult: 0, judgementsPassed: 2, providerCalls: 2, reportedTokens: 4389, reportedCostUsd: 0.00234036 }, tasks: [built, refused] };
+  const summary = { campaignId: "c", startedAt: "s", finishedAt: "f", options: { profiles: { create: "lab-create-flow", repair: "lab-adapt-repair" }, provider: "deepseek", model: "deepseek-flash", maxAttempts: 3 }, totals: { tasks: 2, passed: 2, succeeded: 2, failed: 0, noResult: 0, judgementsPassed: 2, providerCalls: 2, reportedTokens: 4389, reportedCostUsd: 0.00234036 }, tasks: [built, refused] };
   const markdown = renderSummaryMarkdown(summary);
   // A build Core kept no declarations for reads "not recorded": a Core that published none, never a build that declared nothing.
   assert.match(markdown, /\| proposed \| yes \| 5 nodes: \(unrecognized\) ×1, web\.dom\.click ×2, web\.dom\.type ×1 \| not recorded \| builtin\.control\.start, web\.dom\.type \| playback goal \| yes \| — \| 1 \| 4389 \| 0\.00234036 \|/u);

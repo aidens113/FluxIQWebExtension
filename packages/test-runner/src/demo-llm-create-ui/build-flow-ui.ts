@@ -16,6 +16,7 @@ import { finite, identifier, integer, record, text } from "./json-shapes.js";
 import { FIRST_LIVE_CREATION_LIMITS } from "./limits.js";
 import { exactVirtualizedHierarchyObject, exactVisible, review, waitForEndpoint } from "./panel-interaction.js";
 import { fail } from "./runner-fail.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 export type BuildApproveApplyCreationInput = {
   page: Page; flowTreeItemId: string; projectId: string; flowId: string; pin: string;
@@ -98,7 +99,7 @@ function parseGeneration(body: unknown, ok: boolean, projectId: string, flowId: 
     || totalTokens > FIRST_LIVE_CREATION_LIMITS.maxTotalTokens
     || inputTokens + outputTokens !== totalTokens
     || cost > FIRST_LIVE_CREATION_LIMITS.maxEstimatedCostUsd) fail("Flow bootstrap provider accounting exceeded strict limits");
-  if (text(accounting.provider) !== "deepseek" || text(accounting.model) !== "deepseek-chat") fail("Flow bootstrap used an unexpected provider or model");
-  const safe = { adaptationId: identifier(value.adaptationId), baseExecutionDigest: identifier(value.baseDependencyDigest), requestId: identifier(accounting.requestId), provider: "deepseek" as const, model: "deepseek-chat" as const, promptSchemaVersion: "flow-bootstrap.v1", inputTokens, outputTokens, totalTokens, estimatedCostUsd: cost, latencyMs };
+  if (text(accounting.provider) !== "deepseek" || text(accounting.model) !== DEFAULT_LLM_MODEL) fail("Flow bootstrap used an unexpected provider or model");
+  const safe = { adaptationId: identifier(value.adaptationId), baseExecutionDigest: identifier(value.baseDependencyDigest), requestId: identifier(accounting.requestId), provider: "deepseek" as const, model: DEFAULT_LLM_MODEL, promptSchemaVersion: "flow-bootstrap.v1", inputTokens, outputTokens, totalTokens, estimatedCostUsd: cost, latencyMs };
   return Object.freeze({ ...safe, proposalDigest: createHash("sha256").update(JSON.stringify(safe)).digest("hex") });
 }

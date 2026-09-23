@@ -6,6 +6,7 @@
 
 import assert from "node:assert/strict";
 import { AutomationStudioActionPermissionGate, flowBootstrapPermissionRequiredFailure } from "fluxiq/automation-studio";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 /**
  * A build that pressed nothing it was not allowed to: its second decision
@@ -22,6 +23,6 @@ export async function permissionRequiredDiagnostic(): Promise<unknown> {
     { iteration: 2, decision: "tool_call" as const, callId: "call-3", toolId: "web.press_control", effectApplied: false, resultCode: "web.action.rejected.permission_required" },
   ];
   const spent = { iterations: 2, toolCalls: 2, evidenceBytes: 900, inputTokens: 9_000, outputTokens: 300, totalTokens: 9_300, estimatedCostUsd: 0.003 };
-  const error = flowBootstrapPermissionRequiredFailure(gate.request, { trace, accounting: spent }, { requestId: "evidence.one", estimatedInputTokens: 9_000, provider: "deepseek", model: "deepseek-chat", inputTokens: 9_000, outputTokens: 300, totalTokens: 9_300, estimatedCostUsd: 0.003 });
+  const error = flowBootstrapPermissionRequiredFailure(gate.request, { trace, accounting: spent }, { requestId: "evidence.one", estimatedInputTokens: 9_000, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 9_000, outputTokens: 300, totalTokens: 9_300, estimatedCostUsd: 0.003 });
   return JSON.parse(JSON.stringify(error.diagnostic)) as unknown;
 }

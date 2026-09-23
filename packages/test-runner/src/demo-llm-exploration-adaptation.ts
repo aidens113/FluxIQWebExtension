@@ -4,11 +4,12 @@ import { FIRST_LIVE_ADAPTATION_PROFILE } from "./demo-llm-adaptation.js";
 import { adaptationCallCountWithinGrant, targetRepairValidationIsHonest } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
 import type { TargetProposalStructure } from "./demo-workspace/index.js";
+import { DEFAULT_LLM_MODEL, type LlmModel } from "@fluxiq-web-extension/test-contracts";
 
 export type ExplorationAdaptationProposalCheckpoint = Readonly<{
   status: "proposed";
   provider: "deepseek";
-  model: "deepseek-chat";
+  model: LlmModel;
   /** What the adapting run spent: it iterates, so this is not a fixed number. */
   providerCallCount: number;
   retryCount: 0;
@@ -81,7 +82,7 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
   const providerCallCount = run.providerCallCount!;
   for (const [index, intervention] of interventions.entries()) {
     const prompt = index === 0 ? "automation-studio.runtime-diagnosis.v1" : "automation-studio.runtime-patch.v1";
-    if (!intervention.requestId || intervention.provider !== "deepseek" || intervention.model !== "deepseek-chat"
+    if (!intervention.requestId || intervention.provider !== "deepseek" || intervention.model !== DEFAULT_LLM_MODEL
       || intervention.promptVersion !== prompt || intervention.validationOk !== true
       || !Number.isSafeInteger(intervention.inputTokens) || !Number.isSafeInteger(intervention.outputTokens)
       || !Number.isSafeInteger(intervention.totalTokens)
@@ -106,7 +107,7 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
   return Object.freeze({
     status: "proposed" as const,
     provider: "deepseek" as const,
-    model: "deepseek-chat" as const,
+    model: DEFAULT_LLM_MODEL,
     providerCallCount,
     retryCount: 0 as const,
     projectId: readiness.projectId,

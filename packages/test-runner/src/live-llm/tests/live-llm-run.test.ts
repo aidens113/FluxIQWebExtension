@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
@@ -30,7 +30,7 @@ function profile(budget: Partial<LlmExecutionProfile["budget"]>): LlmExecutionPr
     profileId: "lab-adapt",
     mode: "live",
     provider: "deepseek",
-    model: "deepseek-chat",
+    model: DEFAULT_LLM_MODEL,
     task: "adapt",
     scenarioNetworkPolicy: "loopback-only",
     providerEgressPolicy: "core-trusted-provider-only",
@@ -87,9 +87,9 @@ const detail: ExistingRunDetail = {
   subflows: [],
   actionAttempts: [],
   interventions: [
-    { interventionId: "i-1", kind: "diagnosis", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
-    { interventionId: "i-2", kind: "diagnosis", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
-    { interventionId: "i-3", kind: "runtime_patch", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-1", kind: "diagnosis", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-2", kind: "diagnosis", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
+    { interventionId: "i-3", kind: "runtime_patch", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001 },
   ],
   llmAccounting: { calls: 3, inputTokens: 2_700, outputTokens: 300, totalTokens: 3_000, estimatedCostUsd: 0.003, budgetBreaches: 0, pendingCalls: 0 },
   llmGate: { invoked: true },
@@ -204,7 +204,7 @@ const proposedBuild: CreatedFlowBuild = {
   adaptationId: "adaptation-1",
   providerCalls: 5,
   providerInvocation: "attempted",
-  accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 20_000, outputTokens: 3_000, totalTokens: 23_000, estimatedCostUsd: 0.02 },
+  accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 20_000, outputTokens: 3_000, totalTokens: 23_000, estimatedCostUsd: 0.02 },
   evidenceLoop: { decisionCount: 5, toolCallCount: 4, evidenceBytes: 9_000, toolIds: ["web.recovery.inspect"], steps: null },
   instructedConsequences: [],
   declaredConsequences: null,
@@ -268,7 +268,7 @@ test("a build over its run budget, over its call count, or run on another model 
   const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
   await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });
-  await assert.rejects(otherModel.settle(), /Core's Flow build ran on deepseek\/deepseek-reasoner, not the authorized deepseek\/deepseek-chat/u);
+  await assert.rejects(otherModel.settle(), /Core's Flow build ran on deepseek\/deepseek-reasoner, not the authorized deepseek\/deepseek-flash/u);
 });
 
 // A created Flow's playback runs under its own grant, so a Flow that fails is

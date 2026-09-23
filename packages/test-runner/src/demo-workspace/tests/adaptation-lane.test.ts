@@ -10,6 +10,7 @@ import test from "node:test";
 import { type DemoLlmAdaptationCertificationInput, evaluateDemoLlmAdaptation } from "../../demo-llm-adaptation.js";
 import type { ExistingRunIntervention, ExistingRunProviderCall } from "../../existing-fluxiq-control.js";
 import { type AdaptationCertificateCalls, adaptationCertificateCalls } from "../adaptation-lane.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const sourceDirectory = path.resolve(import.meta.dirname, "../../../../../packages/test-runner/src/demo-workspace");
 
@@ -24,7 +25,7 @@ function line(sequence: number, taskKind: string, overrides: Partial<ExistingRun
   return {
     sequence, requestId: `llm.${taskKind}.${sequence}`, taskKind, stage: taskKind === "runtime_patch" ? "implement" : "gather",
     allowance: taskKind === "evidence_tool_decision" ? "exploration" : "run", promptVersion: PROMPTS[taskKind] ?? null,
-    provider: "deepseek", model: "deepseek-chat", validationOk: true, validationCodes: [], ...reported,
+    provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, validationCodes: [], ...reported,
     charged: { ...reported, tokens: "reported", cost: "reported" }, budgetBreach: false, ...overrides,
   };
 }
@@ -95,8 +96,8 @@ test("refuses, by name, any run the certificate could not record honestly", () =
     ["last call is not the patch", run(replaced(3, { requestId: "llm.other.4" })), events, /not the diagnosis and patch interventions/u],
     ["a middle call is not an evidence decision", run(replaced(2, { taskKind: "runtime_patch" })), events, /call 3 is runtime_patch, not evidence_tool_decision/u],
     ["a call with no task", run(replaced(1, { taskKind: null })), events, /call 2 is an unnamed task/u],
-    ["another provider", run(replaced(1, { provider: "openai" })), events, /call 2 was not a deepseek-chat call/u],
-    ["another model", run(replaced(3, { model: "deepseek-reasoner" })), events, /call 4 was not a deepseek-chat call/u],
+    ["another provider", run(replaced(1, { provider: "openai" })), events, /call 2 was not a deepseek\/deepseek-flash call/u],
+    ["another model", run(replaced(3, { model: "deepseek-reasoner" })), events, /call 4 was not a deepseek\/deepseek-flash call/u],
     ["an invalid call", run(replaced(2, { validationOk: false })), events, /call 3 did not validate/u],
     ["an unsettled call", run(replaced(0, { validationOk: null })), events, /call 1 did not validate/u],
     ["unreported tokens", run(replaced(1, { totalTokens: null })), events, /call 2 has no provider-reported usage/u],

@@ -1,10 +1,4 @@
-import {
-  DEFAULT_LLM_LAB_BUDGET,
-  LLM_LAB_SCHEMA_VERSION,
-  assertLlmExecutionProfile,
-  type LlmExecutionProfile,
-  type LlmTokenBudget,
-} from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 
 export const DEMO_LLM_PROFILE_NAMES = ["production", "conservative"] as const;
 export type DemoLlmProfileName = (typeof DEMO_LLM_PROFILE_NAMES)[number];
@@ -63,7 +57,7 @@ function createProfile(name: DemoLlmProfileName, budget: LlmTokenBudget): Readon
     profileId: `deepseek-flow-bootstrap-${name}`,
     mode: "live",
     provider: "deepseek",
-    model: "deepseek-chat",
+    model: DEFAULT_LLM_MODEL,
     task: "create-flow",
     scenarioNetworkPolicy: "loopback-only",
     providerEgressPolicy: "core-trusted-provider-only",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail, ExistingRunProviderCall } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { runLaneWithLiveLlmSettlement } from "../lane-settlement.js";
@@ -19,7 +19,7 @@ const PROFILE: LlmExecutionProfile = {
   profileId: "lab-adapt-renamed",
   mode: "live",
   provider: "deepseek",
-  model: "deepseek-chat",
+  model: DEFAULT_LLM_MODEL,
   task: "adapt",
   scenarioNetworkPolicy: "loopback-only",
   providerEgressPolicy: "core-trusted-provider-only",
@@ -42,7 +42,7 @@ const OVERSPENT_TOKENS = RUN_TOKEN_BUDGET + DEFAULT_LLM_LAB_BUDGET.maxTotalToken
 
 const call = (taskKind: string, sequence: number): ExistingRunProviderCall => ({
   sequence, requestId: `llm.request.${taskKind}`, taskKind, stage: "gather", allowance: taskKind === "evidence_tool_decision" ? "exploration" : "run",
-  promptVersion: "v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, validationCodes: [],
+  promptVersion: "v1", provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, validationCodes: [],
   inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001,
   charged: { inputTokens: 900, outputTokens: 100, totalTokens: 1_000, estimatedCostUsd: 0.001, tokens: "reported", cost: "reported" },
   budgetBreach: false,

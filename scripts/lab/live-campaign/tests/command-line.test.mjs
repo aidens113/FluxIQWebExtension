@@ -59,9 +59,9 @@ test("the command line: a repair dry run prints the adapt commands and runs noth
   assert.equal(dry.code, 0, dry.stderr);
   const limits = REPAIR_LIMIT_ARGS.join(" ");
   assert.deepEqual(dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#")), [
-    `pnpm lab run identity-drift --variant renamed-redesign --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-chat --llm-task adapt ${limits}`,
-    `pnpm lab run identity-drift --variant save-and-exit --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-chat --llm-task adapt ${limits}`,
-    `pnpm lab run sensitive-input --workflow extract-card-secrets --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-chat --llm-task adapt ${limits}`,
+    `pnpm lab run identity-drift --variant renamed-redesign --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --llm-task adapt ${limits}`,
+    `pnpm lab run identity-drift --variant save-and-exit --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --llm-task adapt ${limits}`,
+    `pnpm lab run sensitive-input --workflow extract-card-secrets --flow --live-llm --llm-profile lab-adapt-repair --llm-provider deepseek --llm-model deepseek-flash --llm-task adapt ${limits}`,
   ]);
   const every = await runCli(["--dry-run"], env);
   assert.equal(every.stdout.trim().split("\n").filter((line) => !line.startsWith("#")).length, CATALOG.length + REPAIRS.length);
@@ -92,8 +92,8 @@ test("the command line: a dry run prints commands and runs nothing", () => withT
   assert.equal(dry.code, 0, dry.stderr);
   const commands = dry.stdout.trim().split("\n").filter((line) => !line.startsWith("#"));
   assert.deepEqual(commands, [
-    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 48 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
-    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-chat --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 48 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
+    "pnpm lab run data-table --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow --instruction-task table-read --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 48 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
+    "pnpm lab run data-table --variant column-reorder --live-llm --llm-profile lab-create-flow --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow --instruction-task table-read-reordered --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 48 --llm-max-run-tokens 600000 --llm-max-cost-usd 0.25",
   ]);
   await assert.rejects(stat(path.join(directory, "invocations.ndjson")), { code: "ENOENT" });
   await assert.rejects(stat(path.join(directory, "campaigns")), { code: "ENOENT" });

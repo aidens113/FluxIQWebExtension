@@ -1,15 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import {
-  DEFAULT_LLM_LAB_BUDGET,
-  LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST,
-  LLM_LAB_MAX_CALLS_PER_RUN,
-  LLM_LAB_SCHEMA_VERSION,
-  llmActionConsequences,
-  type LlmExecutionProfile,
-  type LlmTaskKind,
-} from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
 import {
   AUTOMATION_STUDIO_ACTION_CONSEQUENCES,
   AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS,
@@ -37,7 +29,7 @@ function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<L
     profileId: "lab-diagnose",
     mode: "live",
     provider: "deepseek",
-    model: "deepseek-chat",
+    model: DEFAULT_LLM_MODEL,
     task: "diagnose" as LlmTaskKind,
     scenarioNetworkPolicy: "loopback-only",
     providerEgressPolicy: "core-trusted-provider-only",
@@ -72,7 +64,7 @@ test("a diagnose profile plans exactly one authorized provider call, whatever ca
   }
   const plan = planLiveLlmExecution(profile());
   assert.equal(plan.provider, "deepseek");
-  assert.equal(plan.model, "deepseek-chat");
+  assert.equal(plan.model, DEFAULT_LLM_MODEL);
 });
 
 test("a diagnose profile still needs a cap of at least one, and no more than Core's backstop", () => {
@@ -211,16 +203,33 @@ test("the operator's own budget is carried through untouched for the post-run ch
   assert.equal(plan.maxEstimatedCostUsd, 0.05);
 });
 
+test("every configured model reaches the plan, and the default is what an absent one means", () => {
+  // The plan used to permit exactly `deepseek-chat`, so when DeepSeek retired
+  // that alias no `--llm-model` could be run: the only fix was a source edit
+  // here and in Core at the same moment. The model is a setting now, and these
+  // pin that it is the operator's choice that travels, not a constant.
+  for (const model of llmModels) {
+    assert.equal(planLiveLlmExecution(profile({ model })).model, model);
+  }
+  const absent = profile();
+  delete (absent as { model?: string }).model;
+  assert.equal(planLiveLlmExecution(absent).model, DEFAULT_LLM_MODEL);
+  assert.equal(DEFAULT_LLM_MODEL, "deepseek-flash");
+});
+
 test("an unsupported provider, model, task or retry count is refused", () => {
   assert.throws(() => planLiveLlmExecution(profile({ provider: "openai" })), /--llm-provider openai is unsupported/u);
-  assert.throws(() => planLiveLlmExecution(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported/u);
+  assert.throws(() => planLiveLlmExecution(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
+  // The retired alias is refused by name rather than sent on and answered with
+  // an opaque provider 400.
+  assert.throws(() => planLiveLlmExecution(profile({ model: "deepseek-chat" })), /--llm-model deepseek-chat is unsupported; Core is configured for deepseek-flash, deepseek-v4-pro/u);
   assert.throws(() => planLiveLlmExecution(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; use diagnose, adapt, repair or create-flow/u);
   assert.throws(() => planLiveLlmExecution(profile({ task: "edit-flow" })), /--llm-task edit-flow has no live runner/u);
   assert.throws(() => planLiveLlmExecution(profile({}, { maxRetries: 1 })), /--llm-max-retries 1 is unsupported/u);
 });
 
 test("token limits are held inside Core's ceiling and must add up", () => {
-  // One token past Core's per-request ceiling, which is deepseek-chat's own 64k
+  // One token past Core's own per-request ceiling, which is 64k
   // context. The number comes from the contract rather than being written down,
   // so a plan that stopped agreeing with it fails here instead of passing.
   const overCeiling = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1;

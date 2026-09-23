@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { findPendingEvidenceGuidedCreationForFlow, locateBoundAppliedEvidenceGuidedCreation, locateBoundPendingEvidenceGuidedCreation, locateExactPendingEvidenceGuidedCreation } from "../demo-llm-exploration-apply.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
@@ -12,7 +13,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
     projectId: "project.one", flowId: summary.flowId, adaptationId: "adaptation.one", status: "proposed",
     adaptationKind: "flow_bootstrap", validationSucceededCount: 2, validationFailedCount: 0,
     evidenceLoop: { providerCallCount: 1, toolCallCount: 1, evidenceBytes: 900, toolIds: ["web.inspect_current_page"] },
-    accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 },
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01 },
     bootstrapBinding: { baseExecutionDigest: "digest.base", currentExecutionDigest: "digest.base" },
     ...overrides,
   };
@@ -40,7 +41,7 @@ test("recovers one exact pending deterministic-flow proposal without a provider 
   const recovered = await findPendingEvidenceGuidedCreationForFlow(control, "project.one", summary);
   assert.equal(recovered?.adaptationId, "adaptation.one");
   assert.deepEqual(recovered?.checkpoint, {
-    adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: "deepseek-chat",
+    adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: DEFAULT_LLM_MODEL,
     providerCallCount: 1, toolCallCount: 1, evidenceBytes: 900, toolIds: ["web.inspect_current_page"],
     inputTokens: 100, outputTokens: 50, totalTokens: 150, estimatedCostUsd: 0.01,
   });

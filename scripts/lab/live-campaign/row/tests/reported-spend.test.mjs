@@ -5,7 +5,7 @@ import { reportedSpend } from "../reported-spend.mjs";
 // A created Flow's build keeps its totals in `build.accounting`; the repair its
 // playback ran under keeps a per-call record beside it as `repair.observed`.
 // The row sums the two, and says so, only when the repair called a provider.
-const accounting = { provider: "deepseek", model: "deepseek-chat", inputTokens: 57117, outputTokens: 1436, totalTokens: 58553, estimatedCostUsd: 0.027027 };
+const accounting = { provider: "deepseek", model: "deepseek-flash", inputTokens: 57117, outputTokens: 1436, totalTokens: 58553, estimatedCostUsd: 0.027027 };
 const build = { accounting };
 const repairCalls = [{ totalTokens: 6000, estimatedCostUsd: 0.0031 }, { inputTokens: 2000, outputTokens: 400, estimatedCostUsd: 0.0012 }];
 

@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { rejectExactPendingExplorationTargetAdaptation, revertExactAppliedExplorationTargetAdaptation } from "../demo-llm-exploration-adaptation-revert.js";
+import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
@@ -16,7 +17,7 @@ function fixture() {
     projectId: "project.one", flowId: flow.flowId, adaptationId: "adaptation.bootstrap",
     status: "applied", adaptationKind: "flow_bootstrap",
     evidenceLoop: { providerCallCount: 1, iterationCount: 2, toolCallCount: 1, evidenceBytes: 700, toolIds: ["web.inspect_current_page"] },
-    accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 100, outputTokens: 40, totalTokens: 140 },
+    accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 100, outputTokens: 40, totalTokens: 140 },
     bootstrapBinding: { baseExecutionDigest: "digest.blank", appliedExecutionDigest: "digest.created", currentExecutionDigest: "digest.adapted" },
   };
   const target = {

@@ -1,14 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  LLM_LAB_SCHEMA_VERSION,
-  assertLlmExecutionProfile,
-  validateLlmRunEvaluation,
-  type LlmExecutionProfile,
-  type LlmInvocationProvenance,
-  type LlmRunEvaluation,
-} from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmInvocationProvenance, type LlmModel, type LlmRunEvaluation, validateLlmRunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "./failure.js";
 import { attestWorkspaceSecretAbsence } from "./secret-leak-attestation.js";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
@@ -34,7 +27,7 @@ type CreationInvocation = Readonly<{
   requestId: string;
   purpose: "flow_bootstrap";
   provider: "deepseek";
-  model: "deepseek-chat";
+  model: LlmModel;
   promptSchemaVersion: string;
   attempt: 1;
   retryCount: 0;
@@ -144,7 +137,7 @@ export function evaluateDemoLlmCreation(input: unknown, profile: Readonly<LlmExe
   const parsed = parseCreationInput(input);
   const invocation = parsed.invocations[0];
   assertLlmExecutionProfile(profile);
-  if (profile.provider !== "deepseek" || profile.model !== "deepseek-chat" || profile.task !== "create-flow") fail("Creation profile identity is unsupported");
+  if (profile.provider !== "deepseek" || profile.model !== DEFAULT_LLM_MODEL || profile.task !== "create-flow") fail("Creation profile identity is unsupported");
   const budget = profile.budget;
   if (invocation.inputTokens > budget.maxInputTokens
     || invocation.outputTokens > budget.maxOutputTokens
@@ -276,7 +269,7 @@ function parseCreationInput(input: unknown): DemoLlmCreationCertificationInput {
   const invocations = root.invocations;
   if (!Array.isArray(invocations) || invocations.length !== 1) fail("Creation requires exactly one provider invocation");
   const invocation = exact(invocations[0], ["requestId", "purpose", "provider", "model", "promptSchemaVersion", "attempt", "retryCount", "providerCallCount", "inputTokens", "outputTokens", "totalTokens", "estimatedCostUsd", "latencyMs"]);
-  requireLiteral(invocation.purpose, "flow_bootstrap"); requireLiteral(invocation.provider, "deepseek"); requireLiteral(invocation.model, "deepseek-chat"); requireLiteral(invocation.attempt, 1); requireLiteral(invocation.retryCount, 0); requireLiteral(invocation.providerCallCount, 1);
+  requireLiteral(invocation.purpose, "flow_bootstrap"); requireLiteral(invocation.provider, "deepseek"); requireLiteral(invocation.model, DEFAULT_LLM_MODEL); requireLiteral(invocation.attempt, 1); requireLiteral(invocation.retryCount, 0); requireLiteral(invocation.providerCallCount, 1);
   const proposal = exact(root.proposal, ["proposalId", "proposalDigest", "baseExecutionDigest", "validationOk", "stale", "unsupportedOutputCount"]);
   requireLiteral(proposal.validationOk, true); requireLiteral(proposal.stale, false); requireLiteral(proposal.unsupportedOutputCount, 0);
   const review = exact(root.review, ["proposalId", "outcome", "channel", "mutationObservedBeforeApproval"]);
