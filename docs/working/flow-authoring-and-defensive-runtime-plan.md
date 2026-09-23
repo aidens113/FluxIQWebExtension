@@ -671,6 +671,17 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Outcome: Done, with a finding that outranks it
 - Follow-up: **the gate was never asked anything in four live builds** — every press declared that it causes nothing lasting, including the press that schedules a public post, so two Flows containing presses built and replayed with no request raised. Three causes, three owners, all relayed: the prompt in `node-tools/run-node.ts` demonstrates the empty answer three times and never shows a press that must declare (t088); a declared class today dead-ends in a refusal while `none` costs nothing, and the conversation ask that would let the request park already exists with nothing outside `conversations/` calling it (t087, as A11); and the Lab records `perCallRecords: "not recorded"`, so the declarations had to be deduced rather than read (t089). A13 below adds the independent cross-check. Until those land, the step table must not describe this gate as a defence.
 
+
+---
+
+### 2026-09-22 — A7 landed: a build must replay its draft before it may propose
+- Agent: supervisor; worker `fa-draft-dry-run`
+- Changed: t088 merged in both repositories (downstream `674aeb5`, Core `65dee11`), both pushed. A build now replays its accrued draft from a reset page with no model attached, and a proposal is refused until that replay comes back clean; the refusal reaches the model as an ordinary issue it can answer.
+- Why: after t082 a Flow is assembled from steps that each worked once, in sequence, on a page the steps before it had already carried there. That is not the same claim as the Flow working, and the gap was measured twice — a proposal whose extraction returned 0 of 16 records on replay, and one that needed a paid repair mid-replay.
+- Validation: live `run-muditxzh-a7ae883d` (everything-store, real DeepSeek) — the dry run ran twice, **attempt one refused the proposal, the model amended and asked again, attempt two passed**; `build.providerCalls` 16 == `observed.calls` 16, so the replay itself spent **zero** calls; 7,262 ms and 7,108 ms for a reset plus five steps, about 1.2 s per act and 14% of a 105 s build. The supervisor re-ran everything after merging `dev`: domain `# pass 752 / # fail 0`, extension `# pass 731 / # fail 0`, Core `flow-draft` plus `llm` 2,736 passed, and both `task finish` runs reported `"command":"pnpm check","passed":true`. Seven domain failures seen before the rebuild were a stale Core `dist` in that worktree, not an integration defect.
+- Outcome: Done
+- Follow-up: the hard refusal is proved by unit test only — no live run has yet produced a `failed` or `changed` step, so the soft `unreproducible` path is what was exercised live. The plan's open question is answered: **the reset is the page**, because workspace and browser-context resets are unreachable through a gateway that only runs page actions, and a step the site itself remembers cannot be put back; that soft edge closes properly only with C1. Two Lab caps now fail correct work and are relayed to t089 — the created-adaptation audit caps tool calls at 16, and the instruction-authority derivation spends about four provider calls the grant never sees, which also corrupts any per-condition call count.
+
 ## Open Questions
 
 - Does the dry run reset the page, the workspace, or the whole browser context?
