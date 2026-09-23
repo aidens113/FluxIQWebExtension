@@ -14,6 +14,14 @@ export {
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./resolve-plan-node";
+// What a step says its own action would lastingly do, and Core's answer.
+export {
+  WEB_PLAN_STEP_ISSUE_CODES,
+  webPlanStepMustDeclare,
+  webPlanStepPermission,
+  type WebPlanStepIssueCode,
+  type WebPlanStepPermission
+} from "./step-permission";
 export {
   createWebLlmTargetPackets,
   type WebLlmTargetPackets,

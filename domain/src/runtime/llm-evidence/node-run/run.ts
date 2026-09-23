@@ -159,8 +159,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // form is what the draft keeps, so the step the Flow gains resolves the
     // same way this run did.
     const written = withHandleShape(parameters);
-    const resolved = resolveWebPlanNodeParameters(
-      { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written },
+    // `gatedByCaller`, because this call's permission is decided a few lines
+    // below against the page the model is looking at, with a refusal that
+    // carries that page back to it. Resolution gates a *step of a Flow*, which
+    // is a different question asked at a different time.
+    const resolved = await resolveWebPlanNodeParameters(
+      { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written, gatedByCaller: true },
       run.stores
     );
     if (resolved.status === "refused") {

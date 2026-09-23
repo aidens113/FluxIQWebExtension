@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID } from "@fluxiq-web-extension/domain";
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID } from "@fluxiq-web-extension/domain";
 import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputNodeId } from "@fluxiq-web-extension/domain/client";
 import type { TargetCandidate } from "../candidates";
 import { TARGET_SCORE_FLOOR, scoreTargetCandidates, type RecordedIdentity } from "../score";
@@ -60,8 +60,11 @@ async function resolvedNode(nodeDefinitionId: string, parameters: JsonObject): P
       ? { status: "succeeded", payload: { snapshot: { url: PAGE_URL, title: "Instruction-only automation", interactiveElements: DESCRIBED } } }
       : { status: "succeeded" }
   });
-  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  const resolution = runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters });
+  // The library verb running the snapshot node: how a build looks at a page
+  // since the exploration verbs were retired (`llm/node-tools/run-node.ts`).
+  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: webAutomationOutputNodeId("web.dom.capture_snapshot"), parameters: {}, consequences: [] } });
+  // A press step says what it would lastingly do; these rows are about identity, so they say it does nothing.
+  const resolution = await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId, parameters, declaredConsequences: [] });
   assert.equal(resolution.status, "resolved", JSON.stringify(resolution));
   return resolution.status === "resolved" ? resolution.parameters : {};
 }
