@@ -54,7 +54,18 @@
 // (`run-mu4xn1wz-6cdb8bbf`). So a refusal names its reasons, then where a
 // handle of that kind is accepted and in which shape, then `<reason>:<path>`
 // for each place it was refused at, quoted by position (`issue-position.ts`).
+//
+// Once the node's parameters are real, the step itself is put to Core's
+// permission gate (`step-permission.ts`), which is what makes a Flow that
+// publishes, buys, edits or deletes something a person is asked about rather
+// than something that happens every time it runs. That is a different answer
+// from a refusal and is reported as one: `needs_permission` is nobody's to
+// correct but the person's. A caller running a node against the live page has
+// already gated that call against the page the model is looking at, and says so
+// with `gatedByCaller`, so one act is not put to the gate twice under two
+// different rules.
 
+import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
@@ -64,6 +75,7 @@ import { isJsonRecord } from "../untrusted-json";
 import { resolveWebExtractionSlot } from "./extraction-slot";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
+import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
 import type { WebLlmTargetPackets } from "./target-packets";
 
 /**
@@ -105,12 +117,49 @@ export type WebPlanNodeResolutionInput = {
   flowId: string;
   nodeDefinitionId: string;
   parameters: JsonObject;
+  /**
+   * Core's check for this step of the Flow. Called once the step's parameters
+   * are real, so the request that reaches the person names the control the
+   * model was shown. Absent only where a caller drove this without a build
+   * behind it, which is nobody to ask: a step that would do something lasting
+   * is then refused rather than taken.
+   */
+  permission?: AutomationStudioActionPermissionCheck | undefined;
+  /**
+   * What the step said its own action would lastingly do, in Core's classes.
+   * Absent when the step declared nothing; empty when it declared that it
+   * causes nothing lasting. Never this domain's reading of the control.
+   */
+  declaredConsequences?: readonly AutomationStudioActionConsequence[] | undefined;
+  /**
+   * That this resolution is for a call the caller is about to make and has
+   * gated itself, rather than for a step of a Flow.
+   *
+   * There are two moments a web action meets the gate and they are not the
+   * same event. `node-run/run.ts` runs a node against the live page, and gates
+   * that call against the page in front of the model: it requires a
+   * declaration on *every* acting node rather than only a committing one, and
+   * refuses with the page attached so whatever was in the way has a handle the
+   * model can act on next. A step of a Flow is gated here instead, because a
+   * Flow runs every time with nobody watching and the question is about the
+   * step rather than about one call. Asking twice would put the same act to
+   * the gate under two different rules, and the run-node path would be refused
+   * for not declaring something it had already declared.
+   *
+   * Absent is the safe answer on purpose. A caller that forgets it is gated
+   * here as well as wherever else it gates, which costs a refusal; a caller
+   * that had to opt *in* and forgot would pass ungated, which is the defect
+   * this whole seam exists to close.
+   */
+  gatedByCaller?: true;
 };
 
 export type WebPlanNodeResolution =
   | { status: "unchanged" }
   | { status: "resolved"; parameters: JsonObject }
-  | { status: "refused"; issueCodes: readonly WebPlanHandleIssue[] };
+  | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode)[] }
+  /** A person must answer this one. `requestId` is null where there was nobody to ask. */
+  | { status: "needs_permission"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null };
 
 export type WebPlanHandleStores = {
   targets: WebLlmTargetPackets;
@@ -205,12 +254,37 @@ const TARGET_ISSUES = {
   not_unique: "web.handle.not_unique"
 } as const satisfies Record<"unknown" | "stale" | "ambiguous" | "not_unique", WebPlanHandleIssueCode>;
 
-export function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): WebPlanNodeResolution {
+export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeResolution> {
   const scope = { projectId: input.projectId, flowId: input.flowId };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
-  return outcome.status === "refused" ? refusal(input.parameters, outcome.refusals) : outcome;
+  if (outcome.status === "refused") return refusal(input.parameters, outcome.refusals);
+  // The step is asked about with the parameters it would really run with, so
+  // the request names the control the model was shown rather than a handle.
+  if (input.gatedByCaller) return outcome;
+  const acting = actingStep(input.nodeDefinitionId, outcome.status === "resolved" ? outcome.parameters : input.parameters);
+  const permission = await webPlanStepPermission({
+    nodeDefinitionId: acting.nodeDefinitionId,
+    declared: input.declaredConsequences,
+    check: input.permission,
+    parameters: acting.parameters
+  });
+  if (permission.kind === "undeclared") return { status: "refused", issueCodes: ["web.step.consequences_undeclared", "web.step.expected.consequences_classes_or_none"] };
+  if (permission.kind === "refused") return { status: "needs_permission", missing: permission.missing, requestId: permission.requestId };
+  return outcome;
+}
+
+/**
+ * The action the step really takes, and the parameters it takes it with. Core's
+ * Run Output node takes its action through the web output its payload names, so
+ * a declaration on that step is about that output, and the element it acts on
+ * is named inside the payload rather than beside it.
+ */
+function actingStep(nodeDefinitionId: string, parameters: JsonObject): { nodeDefinitionId: string; parameters: JsonObject } {
+  if (nodeDefinitionId !== RUN_OUTPUT_NODE_ID || !isWebOutputId(parameters.outputId)) return { nodeDefinitionId, parameters };
+  const payload = parameters.parameters;
+  return { nodeDefinitionId: webAutomationOutputNodeId(parameters.outputId), parameters: isJsonRecord(payload) ? payload as JsonObject : {} };
 }
 
 function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Scope, stores: WebPlanHandleStores): NodeOutcome {
@@ -325,7 +399,7 @@ function declaredFrame(value: unknown): number | undefined {
 }
 
 /** A refusal's codes: its reasons in a fixed order, where each kind of handle it is about is accepted, then each reason's position. */
-function refusal(parameters: JsonObject, refusals: Refusal[]): WebPlanNodeResolution {
+function refusal(parameters: JsonObject, refusals: Refusal[]): Extract<WebPlanNodeResolution, { status: "refused" }> {
   const codes = new Set<WebPlanHandleIssueCode>(refusals.map((entry) => entry.code));
   for (const entry of refusals) {
     if (entry.kind !== undefined && PLACEMENT_REASONS.has(entry.code)) codes.add(EXPECTED_PLACEMENT[entry.kind]);

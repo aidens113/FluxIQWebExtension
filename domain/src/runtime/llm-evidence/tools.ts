@@ -178,8 +178,13 @@ export type WebAutomationLlmEvidenceRuntime = {
    * becomes the request behind it (`plan-resolution/`). A node with no handle
    * is `unchanged`; any handle that cannot be made real refuses the node with
    * named codes. Core calls it before a plan is validated.
+   *
+   * Awaited, because the step is then put to Core's permission check
+   * (`plan-resolution/step-permission.ts`): a step that would lastingly do
+   * something the run is not permitted answers `needs_permission`, and a step
+   * that presses without saying what pressing would do is refused.
    */
-  resolvePlanNodeParameters(input: WebPlanNodeResolutionInput): WebPlanNodeResolution;
+  resolvePlanNodeParameters(input: WebPlanNodeResolutionInput): Promise<WebPlanNodeResolution>;
 };
 
 /**
