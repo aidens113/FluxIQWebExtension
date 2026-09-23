@@ -31,6 +31,13 @@
 // every call. Treating an undeclared press as harmless is what the live run
 // above did, and it is how a Flow came to publish with nobody asked.
 //
+// **An empty declaration is put to Core too.** A step that says `none` used to
+// stop here and Core never heard of it, so the only record a permitted press
+// left anywhere was that it had not been refused -- which is how four live
+// builds authored Flows containing presses with nobody able to say what any
+// press declared. It now goes to the check like any other, is permitted
+// because there is nothing to permit, and is recorded against the step.
+//
 // **A refusal here is not the same event as a refusal of how a step was
 // written.** `needs_permission` says a person must answer; no rewrite of the
 // plan can. `refused` says the model wrote something this domain will not
@@ -105,7 +112,6 @@ export async function webPlanStepPermission(input: {
   parameters: JsonObject;
 }): Promise<WebPlanStepPermission> {
   if (input.declared === undefined) return webPlanStepMustDeclare(input.nodeDefinitionId) ? { kind: "undeclared" } : { kind: "clear" };
-  if (input.declared.length === 0) return { kind: "clear" };
   const identity = isJsonRecord(input.parameters.element) ? input.parameters.element : undefined;
   const permission = await webActionPermission({
     check: input.check,

@@ -9,11 +9,19 @@
 // it asks for, and answers; when the answer is no it has already raised the
 // request that goes to the person, so this module only reports the refusal.
 //
-// An action that declares no lasting consequence asks nothing: moving about,
-// opening, ticking a row are undone by looking away. A declaration that is not
-// a list of Core's classes is not a declaration at all, and no permission is
-// asked for something nobody could read. Without a check to ask -- a caller
-// that did not pass Core's -- a declared consequence is refused, never taken.
+// An action that declares no lasting consequence has nothing to be permitted:
+// moving about, opening, ticking a row are undone by looking away. It is still
+// put to Core, which is the change of 2026-09-22 and is not a formality. Saying
+// `[]` is an answer, and until then this module returned `no_consequence`
+// without calling the check at all -- so every press in four measured live
+// builds, including the one that scheduled a public post, was invisible to Core
+// and what each step had declared could only be deduced from the absence of a
+// refusal. Core now reads the empty answer, records it against the action, and
+// permits it. A declaration that is not a list of Core's classes is not a
+// declaration at all, and no permission is asked for something nobody could
+// read. Without a check to ask -- a caller that did not pass Core's -- a
+// declared consequence is refused, never taken, and an empty one stands,
+// because refusing it would make honesty the one answer that cannot be given.
 //
 // **A refusal is reported with what Core said about it.** The standing product
 // rule is that a blocked action is put to the person rather than quietly
@@ -57,13 +65,35 @@ export async function webActionPermission(input: {
 }): Promise<WebActionPermission> {
   if (input.declared === undefined) return { kind: "no_consequence" };
   if (!Array.isArray(input.declared) || input.declared.length > 10 || !input.declared.every(isAutomationStudioActionConsequence)) return { kind: "invalid" };
-  if (input.declared.length === 0) return { kind: "no_consequence" };
   const declared: readonly AutomationStudioActionConsequence[] = input.declared;
   // Nobody to ask, so the whole declaration is what is missing: none of it was
-  // put to anyone.
-  if (input.check === undefined) return { kind: "refused", missing: declared, requestId: null };
-  const name = input.control.name?.trim() || `an unlabelled ${input.control.kind}`;
-  const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: input.verb });
+  // put to anyone. An empty one asks for nothing, so there is nothing to miss.
+  if (input.check === undefined) return declared.length ? { kind: "refused", missing: declared, requestId: null } : { kind: "no_consequence" };
+  const name = boundedName(input.control.name) || `an unlabelled ${input.control.kind}`;
+  const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: boundedVerb(input.verb) });
   if (verdict.permitted) return { kind: "permitted" };
   return { kind: "refused", missing: verdict.missing, requestId: verdict.requestId };
+}
+
+/**
+ * The control's name as Core's reader will take it: trimmed, and no longer than
+ * the reader allows. Core withholds a name it cannot find in evidence already
+ * shown, so cutting a long one here costs nothing a person would have seen.
+ */
+function boundedName(name: string | undefined): string {
+  return (name ?? "").replace(/\s+/gu, " ").trim().slice(0, 2_000);
+}
+
+/**
+ * The verb as Core's reader will take it: at most two plain lowercase words.
+ *
+ * Bounded here rather than left to throw, because the verb is what a sentence
+ * shown to a person reads as -- presentation, not authority -- and a caller
+ * naming its action from a node label ("Wait For Selector") would otherwise
+ * fail the action outright over three words. Nothing about the declaration's
+ * classes is softened: an unreadable class still throws, and the action fails.
+ */
+function boundedVerb(verb: string): string {
+  const words = verb.toLowerCase().replace(/[^a-z ]+/gu, " ").split(/\s+/u).filter((word) => word.length >= 2 && word.length <= 20);
+  return words.slice(0, 2).join(" ") || "run";
 }

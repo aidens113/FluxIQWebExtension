@@ -58,7 +58,15 @@ The model declares what its own action does in Core's classes -- `move_money`,
 `consequences` input or on the step's target handle, and Core answers from the
 person's grant and from what his instruction asks for. A refusal ends the build
 with Core's permission request for the person; FluxIQ judges no control by how
-it looks. A checkbox press is pressed back once the page has been read,
+it looks. **An empty declaration is put to Core too.** Until 2026-09-22 this
+domain answered `no_consequence` for `[]` without calling the check, so a press
+that said it causes nothing lasting reached Core's gate at all -- and four
+measured live builds authored Flows containing presses with nobody able to say
+what any press had declared. Core now reads the empty answer, records it against
+the action and permits it, so the declaration a Flow step carries can be read on
+the proposal rather than deduced from the absence of a refusal. Core's reader
+bounds the control name and the verb this domain supplies, so a node whose label
+runs to three words costs a plainer sentence rather than the action. A checkbox press is pressed back once the page has been read,
 so exploration leaves the page as it found it. Form filling and option selection
 are deliberately absent from the authoring tool catalog. Parsed evidence
 already contains the control metadata and bounded options needed to propose
