@@ -1,5 +1,6 @@
 import { distinct } from "../distinct.mjs";
 import { parseLabResult, parseRunnerRefusal } from "../lab-run/index.mjs";
+import { consequenceSummary } from "./consequences.mjs";
 import { createdFlowShape } from "./created-flow-shape.mjs";
 import { datasetJudgement } from "./dataset-judgement.mjs";
 import { describeFacilityFailure } from "./facility-failure.mjs";
@@ -41,6 +42,10 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
   // beside `providerCalls` below, the two are the adversarial measurement: the
   // rung that absorbed the condition, and what it cost in model calls.
   const recoveryRungs = rungAttribution(flowLane);
+  // What the build's own steps declared, and who permitted it. Read from the
+  // live-LLM snapshot, which carries the build record whether the build
+  // proposed a Flow or parked on a question nobody answered.
+  const consequences = consequenceSummary(liveLlm);
   const repair = repairing ? repairOutcome(recovery, providerCalls, flowLane, repairLane) : null;
   let judgement;
   if (repairing) judgement = repairJudgement(task, repair, oracleVerdict);
@@ -89,6 +94,25 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
     flowCreated: evaluation?.flowCreated ?? result?.observation?.flowCreated ?? (flowLane?.flowId ? true : null),
     actionTypes: distinct((evaluation?.actions ?? run?.actions ?? flowLane?.actions ?? []).map((action) => action.actionType)),
     createdFlowShape: createdFlowShape(flowLane),
+    /**
+     * How the build ended, in the product's own words: `proposed`,
+     * `permission_required` -- it asked a person for a lasting act and nobody
+     * answered -- or `failed`. `null` for a run that made no build.
+     */
+    buildOutcome: typeof liveLlm?.build?.outcome === "string" ? liveLlm.build.outcome : null,
+    /**
+     * What the build's acting steps said they would lastingly do, who allowed
+     * it (`answeredBy`), and the question it asked if nobody had. `null` for a
+     * run that reached no build.
+     */
+    consequences,
+    /**
+     * What Core had still not written about the created Flow's own run when
+     * the wait for it ran out: today only `recovery`, its recovery record. The
+     * run is reported as it stands, so this separates "Core recovered nothing"
+     * from "Core never said".
+     */
+    unsettled: typeof flowLane?.unsettled === "string" ? flowLane.unsettled : null,
     judgement,
     repair,
     /** `null` unless the run was given `--replays`; then whether its repair was applied, and whether each replay with no model met the goal. */

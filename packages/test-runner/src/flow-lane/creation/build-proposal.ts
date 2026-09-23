@@ -9,7 +9,7 @@
 // it fails on the refusal.
 
 import { parseAutomationStudioFlowBootstrapFailureDiagnostic } from "fluxiq/automation-studio";
-import type { ExistingFlowAdaptation, ExistingFlowAdaptationSummary, FlowBootstrapGenerationEnvelope } from "../../existing-fluxiq-control.js";
+import type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationDeclaredAction, ExistingFlowAdaptation, ExistingFlowAdaptationSummary, FlowBootstrapGenerationEnvelope } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../../http-control/index.js";
 
@@ -50,28 +50,40 @@ export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: bo
 export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
 
 /**
- * - `outcome`: `proposed` when Core left a pending proposal; `permission_required`
- *   when Core stopped the build to ask a person for a lasting consequence nobody
- *   allowed -- not a failure of the build, and never an HTTP failure, but the
- *   question FluxIQ puts to the person, carried in `permissionRequest`;
- *   `failed` for every other ending.
- * - `providerCalls`: the **evidence loop's** decisions, from the proposal's
- *   audit or the refusal's diagnostic; `null` when Core did not say. Core does
- *   not itemize a build's calls one by one, so this count and `accounting`'s
- *   totals are all a build's per-call record can hold.
+ * - `outcome`: `proposed` when Core left a pending proposal nothing is waiting
+ *   on; `permission_required` when the build asked a person for a lasting
+ *   consequence nobody allowed -- not a failure of the build, and never an HTTP
+ *   failure, but the question FluxIQ puts to the person, carried in
+ *   `permissionRequest`; `failed` for every other ending.
  *
- *   It is not the build's total spend, and the difference is real rather than
- *   theoretical. Core makes provider calls outside the loop -- the instruction
- *   authority derivation asks the model what the person's instruction already
- *   asks for (`runtime/action-permissions/`, `deriveInstructed`) -- and those
- *   calls are spent against the grant's token and cost budget without
- *   appearing in any count Core publishes for the build. Measured: a build
- *   that died on its token budget for calls no count explained. So
- *   `accounting`'s totals are the honest measure of what a build spent, and
- *   this number is the honest measure of how many decisions it took; a reader
- *   dividing one by the other will find more tokens than these calls explain,
- *   and that is the derivation. Closing it properly is Core's: a call count on
- *   the build's own accounting record, covering every call the grant paid for.
+ *   A build reaches `permission_required` two ways. It can end on the request,
+ *   which arrives as a refusal with a diagnostic. Or -- since the gate learned
+ *   to park and wait for an answer -- it can finish, leave a proposal, and
+ *   carry the unanswered question on it; Core then refuses to approve or apply
+ *   that proposal (`FLOW_BOOTSTRAP_PERMISSION_REQUIRED`). Both are the same
+ *   ending and are reported as one. Reading the second off the proposal is what
+ *   this record gains: it was arriving here as a `proposed` build whose review
+ *   then failed as an HTTP 400, which a campaign recorded as
+ *   `environment.missing` -- a harness verdict for the product working exactly
+ *   as it was built to.
+ * - `providerCalls`: **every** provider call the build made, from the
+ *   proposal's audit (`totalProviderCallCount`) or the refusal's diagnostic;
+ *   `null` when Core did not say. Core does not itemize a build's calls one by
+ *   one, so this count and `accounting`'s totals are all a build's per-call
+ *   record can hold.
+ *
+ *   It used to be the evidence loop's decisions alone, and was short by every
+ *   call Core makes outside the loop -- the instruction-authority derivation
+ *   asks the model what the person's instruction already asks for
+ *   (`runtime/action-permissions/`, `deriveInstructed`). Those calls are spent
+ *   against the grant's token and cost budget, so a build could die on its
+ *   budget for calls no count explained. Core publishes them as
+ *   `additionalProviderCallCount` and their sum as `totalProviderCallCount`,
+ *   and this is that sum. A Core that publishes neither still reports the loop
+ *   count, which is then all there is.
+ * - `loopProviderCalls`: the evidence loop's own decisions, beside the total,
+ *   so a reader can still see what the build itself decided. The difference
+ *   between the two is what Core spent outside the loop.
  * - `providerInvocation`: whether Core says it sent a provider request at all;
  *   `unknown` when the build outlived its request and no proposal appeared.
  * - `failure.code`: Core's own closed code for a refusal, or a `lab.` code
@@ -88,8 +100,14 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
  * - `instructedConsequences`: the lasting consequences Core found the person's
- *   instruction asks for, each with the words it quoted, as stored on the
- *   proposal. `null` on a refused build, `[]` when the build asked nothing.
+ *   instruction asks for, each with the words it quoted. Read from the
+ *   proposal's `metadata.bootstrap` and from nowhere else -- the top-level
+ *   field this used to read is never populated for a bootstrap proposal, so
+ *   every build measured before 2026-09-23 reported an empty set while the
+ *   stored proposal held a full one. `null` on a refused build.
+ * - `declaredConsequences` and `consequenceCrossCheck`: what every action put
+ *   to Core's gate said about itself, and Core's reading of that against the
+ *   instruction. From `metadata.bootstrap` as well.
  * - `permissionRequest`: the request Core raised when the build needed a
  *   lasting consequence nobody allowed (`flow_bootstrap.permission_required`):
  *   what the action was, the control as the model was shown it, and which
@@ -106,7 +124,43 @@ export type CreatedFlowBuild = Readonly<{
   recoveredAfterTimeout: boolean;
   durationMs: number;
   instructedConsequences: ReadonlyArray<Readonly<{ consequence: string; quote: string }>> | null;
+  /**
+   * What every action the build put to Core's permission gate declared about
+   * itself, in the order it was asked, with Core's own answer beside it. A
+   * permitted declaration used to leave no trace at all, so what a Flow's
+   * steps said they would do could only be deduced from what was not refused.
+   * `null` on a build Core published none for.
+   */
+  declaredConsequences: readonly CreatedFlowDeclaredAction[] | null;
+  /** Core's reading of those declarations against the person's own instruction. `null` when Core made none. */
+  consequenceCrossCheck: CreatedFlowConsequenceCrossCheck | null;
   permissionRequest: CreatedFlowPermissionRequest | null;
+  /** The evidence loop's own decisions, where `providerCalls` is every call the build made. */
+  loopProviderCalls: number | null;
+}>;
+
+/** One action the build declared to the gate, as the build record keeps it: codes, a verb, and the control as Core allowed it to be named. */
+export type CreatedFlowDeclaredAction = Readonly<{
+  actionKind: string;
+  actionId: string;
+  ref: string;
+  verb: string;
+  controlName: string | null;
+  controlKind: string | null;
+  consequences: readonly string[];
+  permitted: boolean;
+  missing?: readonly string[];
+}>;
+
+/** Core's verdict on the two self-reports held against each other, cut to what a measurement reads. */
+export type CreatedFlowConsequenceCrossCheck = Readonly<{
+  verdict: string;
+  declared: readonly string[];
+  instructed: readonly string[];
+  undeclared: readonly string[];
+  beyondInstruction: readonly string[];
+  actions: number;
+  declaredNothing: number;
 }>;
 
 export type CreatedFlowPermissionRequest = Readonly<{
@@ -182,17 +236,22 @@ async function awaitProposal(control: CreatedFlowBuildControl, input: { projectI
 async function proposed(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string }, adaptationId: string, recoveredAfterTimeout: boolean, durationMs: number): Promise<CreatedFlowBuild> {
   const detail = await control.getFlowAdaptation(input.projectId, input.flowId, adaptationId);
   const loop = detail.evidenceLoop;
+  const consequences = detail.consequences;
+  const request = consequences?.permissionRequest;
   const base = {
     adaptationId: detail.adaptationId,
-    providerCalls: loop?.providerCallCount ?? null,
+    providerCalls: loop?.totalProviderCallCount ?? loop?.providerCallCount ?? null,
+    loopProviderCalls: loop?.providerCallCount ?? null,
     // A proposal cannot exist without a provider's answer.
     providerInvocation: "attempted" as const,
     accounting: detail.accounting ? accountingOf(detail.accounting) : null,
     evidenceLoop: loop ? { decisionCount: loop.decisionCount ?? loop.providerCallCount ?? null, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary(loop.toolIds), steps: buildSteps(loop.steps) } : null,
     recoveredAfterTimeout,
     durationMs,
-    instructedConsequences: await instructedConsequencesOf(control, input, adaptationId),
-    permissionRequest: null,
+    instructedConsequences: Object.freeze((consequences?.instructed ?? []).map((entry) => Object.freeze({ consequence: entry.consequence, quote: entry.quote }))),
+    declaredConsequences: consequences ? Object.freeze(consequences.declared.map(declaredActionOf)) : null,
+    consequenceCrossCheck: consequences?.crossCheck ? crossCheckOf(consequences.crossCheck) : null,
+    permissionRequest: request ? permissionRequestOf(request) : null,
   };
   const problem = detail.status !== "proposed" || detail.adaptationKind !== "flow_bootstrap" ? "lab.proposal_not_pending_bootstrap"
     : !loop ? "lab.proposal_without_evidence_audit"
@@ -200,7 +259,39 @@ async function proposed(control: CreatedFlowBuildControl, input: { projectId: st
         : loop.toolCallCount < 1 || loop.evidenceBytes < 1 ? "lab.proposal_without_page_evidence"
           : undefined;
   if (problem) return Object.freeze({ ...base, outcome: "failed", failure: { code: problem, stage: null, httpStatus: null } });
+  // The proposal exists and is well formed, and a person still has to answer
+  // before anything may be done with it. Read here rather than discovered when
+  // the review call is refused, so the ending is the product's own answer and
+  // not an HTTP status.
+  if (request) return Object.freeze({ ...base, outcome: "permission_required", failure: { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null } });
   return Object.freeze({ ...base, outcome: "proposed", failure: null });
+}
+
+/** One gate record as the build keeps it: Core's own strings, nothing interpreted. */
+function declaredActionOf(entry: ExistingAdaptationDeclaredAction): CreatedFlowDeclaredAction {
+  return Object.freeze({
+    actionKind: entry.actionKind,
+    actionId: entry.actionId,
+    ref: entry.ref,
+    verb: entry.verb,
+    controlName: entry.controlName,
+    controlKind: entry.controlKind,
+    consequences: Object.freeze([...entry.consequences]),
+    permitted: entry.permitted,
+    ...(entry.missing === undefined ? {} : { missing: Object.freeze([...entry.missing]) }),
+  });
+}
+
+function crossCheckOf(crossCheck: ExistingAdaptationConsequenceCrossCheck): CreatedFlowConsequenceCrossCheck {
+  return Object.freeze({
+    verdict: crossCheck.verdict,
+    declared: Object.freeze([...crossCheck.declared]),
+    instructed: Object.freeze([...crossCheck.instructed]),
+    undeclared: Object.freeze([...crossCheck.undeclared]),
+    beyondInstruction: Object.freeze([...crossCheck.beyondInstruction]),
+    actions: crossCheck.actions,
+    declaredNothing: crossCheck.declaredNothing,
+  });
 }
 
 /**
@@ -233,6 +324,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     outcome: diagnostic.permissionRequest ? "permission_required" : "failed",
     adaptationId: null,
     providerCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
+    loopProviderCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
     evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null } : null,
@@ -240,12 +332,17 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     recoveredAfterTimeout: false,
     durationMs,
     instructedConsequences: null,
+    // A refusal's diagnostic carries the request and nothing else about the
+    // gate: the declarations and the cross-check live on a proposal, and a
+    // refused build left none.
+    declaredConsequences: null,
+    consequenceCrossCheck: null,
     permissionRequest: diagnostic.permissionRequest ? permissionRequestOf(diagnostic.permissionRequest) : null,
   });
 }
 
 function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {
-  return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs, instructedConsequences: null, permissionRequest: null });
+  return Object.freeze({ outcome: "failed", adaptationId: null, providerCalls: null, loopProviderCalls: null, providerInvocation, accounting: null, evidenceLoop: null, failure, recoveredAfterTimeout: false, durationMs, instructedConsequences: null, declaredConsequences: null, consequenceCrossCheck: null, permissionRequest: null });
 }
 
 function accountingOf(value: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number }): CreatedFlowBuildAccounting {
@@ -288,19 +385,4 @@ function permissionRequestOf(request: { action: { kind: string; verb: string }; 
     missing: Object.freeze([...request.missing]),
     instructed: Object.freeze((request.authority?.instructed ?? []).map((entry) => Object.freeze({ consequence: entry.consequence, quote: entry.quote.slice(0, 200) }))),
   });
-}
-
-/**
- * The instructed consequences stored on the proposal, read from Core's own
- * record of it. Only the class and the quoted words are kept: the instruction
- * id and digest are Core's to check, not the record's to show.
- */
-async function instructedConsequencesOf(control: CreatedFlowBuildControl, input: { projectId: string; flowId: string }, adaptationId: string): Promise<CreatedFlowBuild["instructedConsequences"]> {
-  const payload = await control.automationStudioCall("get-flow-adaptation", { projectId: input.projectId, flowId: input.flowId, adaptationId });
-  const adaptation = isRecord(payload) && isRecord(payload.adaptation) ? payload.adaptation : undefined;
-  const stored = adaptation?.instructedConsequences;
-  if (!Array.isArray(stored)) return Object.freeze([]);
-  return Object.freeze(stored.flatMap((entry) => isRecord(entry) && typeof entry.consequence === "string" && typeof entry.quote === "string"
-    ? [Object.freeze({ consequence: entry.consequence, quote: entry.quote.slice(0, 200) })]
-    : []));
 }

@@ -81,16 +81,35 @@ test("an answered request is still read until the recovery is in, should Core ev
   assert.equal(outcome.status, "failed");
 });
 
-test("a repair run still recovering when its deadline passes ends on the closed timeout code, not on the run's failure", async () => {
+test("a run whose recovery record never arrives is still the run that happened, marked as unsettled", async () => {
+  // Core's recovery record is evidence *about* a run whose outcome is already
+  // written, and nothing that judges a created Flow reads it. Failing the run
+  // for its absence threw away a complete product result and reported
+  // `performance.budget` instead -- a verdict about the harness
+  // (`run-mudslg9p-c59266aa`). The run is reported, and the absence with it.
   const lab = granted({ purpose: "explore_and_adapt", request: "times out", details: [recovering] });
+  const outcome = await lab.run();
+
+  assert.equal(outcome.status, "failed");
+  assert.equal(outcome.unsettled, "recovery");
+  assert.equal(outcome.actions.length, 1);
+  // Bounded by the recovery record's own wait, measured from the first
+  // terminal read, rather than by the grant's whole run lease.
+  assert.ok(lab.clock.value >= 300_000 && lab.clock.value <= 301_000, `waited ${lab.clock.value} ms`);
+});
+
+test("a run still missing its verdict when the wait runs out fails, because reading it would report a pass the verdict may take away", async () => {
+  const unjudged = { summary: { status: "succeeded" }, actionAttempts: [{ ...failedAttempt, status: "succeeded" }], interventions: [] };
+  const lab = granted({ purpose: "verify_result", request: "times out", details: [unjudged] });
 
   await assert.rejects(lab.run(), (error: unknown) => {
     assert.ok(error instanceof RunnerFailure);
     assert.equal(error.category, "performance.budget");
-    assert.deepEqual(error.details, { code: "flow_lane.granted_run_unsettled", pending: "recovery", waitedMs: 600_000 });
+    assert.equal(error.details?.code, "flow_lane.granted_run_unsettled");
+    assert.equal(error.details?.pending, "verdict");
     return true;
   });
-  // Bounded by the grant's own run lease, and waited for in full.
+  // The verdict keeps the grant's own run lease: it decides the run's outcome.
   assert.ok(lab.clock.value >= 600_000 && lab.clock.value <= 601_000, `waited ${lab.clock.value} ms`);
 });
 

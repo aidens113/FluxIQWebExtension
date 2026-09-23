@@ -10,17 +10,7 @@ import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-reco
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
-
-/**
- * A timed-out synchronous Core run can keep executing after its HTTP client has
- * gone away. Under the final two-bench load, the first W02 Flow crossed the
- * request's 30-second bound in both campaigns and completed its runner cleanup
- * 42.9-46.5 seconds after Flow-lane dispatch. Give that exact run the same
- * load-proven 90-second window used for recording finalization to publish a
- * terminal detail with durable attempts.
- */
-const TERMINAL_DETAIL_WAIT_MS = 90_000;
-const TERMINAL_DETAIL_POLL_MS = 250;
+import { awaitTerminalRunDetail, pendingWork, TERMINAL_DETAIL_POLL_MS, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
 
 /**
  * How long a granted run is read back for after its request timed out: Core's
@@ -29,7 +19,8 @@ const TERMINAL_DETAIL_POLL_MS = 250;
  * defines, so it is the run's own deadline rather than a guess at one. The poll
  * ends as soon as the run settles; this bounds only a run that never does.
  *
- * Why a granted run needs more than the 90 seconds above: since t012, a created
+ * Why a granted run needs more than the 90 seconds a run ordinarily gets
+ * (`TERMINAL_DETAIL_WAIT_MS`, in `terminal-run-wait.ts`): since t012, a created
  * Flow's playback carries a `verify_result` grant, so the single request that
  * runs it also waits for the model to judge the result. On 2026-09-18 that
  * outlasted the 30-second request bound in four units, and because the run's id
@@ -38,7 +29,6 @@ const TERMINAL_DETAIL_POLL_MS = 250;
  */
 const GRANTED_RUN_WAIT_MS = AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS;
 const GRANTED_RUN_POLL_MS = 1_000;
-
 /**
  * The HTTP bound on the one request that runs a granted Flow.
  *
@@ -53,38 +43,6 @@ const GRANTED_RUN_POLL_MS = 1_000;
  * allows one request to be held, and the read-back covers the rest.
  */
 const GRANTED_RUN_REQUEST_MS = Math.min(GRANTED_RUN_WAIT_MS, FLUXIQ_HTTP_MAX_TIMEOUT_MS);
-
-/**
- * The closed code for a granted run Core was still finishing when the wait
- * for it ran out. It is the facility's finding -- the run never settled
- * inside its own deadline -- and never the run's failure, which Core had not
- * finished deciding.
- */
-const GRANTED_RUN_UNSETTLED_CODE = "flow_lane.granted_run_unsettled";
-
-export type PersistedFlowTerminalWait = {
-  now?: () => number;
-  sleep?: (ms: number) => Promise<void>;
-  timeoutMs?: number;
-  intervalMs?: number;
-  /**
-   * Whether a `succeeded` run is only finished once Core has recorded the
-   * verdict on its result. True for a granted run: Core publishes the status
-   * its steps earned first and judges the result afterwards, so a read in
-   * between sees a pass the verdict may still overturn.
-   */
-  awaitVerdict?: boolean;
-  /**
-   * Whether a `failed` run is only finished once Core's recovery has recorded
-   * how it ended. True for a granted run whose grant recovers. Core writes the
-   * failed status with the run's first save, before the recovery starts, and
-   * the recovery's record -- `metadata.llmGate` and `metadata.recoveryTrace`,
-   * which every way out of Core's recovery writes -- only with its last. The
-   * recovery ladder's diagnosis placeholder is in the first save too, so an
-   * intervention alone says nothing about whether the recovery finished.
-   */
-  awaitRecovery?: boolean;
-};
 
 /** The Core calls a Flow run makes; `ExistingFluxIQControlClient` satisfies it. */
 /**
@@ -304,6 +262,19 @@ export type PersistedFlowRunOutcome = {
    */
   stoppedWithoutFailedAttempt?: FlowStopWithoutFailedAttempt;
   /**
+   * What Core had still not written about this run when the wait for it ran
+   * out, or absent when everything the wait asked for arrived.
+   *
+   * Only ever `"recovery"`: the run is terminal, its attempts and datasets are
+   * complete, and Core's recovery record never came. The run is reported as it
+   * stands, because its outcome is not the recovery's to decide, and this says
+   * that the recovery record is missing rather than absent. A missing *verdict*
+   * is not reported here and never will be -- it fails the run instead, since a
+   * `succeeded` read before its verdict is a pass the verdict may be about to
+   * take away.
+   */
+  unsettled?: PendingWork;
+  /**
    * Where the run started, as a position in the recording's candidate order:
    * the position `candidateOrder` gives the node of the run's first attempt, in
    * Core's attempt order, that the order names. 0 is the recording's first
@@ -386,19 +357,24 @@ export async function executeRecordedFlowRun(
     const granted = input.llmExecution !== undefined;
     const timedOut = granted && error instanceof RunnerFailure && error.details?.bounded === "timeout";
     const wait: PersistedFlowTerminalWait = { ...(timedOut ? { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: GRANTED_RUN_POLL_MS } : {}), ...settlement, ...terminalWait };
-    const detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), error, wait);
-    return outcomeFromDetail(runId, detail, await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+    const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), error, wait);
+    const reads = await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, settled.detail, bounds);
+    return outcomeFromDetail(runId, settled.detail, reads, sessionStatus, input.actionTypes, input.candidateOrder, settled.unsettled);
   }
   let detail = await readRunDetail(control, input.projectId, runId, bounds, input.actionTypes ?? new Map());
+  let unsettled: PendingWork | undefined;
   // Core answers a granted run only once it is written whole, recovery
   // included, so this should already be the finished run. Should a failed run
   // come back without its recovery record, it is read until the record is in,
   // rather than taken as finished while Core is still repairing it.
   if (input.llmExecution && pendingWork(detail, { awaitRecovery: settlement.awaitRecovery === true }) === "recovery") {
     const early = new RunnerFailure("runtime.behavior", "Core answered the granted run before its detail was terminal");
-    detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), early, { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: GRANTED_RUN_POLL_MS, ...settlement, ...terminalWait });
+    const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), early, { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: GRANTED_RUN_POLL_MS, ...settlement, ...terminalWait });
+    detail = settled.detail;
+    unsettled = settled.unsettled;
   }
-  return outcomeFromDetail(runId, detail, await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+  const reads = await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds);
+  return outcomeFromDetail(runId, detail, reads, sessionStatus, input.actionTypes, input.candidateOrder, unsettled);
 }
 
 /**
@@ -467,6 +443,7 @@ function outcomeFromDetail(
   sessionStatus: string,
   actionTypes: ReadonlyMap<string, string> | undefined,
   candidateOrder: ReadonlyMap<string, number> | undefined,
+  unsettled?: PendingWork,
 ): PersistedFlowRunOutcome {
   const actions = detail.actions;
   if (!actions.length) throw new RunnerFailure("action.dispatch", "The approved Flow produced no durable action attempt");
@@ -490,44 +467,8 @@ function outcomeFromDetail(
     route: readFlowRunRoute(detail.runDetail),
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
+    ...(unsettled === undefined ? {} : { unsettled }),
   };
-}
-
-async function awaitTerminalRunDetail(
-  control: PersistedFlowRunControl,
-  projectId: string,
-  runId: string,
-  actionTypes: ReadonlyMap<string, string>,
-  originalFailure: unknown,
-  wait: PersistedFlowTerminalWait,
-): Promise<Awaited<ReturnType<typeof readRunDetail>>> {
-  const now = wait.now ?? Date.now;
-  const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-  const timeoutMs = wait.timeoutMs ?? TERMINAL_DETAIL_WAIT_MS;
-  const intervalMs = wait.intervalMs ?? TERMINAL_DETAIL_POLL_MS;
-  const deadline = now() + timeoutMs;
-  // What Core was still doing at the last terminal read, if anything: the
-  // difference between a run that never finished and one Core was finishing.
-  let pending: PendingWork | undefined;
-  while (now() < deadline) {
-    const remaining = deadline - now();
-    try {
-      const detail = await readRunDetail(control, projectId, runId, { timeoutMs: Math.min(30_000, remaining) }, actionTypes);
-      if (terminalRunStatus(detail.summaryStatus) && detail.actions.length > 0) {
-        pending = pendingWork(detail, wait);
-        if (!pending) return detail;
-      }
-    } catch {
-      // The original timeout/abort remains authoritative until exact terminal
-      // evidence arrives; a diagnostic read must never replace it.
-    }
-    const delay = Math.min(intervalMs, Math.max(0, deadline - now()));
-    if (delay > 0) await sleep(delay);
-  }
-  if (pending) {
-    throw new RunnerFailure("performance.budget", `Core was still finishing the granted run's ${pending} when the wait for it ran out`, { details: { code: GRANTED_RUN_UNSETTLED_CODE, pending, waitedMs: timeoutMs } });
-  }
-  throw originalFailure;
 }
 
 /**
@@ -539,42 +480,6 @@ async function awaitTerminalRunDetail(
 function grantedSettlement(execution: PersistedFlowLlmExecution | undefined): Pick<PersistedFlowTerminalWait, "awaitVerdict" | "awaitRecovery"> {
   if (!execution) return {};
   return { awaitVerdict: true, awaitRecovery: execution.purpose !== "verify_result" };
-}
-
-function terminalRunStatus(status: string | undefined): boolean {
-  return status === "succeeded" || status === "failed" || status === "cancelled";
-}
-
-type PendingWork = "verdict" | "recovery";
-
-/**
- * What Core still has to write about a terminal run, or `undefined` when it
- * has written everything the wait asked for.
- *
- * The verdict: Core writes a finished run's status as its steps earned it,
- * then judges the result and may rewrite a `succeeded` to `failed`; the
- * verdict and the final status are saved together (Core
- * `result-verification/run-outcome.ts`). So a `succeeded` run with no verdict
- * recorded yet is not finished, and one read at that moment would report a
- * pass the verdict was about to take away. A run that failed is never judged.
- *
- * The recovery: a `failed` run is saved as soon as its steps fail, and Core's
- * recovery then diagnoses, explores and repairs it before writing its record.
- * Until that record is in, the run is not finished either (`awaitRecovery`).
- */
-function pendingWork(
-  detail: { summaryStatus: string | undefined; resultVerification: PersistedResultVerification; runDetail: Readonly<Record<string, unknown>> },
-  wait: Pick<PersistedFlowTerminalWait, "awaitVerdict" | "awaitRecovery">,
-): PendingWork | undefined {
-  if (wait.awaitVerdict && detail.summaryStatus === "succeeded" && detail.resultVerification === null) return "verdict";
-  if (wait.awaitRecovery && detail.summaryStatus === "failed" && !recoveryRecordWritten(detail.runDetail)) return "recovery";
-  return undefined;
-}
-
-/** Whether Core's recovery wrote its record: the gate that decided it, or the trace of its stages. */
-function recoveryRecordWritten(runDetail: Readonly<Record<string, unknown>>): boolean {
-  const metadata = optionalRecord(runDetail.metadata);
-  return optionalRecord(metadata?.llmGate) !== undefined || optionalRecord(metadata?.recoveryTrace) !== undefined;
 }
 
 /**

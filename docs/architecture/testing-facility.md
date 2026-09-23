@@ -1192,6 +1192,113 @@ re-resolves a renamed control before Core is told anything failed -- so a
 `fingerprint` or `scored-candidate` strategy on a **succeeded** attempt is the
 record that a rename was survived.
 
+### Who answers a permission question in a campaign
+
+Nobody is watching a campaign, so a build that stops to ask a person waits for
+an answer that never comes. Since the permission gate learned to park, a build
+can finish, leave a proposal and carry the unanswered question on it; Core then
+refuses to approve or apply that proposal (`FLOW_BOOTSTRAP_PERMISSION_REQUIRED`).
+Until 2026-09-23 the first anyone heard of it was that refusal, as an HTTP 400
+on `review-flow-adaptation`, and a campaign recorded the row as
+`environment.missing` — a verdict about the installation, for the product doing
+exactly what it was built to do (`run-mudt5jr5-92321d8c`, 24 provider calls and
+$0.12 that measured nothing).
+
+Three things keep that from happening, and they are in order of authority.
+
+**The instruction is the authority.** Core permits any class it reads the
+person's own instruction as asking for, whatever the grant holds, so the
+ordinary consequential task needs no grant at all
+(`runtime/action-permissions/gate.ts`).
+
+**A task may declare what its own instruction asks for.** `LiveInstructionTask`
+takes an optional `permits`, the consequence classes in Core's closed
+vocabulary, and a campaign passes exactly those as that one task's
+`--llm-permit`. This is the corpus's second opinion, for the case where Core's
+reading of the instruction and the model's declaration of its own action
+disagree. A task that names none permits none: a task nobody has judged never
+authorizes an act on its own, and a campaign-wide `--llm-permit` would hide the
+over-declaration the measurement exists to find. An operator's own
+`--llm-permit` after `--` replaces the task's, because the Lab refuses an option
+given twice and somebody running one task by hand is the person the question is
+for.
+
+**A build that still parks is a product result, read off the proposal.** The
+build record's `outcome` is `permission_required` — the same ending as a build
+that died on the request, and reported as one — and the run fails as
+`runtime.behavior` with `permission.required` and the classes a later grant
+would have to add. Nothing is asked of the review surface, so no HTTP status
+stands in for the answer.
+
+The row says which of those happened. `buildOutcome` is the build's own ending,
+and `consequences.answeredBy` is one of:
+
+| `answeredBy` | What it means |
+| --- | --- |
+| `instruction` | Every class declared was one the instruction asks for. No grant was involved. |
+| `campaign` | A class the instruction did not cover was held by the task's own `permits`. |
+| `nobody` | Neither held it. The build asked, and the campaign had no answer. |
+| `nothing lasting` | Every action said it would cause nothing that stays. |
+| `not recorded` | Core published no declarations for this build at all. |
+
+Beside it the row carries what the build's acting steps declared, how many
+actions were put to the gate and how many declared nothing, Core's cross-check
+verdict — `undeclared` naming a class the instruction asks for that nothing
+declared — and the request itself, cut to its verb, control kind and classes.
+
+**All of it is read from `metadata.bootstrap`, and from nowhere else.** The
+top-level `adaptation.instructedConsequences` this facility read until
+2026-09-23 is never populated for a bootstrap proposal:
+`bootstrapAdaptationAsFlowAdaptation` projects all four members —
+`instructedConsequences`, `declaredConsequences`, `consequenceCrossCheck` and
+`permissionRequest` — under `metadata.bootstrap`. Every build measured before
+that date therefore reported an empty declaration while the stored proposal
+held a full one.
+
+### What a build's reported calls are
+
+A build's `providerCalls` is **every** provider call it made, from the
+proposal's `totalProviderCallCount`. It used to be the evidence loop's
+decisions alone and was short by every call Core makes outside the loop — the
+instruction-authority derivation, which asks the model what the person's
+instruction already asks for. Those calls are spent against the grant's token
+and cost budget, so a build could die on its budget for calls no count
+explained. Core publishes them as `additionalProviderCallCount` and their sum as
+`totalProviderCallCount`, beside the two loop counts rather than inside them,
+because folding the extra call into `providerCallCount` breaks the bounded
+contract this facility holds an audit record to and fails every evidence-guided
+build before its Flow is read (measured, `run-mudna2ng-ceadeb69`). The loop's
+own count stays on the record as `loopProviderCalls`; the difference between the
+two is what Core spent outside the loop. A record whose total is not the loop's
+calls plus the ones outside it is refused rather than reported
+(`existing-fluxiq-control/adaptation-evidence-loop.ts`).
+
+### When Core is still writing a run
+
+Core saves a run in stages: the status its steps earned first, then the verdict
+on its result, and for a failed run its recovery record. A reader that takes the
+first save as the whole run reports a pass the verdict may be about to take
+away, so the Flow lane waits (`flow-lane/terminal-run-wait.ts`). What it does
+when the wait runs out depends on which of the two is missing, because they are
+different in kind.
+
+**A missing verdict fails the run**, as `performance.budget` with `pending:
+"verdict"`. It decides the run's outcome, and a measurement that can report a
+false pass is worse than one that reports nothing. It keeps the grant's whole
+run lease.
+
+**A missing recovery record does not.** The run is returned as it stands and
+marked `unsettled: "recovery"`, which the Flow-lane snapshot and the campaign
+row both carry, so a reader can tell "Core recovered nothing" from "Core never
+said". The record is evidence *about* a run whose outcome is already written,
+and nothing that judges a created Flow reads it. Failing the run for its absence
+threw away a complete product result: on `run-mudslg9p-c59266aa` a Flow was
+built, ran, failed, Core's repair made its two calls, no record arrived, and the
+run spent ten minutes waiting before being reported `performance.budget`. It
+now takes its own bound, `RECOVERY_RECORD_WAIT_MS`, five minutes measured from
+the first terminal read — half of Core's lease on a claimed grant, and long
+enough for any recovery this facility has been observed to complete.
+
 ### The adversarial lane
 
 `pnpm lab:adversarial` runs every corpus row that declares `expected.recovery`

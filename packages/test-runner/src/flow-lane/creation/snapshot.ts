@@ -38,6 +38,11 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     // a value the host observed.
     route: evidence.run.route,
     harnessRecovery: evidence.run.harnessRecovery,
+    // What Core never finished writing about this run, when the wait for it
+    // ran out: today only its recovery record. The run is reported as it
+    // stands, so this is the difference between "Core recovered nothing" and
+    // "Core never said".
+    unsettled: evidence.run.unsettled ?? null,
     oracleVerdict: evidence.observation.oracleVerdict,
     extraction: evidence.extraction ? flowExtractionSnapshot(evidence.extraction) : null,
     actions: flowActionsSnapshot(evidence.run),

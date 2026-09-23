@@ -26,6 +26,8 @@ export type FakeCreationCoreOptions = {
   generation?: { kind: "proposed" } | { kind: "refused"; status: number; payload: unknown } | { kind: "timeout"; proposalAfterPolls?: number } | { kind: "transport" };
   /** The pending proposal's evidence-loop audit; `null` for none. */
   evidenceLoop?: ExistingFlowAdaptation["evidenceLoop"] | null;
+  /** What the proposal says its steps declared, and the question it carries out to a person. */
+  consequences?: ExistingFlowAdaptation["consequences"];
   adaptationStatus?: string;
   instructionStatus?: string;
   appliedMutationCount?: number;
@@ -56,6 +58,7 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
     adaptationKind: "flow_bootstrap",
     accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
     ...(options.evidenceLoop === null ? {} : { evidenceLoop: options.evidenceLoop ?? { providerCallCount: 4, decisionCount: 4, traceStepCount: 5, iterationCount: 5, toolCallCount: 4, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect", "WEB.Unrecognized.Tool"] } }),
+    ...(options.consequences === undefined ? {} : { consequences: options.consequences }),
     ...extra,
   });
 
@@ -68,7 +71,6 @@ export function fakeCreationCore(options: FakeCreationCoreOptions = {}) {
         return { flow: options.blankFlow ?? { flowId: FLOW_ID, projectId: PROJECT_ID, nodes: [], edges: [], metadata: { flowRepresentationKind: "orchestration" } } };
       }
       if (endpoint === "list-flow-subflows") return { subflows: applied ? [{ subflowId: "subflow.one", graphFlowId: GRAPH_FLOW_ID }] : [] };
-      if (endpoint === "get-flow-adaptation") return { adaptation: { instructedConsequences: [] } };
       if (endpoint === "get-flow-router") return { router: applied ? { routerId: "router.one" } : null };
       if (endpoint === "save-flow-generation-instruction") {
         instructionRequests.push(payload);

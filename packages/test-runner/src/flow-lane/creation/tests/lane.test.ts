@@ -65,7 +65,7 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
   assert.deepEqual(core.calls, [
     "create-flow", "get-flow", "list-flow-subflows", "get-flow-router",
     "prepare",
-    "save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation",
+    "save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation",
     "settle",
     "approve", "apply",
     "get-flow", "list-flow-subflows", "get-flow",

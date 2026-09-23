@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
-import { harnessPatchPermissionOutcomes, LLM_LAB_MAX_CALLS_PER_RUN, type HarnessPatchPermissionOutcome } from "@fluxiq-web-extension/test-contracts";
+import { harnessPatchPermissionOutcomes, type HarnessPatchPermissionOutcome } from "@fluxiq-web-extension/test-contracts";
 import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation-studio/action-permissions";
 import { RunnerFailure } from "./failure.js";
+import {
+  adaptationConsequences, adaptationEvidenceLoop, array, boolean, enumeration, finite, integer, invalid, nullableText, nullableUrl, optionalRecord, positiveInteger, record, stringArray, text,
+  type ExistingAdaptationConsequenceCrossCheck, type ExistingAdaptationConsequences, type ExistingAdaptationDeclaredAction, type ExistingAdaptationEvidenceLoop, type JsonRecord,
+} from "./existing-fluxiq-control/index.js";
 import type { PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
 
-type JsonRecord = Record<string, unknown>;
 export type ExistingProject = { id: string; name: string; description: string; domainId?: string | null; createdAt: number; updatedAt: number };
 export type ExistingFlowSummary = { flowId: string; name: string; description?: string; sourceMode: "visual" | "code"; nodeCount: number; edgeCount: number; updatedAt: number; version?: string };
 export type ExistingFlow = { flowId: string; projectId: string; name: string; updatedAt: number; contentHash: string; document: JsonRecord };
@@ -86,8 +89,10 @@ export type ExistingRunProviderCall = {
 export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting; providerCalls?: ExistingRunProviderCall[]; providerCallsOmitted?: number; permissionRequest?: AutomationStudioActionPermissionRequest };
 export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
 export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
+export type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationConsequences, ExistingAdaptationDeclaredAction, ExistingAdaptationEvidenceLoop };
 export type ExistingFlowAdaptationSummary = { adaptationId: string; flowId: string; projectId: string; status: string };
 export type ExistingFlowAdaptation = ExistingFlowAdaptationSummary & {
+  consequences?: ExistingAdaptationConsequences;
   adaptationKind?: string;
   subflowId?: string;
   sourceRunId?: string;
@@ -98,24 +103,7 @@ export type ExistingFlowAdaptation = ExistingFlowAdaptationSummary & {
   appliedMutationCount?: number;
   bootstrapBinding?: { baseExecutionDigest?: string; currentExecutionDigest?: string; appliedExecutionDigest?: string; baseSettingsRevision?: number; currentSettingsRevision?: number };
   accounting?: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number };
-  evidenceLoop?: {
-    providerCallCount?: number;
-    decisionCount?: number;
-    traceStepCount?: number;
-    iterationCount: number;
-    toolCallCount: number;
-    evidenceBytes: number;
-    toolIds: string[];
-    /**
-     * Every decision of the build, in order, where Core published them. A
-     * refused build carries them on its failure diagnostic; a proposed one
-     * carries them here or not at all, and Core does not publish them on a
-     * proposal yet -- see `fa-lab-measurement.md`. Read as optional so the
-     * Lab records the trail the moment Core does, rather than having to be
-     * changed again afterwards.
-     */
-    steps?: Array<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
-  };
+  evidenceLoop?: ExistingAdaptationEvidenceLoop;
 };
 export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string };
 export type ExistingRunEvent = { sequence: number; eventId: string; eventKind: "run_summary" | "route_decision" | "subflow_execution" | "action_attempt" | "recovery_attempt" | "intervention"; timestampMs: number; title: string; status?: string; entityId?: string };
@@ -428,27 +416,6 @@ function project(value: unknown, at: string): ExistingProject { const item = rec
 function flowSummary(value: unknown, at: string): ExistingFlowSummary { const item = record(value, at); const sourceMode = enumeration(item.sourceMode, ["visual", "code"] as const, `${at}.sourceMode`); return { flowId: text(item.flowId, `${at}.flowId`), name: text(item.name, `${at}.name`), ...(typeof item.description === "string" ? { description: item.description } : {}), sourceMode, nodeCount: integer(item.nodeCount, `${at}.nodeCount`), edgeCount: integer(item.edgeCount, `${at}.edgeCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(typeof item.version === "string" ? { version: item.version } : {}) }; }
 function flowSubflow(value: unknown, at: string, projectId: string, flowId: string): ExistingFlowSubflow { const item = record(value, at); if (text(item.projectId, `${at}.projectId`) !== projectId || text(item.flowId, `${at}.flowId`) !== flowId) invalid(`${at} escaped the requested parent Flow`); return { projectId, flowId, subflowId: text(item.subflowId, `${at}.subflowId`), ...(typeof item.graphFlowId === "string" && item.graphFlowId ? { graphFlowId: item.graphFlowId } : {}), name: text(item.name, `${at}.name`), status: text(item.status, `${at}.status`), role: text(item.role, `${at}.role`) }; }
 function flowAdaptationSummary(value: unknown, at: string, projectId: string, flowId: string): ExistingFlowAdaptationSummary { const item = record(value, at); const parsed = { adaptationId: text(item.adaptationId, `${at}.adaptationId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), status: text(item.status, `${at}.status`) }; if (parsed.projectId !== projectId || parsed.flowId !== flowId) invalid(`${at} escaped the requested parent Flow`); return parsed; }
-/** Core's own ceiling on a published trace: one entry per evidence-loop iteration, plus the deterministic iteration 0. */
-const MAX_EVIDENCE_LOOP_STEPS = 65;
-
-/**
- * A build's published decisions, in order. Only the tool id, whether its
- * effect was applied, and the code it came to are kept -- the same three
- * fields a refused build's diagnostic carries, so a proposed build and a
- * refused one read alike. Nothing the tool returned and nothing the model
- * wrote is admitted.
- */
-function evidenceLoopSteps(value: unknown, at: string): Array<{ toolId: string; effectApplied?: boolean; resultCode?: string }> {
-  return array(value, at).map((entry, index) => {
-    const step = record(entry, `${at}[${index}]`);
-    return {
-      toolId: text(step.toolId, `${at}[${index}].toolId`),
-      ...(step.effectApplied === undefined ? {} : { effectApplied: Boolean(step.effectApplied) }),
-      ...(step.resultCode === undefined ? {} : { resultCode: text(step.resultCode, `${at}[${index}].resultCode`) }),
-    };
-  });
-}
-
 function flowAdaptation(value: unknown, at: string, projectId: string, flowId: string, adaptationId: string): ExistingFlowAdaptation {
   const item = record(value, at);
   const summary = flowAdaptationSummary(item, at, projectId, flowId);
@@ -464,6 +431,7 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
     ...(bootstrap.baseSettingsRevision === undefined ? {} : { baseSettingsRevision: integer(bootstrap.baseSettingsRevision, `${at}.metadata.bootstrap.baseSettingsRevision`) }),
     ...(bootstrap.currentSettingsRevision === undefined ? {} : { currentSettingsRevision: integer(bootstrap.currentSettingsRevision, `${at}.metadata.bootstrap.currentSettingsRevision`) }),
   } : undefined;
+  const consequences = adaptationConsequences(bootstrap, `${at}.metadata.bootstrap`);
   const rawAccounting = optionalRecord(bootstrap?.accounting, `${at}.metadata.bootstrap.accounting`);
   const accounting = rawAccounting ? {
     ...(typeof rawAccounting.provider === "string" ? { provider: rawAccounting.provider } : {}),
@@ -477,35 +445,7 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
   const auditEvents = phase9?.auditEvents === undefined ? [] : array(phase9.auditEvents, `${at}.metadata.phase9.auditEvents`);
   const createdAudit = auditEvents.map((value, index) => record(value, `${at}.metadata.phase9.auditEvents[${index}]`)).find((event) => event.eventType === "created");
   const auditDetail = optionalRecord(createdAudit?.detail, `${at}.metadata.phase9.created.detail`);
-  const evidenceLoop = auditDetail?.evidenceGuided === true ? {
-    ...(auditDetail.providerCallCount === undefined ? {} : { providerCallCount: integer(auditDetail.providerCallCount, `${at}.metadata.phase9.created.detail.providerCallCount`) }),
-    ...(auditDetail.decisionCount === undefined ? {} : { decisionCount: integer(auditDetail.decisionCount, `${at}.metadata.phase9.created.detail.decisionCount`) }),
-    ...(auditDetail.traceStepCount === undefined ? {} : { traceStepCount: integer(auditDetail.traceStepCount, `${at}.metadata.phase9.created.detail.traceStepCount`) }),
-    iterationCount: integer(auditDetail.iterationCount, `${at}.metadata.phase9.created.detail.iterationCount`),
-    toolCallCount: integer(auditDetail.toolCallCount, `${at}.metadata.phase9.created.detail.toolCallCount`),
-    evidenceBytes: integer(auditDetail.evidenceBytes, `${at}.metadata.phase9.created.detail.evidenceBytes`),
-    toolIds: stringArray(auditDetail.toolIds, `${at}.metadata.phase9.created.detail.toolIds`),
-    ...(auditDetail.steps === undefined ? {} : { steps: evidenceLoopSteps(auditDetail.steps, `${at}.metadata.phase9.created.detail.steps`) }),
-  } : undefined;
-  if (evidenceLoop && (
-    (evidenceLoop.providerCallCount === undefined) !== (evidenceLoop.decisionCount === undefined)
-    // Evidence-guided creation iterates for as many calls as it needs, so the
-    // only call ceiling a record can be held to is Core's runaway backstop.
-    || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.providerCallCount < 1 || evidenceLoop.providerCallCount > LLM_LAB_MAX_CALLS_PER_RUN))
-    || (evidenceLoop.providerCallCount !== undefined && evidenceLoop.decisionCount !== evidenceLoop.providerCallCount)
-    || (evidenceLoop.traceStepCount !== undefined && evidenceLoop.traceStepCount !== evidenceLoop.iterationCount)
-    || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.iterationCount < evidenceLoop.providerCallCount || evidenceLoop.iterationCount > evidenceLoop.providerCallCount + 1))
-    // Core's own ceiling, not a number of our own. A build now explores by
-    // running the node library's nodes, so it makes one tool call per step it
-    // tries rather than a handful before writing a script: 16 was measured
-    // cutting off a live build that had already produced a Flow. The only
-    // ceiling a record can honestly be held to is the one Core enforces on
-    // its own loop, and `toolCallCount > iterationCount` already refuses a
-    // record that claims more calls than decisions.
-    || evidenceLoop.toolCallCount > MAX_EVIDENCE_LOOP_STEPS || evidenceLoop.toolCallCount > evidenceLoop.iterationCount
-    || evidenceLoop.evidenceBytes > 7_340_032 || evidenceLoop.toolIds.length > MAX_EVIDENCE_LOOP_STEPS
-    || (evidenceLoop.steps !== undefined && evidenceLoop.steps.length > MAX_EVIDENCE_LOOP_STEPS)
-  )) invalid(`${at}.metadata.phase9 created evidence audit exceeded its bounded contract`);
+  const evidenceLoop = adaptationEvidenceLoop(auditDetail, `${at}.metadata.phase9.created.detail`);
   const patchKinds = item.patch === undefined ? undefined : array(item.patch, `${at}.patch`).map((value, index) => text(record(value, `${at}.patch[${index}]`).kind, `${at}.patch[${index}].kind`));
   const validationStatuses = item.validationResults === undefined ? [] : array(item.validationResults, `${at}.validationResults`).map((value, index) => enumeration(record(value, `${at}.validationResults[${index}]`).status, ["succeeded", "failed"] as const, `${at}.validationResults[${index}].status`));
   const appliedMutationCount = item.appliedTo === undefined ? undefined : array(item.appliedTo, `${at}.appliedTo`).length;
@@ -521,6 +461,7 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
       validationFailedCount: validationStatuses.filter(status => status === "failed").length,
     }),
     ...(appliedMutationCount === undefined ? {} : { appliedMutationCount }),
+    ...(consequences ? { consequences } : {}),
     ...(bootstrapBinding && Object.keys(bootstrapBinding).length ? { bootstrapBinding } : {}),
     ...(accounting ? { accounting } : {}),
     ...(evidenceLoop ? { evidenceLoop } : {}),
@@ -770,19 +711,6 @@ function runEvent(value: unknown, at: string): ExistingRunEvent { const item = r
 function routeDecision(value: unknown, at: string): ExistingRouteDecision { const item = record(value, at); return { decisionId: text(item.decisionId, `${at}.decisionId`), routerId: text(item.routerId, `${at}.routerId`), ...(typeof item.selectedRuleId === "string" ? { selectedRuleId: item.selectedRuleId } : {}), ...(typeof item.selectedSubflowId === "string" ? { selectedSubflowId: item.selectedSubflowId } : {}), ...(typeof item.fallbackUsed === "boolean" ? { fallbackUsed: item.fallbackUsed } : {}) }; }
 function subflowExecution(value: unknown, at: string): ExistingSubflowExecution { const item = record(value, at); const metadata = optionalRecord(item.metadata, `${at}.metadata`); return { entryId: text(item.entryId, `${at}.entryId`), subflowId: text(item.subflowId, `${at}.subflowId`), status: status(item.status, `${at}.status`), ...(typeof metadata?.graphFlowId === "string" ? { graphFlowId: metadata.graphFlowId } : {}), ...(typeof metadata?.routeDecisionId === "string" ? { routeDecisionId: metadata.routeDecisionId } : {}) }; }
 function status(value: unknown, at: string): RuntimeStatus { return enumeration(value, ["queued", "running", "waiting", "succeeded", "failed", "cancelled"] as const, at); }
-function record(value: unknown, at: string): JsonRecord { if (!value || typeof value !== "object" || Array.isArray(value)) invalid(`${at} must be an object`); return value as JsonRecord; }
-function optionalRecord(value: unknown, at: string): JsonRecord | undefined { return value === undefined || value === null ? undefined : record(value, at); }
-function array(value: unknown, at: string): unknown[] { if (!Array.isArray(value)) invalid(`${at} must be an array`); return value; }
-function stringArray(value: unknown, at: string): string[] { return array(value, at).map((item, index) => text(item, `${at}[${index}]`)); }
-function text(value: unknown, at: string): string { if (typeof value !== "string" || !value) invalid(`${at} must be a non-empty string`); return value; }
-function nullableText(value: unknown, at: string): string | null { if (value === null || value === undefined) return null; return text(value, at); }
-function finite(value: unknown, at: string): number { if (typeof value !== "number" || !Number.isFinite(value)) invalid(`${at} must be finite`); return value; }
-function integer(value: unknown, at: string): number { const result = finite(value, at); if (!Number.isSafeInteger(result) || result < 0) invalid(`${at} must be a non-negative integer`); return result; }
-function positiveInteger(value: number, at: string): number { if (!Number.isSafeInteger(value) || value < 1) invalid(`${at} must be a positive integer`); return value; }
-function boolean(value: unknown, at: string): boolean { if (typeof value !== "boolean") invalid(`${at} must be a boolean`); return value; }
-function enumeration<const T extends readonly string[]>(value: unknown, allowed: T, at: string): T[number] { if (typeof value !== "string" || !allowed.includes(value)) invalid(`${at} is invalid`); return value as T[number]; }
-function nullableUrl(value: unknown, at: string): string | null { if (value === null || value === undefined) return null; const result = text(value, at); let url: URL; try { url = new URL(result); } catch { invalid(`${at} must be a URL`); } if (url!.protocol !== "ws:" && url!.protocol !== "wss:") invalid(`${at} must use ws or wss`); return url!.toString(); }
-function invalid(message: string): never { throw new RunnerFailure("environment.missing", `Malformed FluxIQ API response: ${message}`); }
 function safeId(value: string): string { return /^[A-Za-z0-9._:+-]+$/.test(value) ? value : "[invalid-id]"; }
 function hashJson(value: unknown): string { return createHash("sha256").update(stableJson(value)).digest("hex"); }
 function stableJson(value: unknown): string { if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`; if (value && typeof value === "object") return `{${Object.entries(value as JsonRecord).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`; return JSON.stringify(value); }
