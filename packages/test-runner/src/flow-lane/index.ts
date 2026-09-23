@@ -11,6 +11,7 @@ export * from "./lab-project-domain.js";
 export * from "./lane-observation.js";
 export * from "./persisted-attempt.js";
 export * from "./persisted-flow-run.js";
+export * from "./terminal-run-wait.js";
 export * from "./recording-discards.js";
 export * from "./recovery-attribution.js";
 export * from "./recording-flow-proposal.js";

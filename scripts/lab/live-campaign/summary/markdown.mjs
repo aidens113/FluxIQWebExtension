@@ -21,6 +21,17 @@ export function renderSummaryMarkdown(summary) {
   const spent = (value, row) => value ?? (row.spendSource === "not recorded" ? "not recorded" : null);
   // `--replays`: whether the repair was applied (and the declared repair's verdict, where the lane judged one), then the replays with no model that met the goal.
   const repairLaneOf = ({ repairLane: lane }) => (lane ? `${lane.application ?? "unreadable"}${lane.declaredRepair ? ` (${lane.declaredRepair})` : ""}; ${lane.replaysPassed} of ${lane.replaysRequested ?? "?"} replay(s) passed, ${lane.replayProviderCalls ?? "no"} call(s)` : null);
+  // What the build said it would lastingly do and who allowed it, so a run
+  // that proceeded on the person's own instruction and one that stopped for a
+  // permission nobody answered read differently rather than both as "failed".
+  const consequencesOf = ({ consequences: c }) => {
+    if (!c) return null;
+    if (c.answeredBy === "not recorded") return "not recorded";
+    const asked = c.permissionRequest ? `asked for ${c.permissionRequest.missing.join(", ")} and nobody answered` : null;
+    const said = c.declared.length > 0 ? c.declared.join(", ") : `nothing lasting (${c.declaredNothing ?? 0} of ${c.actions ?? 0} actions)`;
+    const cross = c.crossCheckVerdict === "undeclared" ? `; instruction also asks for ${c.crossCheckUndeclared.join(", ")}, declared by nothing` : "";
+    return `${said}; allowed by ${c.answeredBy}${asked ? `; ${asked}` : ""}${cross}`;
+  };
   const nodesOf = ({ createdFlowShape: shape }) => (shape ? `${shape.nodeCount ?? "?"} nodes${Object.keys(shape.nodeTypes).length > 0 ? `: ${Object.entries(shape.nodeTypes).map(([name, n]) => `${name} ×${n}`).join(", ")}` : ""}` : null);
   const creations = summary.tasks.filter((row) => row.kind !== "repair");
   const repairs = summary.tasks.filter((row) => row.kind === "repair");
@@ -30,10 +41,10 @@ export function renderSummaryMarkdown(summary) {
     `**${t.passed} of ${t.tasks} runs passed** (${t.failed} failed, ${t.noResult} produced no result); ${t.judgementsPassed} judgement(s) passed; **${t.succeeded} of ${t.tasks} tasks succeeded** (a creation task on its run's verdict, a repair task on its judgement; a run whose scenario declares the failure it must report passes by reporting exactly that failure). Provider calls ${t.providerCalls}; reported tokens ${t.reportedTokens}; reported cost $${t.reportedCostUsd.toFixed(6)} (reservations excluded).`,
   ];
   if (creations.length > 0 || repairs.length === 0) {
-    lines.push("", "| Task | Scenario / variant | Kind | Run | Verdict | Flow created | Created Flow nodes | Executed actions | Judged by | Judgement | Repair and replays | Calls | Tokens (reported) | Cost USD (reported) | Failure | Issue codes | Attempts |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+    lines.push("", "| Task | Scenario / variant | Kind | Run | Verdict | Build | Flow created | Created Flow nodes | Declared consequences | Executed actions | Judged by | Judgement | Repair and replays | Calls | Tokens (reported) | Cost USD (reported) | Failure | Issue codes | Attempts |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
     for (const row of creations) {
       const judgedBy = row.judgeBy === "expected-dataset" ? `dataset ${row.expectedDatasetId}` : "playback goal";
-      lines.push(tableRow([row.taskId, row.variantId ? `${row.scenarioId} / ${row.variantId}` : row.scenarioId, row.kind, row.runId, row.verdict, yesNo(row.flowCreated), nodesOf(row), row.actionTypes.join(", "), judgedBy, yesNo(row.judgement.passed), repairLaneOf(row), row.providerCalls, spent(row.reportedTokens, row), spent(row.reportedCostUsd, row), failureOf(row), row.issueCodes.join(", "), attemptsOf(row)]));
+      lines.push(tableRow([row.taskId, row.variantId ? `${row.scenarioId} / ${row.variantId}` : row.scenarioId, row.kind, row.runId, row.verdict, row.buildOutcome, yesNo(row.flowCreated), nodesOf(row), consequencesOf(row), row.actionTypes.join(", "), judgedBy, yesNo(row.judgement.passed), repairLaneOf(row), row.providerCalls, spent(row.reportedTokens, row), spent(row.reportedCostUsd, row), failureOf(row), row.issueCodes.join(", "), attemptsOf(row)]));
     }
   }
   if (repairs.length > 0) {

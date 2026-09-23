@@ -50,3 +50,23 @@ test("--replays after -- reaches a creation task's run, which applies and replay
   assert.equal(creation[creation.indexOf("--llm-task") + 1], "create-flow");
   assert.equal(creation.includes("--flow"), false, "a created Flow's repair lane needs no recorded Flow lane");
 });
+
+test("a task whose instruction asks for an act is granted exactly the classes it names, and an operator's own permit replaces them", () => {
+  // Nobody is watching a campaign, so a build that stops to ask a person waits
+  // for an answer that never comes. Core already permits whatever it reads the
+  // instruction as asking for; this is the corpus's second opinion for the
+  // case where that reading and the model's declaration disagree.
+  const buyKettle = { id: "buy-kettle", scenarioId: "everything-store", kind: "form", instruction: "Buy one kettle and pay with my Visa.", judgeBy: "playback-goal", permits: ["move_money", "create_new"] };
+  const consequential = labRunArguments(buyKettle, parseCampaignArgs([]));
+  assert.equal(consequential[consequential.indexOf("--llm-permit") + 1], "move_money,create_new");
+
+  // A task that names none permits none: a task nobody has judged never
+  // authorizes an act on its own.
+  assert.equal(labRunArguments(CATALOG[0], parseCampaignArgs([])).includes("--llm-permit"), false);
+
+  // The Lab refuses an option given twice, and somebody running one task by
+  // hand is the person the question is for.
+  const overridden = labRunArguments(buyKettle, parseCampaignArgs(["--", "--llm-permit", "send_or_publish"]));
+  assert.equal(overridden.filter((arg) => arg === "--llm-permit").length, 1);
+  assert.equal(overridden[overridden.indexOf("--llm-permit") + 1], "send_or_publish");
+});

@@ -55,6 +55,37 @@ const CREATE_LIMITS = Object.freeze([
 ]);
 
 /**
+ * What a task's run is permitted to cause, as `--llm-permit`.
+ *
+ * **Who answers a permission question in a campaign, and how.** Nobody is
+ * watching a campaign, so a build that stops to ask a person waits for an
+ * answer that never comes. Two things keep that from being a harness failure.
+ *
+ * Core already permits any class it reads the person's own instruction as
+ * asking for, whatever the grant holds -- the instruction is the authority --
+ * so the ordinary consequential task needs nothing here at all. This is the
+ * corpus's second opinion for the case where the two readings disagree: a task
+ * whose instruction plainly asks for an act names the classes on itself
+ * (`LiveInstructionTask.permits`), and its run is granted exactly those.
+ *
+ * A task that names none permits none. Its build then either proceeds on the
+ * instruction's own authority, or stops and asks -- and a build that asks and
+ * is not answered ends as `permission.required`, which is a result about the
+ * product. What it must never be is a campaign-wide grant: permitting
+ * `move_money` for every task would hide exactly the over-declaration this
+ * measurement exists to find.
+ *
+ * An operator's own `--llm-permit` after `--` replaces this for every task in
+ * the selection, because the Lab refuses an option given twice and because
+ * somebody running one task by hand is the person the question is for.
+ */
+function permitArguments(task, options) {
+  const permits = Array.isArray(task.permits) ? task.permits.filter((entry) => typeof entry === "string" && entry.length > 0) : [];
+  if (permits.length === 0 || options.labArgs.includes("--llm-permit")) return [];
+  return ["--llm-permit", permits.join(",")];
+}
+
+/**
  * The Lab arguments for one task, after `pnpm lab`. A creation task builds a
  * Flow from its instruction; a repair task runs the Flow recorded on the
  * unarmed page against its variant, with the model allowed to diagnose and
@@ -65,7 +96,7 @@ export function labRunArguments(task, options) {
   const identity = ["--live-llm", "--llm-profile", options.profile ?? (repair ? DEFAULT_PROFILES.repair : DEFAULT_PROFILES.create), "--llm-provider", options.provider, "--llm-model", options.model];
   if (!repair) {
     const createLimits = CREATE_LIMITS.filter(([name]) => !options.labArgs.includes(name)).flat();
-    return ["run", task.scenarioId, ...(task.variantId ? ["--variant", task.variantId] : []), ...identity, "--llm-task", "create-flow", "--instruction-task", task.id, ...createLimits, ...options.labArgs];
+    return ["run", task.scenarioId, ...(task.variantId ? ["--variant", task.variantId] : []), ...identity, "--llm-task", "create-flow", "--instruction-task", task.id, ...createLimits, ...permitArguments(task, options), ...options.labArgs];
   }
   const limits = REPAIR_LIMITS.filter(([name]) => !options.labArgs.includes(name)).flat();
   return [

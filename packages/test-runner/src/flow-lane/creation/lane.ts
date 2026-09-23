@@ -186,18 +186,27 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
 }
 
 /**
- * The build stopped to ask a person, which is an answer and not a transport
- * failure: the run reports `permission.required` and the classes a later
- * grant must add, and records no Flow, because Core built none. Codes only --
- * the control's name stays on the build record, where Core already bounded it.
+ * The build asked a person, which is an answer and not a transport failure:
+ * the run reports `permission.required` and the classes a later grant must
+ * add, and records no Flow, because none can be applied until somebody
+ * answers. Codes only -- the control's name stays on the build record, where
+ * Core already bounded it.
+ *
+ * `adaptationId` is present when the build finished and left a proposal that
+ * carries the unanswered question, and absent when the build ended on the
+ * request itself. Both are the same ending for the run, and the difference is
+ * worth keeping: the first has a Flow waiting behind an answer.
  */
 function permissionRequired(build: CreatedFlowBuild, request: CreatedFlowPermissionRequest): RunnerFailure {
-  return new RunnerFailure("runtime.behavior", `FluxIQ asked for permission before building a Flow from the task's instruction (permission.required: ${request.missing.join(", ")})`, {
+  const proposal = build.adaptationId === null ? "before building" : "after building";
+  return new RunnerFailure("runtime.behavior", `FluxIQ asked for permission ${proposal} a Flow from the task's instruction (permission.required: ${request.missing.join(", ")})`, {
     details: {
       outcome: "permission.required",
       missing: [...request.missing],
       consequences: [...request.consequences],
       action: { kind: request.actionKind, verb: request.verb },
+      instructed: request.instructed.map((entry) => entry.consequence),
+      ...(build.adaptationId === null ? {} : { adaptationId: build.adaptationId }),
       failure: build.failure,
       providerCalls: build.providerCalls,
       providerInvocation: build.providerInvocation,

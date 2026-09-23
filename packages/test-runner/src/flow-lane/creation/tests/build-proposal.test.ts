@@ -4,6 +4,7 @@ import { RunnerFailure } from "../../../failure.js";
 import { buildCreatedFlowProposal } from "../build-proposal.js";
 import { ADAPTATION_ID, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
 import { permissionRequiredDiagnostic } from "./permission-required-diagnostic.js";
+import { parkedProposalConsequences } from "./parked-proposal.js";
 
 /**
  * The build is the one paid step of a created-Flow run, and whatever Core
@@ -30,7 +31,7 @@ async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?:
 
 test("the build saves the instruction, then authorizes, selects the context and explores, as the web panel does", async () => {
   const { core, authorized, record } = await build();
-  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation", "get-flow-adaptation"]);
+  assert.deepEqual(core.calls, ["save-flow-generation-instruction", "authorize", "select-context", "generate", "get-adaptation"]);
   assert.deepEqual(core.instructionRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION }]);
   assert.deepEqual(authorized, [FLOW_ID]);
   assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true }]);
@@ -38,6 +39,7 @@ test("the build saves the instruction, then authorizes, selects the context and 
     outcome: "proposed",
     adaptationId: ADAPTATION_ID,
     providerCalls: 4,
+    loopProviderCalls: 4,
     providerInvocation: "attempted",
     accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 12_000, outputTokens: 2_000, totalTokens: 14_000, estimatedCostUsd: 0.01 },
     // A tool id without an identifier's shape is not kept.
@@ -46,6 +48,8 @@ test("the build saves the instruction, then authorizes, selects the context and 
     recoveredAfterTimeout: false,
     durationMs: 0,
     instructedConsequences: [],
+    declaredConsequences: null,
+    consequenceCrossCheck: null,
     permissionRequest: null,
   });
   assert.equal(JSON.stringify(record).includes("Scrape"), false, "the record holds no instruction text");
@@ -98,6 +102,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     outcome: "failed",
     adaptationId: null,
     providerCalls: 5,
+    loopProviderCalls: 5,
     providerInvocation: "attempted",
     accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },
     evidenceLoop: { decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, toolIds: ["web.recovery.inspect"], steps: [{ toolId: "web.recovery.inspect", effectApplied: false, resultCode: "web.evidence.captured" }] },
@@ -105,6 +110,8 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
     recoveredAfterTimeout: false,
     durationMs: 0,
     instructedConsequences: null,
+    declaredConsequences: null,
+    consequenceCrossCheck: null,
     permissionRequest: null,
   });
   // A refusal before any request is a build that made no call.
@@ -219,4 +226,50 @@ test("a proposal that cannot be shown to be what was paid for is a failed build,
     assert.equal(record.failure?.code, code);
     assert.equal(record.providerInvocation, "attempted", `${code}: a proposal exists, so a provider answered`);
   }
+});
+
+test("a proposal that still carries an unanswered question is a permission request, not a build to be reviewed", async () => {
+  // Since the gate learned to park, a build can finish, leave a proposal and
+  // carry the question on it. Core then refuses to approve or apply it, and
+  // that refusal used to be the first anyone heard of it: an HTTP 400 on
+  // `review-flow-adaptation`, which a campaign recorded as
+  // `environment.missing` (`run-mudt5jr5-92321d8c`). The proposal says so
+  // itself, before anything is asked of the review surface.
+  const { record } = await build({ consequences: await parkedProposalConsequences() });
+
+  assert.equal(record.outcome, "permission_required");
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null });
+  assert.equal(record.permissionRequest?.controlName, "Schedule post");
+  assert.deepEqual(record.permissionRequest?.missing, ["send_or_publish"]);
+  // The proposal is still named: a Flow was built and waits on an answer.
+  assert.equal(record.adaptationId, ADAPTATION_ID);
+});
+
+test("a build's declarations and Core's cross-check are read from where Core puts them, so a Flow's steps can be read rather than deduced", async () => {
+  // They live under `metadata.bootstrap`. The top-level
+  // `adaptation.instructedConsequences` this used to read is never populated
+  // for a bootstrap proposal, so every build measured before 2026-09-23
+  // reported an empty declaration while the stored proposal held a full one.
+  const { record } = await build({ consequences: await parkedProposalConsequences() });
+
+  assert.deepEqual(record.declaredConsequences?.map((entry) => [entry.actionKind, entry.verb, entry.controlName, entry.consequences, entry.permitted]), [
+    ["exploration_step", "enter", "Post text", [], true],
+    ["flow_step", "press", "Schedule post", ["send_or_publish"], false],
+  ]);
+  assert.equal(record.consequenceCrossCheck?.verdict, "beyond_instruction");
+  assert.deepEqual(record.consequenceCrossCheck?.declared, ["send_or_publish"]);
+  assert.deepEqual([record.consequenceCrossCheck?.actions, record.consequenceCrossCheck?.declaredNothing], [2, 1]);
+});
+
+test("a build's reported calls are every call it made, with the loop's own beside them", async () => {
+  // Core spends provider calls outside the evidence loop -- reading what the
+  // person's instruction already asks for -- and publishes them separately, so
+  // a reader taking the loop count alone under-reports what the grant paid for.
+  const { record } = await build({
+    evidenceLoop: { providerCallCount: 17, decisionCount: 17, additionalProviderCallCount: 1, totalProviderCallCount: 18, traceStepCount: 18, iterationCount: 18, toolCallCount: 9, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"] },
+  });
+
+  assert.equal(record.providerCalls, 18);
+  assert.equal(record.loopProviderCalls, 17);
+  assert.equal(record.evidenceLoop?.decisionCount, 17);
 });
