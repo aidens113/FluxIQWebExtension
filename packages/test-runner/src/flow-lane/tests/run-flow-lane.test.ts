@@ -276,8 +276,8 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
     run: {
       runId: "run.one", status: "succeeded", failure: null, harnessActivations: 0, extracted: [], extractedNonStringValues: 2, extractionDurationsByNode: new Map(),
       actions: [
-        { actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), failure: null, targetResolution },
-        { actionType: "web.dom.click", status: "succeeded", startedAt: new Date(0).toISOString(), failure: null },
+        { actionType: "web.dom.type", nodeId: "node.type", attemptIndex: 0, status: "succeeded", startedAt: new Date(0).toISOString(), failure: null, targetResolution, hostTargetResolution: { strategy: "selector", candidateCount: 1 } },
+        { actionType: "web.dom.click", nodeId: "node.click", attemptIndex: 1, status: "succeeded", startedAt: new Date(0).toISOString(), failure: null },
       ],
     },
     observation: {},
@@ -290,10 +290,16 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
     },
   } as unknown as FlowLaneEvidence;
   const snapshot = flowLaneSnapshot(evidence);
+  // Both resolutions travel, named apart: Core's pre-dispatch choice, and the
+  // strategy the browser actually found the element by.
   assert.deepEqual(snapshot.actions, [
-    { actionType: "web.dom.type", status: "succeeded", targetResolution },
-    { actionType: "web.dom.click", status: "succeeded" },
+    { actionType: "web.dom.type", nodeId: "node.type", attemptIndex: 0, status: "succeeded", startedAt: new Date(0).toISOString(), targetResolution, hostTargetResolution: { strategy: "selector", candidateCount: 1 } },
+    { actionType: "web.dom.click", nodeId: "node.click", attemptIndex: 1, status: "succeeded", startedAt: new Date(0).toISOString() },
   ]);
+  // Nothing had to recover, which is what a snapshot of two first-attempt
+  // successes must say.
+  assert.deepEqual(snapshot.recovery.resolvedBy, []);
+  assert.equal(snapshot.recovery.maxAttemptsPerNode, 1);
   assert.equal(snapshot.candidateCount, 2);
   assert.equal(snapshot.recording.entryCount, 2);
   // X0.7: the run's count of extracted values that are not strings is published with the extraction block, as a count only.
@@ -401,7 +407,9 @@ test("each action's evidence packet sizes reach the flow-lane snapshot, and the 
   const evidence: FlowLaneEvidence[] = [];
   await runLane(fake, evidence);
   const snapshot = flowLaneSnapshot(evidence[0]!);
-  assert.deepEqual(snapshot.actions, [
+  // Without the members that join an attempt to its node, which this test is
+  // not about and which carry the fake's own identifiers and clock.
+  assert.deepEqual(snapshot.actions.map(({ nodeId: _node, attemptIndex: _index, startedAt: _at, durationMs: _ms, ...rest }) => rest), [
     { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: Buffer.byteLength(JSON.stringify(summary), "utf8"), truncated: true }] },
   ]);
   const serialised = JSON.stringify(snapshot);
@@ -536,7 +544,7 @@ test("each action's transition comparison status reaches the flow-lane snapshot"
   const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, runStatus: "failed", attempt: { status: "failed", failure: authRequired, comparisonStatus: "blocked" } });
   const evidence: FlowLaneEvidence[] = [];
   await runLane(fake, evidence, { expected: { failure: { category: "auth_required" } } });
-  assert.deepEqual(flowLaneSnapshot(evidence[0]!).actions, [{ actionType: "web.dom.click", status: "failed", failure: authRequired, comparisonStatus: "blocked" }]);
+  assert.deepEqual(flowLaneSnapshot(evidence[0]!).actions.map(({ nodeId: _node, attemptIndex: _index, startedAt: _at, durationMs: _ms, ...rest }) => rest), [{ actionType: "web.dom.click", status: "failed", failure: authRequired, comparisonStatus: "blocked" }]);
 });
 
 /**

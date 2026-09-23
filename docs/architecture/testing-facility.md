@@ -1160,12 +1160,73 @@ never page content (`flowLaneSnapshot`):
   is in it. The `unjudged` list is the point of the block: a reader who sees a
   green extraction must be able to see what was not compared without opening
   the code;
-- per attempt, in order: its action type and status; its failure record; Core's
-  transition comparison status when Core reported one, kept only when it is
-  shaped like one of Core's names; Core's target resolution, narrowed to its
-  status and numbers; and the size in bytes and truncation flag of each
-  sanitized evidence packet Core captured before and after it. The packets
-  themselves never travel.
+- per attempt, in order: the Flow node it ran and its position in Core's
+  attempt order; its action type, status, start time and duration; the ladder
+  rung that asked for it, when it is not the node's first attempt; what the run
+  did about the state the node expected before it ran; its failure record;
+  Core's transition comparison status when Core reported one, kept only when it
+  is shaped like one of Core's names; **both** target resolutions, each narrowed
+  to closed words and numbers; and the size in bytes and truncation flag of
+  each sanitized evidence packet Core captured before and after it. The packets
+  themselves never travel;
+- a `recovery` block: which recovery answered for each node, which rungs ran,
+  and the busiest node's attempt count (`recoveryAttributionSnapshot`).
+
+The node id is the newest of those and the one the rest depend on. An action
+carried none until the recovery ladder existed, deliberately, so that an
+identifier could never reach a judgement or a bundle. What changed is that a
+node is now attempted more than once: without the id, a node the ladder retried
+twice and a Flow that authored the same action twice produce the same flat list
+of attempts, and no rung can be attributed to anything. It is admitted only when
+it has the shape of a Core node identifier, so a value carrying page text is
+read as absent.
+
+The two target resolutions answer different questions and are named apart.
+`targetResolution` is Core's own, its pre-dispatch choice of candidate.
+`hostTargetResolution` is the browser's `WebAutomationTargetResolution`, which
+names the `strategy` it actually found the element by; it reaches Core inside
+the dispatched result payload, and Core projects it onto the attempt
+(`runtime/service/summaries/host-target-resolution.ts`). That strategy is the
+only evidence of the recovery that has no ladder rung, because the browser
+re-resolves a renamed control before Core is told anything failed -- so a
+`fingerprint` or `scored-candidate` strategy on a **succeeded** attempt is the
+record that a rename was survived.
+
+### The adversarial lane
+
+`pnpm lab:adversarial` runs every corpus row that declares `expected.recovery`
+and prints one line per condition: which recovery absorbed it, how many attempts
+it cost, and how many provider calls. It writes `measurement.json` and
+`measurement.txt` under `test-runs/.adversarial/<timestamp>/`, and exits
+non-zero unless every condition was absorbed by what it declared, within the
+attempts it declared, for no provider calls.
+
+It exists because the recovery ladder landed in Core unit-tested and proved to
+run live, and had never been shown to absorb anything: no variant in the corpus
+was absorbable by a deterministic ladder, because the corpus was written to
+prove *model* repair. Each condition arms a fault a real site produces -- a
+timed interstitial over a control, content that arrives after the action that
+needed it, a control renamed between authoring and replay, a listing whose rows
+and identifiers differ per visit, a session that expires partway through -- and
+declares the recovery that must answer it.
+
+Two declarations govern a condition, and they answer different questions.
+`expected.providerCalls` says the run must spend nothing, and is the guard for
+when the campaign runs the row **with** a grant. `expected.recovery` says which
+recovery must absorb it, in the closed vocabulary the run itself publishes:
+Core's four ladder rungs, `host_target_resolution` for the browser's own
+re-resolution, or `none` for a condition nothing absorbs. Spend alone cannot
+tell a rung that absorbed the fault from a fixture whose arming never reached
+the page -- both spend nothing and both pass -- which is why the rung is
+declared as well as the cost. The lane itself runs each condition with **no**
+grant at all, so what finished the run can only have been the deterministic
+runtime.
+
+A condition whose declaration says `none` is not a gap. `web.action.rejected`
+(a covered control) and `web.auth.required` (an expired session) are both
+non-retryable in the domain's failure table, so the retry rung is never offered
+those nodes, and `clear_interference` has no node to run because nothing writes
+`metadata.clearsInterference` onto a recorded Flow.
 
 Every isolated or persistent-isolated run also writes `evaluation.json`, its own
 `RunEvaluation`: the same judgement [the bench](#the-bench) records for a corpus

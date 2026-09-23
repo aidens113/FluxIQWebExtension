@@ -48,6 +48,7 @@
     "fluxiq:web": "node scripts/run-fluxiq-web.mjs",
     "lab": "node scripts/lab/run-lab.mjs",
     "lab:campaign": "node scripts/lab/live-campaign.mjs",
+    "lab:adversarial": "node scripts/lab/adversarial-lane.mjs",
     "lab:test": "node --test \"scripts/lab/**/tests/*.test.mjs\"",
     "lab:interactive": "node scripts/lab/run-lab.mjs interactive",
     "lab:pair": "node scripts/lab/pair.mjs",

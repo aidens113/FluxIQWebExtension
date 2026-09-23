@@ -3,6 +3,7 @@ import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord,
 import { AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS } from "fluxiq/automation-studio";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
+import { attemptNodeId, hostTargetResolutionOf, readinessOf, retryOf, type PersistedFlowActionReadiness, type PersistedFlowActionRetry, type PersistedHostTargetResolution } from "./persisted-attempt.js";
 import { FLUXIQ_HTTP_MAX_TIMEOUT_MS, isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
 import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
@@ -112,9 +113,52 @@ export type PersistedFlowRunControl = HarnessRecoveryControl & {
 /** One action attempt, carrying Core's own structured failure rather than a message. */
 export type PersistedFlowAction = {
   actionType: string;
+  /**
+   * The Flow node this attempt ran, as Core names it, or `null` when Core
+   * named none.
+   *
+   * It was deliberately left out until the recovery ladder existed: an action
+   * carried no node id so that one could never reach a judgement, a failure's
+   * details or the bundle. What changed is that a node is now attempted more
+   * than once. Without the id, a node the ladder retried twice and a Flow that
+   * authored the same action twice produce exactly the same list of actions,
+   * so no rung can be attributed to anything and the whole measurement is
+   * unreadable. The id is a Core-generated node identifier and is admitted
+   * only when it has that shape (`NODE_ID`), so a value carrying page text is
+   * treated as absent rather than published.
+   */
+  nodeId: string | null;
+  /** This attempt's position in Core's attempt order for the run, from 0. */
+  attemptIndex: number;
   status: RunActionTiming["status"];
   startedAt: string;
   durationMs?: number;
+  /**
+   * Which attempt of this node this is and which ladder rung asked for it,
+   * from Core's `metadata.retry`. Present from the second attempt onwards, so
+   * its absence says the Flow, not the ladder, put this node on the page.
+   */
+  retry?: PersistedFlowActionRetry;
+  /**
+   * What the run did about the state the node expected to find before it ran
+   * (Core's `metadata.readiness`). `satisfied: false` is a mark, not a
+   * failure: the recording is evidence the action was possible, so the node is
+   * attempted at the deadline anyway.
+   */
+  readiness?: PersistedFlowActionReadiness;
+  /**
+   * How the *browser* found the element once the command arrived, from Core's
+   * `metadata.hostTargetResolution`. This is the other target resolution, and
+   * the two answer different questions: `targetResolution` below is Core's
+   * pre-dispatch choice of candidate, and this is what the host actually did.
+   *
+   * It is the only evidence of the recovery that has no ladder rung. The
+   * executor deliberately implements no re-resolve-the-target rung, because
+   * the host has already re-resolved before Core is told anything failed, so a
+   * `strategy` of `fingerprint` or `scored-candidate` on a **succeeded**
+   * attempt is the record that a renamed control was recovered from.
+   */
+  hostTargetResolution?: PersistedHostTargetResolution;
   failure: AutomationStudioFailureRecord | null;
   /**
    * Rows the attempt captured, from Core's `metadata.recordCount` (K5). Core
@@ -185,6 +229,7 @@ const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
  * so no endpoint this lane reads can return it.
  */
 export type PersistedTargetResolution = PersistedFieldsOf<AutomationNodeTargetResolution>;
+
 
 /** The fields that may travel. A field Core adds to its union stays behind until it is named here. */
 type PersistedTargetResolutionField = "status" | "candidateCount" | "minimumConfidence" | "confidence" | "normalizedScore";
@@ -566,7 +611,7 @@ async function readRunDetail(
     .map((value, index) => asRecord(value, `runDetail.actionAttempts[${index}]`))
     .sort((left, right) => numberOf(left.order) - numberOf(right.order));
   const interventions = Array.isArray(detail.interventions) ? detail.interventions : [];
-  const actions = attempts.map((attempt) => flowAction(attempt, actionTypes));
+  const actions = attempts.map((attempt, index) => flowAction(attempt, actionTypes, index));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
   const attemptNodeIds = attempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
   return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts), resultVerification: resultVerificationOf(detail), runDetail: detail };
@@ -595,16 +640,21 @@ function resultVerificationOf(detail: Record<string, unknown>): PersistedResultV
  * through the Flow's own nodes can. The definition id remains the fallback,
  * which is what a node outside the recorded set reports.
  */
-function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<string, string>): PersistedFlowAction {
+function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<string, string>, attemptIndex: number): PersistedFlowAction {
   const startedAt = numberOf(attempt.startedAt);
   const finishedAt = typeof attempt.finishedAt === "number" && Number.isFinite(attempt.finishedAt) ? attempt.finishedAt : undefined;
   const nodeId = typeof attempt.nodeId === "string" ? attempt.nodeId : "";
   const recordCount = optionalRecord(attempt.metadata)?.recordCount;
   const targetResolution = targetResolutionOf(attempt);
+  const hostTargetResolution = hostTargetResolutionOf(attempt);
+  const retry = retryOf(attempt);
+  const readiness = readinessOf(attempt);
   const evidencePackets = evidencePacketsOf(attempt);
   const comparisonStatus = comparisonStatusOf(attempt);
   return {
     actionType: actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
+    nodeId: attemptNodeId(nodeId),
+    attemptIndex,
     status: runActionStatus(attempt.status),
     startedAt: new Date(startedAt).toISOString(),
     ...(finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(finishedAt - startedAt)) }),
@@ -612,7 +662,10 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
     ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
     ...(comparisonStatus ? { comparisonStatus } : {}),
+    ...(retry ? { retry } : {}),
+    ...(readiness ? { readiness } : {}),
     ...(targetResolution ? { targetResolution } : {}),
+    ...(hostTargetResolution ? { hostTargetResolution } : {}),
     ...(evidencePackets.length ? { evidencePackets } : {}),
   };
 }
@@ -685,11 +738,12 @@ function isFiniteNumber(value: unknown): value is number {
 
 /**
  * Each node's attempts summed, from Core's raw attempts rather than from the
- * lane's actions: an action carries no node id, so that a node id cannot reach
- * a judgement, a failure's details, or the bundle. A `Map` keyed by node id is
- * how the id stays available to pair a dataset with its step and still leaves
- * nothing in what the lane serializes. An attempt with no finish time
- * contributes nothing, as it does to every other latency the lane reports.
+ * lane's actions. It predates the action's own `nodeId` and is kept because it
+ * answers a different question: this is the node's *total* time across every
+ * attempt the ladder made, which is what a dataset's step is paired with,
+ * while the action carries one attempt's own duration. An attempt with no
+ * finish time contributes nothing, as it does to every other latency the lane
+ * reports.
  */
 function attemptDurationsByNode(attempts: readonly Record<string, unknown>[]): Map<string, number> {
   const durations = new Map<string, number>();

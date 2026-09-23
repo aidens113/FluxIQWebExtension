@@ -6,7 +6,7 @@ import { assertFlowActions, assertFlowExtraction, assertFlowFailure, judgeFlowEx
 import type { PersistedFlowAction } from "../persisted-flow-run.js";
 import type { FlowRunDataset } from "../run-datasets.js";
 
-const action = (actionType: string, status: PersistedFlowAction["status"]): PersistedFlowAction => ({ actionType, status, startedAt: new Date(0).toISOString(), durationMs: 1, failure: null });
+const action = (actionType: string, status: PersistedFlowAction["status"]): PersistedFlowAction => ({ actionType, nodeId: "node-1", attemptIndex: 0, status, startedAt: new Date(0).toISOString(), durationMs: 1, failure: null });
 
 /** Approved Flows' node output ids, as `flowActionTypes` maps them: one that can extract, and one that cannot. */
 const extractingFlow = new Map([["node.open", "web.dom.click"], ["node.extract", "web.dom.extract_list"]]);

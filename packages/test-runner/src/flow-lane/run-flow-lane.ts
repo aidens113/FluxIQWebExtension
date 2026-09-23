@@ -10,6 +10,7 @@ import { flowLaneObservation, type RunLaneObservation } from "./lane-observation
 import { extractionMismatchReport, extractionStepMismatches, type ExtractionDisclosureRule, type ExtractionMismatchReport } from "../run-expectations/index.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
+import { absorbedEveryFailure, assertRecoveryAsDeclared, recoveryAttribution, recoveryAttributionSnapshot, type RunRecoveryAttribution } from "./recovery-attribution.js";
 import { assertFlowRepair, judgeFlowRepair, type FlowRepairExpectation, type FlowRepairJudgement } from "./repair/index.js";
 import { resetScenarioLab } from "./reset-scenario-lab.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
@@ -115,6 +116,8 @@ export type FlowLaneOutcome = {
   run: PersistedFlowRunOutcome;
   observation: RunLaneObservation;
   extraction: FlowExtractionJudgement;
+  /** Which recovery answered for each node, and at what cost. */
+  recovery: RunRecoveryAttribution;
   startCandidateIndex: number | null;
   repair?: FlowRepairJudgement;
 };
@@ -210,6 +213,9 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // evaluation. Consulting the oracle first costs a failing run the oracle's
   // wait and buys it a real `oracleVerdict` instead of a null.
   const oracleHeld = await input.checkFinalState();
+  // Every failure this run met was recovered from, so the failure record Core
+  // kept describes an attempt rather than the run.
+  const absorbed = absorbedEveryFailure(run.actions);
   const observation = flowLaneObservation({
     flowCreated: true,
     oracleVerdict: oracleHeld ? "passed" : "failed",
@@ -225,6 +231,10 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   const repair = input.repairExpectation && llmExecution && llmExecution.purpose !== "diagnosis_only"
     ? await judgeFlowRepair(input.control, { projectId: input.projectId, flowId: approved.flowId, run, expectation: input.repairExpectation }, bounds)
     : undefined;
+  // Joined before the evidence is written, like every other measurement here:
+  // a run whose declaration fails is exactly the run whose rung attribution has
+  // to be readable.
+  const recovery = recoveryAttribution(run.actions);
   await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex, ...(repair ? { repair } : {}) });
   // Before the expectations, which would otherwise blame whichever later action
   // they name ("did not produce a web.dom.click action", W28 run 2). The start
@@ -232,11 +242,15 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // actions before it, and the start is the cause.
   assertFlowStartedAtFirstAction(startCandidateIndex, proposal.candidateIds.length);
   assertFlowDidNotStopEarly(run);
-  assertFlowFailure(expected.failure, run.failure);
+  assertFlowFailure(expected.failure, absorbed ? null : run.failure);
   assertFlowActions(expected.actions, run.actions);
   assertFlowExtraction(extraction);
+  // After the actions, which name the node an unabsorbed fault stopped at, and
+  // before the repair, which is the model's answer to a fault the runtime did
+  // not absorb.
+  assertRecoveryAsDeclared(expected.recovery, recovery);
   assertFlowRepair(repair);
-  return { recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex, ...(repair ? { repair } : {}) };
+  return { recording, proposal, flowId: approved.flowId, run, observation, extraction, recovery, startCandidateIndex, ...(repair ? { repair } : {}) };
 }
 
 /**
@@ -414,6 +428,13 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
     startCandidateIndex: evidence.startCandidateIndex ?? null,
     extraction: flowExtractionSnapshot(evidence.extraction),
+    // Which recovery answered for each node, and what it cost in attempts,
+    // derived here from the run's own attempts rather than carried in: there
+    // is one source of truth for it, and it is the attempt list every reader
+    // of this file already has. Read beside `snapshots/live-llm.json`'s
+    // provider count, it is the whole adversarial measurement: the rung that
+    // absorbed the condition, and the number of model calls it took to do it.
+    recovery: recoveryAttributionSnapshot(recoveryAttribution(evidence.run.actions)),
     // The declared repair's judgement: a verdict, field names and codes, never the proposal's target. Null when none was judged.
     repair: evidence.repair ?? null,
     actions: flowActionsSnapshot(evidence.run),
@@ -424,14 +445,36 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
  * Each attempt as a Flow-lane snapshot states it. `evidencePackets` is where
  * the evaluation reads evidence sizes from (`run-evaluation/flow-lane-evidence-sizes.ts`),
  * so every lane that writes `snapshots/flow-lane.json` writes its actions here.
+ *
+ * `nodeId` and `attemptIndex` are what make a retried node readable. The
+ * snapshot is a flat list of attempts in Core's order, so until the node id
+ * was published a node the ladder attempted three times and a Flow that
+ * authored three identical actions produced the same list, and no rung could
+ * be attributed to anything. With them, and with `retry` naming the rung that
+ * asked for each attempt after the first, a reader can join a run's attempts
+ * back into nodes and say which rung absorbed what.
+ *
+ * `durationMs` is published for the same reason: the "wait for readiness" rung
+ * costs time and nothing else, so a rung that fires and a rung that does not
+ * are indistinguishable without a per-attempt duration.
  */
 export function flowActionsSnapshot(run: PersistedFlowRunOutcome) {
   return run.actions.map((action) => ({
     actionType: action.actionType,
+    nodeId: action.nodeId,
+    attemptIndex: action.attemptIndex,
     status: action.status,
+    // Core's own clock for the attempt. With `durationMs` it gives the gap
+    // between one attempt and the next, which is the only way to check that a
+    // fixture whose condition is timed was met at the moment it claims.
+    startedAt: action.startedAt,
+    ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }),
+    ...(action.retry ? { retry: action.retry } : {}),
+    ...(action.readiness ? { readiness: action.readiness } : {}),
     ...(action.failure ? { failure: action.failure } : {}),
     ...(action.comparisonStatus ? { comparisonStatus: action.comparisonStatus } : {}),
     ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
+    ...(action.hostTargetResolution ? { hostTargetResolution: action.hostTargetResolution } : {}),
     ...(action.evidencePackets ? { evidencePackets: action.evidencePackets } : {}),
   }));
 }
