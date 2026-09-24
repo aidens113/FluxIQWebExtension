@@ -76,8 +76,28 @@ model is `deepseek-flash` and is now configurable rather than hardcoded in six
 places; the old prices were wrong in both directions and r5 recomputes from
 $0.1720 to $0.1188.
 
-**Not done, and the next things.** t112 is merged. t113 is in flight with a
-worktree at `F:/fxwork/t113/`, nothing committed. Then: re-run the same task, and only then fan out to other sites and
+**Not done, and the next things.** t112 and t113 are both merged. Nothing is in
+flight.
+
+**What t113 established, and it is the sharpest finding of the day.** The repair
+loop is not dead — Core's own tests carry a `target_not_found` that reaches the
+patch call and produces a proposal. Three things stopped this run. **The model
+was asked about the wrong failure**: `annotate` diagnoses the *last* failed
+attempt, and the three highly repairable failures with six same-family controls
+were fixed deterministically by the retry rung and never reached it, so the one
+it saw was `s6` with **0 same-family controls and 0 fingerprint candidates on an
+819-byte page**. **The refusal was never checked against the page**: `annotate`
+gates exploration on `plan.explorationRequested && plan.patchRequest.request`,
+so the moment the plan says "no patch" the look is cancelled too, and the
+model's unexamined "the goal is gone" is final. And `structured-diagnosis.ts`
+is asymmetric — it refuses a model `yes` over Core's `no` and records it, but
+accepts a model `no` over Core's `unknown` unexamined. **Saying why is not
+repairing: t113 closed the silence, not the gap.**
+
+**The next task, named by t113 and the largest remaining gap:** make the loop
+re-plan after exploring, so the difference between "the model declined" and "the
+model declined after looking" exists at all. Removing the exploration gate alone
+would spend calls on a look nothing re-plans from. Then: re-run the same task, and only then fan out to other sites and
 goal shapes. Nine of the ten sites have not been touched by current code.
 
 **Known and written down, not yet worked:** Core's flow-bootstrap catalog
