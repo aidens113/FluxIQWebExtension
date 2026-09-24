@@ -13,6 +13,13 @@ Related: [week2-exit-plan.md](./week2-exit-plan.md) (the campaign this defers), 
 
 ## Current State
 
+**Superseded for measurement on 2026-09-24.** The user replaced corpus-wide lane
+runs with a strict one-run, one-full-debug, one-fix loop on complex multi-node
+scenarios only; that loop, its debug protocol and the MVP exit criteria are in
+[language-driven-flow-loop-plan.md](./language-driven-flow-loop-plan.md). This
+document stays active as the **design backlog** — workstreams A to D below are
+the fixes that loop draws from. Do not run the extract lane from here.
+
 **Scope, set by the user on 2026-09-22 and binding.** The only path that counts
 is: a person writes an instruction, the model explores the live page, and the
 Flow it builds then runs deterministically and produces the right answer.
