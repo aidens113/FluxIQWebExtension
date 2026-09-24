@@ -732,6 +732,21 @@ All three are merged and pushed; what they changed is in `Current State`.
   belongs in a worktree, which is what the rest of this session used.
 
 ## Open Questions
+- **A run does not record the parameters of the Flow it built.** `flow-lane.json`
+  publishes `flowShape` and `actionTypes`, and no Flow document is persisted
+  under `test-runs/`, so the pagination cause behind five of six failures on
+  2026-09-24 had to be *inferred* from record counts rather than read from the
+  node. The inference was solid - 23 is exactly the three-page catalogue, and
+  the run that passed took 8 - but it should not have been an inference. A
+  campaign that cannot say what the model actually wrote can only diagnose
+  causes that happen to leave an arithmetic signature. Recording the authored
+  parameters, screened the way the repair context already screens step
+  parameters, is what would have answered it in one read.
+- **`product-catalog-first-page` passed twice and failed once** on the same
+  code, because the model sometimes copies the pagination proposal into the node
+  and sometimes does not. Run-to-run variance of that size means a single run is
+  not evidence about a task, and a pass rate needs repeats before it means
+  anything.
 
 - Does the dry run reset the page, the workspace, or the whole browser context?
   Cheapest sufficient reset wins; d2 and d3 should settle what is available.
