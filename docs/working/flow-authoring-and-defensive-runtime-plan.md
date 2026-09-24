@@ -607,86 +607,34 @@ The entry for `run-muexhp0k-73172f73` - the furthest run of that morning and
 the two causes that stopped it - is in
 [archive/2026-09-24-t114-t117-repair-loop.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-24-t114-t117-repair-loop.md).
 
-### 2026-09-24 - The extract campaign, and one cause behind five of six failures
-
-- Agent: supervisor, with four read-only investigation workers and one
-  implementation worker.
-- **First passing run in the project's history.** `product-catalog-first-page`,
-  `run-mueydi5d-8fad7bb7`: an instruction became a one-node Flow
-  (`web.dom.extract_list`), the Flow replayed, and the dataset it produced was
-  judged correct. 9 calls, $0.0070. Across every campaign before this, the
-  number of instruction-built Flows that produced the right answer was zero.
-- **And one cause behind almost every failure beside it.** Six
-  `product-catalog` extract runs; five failed, and all five failed identically:
-  `expectedRecords 8, observedRecords 23, matchedRecords 8`. Twenty-three is the
-  whole three-page catalogue, 8 + 8 + 7. Every one of those runs read all eight
-  page-one records perfectly - `presentFields == expectedFields`, no unexpected
-  fields, no non-string values, including `text-variant`'s "16.00 USD" prices and
-  `sparse-cards`' absent price and rating. Nothing was wrong with the read. The
-  Flow took three pages for a request that said one.
-- **Why.** `detectPagination` proposed `maxPages` as the count of the pager's
-  numbered controls, or the domain's ceiling when it had none. How a list
-  continues is a fact about the page; how much of it to take is a fact about what
-  was asked for, and a proposal that answers the second turns "the first page"
-  into "every page" with nobody choosing. The run that passed is the one whose
-  model authored no pagination block at all.
-- Fixed: a proposal now asks for the page in front of it and names its mode
-  explicitly rather than leaning on what an omitted one happens to mean. A read
-  that wants more pages says so, and one stopped by the bound reports
-  `truncated`, so a Flow that should have taken more says it took fewer rather
-  than quietly answering short.
-- **The corpus's most common event is a rejection, and it is model thrash.**
-  Across 33 runs the build-loop result codes are led by
-  `web.action.rejected.no_repeating_structure` at 39, against 19
-  `web.action.succeeded`. The worst, `run-mueyx0xe-e4615f3c` on
-  `product-catalog` `text-variant`, called `web.detect_repeating_structure`
-  twenty-eight times: refused twenty-seven, answered once, 38 provider calls in
-  all. So the model is calling the detection tool rather than guessing selectors
-  at an extract node, which is the right tool - it just keeps being told no.
-  **Not a detection defect**, on the evidence: the same task in the earlier
-  campaign (`run-mueyh9ey-5ce143dc`) was refused five times on the same page and
-  got there, and the plain `first-page` run found its list in one call. The page
-  has a readable run and detection finds it; the variance is the model's.
-  **And the guard that should bound it is a streak, not a total.** Core does
-  count a refused look as no progress - `automationStudioLlmEvidenceLookWasRefused`
-  is true for an `observe` tool answering `{ok:false}`, which is exactly what a
-  refused detection returns - and trips at `maxStepsWithoutProgress`, 24. But
-  `progressed()` resets the count to zero on any answered call, so twenty-seven
-  refusals with three successes among them never come near it. The streak is
-  bounded and the total is not. A build can be told "there is no list there"
-  indefinitely as long as it occasionally looks at something else.
-  **And the data will not support a bound, which is the finding.** Counting
-  refused detections per run against its verdict: passing runs used 0, 0, 1, 1
-  and **15**; failing runs used 1, 2, 2, 5, 10 and 27. They overlap almost
-  completely, and the passing run at 15 sits above four of the six failures. So
-  there is no total that separates a build working its way to an answer from one
-  that is only asking again - a bound of 12 would have killed a run that went on
-  to pass. The waste is real (27 refusals cost that build most of its 38 calls)
-  but a count is the wrong discriminator, and picking one from the worst run
-  alone would have been a guess dressed as evidence. What would separate them is
-  whether the *target* changed between asks, which nothing currently records.
-  `bootstrap.invalid_subflows` is the same shape, five times in that one run.
-- **`everything-store` is a different failure, and it is not extraction.** Its
-  instruction says "narrow the results to Brightaisle Plus items". The Flow
-  searched and correctly excluded sponsored placements - 20 cards on the page,
-  16 rows returned - and never clicked the Plus rail, so it read the unnarrowed
-  list: `matchedRecords 7`, `matchedInAnyOrder 13`, the rest displaced. An
-  earlier reading of this as "one intruder row shifting the list by one" was
-  wrong; expected 12 was observed at 15, not 13. Whether the model was ever shown
-  the Plus control cannot be answered from any artifact, because nothing records
-  what a packet contained - which is now being fixed.
-- Validation: extension `node apps/extension/scripts/test-extension.mjs`
-  `# tests 747 # pass 747 # fail 0`; `tsc --noEmit` on the extension exit 0.
-- Outcome: Partial - one cause fixed and pending re-measurement, one named and
-  open, one unanswerable until the packet record lands.
-- **An operational mistake worth writing down.** The first attempt at this
-  campaign aborted after 5 tasks because Core source was edited while it ran,
-  leaving Core's dist stale; the Lab's own guard caught it and refused to
-  continue - "Nothing measured here is a product result until that is fixed."
-  That guard is correct and cost nothing but time. Work during a live campaign
-  belongs in a worktree, which is what the rest of this session used.
+The 2026-09-24 entry for the extract campaign - the first passing run and the
+cause behind five of six failures - is in
+[archive/2026-09-24-t114-t117-repair-loop.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-24-t114-t117-repair-loop.md).
+Its pagination conclusion was later falsified; see `Open Questions`.
 
 ## Open Questions
+- **Eleven tasks across six sites never measured before: 4 passed, 6 failed, 1
+  no result.** Two of the failures are new causes, each diagnosed to the field.
+  - `admin-console-customer-book`: expected 240, observed **19**, none matching,
+    and the first row read `CUS-0005` where `CUS-0001` was expected. The console
+    is a *virtualiser* (`apps/scenario-lab/src/scenarios/admin-console/virtual-list.ts`):
+    a row outside the scroll band is removed from the document rather than
+    hidden. So 19 is the window that happened to be mounted, read from wherever
+    the list was standing - the Flow never scrolled. This is the opposite
+    failure to product-catalog's: there a read took more than it was asked for,
+    here it took a fraction, and both come down to a read's scope.
+  - `property-listings-newest-homes` and its `agent-withheld` variant: 10
+    expected, 10 observed, **0 matching**, and one field explains all ten - the
+    `address` column carries
+    `http://127.0.0.1:.../scenarios/property-listings/listings/hb-10258` where
+    "Flat 5, 37 Saltmarsh Crescent, Ashcombe" was expected. The model mapped the
+    column to the card's link rather than to its address text. Right rows, right
+    count, one column pointed at the wrong thing.
+  - Passing: `admin-console-customer-book-short` (12/12), `social-scheduler-whole-queue`
+    (**280/280**), `data-table-inventory-large` (1000/1000) and
+    `data-table-inventory-may-be-empty` (12/12).
+  - No result: `data-table-inventory-empty`, `sensitive-input-card-labels` and
+    `company-directory-register-page`, the last after 44 provider calls.
 - **A falsifiable prediction about the 23-record failure, and where it comes
   from.** `domain/src/output-nodes/extract-list/catalog-text.ts` ends in
   `WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE`, the worked request the model is shown
