@@ -739,6 +739,25 @@ All three are merged and pushed; what they changed is in `Current State`.
   belongs in a worktree, which is what the rest of this session used.
 
 ## Open Questions
+- **The result check was wrong in both directions, in one campaign, and that
+  now costs money.** `run-muezaeuk-5affbb6c` (`product-catalog-photos`) extracted
+  the right dataset - the Lab's oracle passed it - and Core's own verification
+  refuted it twice over, `does_not_answer` on both checks, 1,519 input tokens
+  each. `run-mueyh9ey-5ce143dc` went the other way: 23 rows for a first-page
+  request, and the verification answered `answers_request`. A false positive
+  wastes a wrong answer; a false negative was harmless only while the repair
+  could never start, and t117 changed that - a refuted result now reaches a
+  repair, so a wrong refutation spends provider calls trying to fix a Flow that
+  was already correct, and may damage it.
+  **What is shown to the judge is not recorded anywhere**, which is why the
+  mechanism is still open. `result-summary.ts` withholds a record set's
+  `sampleRows` when they are absent, over the byte budget, or tripped by the
+  evidence screen, and 1,519 tokens is consistent with a judge shown counts and
+  column names and no rows at all. If that is what happened, the fix is not a
+  better prompt: a check shown no rows cannot honestly answer "does not answer",
+  and `unverifiable` already exists for exactly that. Confirming it needs the
+  summary on the record, which is the same gap as the authored parameters and
+  the packet composition.
 - **A run does not record the parameters of the Flow it built.** `flow-lane.json`
   publishes `flowShape` and `actionTypes`, and no Flow document is persisted
   under `test-runs/`, so the pagination cause behind five of six failures on
