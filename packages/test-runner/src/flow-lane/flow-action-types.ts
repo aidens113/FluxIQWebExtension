@@ -20,8 +20,17 @@ import type { RecordingProposalControl } from "./recording-flow-proposal.js";
  * `runtime/flow-bootstrap/adaptation.ts`). A bootstrap node whose definition
  * fixes its output carries it only there, not as a `parameterValues.outputId`.
  * Absent on a recorded node.
+ *
+ * `definitionId` is the node definition the Flow placed
+ * (`web.output.dom-extract_list`). It is read here because the created-Flow
+ * snapshot publishes it beside each action node's screened parameters
+ * (`creation/authored-nodes.ts`): the output says what the step dispatched and
+ * the definition says which node the build chose to dispatch it with, and the
+ * run's own attempt records keep only the definition id, so it is the field
+ * that joins an authored node back to what Core stored about it. Absent when
+ * Core's document named none.
  */
-export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined; recordingCandidateId?: string; outputActionId?: string };
+export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined; recordingCandidateId?: string; outputActionId?: string; definitionId?: string };
 
 /**
  * Every node of the approved Flow, read once: the parent Flow first and every
@@ -83,11 +92,13 @@ async function flowNodes(control: RecordingProposalControl, projectId: string, f
     const metadata = optionalRecord(node.metadata);
     const recordingCandidateId = metadata?.recordingCandidateId;
     const outputActionId = metadata?.outputActionId;
+    const definitionId = node.definitionId;
     return [{
       id: node.id,
       parameterValues: optionalRecord(node.parameterValues),
       ...(typeof recordingCandidateId === "string" && recordingCandidateId ? { recordingCandidateId } : {}),
       ...(typeof outputActionId === "string" && outputActionId ? { outputActionId } : {}),
+      ...(typeof definitionId === "string" && definitionId ? { definitionId } : {}),
     }];
   });
 }

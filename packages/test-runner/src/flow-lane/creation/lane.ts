@@ -5,7 +5,7 @@
 // `settleBuild` for the build, and `authorizeRun` and `settleRun` for the
 // repair its playback may make, and the lane decides only when each is used.
 
-import type { ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import type { AuthoredFlowNode, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";
@@ -17,6 +17,7 @@ import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
 import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
+import { createdFlowAuthoredNodes } from "./authored-nodes.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
 import { assertCreatedFlowDataset, createdFlowDatasetHolds, judgeCreatedFlowDataset } from "./judgement.js";
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
@@ -108,6 +109,17 @@ export type CreatedFlowLaneEvidence = Readonly<{
   review: CreatedFlowReview;
   flowId: string;
   shape: CreatedFlowShape;
+  /**
+   * What each action node of the built Flow was told to do, screened.
+   *
+   * `shape` says how many nodes of each output the build made; this says with
+   * what. Six live `product-catalog` runs failed with `expectedRecords 8,
+   * observedRecords 23` -- a Flow that walked all three fixture pages for an
+   * instruction asking for the first -- and could not be diagnosed, because no
+   * artifact recorded whether the extraction node had been authored to
+   * paginate.
+   */
+  authoredNodes: readonly AuthoredFlowNode[];
   /** Whether the Flow can reach the page it works on, or whether the harness reached it for the Flow. */
   ownPage: CreatedFlowOwnPage;
   run: PersistedFlowRunOutcome;
@@ -154,6 +166,11 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   const nodes = await readFlowNodes(input.control, { projectId, flowId }, bounds);
   const actionTypes = createdFlowActionTypes(nodes, flowId);
   const shape = createdFlowShape(nodes, actionTypes);
+  // Read from the same nodes and the same map as the shape, before the run
+  // touches anything: this is the Flow as the build left it, which is the
+  // document a later diagnosis needs and the one Core deletes with the
+  // workspace when an isolated run ends.
+  const authoredNodes = createdFlowAuthoredNodes(nodes, actionTypes);
   // Stated before the run and judged after it: the run publishes what the Flow
   // did either way, and a Flow that cannot reach its own page is the first
   // thing said about it.
@@ -203,7 +220,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, ownPage, run, observation, extraction });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, ownPage, run, observation, extraction });
   await input.recordEvidence(evidence);
   // First of the judgements: a Flow that could not have started without the
   // harness produced its records from a page it never chose, so what those

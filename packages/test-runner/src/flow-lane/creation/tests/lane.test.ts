@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveScenarioWorkflow, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "@fluxiq-web-extension/domain/node";
+import { resolveScenarioWorkflow, validateAuthoredFlowNodes, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
 import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
@@ -97,10 +98,29 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
   assert.deepEqual(snapshot.recoveredFailures, [], "a run that absorbed nothing says so, rather than leaving the field out");
   assert.equal(snapshot.flowId, FLOW_ID);
   assert.deepEqual(snapshot.flowShape.actionTypes, { "web.browser.navigate": 1, "web.dom.extract_list": 1 });
+  // The shape's counts, and beside them what each counted node was told to do.
+  // Six live `product-catalog` runs failed with `expectedRecords 8,
+  // observedRecords 23` and could not be diagnosed, because the counts were
+  // all a bundle held: nothing said whether the extraction had been authored to
+  // paginate. The extraction's selector is withheld by name, its column id
+  // keeps its place with `null`, and the navigation's URL is carried as its
+  // origin alone.
+  assert.deepEqual(snapshot.authoredNodes, [
+    { nodeId: "node.open", definitionId: "web.output.browser-navigate", outputId: "web.browser.navigate", parameters: { url: "http://127.0.0.1" }, parametersWithheld: [] },
+    { nodeId: "node.extract", definitionId: "web.output.dom-extract_list", outputId: "web.dom.extract_list", parameters: { fields: { name: null } }, parametersWithheld: ["selector", "fields.name"] },
+  ]);
+  assert.deepEqual(validateAuthoredFlowNodes(snapshot.authoredNodes, WEB_LLM_DENIED_EVIDENCE_KEYS), { valid: true, value: snapshot.authoredNodes });
   assert.deepEqual(snapshot.actions.map((action) => action.actionType), ["web.browser.navigate", "web.dom.extract_list"]);
   assert.equal(snapshot.extraction?.steps[0]?.matchedRecords, 2);
   const text = JSON.stringify(snapshot);
-  for (const leak of ["data-testid", "Scrape the first page", "Lamp", "127.0.0.1"]) assert.equal(text.includes(leak), false, `the snapshot carries ${leak}`);
+  // The fixture's selector, the instruction, and a record the page held. The
+  // loopback host left this list when `authoredNodes` arrived: a navigation
+  // parameter is now carried as its origin, deliberately and by Core's own
+  // rule, because where a step was pointed is a fact about the Flow. What must
+  // still never appear is the rest of that URL -- the path and the query are
+  // where a page number, a search term and a session token live, and reading a
+  // Flow's page number out of a bundle is half of what this member exists for.
+  for (const leak of ["data-testid", "Scrape the first page", "Lamp", "/scenarios/", "product-catalog/"]) assert.equal(text.includes(leak), false, `the snapshot carries ${leak}`);
 });
 
 test("a dataset task whose Flow stored the wrong records fails, after publishing what it measured", async () => {

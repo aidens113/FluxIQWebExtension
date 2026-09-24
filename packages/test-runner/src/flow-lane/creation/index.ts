@@ -11,6 +11,7 @@ export * from "./build-proposal.js";
 export * from "./review-proposal.js";
 export * from "./secrets.js";
 export * from "./flow-shape.js";
+export * from "./authored-nodes.js";
 export * from "./own-page.js";
 export * from "./judgement.js";
 export * from "./lane.js";

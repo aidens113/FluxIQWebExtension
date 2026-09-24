@@ -14,6 +14,18 @@ import { describeCreatedFlowRequest } from "./request.js";
  * tool ids, and any refusal code. `flowShape` is the created Flow's node count
  * and its action nodes counted by output. `extraction` is `null` for a task
  * judged by a playback goal.
+ *
+ * `authoredNodes` is what each of those action nodes was told to do, screened:
+ * the node, its definition, its output and its parameters, with every value the
+ * screen would not carry named as withheld rather than dropped. It is here
+ * because `flowShape` alone was not enough to diagnose a failure. Six live
+ * `product-catalog` extract runs failed identically with `expectedRecords 8,
+ * observedRecords 23` -- eight products a page across three pages, so a Flow
+ * that walked all three for an instruction asking for the first -- and nothing
+ * a run wrote said whether the model had authored `pagination: { mode: "next",
+ * maxPages: 3 }`, `mode: "numbered"`, or a scroll with a cap. No Flow document
+ * is persisted under `test-runs/`, Core deletes an isolated run's workspace
+ * when the run ends, and a fix shipped against the inferred cause did not work.
  */
 export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
   return {
@@ -23,6 +35,7 @@ export function createdFlowLaneSnapshot(evidence: CreatedFlowLaneEvidence) {
     review: evidence.review,
     flowId: evidence.flowId,
     flowShape: evidence.shape,
+    authoredNodes: evidence.authoredNodes,
     // Whether the Flow can reach the page it works on, or whether
     // `prepareFlowPage("playback")` reached it for the Flow. A
     // `navigate-and-extract` Flow with no navigation node is measured on a page

@@ -13,6 +13,15 @@ export type {
   WebLlmEvidenceToolRequest
 } from "./capture";
 export * from "./harness-options";
+// The declaration itself, not the machinery that applies it. Anything that
+// projects this domain's data for someone else to read has to be held to the
+// same list, and `denied-keys.ts` says why there must be exactly one copy of
+// it. The Lab's created-Flow snapshot is the third such reader: it screens a
+// built Flow's authored node parameters before writing them into a run bundle
+// (`packages/test-runner/src/flow-lane/creation/parameter-screen.ts`), and a
+// second, drifting copy of this list there is precisely the failure the single
+// declaration exists to prevent.
+export { WEB_LLM_DENIED_EVIDENCE_KEYS, webLlmEvidenceKey } from "./denied-keys";
 export { WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 export type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
 export type { WebLlmEvidenceDialog, WebLlmEvidenceFrame, WebLlmPageContext } from "./page-evidence";

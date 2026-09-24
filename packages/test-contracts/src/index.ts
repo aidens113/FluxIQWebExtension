@@ -11,6 +11,8 @@ export * from "./evidence-validation.js";
 export * from "./evaluation-validation.js";
 export * from "./harness-recovery.js";
 export * from "./harness-recovery-validation.js";
+export * from "./authored-flow-node.js";
+export * from "./authored-flow-node-validation.js";
 export * from "./adaptation-reuse.js";
 export * from "./adaptation-reuse-validation.js";
 export * from "./bench-report.js";
