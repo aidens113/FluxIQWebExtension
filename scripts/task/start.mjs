@@ -25,7 +25,7 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
   if (core && !worktree) throw new Error("--core needs --worktree: a Core-paired task takes a nested worktree with a Core of its own, because the shared Core is detached and every other task builds against it.");
   if (core && !coreRepositoryRoot) throw new Error("--core needs a Core checkout beside this one; none was resolved, so the paired branch has nowhere to be created.");
 
-  const id = await nextTaskId(repositoryRoot, { integrationBranch: from });
+  const id = await nextTaskId(repositoryRoot, { integrationBranch: from, ...core ? { coreRepositoryRoot, coreIntegrationBranch: coreFrom } : {} });
   const branch = taskBranchName(id, slug);
 
   const existing = await runGit(repositoryRoot, ["branch", "--list", "--format=%(refname:short)", branch]);
