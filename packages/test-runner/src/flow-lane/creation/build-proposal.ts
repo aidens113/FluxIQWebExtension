@@ -8,8 +8,9 @@
 // record too, not a throw, so the run can publish what the build spent before
 // it fails on the refusal.
 
-import { parseAutomationStudioFlowBootstrapFailureDiagnostic } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS, parseAutomationStudioFlowBootstrapFailureDiagnostic } from "fluxiq/automation-studio";
 import type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationDeclaredAction, ExistingFlowAdaptation, ExistingFlowAdaptationSummary, FlowBootstrapGenerationEnvelope } from "../../existing-fluxiq-control.js";
+import { publishableStepFields, type PublishableStepValue } from "../../existing-fluxiq-control/index.js";
 import { RunnerFailure } from "../../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../../http-control/index.js";
 
@@ -27,11 +28,21 @@ const PROPOSAL_POLL_MS = 1_000;
 const VOCABULARY_ID = /^[a-z][a-z0-9_-]*(?:[.:][a-z0-9_-]+)*$/u;
 const MAX_VOCABULARY_ID_LENGTH = 96;
 /**
- * Core's own namespace. A step under it is a decision that called no tool --
- * Core records a refused plan as `core.decision_unusable`, with the first code
- * that refused it -- so it is kept as a step and never listed as a tool.
+ * Core's own names for the decisions that called no tool
+ * (`AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS`): a refused plan is
+ * recorded as `core.decision_unusable`, with the first code that refused it.
+ * They are kept as steps and never listed as tools.
+ *
+ * This was the whole `core.` prefix, and that hid 21 of one build's 22 calls.
+ * The tool the model explores a page with is `core.run_node`
+ * (`AUTOMATION_STUDIO_LLM_RUN_NODE_TOOL_ID`) -- it runs the library's nodes,
+ * so it is almost every call a build makes -- and it shares the namespace with
+ * the decision names, so a prefix test deleted it from every tool list the
+ * facility published. Core's own closed set is the test instead: a decision
+ * name Core adds is excluded here without a change, and a tool it adds is not
+ * dropped.
  */
-const CORE_DECISION_STEP_PREFIX = "core.";
+const CORE_DECISION_STEP_IDS: ReadonlySet<string> = new Set<string>(Object.values(AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS));
 
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
@@ -45,8 +56,54 @@ export type CreatedFlowBuildControl = {
 export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) => Promise<void>; requestTimeoutMs?: number; deadlineMs?: number; pollMs?: number };
 
 export type CreatedFlowBuildAccounting = Readonly<{ provider: string | null; model: string | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; estimatedCostUsd: number | null }>;
-/** One decision the build's exploration made, in order: the tool it called, or Core's name for a decision that called none, and the code it came to. */
-export type CreatedFlowBuildStep = Readonly<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
+/**
+ * What one member of a decision row may hold: a count, a flag, a closed code
+ * or identifier, a bounded list of those, or a bounded record of them (Core's
+ * per-call `usage`).
+ *
+ * The rule that decides it lives in `existing-fluxiq-control`, because the
+ * reader of a *proposed* build applies the same one; this name is kept for the
+ * readers of a created-Flow build.
+ */
+export type CreatedFlowBuildStepValue = PublishableStepValue;
+
+/**
+ * One decision the build's exploration made, in order: the tool it called, or
+ * Core's name for a decision that called none, and the code it came to.
+ *
+ * **Every member Core publishes on the row is carried through, not a chosen
+ * three.** This kept `toolId`, `effectApplied` and `resultCode` and dropped the
+ * rest, and a real failed build then read as 32 rows of two fields each, twenty
+ * of them the identical `web.action.rejected.target_unobserved` inside one
+ * undivided 99-second gap -- so nobody could tell one handle refused twenty
+ * times from twenty different handles, and three defects with three different
+ * fixes were one word (`run-muf8dstp-0135804a`). Core keeps the iteration, the
+ * call id, the bytes the call admitted, what it spent and the refusal's own
+ * reason per row; whatever of that reaches here is kept, and the next member
+ * Core adds is kept too without a change on this side.
+ *
+ * What bounds the record is the *shape* of each value, not a list of names:
+ * counts, flags and whitespace-free codes and identifiers travel, and anything
+ * that could be a sentence, an address, a selector or a value read off the page
+ * does not. The fields below are the ones Core writes today and are named for a
+ * reader; they are not the limit of what is carried.
+ */
+export type CreatedFlowBuildStep = Readonly<{
+  toolId: string;
+  effectApplied?: boolean;
+  resultCode?: string;
+  /** The loop iteration this row belongs to, which is what a provider call is counted by; two rows may share one. */
+  iteration?: number;
+  /** The evidence call the row records, where it made one. */
+  callId?: string;
+  /** Bytes of evidence this one call admitted. A size, never a value. */
+  evidenceBytes?: number;
+  /** The refusal's own reason, where the row was one and Core named it. */
+  reason?: string;
+  /** What this one call spent, as Core reported it. */
+  usage?: Readonly<Record<string, string | number | boolean>>;
+  [field: string]: CreatedFlowBuildStepValue | undefined;
+}>;
 export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
 
 /**
@@ -91,12 +148,13 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  * - `failure.issueCodes`: the codes Core says refused the last plan the model
  *   completed -- validation's or the domain's -- when it names any. Codes
  *   only; the plan paths and page content they refer to are never kept.
- * - `evidenceLoop.steps`: every decision of the build, in order, as Core
- *   recorded it; `toolIds` are the tools among them. A refused build carries
- *   them on its failure diagnostic, and a proposed build now carries them on
- *   the created audit event of its proposal, so the successful builds most
- *   worth studying read alike with the refused ones. `null` only for a build
- *   Core published no trace for at all.
+ * - `evidenceLoop.steps`: every decision of the build, in order, with every
+ *   member Core published on it that a published record may carry
+ *   (`CreatedFlowBuildStep`); `toolIds` are the tools among them. A refused
+ *   build carries them on its failure diagnostic, and a proposed build carries
+ *   them on the created audit event of its proposal, so the successful builds
+ *   most worth studying read alike with the refused ones. `null` only for a
+ *   build Core published no trace for at all.
  * - `recoveredAfterTimeout`: the request outlived its HTTP bound and the
  *   proposal was found by polling, as the web panel does.
  * - `instructedConsequences`: the lasting consequences Core found the person's
@@ -306,17 +364,28 @@ function crossCheckOf(crossCheck: ExistingAdaptationConsequenceCrossCheck): Crea
 }
 
 /**
- * The build's decisions as the record keeps them: identifiers only, and `null`
- * where Core published none. The same filter the refused path applies, so a
- * proposed build's trail and a refused one's are the same shape and a reader
- * can compare them.
+ * The build's decisions as the record keeps them, and `null` where Core
+ * published none. The one filter both paths use -- a proposed build's trail and
+ * a refused build's are built here, so they are the same shape and a reader can
+ * compare them. It was written twice, and the two copies were the same
+ * three-field whitelist, so widening the record meant widening it in two
+ * places and forgetting one.
+ *
+ * A row is kept when it names a tool in the vocabulary, and everything else
+ * Core wrote on it is carried through as far as its value's shape allows
+ * (`publishableStepFields`, which the reader of a proposed build applies too,
+ * so the two records are built by one rule). Nothing is dropped for not being
+ * recognized.
  */
-function buildSteps(steps: ReadonlyArray<{ toolId: string; effectApplied?: boolean; resultCode?: string }> | undefined): readonly CreatedFlowBuildStep[] | null {
+function buildSteps(steps: readonly unknown[] | undefined): readonly CreatedFlowBuildStep[] | null {
   if (steps === undefined) return null;
-  return steps.flatMap((step): CreatedFlowBuildStep[] => {
-    if (!isVocabulary(step.toolId)) return [];
-    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
-  });
+  return Object.freeze(steps.flatMap((entry): CreatedFlowBuildStep[] => {
+    if (!isRecord(entry) || typeof entry.toolId !== "string" || !isVocabulary(entry.toolId)) return [];
+    // Validated member by member on the way in, so the assertion states the
+    // shape rather than assuming it.
+    const row: Record<string, CreatedFlowBuildStepValue> = { toolId: entry.toolId, ...publishableStepFields(entry) };
+    return [Object.freeze(row) as CreatedFlowBuildStep];
+  }));
 }
 
 /** A refusal, read through Core's own diagnostic parser; a body that parser rejects keeps only its HTTP status. */
@@ -326,10 +395,7 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
   if (!diagnostic) return failed({ code: `lab.generation_http_${envelope.status}`, stage: null, httpStatus: envelope.status }, "unknown", durationMs);
   const loop = diagnostic.evidenceLoop;
   const issueCodes = [...new Set((diagnostic.issueCodes ?? []).filter(isVocabulary))];
-  const steps = loop?.steps?.flatMap((step): CreatedFlowBuildStep[] => {
-    if (!isVocabulary(step.toolId)) return [];
-    return [{ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode !== undefined && isVocabulary(step.resultCode) ? { resultCode: step.resultCode } : {}) }];
-  });
+  const steps = buildSteps(loop?.steps) ?? undefined;
   return Object.freeze({
     // Core's parser admits a request only on its own ending, and that ending only with one.
     outcome: diagnostic.permissionRequest ? "permission_required" : "failed",
@@ -369,7 +435,7 @@ function accountingOf(value: { provider?: string; model?: string; inputTokens?: 
 
 /** The distinct tool ids among `values`, sorted: identifiers only, and none of Core's own decision steps. */
 function vocabulary(values: readonly string[]): string[] {
-  return [...new Set(values.filter((value) => isVocabulary(value) && !value.startsWith(CORE_DECISION_STEP_PREFIX)))].sort();
+  return [...new Set(values.filter((value) => isVocabulary(value) && !CORE_DECISION_STEP_IDS.has(value)))].sort();
 }
 
 function isVocabulary(value: string): boolean {

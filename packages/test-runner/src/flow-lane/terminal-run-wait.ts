@@ -11,20 +11,95 @@
 // The reader is passed in rather than imported, because the run detail belongs
 // to `persisted-flow-run.ts` and this is the rule about it, not another way of
 // fetching it.
+//
+// How long the run's own detail is waited for is derived from the Flow rather
+// than measured from one campaign, which is why Core's own per-node ceilings
+// are imported here. A bound measured from single-node Flows is not a bound on
+// a Flow of twenty nodes, and a wait that expires early does not report "still
+// running": it reports the run's failure, which is a product verdict this
+// facility never observed.
 
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 import { everyNodeEndedSucceeded, type NodeAttempt } from "./node-recovery.js";
 
 /**
+ * What a run costs beyond its nodes, and so the whole bound for a Flow of one.
+ *
  * A timed-out synchronous Core run can keep executing after its HTTP client has
  * gone away. Under the final two-bench load, the first W02 Flow crossed the
  * request's 30-second bound in both campaigns and completed its runner cleanup
- * 42.9-46.5 seconds after Flow-lane dispatch. Give that exact run the same
- * load-proven 90-second window used for recording finalization to publish a
- * terminal detail with durable attempts.
+ * 42.9-46.5 seconds after Flow-lane dispatch. Ninety seconds is that
+ * load-proven window, the same one recording finalization uses.
+ *
+ * It was the entire bound until t124, and every run it was measured on ran a
+ * single extraction node. Read as a whole-run deadline it says a Flow of six to
+ * twenty nodes must finish in the time one node took, which no multi-node Flow
+ * can do; the run would then be read back as never terminal and reported with
+ * the failure that stopped its *request*. So it is the fixed part now, and
+ * `terminalDetailWaitMs` adds the rest.
  */
-export const TERMINAL_DETAIL_WAIT_MS = 90_000;
+export const TERMINAL_DETAIL_BASE_WAIT_MS = 90_000;
 export const TERMINAL_DETAIL_POLL_MS = 250;
+
+/**
+ * What one more node may add, taken from Core's own per-node ceilings rather
+ * than from a measurement of Flows that had one node.
+ *
+ * Core awaits a node's recorded state before *each* attempt -- the wait is
+ * named `<node>.attempt.<n>` inside the attempt loop (Core
+ * `runtime/executor/graph-run.ts`) -- under the ceiling
+ * `AUTOMATION_STUDIO_READINESS_CAP_MS`. Retries are on by default
+ * (`AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY`: three attempts), and the
+ * ladder sleeps `automationStudioRetryBackoffMs` before each attempt after the
+ * first. So the most one node can spend inside Core's own waits is every
+ * attempt's readiness ceiling plus every retry's backoff: 3 x 30 s, plus
+ * 250 ms and 1 s, which is 91.25 s.
+ *
+ * Every term is Core's published constant, applied by Core's own rule, so a
+ * Core that changes its ceilings moves this bound with it instead of leaving a
+ * number here that was true for one campaign.
+ */
+export const TERMINAL_DETAIL_NODE_WAIT_MS = AUTOMATION_STUDIO_READINESS_CAP_MS * AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts + retryBackoffTotalMs();
+
+/**
+ * The ceiling on the derived bound: Core's lease on a claimed grant, which is
+ * the only whole-run deadline Core publishes and already this package's bound
+ * for a granted run (`GRANTED_RUN_WAIT_MS`, `persisted-flow-run.ts`).
+ *
+ * It binds from seven nodes up, and it should. The per-node figure is the worst
+ * case Core permits, not what a node costs -- a node that resolves its target
+ * and runs takes seconds -- so uncapped it would let one stuck run hold a
+ * scenario for half an hour and a nineteen-row campaign for nine, which is the
+ * arithmetic `RECOVERY_RECORD_WAIT_MS` was cut for. Ten minutes is the longest
+ * any run in this facility is allowed to be in flight, so a deterministic run
+ * still unfinished after it is not a run that was merely taking long.
+ */
+export const TERMINAL_DETAIL_MAX_WAIT_MS = AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS;
+
+/**
+ * How long a run of `actionNodeCount` action nodes is read back for: the fixed
+ * cost of a run, plus Core's own per-node ceiling for every node after the
+ * first, capped.
+ *
+ * The count is the Flow's action nodes, the same map `stopWithoutFailedAttempt`
+ * counts over, so it is the Flow's own shape rather than a guess at it. A
+ * caller that names none, or names something that is not a count, gets the
+ * one-node bound, which is exactly what every caller got before.
+ */
+export function terminalDetailWaitMs(actionNodeCount?: number): number {
+  const nodes = typeof actionNodeCount === "number" && Number.isSafeInteger(actionNodeCount) && actionNodeCount > 1 ? actionNodeCount : 1;
+  return Math.min(TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_BASE_WAIT_MS + (nodes - 1) * TERMINAL_DETAIL_NODE_WAIT_MS);
+}
+
+/** Every backoff Core's default policy sleeps across one node's retries, by Core's own rule for reading them. */
+function retryBackoffTotalMs(): number {
+  let total = 0;
+  for (let attempt = 2; attempt <= AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts; attempt += 1) {
+    total += automationStudioRetryBackoffMs(AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, attempt);
+  }
+  return total;
+}
 
 /**
  * How long the recovery record alone is waited for, measured from the moment
@@ -85,6 +160,12 @@ export const GRANTED_RUN_UNSETTLED_CODE = "flow_lane.granted_run_unsettled";
 export type PersistedFlowTerminalWait = {
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * How long the run's own detail is waited for. A caller passes
+   * `terminalDetailWaitMs` over the Flow's action-node count, so the bound is
+   * the Flow's; the default is the one-node bound
+   * (`TERMINAL_DETAIL_BASE_WAIT_MS`).
+   */
   timeoutMs?: number;
   intervalMs?: number;
   /**
@@ -164,7 +245,7 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   const recoveryWaitMs = wait.recoveryWaitMs ?? RECOVERY_RECORD_WAIT_MS;
   const recoveryGraceMs = wait.recoveryGraceMs ?? RECOVERY_RECORD_GRACE_MS;
   const started = now();
-  let deadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_WAIT_MS);
+  let deadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_BASE_WAIT_MS);
   // What Core was still doing at the last terminal read, if anything: the
   // difference between a run that never finished and one Core was finishing.
   let pending: PendingWork | undefined;

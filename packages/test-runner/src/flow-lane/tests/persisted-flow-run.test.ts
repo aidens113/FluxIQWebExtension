@@ -3,6 +3,7 @@ import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
 import { LAB_PROJECT_DOMAIN_ID } from "../lab-project-domain.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl } from "../persisted-flow-run.js";
+import { TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
 
 const attempt = (overrides: Record<string, unknown> = {}) => ({ attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.type", order: 0, status: "succeeded", startedAt: 1_000, finishedAt: 1_030, ...overrides });
 
@@ -587,4 +588,85 @@ test("a run authorizes and reads its datasets under one domain: the caller's whe
     // The run detail is structure and Core asks for no scope on it; the dataset page is content and Core does.
     assert.deepEqual(scopes, [undefined, expected], "get-flow-run-detail unscoped, get-run-dataset-page scoped");
   }
+});
+
+// E10. The browser's own `WebAutomationTargetResolution` reaches Core inside
+// the dispatched result, which Core keeps on the attempt's `outputs` and the
+// run detail drops. Core now projects it, narrowed, at
+// `metadata.hostTargetResolution`, and this is the only record that a control
+// the Flow named one way was found another: the host re-resolves before Core
+// is told anything failed, so that recovery leaves no ladder rung behind it.
+test("the strategy the browser actually found the element by travels with the attempt", async () => {
+  const resolved = { strategy: "fingerprint", candidateCount: 3, bestScore: 0.81, runnerUpScore: 0.4, confidence: 0.42, candidateLabel: "Apply changes" };
+  const { client } = control({}, { actionAttempts: [attempt({ metadata: { hostTargetResolution: resolved } })] });
+
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+
+  // Every member but the candidate's label, which is the page's own words.
+  assert.deepEqual(outcome.actions[0]?.hostTargetResolution, { strategy: "fingerprint", candidateCount: 3, bestScore: 0.81, runnerUpScore: 0.4, confidence: 0.42 });
+  // And the node the attempt ran, without which a retried node cannot be told
+  // from a Flow that authored the same action twice.
+  assert.equal(outcome.actions[0]?.nodeId, "node.one");
+  assert.equal(outcome.actions[0]?.attemptIndex, 0);
+});
+
+test("a strategy Core does not name is read as absent, rather than carried into the bundle", async () => {
+  const { client } = control({}, { actionAttempts: [attempt({ metadata: { hostTargetResolution: { strategy: "telepathy", candidateCount: 1 } } })] });
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.equal(outcome.actions[0]?.hostTargetResolution, undefined);
+});
+
+/**
+ * E11. A run whose request timed out is read back until it reads terminal, and
+ * the bound on that read-back is the whole deadline a multi-node Flow gets.
+ * Ninety seconds was measured on Flows of one extraction node; at six nodes the
+ * run is still executing when it expires, and what the Lab then records is the
+ * request's own timeout -- a product failure for a Flow nobody saw fail.
+ *
+ * The clock is the test's, so the assertion is on the bound itself rather than
+ * on how long the test took: Core here never reaches terminal, so the wait runs
+ * to its deadline every time and the elapsed virtual time is the deadline.
+ */
+function neverSettles(nodes: number) {
+  const clock = { value: 0 };
+  let reads = 0;
+  const client = {
+    selectExistingContext: async () => {},
+    startPersistedFlow: async () => ({ runId: "run.one" }),
+    runPersistedFlow: async () => { throw new RunnerFailure("environment.missing", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", timeoutMs: 30_000 } }); },
+    automationStudioCall: async () => {
+      reads += 1;
+      return { runDetail: { summary: { runId: "run.one", status: "running" }, interventions: [], actionAttempts: [] } };
+    },
+  } as unknown as PersistedFlowRunControl;
+  const actionTypes = new Map(Array.from({ length: nodes }, (_value, index) => [`node.${index}`, "web.dom.click"] as const));
+  const run = executeRecordedFlowRun(
+    client,
+    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", actionTypes },
+    {},
+    { now: () => clock.value, sleep: async (ms: number) => { clock.value += ms; } },
+  );
+  return { run, clock, reads: () => reads };
+}
+
+test("a Flow that outlasted its request is read back for the bound its own node count earns", async () => {
+  const six = neverSettles(6);
+  await assert.rejects(six.run, /timed out/u);
+  // 90 s for the run itself, then Core's per-node worst case for each of the
+  // five nodes after the first: 9.1 minutes, not 90 seconds.
+  assert.equal(six.clock.value, terminalDetailWaitMs(6));
+  assert.equal(six.clock.value, 546_250);
+  assert.ok(six.reads() > 1, "the run was read back until its deadline, not once");
+
+  const one = neverSettles(1);
+  await assert.rejects(one.run, /timed out/u);
+  // A Flow of one node is unchanged: the bound every run had before is the
+  // fixed part of this one.
+  assert.equal(one.clock.value, TERMINAL_DETAIL_BASE_WAIT_MS);
+
+  const twenty = neverSettles(20);
+  await assert.rejects(twenty.run, /timed out/u);
+  // And no Flow, however large, holds a scenario longer than the longest run
+  // this facility allows.
+  assert.equal(twenty.clock.value, TERMINAL_DETAIL_MAX_WAIT_MS);
 });
