@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { paginationKindForLabel } from "../detect-pagination";
+import { PROPOSED_MAX_PAGES, paginationKindForLabel } from "../detect-pagination";
 
 test("a control labelled Next follows the list, however the page cases or decorates it", () => {
   for (const label of ["Next", "next", " Next \n", "Next page", "NEXT PAGE", "Go to next page", "Next →"]) {
@@ -29,4 +29,17 @@ test("a control that says nothing about pagination is not one", () => {
   for (const label of ["", "   ", "Previous", "1", "Add to cart", "More about us"]) {
     assert.equal(paginationKindForLabel(label, undefined), undefined, JSON.stringify(label));
   }
+});
+
+// A proposal says how a list continues. How much of it to take is what the
+// instruction says, and a detector that answers it too turns "the first page"
+// into "every page" without anyone choosing. On 2026-09-24 that cost two of the
+// three live runs that completed: each built a single `web.dom.extract_list`
+// carrying this proposal, walked all three catalog pages, and returned 23
+// records where the expectation held 8 -- with every in-scope record matching
+// field for field, so nothing else was wrong. A read that wants more pages now
+// has to say so, and one stopped by this bound reports `truncated` rather than
+// quietly answering short.
+test("a proposal asks for the page in front of it, never for every page the pager shows", () => {
+  assert.equal(PROPOSED_MAX_PAGES, 1);
 });

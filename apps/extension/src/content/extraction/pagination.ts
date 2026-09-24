@@ -10,7 +10,9 @@
 // - `timed_out`: the command's deadline passed before the next page arrived.
 //
 // The modes (`WebAutomationExtractListPagination`):
-// - `next`, which an absent mode also means: follow the `next` control until
+// - `next`, which an absent mode also means -- though `detect-pagination.ts`
+//   now names it explicitly, so an omission is a caller's, not a proposal's:
+//   follow the `next` control until
 //   it is absent. After a click the list must become a different list -- its
 //   first item detached or replaced, or its length changed -- within ten
 //   seconds, or the page ignored its own control and the read fails. The old

@@ -114,8 +114,14 @@ test("product-catalog: a picked product name proposes the eight cards, with a li
   expect(proposal.fields.map((field) => field.spec.kind)).toContain("link");
   expect(fieldLabelled(proposal, "product-link").spec).toMatchObject({ kind: "link" });
 
-  // Next is detected, and the page count comes from the page's own numbered controls.
-  expect(proposal.pagination).toMatchObject({ next: NEXT, maxPages: await page.locator(PAGE_NUMBERS).count() });
+  // Next is detected, named explicitly, and asks for the page in front of it.
+  // The count used to come from the page's own numbered controls, which made a
+  // proposal decide how much of a list to take -- a question only the
+  // instruction can answer, and the one that had two of three live runs on
+  // 2026-09-24 walk a three-page catalog for a "first page" request
+  // (`detect-pagination.ts`, PROPOSED_MAX_PAGES).
+  expect(await page.locator(PAGE_NUMBERS).count()).toBeGreaterThan(1);
+  expect(proposal.pagination).toMatchObject({ mode: "next", next: NEXT, maxPages: 1 });
 
   // D3: nothing the cards say is in the proposal.
   const names = (await page.locator(PRODUCT_NAME).allInnerTexts()).map((name) => name.trim());
