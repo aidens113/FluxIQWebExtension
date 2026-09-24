@@ -17,6 +17,16 @@
 // Core's loop answers a repeat from what it already holds until the build runs
 // out of steps.
 //
+// The `detail` that answered that did not reach the one path the model now
+// uses. Every handle a plan resolver would not make real came back as the
+// single reason `parameters_not_resolved`, with the resolver's own codes
+// buried in `instead` among the shapes a handle is written in -- so
+// `target_unobserved` was one word again. Measured on `run-muf8dstp-0135804a`,
+// 2026-09-24: twenty of 32 decision rows read it, mutually indistinguishable,
+// inside one undivided 99-second gap. `webLlmHandleRejectionReason` below
+// reads those codes and gives back the reason each one implies, which is what
+// makes the three defects behind that one word three answers again.
+//
 // So a rejection now carries a `detail`, and everything in it is one of three
 // things and never a fourth:
 //
@@ -135,6 +145,18 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   page any more -- it was removed, or the page re-rendered. Look again.
  * - `handle_names_several_now`: the control that handle named has become more
  *   than one element, so acting on it would be a guess. Look again and choose.
+ * - `handle_in_wrong_parameter`: the handle is written in a parameter that
+ *   takes no handle. Put it in the one the node's description names.
+ * - `handle_in_another_frame`: the step already names a frame other than the
+ *   one the handle's element is in, so moving it there would be a guess.
+ * - `handle_wrong_kind_of_control`: the handle names a real control, and not
+ *   one this node can act on -- a choice step given a button, an entry step
+ *   given a link. Choose a handle whose control the node fits.
+ * - `extraction_handle_required`: a repeating list was already detected here,
+ *   so an extraction written from selectors is a guess at what was never
+ *   shown. Name the detected list's own handle.
+ * - `column_not_in_detected_list`: a column of the extraction names a field the
+ *   detected list has no column for. Choose one it does have.
  *
  * Where the Flow is (`not_at_start_location`):
  * - `start_location_not_reached`: the Flow has not reached the place it starts
@@ -176,6 +198,11 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "page_moved_since_packet",
   "handle_no_longer_on_page",
   "handle_names_several_now",
+  "handle_in_wrong_parameter",
+  "handle_in_another_frame",
+  "handle_wrong_kind_of_control",
+  "extraction_handle_required",
+  "column_not_in_detected_list",
   "unexpected_input_keys",
   "missing_input_keys",
   "malformed_handle",
@@ -193,6 +220,13 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   // The library verb names a node, and two things can be wrong with the naming.
   // `instead` carries what the call could have written: the nodes this domain
   // can run, or the resolver's own codes for a handle it would not make real.
+  //
+  // `parameters_not_resolved` is now the last answer rather than the first: the
+  // resolver's codes are read (`HANDLE_ISSUE_REASONS`) and the reason above
+  // that each one implies is given instead. What is left when none of them
+  // matches is a gap in that table rather than a fact about the call, so a
+  // refusal that still reads `parameters_not_resolved` is a finding about this
+  // file.
   "node_not_runnable_here",
   "parameters_not_resolved",
   // The node acts on an element and its parameters named no handle. The model
@@ -256,7 +290,64 @@ export function recoverable(code: WebLlmToolRejectionCode, detail?: WebLlmToolRe
   throw new RecoverableToolRejection(code, detail);
 }
 
-/** One reason, carrying only the fields that reason gives a meaning to. */
+/**
+ * The plan resolver's own codes for a handle it would not make real
+ * (`plan-resolution/resolve-plan-node.ts` `WEB_PLAN_HANDLE_ISSUE_CODES`),
+ * against the reason each one implies.
+ *
+ * Both halves are this domain's closed vocabulary, so nothing the page said can
+ * cross this table; what it does is turn one word back into the several
+ * different mistakes it was made of. The codes it does not name -- the
+ * `web.handle.expected.*` shape hints, and the `<code>:<position>` entries --
+ * are not reasons at all and are passed over.
+ */
+const HANDLE_ISSUE_REASONS: ReadonlyMap<string, WebLlmToolRejectionReason> = new Map([
+  ["web.handle.malformed", "malformed_handle"],
+  ["web.handle.misplaced", "handle_in_wrong_parameter"],
+  ["web.handle.unknown", "handle_not_in_packet"],
+  ["web.handle.stale", "page_moved_since_packet"],
+  ["web.handle.ambiguous", "handle_names_several_now"],
+  ["web.handle.not_unique", "handle_names_several_now"],
+  ["web.handle.frame_mismatch", "handle_in_another_frame"],
+  ["web.handle.unknown_field", "column_not_in_detected_list"],
+  ["web.handle.extraction_required", "extraction_handle_required"],
+  ["web.handle.wrong_control", "handle_wrong_kind_of_control"]
+] as const satisfies ReadonlyArray<readonly [string, WebLlmToolRejectionReason]>);
+
+/**
+ * Which of those mistakes a resolver refusal was, given its codes.
+ *
+ * The defect this closes is the failed multi-step run `run-muf8dstp-0135804a`:
+ * twenty of its 32 decision rows read `web.action.rejected.target_unobserved`
+ * and were mutually indistinguishable, because every way a handle can fail to
+ * name one control arrived as the single reason `parameters_not_resolved`. A
+ * handle that was never in a packet, a handle whose page the exploration has
+ * left, and a selector the page has given to several controls are three
+ * different defects with three different next moves, and the model was told
+ * one word for all of them.
+ *
+ * The first code that names a reason wins, which is the resolver's own
+ * priority: it lists its reasons in `WEB_PLAN_HANDLE_ISSUE_CODES` order before
+ * anything else, so reading in order is reading that order.
+ */
+export function webLlmHandleRejectionReason(issueCodes: readonly string[]): WebLlmToolRejectionReason {
+  for (const code of issueCodes) {
+    const reason = HANDLE_ISSUE_REASONS.get(code);
+    if (reason !== undefined) return reason;
+  }
+  return "parameters_not_resolved";
+}
+
+/**
+ * One reason, carrying only the fields that reason gives a meaning to.
+ *
+ * A caller that has the resolver's codes but not the reason behind them says
+ * `parameters_not_resolved` and puts the codes in `instead`; the reason is
+ * sharpened here rather than there, so there is one place the table is applied
+ * and no caller can forget it. It is idempotent -- a reason that has already
+ * been sharpened is not `parameters_not_resolved`, so a caller that comes to
+ * call `webLlmHandleRejectionReason` itself changes nothing here.
+ */
 export function rejectionDetail(fields: {
   reason: WebLlmToolRejectionReason;
   target?: string | undefined;
@@ -266,7 +357,9 @@ export function rejectionDetail(fields: {
   startLocation?: string | undefined;
 }): WebLlmToolRejectionDetail {
   return present<WebLlmToolRejectionDetail>({
-    reason: fields.reason,
+    reason: fields.reason === "parameters_not_resolved" && fields.instead !== undefined
+      ? webLlmHandleRejectionReason(fields.instead)
+      : fields.reason,
     target: fields.target,
     // Copied, so a caller's own list cannot be changed by what goes on the wire, and the packet stays plain JSON.
     instead: fields.instead === undefined ? undefined : [...fields.instead],

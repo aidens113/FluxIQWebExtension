@@ -79,3 +79,54 @@ test("a build publishes one step per trace row, so its steps are bounded by the 
   assert.equal(adaptationEvidenceLoop(loop({ steps: steps(100) }), "detail")?.steps?.length, 100);
   assert.throws(() => adaptationEvidenceLoop(loop({ steps: steps(130) }), "detail"), /exceeded its bounded contract/u);
 });
+
+// A row used to be rebuilt as exactly `toolId`, `effectApplied` and
+// `resultCode`, so every other member Core published was thrown away here --
+// before it could reach the record a run publishes. What replaced the
+// whitelist is the shape of each value, and these two tests are the pair that
+// matters: everything Core sends arrives, and nothing that could carry the
+// page does.
+
+test("a decision row carries every member Core published on it", () => {
+  const read = adaptationEvidenceLoop(loop({
+    steps: [{
+      toolId: "core.run_node",
+      effectApplied: true,
+      resultCode: "web.action.succeeded",
+      iteration: 7,
+      callId: "call-01J9F4Z2",
+      evidenceBytes: 4_096,
+      reason: "web.action.rejected.target_unobserved",
+      startedAt: "2026-09-24T11:04:07+00:00",
+      usage: { inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500 },
+    }],
+  }), "detail");
+
+  assert.deepEqual(read?.steps?.[0], {
+    toolId: "core.run_node",
+    effectApplied: true,
+    resultCode: "web.action.succeeded",
+    iteration: 7,
+    callId: "call-01J9F4Z2",
+    evidenceBytes: 4_096,
+    reason: "web.action.rejected.target_unobserved",
+    startedAt: "2026-09-24T11:04:07+00:00",
+    usage: { inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500 },
+  });
+});
+
+test("nothing the tool returned and nothing the model wrote reaches the record", () => {
+  const read = adaptationEvidenceLoop(loop({
+    steps: [{
+      toolId: "core.run_node",
+      iteration: 3,
+      selector: '[data-testid="product-card"]',
+      url: "http://127.0.0.1:53017/scenarios/catalog",
+      label: "Add to cart",
+      reply: "I will click the Submit button next",
+      input: { selector: { nested: "deep" } },
+    }],
+  }), "detail");
+
+  assert.deepEqual(read?.steps?.[0], { toolId: "core.run_node", iteration: 3 });
+});

@@ -120,7 +120,6 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   setFacilityStage("bundle.initialize");
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
   await bundle.initialize();
-  const capture = new EvidenceCaptureController(bundle, evidence.capture);
   const startedAt = new Date().toISOString();
   let topology: RunningTopology | undefined;
   let context: BrowserContext | undefined;
@@ -138,6 +137,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let panelVerification: FluxIQPanelVerificationOutcome | undefined;
   let stepRunner: ScenarioStepRunner | undefined;
   let consoleErrors: ConsoleErrorWatch | undefined;
+  // What a capture is a picture of: the step runner's active page while a script is running, else the scenario tab -- the rule the failure screenshot below already used, and the same `sensitive-input` exclusion. Both controllers take it, so a `runtime.dispatch`, a `runtime.settle` and an `error` are pictures rather than `capture-unavailable`; before the tab exists there is nothing to photograph and they say so.
+  const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => { const shown = stepRunner?.activePage() ?? scenarioPage; return shown && !shown.isClosed() ? { bytes: await shown.screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const } : undefined; } };
+  const capture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
   let recordingBaseline: Set<string> | undefined;
   let recordedEvents: Record<string, number> | undefined;
   // The extension's count of the executable actions it recorded, read before Stop and compared with Core's.
@@ -316,7 +318,6 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     });
     const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
-    const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await (stepRunner?.activePage() ?? page).screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
     const stepCapture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
     if (target.mode === "existing") {
       if (!paired || !existingControl || !existingPreflight) throw new RunnerFailure("gateway.pairing", "Existing FluxIQ extension pairing did not produce an executable session");
@@ -385,6 +386,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
         authorizeRun: live.repairAuthorizer(control, activeTopology),
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
+        recordIncompleteEvidence: incomplete => bundle.writeStructured("snapshots/flow-lane.json", incomplete),
         ...flowRunHooks(activeTopology, async evidence => {
           await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence));
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
@@ -505,14 +507,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (flowObservation?.reportedVerdict == null) {
       facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.execute");
     }
-    // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis.
+    // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis. So now are a `runtime.behavior` failure's, which is the class the created-Flow lane actually raises -- a build that proposed nothing, a build that asked for a permission, a Flow with no extract node -- and whose details were dropped here while a recording's were kept. One of them does carry page data (`assertExtraction`'s record mismatch publishes the expected and the observed record), so the gate is the disclosure rule `snapshots/extraction-mismatches.json` already publishes observed values by: a scenario that declares a replay secret has one on its page by construction, and its details are withheld.
     // So is what the Flow reported when the lane got that far: Core's category and closed-set code, and nothing else of the record.
     const flowReported = flowObservation?.automationFailureReported;
     const finalizationWaitDetails = finalizedRecordingWaitFailureDetails(error);
     const pairingWaitDetails = pairingStatusWaitFailureDetails(error);
     const httpTransportDetails = httpTransportFailureDetails(error);
     const topologyReadinessDetails = topologyReadinessFailureDetails(error);
-    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
+    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
     const failurePage = stepRunner?.activePage() ?? scenarioPage;
     const bytes = evidence.failureScreenshot && scenario.id !== "sensitive-input" && failurePage && !failurePage.isClosed() ? await failurePage.screenshot({ type: "png" }).catch(() => undefined) : undefined;
     if (bytes) {

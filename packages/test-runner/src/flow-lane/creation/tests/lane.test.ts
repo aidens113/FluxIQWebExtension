@@ -7,7 +7,7 @@ import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
 import type { LabResetFetch } from "../../reset-scenario-lab.js";
 import type { CreatedFlowBuild } from "../build-proposal.js";
-import { runCreatedFlowLane, type CreatedFlowLaneEvidence } from "../lane.js";
+import { runCreatedFlowLane, type CreatedFlowLaneEvidence, type CreatedFlowLaneIncomplete } from "../lane.js";
 import { resolveCreatedFlowRequest, type CreatedFlowRequest } from "../request.js";
 import { createdFlowLaneSnapshot } from "../snapshot.js";
 import { EXTRACTING_NODES, FLOW_ID, PROJECT_ID, fakeCreationCore, type FakeCreationCoreOptions } from "./fake-creation-core.js";
@@ -36,6 +36,7 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
   const workflow = options.workflow ?? resolveScenarioWorkflow(catalogScenario, { ...(request.workflowId === undefined ? {} : { workflowId: request.workflowId }), ...(request.variantId === undefined ? {} : { variantId: request.variantId }) });
   const settled: CreatedFlowBuild[] = [];
   const evidence: CreatedFlowLaneEvidence[] = [];
+  const incomplete: CreatedFlowLaneIncomplete[] = [];
   const fetchLab: LabResetFetch = async (url) => { core.calls.push(`reset:${new URL(url).pathname}`); return { ok: true, status: 200 }; };
   const run = runCreatedFlowLane({
     control: core.control,
@@ -54,10 +55,11 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     ...(options.settleRun ? { settleRun: options.settleRun } : {}),
     prepareFlowPage: async () => { core.calls.push("prepare"); },
     recordEvidence: async (published) => { core.calls.push("publish"); evidence.push(published); },
+    recordIncompleteEvidence: async (published) => { core.calls.push("publish-incomplete"); incomplete.push(published); },
     checkFinalState: async () => { core.calls.push("oracle"); return options.finalStateHolds ?? true; },
     fetchLab,
   });
-  return { run, settled, evidence };
+  return { run, settled, evidence, incomplete };
 }
 
 test("a dataset task is built, settled, applied, run on a freshly presented page, and passes on the records it stored", async () => {
@@ -259,7 +261,8 @@ test("the lane refuses what it cannot build or run honestly, before the step it 
   // An apply that changed nothing.
   const unchanged = fakeCreationCore({ appliedMutationCount: 0 });
   await assert.rejects((await runLane(unchanged)).run, /reported no change to the Flow/u);
-  assert.equal(unchanged.calls.at(-1), "apply", "nothing is read or run after an apply that changed nothing");
+  // Nothing is read or run after an apply that changed nothing; the lane writes down what it knew and stops there.
+  assert.deepEqual(unchanged.calls.slice(-2), ["apply", "publish-incomplete"]);
 });
 
 // With a repair grant the created Flow's playback is a live run: it starts its
@@ -318,4 +321,50 @@ test("a repair run that throws is still settled, and an overspend outranks the r
   await assert.rejects(breached.run, (error: unknown) => error === breach);
   const unwritable = await runLane(failing(), { authorizeRun: grant, settleRun: async () => { throw new Error("disk full"); } });
   await assert.rejects(unwritable.run, /the run broke/u, "a settlement that could not write its record does not hide why the lane failed");
+});
+
+/**
+ * The runs that most need reading are the ones that stop before the judgement,
+ * and until this they were the ones with nothing written down: `flow-lane.json`
+ * was published from `recordEvidence` alone, which a failed build never
+ * reaches. The failure itself is unchanged -- the artifact is added to the
+ * run's record, not taken out of its verdict.
+ */
+test("a build that proposed no Flow is written down with what the lane knew, and still fails the run", async () => {
+  const diagnostic = { code: "flow_bootstrap.evidence_repeat_without_progress", stage: "provider_output_validation", retryable: false, providerInvocation: "attempted", providerResponse: "received", evidenceLoop: { iterationCount: 3, decisionCount: 2, toolCallCount: 2, evidenceBytes: 400 } };
+  const core = fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  const { run, incomplete } = await runLane(core);
+  await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /FluxIQ did not build a Flow from the task's instruction/u.test(error.message));
+  assert.equal(incomplete.length, 1);
+  const written = incomplete[0]!;
+  assert.equal(written.lane, "created-flow");
+  assert.equal(written.complete, false);
+  assert.equal(written.stoppedAt, "build");
+  assert.equal(written.failure.category, "runtime.behavior");
+  assert.match(written.failure.message, /FluxIQ did not build a Flow/u);
+  assert.equal(written.flowId, FLOW_ID);
+  assert.equal(written.task.taskId, "catalog-first-page");
+  // The build's own record: its outcome, Core's code and what it spent, which is the whole of what a refused build can be diagnosed from.
+  assert.equal(written.build?.outcome, "failed");
+  assert.equal(written.build?.failure?.code, "flow_bootstrap.evidence_repeat_without_progress");
+  // Nothing was built, so nothing is claimed about it.
+  assert.deepEqual([written.review, written.flowShape, written.authoredNodes, written.ownPage, written.runtimeRunId, written.status, written.route], [null, null, null, null, null, null, null]);
+  assert.deepEqual(written.actions, []);
+  // The same screen the complete snapshot writes under: the instruction is counted and hashed, never quoted.
+  assert.equal(JSON.stringify(written).includes("Scrape the first page"), false);
+});
+
+test("a settlement that refuses after the build still carries the build, and a failure after the publish leaves the complete snapshot alone", async () => {
+  const refusal = new RunnerFailure("runtime.behavior", "Live LLM run reached no provider");
+  const unsettled = await runLane(fakeCreationCore(), { settle: async () => { throw refusal; } });
+  await assert.rejects(unsettled.run, (error: unknown) => error === refusal);
+  assert.equal(unsettled.incomplete[0]?.stoppedAt, "build");
+  assert.equal(unsettled.incomplete[0]?.build?.outcome, "proposed", "the build is held before it is settled, so the settlement's refusal does not lose it");
+
+  const core = fakeCreationCore();
+  const judged = await runLane(core, { request: resolveCreatedFlowRequest(catalogScenario, goalTask()), finalStateHolds: false });
+  await assert.rejects(judged.run, /playback goal did not hold/u);
+  assert.equal(judged.evidence.length, 1);
+  assert.deepEqual(judged.incomplete, [], "the complete snapshot is already on disk and must not be overwritten by a partial one");
+  assert.equal(core.calls.includes("publish-incomplete"), false);
 });

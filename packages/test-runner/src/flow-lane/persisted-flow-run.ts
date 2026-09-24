@@ -11,7 +11,7 @@ import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { recoveredByNode } from "./node-recovery.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 import { readFlowRunRoute, type FlowRunRoute } from "./taken-route.js";
-import { awaitTerminalRunDetail, pendingWork, TERMINAL_DETAIL_POLL_MS, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
+import { awaitTerminalRunDetail, pendingWork, terminalDetailWaitMs, type PendingWork, type PersistedFlowTerminalWait } from "./terminal-run-wait.js";
 
 /**
  * How long a granted run is read back for after its request timed out: Core's
@@ -20,16 +20,24 @@ import { awaitTerminalRunDetail, pendingWork, TERMINAL_DETAIL_POLL_MS, type Pend
  * defines, so it is the run's own deadline rather than a guess at one. The poll
  * ends as soon as the run settles; this bounds only a run that never does.
  *
- * Why a granted run needs more than the 90 seconds a run ordinarily gets
- * (`TERMINAL_DETAIL_WAIT_MS`, in `terminal-run-wait.ts`): since t012, a created
- * Flow's playback carries a `verify_result` grant, so the single request that
- * runs it also waits for the model to judge the result. On 2026-09-18 that
- * outlasted the 30-second request bound in four units, and because the run's id
- * arrived only in the reply, nothing could be read back and every one of them
- * failed as `environment.missing`.
+ * Why a granted run needs more than the fixed 90 seconds a one-node run gets
+ * (`TERMINAL_DETAIL_BASE_WAIT_MS`, in `terminal-run-wait.ts`): since t012, a
+ * created Flow's playback carries a `verify_result` grant, so the single
+ * request that runs it also waits for the model to judge the result. On
+ * 2026-09-18 that outlasted the 30-second request bound in four units, and
+ * because the run's id arrived only in the reply, nothing could be read back
+ * and every one of them failed as `environment.missing`.
  */
 const GRANTED_RUN_WAIT_MS = AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS;
-const GRANTED_RUN_POLL_MS = 1_000;
+/**
+ * How often a run that outlasted its request is read back for.
+ *
+ * A second rather than the 250 ms a short wait polls at, because the read is
+ * `get-flow-run-detail` against the Core that is still executing the run:
+ * across the ten minutes this wait may now last, 250 ms would be 2,400 whole
+ * run details serialized in competition with the run they are asking about.
+ */
+const READ_BACK_POLL_MS = 1_000;
 /**
  * The HTTP bound on the one request that runs a granted Flow.
  *
@@ -184,8 +192,13 @@ const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
  *
  * This is Core's resolution, not the browser's. The browser's
  * `WebAutomationTargetResolution` reaches Core inside the dispatched result,
- * which Core stores on the attempt's `outputs`; the run detail drops `outputs`,
- * so no endpoint this lane reads can return it.
+ * which Core stores on the attempt's `outputs`, and the run detail drops
+ * `outputs` -- so it travelled nowhere until Core began projecting it beside
+ * this one, narrowed, at `metadata.hostTargetResolution`
+ * (`service/summaries/host-target-resolution.ts`). That is the attempt's
+ * `hostTargetResolution` above, and the two are kept apart because they answer
+ * different questions: Core's pre-dispatch choice of candidate, and what the
+ * host did with the command when it arrived.
  */
 export type PersistedTargetResolution = PersistedFieldsOf<AutomationNodeTargetResolution>;
 
@@ -375,14 +388,24 @@ export async function executeRecordedFlowRun(
     // Only a bounded request can have left Core executing after the client went
     // away. An arbitrary runner failure is not evidence that a run completed.
     if (!isBoundedHttpFailure(error)) throw error;
-    // A granted run that outlasted its request is read back for as long as
-    // Core would let it keep running, and is finished only once its result's
-    // verdict, and a failed run's recovery, are recorded. A caller's own abort
-    // keeps the short window: it is somebody stopping the run, not the run
-    // taking long.
+    // A run that outlasted its request is read back for as long as it could
+    // still be running: Core's lease on a claimed grant for a granted run, and
+    // for a deterministic one the bound its own Flow earns -- the fixed cost of
+    // a run plus Core's per-node ceiling for every action node after the first.
+    //
+    // The Flow's node count is why this cannot be one number. Every run the
+    // 90-second bound was measured on had a single extraction node; a Flow of
+    // six to twenty nodes outlasts it while still executing, and the read-back
+    // then finds no terminal detail and rethrows the request's own timeout --
+    // a product failure recorded for a Flow that was still running, which is
+    // the failure mode that has already cost this project hours of diagnosis.
+    //
+    // A caller's own abort keeps the short window either way: it is somebody
+    // stopping the run, not the run taking long.
     const granted = input.llmExecution !== undefined;
-    const timedOut = granted && error instanceof RunnerFailure && error.details?.bounded === "timeout";
-    const wait: PersistedFlowTerminalWait = { ...(timedOut ? { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: GRANTED_RUN_POLL_MS } : {}), ...settlement, ...terminalWait };
+    const timedOut = error instanceof RunnerFailure && error.details?.bounded === "timeout";
+    const readBackMs = granted ? GRANTED_RUN_WAIT_MS : terminalDetailWaitMs(input.actionTypes?.size);
+    const wait: PersistedFlowTerminalWait = { ...(timedOut ? { timeoutMs: readBackMs, intervalMs: READ_BACK_POLL_MS } : {}), ...settlement, ...terminalWait };
     const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), error, wait);
     const reads = await terminalReadsOf(control, { projectId: input.projectId, runId, domainId }, settled.detail, bounds);
     return outcomeFromDetail(runId, settled.detail, reads, sessionStatus, input.actionTypes, input.candidateOrder, settled.unsettled);
@@ -395,7 +418,7 @@ export async function executeRecordedFlowRun(
   // rather than taken as finished while Core is still repairing it.
   if (input.llmExecution && pendingWork(detail, { awaitRecovery: settlement.awaitRecovery === true }) === "recovery") {
     const early = new RunnerFailure("runtime.behavior", "Core answered the granted run before its detail was terminal");
-    const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), early, { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: GRANTED_RUN_POLL_MS, ...settlement, ...terminalWait });
+    const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), early, { timeoutMs: GRANTED_RUN_WAIT_MS, intervalMs: READ_BACK_POLL_MS, ...settlement, ...terminalWait });
     detail = settled.detail;
     unsettled = settled.unsettled;
   }

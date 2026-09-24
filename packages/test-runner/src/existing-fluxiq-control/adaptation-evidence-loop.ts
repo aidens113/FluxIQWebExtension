@@ -10,6 +10,7 @@
 
 import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
 import { array, integer, invalid, record, stringArray, text, type JsonRecord } from "./api-readings.js";
+import { publishableStepFields, type PublishableStepValue } from "./publishable-step-value.js";
 
 /** Core's own ceiling on a build's decisions: its evidence-loop iterations, plus the deterministic iteration 0. */
 const MAX_EVIDENCE_LOOP_STEPS = 65;
@@ -58,7 +59,35 @@ export type ExistingAdaptationEvidenceLoop = {
    * refused build carries them on its failure diagnostic; a proposed one
    * carries them here.
    */
-  steps?: Array<{ toolId: string; effectApplied?: boolean; resultCode?: string }>;
+  steps?: ExistingAdaptationEvidenceLoopStep[];
+};
+
+/**
+ * One decision the build made: the tool it called, or Core's name for a
+ * decision that called none, and whatever else Core published on the row.
+ *
+ * **Every member of the row that may travel is carried, not a chosen three.**
+ * The fields named below are the ones Core writes today and are here for a
+ * reader; they are not the limit of what is kept, and a member Core adds later
+ * arrives without a change on this side. What bounds the record is the shape of
+ * each value (`publishable-step-value.ts`), which is what keeps the guarantee
+ * that nothing the tool returned and nothing the model wrote is admitted.
+ */
+export type ExistingAdaptationEvidenceLoopStep = {
+  toolId: string;
+  effectApplied?: boolean;
+  resultCode?: string;
+  /** The loop iteration this row belongs to, which is what a provider call is counted by; two rows may share one. */
+  iteration?: number;
+  /** The evidence call the row records, where it made one. */
+  callId?: string;
+  /** Bytes of evidence this one call admitted. A size, never a value. */
+  evidenceBytes?: number;
+  /** The refusal's own reason, where the row was one and Core named it. */
+  reason?: string;
+  /** What this one call spent, as Core reported it. */
+  usage?: Readonly<Record<string, string | number | boolean>>;
+  [field: string]: PublishableStepValue | undefined;
 };
 
 /** The created audit's accounting, or `undefined` when the build was not evidence-guided. */
@@ -112,19 +141,40 @@ function outsideItsContract(loop: ExistingAdaptationEvidenceLoop): boolean {
 }
 
 /**
- * A build's published decisions, in order. Only the tool id, whether its
- * effect was applied, and the code it came to are kept -- the same three
- * fields a refused build's diagnostic carries, so a proposed build and a
- * refused one read alike. Nothing the tool returned and nothing the model
- * wrote is admitted.
+ * A build's published decisions, in order.
+ *
+ * **Nothing the tool returned and nothing the model wrote is admitted.** That
+ * policy is unchanged; what changed is how it is enforced. This kept the tool
+ * id, whether the effect was applied, and the result code, and dropped every
+ * other member of the row -- so a real failed build read as 32 rows of two
+ * fields each, twenty of them the identical `web.action.rejected.target_unobserved`
+ * inside one undivided 99-second gap, and three defects with three different
+ * fixes were indistinguishable (`run-muf8dstp-0135804a`). The iteration, the
+ * call id, the bytes the call admitted, what it spent and the refusal's own
+ * reason were all on the row and all thrown away here.
+ *
+ * Each member is now judged by the shape of its value
+ * (`publishable-step-value.ts`): an identifier, a closed code, a count, a byte
+ * size, a flag and a timestamp travel; a prompt, a reply, free text, a
+ * selector, an address and a label cannot. A member Core adds later is carried
+ * through with no change here, and the guarantee still holds because it never
+ * depended on the list of names -- it depends on what a value is allowed to
+ * look like.
+ *
+ * A refused build's decisions are built by the same rule in
+ * `flow-lane/creation/build-proposal.ts`, so a proposed build and a refused one
+ * still read alike.
  */
-function evidenceLoopSteps(value: unknown, at: string): Array<{ toolId: string; effectApplied?: boolean; resultCode?: string }> {
+function evidenceLoopSteps(value: unknown, at: string): ExistingAdaptationEvidenceLoopStep[] {
   return array(value, at).map((entry, index) => {
     const step = record(entry, `${at}[${index}]`);
-    return {
+    // Every member was admitted by the shape rule on the way in, and `toolId`
+    // by this module's own: refuse a malformed record rather than coerce it.
+    // The assertion states that shape rather than assuming it.
+    const row: Record<string, PublishableStepValue> = {
       toolId: text(step.toolId, `${at}[${index}].toolId`),
-      ...(step.effectApplied === undefined ? {} : { effectApplied: Boolean(step.effectApplied) }),
-      ...(step.resultCode === undefined ? {} : { resultCode: text(step.resultCode, `${at}[${index}].resultCode`) }),
+      ...publishableStepFields(step),
     };
+    return row as ExistingAdaptationEvidenceLoopStep;
   });
 }

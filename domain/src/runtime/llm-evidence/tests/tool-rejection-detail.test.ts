@@ -18,6 +18,8 @@ import test from "node:test";
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import type { WebLlmEvidenceGateway } from "../capture";
+import { WEB_PLAN_HANDLE_ISSUE_CODES } from "../plan-resolution";
+import { rejectionDetail, webLlmHandleRejectionReason, WEB_LLM_TOOL_REJECTION_REASONS } from "../tool-rejection";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
 import { WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_PRESS_TOOL_ID } from "../vocabulary";
@@ -87,29 +89,45 @@ test("each way a handle stops naming one control is a different reason, and the 
   // A handle no packet ever carried.
   const invented = await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } });
   assert.equal(codeOf(invented), "target_unobserved");
-  // The resolver's own codes now say which way the handle stopped naming one
+  // The resolver's own codes say which way the handle stopped naming one
   // control, because the handle is made real by the same resolver the built
-  // Flow's parameters go through. Each still implies a different next call,
-  // and the shapes a handle is accepted in ride with them, because a code is
-  // a name for a mistake and never a statement of what is accepted instead.
-  assert.deepEqual(detailOf(invented), { reason: "parameters_not_resolved", target: "target.40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  // Flow's parameters go through -- and the reason is now that answer instead
+  // of `parameters_not_resolved`, which was one word for every one of them.
+  // Each implies a different next call, and the shapes a handle is accepted in
+  // ride with them, because a code is a name for a mistake and never a
+  // statement of what is accepted instead.
+  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "target.40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // The control the handle named has left the page.
+  //
+  // This reads `handle_not_in_packet` rather than `handle_no_longer_on_page`,
+  // and that is the resolver being honest about what it knew. Running any node
+  // recaptures the page first and remembers the new packet in that page's
+  // place (`node-run/run.ts`, `run.shown`), so by the time the handle is
+  // resolved it is simply not among this page's handles -- which is what
+  // `web.handle.unknown` says. Telling "was issued, and the page dropped it"
+  // apart from "was never issued" needs `plan-resolution/target-packets.ts` to
+  // remember the handles a recapture replaced. Until it does, this reason is
+  // not invented here.
   pages.set({ url: QUEUE.url, elements: [QUEUE.elements[1]!] });
   const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(gone), { reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
-  // The page the packet described has been left.
+  // The page the packet described has been left. The same answer, for the same
+  // reason: the page remembered under that location no longer carries the
+  // handle, so nothing is left for the resolver to call stale.
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
   const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // Not a handle this domain issues at all.
   const malformed = await runtime.executeTool({ ...BASE, callId: "call.malformed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "the schedule button" } }, consequences: [] } });
   // A token that is not a handle this domain mints is a locator the model
-  // invented, and an acting node is refused for naming one.
+  // invented, and an acting node is refused for naming one. `malformed_handle`
+  // and not `handle_not_in_packet`: looking again would not help, because what
+  // was written is not the shape a handle is written in.
   assert.equal(codeOf(malformed), "target_unobserved");
-  assert.deepEqual(detailOf(malformed), { reason: "parameters_not_resolved", instead: ["web.handle.malformed", "web.handle.expected.selector.handle_location", "web.handle.malformed:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.selector.handle_location", "web.handle.malformed:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
 
   assert.deepEqual(clicks, [], "nothing was pressed on a handle that named nothing");
 });
@@ -124,7 +142,7 @@ test("a handle the page has turned into several elements says so, rather than be
   const several = await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
 
   assert.equal(codeOf(several), "target_unobserved");
-  assert.deepEqual(detailOf(several), { reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(several), { reason: "handle_names_several_now", target: "target.1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
   assert.deepEqual(clicks, []);
 });
 
@@ -203,4 +221,66 @@ test("no refusal carries a word of the page, whatever it refused", async () => {
   for (const word of PAGE_WORDS) assert.equal(serialized.includes(word), false, word);
   // Every one of them refused, and every one of them said why.
   for (const refusal of refusals) assert.ok(detailOf(refusal as { evidence: unknown })?.reason, JSON.stringify(refusal));
+});
+
+/**
+ * The table that turns the resolver's codes back into reasons has to cover the
+ * resolver, or the flattening comes back quietly: a code it does not name falls
+ * through to `parameters_not_resolved`, which is the one word this whole change
+ * exists to remove. So the resolver's own published set is the test's input,
+ * and a code added there fails here until a reason is chosen for it.
+ *
+ * The `web.handle.expected.*` codes are deliberately outside it. They are not
+ * reasons at all -- a refusal carries them to say where a handle of that kind
+ * is accepted and in which shape -- and reading one as the reason would answer
+ * "what went wrong" with "here is the shape", which is what the model was
+ * already told.
+ */
+test("every code the plan resolver can refuse with names a reason, and each reason is one of the closed set", () => {
+  const reasons = new Set<string>(WEB_LLM_TOOL_REJECTION_REASONS);
+  const unmapped: string[] = [];
+  for (const code of WEB_PLAN_HANDLE_ISSUE_CODES) {
+    const reason = webLlmHandleRejectionReason([code]);
+    if (code.startsWith("web.handle.expected.")) {
+      assert.equal(reason, "parameters_not_resolved", `${code} is a shape hint and must not be read as a reason`);
+      continue;
+    }
+    if (reason === "parameters_not_resolved") unmapped.push(code);
+    assert.equal(reasons.has(reason), true, `${code} named ${reason}, which is not one of this domain's reasons`);
+  }
+  assert.deepEqual(unmapped, [], "these resolver codes have no reason, so a refusal carrying one says nothing the model can act on");
+});
+
+test("the reason is the first the refusal names, and nothing but a code can become one", () => {
+  // The resolver lists its reasons in its own published order before the
+  // positions and the shapes, so reading in order is reading that order.
+  assert.equal(webLlmHandleRejectionReason(["web.handle.malformed", "web.handle.unknown"]), "malformed_handle");
+  assert.equal(webLlmHandleRejectionReason(["web.handle.unknown", "web.handle.malformed"]), "handle_not_in_packet");
+
+  // A position is a code and a path, and a path is a parameter key the model
+  // wrote. It is not a reason, and it is passed over rather than matched on.
+  assert.equal(webLlmHandleRejectionReason(["web.handle.unknown:target", "web.handle.stale"]), "page_moved_since_packet");
+  // As are the shapes a handle is accepted in.
+  assert.equal(webLlmHandleRejectionReason(['target: {"handle": "target.N"}']), "parameters_not_resolved");
+  // And nothing a page could have put there becomes a reason.
+  assert.equal(webLlmHandleRejectionReason(["Schedule post", "#schedule", ""]), "parameters_not_resolved");
+});
+
+/**
+ * The sharpening happens where the detail is built, so no caller can hold the
+ * resolver's codes and forget to apply it -- and applying it twice changes
+ * nothing, which is what lets a caller start passing the sharpened reason
+ * itself without this becoming a second, disagreeing copy.
+ */
+test("a detail carrying the resolver's codes is sharpened once, and sharpening it again does not move it", () => {
+  const first = rejectionDetail({ reason: "parameters_not_resolved", target: "target.3", instead: ["web.handle.stale", "web.handle.stale:target"], missing: undefined, requestId: undefined, startLocation: undefined });
+  assert.deepEqual(first, { reason: "page_moved_since_packet", target: "target.3", instead: ["web.handle.stale", "web.handle.stale:target"] });
+  assert.deepEqual(rejectionDetail({ ...first, instead: first.instead, missing: undefined, requestId: undefined, startLocation: undefined }), first);
+
+  // A reason that was never the resolver's is left exactly as the caller said,
+  // whatever else rides with it.
+  assert.deepEqual(
+    rejectionDetail({ reason: "node_not_runnable_here", target: "web.output.dom-teleport", instead: ["web.handle.unknown"], missing: undefined, requestId: undefined, startLocation: undefined }),
+    { reason: "node_not_runnable_here", target: "web.output.dom-teleport", instead: ["web.handle.unknown"] }
+  );
 });

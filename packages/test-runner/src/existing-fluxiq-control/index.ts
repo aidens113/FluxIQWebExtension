@@ -5,7 +5,11 @@
 // own -- what a Flow Bootstrap proposal says its steps would lastingly do, and
 // where on the adaptation that actually lives; `adaptation-evidence-loop.ts`
 // is the build's own accounting and the bounds it has to satisfy.
+// `publishable-step-value.ts` is what may travel out of an audit detail on one
+// decision row, shared with the reader of a refused build so the two records
+// are built by one rule rather than two copies of it.
 
 export * from "./adaptation-consequences.js";
 export * from "./adaptation-evidence-loop.js";
 export * from "./api-readings.js";
+export * from "./publishable-step-value.js";

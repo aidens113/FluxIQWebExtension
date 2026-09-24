@@ -85,6 +85,83 @@ test("a proposed build keeps the decisions Core published on the proposal, in th
   assert.deepEqual(record.evidenceLoop?.toolIds, ["web.recovery.inspect"]);
 });
 
+test("a decision row carries every member Core published on it, and leaves behind anything that could be page content", async () => {
+  // The failed run this was written for published 32 rows of two members each,
+  // twenty of them the identical `web.action.rejected.target_unobserved` inside
+  // one undivided 99-second gap, so one handle refused twenty times and twenty
+  // different handles read exactly alike (`run-muf8dstp-0135804a`). What
+  // separates them -- the iteration, the call, the refusal's own reason, the
+  // moment, what it spent -- is all on Core's row and was all dropped here.
+  const { record } = await build({
+    evidenceLoop: {
+      providerCallCount: 2, decisionCount: 2, traceStepCount: 2, iterationCount: 2, toolCallCount: 2, evidenceBytes: 18_000,
+      toolIds: ["core.run_node"],
+      steps: [
+        {
+          toolId: "core.run_node", iteration: 1, callId: "evidence.1", effectApplied: true,
+          resultCode: "web.action.rejected.target_unobserved", reason: "handle_not_in_packet",
+          evidenceBytes: 1_450, at: "2026-09-24T10:31:05.412+01:00",
+          usage: { inputTokens: 9_000, outputTokens: 400, totalTokens: 9_400, estimatedCostUsd: 0.006 },
+        },
+        {
+          toolId: "core.run_node", iteration: 2, issueCodes: ["web.handle.unknown", "not a code but a sentence"],
+          // None of these may travel, whatever a future Core calls them: the
+          // record is bounded by the shape of a value, not by a list of names.
+          selector: "[data-testid=\"card\"]",
+          reply: "The lamp costs 16.00 USD",
+          url: "http://127.0.0.1:53017/scenarios/everything-store/",
+          usage: { inputTokens: 11_000, note: "cached prefix reused" },
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(record.evidenceLoop?.steps, [
+    {
+      toolId: "core.run_node", iteration: 1, callId: "evidence.1", effectApplied: true,
+      resultCode: "web.action.rejected.target_unobserved", reason: "handle_not_in_packet",
+      evidenceBytes: 1_450, at: "2026-09-24T10:31:05.412+01:00",
+      usage: { inputTokens: 9_000, outputTokens: 400, totalTokens: 9_400, estimatedCostUsd: 0.006 },
+    },
+    { toolId: "core.run_node", iteration: 2, issueCodes: ["web.handle.unknown"], usage: { inputTokens: 11_000 } },
+  ]);
+  const published = JSON.stringify(record);
+  for (const leaked of ["data-testid", "The lamp costs", "127.0.0.1", "cached prefix", "not a code"]) {
+    assert.equal(published.includes(leaked), false, `${leaked} must not travel on a decision row`);
+  }
+});
+
+test("the tools a build called include Core's own node runner, and never its decision names", async () => {
+  // `vocabulary()` filtered the whole `core.` prefix, and the tool the model
+  // explores with is `core.run_node`: 21 of one build's 22 calls were deleted
+  // from the record of what it did, while `core.decision_*` -- which are
+  // decisions, not tools -- is what the filter was for.
+  const proposal = await build({
+    evidenceLoop: { providerCallCount: 2, decisionCount: 2, traceStepCount: 2, iterationCount: 2, toolCallCount: 2, evidenceBytes: 18_000, toolIds: ["core.run_node", "web.inspect_current_page"] },
+  });
+  assert.deepEqual(proposal.record.evidenceLoop?.toolIds, ["core.run_node", "web.inspect_current_page"]);
+
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_unusable_decision",
+    stage: "provider_output_validation",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    evidenceLoop: {
+      iterationCount: 3, decisionCount: 3, toolCallCount: 2, evidenceBytes: 4_300,
+      steps: [
+        { toolId: "core.run_node", effectApplied: true, resultCode: "web.action.rejected.target_unobserved" },
+        { toolId: "core.decision_unusable", resultCode: "web.handle.unknown" },
+        { toolId: "web.inspect_current_page", resultCode: "web.inspect.succeeded" },
+      ],
+    },
+  };
+  const refusal = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(refusal.record.evidenceLoop?.toolIds, ["core.run_node", "web.inspect_current_page"]);
+  // The decision itself is still a step: it is what it called nothing for that is not listed as a tool.
+  assert.deepEqual(refusal.record.evidenceLoop?.steps?.map((step) => step.toolId), ["core.run_node", "core.decision_unusable", "web.inspect_current_page"]);
+});
+
 test("an instruction Core did not activate refuses before any grant is taken", async () => {
   await assert.rejects(build({ instructionStatus: "draft" }), /Core did not make the task's instruction the Flow's active instruction/u);
 });
