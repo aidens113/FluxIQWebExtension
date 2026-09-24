@@ -3,16 +3,19 @@
 // **The record output.** Core saves an output's rows only when the dispatch
 // effect carries `recordOutput` (`runtime/executor/record-capture.ts`), so a
 // node that sends none reads the page and stores nothing. The node sends the
-// one its author set, or else the one derived from its extraction
-// (`./derived-record-output.ts`). Either is parsed first, and one that does not
-// parse fails the node **before** the page is read, exactly as Core's
-// `builtin.policy.action` does, with the same codes: reading rows that cannot be
-// saved as declared would only collect them. The record output leaves the
-// parameters, because it is Core's instruction rather than the page's.
+// one derived from its extraction (`./derived-record-output.ts`), or, where its
+// author set one, that output holding the columns its extraction actually reads
+// (`./reconciled-record-output.ts`) -- because a schema the page cannot satisfy
+// loses every row without failing anything. Either is parsed first, and one
+// that does not parse fails the node **before** the page is read, exactly as
+// Core's `builtin.policy.action` does, with the same codes: reading rows that
+// cannot be saved as declared would only collect them. The record output leaves
+// the parameters, because it is Core's instruction rather than the page's.
 //
-// An author's record output may leave `recordsPath` out, since the output
-// declares where its records are (`./records-path.ts`, CD19); one that names a
-// path is sent as named, and Core reports it if nothing is there.
+// The records path is the node's own (`./records-path.ts`, CD19) whatever an
+// author wrote: the node knows where its rows are, and a path naming anywhere
+// else can only find nothing. Only a request that did not parse leaves an
+// authored path alone, since there is then no extraction to reconcile it with.
 //
 // **The timeout (D14).** The page reads each page of a list within
 // `WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS`, and the command's `timeoutMs`
@@ -38,6 +41,7 @@ import {
   webAutomationExtractListTimeoutMs
 } from "../../actions/extraction";
 import { webAutomationDerivedRecordOutput } from "./derived-record-output";
+import { webAutomationReconciledRecordOutput } from "./reconciled-record-output";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "./records-path";
 
 /** The dispatch payload's fields beside `outputId`, or the node's refusal when its record output cannot be saved. */
@@ -56,7 +60,7 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
     : rest;
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
-    : withRecordsPath(authored);
+    : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request);
   if (declared === undefined) return { ok: true, payload: { parameters } };
   const parsed = parseAutomationStudioRecordOutput(declared);
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
