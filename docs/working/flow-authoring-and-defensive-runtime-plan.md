@@ -1,7 +1,7 @@
 # Flow Authoring And Defensive Runtime
 
 Status: Active
-Status detail: Eleven tasks landed 2026-09-23 (t095-t111), all merged and pushed in both repositories. Three live runs then failed at three successively later points -- blocked asking permission to read, every record refused on a type mismatch after reading all 16 correctly, and a selector built on a React-generated id. t112 and t113 are in flight.
+Status detail: The nineteen-task extract lane measured twice on 2026-09-24: 9 stable passes, 6 stable failures, 4 tasks flipping between identical runs. Nine one-node extractions are correct to the field on hard pages; multi-step automation still is not. Five causes fixed (t116-t123), three of them not yet measured by a lane.
 Created: 2026-09-22
 Last updated: 2026-09-24
 Owner: Senior supervisor agent
@@ -13,143 +13,92 @@ Related: [week2-exit-plan.md](./week2-exit-plan.md) (the campaign this defers), 
 
 ## Current State
 
-**Scope, set by the user on 2026-09-22 and binding on everything below.** The
-only path that counts is: a person writes an instruction, the model explores the
-live page by running real Flow nodes, and the Flow it builds then runs
-deterministically and produces the right answer. **Recording-built Flows are not
-to be tested, measured, or reported as progress**, and **the ten realistic
-campaign sites are the only test surface**.
+**Scope, set by the user on 2026-09-22 and binding.** The only path that counts
+is: a person writes an instruction, the model explores the live page, and the
+Flow it builds then runs deterministically and produces the right answer.
+Recording-built Flows are not tested, measured, or reported as progress.
 
-**Where the product actually is, measured 2026-09-23/24.** Three live runs of
-`everything-store-first-page-plus-earbuds` against `deepseek-flash`, each
-diagnosed to its cause and fixed before the next. Total spend for the three:
-**$0.10**. No run has yet produced the right answer, and across every campaign
-ever run that number is still zero — but each of the three failed further along
-the chain than the one before, and every cause is now closed:
+**Where the product is, measured 2026-09-24 over two full runs of the
+nineteen-task extract lane.** Both read 11 of 19, and that number is misleading:
+task by task it is **9 stable passes, 6 stable failures, and 4 tasks that flip
+between identical runs**. About one task in five changes verdict on unchanged
+code, so a single lane run cannot tell a fix from noise. Report the stable sets.
 
-1. `run-mueozmp8-348a2057` — **no Flow at all.** The build spent 21 calls,
-   explored the page, then asked the person for permission to *read a list*, the
-   very thing the instruction requested. Nobody was there, so it parked.
-   Cause: a declaration could say what class of consequence an action carried
-   but not whether it acted at all. Fixed in t109.
-2. `run-mueqynzb-ac54aab9` — **Flow built, 11 nodes, its own `navigate` node,
-   replayed end to end, extraction ran and read exactly the 16 expected rows** —
-   and Core refused all 16, because the record schema the model authored typed
-   `price` and `rating` as numbers and a page returns text. The capture then
-   reported success with an empty array, so the node was told nothing. Fixed in
-   t111, both halves.
-3. `run-muesyox4-930bef98` — **failed before extraction**, and my first reading
-   of it was wrong. The two `#\:r13b8o\:` click failures were **not** the
-   volatile id: that is the notifications modal, which this fixture opens four
-   seconds after every load, and the clicks fired at about 1.0s and 2.4s before
-   it existed. The third, at about 4.4s, succeeded. The recovery's **-0.12** is
-   arithmetically what a same-family button scores when it shares only its
-   family, so refusing was correct. **The Flow clicks a modal on a four-second
-   timer with no wait node, and survived only by accident of the three-attempt
-   retry ladder** — recorded state is supposed to drive execution, and here it
-   did not. The run's *terminal* failure was a different node, `s6`
-   (`main > div:nth-of-type(2) > aside > div:nth-of-type(1) > a`, "0 control(s)
-   of the same family"), untouched and still open. Separately the volatile id
-   **is** fatal across builds — under another seed `:r13b8o:` becomes
-   `:r05rcq:` and the recorded address matches nothing — and t112 closed that.
-   The repair loop engaged, spent two diagnosis calls, validated the second, and
-   produced **no patch, no adaptation and no refusal code**; open as t113.
+**What works, and it is real.** Nine tasks pass in both runs, correct to the
+field: `social-scheduler` 280 records and 1120 fields all matched in 5 calls,
+`social-inbox` 25 and 125, `data-table` including its columns reordered,
+`product-catalog` with price and rating absent on some cards, with the real
+image in `data-src`, and with prices reading "16.00 USD". The pages are hard.
 
-**Eleven tasks landed on 2026-09-23, t095 to t111**, all merged and pushed in
-both repositories. The model can now see a page's filter controls (a facet
-ranked 56th of 611 never reached it, so Flows read the unnarrowed list); a field
-reads the value the page states rather than the sentence around it; a read waits
-for a lazily loaded list to be complete; the Lab reports the failure that
-decided a run rather than a recovered one, and stopped waiting 300s for a
-recovery record that never comes (campaign wall clock ~959s to ~347s); a Flow
-must reach its own page and now can, because the domain refuses every call until
-it has; a clean run that answers wrongly is a repairable failure; a repair sees
-screened step parameters and the Flow's real routing; a successful run is
-checked on a decaying schedule; and an unattended run can both judge and make a
-repair, funded by a standing Flow-scoped authorization with a ceiling and an
-expiry.
+**What that is not.** All nine are **one-node Flows** -- a single
+`web.dom.extract_list` on a page that is already the right page. Nothing
+navigates, searches, clicks or filters. Single-step extraction from difficult
+pages works; **multi-step automation does not**, and `everything-store` -- search,
+then apply a filter, then extract -- has still never produced a correct answer.
+`data-table-inventory-large` also passes on count alone (`presentFields: 0`,
+`matchedRecords: 0`), so it should not be counted as a full pass until that is
+understood.
 
-**Cost work, measured.** The cacheable prefix went from 1,272 bytes to 50,693 of
-50,711, and the first live run after it reconciled at **62.3% cache hits**
-(143,872 of 230,895 input tokens; $0.030 observed against $0.072 all-miss). The
-model is `deepseek-flash` and is now configurable rather than hardcoded in six
-places; the old prices were wrong in both directions and r5 recomputes from
-$0.1720 to $0.1188.
+**The six stable failures, each diagnosed to a named cause.**
 
-**Not done, and the next things.** t112, t113 and t114 are merged. Nothing is in
-flight.
+1. `property-listings-newest-homes` and its `agent-withheld` variant: 10 of 10
+   rows, **0 matching**, because the `address` column reads the listing's URL
+   rather than its address text. `product-catalog` shows the same shape
+   intermittently, reading `$49.00` for `rating`. A column mapped to the wrong
+   element, and the largest open cause.
+2. `admin-console-customer-book`: 19 records of 240, first row `CUS-0005`. Fixed
+   in t121 but **merged after both lanes ran**, so unmeasured.
+3. `company-directory-register-page` and `data-table-inventory-empty`: the
+   subflow loop below. Fixed in t122/t123, also **merged after both lanes**, so
+   unmeasured.
+4. `product-catalog-photos`: the Lab's oracle passes the dataset and Core's own
+   verification refutes it. The result check has now been seen wrong in both
+   directions, and since t117 a false refutation triggers a real repair.
 
-**What t113 established, and it is the sharpest finding of the day.** The repair
-loop is not dead — Core's own tests carry a `target_not_found` that reaches the
-patch call and produces a proposal. Three things stopped this run. **The model
-was asked about the wrong failure**: `annotate` diagnoses the *last* failed
-attempt, and the three highly repairable failures with six same-family controls
-were fixed deterministically by the retry rung and never reached it, so the one
-it saw was `s6` with **0 same-family controls and 0 fingerprint candidates on an
-819-byte page**. **The refusal was never checked against the page**: `annotate`
-gates exploration on `plan.explorationRequested && plan.patchRequest.request`,
-so the moment the plan says "no patch" the look is cancelled too, and the
-model's unexamined "the goal is gone" is final. And `structured-diagnosis.ts`
-is asymmetric — it refuses a model `yes` over Core's `no` and records it, but
-accepts a model `no` over Core's `unknown` unexamined. **Saying why is not
-repairing: t113 closed the silence, not the gap.**
+**Five causes found and fixed today, each proven or explicitly not.**
 
-**t114 closed the second of t113's three causes.** The loop now plans a second
-time after looking. On a `goal_unachievable` refusal it explores anyway, then
-makes a second `runtime_diagnosis` at the `plan` stage carrying the packets the
-look returned and the model's own earlier answer, and rebuilds the plan from what
-comes back. A refusal that survives keeps its code and changes rung from `plan`
-to `exploration` - which is the whole difference between "the model declined" and
-"the model declined after looking", said in the vocabulary that already existed.
-A second call that returns no diagnosis leaves the first plan standing and
-records it as unchecked rather than confirmed. Only `goal_unachievable` is
-treated as checkable: a policy refusal is a person's setting no page can speak
-to, and `diagnosis_asked_for_none` is unreachable because the flag that decides
-it is the same flag that stops an exploration running. The Lab needed no change;
-it already carries Core's rung through untouched.
+- **The page budget.** The grammar named `maxPages` and its ceiling and never
+  said what the number does, so the model wrote the count it could see. Proven
+  by a pair: "the first page" and "across all of its pages" produced the
+  identical node, `paginate: { maxPages: 3 }`, one failing and one passing; with
+  the clause in, `paginate: null` and `maxPages: 3`, 8 of 8 and 23 of 23. The
+  clause needed room Core's 600-character parameter description did not have,
+  and Core truncates silently, so that bound moved to 700.
+- **A silent subflow rejection**, and four of the eight failures.
+  `buildSubflow` returned no subflow and **no issue** when the node list was not
+  under `nodes`, `steps` or `actions`; the caller then told a model that had
+  written an array that subflows "must be an array". It rewrote the same plan
+  15, 16, 24 times. Three distinct refusals now.
+- **A refused attempt is not progress.** The loop cleared its no-progress count
+  on a refused action, bounded instead by a signature that only catches an
+  identical retry. `company-directory` spent 31 of 45 steps on
+  `target_unobserved`. The repeat cache keeps its rule; progress now asks
+  whether anything happened.
+- **A declared row count is read.** A virtualised grid says `role="grid"` and
+  `aria-rowcount`; only the ARIA feed pattern was read.
+- **A grant refusal names itself**, and a repair can resolve a grant the
+  verification already claimed -- which is why "a clean run that answers wrongly
+  is repairable" had never once produced a repair.
 
-**t115 closed the first of the three, and it was not the attempt selection.**
-Diagnosing the terminal failure is right - that is what has to be repaired for
-the run to succeed. What was wrong is that the repair was shown that failure
-*alone*: `recent_nodes` keeps only succeeded attempts, and `recoveryAttempts` was
-written on every run and read by nothing but a counter, so the three clicks the
-ladder rescued - six same-family controls each, at offsets that say the modal
-appears about four seconds in - reached nobody. A `recovered_failures` section
-now carries them. Writing its test found two more: the locator screen's id rule
-required a letter after the `#`, so React's `useId` ids - the exact shape t112 is
-named after - passed through unwithheld; and `explorationRequested` was read
-straight off the model's own `explorationNeeded`, which thirteen live runs
-answered `false` every time, so t114's re-plan would have fired almost never. A
-model does not get to both claim the goal is gone and rule that the page need not
-be looked at. Both are closed.
+**Three pagination theories were wrong first**, each diagnosed from record
+counts alone: the detector's proposal, the worked example's `maxPages: 5`, and
+the node's "across pages" description. What settled it was recording the
+parameters the model actually wrote, then running two opposite instructions as a
+pair. **The instrumentation should have come before the first fix, not after the
+third.**
 
-**The next step is a live run.** Re-run
-`everything-store-first-page-plus-earbuds` and read three things: whether a
-refusal now carries `refusalRung: "exploration"`, whether the repair's context
-carries `recovered_failures`, and whether a model shown that the page mutates on
-a timer does anything different with it. Only then fan out. Nine of the ten sites
-have not been touched by current code.
+**Also landed:** the Lab records a Flow's authored node parameters and the
+recovery context's section names; Core exports its parameter screen so nothing
+downstream copies it; and the Lab's build lock survives a crash rather than
+deadlocking the next campaign on a reused pid.
 
-**Known and written down, not yet worked:** Core's flow-bootstrap catalog
-actively teaches the model to author a record schema for a node that derives a
-correct one itself, offering value types a page can never return — its own
-header records three earlier live refusals from the same cause. The 40-element
-evidence bound now cuts four of six packets with up to 2,233 bytes unspent.
-Crossborder's header links crowd out its filters. A repair drains the shared
-authorization about 150x faster than a check, so a repeatedly failing Flow
-spends its purse and then stops being checked, with nothing telling the person.
-The authorization clause has no UI or API. Cache-hit tokens are read by Core but
-lost before the Lab can record them.
-
-**Environment traps that cost five invocations before the first run started:**
-the Lab executes Core's *compiled* output, so a Core merge invalidates it and
-`pnpm --filter fluxiq build` must run first; `.env.local` configures an
-`existing` target while every campaign run uses `isolated`; and blanking the
-existing-install keys does not work because empty values are rejected. The
-working invocation is `FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=isolated`
-with `DEEPSEEK_API_KEY` exported into the shell.
+**Next.** Re-run the lane **with repeats** -- the flip rate makes single runs
+uninformative -- to measure t121, t122 and t123, which no lane has yet seen.
+Then the column mis-mapping, which is the largest stable cause. Then
+`everything-store`, the multi-step case that has never worked.
 
 **Blockers:** none.
+
 
 ---
 
@@ -588,6 +537,40 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 
 ## Work Ledger
 
+### 2026-09-24 - The extract lane measured twice, five causes fixed, and a flip rate
+
+- Agent: supervisor, direct, with four read-only investigation workers and two
+  implementation workers.
+- Changed: Core t116-t123 and web t114-t123, all merged and pushed in both
+  repositories.
+- **Result.** Two full runs of the nineteen-task extract lane, either side of
+  four fixes, both 11 of 19. Task by task: 9 stable passes, 6 stable failures, 4
+  flips. The flip rate is the finding -- one task in five changes verdict on
+  unchanged code -- so the pass count was hiding both the fixes that worked and
+  the ones that did not.
+- **Causes fixed:** the undefined page budget (proven by a controlled pair of
+  opposite instructions); a silent subflow rejection behind four of eight
+  failures; a no-progress guard that a refused action cleared; a declared row
+  count nothing read; a grant a repair could not re-resolve; a build lock that
+  deadlocked on a reused pid after a crash.
+- **Wrong first, three times**, all on pagination and all diagnosed from record
+  counts: the detector's proposal, the example's `maxPages: 5`, the node's
+  description. Each was shipped or drafted before the authored parameters were
+  recorded. The instrumentation was the fix that mattered.
+- Validation: Core `pnpm check` observed passing through `pnpm task finish` for
+  t116, t117, t118, t119, t122 and t123; web `pnpm check` likewise for t114,
+  t115, t119, t120, t121 and t122. Domain suite `# tests 779 # pass 779 # fail
+  0`; extension `# tests 749 # pass 749 # fail 0`; test-runner `# tests 1343 #
+  pass 1343 # fail 0`; Core `runtime/flow-bootstrap` + `runtime/llm` `61 files,
+  693 tests, 0 failures`; `structure-audit: passed` in both repositories. Live:
+  two campaigns of 19 tasks, 275 and 281 provider calls, $0.223 and $0.217.
+- Outcome: Partial - five causes closed, three of them unmeasured because their
+  fixes merged after the last lane ran.
+- Not verified: t121, t122 and t123 have not been through a lane; the column
+  mis-mapping has no fix; `everything-store` has still never produced a correct
+  answer; `data-table-inventory-large` passes on count without comparing a field.
+
+
 Entries before 2026-09-24 are in
 [archive/2026-09-23-wave-one-ledger-and-partition.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-23-wave-one-ledger-and-partition.md).
 Their outcomes are settled and folded into `Current State`.
@@ -613,164 +596,10 @@ cause behind five of six failures - is in
 Its pagination conclusion was later falsified; see `Open Questions`.
 
 ## Open Questions
-- **The extract lane, all nineteen tasks: 11 passed, 8 failed, 0 no results.**
-  Up from 4 of 11 before the pagination fix, and every task now produces a Flow.
-  Passing includes `social-scheduler-whole-queue` at 280 records,
-  `data-table-inventory-large` at 1000, and `sensitive-input-card-labels` and
-  `social-inbox-first-screen`, which had produced nothing before. The eight
-  failures reduce to four causes, not eight.
-- **Four of the eight were one silent return.** `buildSubflow` ended
-  `if (!nodes.length) return { issues }`, and when the model's node list was
-  not under `nodes`, `steps` or `actions`, `issues` was empty - the subflow
-  vanished with no reason recorded, and the caller reported "Bootstrap subflows
-  must be an array" to a model that had written an array. Nothing in that
-  sentence could be acted on, so the model wrote the same plan again:
-  `data-table-inventory-empty` 24 times, `admin-console-customer-book-short` 16,
-  `product-catalog-first-page-sparse-cards` 15, `company-directory-register-page`
-  12 before dying after 44 provider calls. Three refusals now, because they are
-  three different problems.
-- **A refused attempt is no longer progress.** The loop cleared its no-progress
-  count on a refused action, bounded instead by the action's signature - which
-  catches an identical retry and not a model naming a different target each
-  time. `company-directory-register-page` spent 31 of 45 build steps on
-  `target_unobserved` that way. The repeat cache keeps its own rule; progress
-  now asks whether anything happened.
-- **A declared row count is read.** `admin-console-customer-book` returned 19 of
-  240 from a virtualiser, over a viewport saying `aria-rowcount="240"`. The
-  extension read only the ARIA feed pattern, which a grid does not use.
-- **Still open: a column mapped to the wrong element**, on
-  `property-listings-newest-homes` (address reads the listing URL, 10 rows, 0
-  matching) and intermittently on `product-catalog` (rating read `$49.00`).
-  Intermittent is the finding: earlier runs of the same task mapped it
-  correctly, so this is model variance and wants a rate, not a single run.
-- **The 23-record failure is fixed, and it took three wrong answers to find the
-  right one.** The cause was that the grammar for `extractList` named `maxPages`
-  and its ceiling and never said what the number does, so a model read it as a
-  description of the page and wrote the count it could see. The proof is a pair,
-  not an argument: "the products shown on the first page of the catalog" and
-  "every product, across all of its pages" produced the *identical* authored
-  node, `paginate: { maxPages: 3 }`, one failing at 23 of 8 and one passing at
-  23 of 23. With the clause in - "maxPages/maxScrolls = pages to read, not pages
-  present: read only the page shown unless asked for more" - the same pair
-  produced `paginate: null` and `maxPages: 3`, 8 of 8 and 23 of 23. The clause
-  needed room Core's 600-character parameter description did not have, and Core
-  truncates rather than refusing, so the bound moved to 700 with it.
-- **Three attempts missed first**, each diagnosed from record counts alone: the
-  detector's page proposal, the worked example's `maxPages: 5`, and the node's
-  own "across pages" description. None was the cause. What found it was
-  recording the parameters the model actually wrote, then running the two
-  opposite instructions as a pair - one run each, about a cent apiece. **The
-  instrumentation should have come before the first fix, not after the third.**
-- **The next cause on that task is already visible**, and it is the same one
-  property-listings has: a column mapped to the wrong element. All 8 rows, all
-  32 fields present, and `rating` reads `$49.00` where "4.6 out of 5" was
-  expected; property-listings' `address` reads its listing URL. Two sites, one
-  shape of error, and it is now the largest open failure in the extract lane.
-- **Eleven tasks across six sites never measured before: 4 passed, 6 failed, 1
-  no result.** Two of the failures are new causes, each diagnosed to the field.
-  - `admin-console-customer-book`: expected 240, observed **19**, none matching,
-    and the first row read `CUS-0005` where `CUS-0001` was expected. The console
-    is a *virtualiser* (`apps/scenario-lab/src/scenarios/admin-console/virtual-list.ts`):
-    a row outside the scroll band is removed from the document rather than
-    hidden. So 19 is the window that happened to be mounted, read from wherever
-    the list was standing - the Flow never scrolled. This is the opposite
-    failure to product-catalog's: there a read took more than it was asked for,
-    here it took a fraction, and both come down to a read's scope.
-  - `property-listings-newest-homes` and its `agent-withheld` variant: 10
-    expected, 10 observed, **0 matching**, and one field explains all ten - the
-    `address` column carries
-    `http://127.0.0.1:.../scenarios/property-listings/listings/hb-10258` where
-    "Flat 5, 37 Saltmarsh Crescent, Ashcombe" was expected. The model mapped the
-    column to the card's link rather than to its address text. Right rows, right
-    count, one column pointed at the wrong thing.
-  - Passing: `admin-console-customer-book-short` (12/12), `social-scheduler-whole-queue`
-    (**280/280**), `data-table-inventory-large` (1000/1000) and
-    `data-table-inventory-may-be-empty` (12/12).
-  - No result: `data-table-inventory-empty`, `sensitive-input-card-labels` and
-    `company-directory-register-page`, the last after 44 provider calls.
-- **A falsifiable prediction about the 23-record failure, and where it comes
-  from.** `domain/src/output-nodes/extract-list/catalog-text.ts` ends in
-  `WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE`, the worked request the model is shown
-  for `extract_list`. Its own doc calls it "a paginated product list", and it
-  reads `{ item: "li.product", fields: {name, price, url}, where: [...],
-  paginate: { mode: "next", next: "a.next", maxPages: 5 }, minItems: 1 }`.
-  A model asked to scrape a product catalogue is shown an example of scraping a
-  product catalogue across five pages.
-  **The example cannot simply drop `paginate`.** Its own comment says why: Core
-  reads a parameter's example as the declaration of which keys belong inside it
-  (`flow-bootstrap/authoring/matching.ts`), so a key the example omits is a key
-  the model is refused for writing. The key has to stay; it is the *value* that
-  teaches five pages.
-  **The prediction:** when `authoredNodes` lands, a failing `product-catalog`
-  run's `extract_list` will carry `maxPages: 5`. Five is not a number reasoning
-  produces from a three-page catalogue - it is the example's number - so finding
-  it is conclusive, and not finding it kills this explanation as cleanly as the
-  re-run killed the last one. No change to the example until the run says.
-- **Before t119 merges, Core must export the screen the Lab needs.** Recording a
-  Flow's authored parameters requires the same screening Core already does for a
-  repair's step parameters, and `automationStudioScreenedNodeParameters` exists
-  for exactly that - but it is unreachable from any public subpath, because
-  `recovery/index.ts` never re-exports `repair-context/index.ts`. A one-line
-  omission. The worker, correctly forbidden from editing Core, restated the
-  screen instead: 198 lines against Core's 200, identical logic. That is a copy
-  of Core in a downstream repository, which is the one thing that must not
-  happen, so it is not merging in that shape. The sequence is: add the barrel
-  line in Core, rebuild, import it in the Lab, delete the copy. It cannot be
-  done while a campaign holds the main checkout, because a Core source edit
-  stales Core's dist and the Lab refuses to run against it.
-- **The pagination fix did not work, and the inference behind it was wrong.**
-  Re-running all four failing `product-catalog` tasks against the merged fix,
-  with `PROPOSED_MAX_PAGES = 1` confirmed present in the `dist/e2e-chromium`
-  bundle the Lab loads: 0 passed, 4 failed, three of them the same
-  `exp 8 obs 23 match 8`. The detector's proposal was never where the page
-  budget came from. What the change is still right about - a detector reports
-  how a list continues and does not decide how much of it to take - it is not a
-  fix, and it was shipped as one.
-  **What the code says instead.** `plan-resolution/extraction/slot.ts`
-  `keptPagination` reads the model's `paginate`: `false` is the page shown,
-  absent or `true` is the detected pagination, and an object supplies the
-  model's own `maxPages`. With the proposal now at 1, absent and `true` both
-  give eight records - so the model is writing an explicit number above one. It
-  does not need to know the catalogue has three pages to do it: any `maxPages`
-  greater than 1 follows Next until Next is gone, which is all 23. The packet
-  tells it a pagination *mode* and an item count, never a page count.
-  **This was diagnosed twice from record counts and got it wrong once, which is
-  the argument for the instrumentation rather than for another guess.** No
-  further pagination change until a run records what the model actually wrote.
-- **The result check was wrong in both directions, in one campaign, and that
-  now costs money.** `run-muezaeuk-5affbb6c` (`product-catalog-photos`) extracted
-  the right dataset - the Lab's oracle passed it - and Core's own verification
-  refuted it twice over, `does_not_answer` on both checks, 1,519 input tokens
-  each. `run-mueyh9ey-5ce143dc` went the other way: 23 rows for a first-page
-  request, and the verification answered `answers_request`. A false positive
-  wastes a wrong answer; a false negative was harmless only while the repair
-  could never start, and t117 changed that - a refuted result now reaches a
-  repair, so a wrong refutation spends provider calls trying to fix a Flow that
-  was already correct, and may damage it.
-  **What is shown to the judge is not recorded anywhere**, which is why the
-  mechanism is still open. `result-summary.ts` withholds a record set's
-  `sampleRows` when they are absent, over the byte budget, or tripped by the
-  evidence screen, and 1,519 tokens is consistent with a judge shown counts and
-  column names and no rows at all. If that is what happened, the fix is not a
-  better prompt: a check shown no rows cannot honestly answer "does not answer",
-  and `unverifiable` already exists for exactly that. Confirming it needs the
-  summary on the record, which is the same gap as the authored parameters and
-  the packet composition.
-- **A run does not record the parameters of the Flow it built.** `flow-lane.json`
-  publishes `flowShape` and `actionTypes`, and no Flow document is persisted
-  under `test-runs/`, so the pagination cause behind five of six failures on
-  2026-09-24 had to be *inferred* from record counts rather than read from the
-  node. The inference was solid - 23 is exactly the three-page catalogue, and
-  the run that passed took 8 - but it should not have been an inference. A
-  campaign that cannot say what the model actually wrote can only diagnose
-  causes that happen to leave an arithmetic signature. Recording the authored
-  parameters, screened the way the repair context already screens step
-  parameters, is what would have answered it in one read.
-- **`product-catalog-first-page` passed twice and failed once** on the same
-  code, because the model sometimes copies the pagination proposal into the node
-  and sometimes does not. Run-to-run variance of that size means a single run is
-  not evidence about a task, and a pass rate needs repeats before it means
-  anything.
+The day's full diagnosis -- the four causes, the three falsified pagination
+theories, and the instrumentation that settled them -- is in
+[archive/2026-09-24-extract-lane-diagnosis.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-24-extract-lane-diagnosis.md).
+The conclusions are in `Current State`.
 
 - Does the dry run reset the page, the workspace, or the whole browser context?
   Cheapest sufficient reset wins; d2 and d3 should settle what is available.
