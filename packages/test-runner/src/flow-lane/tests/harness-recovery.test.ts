@@ -301,6 +301,17 @@ test("a recovery Core's gate refused says why, by the gate's code and never its 
     assert.equal(JSON.stringify(snapshotOf(outcome).harnessRecovery).includes("PRIVATE-ISSUE"), false, `${code}: the sentence stays behind`);
     assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
   }
+  // The cause behind the code, where Core named one. `llm.provider_resolution_failed`
+  // names the step that failed and nothing about what stopped it, and that is
+  // the whole of what live run `run-muexhp0k-73172f73` (2026-09-24) could say
+  // about a repair that never started with most of its budget unspent.
+  serve(refused({ invoked: false, code: "llm.provider_resolution_failed", cause: "llm.execution_grant_no_longer_valid", reason: "PRIVATE-ISSUE: Core's sentence for why" }));
+  const caused = await run(control);
+  assert.deepEqual(caused.harnessRecovery, { ...NO_RECOVERY, refusalCode: "llm.provider_resolution_failed", refusalRung: "gate", refusalCause: "llm.execution_grant_no_longer_valid" });
+  assert.deepEqual(validateRunHarnessRecovery(caused.harnessRecovery), { valid: true, value: caused.harnessRecovery });
+  // A gate that named no cause leaves the member absent, never null-by-guess.
+  serve(refused({ invoked: false, code: "llm.provider_resolution_failed", reason: "no cause named" }));
+  assert.equal("refusalCause" in ((await run(control)).harnessRecovery ?? {}), false);
   // A gate that ran the model states no refusal, whatever else it recorded.
   serve(refused({ invoked: true, code: "llm.gate.training_mode" }));
   assert.equal((await run(control)).harnessRecovery?.refusalCode, null);

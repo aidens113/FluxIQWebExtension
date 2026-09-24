@@ -59,6 +59,25 @@ export type RunHarnessRecovery = {
    */
   refusalRung?: HarnessRecoveryRung | null;
   /**
+   * The cause behind the refusal, where Core named one.
+   *
+   * `refusalCode` says which step declined and `refusalRung` says who; neither
+   * says why that step could not proceed. For most refusals there is nothing
+   * further to say -- "the policy permits no patch kind" is already the reason.
+   * For one there is: a repair that could not resolve a provider records
+   * `llm.provider_resolution_failed`, which names the step and nothing about
+   * what stopped it, and Core now records its own grant refusal code beside it
+   * (`llm.execution_grant_no_longer_valid` and its three siblings).
+   *
+   * Live run `run-muexhp0k-73172f73` (2026-09-24) is why. Its repair died there
+   * with 29 of 48 calls and $0.227 of its $0.25 unspent, well inside the grant's
+   * 600s window, and no artifact could say which of those four it was.
+   *
+   * `null` when Core named no cause, which is the ordinary case, and **absent**
+   * in a record written before this member existed.
+   */
+  refusalCause?: string | null;
+  /**
    * Which sections of Core's recovery context reached the model, and why each
    * one that did not was left out.
    *

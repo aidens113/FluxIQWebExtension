@@ -592,49 +592,10 @@ Entries before 2026-09-24 are in
 [archive/2026-09-23-wave-one-ledger-and-partition.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-23-wave-one-ledger-and-partition.md).
 Their outcomes are settled and folded into `Current State`.
 
-### 2026-09-24 - Eleven fixes, then three live runs, each failing further along
-- Agent: supervisor; workers `fa-extraction-value-shape`, `fa-extraction-rowset`,
-  `fa-lab-truthful-reporting`, `fa-build-cost-fixes`, `fa-repair-wrong-answer`,
-  `fa-evidence-controls`, `fa-flow-reaches-its-own-page`, `fa-training-mode-design`,
-  `fa-result-check-schedule`, `fa-build-destination-channel`,
-  `fa-repair-sees-parameters-and-routing`, `fa-deepseek-flash-model`,
-  `fa-evidence-budget-waste`, `fa-unattended-repair-verification`,
-  `fa-unattended-repair-authority`, `fa-extraction-is-not-consequential`,
-  `fa-every-record-refused`, `fa-t102-t099-merge`, `fa-r5-postmortem`, `fa-build-cost`
-- Changed: t095 to t111 in both repositories, merged and pushed. Web `be72712`
-  to `fbde015`; Core `8b145c7` to `6bdfce2`.
-- Why: the user restated that every run is diagnosed to its cause and the cause
-  fixed directly, then authorised fresh runs across sites. Two r5 runs were the
-  whole evidence base; the 107 runs of the 2026-09-21 campaign were deliberately
-  NOT mined, because they predate almost all of this code and r5 already answers
-  the question they would have.
-- Validation: `pnpm check` on `dev` in both repositories, observed exit 0 -
-  web `structure-audit: passed (99 warning(s), 121 baselined)` and all ten
-  projects `check: Done`; Core `passed (181 warning(s), 360 baselined)` and all
-  four projects `Done`. Three live runs, each read from its own artifacts:
-  `run-mueozmp8-348a2057` `buildOutcome: permission_required`,
-  `permissionRequest {verb: "extract list", missing: ["create_new"]}`,
-  `answeredBy: nobody`, 21 calls, $0.030;
-  `run-mueqynzb-ac54aab9` 11 nodes with `navigationNodes: 1`,
-  `permissionRequest: null`, `crossCheckVerdict: agreed`, extraction succeeded,
-  `core.result.every_record_refused`, `expectedRecords 16 / observedRecords 0`,
-  24 calls, $0.0319; `run-muesyox4-930bef98` `ownPage {reached: true}`,
-  three clicks `web.target.not_found` on `#\:r13b8o\:`, extraction
-  `status: not_run`, `harnessRecovery {attempted: true, runtimePatchAttempts: [],
-  refusalCode: null}`, 33 calls, $0.0387. Cache: $0.030024132 reconciles exactly
-  against $0.072322 all-miss, so 143,872 of 230,895 input tokens hit.
-- Outcome: Partial - every diagnosed cause fixed, no run yet correct
-- Follow-up: t112 (a selector must not be authored on a generated id; the
-  look-alike score went negative with six candidates present) and t113 (a
-  validated diagnosis produced no patch and no refusal code) are dispatched with
-  worktrees and nothing committed. Then re-run the same task, then fan out.
-- Not verified: no run has produced a correct answer; nine of the ten sites are
-  untouched by current code; Core's full suite is not reliably green on this
-  machine (disk-bound tests time out under parallel load and pass alone).
-- Standing rules restated by the user this session: announce what you are about
-  to do before doing it; report a failure with its cause and how far the run
-  got, never as a bare verdict; do not delay the product's own work to save
-  money; the deep-debugging rule is forward-looking rather than a backlog.
+The 2026-09-24 entry for t095-t111 - eleven fixes and the three live runs that
+followed them, each diagnosed to its cause - is in
+[archive/2026-09-23-wave-one-ledger-and-partition.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-23-wave-one-ledger-and-partition.md).
+Its causes are all closed and its findings are in `Current State`.
 
 ### 2026-09-23 - The loop plans again after looking, so a refusal can be checked
 
@@ -756,6 +717,62 @@ Their outcomes are settled and folded into `Current State`.
   re-plan nor this section has been exercised against a real page. What a model
   does when it is finally shown that the page mutates on a timer is the thing
   the next run measures.
+
+### 2026-09-24 - The furthest run yet, and the two things that stopped it
+
+- Agent: supervisor, direct. Core `task/t116-grant-refusal-says-why`; web t114
+  (worktree) and t115.
+- The run: `run-muexhp0k-73172f73`, `everything-store-first-page-plus-earbuds`,
+  deepseek-flash, 19 calls, $0.0233, 250s, verdict `failed` on
+  `core.result.does_not_answer_request`.
+- **How far it got, and it is the furthest yet.** A Flow was built
+  (`flowCreated: true`, 12 actions: navigate, three clicks, a merge, a type,
+  three more clicks, a second merge, two `extract_list`), it replayed end to
+  end, and extraction returned **16 of 16 expected records with 64 of 64
+  expected fields, 0 unexpected fields and 0 non-string values**. The value-shape
+  defect t111 closed has stayed closed.
+- **Why it failed, cause A: one intruder row shifts the whole list.** Positions
+  1-6 matched exactly. Positions 7-12 are every one of them `kind: "moved"`,
+  each observed exactly one position later - 7 at 8, 8 at 9, through 12 at 13 -
+  with `fields: []`, so every field was right and only the position was wrong.
+  Observed position 7 is therefore a row the expectation does not contain, and
+  it pushes the real products down one, knocking the last three off the end.
+  Those three then read as `values-differ` - expected "Oakhaven Sound Grove ...
+  3.6" against observed "Aurelle Pods Fit ... 4.8" - which looks like three bad
+  extractions and is one extra row counted once. `matchedRecords: 7`,
+  `matchedInAnyOrder: 13`. Not yet fixed; the row is most likely a sponsored or
+  interstitial card inside the same repeating container.
+- **Why it failed, cause B: the repair never ran.** The three interventions
+  `harnessRecovery` reports are not diagnoses - all three are
+  `automation-studio.loop-verification.v1`. Two result checks ran and both
+  correctly returned `does_not_answer`. The third activation, the repair, died
+  at `llm.provider_resolution_failed`, `refusalRung: "gate"`. So neither t114's
+  re-plan nor t115's `recovered_failures` was exercised at all.
+- **And the record could not say why**, because `annotate.ts` caught the
+  resolution failure with a bare `catch {}` and discarded it. It was not budget
+  (19 of 48 calls, $0.0233 of $0.25) and not the grant's 600s run window (250s).
+  Three changes close that: Core's grant claim path now throws a typed
+  `AutomationStudioLlmExecutionGrantRefusal` carrying one of four codes -
+  unavailable, scope mismatch, no longer valid, purpose invalid - with every
+  sentence unchanged so no caller moves; `annotate` records it as
+  `llmGate.cause` beside the step's own code, keeping only Core's vocabulary and
+  never a thrown provider message; and the Lab carries it as
+  `harnessRecovery.refusalCause`. The suspicion to test is `no_longer_valid`:
+  the grant is minted against the Flow's execution digest, and a run that
+  *creates* a Flow changes that digest itself.
+- Also landed, web t114: `harnessRecovery.contextSections`. Core has written the
+  recovery context's section names, byte counts and omission reasons on every
+  run since the context existed, built so a test could require a section was
+  carried without holding page data, and nothing read it. This run is where that
+  bit - no artifact could say which evidence the repair would have been given.
+- Validation: Core `tsc --noEmit` exit 0; `vitest run` over `runtime/recovery`
+  and `runtime/llm` `Test Files 73 passed (73)`, `Tests 861 passed (861)`. Web
+  `pnpm check` exit 0 through `pnpm task finish` for t114; test-runner
+  `# tests 1338 # pass 1338 # fail 0`.
+- Outcome: Partial - the run is the best yet and both of its causes are now
+  named; cause A is not fixed, and cause B is instrumented rather than fixed.
+- Next: re-run, read `refusalCause` to learn which grant refusal it is, and fix
+  that; then the intruder row.
 
 ## Open Questions
 

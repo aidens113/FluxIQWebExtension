@@ -166,3 +166,49 @@ Workstream C waits on A5. Workstream D1 to D3 wait on D0 and B4.
    the supervisor confirmed. Only the browser's
    `WebAutomationTargetResolution.strategy`, stuck in Core's `attempt.outputs`,
    still needs a Core change.
+
+## t095 to t111, and the three runs that followed
+
+### 2026-09-24 - Eleven fixes, then three live runs, each failing further along
+- Agent: supervisor; workers `fa-extraction-value-shape`, `fa-extraction-rowset`,
+  `fa-lab-truthful-reporting`, `fa-build-cost-fixes`, `fa-repair-wrong-answer`,
+  `fa-evidence-controls`, `fa-flow-reaches-its-own-page`, `fa-training-mode-design`,
+  `fa-result-check-schedule`, `fa-build-destination-channel`,
+  `fa-repair-sees-parameters-and-routing`, `fa-deepseek-flash-model`,
+  `fa-evidence-budget-waste`, `fa-unattended-repair-verification`,
+  `fa-unattended-repair-authority`, `fa-extraction-is-not-consequential`,
+  `fa-every-record-refused`, `fa-t102-t099-merge`, `fa-r5-postmortem`, `fa-build-cost`
+- Changed: t095 to t111 in both repositories, merged and pushed. Web `be72712`
+  to `fbde015`; Core `8b145c7` to `6bdfce2`.
+- Why: the user restated that every run is diagnosed to its cause and the cause
+  fixed directly, then authorised fresh runs across sites. Two r5 runs were the
+  whole evidence base; the 107 runs of the 2026-09-21 campaign were deliberately
+  NOT mined, because they predate almost all of this code and r5 already answers
+  the question they would have.
+- Validation: `pnpm check` on `dev` in both repositories, observed exit 0 -
+  web `structure-audit: passed (99 warning(s), 121 baselined)` and all ten
+  projects `check: Done`; Core `passed (181 warning(s), 360 baselined)` and all
+  four projects `Done`. Three live runs, each read from its own artifacts:
+  `run-mueozmp8-348a2057` `buildOutcome: permission_required`,
+  `permissionRequest {verb: "extract list", missing: ["create_new"]}`,
+  `answeredBy: nobody`, 21 calls, $0.030;
+  `run-mueqynzb-ac54aab9` 11 nodes with `navigationNodes: 1`,
+  `permissionRequest: null`, `crossCheckVerdict: agreed`, extraction succeeded,
+  `core.result.every_record_refused`, `expectedRecords 16 / observedRecords 0`,
+  24 calls, $0.0319; `run-muesyox4-930bef98` `ownPage {reached: true}`,
+  three clicks `web.target.not_found` on `#\:r13b8o\:`, extraction
+  `status: not_run`, `harnessRecovery {attempted: true, runtimePatchAttempts: [],
+  refusalCode: null}`, 33 calls, $0.0387. Cache: $0.030024132 reconciles exactly
+  against $0.072322 all-miss, so 143,872 of 230,895 input tokens hit.
+- Outcome: Partial - every diagnosed cause fixed, no run yet correct
+- Follow-up: t112 (a selector must not be authored on a generated id; the
+  look-alike score went negative with six candidates present) and t113 (a
+  validated diagnosis produced no patch and no refusal code) are dispatched with
+  worktrees and nothing committed. Then re-run the same task, then fan out.
+- Not verified: no run has produced a correct answer; nine of the ten sites are
+  untouched by current code; Core's full suite is not reliably green on this
+  machine (disk-bound tests time out under parallel load and pass alone).
+- Standing rules restated by the user this session: announce what you are about
+  to do before doing it; report a failure with its cause and how far the run
+  got, never as a bare verdict; do not delay the product's own work to save
+  money; the deep-debugging rule is forward-looking rather than a backlog.
