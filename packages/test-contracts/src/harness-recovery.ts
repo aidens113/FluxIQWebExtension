@@ -58,7 +58,44 @@ export type RunHarnessRecovery = {
    * when Core named no rung -- an older Core, not an unattributed refusal.
    */
   refusalRung?: HarnessRecoveryRung | null;
+  /**
+   * Which sections of Core's recovery context reached the model, and why each
+   * one that did not was left out.
+   *
+   * Core already writes this, and has since the context existed: the summary in
+   * `recovery/context-summary.ts` carries section *names*, byte counts and
+   * reasons, and never a section's contents, precisely so that a test can
+   * require a section was carried without the test ever holding page data. It
+   * reached the run record and stopped there, so the one question this lane
+   * most needs to answer -- was the model actually told what it should have
+   * been told -- could not be asked of a run at all.
+   *
+   * `included` names what the model saw. `omitted` names the rest with Core's
+   * own reason, and the three reasons stay apart for the same purpose they do
+   * in Core: a context that had no state diff, one whose state diff the byte
+   * budget forced out, and one whose state diff Core refused to carry are three
+   * different problems, and collapsing them is the silence the record exists to
+   * end.
+   *
+   * `null` when Core recorded no recovery context, and **absent** in a record
+   * written before this member existed, which says nothing either way.
+   */
+  contextSections?: RunHarnessRecoveryContextSections | null;
 };
+
+/** Section names only, never a section's contents. See `contextSections`. */
+export type RunHarnessRecoveryContextSections = {
+  included: string[];
+  omitted: Array<{ section: string; reason: string }>;
+};
+
+/**
+ * Why Core left a recovery-context section out. Core's own three words
+ * (`recovery/context.ts`): the run never produced it, the byte budget forced it
+ * out, or it existed and Core would not pass it on.
+ */
+export const harnessRecoveryContextOmissionReasons = ["absent", "byte_budget", "withheld"] as const;
+export type HarnessRecoveryContextOmissionReason = (typeof harnessRecoveryContextOmissionReasons)[number];
 
 /**
  * The rungs a refusal can come from: Core's gate, then its four loop stages

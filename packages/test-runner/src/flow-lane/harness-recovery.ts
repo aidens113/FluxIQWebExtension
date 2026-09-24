@@ -1,4 +1,4 @@
-import { harnessRecoveryRungs, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { harnessRecoveryRungs, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery, type RunHarnessRecoveryContextSections } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control/index.js";
@@ -71,7 +71,8 @@ export async function readHarnessRecovery(
   // a single intervention existed. What silences it now is a recovery that
   // produced something, because then the lists are the answer.
   const produced = runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
-  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)) });
+  const contextSections = recoveryContextSections(runDetail);
+  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)), ...(contextSections !== undefined ? { contextSections } : {}) });
 }
 
 /**
@@ -96,6 +97,43 @@ function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusa
   if (patchSkippedCode !== undefined) return { refusalCode: patchSkippedCode as string, refusalRung: rung(patchSkippedRung) };
   if (patchHeldCode !== undefined) return { refusalCode: patchHeldCode as string, refusalRung: rung(patchHeldRung) ?? "resolution" };
   return none;
+}
+
+/**
+ * Which sections of Core's recovery context the model was shown, and why each
+ * other one was not.
+ *
+ * Core has written this on every run since the context existed -- the summary
+ * in its `recovery/context-summary.ts`, which carries section names, byte
+ * counts and reasons and never a section's contents, built so that a test could
+ * require a section was carried without the test holding page data. Nothing
+ * here read it, so "was the model told what it should have been told" was a
+ * question a run could not answer. `recovered_failures` is the immediate
+ * reason it matters: a repair that cannot see what the run was rescued from is
+ * being asked to explain a page it has only seen once, at its worst moment.
+ *
+ * Names and Core's reasons only. Byte counts are deliberately left behind --
+ * they say nothing this lane asserts on, and a size is one more number to keep
+ * stable in a fixture.
+ */
+function recoveryContextSections(runDetail: Readonly<Record<string, unknown>>): RunHarnessRecoveryContextSections | null | undefined {
+  const metadata = runDetail.metadata;
+  const gate = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).llmGate : undefined;
+  if (!gate || typeof gate !== "object" || Array.isArray(gate)) return undefined;
+  const summary = (gate as Record<string, unknown>).recoveryContext;
+  if (summary === undefined) return undefined;
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return null;
+  const { included, omitted } = summary as Record<string, unknown>;
+  return {
+    included: entries(included).map((entry) => String(entry.section)),
+    omitted: entries(omitted).map((entry) => ({ section: String(entry.section), reason: String(entry.reason) }))
+  };
+}
+
+/** A list of Core's `{ section, ... }` records, or nothing when it is not one. */
+function entries(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) && typeof entry.section === "string");
 }
 
 /** One of Core's rungs, or `null` when Core named none or named a word it does not own. */

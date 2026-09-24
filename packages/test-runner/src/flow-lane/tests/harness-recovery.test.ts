@@ -138,6 +138,48 @@ test("a recovered run is recorded in full: the diagnosis, the proposal-only over
   assert.deepEqual(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: outcome, automationFailureExpected: null }).harnessRecovery, RECOVERED);
 });
 
+// Core has written this summary on every run since the recovery context
+// existed -- section names, byte counts and reasons, never a section's contents,
+// built exactly so a test could require a section was carried without holding
+// page data -- and nothing here read it. So "was the model told what it should
+// have been told" was a question a run could not answer. Live run
+// `run-muexhp0k-73172f73` (2026-09-24) is where that bit: its repair never ran,
+// and no artifact could say which evidence the repair would have been given.
+test("the recovery context's sections are recorded by name, with Core's reason for each one left out", async (t) => {
+  const { control, serve } = await core(t);
+  serve(() => {
+    const detail = recoveredDetail();
+    (detail.metadata as Record<string, unknown>).llmGate = {
+      recoveryContext: {
+        byteCount: 4_010,
+        included: [{ section: "failure", byteCount: 900 }, { section: "recovered_failures", byteCount: 610 }],
+        omitted: [{ section: "state_diff", reason: "absent", byteCount: 0 }, { section: "recent_nodes", reason: "byte_budget", byteCount: 220 }, { section: "step_parameters", reason: "withheld", byteCount: 0 }],
+      },
+    };
+    return detail;
+  });
+  const outcome = await run(control);
+
+  assert.deepEqual(outcome.harnessRecovery?.contextSections, {
+    included: ["failure", "recovered_failures"],
+    omitted: [{ section: "state_diff", reason: "absent" }, { section: "recent_nodes", reason: "byte_budget" }, { section: "step_parameters", reason: "withheld" }],
+  });
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+  // Byte counts are Core's, not this lane's business, and carrying them would be
+  // one more number a fixture has to keep stable for nothing.
+  assert.equal(JSON.stringify(outcome.harnessRecovery?.contextSections).includes("610"), false);
+});
+
+// Absent, not null: a run whose Core never wrote a recovery context says nothing
+// either way, and a reader must not take that for "Core carried no sections".
+test("a run with no recovery context leaves the member absent", async (t) => {
+  const { control } = await core(t);
+  const outcome = await run(control);
+
+  assert.equal("contextSections" in (outcome.harnessRecovery ?? {}), false);
+  assert.deepEqual(outcome.harnessRecovery, RECOVERED);
+});
+
 test("nothing free-text reaches the recovery record or the snapshot written from it", async (t) => {
   const { control } = await core(t);
   const outcome = await run(control);

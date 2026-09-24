@@ -1,4 +1,4 @@
-import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryRungs, type RunHarnessRecovery } from "./harness-recovery.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, type RunHarnessRecovery } from "./harness-recovery.js";
 import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
@@ -11,7 +11,9 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "contextSections"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const contextSectionKeys = ["included", "omitted"] as const;
+const contextOmissionKeys = ["section", "reason"] as const;
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
 const patchFlagKeys = ["proposalOnly", "executed", "preflightOk"] as const;
 const patchOutcomeKeys = ["adaptationCreated", "changeProposalCreated"] as const;
@@ -75,8 +77,33 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
       enumeration(value.refusalRung, harnessRecoveryRungs, "$.refusalRung", issues);
       if (value.refusalCode === undefined || value.refusalCode === null) add(issues, "$.refusalRung", "must be null unless a refusal code names what it declined");
     }
+    // Section names and Core's own omission reasons. A name is not content, so
+    // nothing here can carry page data; the check is that it stays that way.
+    if (value.contextSections !== undefined && value.contextSections !== null) {
+      checkContextSections(value.contextSections, "$.contextSections", issues);
+    }
   }
   return result(input, issues);
+}
+
+function checkContextSections(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, contextSectionKeys, path, issues);
+  array(value.included, `${path}.included`, issues, checkIdentifier);
+  array(value.omitted, `${path}.omitted`, issues, checkContextOmission);
+  // A section is in exactly one of the two, which is Core's own invariant and
+  // the whole point of keeping `omitted` rather than only listing what fit.
+  const omitted = Array.isArray(value.omitted) ? value.omitted : [];
+  const included = Array.isArray(value.included) ? value.included : [];
+  const named = [...included, ...omitted.map((entry) => (entry && typeof entry === "object" ? (entry as JsonObject).section : undefined))];
+  if (new Set(named).size !== named.length) add(issues, path, "must name each recovery context section exactly once, as included or as omitted");
+}
+
+function checkContextOmission(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, contextOmissionKeys, path, issues);
+  checkIdentifier(value.section, `${path}.section`, issues);
+  enumeration(value.reason, harnessRecoveryContextOmissionReasons, `${path}.reason`, issues);
 }
 
 function checkIntervention(input: unknown, path: string, issues: ValidationIssue[]): void {
