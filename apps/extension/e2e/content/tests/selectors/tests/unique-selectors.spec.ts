@@ -25,9 +25,9 @@
 // different card, which is what the identity veto and scoring are for.
 
 import type { Page } from "@playwright/test";
-import type { DomElementDescriptor, DomSnapshot } from "../../../src/shared/protocol.js";
-import { expect, test } from "../index.js";
-import type { ContentHarness } from "../index.js";
+import type { DomElementDescriptor, DomSnapshot } from "../../../../../src/shared/protocol.js";
+import { expect, test } from "../../../index.js";
+import type { ContentHarness } from "../../../index.js";
 
 /** Element kinds a plan clicks: the resolver's handle targets that matter most. */
 const CLICKABLE_TAGS = new Set(["a", "button", "input", "select", "textarea", "summary", "label", "option"]);

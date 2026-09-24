@@ -1,4 +1,4 @@
-import type { LookupRoot } from "./selector";
+import { isVolatileIdentifier, type LookupRoot } from "./selector";
 
 export type ElementFingerprint = {
   selector?: string;
@@ -65,13 +65,18 @@ export function findClosestFingerprint(fingerprint: ElementFingerprint, root: Lo
  * fallback silently never answered for an element carrying an id or sitting
  * under one. With no id anywhere the path is absolute from the root, and there
  * the single slash is correct.
+ *
+ * An id a rendering generated is walked past rather than anchored on, by the
+ * same rule `element-anchors.ts` applies and for the same reason: a path
+ * anchored on `:r13b8o:` names nothing on the next rendering, and the steps it
+ * skipped were the only part of it that would still have been true.
  */
 export function xpathFor(element: Element): string {
   const parts: string[] = [];
   let current: Element | null = element;
   let anchored = false;
   while (current) {
-    if (current.id) {
+    if (current.id && !isVolatileIdentifier(current.id)) {
       parts.unshift(`*[@id=${xpathString(current.id)}]`);
       anchored = true;
       break;

@@ -1,12 +1,13 @@
 // `elementAnchors` is the one list of identifiers a selector may quote. These
 // rows pin its order (id, then test ids in the order the common tools write
-// them, then name), that every value goes through `CSS.escape`, and that
-// nothing a page shows or a control holds is ever on it.
+// them, then name), that every value goes through `CSS.escape`, that nothing a
+// page shows or a control holds is ever on it, and that an id a rendering
+// generated is not on it either while the identifiers beside it still are.
 //
 // The runner is Node, so the element is a stub answering only `getAttribute`
 // and `localName`, and `CSS.escape` is a marker that shows where escaping ran.
 // Whether each anchor is unique on a real page is the content harness's
-// (`e2e/content/tests/unique-selectors.spec.ts`).
+// (`e2e/content/tests/selectors/tests/unique-selectors.spec.ts`).
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -60,5 +61,23 @@ test("no text, value, placeholder, label, title, alt or href is ever quoted", ()
     }));
     assert.deepEqual(anchors, []);
     assert.ok(!JSON.stringify(anchors).includes(secret));
+  });
+});
+
+test("an id a rendering generated is not an anchor, and does not take the element's other identifiers with it", () => {
+  withMarkedEscape(() => {
+    // The token the everything store gave its notifications modal in
+    // `test-runs/run-muesyox4-930bef98`, which a built Flow was addressed through.
+    assert.deepEqual(elementAnchors(stubElement("div", { id: ":r13b8o:" })), []);
+    assert.deepEqual(elementAnchors(stubElement("input", { id: ":r0g7pe:", name: "k" })), [
+      { selector: `<input>[name="<k>"]`, qualifier: `[name="<k>"]` }
+    ]);
+    assert.deepEqual(elementAnchors(stubElement("button", { id: "mat-input-3", "data-testid": "save" })), [
+      { selector: `[data-testid="<save>"]`, qualifier: `[data-testid="<save>"]` }
+    ]);
+    // And an authored id is still the strongest anchor there is.
+    assert.deepEqual(elementAnchors(stubElement("button", { id: "save-changes" })), [
+      { selector: "#<save-changes>", qualifier: "#<save-changes>" }
+    ]);
   });
 });
