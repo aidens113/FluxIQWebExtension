@@ -76,7 +76,7 @@ model is `deepseek-flash` and is now configurable rather than hardcoded in six
 places; the old prices were wrong in both directions and r5 recomputes from
 $0.1720 to $0.1188.
 
-**Not done, and the next things.** t112 and t113 are both merged. Nothing is in
+**Not done, and the next things.** t112, t113 and t114 are merged. Nothing is in
 flight.
 
 **What t113 established, and it is the sharpest finding of the day.** The repair
@@ -94,11 +94,29 @@ is asymmetric — it refuses a model `yes` over Core's `no` and records it, but
 accepts a model `no` over Core's `unknown` unexamined. **Saying why is not
 repairing: t113 closed the silence, not the gap.**
 
-**The next task, named by t113 and the largest remaining gap:** make the loop
-re-plan after exploring, so the difference between "the model declined" and "the
-model declined after looking" exists at all. Removing the exploration gate alone
-would spend calls on a look nothing re-plans from. Then: re-run the same task, and only then fan out to other sites and
-goal shapes. Nine of the ten sites have not been touched by current code.
+**t114 closed the second of t113's three causes.** The loop now plans a second
+time after looking. On a `goal_unachievable` refusal it explores anyway, then
+makes a second `runtime_diagnosis` at the `plan` stage carrying the packets the
+look returned and the model's own earlier answer, and rebuilds the plan from what
+comes back. A refusal that survives keeps its code and changes rung from `plan`
+to `exploration` - which is the whole difference between "the model declined" and
+"the model declined after looking", said in the vocabulary that already existed.
+A second call that returns no diagnosis leaves the first plan standing and
+records it as unchecked rather than confirmed. Only `goal_unachievable` is
+treated as checkable: a policy refusal is a person's setting no page can speak
+to, and `diagnosis_asked_for_none` is unreachable because the flag that decides
+it is the same flag that stops an exploration running. The Lab needed no change;
+it already carries Core's rung through untouched.
+
+**The next task is the first of t113's three, and it is still the wrong
+question being asked.** `annotate` diagnoses the *last* failed attempt, so the
+three highly repairable failures with six same-family controls were fixed
+deterministically by the retry rung and never reached the model, and the one it
+saw was `s6` with nothing on an 819-byte page. Re-planning helps a model that was
+shown the right failure; it cannot help one shown the wrong one. Then: re-run the
+same task and read whether the refusal now carries `refusalRung: "exploration"`,
+and only then fan out to other sites and goal shapes. Nine of the ten sites have
+not been touched by current code.
 
 **Known and written down, not yet worked:** Core's flow-bootstrap catalog
 actively teaches the model to author a record schema for a node that derives a
@@ -738,6 +756,62 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
   to do before doing it; report a failure with its cause and how far the run
   got, never as a bare verdict; do not delay the product's own work to save
   money; the deep-debugging rule is forward-looking rather than a backlog.
+
+### 2026-09-23 - The loop plans again after looking, so a refusal can be checked
+
+- Agent: supervisor, direct. Core task branch `task/t114-replan-after-exploring`.
+- Changed: Core only. New
+  `runtime/recovery/annotation/replan.ts`; `diagnosis-chain.ts` gains the set of
+  refusals a page could overturn; `annotate.ts` re-orders stages C and D around
+  the re-plan; `patch-reserve.ts` can hold more than one call; `stages.ts`
+  records the second plan; and the two task-kind gates in
+  `llm/harness/explored-evidence.ts` and `llm/harness/context-packet.ts` now
+  admit a re-planning diagnosis.
+- Why: t113 found that `annotate` gated exploration on
+  `plan.explorationRequested && plan.patchRequest.request`, so the moment a
+  diagnosis answered `stillAchievable: "no"` the look was cancelled with it. The
+  one claim a page could settle was the one claim that stopped the page being
+  looked at. Removing the gate alone would have bought a look nothing re-plans
+  from, which is why the re-plan is the change and the gate is a consequence of
+  it.
+- What it does now: on a `goal_unachievable` refusal the loop explores anyway,
+  then makes a second `runtime_diagnosis` at the `plan` stage - a legal one-step
+  advance through Core's fixed order, and the stage the patch has always
+  declared as its `previousStage` without any call ever occupying it - carrying
+  the explored packets and the model's own earlier answer. The plan is rebuilt
+  from what comes back. A refusal that survives keeps its code and changes rung
+  from `plan` to `exploration`, which is the whole difference between "the model
+  declined" and "the model declined after looking". A second call that returns
+  no diagnosis leaves the first plan standing and records it as unchecked rather
+  than confirmed.
+- Only `goal_unachievable` is checkable. `policy_allows_no_kind` is a person's
+  setting no page can speak to; the three diagnosis-call refusals leave no claim
+  to check; `resolved_without_model` was Core's own classifier. And
+  `diagnosis_asked_for_none` is unreachable here by construction, because the
+  `!explorationNeeded` that decides it is the same flag that stops an
+  exploration running - so it is left out rather than listed harmlessly.
+- Validation: Core `pnpm exec tsc --noEmit -p packages/fluxiq/tsconfig.json`
+  exit 0; `node scripts/structure-audit.mjs` `structure-audit: passed (181
+  warning(s), 360 baselined)` exit 0; `vitest run` over
+  `runtime/recovery` and `runtime/llm` `Test Files 73 passed (73)`,
+  `Tests 851 passed (851)`. Core's full package suite
+  `Test Files 3 failed | 367 passed (370)`, `Tests 3 failed | 3222 passed`; all
+  three failures are `Test timed out in 15000ms` and all three pass run alone -
+  `run-detail-preservation` in 4.1s, and two `deepseek-bootstrap-exploration`
+  cases at 12.8s and 12.6s against a 15s limit, so parallel load is the cause.
+  `run-detail-preservation` is the one of the three that touches this change, and
+  it drives a repaired run's recovery annotation through apply, replay and
+  restart. Web `pnpm check` exit 0, ten projects `Done`,
+  `structure-audit: passed (99 warning(s), 121 baselined)`.
+- Outcome: Done
+- Follow-up: re-run `everything-store-first-page-plus-earbuds` and read whether
+  the refusal now carries `refusalRung: "exploration"`. The Lab needed no change
+  - `packages/test-contracts/src/harness-recovery.ts` already lists
+  `exploration` among its rungs and `flow-lane/harness-recovery.ts` passes
+  Core's value through untouched.
+- Not verified: no live run has exercised the re-plan; whether a model shown the
+  page actually changes its answer is exactly what the next run measures, and
+  this change only makes the question askable.
 
 ## Open Questions
 
