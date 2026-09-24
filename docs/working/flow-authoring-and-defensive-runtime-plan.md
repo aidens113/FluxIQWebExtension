@@ -687,6 +687,18 @@ the two causes that stopped it - is in
   belongs in a worktree, which is what the rest of this session used.
 
 ## Open Questions
+- **Before t119 merges, Core must export the screen the Lab needs.** Recording a
+  Flow's authored parameters requires the same screening Core already does for a
+  repair's step parameters, and `automationStudioScreenedNodeParameters` exists
+  for exactly that - but it is unreachable from any public subpath, because
+  `recovery/index.ts` never re-exports `repair-context/index.ts`. A one-line
+  omission. The worker, correctly forbidden from editing Core, restated the
+  screen instead: 198 lines against Core's 200, identical logic. That is a copy
+  of Core in a downstream repository, which is the one thing that must not
+  happen, so it is not merging in that shape. The sequence is: add the barrel
+  line in Core, rebuild, import it in the Lab, delete the copy. It cannot be
+  done while a campaign holds the main checkout, because a Core source edit
+  stales Core's dist and the Lab refuses to run against it.
 - **The pagination fix did not work, and the inference behind it was wrong.**
   Re-running all four failing `product-catalog` tasks against the merged fix,
   with `PROPOSED_MAX_PAGES = 1` confirmed present in the `dist/e2e-chromium`
