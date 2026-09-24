@@ -45,6 +45,8 @@
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationActionEffect } from "../../../actions/effect";
+import { WEB_AUTOMATION_ACTION_SAFETY } from "../../../actions/safety";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
 import { webActionPermission } from "../permission";
@@ -77,6 +79,18 @@ export type WebPlanStepPermission =
 const COMMITTING_ACTIONS: readonly WebAutomationActionType[] = ["web.dom.click", "web.dom.keypress", "web.dom.dialog"];
 
 const COMMITTING_NODE_IDS: ReadonlySet<string> = new Set(COMMITTING_ACTIONS.map((action) => webAutomationOutputNodeId(action)));
+
+/**
+ * What each node's own action does to the page, by the node id a step names.
+ *
+ * Built from one string function and one table, both of which are plain values,
+ * so this may be a module constant where the exploration catalog's map may not.
+ * A step whose node this domain does not own is `mutate`: unknown is gated.
+ */
+const NODE_EFFECTS: ReadonlyMap<string, "observe" | "mutate"> = new Map(
+  (Object.keys(WEB_AUTOMATION_ACTION_SAFETY) as WebAutomationActionType[])
+    .map((action) => [webAutomationOutputNodeId(action), webAutomationActionEffect(action)] as const)
+);
 
 /** What each action does to its control, in the plain word a person being asked would use. */
 const VERBS: Partial<Record<WebAutomationActionType, string>> = {
@@ -117,7 +131,11 @@ export async function webPlanStepPermission(input: {
     check: input.check,
     declared: [...input.declared],
     control: { name: controlName(identity), kind: controlKind(identity) },
-    verb: verbFor(input.nodeDefinitionId)
+    verb: verbFor(input.nodeDefinitionId),
+    // The node's, not the model's. A step that reads the page -- an assertion,
+    // a wait, an extraction -- leaves nothing behind each time the Flow runs it,
+    // so a class written against it is disregarded rather than put to a person.
+    effect: NODE_EFFECTS.get(input.nodeDefinitionId) ?? "mutate"
   });
   return permission.kind === "refused" ? { kind: "refused", missing: permission.missing, requestId: permission.requestId } : { kind: "clear" };
 }

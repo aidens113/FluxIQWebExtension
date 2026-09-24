@@ -114,7 +114,7 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
   // Moving about has no lasting consequence, and the gate is still asked:
   // every act a replay takes goes through it, with no exception made for the
   // one this module writes itself.
-  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "page" }, verb: "go to" });
+  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "page" }, verb: "go to", effect: "mutate" });
   if (permission.kind === "refused" || permission.kind === "invalid") return answer(REPLAY_RESULT_CODES.resetFailed, "the reset was not permitted");
   const result = await run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters: { url: location }, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
@@ -140,7 +140,10 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     check: run.request.permission,
     declared: value.consequences,
     control: { name: undefined, kind: "step" },
-    verb: node.definition.label.toLowerCase()
+    verb: node.definition.label.toLowerCase(),
+    // The node's own, so a replayed read is not gated on what the model wrote
+    // about it -- the same rule the live run applies (`./run.ts`).
+    effect: node.effect
   });
   if (permission.kind === "refused" || permission.kind === "invalid") return answer(REPLAY_RESULT_CODES.failed, "the step was not permitted");
   // `gatedByCaller`, because the step was put to the gate a few lines above,

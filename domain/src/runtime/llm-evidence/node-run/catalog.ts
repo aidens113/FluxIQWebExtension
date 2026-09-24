@@ -15,14 +15,17 @@
 //     runs it (`io/gateway-output-dispatcher.ts`). A node that declares none is
 //     not a web output and is not runnable here.
 //   - **Whether it changes the page.** The one safety classification every
-//     other consumer derives from, `actions/safety.ts`: a `review` output acts,
-//     a `safe` one only reads or waits.
+//     other consumer derives from, read through `actions/effect.ts`: a `review`
+//     output acts, a `safe` one only reads or waits. That answer is also what
+//     Core is told on the permission declaration, which is what keeps a read
+//     out of the gate's reach (`../permission.ts`).
 //   - **Whether it belongs in the Flow.** Everything except the domain's own
 //     look. A snapshot is how the model sees where it is; it is a node, it runs
 //     like a node, and a Flow full of snapshots would be a Flow that does
 //     nothing.
 
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import { webAutomationActionEffect } from "../../../actions/effect";
 import { WEB_AUTOMATION_ACTION_SAFETY } from "../../../actions/safety";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeDefinitions } from "../../../output-nodes";
@@ -64,7 +67,7 @@ function runnableNodes(): Map<string, WebRunnableNode> {
       definitionId: definition.id,
       actionType,
       definition,
-      effect: WEB_AUTOMATION_ACTION_SAFETY[actionType] === "review" ? "mutate" : "observe",
+      effect: webAutomationActionEffect(actionType),
       proposes: actionType !== WEB_LLM_OBSERVATION_NODE_ACTION
     } as WebRunnableNode]];
   })
