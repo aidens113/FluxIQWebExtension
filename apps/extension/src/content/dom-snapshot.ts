@@ -215,7 +215,10 @@ function snapshotElements(): { entries: SnapshotElementEntry[]; counts: Snapshot
       documentOrder(left.element, right.element)
     )
     .slice(0, MAX_SNAPSHOT_CANDIDATES)
-    .map(({ element }) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element)) }));
+    // The bucket goes on the descriptor rather than being recomputed later:
+    // this is the only place it is known, and a reader downstream cannot ask
+    // the page again once the capture has left it.
+    .map(({ element, bucket }) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element), bucket) }));
   return { entries, counts: { scanned, candidates: candidates.length, matched: included.length } };
 }
 
@@ -231,10 +234,24 @@ function touchedElements(): ReadonlySet<Element> {
   return touched;
 }
 
-/** The element's descriptor, and, for a run's exemplar, how many elements the run holds. */
-function snapshotDescriptor(element: Element, repeatCount: number | undefined): DomElementDescriptor {
+/**
+ * The element's descriptor, and, for a run's exemplar, how many elements the
+ * run holds -- plus the relevance band this capture ranked it into.
+ *
+ * The band is carried because everything downstream of the capture bounds the
+ * list further, and a bound that drops elements is the only thing between the
+ * model and a control the instruction named. Live run
+ * `run-muexhp0k-73172f73` built a Flow that failed to click a filter the
+ * instruction told it to use, and nothing recorded whether the filter had ever
+ * reached the packet: the run's artifacts held the packet's byte size and
+ * nothing about what was in it. With the band on each element, the packet can
+ * count what it kept and what it cut, band by band, without carrying one word
+ * of the page (`domain/src/runtime/llm-evidence/composition.ts`).
+ */
+function snapshotDescriptor(element: Element, repeatCount: number | undefined, bucket: number): DomElementDescriptor {
   const descriptor = describeElement(element);
   if (repeatCount !== undefined) descriptor.repeatCount = repeatCount;
+  descriptor.snapshotBucket = bucket;
   if (repeatsTheDocumentAddress(element, descriptor)) delete descriptor.href;
   return descriptor;
 }

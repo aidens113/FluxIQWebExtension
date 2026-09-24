@@ -234,6 +234,26 @@ export type DomElementDescriptor = {
    * like the two flags above: it counts what one capture held.
    */
   repeatCount?: number | undefined;
+  /**
+   * The coarse relevance band the capture ranked this element into, lowest
+   * first: 0 is an element the page fires events on, 1 a control that changes
+   * what the page shows -- a facet, a price band, a sort order -- and the rest
+   * run out through the page's own controls, its links, its footer and its
+   * prose (`content/dom-snapshot.ts` `snapshotElementBucket`, which is the one
+   * place the bands are defined).
+   *
+   * It is a number and nothing else. Carrying it is what lets a finished run
+   * say how many elements of each band a packet actually described and how
+   * many the bound cut, without any of the page's own words travelling
+   * (`domain/src/runtime/llm-evidence/composition.ts`). Live run
+   * `run-muexhp0k-73172f73` built a Flow that failed to click a filter the
+   * instruction named, and no artifact could say whether the model had ever
+   * been shown that filter -- only how many bytes the packet weighed.
+   *
+   * Snapshot-scoped, like the three fields above: it is this capture's ranking
+   * of this element against the others in it, not a property of the element.
+   */
+  snapshotBucket?: number | undefined;
 };
 
 /**
@@ -316,13 +336,17 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  *   a fact about the element a recorded event names.
  * - `repeatCount` is snapshot-scoped too: it counts how many rows one capture
  *   held, which a replay of the recorded control neither needs nor can check.
+ * - `snapshotBucket` is snapshot-scoped for the same reason: it is where one
+ *   capture ranked this element against the others it held, which says nothing
+ *   about the control a recorded event names and would be a stale number the
+ *   moment the page changed.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
  * so a field added to the descriptor stops the producer compiling until it is
  * either carried or named here.
  */
-type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted" | "repeatCount";
+type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted" | "repeatCount" | "snapshotBucket";
 
 /**
  * The recorded element's identity as it crosses the client gateway.

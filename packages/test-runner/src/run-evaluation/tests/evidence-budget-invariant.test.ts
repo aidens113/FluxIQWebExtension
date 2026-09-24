@@ -14,8 +14,10 @@ import { evaluateObservedRun, type ObservedRun } from "../observed-run-evaluatio
 // restating its figure.
 const BUDGET = WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration;
 
-const packet = (actionPosition: number, point: MeasuredEvidencePacket["point"], bytes: number, truncated = false): MeasuredEvidencePacket => ({ actionPosition, point, bytes, truncated });
-const evidenceOf = (packets: MeasuredEvidencePacket[]): FlowLaneEvidence => ({ sanitizedPacketBytes: packets.map((item) => item.bytes), rawSnapshotBytes: [], truncationCount: packets.filter((item) => item.truncated).length, packets });
+// The budget check reads sizes, so these rows state no composition: `null` is
+// what a packet that counted none records.
+const packet = (actionPosition: number, point: MeasuredEvidencePacket["point"], bytes: number, truncated = false): MeasuredEvidencePacket => ({ actionPosition, point, bytes, truncated, composition: null });
+const evidenceOf = (packets: MeasuredEvidencePacket[]): FlowLaneEvidence => ({ sanitizedPacketBytes: packets.map((item) => item.bytes), rawSnapshotBytes: [], packetComposition: packets.map((item) => item.composition), truncationCount: packets.filter((item) => item.truncated).length, packets });
 
 const identity: ObservedRun["identity"] = { scenarioId: "product-catalog", workflowId: null, variantId: null, repeatIndex: 0, expectedFailure: null };
 const passedOutcome: ObservedRun["outcome"] = { runId: "run-a", verdict: "passed", invariants: [{ id: "runner-verdict", passed: true, expected: "passed", actual: "passed", evidenceSequences: [9] }], metrics: {}, durationMs: 1_000 };

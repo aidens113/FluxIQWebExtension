@@ -32,7 +32,7 @@ const flowRun = (harnessRecovery) => ({
   invariants: [{ id: "final-state", passed: true, expected: "saved", actual: "saved", evidenceSequences: [4] }], metrics: {},
   scenarioId: "identity-drift", workflowId: null, variantId: "renamed-redesign", repeatIndex: 0, lane: "flow", flowCreated: true,
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
-  harnessActivations: 2, durationMs: 9120, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+  harnessActivations: 2, durationMs: 9120, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
   llm: { mode: "live", profileId: "deepseek-lab", calls: 3 }, extraction: null,
   harnessRecovery, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
 });

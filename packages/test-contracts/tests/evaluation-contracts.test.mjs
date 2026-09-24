@@ -32,7 +32,7 @@ const flowRun = () => ({
   automationFailureExpected: { category: "target_ambiguous" },
   harnessActivations: 0, durationMs: 1840.5,
   actions: [{ actionType: "web.dom.click", durationMs: 120 }, { actionType: "web.dom.extract", durationMs: 35.25 }],
-  evidence: { sanitizedPacketBytes: [2048, 1024], rawSnapshotBytes: [65536], truncationCount: 0 },
+  evidence: { sanitizedPacketBytes: [2048, 1024], rawSnapshotBytes: [65536], packetComposition: [null, null], truncationCount: 0 },
   llm: disabledLlm, extraction: null, ...week2,
 });
 // A paginated list extraction step, judged: 24 of 24 expected records read over three pages, every one of them compared, every expected field present.
@@ -325,10 +325,10 @@ test("identity, repeat index, lane, and measurements are bounded", () => {
     "unnamed action": { actions: [{ actionType: "", durationMs: 1 }] },
     "infinite action": { actions: [{ actionType: "web.dom.click", durationMs: Number.POSITIVE_INFINITY }] },
     "extra action property": { actions: [{ actionType: "web.dom.click", durationMs: 1, selector: "#save" }] },
-    "fractional packet": { evidence: { sanitizedPacketBytes: [1.5], rawSnapshotBytes: [], truncationCount: 0 } },
-    "negative snapshot": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [-1], truncationCount: 0 } },
-    "negative truncation": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: -1 } },
-    "extra evidence property": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0, rawHtml: "<p>" } },
+    "fractional packet": { evidence: { sanitizedPacketBytes: [1.5], rawSnapshotBytes: [], packetComposition: [null], truncationCount: 0 } },
+    "negative snapshot": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [-1], packetComposition: [], truncationCount: 0 } },
+    "negative truncation": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: -1 } },
+    "extra evidence property": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0, rawHtml: "<p>" } },
     "unknown property": { corpusRowId: "W26" },
   })) rejects({ ...flowRun(), ...mutation }, label);
   for (const key of [

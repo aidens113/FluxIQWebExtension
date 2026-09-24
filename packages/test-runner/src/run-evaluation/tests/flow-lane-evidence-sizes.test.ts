@@ -22,7 +22,7 @@ function bundleWith(t: TestContext, snapshot: unknown): string {
   writeFileSync(path.join(directory, "snapshots", "flow-lane.json"), typeof snapshot === "string" ? snapshot : `${JSON.stringify(snapshot, null, 2)}\n`);
   return directory;
 }
-const NO_EVIDENCE: FlowLaneEvidence = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0, packets: [] };
+const NO_EVIDENCE: FlowLaneEvidence = { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0, packets: [] };
 
 test("every measured packet's bytes, in action order and then capture order, and a count of the trimmed ones", (t) => {
   const snapshot = {
@@ -36,7 +36,7 @@ test("every measured packet's bytes, in action order and then capture order, and
     ],
   };
   assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), {
-    sanitizedPacketBytes: [2_048, 1_024, 0, 4_096], rawSnapshotBytes: [], truncationCount: 2,
+    sanitizedPacketBytes: [2_048, 1_024, 0, 4_096], rawSnapshotBytes: [], packetComposition: [null, null, null, null], truncationCount: 2,
     packets: [
       { actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false }, { actionPosition: 1, point: "afterAction", bytes: 1_024, truncated: true },
       { actionPosition: 3, point: "beforeAction", bytes: 0, truncated: false }, { actionPosition: 3, point: "afterAction", bytes: 4_096, truncated: true },
@@ -77,7 +77,7 @@ test("only an entry in the shape the lane writes is measured: a size the evaluat
     ],
   };
   assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), {
-    sanitizedPacketBytes: [512, 0], rawSnapshotBytes: [], truncationCount: 1,
+    sanitizedPacketBytes: [512, 0], rawSnapshotBytes: [], packetComposition: [null, null], truncationCount: 1,
     // A position counts every entry of `actions`, so the last packet's action is the file's seventh entry.
     packets: [{ actionPosition: 1, point: "afterAction", bytes: 512, truncated: true }, { actionPosition: 7, point: "beforeAction", bytes: 0, truncated: false }],
   });

@@ -14,6 +14,11 @@ export type {
 } from "./capture";
 export * from "./harness-options";
 export { WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
+export {
+  WEB_LLM_EVIDENCE_UNRANKED_BAND,
+  type WebLlmEvidenceBandCounts,
+  type WebLlmEvidenceComposition
+} from "./composition";
 export type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
 export type { WebLlmEvidenceDialog, WebLlmEvidenceFrame, WebLlmPageContext } from "./page-evidence";
 export {

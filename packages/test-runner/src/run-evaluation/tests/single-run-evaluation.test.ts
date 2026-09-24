@@ -51,7 +51,7 @@ test("a single scenario run produces a contract-valid RunEvaluation, with no cor
   assert.deepEqual(evaluation.metrics, { steps: 5 });
   assert.equal(evaluation.durationMs, 42_500);
   assert.deepEqual(evaluation.llm, { mode: "disabled", profileId: null, calls: 0 });
-  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 });
 });
 
 test("a campaign run preserves its exact repeat identity while standalone runs default to zero", () => {
@@ -130,7 +130,7 @@ function bundleWith(t: TestContext, snapshot: unknown): string {
   writeFileSync(path.join(directory, "snapshots", "flow-lane.json"), typeof snapshot === "string" ? snapshot : `${JSON.stringify(snapshot, null, 2)}\n`);
   return directory;
 }
-const NO_EVIDENCE = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 };
+const NO_EVIDENCE = { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 };
 
 /** Two measured packets on two actions, one of them trimmed, and an action Core captured nothing around. */
 const TWO_PACKETS = {
@@ -175,7 +175,7 @@ test("a Flow-lane single run records the packets its bundle measured, and agrees
   const bundlePath = bundleWith(t, TWO_PACKETS);
   const run = input({ observation: createdFlow, bundlePath });
   const evaluation = singleRunEvaluation(run);
-  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], packetComposition: [null, null], truncationCount: 1 });
   assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
   // Until this read existed, `evaluation.json` recorded no packets for the run
   // whose bench row recorded two. One file, one judgement.

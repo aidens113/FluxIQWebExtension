@@ -34,6 +34,13 @@
 // the full set of limits on the evidence path are tabulated once, in
 // `domain/src/recording/web-state/evidence/input.ts`.
 //
+// The packet also says what it is made of: `composition` counts how many
+// elements of each of the capture's relevance bands it describes, and how many
+// the capture offered that it does not. Counts only -- it is the one thing a
+// finished run can be asked about a packet that is not its weight in bytes, and
+// `composition.ts` holds the run that forced it and the reasons it stays
+// counts.
+//
 // No two elements of a packet read alike. Where the page repeats a control, the
 // copies are given what a person would tell them apart by -- the dialog, the
 // row's words, which of them from the top (`look-alikes.ts`) -- and that is
@@ -47,6 +54,7 @@
 // positional ones, a packet at its budget could leave the tool over the room
 // Core gave the call, which ends the build `evidence_limit`.
 
+import { evidenceBandKey, webLlmEvidenceComposition, WEB_LLM_EVIDENCE_UNRANKED_BAND, type WebLlmEvidenceComposition } from "./composition";
 import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
 import { frontLayerFirst, openDialogNameOf } from "./front-layer";
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
@@ -81,6 +89,17 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
   elementsTruncated?: true;
   /** The byte budget forced removals. A larger budget, or a narrower page, returns them. */
   budgetTruncated?: true;
+  /**
+   * How many elements of each of the capture's relevance bands this packet
+   * describes, and how many it left behind. Counts and nothing else, and always
+   * present: a packet that says nothing about its own composition is what made
+   * `run-muexhp0k-73172f73` unanswerable (`composition.ts`).
+   *
+   * Recounted after every trim, so it describes the packet as sent rather than
+   * the packet as first assembled, and never droppable -- like the truncation
+   * flags, it describes the trimming and is worth its few bytes.
+   */
+  composition: WebLlmEvidenceComposition;
   /** The opaque handle of the element the failed action addressed. Only on a failure packet, and never a selector. */
   failedTarget?: string;
   /** The failed action's control is not among the elements described: it left the page, or, with `budgetTruncated`, the trim cut it. */
@@ -156,6 +175,13 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const elements: WebLlmEvidenceElement[] = [];
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
+  // The band each described element came from, kept beside the packet rather
+  // than on it: the packet publishes the counts, not which element was which.
+  const bands = new Map<string, string>();
+  // Counted over every element the capture offered, before the bound below cuts
+  // the list, so the dropped side is the whole of what the model was not shown
+  // (`composition.ts`).
+  const compose = webLlmEvidenceComposition(snapshot.interactiveElements);
   // What tells a look-alike apart, kept beside the packet and published only
   // on an element that needs it.
   const cues = new Map<string, WebLlmLookAlikeCues>();
@@ -166,6 +192,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
     if (!described) continue;
     elements.push(described.element);
+    bands.set(described.element.target, evidenceBandKey(raw));
     // The one place a selector is written down, and it is not the packet.
     selectors.set(described.element.target, described.selector);
     if (described.record !== undefined) records.set(described.element.target, described.record);
@@ -197,6 +224,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     truncated: captureTruncated || elementsTruncated,
     captureTruncated: captureTruncated ? true : undefined,
     elementsTruncated: elementsTruncated ? true : undefined,
+    composition: composeCurrent(elements, bands, compose),
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
     budgetTruncated: undefined,
@@ -210,8 +238,27 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     repairCandidates: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
-  trimToBudget(evidence, [selectors, records], maxEvidenceBytes, () => tellWebLlmLookAlikesApart(evidence.elements, cues));
+  trimToBudget(evidence, [selectors, records], maxEvidenceBytes, () => {
+    tellWebLlmLookAlikesApart(evidence.elements, cues);
+    // Recounted in the same callback, and for the same reason: what is measured
+    // against the budget has to be what is sent, and a trim moves elements from
+    // the included side of the histogram to the dropped side.
+    evidence.composition = composeCurrent(evidence.elements, bands, compose);
+  });
   return { evidence, selectors, records };
+}
+
+/**
+ * The composition of whatever elements the packet holds right now. An element
+ * whose band was not recorded is counted as unranked rather than left out, so
+ * the two sides of the histogram always add up to what the capture offered.
+ */
+function composeCurrent(
+  elements: readonly WebLlmEvidenceElement[],
+  bands: ReadonlyMap<string, string>,
+  compose: (includedBands: readonly string[]) => WebLlmEvidenceComposition
+): WebLlmEvidenceComposition {
+  return compose(elements.map((element) => bands.get(element.target) ?? WEB_LLM_EVIDENCE_UNRANKED_BAND));
 }
 
 /** The widest handle a Flow can issue (`stable-handles.ts`). */
@@ -256,7 +303,10 @@ function budgetFor(options: WebLlmSanitizeOptions): number {
 }
 
 /**
- * The fields a packet can lose and still be worth reading. Ordered least useful
+ * The fields a packet can lose and still be worth reading. `composition` is not
+ * among them: it costs a few dozen bytes and it is the only account of what the
+ * trimming did, so dropping it to fit would be dropping the record of the very
+ * thing that made the packet too small. Ordered least useful
  * first where they are dropped: the page facts, then the repair parameters,
  * which are worth more than any page fact to a repair but less than the last
  * element, since a packet describing nothing has nothing to repair to.

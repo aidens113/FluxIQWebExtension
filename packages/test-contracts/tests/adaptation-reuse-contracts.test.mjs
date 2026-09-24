@@ -38,7 +38,7 @@ const flowRun = (overrides = {}) => ({
   scenarioId: "identity-drift", workflowId: null, variantId: "renamed-redesign", repeatIndex: 0, lane: "flow", flowCreated: true,
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
   harnessActivations: 2, durationMs: 9120, actions: [{ actionType: "web.dom.click", durationMs: 140 }],
-  evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+  evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
   llm: liveLlm, extraction: null, ...unmeasured, ...overrides,
 });
 const repairRun = (overrides = {}) => flowRun({ adaptationReuse: repairReuse(), adaptationCost: repairCost(), adaptationValidation: repairValidation(), adaptationPersistence: repairPersistence(), ...overrides });

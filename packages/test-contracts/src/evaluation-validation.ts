@@ -1,6 +1,6 @@
 import {
   EVALUATION_SCHEMA_VERSION, evaluationLanes, FACILITY_FAILURE_ENDPOINT_PATTERN, extractionMeasurementStatuses, extractionUnjudgedMembers, facilityFailureBoundaries, facilityFailureCauseCodes,
-  facilityFailureOperationStages, facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
+  facilityFailureOperationStages, facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes, RUN_EVIDENCE_BAND_KEY_PATTERN,
   type CandidateComparison, type LlmUsage, type RunEvaluation, type RunExtractionMeasurement,
 } from "./evaluation.js";
 import { validateRunAdaptationCost, validateRunAdaptationPersistence, validateRunAdaptationReuse, validateRunAdaptationValidation } from "./adaptation-reuse-validation.js";
@@ -387,11 +387,37 @@ function checkActionLatency(input: unknown, path: string, issues: ValidationIssu
 }
 function checkEvidenceSizes(input: unknown, path: string, issues: ValidationIssue[]): void {
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["sanitizedPacketBytes", "rawSnapshotBytes", "truncationCount"], path, issues);
+  keys(value, ["sanitizedPacketBytes", "rawSnapshotBytes", "packetComposition", "truncationCount"], path, issues);
   for (const key of ["sanitizedPacketBytes", "rawSnapshotBytes"] as const) array(value[key], `${path}.${key}`, issues, checkByteCount);
+  array(value.packetComposition, `${path}.packetComposition`, issues, checkPacketComposition);
+  // One composition per measured packet, or the two lists cannot be read side
+  // by side and "the third packet" means a different packet in each.
+  if (Array.isArray(value.sanitizedPacketBytes) && Array.isArray(value.packetComposition) && value.sanitizedPacketBytes.length !== value.packetComposition.length) {
+    add(issues, `${path}.packetComposition`, "must have one entry per sanitized packet");
+  }
   finite(value.truncationCount, `${path}.truncationCount`, issues, 0, Number.MAX_SAFE_INTEGER, true);
 }
 function checkByteCount(input: unknown, path: string, issues: ValidationIssue[]): void { finite(input, path, issues, 0, Number.MAX_SAFE_INTEGER, true); }
+/** A packet's composition, or `null` where the packet stated none. */
+function checkPacketComposition(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (input === null) return;
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["included", "dropped"], path, issues);
+  for (const key of ["included", "dropped"] as const) checkBandCounts(value[key], `${path}.${key}`, issues);
+}
+/**
+ * A band-keyed histogram. Both halves are checked, because this is the one
+ * place a run artifact could carry a string that came off the page: a key that
+ * is not a band number or `unranked` is rejected rather than recorded, and
+ * every value must be a count.
+ */
+function checkBandCounts(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  for (const [band, count] of Object.entries(value)) {
+    if (!RUN_EVIDENCE_BAND_KEY_PATTERN.test(band)) add(issues, `${path}.${band}`, "must be a band number or unranked");
+    finite(count, `${path}.${band}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  }
+}
 /** Adds a nested contract's issues, re-rooted from `$` at `path`. */
 function nest(checked: ValidationResult<unknown>, path: string, issues: ValidationIssue[]): void {
   if (!checked.valid) for (const issue of checked.issues) issues.push({ path: path + issue.path.slice(1), message: issue.message });

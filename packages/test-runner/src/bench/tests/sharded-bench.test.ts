@@ -31,7 +31,7 @@ function evaluation(cell: CampaignPlanCell, runId: string, verdict: "passed" | "
     scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, repeatIndex: cell.repeatIndex, lane: cell.lane,
     flowCreated: null, oracleVerdict: verdict, reportedVerdict: null, automationFailureReported: null, automationFailureExpected: cell.expectedFailure,
     harnessActivations: 0, durationMs: 10, actions: [{ actionType: "web.dom.click", durationMs: 2 }],
-    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 }, llm: { mode: "disabled", profileId: null, calls: 0 },
+    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 }, llm: { mode: "disabled", profileId: null, calls: 0 },
     extraction: null,
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   };

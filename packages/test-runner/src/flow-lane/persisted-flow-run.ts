@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { parseAutomationStudioFailureRecord, RUN_EVIDENCE_BAND_KEY_PATTERN, type AutomationStudioFailureRecord, type RunActionTiming, type RunEvidencePacketComposition, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS } from "fluxiq/automation-studio";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
@@ -158,8 +158,17 @@ export type PersistedFlowAction = {
  *
  * `bytes` is the UTF-8 length of the packet's JSON, the way the domain's own
  * budget counts it (`serializedBytes`, `domain/src/runtime/llm-evidence/limits.ts`).
+ *
+ * `composition` is the one thing about the packet's contents that travels, and
+ * it is counts: how many elements of each of the capture's relevance bands the
+ * packet described, and how many it left behind
+ * (`domain/src/runtime/llm-evidence/composition.ts`). It is `null` for a packet
+ * that stated none, which is every packet written before the domain counted
+ * them. Live run `run-muexhp0k-73172f73` is why it travels at all: its Flow
+ * failed on a filter the instruction named, and a bundle holding only byte
+ * sizes could not say whether the filter had ever reached a packet.
  */
-export type PersistedEvidencePacket = { point: (typeof EVIDENCE_PACKET_POINTS)[number]; bytes: number; truncated: boolean };
+export type PersistedEvidencePacket = { point: (typeof EVIDENCE_PACKET_POINTS)[number]; bytes: number; truncated: boolean; composition: RunEvidencePacketComposition | null };
 
 const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
 
@@ -630,8 +639,41 @@ function evidencePacketsOf(attempt: Record<string, unknown>): PersistedEvidenceP
   const stateRefs = optionalRecord(optionalRecord(attempt.metadata)?.stateRefs);
   return EVIDENCE_PACKET_POINTS.flatMap((point) => {
     const summary = optionalRecord(optionalRecord(stateRefs?.[point])?.summary);
-    return summary && typeof summary.truncated === "boolean" ? [{ point, bytes: serializedBytes(summary), truncated: summary.truncated }] : [];
+    return summary && typeof summary.truncated === "boolean"
+      ? [{ point, bytes: serializedBytes(summary), truncated: summary.truncated, composition: packetCompositionOf(summary.composition) }]
+      : [];
   });
+}
+
+/**
+ * The packet's own composition, rebuilt entry by entry rather than copied.
+ *
+ * The run detail is untrusted JSON, and this is the one field of a packet whose
+ * keys are not fixed by the bundle's own code, so a malformed packet is the one
+ * way page text could reach a run artifact through it. Every key must read as a
+ * band number or `unranked` and every value as a count; anything else is
+ * dropped. A summary that states nothing usable reads as `null` -- not
+ * recorded -- rather than as an empty composition, because a packet that
+ * described no elements and a packet nobody counted are different facts.
+ */
+function packetCompositionOf(value: unknown): RunEvidencePacketComposition | null {
+  const composition = optionalRecord(value);
+  if (!composition) return null;
+  const included = bandCountsOf(composition.included);
+  const dropped = bandCountsOf(composition.dropped);
+  return included && dropped ? { included, dropped } : null;
+}
+
+function bandCountsOf(value: unknown): Record<string, number> | undefined {
+  const counts = optionalRecord(value);
+  if (!counts) return undefined;
+  const kept: Record<string, number> = {};
+  for (const [band, count] of Object.entries(counts)) {
+    if (!RUN_EVIDENCE_BAND_KEY_PATTERN.test(band)) continue;
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) continue;
+    kept[band] = count;
+  }
+  return kept;
 }
 
 function serializedBytes(value: unknown): number {

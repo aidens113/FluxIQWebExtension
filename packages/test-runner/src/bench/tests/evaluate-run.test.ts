@@ -52,7 +52,7 @@ test("a passing recording-lane run: oracle passed, FluxIQ's probe succeeded, fin
   assert.deepEqual(evaluation.actions, [{ actionType: "web.browser.navigate", durationMs: 1911 }, { actionType: "web.dom.type", durationMs: 1553 }]);
   assert.deepEqual(evaluation.llm, { mode: "disabled", profileId: null, calls: 0 });
   assert.equal(evaluation.harnessActivations, 0);
-  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 });
   assert.deepEqual(evaluation.metrics, { steps: 5 });
   assert.deepEqual([evaluation.harnessRecovery, evaluation.adaptationCost, evaluation.adaptationValidation, evaluation.adaptationPersistence, evaluation.adaptationReuse], [null, null, null, null, null]);
   // Unmeasured, never an empty measurement: this lane asserts each extract step as it runs and keeps no per-step measurement, and `[]` here would put a lane that measured nothing into the bench's extraction block.
@@ -213,11 +213,11 @@ test("a Flow that was created but failed carries the reported category and the c
 
 test("a Flow-lane bundle's measured packets are its evidence sizes: every packet's bytes, and a count of the trimmed ones", (t) => {
   const evaluation = evaluateFlowRun(flowInput({ result: { runId: "run-evidence", verdict: "passed", path: bundleWith(t, TWO_PACKETS), observation: createdFlow } }));
-  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], packetComposition: [null, null], truncationCount: 1 });
 });
 
 test("a recording-lane bundle adds no evidence sizes, even when its directory holds Flow-lane packets", (t) => {
   // runScenario's result carries the bundle path on either lane; only the Flow lane's evaluation reads it.
   const result = { runId: "run-recording", verdict: "passed" as const, path: bundleWith(t, TWO_PACKETS) };
-  assert.deepEqual(evaluateRecordingRun(input({ result })).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+  assert.deepEqual(evaluateRecordingRun(input({ result })).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 });
 });

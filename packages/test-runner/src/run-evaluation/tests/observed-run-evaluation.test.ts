@@ -10,21 +10,26 @@ const flow: RunLaneObservation = { lane: "flow", flowCreated: true, oracleVerdic
 const recording: RunLaneObservation = { ...flow, lane: "recording", flowCreated: null };
 
 test("the evidence sizes a lane measured reach the evaluation, copied rather than shared", () => {
+  // The second packet counted its composition and the first did not, which is
+  // the pair a bundle actually holds while older runs are still being read.
+  const composition = { included: { "1": 2, "2": 9 }, dropped: { "1": 14, "6": 220 } };
   const evidence: FlowLaneEvidence = {
-    sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1,
-    packets: [{ actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false }, { actionPosition: 1, point: "afterAction", bytes: 4_096, truncated: true }],
+    sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], packetComposition: [null, composition], truncationCount: 1,
+    packets: [{ actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false, composition: null }, { actionPosition: 1, point: "afterAction", bytes: 4_096, truncated: true, composition }],
   };
   const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence });
   // Only the contract's fields: the located packets are the budget check's input, not evaluation output.
-  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], packetComposition: [null, composition], truncationCount: 1 });
   evidence.sanitizedPacketBytes.push(8_192);
+  evidence.packetComposition.push(null);
   assert.deepEqual(evaluation.evidence.sanitizedPacketBytes, [2_048, 4_096]);
+  assert.deepEqual(evaluation.evidence.packetComposition, [null, composition]);
 });
 
 test("a run that passes no evidence sizes, as every recording-lane run does, records empty lists and no truncation", () => {
-  assert.deepEqual(evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: recording }).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+  assert.deepEqual(evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: recording }).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 });
 });
 
 test("a size the evaluation contract rejects is refused, never published", () => {
-  assert.throws(() => evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence: { sanitizedPacketBytes: [-1], rawSnapshotBytes: [], truncationCount: 0, packets: [] } }), /sanitizedPacketBytes/u);
+  assert.throws(() => evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence: { sanitizedPacketBytes: [-1], rawSnapshotBytes: [], packetComposition: [null], truncationCount: 0, packets: [] } }), /sanitizedPacketBytes/u);
 });

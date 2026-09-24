@@ -18,7 +18,7 @@ const run = (scenarioId: string, repeatIndex: number, fields: Partial<RunEvaluat
   schemaVersion: "0.3", runId: `run-${scenarioId}-${repeatIndex}`, verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
   scenarioId, workflowId: null, variantId: null, repeatIndex, lane: "recording", flowCreated: null,
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
-  harnessActivations: 0, durationMs: 40_000, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+  harnessActivations: 0, durationMs: 40_000, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
   llm: { mode: "disabled", profileId: null, calls: 0 },
   extraction: null,
   harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,

@@ -105,7 +105,7 @@ function campaignEvaluation(runId: string, options: RunScenarioOptions): RunEval
     workflowId: options.workflowId ?? null, variantId: options.variantId ?? null, repeatIndex: options.benchReceipt?.cellIdentity.repeatIndex ?? 0, lane: options.flow ? "flow" : "recording",
     flowCreated: observation?.flowCreated ?? null, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null,
     automationFailureExpected: null, harnessActivations: observation?.harnessActivations ?? 0, durationMs: 40_000,
-    actions: observation?.actions ?? [{ actionType: "web.dom.type", durationMs: 1_500 }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+    actions: observation?.actions ?? [{ actionType: "web.dom.type", durationMs: 1_500 }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 }, extraction: null, harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   };
 }

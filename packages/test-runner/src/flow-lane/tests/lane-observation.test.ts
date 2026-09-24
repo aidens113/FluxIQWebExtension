@@ -17,7 +17,7 @@ function evaluationFrom(observation: RunLaneObservation): RunEvaluation {
   return {
     schemaVersion: EVALUATION_SCHEMA_VERSION, runId: "run.one", verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
     scenarioId: "auth-gate", workflowId: null, variantId: null, repeatIndex: 0, durationMs: 10,
-    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
     ...observation,

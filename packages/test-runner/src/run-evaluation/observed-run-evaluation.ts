@@ -114,9 +114,13 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     // Core captured no sanitized packet, and it passes none. `rawSnapshotBytes`
     // is empty on every lane, because no producer measures raw snapshots and
     // they are not a Week 1 metric. Only the contract's fields are copied.
+    //
+    // `packetComposition` is copied entry by entry for the same reason the byte
+    // list is: the evaluation must not alias the lane's arrays. The entries
+    // themselves are counts, so the shallow copy is the whole copy.
     evidence: evidence
-      ? { sanitizedPacketBytes: [...evidence.sanitizedPacketBytes], rawSnapshotBytes: [...evidence.rawSnapshotBytes], truncationCount: evidence.truncationCount }
-      : { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+      ? { sanitizedPacketBytes: [...evidence.sanitizedPacketBytes], rawSnapshotBytes: [...evidence.rawSnapshotBytes], packetComposition: [...evidence.packetComposition], truncationCount: evidence.truncationCount }
+      : { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
     llm: input.llm ?? { mode: "disabled", profileId: null, calls: 0 },
     // The lane's own measurements, or `null` when the lane measured no
     // extraction -- which the contract reads as unmeasured, never as "no

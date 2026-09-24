@@ -84,8 +84,48 @@ export type EvaluationLane = (typeof evaluationLanes)[number];
 /** One executed action: its FluxIQ action type and how long it took. */
 export type RunActionLatency = { actionType: string; durationMs: number };
 
-/** Evidence a run produced: bytes per sanitized packet and per raw snapshot, and how many were truncated. */
-export type RunEvidenceSizes = { sanitizedPacketBytes: number[]; rawSnapshotBytes: number[]; truncationCount: number };
+/**
+ * What one sanitized evidence packet was made of: how many elements of each of
+ * the capture's relevance bands the model was shown, and how many the packet
+ * left behind. Counts only -- no name, no text, no selector, no attribute ever
+ * enters a run artifact through this field, which is what makes it safe to
+ * record at all.
+ *
+ * The bands are the capture's own, written in decimal
+ * (`apps/extension/src/content/dom-snapshot.ts` `snapshotElementBucket`); band
+ * 1 is the controls that change what the page shows -- a facet, a price band, a
+ * sort order. `unranked` counts elements from a capture that stamped no band.
+ * Only bands with at least one element appear on each side.
+ *
+ * Live run `run-muexhp0k-73172f73` is why this is recorded. It built a Flow
+ * that failed to click a filter its instruction named, and the run's artifacts
+ * held the packets' byte sizes and nothing about their contents, so nobody
+ * could say whether the model had ever been shown that filter.
+ */
+export type RunEvidencePacketComposition = { included: Record<string, number>; dropped: Record<string, number> };
+
+/**
+ * A band key as a packet may write it: a decimal band number, or `unranked`.
+ * The reader that lifts a composition out of a run bundle drops every other
+ * key, so a malformed packet cannot put page text into an evaluation.
+ */
+export const RUN_EVIDENCE_BAND_KEY_PATTERN = /^(?:\d{1,4}|unranked)$/u;
+
+/** Evidence a run produced: bytes per sanitized packet and per raw snapshot, what each packet was made of, and how many were truncated. */
+export type RunEvidenceSizes = {
+  sanitizedPacketBytes: number[];
+  rawSnapshotBytes: number[];
+  /**
+   * One entry per measured packet, in the same order as `sanitizedPacketBytes`,
+   * and `null` for a packet that stated no composition -- a bundle written
+   * before packets carried one, or a packet whose composition was malformed.
+   * `null` rather than an empty composition on purpose: "not recorded" and "the
+   * packet described nothing" are different answers, and collapsing them is the
+   * mistake that made `run-muexhp0k-73172f73` unanswerable.
+   */
+  packetComposition: (RunEvidencePacketComposition | null)[];
+  truncationCount: number;
+};
 
 /** No provider configured, or the mode of the `LlmExecutionProfile` in use. */
 export const llmUsageModes = ["disabled", "deterministic-dry", "live"] as const satisfies readonly ("disabled" | LlmExecutionProfile["mode"])[];

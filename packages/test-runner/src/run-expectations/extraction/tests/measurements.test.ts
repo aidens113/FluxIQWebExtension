@@ -102,7 +102,7 @@ test("the published measurements carry counts and flags only, and pass the evalu
     scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: null, repeatIndex: 0,
     lane: "recording", flowCreated: null, oracleVerdict: "passed", reportedVerdict: "passed",
     automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, durationMs: 1000, actions: [],
-    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },
     extraction: measurements,
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
