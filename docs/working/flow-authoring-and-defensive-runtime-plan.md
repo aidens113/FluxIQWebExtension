@@ -707,9 +707,16 @@ All three are merged and pushed; what they changed is in `Current State`.
   refusals with three successes among them never come near it. The streak is
   bounded and the total is not. A build can be told "there is no list there"
   indefinitely as long as it occasionally looks at something else.
-  Bounding the total is the open item. It is worth roughly a third of a bad
-  build's calls, and the threshold should come from more than one run, so it is
-  written down rather than guessed at here.
+  **And the data will not support a bound, which is the finding.** Counting
+  refused detections per run against its verdict: passing runs used 0, 0, 1, 1
+  and **15**; failing runs used 1, 2, 2, 5, 10 and 27. They overlap almost
+  completely, and the passing run at 15 sits above four of the six failures. So
+  there is no total that separates a build working its way to an answer from one
+  that is only asking again - a bound of 12 would have killed a run that went on
+  to pass. The waste is real (27 refusals cost that build most of its 38 calls)
+  but a count is the wrong discriminator, and picking one from the worst run
+  alone would have been a guess dressed as evidence. What would separate them is
+  whether the *target* changed between asks, which nothing currently records.
   `bootstrap.invalid_subflows` is the same shape, five times in that one run.
 - **`everything-store` is a different failure, and it is not extraction.** Its
   instruction says "narrow the results to Brightaisle Plus items". The Flow
