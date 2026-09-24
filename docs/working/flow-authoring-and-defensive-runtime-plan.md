@@ -603,61 +603,9 @@ verification already claimed - are in
 [archive/2026-09-24-t114-t117-repair-loop.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-24-t114-t117-repair-loop.md).
 All three are merged and pushed; what they changed is in `Current State`.
 
-### 2026-09-24 - The furthest run yet, and the two things that stopped it
-
-- Agent: supervisor, direct. Core `task/t116-grant-refusal-says-why`; web t114
-  (worktree) and t115.
-- The run: `run-muexhp0k-73172f73`, `everything-store-first-page-plus-earbuds`,
-  deepseek-flash, 19 calls, $0.0233, 250s, verdict `failed` on
-  `core.result.does_not_answer_request`.
-- **How far it got, and it is the furthest yet.** A Flow was built
-  (`flowCreated: true`, 12 actions: navigate, three clicks, a merge, a type,
-  three more clicks, a second merge, two `extract_list`), it replayed end to
-  end, and extraction returned **16 of 16 expected records with 64 of 64
-  expected fields, 0 unexpected fields and 0 non-string values**. The value-shape
-  defect t111 closed has stayed closed.
-- **Why it failed, cause A: one intruder row shifts the whole list.** Positions
-  1-6 matched exactly. Positions 7-12 are every one of them `kind: "moved"`,
-  each observed exactly one position later - 7 at 8, 8 at 9, through 12 at 13 -
-  with `fields: []`, so every field was right and only the position was wrong.
-  Observed position 7 is therefore a row the expectation does not contain, and
-  it pushes the real products down one, knocking the last three off the end.
-  Those three then read as `values-differ` - expected "Oakhaven Sound Grove ...
-  3.6" against observed "Aurelle Pods Fit ... 4.8" - which looks like three bad
-  extractions and is one extra row counted once. `matchedRecords: 7`,
-  `matchedInAnyOrder: 13`. Not yet fixed; the row is most likely a sponsored or
-  interstitial card inside the same repeating container.
-- **Why it failed, cause B: the repair never ran.** The three interventions
-  `harnessRecovery` reports are not diagnoses - all three are
-  `automation-studio.loop-verification.v1`. Two result checks ran and both
-  correctly returned `does_not_answer`. The third activation, the repair, died
-  at `llm.provider_resolution_failed`, `refusalRung: "gate"`. So neither t114's
-  re-plan nor t115's `recovered_failures` was exercised at all.
-- **And the record could not say why**, because `annotate.ts` caught the
-  resolution failure with a bare `catch {}` and discarded it. It was not budget
-  (19 of 48 calls, $0.0233 of $0.25) and not the grant's 600s run window (250s).
-  Three changes close that: Core's grant claim path now throws a typed
-  `AutomationStudioLlmExecutionGrantRefusal` carrying one of four codes -
-  unavailable, scope mismatch, no longer valid, purpose invalid - with every
-  sentence unchanged so no caller moves; `annotate` records it as
-  `llmGate.cause` beside the step's own code, keeping only Core's vocabulary and
-  never a thrown provider message; and the Lab carries it as
-  `harnessRecovery.refusalCause`. The suspicion to test is `no_longer_valid`:
-  the grant is minted against the Flow's execution digest, and a run that
-  *creates* a Flow changes that digest itself.
-- Also landed, web t114: `harnessRecovery.contextSections`. Core has written the
-  recovery context's section names, byte counts and omission reasons on every
-  run since the context existed, built so a test could require a section was
-  carried without holding page data, and nothing read it. This run is where that
-  bit - no artifact could say which evidence the repair would have been given.
-- Validation: Core `tsc --noEmit` exit 0; `vitest run` over `runtime/recovery`
-  and `runtime/llm` `Test Files 73 passed (73)`, `Tests 861 passed (861)`. Web
-  `pnpm check` exit 0 through `pnpm task finish` for t114; test-runner
-  `# tests 1338 # pass 1338 # fail 0`.
-- Outcome: Partial - the run is the best yet and both of its causes are now
-  named; cause A is not fixed, and cause B is instrumented rather than fixed.
-- Next: re-run, read `refusalCause` to learn which grant refusal it is, and fix
-  that; then the intruder row.
+The entry for `run-muexhp0k-73172f73` - the furthest run of that morning and
+the two causes that stopped it - is in
+[archive/2026-09-24-t114-t117-repair-loop.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-24-t114-t117-repair-loop.md).
 
 ### 2026-09-24 - The extract campaign, and one cause behind five of six failures
 
@@ -739,6 +687,55 @@ All three are merged and pushed; what they changed is in `Current State`.
   belongs in a worktree, which is what the rest of this session used.
 
 ## Open Questions
+- **A falsifiable prediction about the 23-record failure, and where it comes
+  from.** `domain/src/output-nodes/extract-list/catalog-text.ts` ends in
+  `WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE`, the worked request the model is shown
+  for `extract_list`. Its own doc calls it "a paginated product list", and it
+  reads `{ item: "li.product", fields: {name, price, url}, where: [...],
+  paginate: { mode: "next", next: "a.next", maxPages: 5 }, minItems: 1 }`.
+  A model asked to scrape a product catalogue is shown an example of scraping a
+  product catalogue across five pages.
+  **The example cannot simply drop `paginate`.** Its own comment says why: Core
+  reads a parameter's example as the declaration of which keys belong inside it
+  (`flow-bootstrap/authoring/matching.ts`), so a key the example omits is a key
+  the model is refused for writing. The key has to stay; it is the *value* that
+  teaches five pages.
+  **The prediction:** when `authoredNodes` lands, a failing `product-catalog`
+  run's `extract_list` will carry `maxPages: 5`. Five is not a number reasoning
+  produces from a three-page catalogue - it is the example's number - so finding
+  it is conclusive, and not finding it kills this explanation as cleanly as the
+  re-run killed the last one. No change to the example until the run says.
+- **Before t119 merges, Core must export the screen the Lab needs.** Recording a
+  Flow's authored parameters requires the same screening Core already does for a
+  repair's step parameters, and `automationStudioScreenedNodeParameters` exists
+  for exactly that - but it is unreachable from any public subpath, because
+  `recovery/index.ts` never re-exports `repair-context/index.ts`. A one-line
+  omission. The worker, correctly forbidden from editing Core, restated the
+  screen instead: 198 lines against Core's 200, identical logic. That is a copy
+  of Core in a downstream repository, which is the one thing that must not
+  happen, so it is not merging in that shape. The sequence is: add the barrel
+  line in Core, rebuild, import it in the Lab, delete the copy. It cannot be
+  done while a campaign holds the main checkout, because a Core source edit
+  stales Core's dist and the Lab refuses to run against it.
+- **The pagination fix did not work, and the inference behind it was wrong.**
+  Re-running all four failing `product-catalog` tasks against the merged fix,
+  with `PROPOSED_MAX_PAGES = 1` confirmed present in the `dist/e2e-chromium`
+  bundle the Lab loads: 0 passed, 4 failed, three of them the same
+  `exp 8 obs 23 match 8`. The detector's proposal was never where the page
+  budget came from. What the change is still right about - a detector reports
+  how a list continues and does not decide how much of it to take - it is not a
+  fix, and it was shipped as one.
+  **What the code says instead.** `plan-resolution/extraction/slot.ts`
+  `keptPagination` reads the model's `paginate`: `false` is the page shown,
+  absent or `true` is the detected pagination, and an object supplies the
+  model's own `maxPages`. With the proposal now at 1, absent and `true` both
+  give eight records - so the model is writing an explicit number above one. It
+  does not need to know the catalogue has three pages to do it: any `maxPages`
+  greater than 1 follows Next until Next is gone, which is all 23. The packet
+  tells it a pagination *mode* and an item count, never a page count.
+  **This was diagnosed twice from record counts and got it wrong once, which is
+  the argument for the instrumentation rather than for another guess.** No
+  further pagination change until a run records what the model actually wrote.
 - **The result check was wrong in both directions, in one campaign, and that
   now costs money.** `run-muezaeuk-5affbb6c` (`product-catalog-photos`) extracted
   the right dataset - the Lab's oracle passed it - and Core's own verification
