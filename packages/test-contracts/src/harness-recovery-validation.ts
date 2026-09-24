@@ -11,7 +11,7 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "contextSections"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "refusalCause", "contextSections"] as const satisfies readonly (keyof RunHarnessRecovery)[];
 const contextSectionKeys = ["included", "omitted"] as const;
 const contextOmissionKeys = ["section", "reason"] as const;
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
@@ -76,6 +76,11 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
     if (value.refusalRung !== undefined && value.refusalRung !== null) {
       enumeration(value.refusalRung, harnessRecoveryRungs, "$.refusalRung", issues);
       if (value.refusalCode === undefined || value.refusalCode === null) add(issues, "$.refusalRung", "must be null unless a refusal code names what it declined");
+    }
+    // A cause explains a refusal, so there has to be one to explain.
+    if (value.refusalCause !== undefined && value.refusalCause !== null) {
+      checkCode(value.refusalCause, "$.refusalCause", issues);
+      if (value.refusalCode === undefined || value.refusalCode === null) add(issues, "$.refusalCause", "must be null unless a refusal code names what it explains");
     }
     // Section names and Core's own omission reasons. A name is not content, so
     // nothing here can carry page data; the check is that it stays that way.

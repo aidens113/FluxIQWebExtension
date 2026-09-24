@@ -87,13 +87,17 @@ export async function readHarnessRecovery(
  * model wrote that a person has to allow first. Core's sentences -- `reason`,
  * `patchSkipped` -- stay behind in every case.
  */
-function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null } {
+function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null; refusalCause?: string } {
   const none = { refusalCode: null, refusalRung: null };
   const metadata = runDetail.metadata;
   const gate = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).llmGate : undefined;
   if (!gate || typeof gate !== "object" || Array.isArray(gate)) return none;
-  const { invoked, code, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate as Record<string, unknown>;
-  if (invoked === false && code !== undefined) return { refusalCode: code as string, refusalRung: "gate" };
+  const { invoked, code, cause, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate as Record<string, unknown>;
+  // Core's own cause behind the gate's code, where it named one. Only a string:
+  // the slot is Core's vocabulary, and the contract holds it to a code shape.
+  if (invoked === false && code !== undefined) {
+    return { refusalCode: code as string, refusalRung: "gate", ...(typeof cause === "string" ? { refusalCause: cause } : {}) };
+  }
   if (patchSkippedCode !== undefined) return { refusalCode: patchSkippedCode as string, refusalRung: rung(patchSkippedRung) };
   if (patchHeldCode !== undefined) return { refusalCode: patchHeldCode as string, refusalRung: rung(patchHeldRung) ?? "resolution" };
   return none;
