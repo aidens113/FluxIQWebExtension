@@ -687,6 +687,24 @@ the two causes that stopped it - is in
   belongs in a worktree, which is what the rest of this session used.
 
 ## Open Questions
+- **A falsifiable prediction about the 23-record failure, and where it comes
+  from.** `domain/src/output-nodes/extract-list/catalog-text.ts` ends in
+  `WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE`, the worked request the model is shown
+  for `extract_list`. Its own doc calls it "a paginated product list", and it
+  reads `{ item: "li.product", fields: {name, price, url}, where: [...],
+  paginate: { mode: "next", next: "a.next", maxPages: 5 }, minItems: 1 }`.
+  A model asked to scrape a product catalogue is shown an example of scraping a
+  product catalogue across five pages.
+  **The example cannot simply drop `paginate`.** Its own comment says why: Core
+  reads a parameter's example as the declaration of which keys belong inside it
+  (`flow-bootstrap/authoring/matching.ts`), so a key the example omits is a key
+  the model is refused for writing. The key has to stay; it is the *value* that
+  teaches five pages.
+  **The prediction:** when `authoredNodes` lands, a failing `product-catalog`
+  run's `extract_list` will carry `maxPages: 5`. Five is not a number reasoning
+  produces from a three-page catalogue - it is the example's number - so finding
+  it is conclusive, and not finding it kills this explanation as cleanly as the
+  re-run killed the last one. No change to the example until the run says.
 - **Before t119 merges, Core must export the screen the Lab needs.** Recording a
   Flow's authored parameters requires the same screening Core already does for a
   repair's step parameters, and `automationStudioScreenedNodeParameters` exists
