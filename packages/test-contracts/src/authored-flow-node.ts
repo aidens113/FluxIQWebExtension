@@ -19,8 +19,8 @@
  * **What may travel.** Numbers, booleans, Core's and the domain's own closed
  * words, identifiers and the origin of an absolute URL. Never a selector, never
  * page text, never a value a person or a page supplied. The screen that decides
- * is the producer's (`test-runner`'s `creation/parameter-screen.ts`, which
- * follows Core's `AS/runtime/recovery/repair-context/parameter-screen.ts` and
+ * is the producer's: `test-runner` calls Core's own
+ * `automationStudioScreenedNodeParameters` rather than restating it, and
  * uses Core's own key, locator and credential screens); this contract states
  * the envelope that screen must have produced, so a screen that regressed
  * fails a check rather than writing a page into a bundle.

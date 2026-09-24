@@ -4,7 +4,7 @@
 // `flow-shape.ts` answers "how many, and of what kind"; this answers "with
 // what". They are kept apart because they carry different risks -- a count can
 // hold nothing, a parameter could hold a page -- and the screen that makes the
-// second safe is a file of its own (`parameter-screen.ts`).
+// second safe is Core's own `automationStudioScreenedNodeParameters`.
 //
 // Six live `product-catalog` extract runs failed identically with
 // `expectedRecords 8, observedRecords 23` and none could be diagnosed, because
@@ -16,7 +16,12 @@
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "@fluxiq-web-extension/domain/node";
 import type { AuthoredFlowNode } from "@fluxiq-web-extension/test-contracts";
 import type { FlowNodeRecord } from "../flow-action-types.js";
-import { screenedNodeParameters } from "./parameter-screen.js";
+// Core's own screen, not a copy of it. It reached no public subpath until
+// `recovery/index.ts` re-exported `repair-context/index.ts`, and this file once
+// restated 198 of its 200 lines for want of that one line. A copy cannot follow
+// Core when a new shape has to be withheld, and the two then disagree about
+// what is safe to say about a page.
+import { automationStudioScreenedNodeParameters } from "fluxiq/automation-studio";
 
 /** Whether a node id or definition id is shaped like one Core writes: no space, so it can carry no text. */
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
@@ -48,7 +53,7 @@ export function createdFlowAuthoredNodes(
   for (const node of nodes) {
     const outputId = actionTypes.get(node.id);
     if (outputId === undefined) continue;
-    const screened = screenedNodeParameters(node.parameterValues ?? {}, deniedKeys);
+    const screened = automationStudioScreenedNodeParameters((node.parameterValues ?? {}) as Parameters<typeof automationStudioScreenedNodeParameters>[0], deniedKeys);
     authored.push({
       nodeId: identifier(node.id) ?? `unrecognized.node.${authored.length}`,
       definitionId: identifier(node.definitionId) ?? null,
