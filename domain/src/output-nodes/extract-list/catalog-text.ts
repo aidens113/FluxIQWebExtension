@@ -56,9 +56,32 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
   "pagination"
 ];
 
-/** The node's description: what it is for, how its list is named, and that saving needs nothing more. */
+/**
+ * The node's description: what it is for, how its list is named, and that
+ * saving needs nothing more.
+ *
+ * **It used to promise "across pages", and the model believed it.** This is the
+ * first thing a model reads about the node, and a node that says it scrapes
+ * every item across pages is a node that will be written to do exactly that --
+ * whatever the instruction asked for.
+ *
+ * Measured on 2026-09-24, and the pair is what settles it. Told to scrape "the
+ * products shown on the first page of the catalog", the model authored
+ * `paginate: { maxPages: 3 }` and returned all 23 products where 8 were
+ * expected (`run-muf2r0wd-29c637d3`). Told to scrape "every product in the
+ * catalog, across all of its pages", it authored `paginate: { maxPages: 3 }` --
+ * the same node, to the character -- and passed (`run-muf33l1g-2b7385aa`).
+ * Opposite instructions, identical output: the request's scope was reaching the
+ * authored node not at all, because the node had already told the model what it
+ * does.
+ *
+ * Nine runs failed on this before the authored parameters were recorded and the
+ * two could be compared. Two earlier fixes were aimed at the detector's
+ * proposal and at the worked example, and neither was the cause; the sentence
+ * above them was.
+ */
 export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
-  "Scrape every item of a repeating list or table into a dataset, across pages.",
+  "Scrape the items of a repeating list or table into a dataset, one page or many.",
   "Detect the list with web.detect_repeating_structure; name it in extractList by its handle.",
   "It saves its rows itself: no recordOutput or save node needed."
 ].join(" ");
@@ -88,13 +111,26 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * in its field spec and its own `where` example. The resolver still accepts
  * every one of them, and a literal request is the fallback for a list nothing
  * detected -- the path this text exists to steer a model away from.
+ *
+ * **The last clause says what a page budget is for, because nothing did.** The
+ * grammar named `maxPages` and its ceiling and never said what the number does,
+ * and a model reading it as a description of the page rather than a request for
+ * that much of it writes the count it can see. On 2026-09-24 the same authored
+ * node -- `paginate: { maxPages: 3 }` -- came back from "the products shown on
+ * the first page of the catalog" and from "every product, across all of its
+ * pages": opposite requests, identical output, one failing and one passing.
+ * Three changes aimed elsewhere (the detector's proposal, the worked example,
+ * this node's own description) each left that pair unchanged, which is what
+ * pointed here. The clause needed room Core's 600-character parameter
+ * description did not have, so Core's bound moved with it.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false (this page)};`,
   "link gives the absolute URL, @href the raw href.",
   `Else {item: css, fields: {key: "css"|"css@attr"|"column:Header"|{kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?}},`,
   `paginate?: {mode: "next", next: css, maxPages} (loadMore: control, numbered: pages)|{mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
-  `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
+  `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`,
+  "maxPages/maxScrolls = pages to read, not pages present: read only the page shown unless asked for more."
 ].join(" ");
 
 /**

@@ -268,10 +268,10 @@ test("the list extraction describes its request for a model to write one", () =>
   const firstSentence = node.description.slice(0, node.description.indexOf(".") + 1);
   assert.equal(firstSentence.length > 0 && firstSentence.length <= 80, true, firstSentence);
   assert.match(firstSentence, /scrape/iu);
-  // The grammar goes with the parameter, whose description Core keeps to 600.
+  // The grammar goes with the parameter, whose description Core keeps to 700.
   const extractList = node.parameters.find((candidate) => candidate.id === "extractList");
   const grammar = extractList?.description ?? "";
-  assert.equal(grammar.length <= 600, true, `${grammar.length} characters`);
+  assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
   for (const term of ["item", "fields", "css@attr", "column:", "paginate", "minItems", "maxItems", ...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES, ...WEB_AUTOMATION_EXTRACT_FIELD_KINDS]) {
     assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
   }

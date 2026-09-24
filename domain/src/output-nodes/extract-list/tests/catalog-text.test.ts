@@ -22,7 +22,15 @@ test("the node says to detect the list, name it by its handle, and that it saves
 
 test("the grammar leads with the handle form, and says how to keep, rename and read columns and pages", () => {
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
-  assert.equal(grammar.length <= 600, true, `${grammar.length} characters`);
+  // 700, with Core's parameter-description bound moved to match. The extra
+  // room carries one clause -- what a page budget is for -- and the pair that
+  // justifies it: on 2026-09-24 "the products shown on the first page" and
+  // "every product, across all of its pages" produced the identical authored
+  // node, `paginate: { maxPages: 3 }`, one failing and one passing. Three
+  // changes elsewhere left that pair unchanged. A budget is for keeping a
+  // prompt honest, not for keeping a term undefined.
+  assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
+  assert.equal(grammar.includes("pages to read, not pages present"), true, "the grammar says what a page budget is for");
   for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "paginate?: false (this page)", "absolute URL", "raw href"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
