@@ -613,6 +613,36 @@ cause behind five of six failures - is in
 Its pagination conclusion was later falsified; see `Open Questions`.
 
 ## Open Questions
+- **The extract lane, all nineteen tasks: 11 passed, 8 failed, 0 no results.**
+  Up from 4 of 11 before the pagination fix, and every task now produces a Flow.
+  Passing includes `social-scheduler-whole-queue` at 280 records,
+  `data-table-inventory-large` at 1000, and `sensitive-input-card-labels` and
+  `social-inbox-first-screen`, which had produced nothing before. The eight
+  failures reduce to four causes, not eight.
+- **Four of the eight were one silent return.** `buildSubflow` ended
+  `if (!nodes.length) return { issues }`, and when the model's node list was
+  not under `nodes`, `steps` or `actions`, `issues` was empty - the subflow
+  vanished with no reason recorded, and the caller reported "Bootstrap subflows
+  must be an array" to a model that had written an array. Nothing in that
+  sentence could be acted on, so the model wrote the same plan again:
+  `data-table-inventory-empty` 24 times, `admin-console-customer-book-short` 16,
+  `product-catalog-first-page-sparse-cards` 15, `company-directory-register-page`
+  12 before dying after 44 provider calls. Three refusals now, because they are
+  three different problems.
+- **A refused attempt is no longer progress.** The loop cleared its no-progress
+  count on a refused action, bounded instead by the action's signature - which
+  catches an identical retry and not a model naming a different target each
+  time. `company-directory-register-page` spent 31 of 45 build steps on
+  `target_unobserved` that way. The repeat cache keeps its own rule; progress
+  now asks whether anything happened.
+- **A declared row count is read.** `admin-console-customer-book` returned 19 of
+  240 from a virtualiser, over a viewport saying `aria-rowcount="240"`. The
+  extension read only the ARIA feed pattern, which a grid does not use.
+- **Still open: a column mapped to the wrong element**, on
+  `property-listings-newest-homes` (address reads the listing URL, 10 rows, 0
+  matching) and intermittently on `product-catalog` (rating read `$49.00`).
+  Intermittent is the finding: earlier runs of the same task mapped it
+  correctly, so this is model variance and wants a rate, not a single run.
 - **The 23-record failure is fixed, and it took three wrong answers to find the
   right one.** The cause was that the grammar for `extractList` named `maxPages`
   and its ceiling and never said what the number does, so a model read it as a
