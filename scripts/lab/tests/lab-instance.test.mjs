@@ -73,6 +73,66 @@ test("the build lock excludes a second holder and is released afterwards", async
   }
 });
 
+// The failure this heartbeat exists for. On 2026-09-24 a campaign died with the
+// machine holding the lock at `{"pid":2656}`; the next campaign's own node
+// process was handed pid 2656, so `isProcessAlive` said yes and it waited on
+// itself -- one line printed, nothing building, and a 45-minute timeout ahead of
+// it. A pid is not an identity across a crash, and this is the clause that does
+// not care.
+test("a lock left by a crash is reclaimed even when its pid has been handed to someone else", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "lab-lock-"));
+  const lockPath = path.join(directory, "build.lock");
+  try {
+    const longAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+    await writeFile(lockPath, `${JSON.stringify({ pid: 2656, acquiredAt: longAgo, heartbeatAt: longAgo })}
+`, "utf8");
+    let ran = false;
+    // Every pid is alive, as it was that night: the waiter must free itself on
+    // the heartbeat alone.
+    await withBuildLock(lockPath, async () => { ran = true; }, { pid: 2656, isProcessAlive: () => true, timeoutMs: 2_000, pollMs: 10 });
+    assert.equal(ran, true);
+    await assert.rejects(readFile(lockPath, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+// A record written before heartbeats existed carries none, so its age is read
+// from `acquiredAt`. An old one is reclaimed; a fresh one is still respected.
+test("a lock with no heartbeat is judged by its age, not taken for fresh", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "lab-lock-"));
+  const lockPath = path.join(directory, "build.lock");
+  try {
+    await writeFile(lockPath, `${JSON.stringify({ pid: 99, acquiredAt: new Date(Date.now() - 10 * 60_000).toISOString() })}
+`, "utf8");
+    let ran = false;
+    await withBuildLock(lockPath, async () => { ran = true; }, { pid: 100, isProcessAlive: () => true, timeoutMs: 2_000, pollMs: 10 });
+    assert.equal(ran, true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+// And a holder that is genuinely building still holds it: the beat keeps the
+// record fresh, so a waiter must not walk in and take the lock from under it.
+test("a holder that keeps beating is not reclaimed", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "lab-lock-"));
+  const lockPath = path.join(directory, "build.lock");
+  try {
+    await withBuildLock(lockPath, async () => {
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const held = JSON.parse(await readFile(lockPath, "utf8"));
+      assert.equal(held.pid, process.pid);
+      await assert.rejects(
+        withBuildLock(lockPath, async () => undefined, { pid: process.pid + 1, timeoutMs: 60, pollMs: 10, isProcessAlive: () => true }),
+        /Timed out waiting/u,
+      );
+    }, { heartbeatMs: 20, staleAfterMs: 5_000 });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("a lock whose process is gone is reclaimed instead of waited on", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "lab-lock-"));
   const lockPath = path.join(directory, "build.lock");
