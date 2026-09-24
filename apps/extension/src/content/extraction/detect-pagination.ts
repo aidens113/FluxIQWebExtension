@@ -25,7 +25,7 @@
 // sensitive-text reader and used only to recognize the control. No label
 // reaches the proposal (decision D3): what travels is the selector.
 
-import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, webAutomationItemSignature, type WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
+import { webAutomationItemSignature, type WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 import { testIdFor } from "../describe-element";
 import { selectorFor } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
@@ -57,6 +57,32 @@ export function paginationKindForLabel(label: string, rel: string | undefined): 
   return undefined;
 }
 
+/**
+ * How many pages a proposal asks for: the one in front of it.
+ *
+ * This used to be every page the pager showed -- the count of its numbered
+ * controls, or the domain's ceiling when it had none -- and that is the
+ * detector answering a question only the instruction can answer. How a list
+ * continues is a fact about the page, and how much of it to take is a fact
+ * about what was asked for; proposing the maximum silently turns the first into
+ * the second.
+ *
+ * Measured on 2026-09-24: `product-catalog-first-page-reworded-prices` and
+ * `product-catalog-first-page-sparse-cards` each built a Flow whose single
+ * `web.dom.extract_list` carried this proposal, walked all three catalog pages
+ * and returned 23 records where the instruction said first page and the
+ * expectation held 8. Two of the three runs that completed that day failed for
+ * this and nothing else -- the extension read both pages perfectly, every
+ * in-scope record matching field for field.
+ *
+ * So a proposal now asks for the page it is looking at, and a read that wants
+ * more says so. Nothing is hidden by the change: a read stopped by this bound
+ * reports `truncated`, which is the loop's own word for "the list could have
+ * gone on", so a Flow that should have taken more pages says it took fewer
+ * rather than quietly answering short.
+ */
+export const PROPOSED_MAX_PAGES = 1;
+
 /** How the run's list continues, or `undefined` when nothing around it says. */
 export function detectPagination(run: readonly Element[], container: Element): WebAutomationExtractListPagination | undefined {
   let level: Element | null = container;
@@ -65,13 +91,12 @@ export function detectPagination(run: readonly Element[], container: Element): W
       .filter((control) => !run.some((item) => item === control || item.contains(control)));
     if (controls.length === 0) continue;
     const numbered = numberedControls(controls);
-    const maxPages = numbered.length > 0 ? numbered.length : WEB_AUTOMATION_EXTRACT_MAX_PAGES;
     const next = controls.find((control) => kindOf(control) === "next");
-    if (next) return { next: selectorFor(next), maxPages };
+    if (next) return { mode: "next", next: selectorFor(next), maxPages: PROPOSED_MAX_PAGES };
     const loadMore = controls.find((control) => kindOf(control) === "loadMore");
-    if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages };
+    if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages: PROPOSED_MAX_PAGES };
     const pages = numbered.length > 1 ? generalizedItemSelector(numbered, selectorFor(level)) : undefined;
-    if (pages) return { mode: "numbered", pages: pages.selector, maxPages: numbered.length };
+    if (pages) return { mode: "numbered", pages: pages.selector, maxPages: PROPOSED_MAX_PAGES };
   }
   return undefined;
 }
