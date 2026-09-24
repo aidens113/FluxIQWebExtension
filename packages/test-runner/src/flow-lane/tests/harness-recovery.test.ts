@@ -70,9 +70,10 @@ const RECOVERED: RunHarnessRecovery = {
   adaptationIds: [ADAPTATION_ID],
   changeProposalIds: [PROPOSAL_ID],
   refusalCode: null,
+  refusalRung: null,
 };
 
-const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: null };
+const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: null, refusalRung: null };
 
 function json(payload: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json", ...headers } });
@@ -253,7 +254,7 @@ test("a recovery Core's gate refused says why, by the gate's code and never its 
   for (const code of ["llm.gate.training_mode", "llm.gate.training_budget_exhausted", "llm.gate.manual_intervention"]) {
     serve(refused({ invoked: false, code, reason: "PRIVATE-ISSUE: Core's sentence for why" }));
     const outcome = await run(control);
-    assert.deepEqual(outcome.harnessRecovery, { ...NO_RECOVERY, refusalCode: code }, code);
+    assert.deepEqual(outcome.harnessRecovery, { ...NO_RECOVERY, refusalCode: code, refusalRung: "gate" }, code);
     assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail"], `${code}: a refused recovery costs no second read`);
     assert.equal(JSON.stringify(snapshotOf(outcome).harnessRecovery).includes("PRIVATE-ISSUE"), false, `${code}: the sentence stays behind`);
     assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
@@ -340,4 +341,52 @@ test("a repair the model declined reads as a decline with its reason, never as a
   // A reason that is not one of Core's words still reads as a decline, and carries nothing of itself.
   serve(declined("Nothing Here Could Be Repaired"));
   assert.deepEqual((await run(control)).harnessRecovery?.runtimePatchAttempts[0]?.issueCodes, ["runtime_patch.declined"]);
+});
+
+// The silence of live run `run-muesyox4-930bef98` (2026-09-23). Its Flow failed
+// on `target_not_found`, Core's recovery engaged, two diagnosis interventions
+// were filed and the second validated -- and then no patch was attempted, no
+// adaptation or proposal was recorded, and `refusalCode` was `null`, because
+// the reader computed it only for a recovery that never started. A loop that
+// engaged and declined was therefore indistinguishable from one switched off.
+// Core stated its reason all along, in `llmGate.patchSkippedCode`; nothing read
+// it. The mutation this is written against: making the refusal conditional on
+// `attempted` again, or dropping the rung.
+test("a recovery that engaged and then repaired nothing states the rung that declined and why", async (t) => {
+  const engaged = (gate: Record<string, unknown>) => () => ({
+    summary: { ...summary, status: "failed", interventionCount: 2, adaptationCount: 0 }, routeDecisions: [], subflows: [], actionAttempts: [attempt],
+    interventions: [
+      // The ladder's own rung, recorded by the executor and answered by nobody.
+      { interventionId: "attempt.one.recovery.diagnosis", kind: "diagnosis", validation: { ok: false, issues: ["recovery.ladder_diagnosis_unanswered: PRIVATE-ISSUE about the rung"] }, createdAt: 1_050 },
+      { interventionId: "intervention.diagnosis", kind: "diagnosis", validation: { ok: true, issues: [] }, createdAt: 1_100 },
+    ],
+    adaptationIds: [], changeProposalIds: [],
+    metadata: { llmGate: gate },
+  });
+  const { control, serve } = await core(t);
+  const cases = [
+    [{ invoked: true, patchSkippedCode: "llm.runtime_patch_goal_unachievable", patchSkippedRung: "plan", patchSkipped: "PRIVATE-ISSUE: Core's sentence for why" }, "llm.runtime_patch_goal_unachievable", "plan"],
+    [{ invoked: true, patchSkippedCode: "llm.runtime_patch_policy_allows_no_kind", patchSkippedRung: "plan" }, "llm.runtime_patch_policy_allows_no_kind", "plan"],
+    [{ invoked: true, patchSkippedCode: "llm.runtime_patch_permission_required", patchSkippedRung: "exploration" }, "llm.runtime_patch_permission_required", "exploration"],
+    // An older Core names the reason and no rung: stated, unattributed.
+    [{ invoked: true, patchSkippedCode: "llm.runtime_patch_not_requested" }, "llm.runtime_patch_not_requested", null],
+    // A rung word Core does not own is not carried into the bundle.
+    [{ invoked: true, patchSkippedCode: "llm.runtime_patch_not_requested", patchSkippedRung: "PRIVATE-ISSUE" }, "llm.runtime_patch_not_requested", null],
+  ] as const;
+  for (const [gate, refusalCode, refusalRung] of cases) {
+    serve(engaged(gate));
+    const outcome = await run(control);
+    assert.equal(outcome.harnessRecovery?.attempted, true, refusalCode);
+    assert.deepEqual(outcome.harnessRecovery?.runtimePatchAttempts, [], refusalCode);
+    assert.equal(outcome.harnessRecovery?.refusalCode, refusalCode, refusalCode);
+    assert.equal(outcome.harnessRecovery?.refusalRung, refusalRung, refusalCode);
+    // The ladder's intervention now reduces to a code, where it once reduced to nothing.
+    assert.deepEqual(outcome.harnessRecovery?.interventions, [
+      { kind: "diagnosis", validationOk: false, validationCodes: ["recovery.ladder_diagnosis_unanswered"] },
+      { kind: "diagnosis", validationOk: true, validationCodes: [] },
+    ], refusalCode);
+    assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery }, refusalCode);
+    const snapshot = JSON.stringify(snapshotOf(outcome).harnessRecovery);
+    assert.equal(snapshot.includes("PRIVATE"), false, `${refusalCode}: Core's sentence stays behind`);
+  }
 });

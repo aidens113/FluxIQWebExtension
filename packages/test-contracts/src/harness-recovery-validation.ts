@@ -1,4 +1,4 @@
-import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, type RunHarnessRecovery } from "./harness-recovery.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryRungs, type RunHarnessRecovery } from "./harness-recovery.js";
 import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
@@ -11,7 +11,7 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung"] as const satisfies readonly (keyof RunHarnessRecovery)[];
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
 const patchFlagKeys = ["proposalOnly", "executed", "preflightOk"] as const;
 const patchOutcomeKeys = ["adaptationCreated", "changeProposalCreated"] as const;
@@ -56,10 +56,24 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
     const recorded = [value.interventions, value.runtimePatchAttempts, value.adaptationIds, value.changeProposalIds].some((list) => Array.isArray(list) && list.length > 0);
     if (value.attempted === true && !recorded) add(issues, "$.attempted", "must be false when Core recorded no intervention, patch attempt, adaptation or change proposal");
     if (value.attempted === false && recorded) add(issues, "$.attempted", "must be true when Core recorded any intervention, patch attempt, adaptation or change proposal");
-    // Absent in a record written before the field existed; a code otherwise, and only for a recovery that did not happen.
+    // Absent in a record written before the field existed; a code otherwise.
+    //
+    // It used to be refused for any `attempted` recovery, which made the one
+    // outcome that most needs explaining -- a loop that engaged, spent a
+    // diagnosis and repaired nothing -- the one outcome that could not be
+    // explained. What a refusal may not sit beside is a recovery that
+    // *produced* something: then the lists say what happened, and a refusal
+    // code would contradict them.
+    const produced = [value.runtimePatchAttempts, value.adaptationIds, value.changeProposalIds].some((list) => Array.isArray(list) && list.length > 0);
     if (value.refusalCode !== undefined && value.refusalCode !== null) {
       checkCode(value.refusalCode, "$.refusalCode", issues);
-      if (value.attempted === true) add(issues, "$.refusalCode", "must be null when recovery was attempted");
+      if (produced) add(issues, "$.refusalCode", "must be null when the recovery produced a patch attempt, an adaptation or a change proposal");
+    }
+    // Absent when Core named no rung. Present, it is one of Core's own rungs,
+    // and it attributes a refusal, so there has to be one to attribute.
+    if (value.refusalRung !== undefined && value.refusalRung !== null) {
+      enumeration(value.refusalRung, harnessRecoveryRungs, "$.refusalRung", issues);
+      if (value.refusalCode === undefined || value.refusalCode === null) add(issues, "$.refusalRung", "must be null unless a refusal code names what it declined");
     }
   }
   return result(input, issues);

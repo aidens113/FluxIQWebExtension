@@ -402,6 +402,15 @@ test("reads Core's per-call lines exactly, and refuses a malformed one rather th
   gate = { patchSkippedCode: "llm.runtime_patch_grant_scope_refused" };
   const published = await client.getRunDetail("project.web", "run.one");
   assert.equal(published.llmGate?.patchSkippedCode, "llm.runtime_patch_grant_scope_refused");
+  // The rung Core names beside the code (`recovery/annotation/annotate.ts`).
+  // A word Core does not own is dropped rather than carried into a bundle, and
+  // a Core that names none leaves the field absent.
+  gate = { patchSkippedCode: "llm.runtime_patch_goal_unachievable", patchSkippedRung: "plan", patchHeldCode: "llm.runtime_patch_permission_required", patchHeldRung: "resolution" };
+  const attributed = await client.getRunDetail("project.web", "run.one");
+  assert.deepEqual([attributed.llmGate?.patchSkippedRung, attributed.llmGate?.patchHeldRung], ["plan", "resolution"]);
+  gate = { patchSkippedCode: "llm.runtime_patch_goal_unachievable", patchSkippedRung: "somewhere in the loop" };
+  const unattributed = await client.getRunDetail("project.web", "run.one");
+  assert.equal("patchSkippedRung" in (unattributed.llmGate ?? {}), false);
   gate = {};
   const older = await client.getRunDetail("project.web", "run.one");
   assert.equal("providerCalls" in older || "providerCallsOmitted" in older, false, "a Core without per-call lines is reported as having none, not as zero calls");

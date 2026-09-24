@@ -3,6 +3,8 @@ import { isIssueCode } from "./issue-code.mjs";
 
 const LAB_REPAIR_VERDICTS = new Set(["repaired", "wrong_target", "refused", "not_proposed", "not_attempted", "proposal_unreadable"]);
 const TARGET_FIELDS = new Set(["tagName", "accessibleName", "controlType"]);
+/** Core's recovery rungs, as `harnessRecoveryRungs` closes them; anything else is dropped rather than carried. */
+const RECOVERY_RUNGS = new Set(["gate", "diagnosis", "plan", "exploration", "resolution"]);
 
 /**
  * What the model did about a broken run, from `harnessRecovery` (kinds, flags,
@@ -11,7 +13,16 @@ const TARGET_FIELDS = new Set(["tagName", "accessibleName", "controlType"]);
  * of it: no patch accepted or executed, no proposal, no adaptation.
  * `refusedAt` says where: `preflight` (a patch was returned and rejected, with
  * `refusalCodes`), `no-patch` (a validated diagnosis and no patch), or
- * `no-validated-diagnosis`. `replayProviderCalls` is the repair lane's count
+ * `no-validated-diagnosis`. `refusedRung` is Core's own word for the rung of
+ * its recovery loop that declined, when Core named one.
+ *
+ * `refusalCodes` carries Core's `refusalCode` beside the rejected patches'
+ * issue codes. Without it the commonest refusal of all -- a validated
+ * diagnosis that asked for no patch -- summarised as `refusedAt: "no-patch"`
+ * and an empty code list, which is exactly the campaign row live run
+ * `run-muesyox4-930bef98` produced (2026-09-23) and says nothing about why.
+ *
+ * `replayProviderCalls` is the repair lane's count
  * over its replays (`replay-summary.mjs`), and `null` unless the run was given
  * `--replays` and replayed: the adapt lane alone only proposes, so nothing is
  * applied or replayed to count.
@@ -25,7 +36,7 @@ const TARGET_FIELDS = new Set(["tagName", "accessibleName", "controlType"]);
 export function repairOutcome(recovery, providerCalls, flowLane, repairLane = null) {
   const replayProviderCalls = repairLane?.replayProviderCalls ?? null;
   const targetJudgement = labRepairJudgement(flowLane);
-  if (!recovery) return { measured: false, consulted: null, diagnosisValidated: null, patchKinds: [], accepted: [], patchExecuted: null, refused: null, refusedAt: null, refusalCodes: [], changeProposalCreated: null, adaptationCreated: null, targetJudgement, replayProviderCalls };
+  if (!recovery) return { measured: false, consulted: null, diagnosisValidated: null, patchKinds: [], accepted: [], patchExecuted: null, refused: null, refusedAt: null, refusedRung: null, refusalCodes: [], changeProposalCreated: null, adaptationCreated: null, targetJudgement, replayProviderCalls };
   const interventions = recovery.interventions ?? [];
   const attempts = recovery.runtimePatchAttempts ?? [];
   const isAccepted = (attempt) => attempt.preflightOk === true && (attempt.issueCodes ?? []).length === 0;
@@ -37,7 +48,9 @@ export function repairOutcome(recovery, providerCalls, flowLane, repairLane = nu
   const rejected = attempts.filter((attempt) => !isAccepted(attempt));
   const refused = consulted && rejected.length === attempts.length && !patchExecuted && !changeProposalCreated && !adaptationCreated;
   const refusedAt = !refused ? null : rejected.length > 0 ? "preflight" : diagnosisValidated ? "no-patch" : "no-validated-diagnosis";
+  const refusedRung = refused && RECOVERY_RUNGS.has(recovery.refusalRung) ? recovery.refusalRung : null;
   const refusalCodes = !refused ? [] : distinct([
+    recovery.refusalCode,
     ...rejected.flatMap((attempt) => attempt.issueCodes ?? []),
     ...interventions.filter((item) => item.validationOk === false).flatMap((item) => item.validationCodes ?? []),
   ].filter(isIssueCode)).sort();
@@ -45,7 +58,7 @@ export function repairOutcome(recovery, providerCalls, flowLane, repairLane = nu
     measured: true, consulted, diagnosisValidated,
     patchKinds: distinct(attempts.map((attempt) => attempt.kind)),
     accepted: attempts.filter(isAccepted).map((attempt) => ({ kind: attempt.kind ?? null, executed: attempt.executed === true, produced: attempt.changeProposalCreated === true || attempt.adaptationCreated === true })),
-    patchExecuted, refused, refusedAt, refusalCodes, changeProposalCreated, adaptationCreated, targetJudgement, replayProviderCalls,
+    patchExecuted, refused, refusedAt, refusedRung, refusalCodes, changeProposalCreated, adaptationCreated, targetJudgement, replayProviderCalls,
   };
 }
 
