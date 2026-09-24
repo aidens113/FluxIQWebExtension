@@ -11,6 +11,10 @@ export { extractList } from "./list-reader";
 
 export type { ExtractedListRecord, ListExtractionOptions, ListExtractionOutcome } from "./list-reader";
 
+// What a read's `where` conditions did to it, and the rule that a read they
+// emptied answers with the rows they rejected rather than with none.
+export type { ListExtractionConditionReport } from "./filtered-answer";
+
 export { inferListFromElement } from "./infer-list";
 
 // And without a pick: the domain's authoring runtime asks `capture_snapshot`

@@ -2,7 +2,7 @@
 //
 // The hole this exists for was measured live (`run-mud4ywy4-45c2002f`): a
 // nine-node Flow that filled a scheduler's composer and submitted it -- a
-// `send_or_publish` act -- was authored and replayed under a grant that
+// `delete` act -- was authored and replayed under a grant that
 // permitted nothing, with `permissionRequest: null` and
 // `instructedConsequences: []`. Nobody was asked anything, because the web
 // domain never declared or called the per-step check Core hands it.
@@ -146,35 +146,35 @@ test("a step that presses and says nothing about it never builds", async () => {
 
 test("a step that says it would publish, under a grant that permits nothing, asks the person", async () => {
   const gate = gateHolding([]);
-  const resolved = await resolveUnder(gate, await explored(gate), PRESS_SCHEDULE, ["send_or_publish"]);
+  const resolved = await resolveUnder(gate, await explored(gate), PRESS_SCHEDULE, ["delete"]);
 
   assert.equal(resolved.ok, false);
   const issue = resolved.ok === false ? resolved.issues[0] : undefined;
   assert.equal(issue?.code, "bootstrap.step_permission_required");
-  assert.match(issue?.message ?? "", /send_or_publish/u);
+  assert.match(issue?.message ?? "", /delete/u);
 
   // The request a person answers, with the control named in the words the
   // evidence carried and the class a later grant must add.
   const request = gate.request;
-  assert.equal(request?.missing.join(","), "send_or_publish");
+  assert.equal(request?.missing.join(","), "delete");
   assert.equal(request?.action.kind, "flow_step");
   assert.equal(request?.action.ref, "main.post");
   assert.equal(request?.control.name, "Schedule post");
   assert.equal(request?.control.kind, "button");
-  assert.equal(request?.sentence, "The Flow its instruction describes would press \"Schedule post\" (button) each time it runs, which would send or publish something that others will receive or see. Neither its instruction nor a grant allows that, so the build stopped to ask.");
+  assert.equal(request?.sentence, "The Flow its instruction describes would press \"Schedule post\" (button) each time it runs, which would delete or remove something. Neither its instruction nor a grant allows that, so the build stopped to ask.");
   // The issue names the request the person is answering, so the record joins them.
   assert.equal(issue?.message.includes(request?.requestId ?? "-"), true);
 });
 
 test("a grant that holds the class builds it, and so does an instruction that asked for it", async () => {
-  const granted = gateHolding(["send_or_publish"]);
-  const byGrant = await resolveUnder(granted, await explored(granted), PRESS_SCHEDULE, ["send_or_publish"]);
+  const granted = gateHolding(["delete"]);
+  const byGrant = await resolveUnder(granted, await explored(granted), PRESS_SCHEDULE, ["delete"]);
   assert.equal(byGrant.ok, true);
   assert.equal(granted.request, undefined);
 
   // FluxIQ is capable by default and the person's instruction is the authority.
-  const instructed = gateHolding([], [{ consequence: "send_or_publish", instructionId: "instruction.one", instructionDigest: `sha256:${"a".repeat(64)}`, quote: "schedule the post" }]);
-  const byInstruction = await resolveUnder(instructed, await explored(instructed), PRESS_SCHEDULE, ["send_or_publish"]);
+  const instructed = gateHolding([], [{ consequence: "delete", instructionId: "instruction.one", instructionDigest: `sha256:${"a".repeat(64)}`, quote: "delete the post" }]);
+  const byInstruction = await resolveUnder(instructed, await explored(instructed), PRESS_SCHEDULE, ["delete"]);
   assert.equal(byInstruction.ok, true);
   assert.equal(instructed.request, undefined);
 });
@@ -269,15 +269,15 @@ test("a declaration written onto the step's parameters is read, and is still tak
   // parameters is read too -- and either way it is a statement about the step
   // and never a parameter the registry sees.
   const gate = gateHolding([]);
-  const resolved = await resolveUnder(gate, await explored(gate), { ...PRESS_SCHEDULE, consequences: "send_or_publish" });
+  const resolved = await resolveUnder(gate, await explored(gate), { ...PRESS_SCHEDULE, consequences: "delete" });
 
   assert.equal(resolved.ok, false);
   assert.equal(resolved.ok === false ? resolved.issues[0]?.code : undefined, "bootstrap.step_permission_required");
   assert.equal(gate.request?.control.name, "Schedule post");
 
   // And when the class is granted it builds, with the declaration gone.
-  const granted = gateHolding(["send_or_publish"]);
-  const built = await resolveUnder(granted, await explored(granted), { ...PRESS_SCHEDULE, consequences: "send_or_publish" });
+  const granted = gateHolding(["delete"]);
+  const built = await resolveUnder(granted, await explored(granted), { ...PRESS_SCHEDULE, consequences: "delete" });
   assert.equal(built.ok, true);
   const node = built.ok ? built.plan.subflows[0]?.nodes[1] : undefined;
   assert.equal(node?.parameters && "consequences" in node.parameters, false);

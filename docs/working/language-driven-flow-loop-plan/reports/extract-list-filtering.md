@@ -238,3 +238,208 @@ vocabulary over a detected column, and refusal positions).
    or added by someone else, along with two new report files. I touched none of
    them, but every command above ran against the combined tree, so the passes
    are joint passes rather than a clean measurement of this change alone.
+
+---
+
+# Follow-up: filtering is optional, and it can no longer answer with nothing
+
+Second brief, same day. `run-mug3tnti-9ab80b85` on
+`everything-store-plus-earbuds-under-50` returned **0 records where 13 were
+expected**, from 30 provider calls. The run before the filtering work returned 55
+unfiltered; the run after it returned 10 with 7 right. So the capability worked
+and there was no floor under it: with conditions available, the model wrote ones
+that rejected every row, and nothing told it or the person that the filter had
+removed the answer rather than that the page had held nothing.
+
+The product owner named the fault: requiring the model to get inclusion right up
+front. "IT SHOULD BE ABLE TO INPUT MINIMAL INITIAL PARAMS IF IT WANTS AND THEN
+THE REPAIR CAN IMPROVE IT LATER."
+
+## What a node with no conditions at all now returns
+
+**Every row it reads, exactly as before this work started.** An absent `where`
+produces no filter, no report, and a summary byte-identical to the one a
+pre-change build produced — the action test asserts the summary by `deepEqual`,
+so an added key would fail it. `where: []` now means the same thing instead of
+refusing the request. Nothing about filtering is required to get a plain
+extraction: not a condition, not the key, not a wrapper.
+
+## The four points, and what each became
+
+**1. Optional in every sense.** `itemFilterFor` returns no filter for an absent
+or empty clause. The request reader drops an empty `where` from the request
+rather than refusing it (`where: []` was a refusal until now), and the plan
+resolver resolves one to a plain read. A read with no conditions carries no
+condition report at all, so nothing downstream changes shape.
+
+**2. Nothing include-by-default.** Where a shape could be read two ways, the
+wider reading wins: an empty clause is no conditions, and `not: false` is
+dropped as saying nothing rather than carried. The pressure that actually
+produced the failure was in the prompt text, so that is where most of this went —
+see *The text* below.
+
+**3. A slightly wrong condition can no longer empty the result.** The three cases
+the brief named now behave like this:
+
+| Case | Before | Now |
+| --- | --- | --- |
+| a column name that does not match | the plan is refused by name (`unknown_field` / `invalid_where`) before it runs | unchanged — a named, repairable refusal, never a silent empty |
+| a comparison that cannot parse a value (`"Currently unavailable"` under `lessThan: 50`) | every row rejected, empty answer | the rows are returned, and the report says the conditions kept none |
+| a regex that compiles and matches nothing | every row rejected, empty answer | the same |
+
+The rule is in one place,
+`apps/extension/src/content/extraction/filtered-answer.ts`: **when the conditions
+keep nothing and there is something to fall back to, the read answers with the
+rows they rejected.** It is its own module precisely so it could be unit-tested —
+`list-reader.ts` needs a document and cannot be tested in Node. The rejected rows
+cost an array rather than a second pass, because the record is built before the
+conditions are asked; they are bounded by `maxItems` and deduplicated exactly as
+the kept rows are, and their missing required fields are folded in only when they
+become the answer.
+
+**4. It says when filtering removed everything.** A new counts-only report,
+`WebAutomationExtractionConditionReport`, rides in the extraction summary — the
+one wire shape whose whole contract is that it carries counts, flags and declared
+field keys and never a value. It carries `applied` (items the conditions were
+asked about), `kept` (items every condition held of), `rejected` (one count per
+condition, positionally) and `unfiltered`. The filter was changed to answer with
+**which** conditions rejected an item rather than a yes or no, and no condition
+short-circuits the rest, so each count is its own rather than an artefact of the
+order they were written in.
+
+The same fact is in the validation prose the model reads:
+
+> `2 records from 1 page, but where kept none of the 2 items it was applied to, so the rows it rejected were returned unfiltered; where[1] rejected every one -- narrow the conditions rather than trusting these rows`
+
+and where no single condition is to blame it says so instead: *"no one condition
+rejected them all, so it was the conditions together"*.
+
+## The text, which is where the pressure came from
+
+The grammar and the detect tool's description had made narrowing look
+compulsory: three condition shapes in the grammar and a four-condition worked
+example, with nothing saying it was optional.
+
+- **The grammar leads with optionality**: `where is optional: omit it, keep every
+  item, narrow later.` It sits before any word that narrows, which a test pins.
+- **The worked example is now the least a read needs** plus the one exclusion
+  that is nearly always right (the sponsored mark). It showed four conditions for
+  a day; an example is the only complete, valid request a model sees, so it
+  models *how much* to write as much as what.
+- **The detect tool's description** says filtering is optional, that leaving it
+  out is the right first attempt when unsure, and what the node does when
+  conditions reject everything — so a model cannot read an empty answer as an
+  empty page. The richer shapes (`contains` with a list, `not: true`) moved here,
+  where there is room.
+
+### Both prompt bounds, again
+
+| Text | Bound | Was | Now |
+| --- | --- | --- | --- |
+| `extractList` parameter description | 700, silently truncated | 697 | **696 (4 spare)** |
+| detect tool description | 2,000, **refused outright** | 1,981 | **1,990 (10 spare)** |
+
+Fitting the optionality clause inside 700 cost three things, none of them a rule:
+the third condition shape (still named, and still shown in the detect
+description), `(this page)` after `paginate?: false` (the pagination clause now
+glosses it for both branches), and **the literal branch's duplicate `paginate`** —
+pagination is now described once, for both branches, which is both shorter and
+truer. That duplicate is what actually bought the room.
+
+The 2,000-character bound bit again on the way: the first draft was 2,086 and
+Core refused it as `harness_option.description_invalid`, which surfaced as five
+unrelated `llm-evidence` tests failing inside the option registry, naming neither
+the length nor the text. There is now an assertion on that length in this
+repository, so the next overflow fails as a length.
+
+## Commands run and observed results
+
+| Command | Observed |
+| --- | --- |
+| `pnpm --filter @fluxiq-web-extension/domain check` | exit 0, no diagnostics |
+| `pnpm --filter @fluxiq-web-extension/domain test` | `# tests 804 / # pass 802 / # fail 2` — both failures are a concurrent Core change, see below |
+| `pnpm --filter @fluxiq-web-extension/extension check` | exit 0 (type check plus in-memory bundle of every browser entry) |
+| `EXTENSION_TEST_BUILD_LABEL=extract-filter pnpm --filter @fluxiq-web-extension/extension test` | `# tests 761 / # pass 761 / # fail 0` (was 749 before this follow-up) |
+| `node scripts/structure-audit.mjs` | `structure-audit: passed (104 warning(s), 121 baselined)` |
+
+New tests: 19. `content/extraction/tests/filtered-answer.test.ts` (4, the
+fail-open rule), `content/extraction/tests/item-filter.test.ts` (6, per-condition
+rejection reporting), `content/actions/tests/extract-list.test.ts` (3 added, the
+report on the wire and the prose naming the culprit),
+`actions/extraction/tests/summary.test.ts` (4, the counts-only contract),
+`output-nodes/extract-list/tests/catalog-text.test.ts` (1 added, optionality
+before narrowing), plus the optionality and length assertions in
+`llm-evidence/tests/tools.test.ts` and the two `where: []` rows that flipped from
+refusal to plain read.
+
+### The two failing domain tests are not this work
+
+`not ok 482 - a step that says it would publish, under a grant that permits
+nothing, asks the person` and `not ok 488 - a declaration written onto the step's
+parameters is read...`.
+
+Both are the permission gate, exercising only `web.dom.click`, `web.dom.type` and
+`web.dom.capture_snapshot` — no extraction anywhere. Neither test file nor any
+domain source they touch is modified in this working tree. What changed is
+**Core**: another agent is editing
+`packages/fluxiq/src/programs/automation-studio/runtime/action-permissions/gate.ts`
+and rebuilt Core's `dist` at 15:20 today, narrowing the gate so that only a
+destructive class can stop a run — its own new comment says "Making something new
+and sending what the instruction said to send are not the gate's to refuse at
+all". `send_or_publish` is therefore no longer refused, which is exactly why a
+test expecting a refusal now sees `ok: true`. I did not touch it; it belongs to
+whoever owns `permission-gate-narrowing.md`.
+
+## Not verified
+
+- **No live run**, as instructed. Whether the model now writes fewer and better
+  conditions is unmeasured, and it is the only thing that settles whether the
+  text changes worked.
+- **The fail-open path has no browser coverage.** The decision is unit-tested
+  pure; the reader that feeds it needs a document, so the wiring between the loop
+  and the decision is proven only by the type checker and the in-memory bundle.
+  The two e2e specs that exercise `where` (`item-conditions.spec.ts`,
+  `list-completeness.spec.ts`) both assert bounds that keep some rows and not
+  others — I read them to confirm the fallback cannot fire there, so neither
+  covers it and neither is broken by it. **An e2e case for a read whose
+  conditions reject every row is the gap worth closing on the next live run**; I
+  did not add an unrunnable one.
+- A read carried across documents reports what its own document did and can fall
+  back only to its own rejected rows, because the checkpoint carries counts and
+  not rows. Honest in the report (`unfiltered` stays false with nothing to fall
+  back to) but untested, and it needs a navigation to reproduce.
+- No repository-wide `pnpm check`, `test` or `build`.
+
+## Open questions and judgements made
+
+1. **A fallback answer still passes validation, deliberately.** The rows satisfy
+   `minItems`, so the node succeeds and the Flow continues, carrying a too-wide
+   answer plus a loud report. I did not fail the node, because a failed node
+   stops the Flow and yields neither an answer nor a judgement of one — and the
+   brief asks for a superset that "can be repaired". This puts real weight on the
+   judge reading `conditions.unfiltered`: **if the judgement does not read it, a
+   too-wide answer will pass silently.** That is the one thing I would check next
+   after a live run.
+2. **The fallback is unconditional, and `minItems: 0` does not switch it off.** I
+   considered honouring `minItems: 0` as "empty is a legitimate answer", and
+   rejected it on evidence: both the grammar and the detect description tell the
+   model to write `minItems: 0` for a filtered read, so the failing run almost
+   certainly had it, and a `minItems`-coupled fallback would not have fired.
+   The consequence is that a Flow can no longer learn "nothing matched" from an
+   empty table; it learns it from `unfiltered` and the counts, which say strictly
+   more. A branching Flow that tests "are there any results under $50?" must read
+   the report rather than the row count.
+3. **One restrictive reading is left, and I left it on purpose.** A condition that
+   names a column and compares nothing — `{field: "ad_label"}` — still means
+   `is: "present"`, which is the narrower reading and can be the complement of
+   what was meant. I did not change it: it is an explicit documented meaning
+   rather than an ambiguity, its failure mode is now floored by the fallback, and
+   the codebase already refuses the genuinely ambiguous form (a bare string
+   `where: ["ad_label"]`) for this exact reason. Changing pre-existing semantics
+   with no measurement is the kind of guess that produced this follow-up. If it
+   should become a no-op instead, the change is one branch in `valueHolds`
+   (`actions/extraction/condition-match.ts`).
+4. **Per-condition attribution is per-condition counts, not a partition.** They
+   sum above `applied - kept` when one item fails several conditions at once.
+   That is what makes "condition 2 rejected all 30" sayable, which is the fact a
+   repair can act on.

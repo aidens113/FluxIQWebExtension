@@ -82,9 +82,11 @@ export function webAutomationExtractListRequestValue(value: unknown): WebAutomat
   if (minItems !== undefined && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return undefined;
   // Sent but unreadable refuses the whole request, as `paginate` does and for
   // the same reason: dropped, the page would read every item of a run the
-  // author asked it to narrow, and report success having done it.
+  // author asked it to narrow, and report success having done it. An empty
+  // clause is not unreadable -- it says what no clause says -- and leaves.
   const where = request.where === undefined ? undefined : conditionsValue(request.where, fields);
   if (request.where !== undefined && where === undefined) return undefined;
+  const conditions = where === NONE ? undefined : where;
   return {
     item,
     ...(itemElement !== undefined ? { itemElement } : {}),
@@ -92,9 +94,12 @@ export function webAutomationExtractListRequestValue(value: unknown): WebAutomat
     ...(paginate !== undefined ? { paginate } : {}),
     ...(maxItems !== undefined ? { maxItems } : {}),
     ...(minItems !== undefined ? { minItems } : {}),
-    ...(where !== undefined ? { where } : {})
+    ...(conditions !== undefined ? { where: conditions } : {})
   };
 }
+
+/** A `where` that was written and says nothing, as distinct from one that could not be read. */
+const NONE = Symbol("no conditions");
 
 /**
  * The conditions an item must satisfy (C5). One condition written on its own is
@@ -105,12 +110,20 @@ export function webAutomationExtractListRequestValue(value: unknown): WebAutomat
  * Every condition must name its value once and be able to read it: `field` must
  * name a field of this request that is actually read, since an excluded column
  * is never read from the page (D12) and a condition over it could only ever be
- * false; `read` must be a field the page can honour. A list that is empty, or
- * that holds one unreadable condition, refuses the whole request.
+ * false; `read` must be a field the page can honour. A list holding one
+ * unreadable condition refuses the whole request.
+ *
+ * **An empty list is no conditions, not a refusal**, and it used to be the
+ * latter. `where: []` says exactly what omitting `where` says -- keep every item
+ * -- and where a shape can be read two ways the wider reading wins, because
+ * filtering is optional and nothing about it is required to get a plain
+ * extraction. `NONE` is how that reaches the caller, which drops `where` from
+ * the request rather than sending an empty clause the page would have to
+ * interpret.
  */
-function conditionsValue(value: unknown, fields: Record<string, WebAutomationExtractField>): WebAutomationExtractItemCondition[] | undefined {
+function conditionsValue(value: unknown, fields: Record<string, WebAutomationExtractField>): WebAutomationExtractItemCondition[] | typeof NONE | undefined {
   const written = Array.isArray(value) ? value : [value];
-  if (written.length === 0) return undefined;
+  if (written.length === 0) return NONE;
   const conditions: WebAutomationExtractItemCondition[] = [];
   for (const entry of written) {
     const condition = conditionValue(entry, fields);

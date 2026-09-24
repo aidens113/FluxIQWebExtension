@@ -209,10 +209,10 @@ test("a build Core stopped to ask a person is a permission request naming the mi
   assert.deepEqual(record.permissionRequest, {
     actionKind: "exploration_step",
     verb: "press",
-    controlName: "Schedule post",
+    controlName: "Delete post",
     controlKind: "button",
-    consequences: ["send_or_publish"],
-    missing: ["send_or_publish"],
+    consequences: ["delete"],
+    missing: ["delete"],
     instructed: [],
   });
   assert.equal(record.providerCalls, 2);
@@ -319,8 +319,8 @@ test("a proposal that still carries an unanswered question is a permission reque
 
   assert.equal(record.outcome, "permission_required");
   assert.deepEqual(record.failure, { code: "flow_bootstrap.permission_required", stage: "review", httpStatus: null });
-  assert.equal(record.permissionRequest?.controlName, "Schedule post");
-  assert.deepEqual(record.permissionRequest?.missing, ["send_or_publish"]);
+  assert.equal(record.permissionRequest?.controlName, "Delete post");
+  assert.deepEqual(record.permissionRequest?.missing, ["delete"]);
   // The proposal is still named: a Flow was built and waits on an answer.
   assert.equal(record.adaptationId, ADAPTATION_ID);
 });
@@ -334,10 +334,10 @@ test("a build's declarations and Core's cross-check are read from where Core put
 
   assert.deepEqual(record.declaredConsequences?.map((entry) => [entry.actionKind, entry.verb, entry.controlName, entry.consequences, entry.permitted]), [
     ["exploration_step", "enter", "Post text", [], true],
-    ["flow_step", "press", "Schedule post", ["send_or_publish"], false],
+    ["flow_step", "press", "Delete post", ["delete"], false],
   ]);
   assert.equal(record.consequenceCrossCheck?.verdict, "beyond_instruction");
-  assert.deepEqual(record.consequenceCrossCheck?.declared, ["send_or_publish"]);
+  assert.deepEqual(record.consequenceCrossCheck?.declared, ["delete"]);
   assert.deepEqual([record.consequenceCrossCheck?.actions, record.consequenceCrossCheck?.declaredNothing], [2, 1]);
 });
 

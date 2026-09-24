@@ -144,17 +144,44 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  *
  * That ordering is the rule this budget is spent by. A clause whose absence is
  * a **named refusal** is cheaper than a clause whose absence is a **wrong
- * answer**, so the refusable ones go first. At 697 of 700 there are three
- * characters left, which is the finding: the next measured clause has nowhere
- * to go, and Core's bound is where it will have to come from.
+ * answer**, so the refusable ones go first. At 697 of 700 there were three
+ * characters left, which was the finding: the next measured clause had nowhere
+ * to go, and Core's bound was where it would have to come from.
+ *
+ * **The next measured clause arrived the same day, and it says `where` is
+ * optional.** With the vocabulary available, a build wrote conditions that
+ * rejected every row and the run returned 0 records where 13 were wanted
+ * (`run-mug3tnti-9ab80b85`, 30 provider calls). The run before it returned 55
+ * unfiltered rows and the run after returned 10 with 7 right, so the capability
+ * was working; what this text had done was make narrowing look compulsory, on a
+ * first attempt, at the point where the model is least certain. The product
+ * owner's words: "IT SHOULD BE ABLE TO INPUT MINIMAL INITIAL PARAMS IF IT WANTS
+ * AND THEN THE REPAIR CAN IMPROVE IT LATER."
+ *
+ * So the clause leads with "optional" and says what omitting it does, and three
+ * things paid for it, none of them a rule:
+ *
+ * - the third condition shape, `{contains: "case", not: true}`. The phrase is
+ *   still named, and the shape is still shown where there is room for it -- the
+ *   detect tool's own description, which the same build reads
+ *   (`runtime/llm-evidence/tools.ts`);
+ * - `(this page)` after `paginate?: false`, whose meaning the pagination clause
+ *   now carries for both branches at once;
+ * - **the literal branch's own `paginate`**, which was a second copy of the
+ *   detected branch's. Saying pagination once, for both, is what bought the
+ *   room, and it is also simply true.
+ *
+ * At 696 of 700 there are four characters left. The bound has not moved and the
+ * pressure has not gone: two measured clauses have now been fitted by cutting,
+ * and the next one has nowhere left to come from but Core's 700.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}, {field: "yourKey", contains: "case", not: true}], paginate?: false (this page)};`,
-  "where: all hold; also atMost/greaterThan/equals (number), startsWith/endsWith/matches (text); list = any.",
+  `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false};`,
+  "where is optional: omit it, keep every item, narrow later. All hold; also atMost/greaterThan/equals (number), contains/startsWith/endsWith/matches (text); list = any; not: true inverts.",
   "link = absolute URL, @href = raw href.",
-  `Or {item: css, fields: {key: css|css@attribute|column:<header>}, paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}}.`,
-  `minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
-  "maxPages/maxScrolls = pages to read, not pages present: read only the page shown unless asked."
+  "Or {item: css, fields: {key: css|css@attribute|column:<header>}}.",
+  `paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}: pages to read, not pages present -- read only the page shown unless asked.`,
+  `minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
 ].join(" ");
 
 /**
@@ -175,30 +202,36 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * rows a person asked for. It shows the literal form, since the example is a
  * literal request; the detected form names a detected column by `field`.
  *
- * It shows four conditions, and they are one real instruction rather than a
- * tour of the grammar: "the Plus-eligible products rated 4.0 or higher and
- * under $50, no sponsored placements, and no accessories like ear tips or
- * charging cases". That instruction ran on 2026-09-24 and reached the Flow
- * carrying none of its five conditions, returning 55 rows where 13 were wanted
- * and none matched (`run-mug1z9k9-ef625d8b`). So the shape shows a mark left
- * out, a bound over a column the request keeps, a second bound, and an
- * exclusion by text -- which are what that instruction is, written down.
+ * **It is the least a read needs, plus the one exclusion that is nearly always
+ * right**, and for a day it was the most instead. It briefly showed four
+ * conditions -- the whole of an instruction asking for Plus-eligible products
+ * rated 4.0 or higher and under $50, with no sponsored placements and no
+ * accessories -- because that instruction had reached a Flow carrying none of
+ * its conditions (`run-mug1z9k9-ef625d8b`). The next run over-corrected: with
+ * the vocabulary available and an example showing four of it, a build wrote
+ * conditions that rejected every row and returned 0 records where 13 were
+ * wanted (`run-mug3tnti-9ab80b85`).
  *
- * Core reads only the example's **top-level** keys as the declaration of what
- * may be written beside `extractList` (`flow-bootstrap/authoring/matching.ts`),
- * so what is inside `where` is here to be copied rather than to be permitted.
- * The example is sent whole or not at all and is cut off above 600 bytes, which
- * this is well inside.
+ * An example is the only complete, valid request a model is shown, so it models
+ * how much to write as much as what to write. The right posture is the one the
+ * loop is built for: write the least the instruction needs, let the judgement
+ * say the answer is too wide, let the repair narrow it. The mark stays because
+ * leaving advertisements out of a results page is not a judgement call, and
+ * because `where` has to appear here at all -- Core reads the example's
+ * **top-level** keys as the declaration of what may be written beside
+ * `extractList` (`flow-bootstrap/authoring/matching.ts`), so an example with no
+ * `where` is a `where` a model is refused for writing there.
+ *
+ * What is inside `where` is therefore here to be copied rather than to be
+ * permitted, and the shapes for the rest of the vocabulary are in the detect
+ * tool's description, which has room for them
+ * (`runtime/llm-evidence/tools.ts`). The example is sent whole or not at all and
+ * is cut off above 600 bytes, which this is well inside.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   item: "li.product",
-  fields: { name: ".name", price: ".price", rating: ".stars", url: "a@href" },
-  where: [
-    { read: ".sponsored-label", is: "absent" },
-    { field: "rating", atLeast: 4 },
-    { field: "price", lessThan: 50 },
-    { field: "name", contains: ["ear tips", "charging case"], not: true }
-  ],
+  fields: { name: ".name", price: ".price", url: "a@href" },
+  where: [{ read: ".sponsored-label", is: "absent" }],
   paginate: { mode: "next", next: "a.next", maxPages: 5 },
   minItems: 1
 };

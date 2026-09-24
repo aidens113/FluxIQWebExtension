@@ -115,6 +115,22 @@ test("binds from the production host seam and selects the sole trusted web clien
   // It also says plainly that it is never a step of the Flow: it is an
   // observation about the page, and the Flow is made of nodes that ran.
   assert.match(detectDescription, /never a step of the Flow/u);
+  // Core refuses a harness option's description above 2,000 characters outright
+  // rather than cutting it (`harness_option.description_invalid`), and the
+  // refusal names neither the length nor this text -- it surfaced on 2026-09-24
+  // as five unrelated tests failing inside the option registry. Asserted here so
+  // the next clause that overflows fails as a length.
+  assert.equal(detectDescription.length <= 2_000, true, `${detectDescription.length} characters, over Core's 2,000`);
+  // It says filtering is optional before it says how to filter, and why: a run
+  // whose conditions rejected every row returned 0 records where 13 were wanted
+  // (`run-mug3tnti-9ab80b85`), and creation is meant to write the least it needs
+  // and let the repair narrow it.
+  assert.match(detectDescription, /where is optional/u);
+  assert.match(detectDescription, /leave it out and every item is a row/u);
+  assert.equal(detectDescription.indexOf("where is optional") < detectDescription.indexOf("atLeast"), true, "optional comes before the vocabulary that narrows");
+  // And it says what the node does when conditions reject everything, since a
+  // model that read an empty answer as an empty page would repair nothing.
+  assert.match(detectDescription, /returns what it read and says so in its report/u);
   const validationEvidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
     title: "Form",

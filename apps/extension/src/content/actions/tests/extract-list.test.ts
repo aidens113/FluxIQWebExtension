@@ -168,6 +168,93 @@ test("a read that ran out of time carries its summary beside the records it read
   assert.equal(call.evidence?.extracted, outcome.records);
 });
 
+test("a filtered read reports what its conditions did, in counts, and how many items they left out", async () => {
+  const outcome: ListExtractionOutcome = {
+    records: [{ name: "Lamp", price: "$49.00", sku: "L-1" }],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    missingFields: [],
+    filtered: 3,
+    conditions: { applied: 4, kept: 1, rejected: [2, 1], unfiltered: false }
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction(COMMAND, deps, 1);
+
+  const [call] = calls;
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  const summary = {
+    recordCount: 1,
+    pagesRead: 1,
+    truncated: false,
+    missingFields: [],
+    fieldNames: ["name", "price", "sku"],
+    conditions: { applied: 4, kept: 1, rejected: [2, 1], unfiltered: false }
+  };
+  assert.deepEqual(call.evidence?.extraction, summary);
+  // The counts survive the domain's wire copy, which is what puts them in front
+  // of the judgement and the repair rather than only in the page.
+  assert.deepEqual(wireSummary(call.validation, call.evidence), summary);
+  assert.equal(call.validation.status, "passed");
+  assert.match(call.validation.status === "passed" ? call.validation.actual : "", /1 record from 1 page, 3 items left out by where/u);
+});
+
+test("a read its conditions emptied says so, names the condition that did it, and still carries the rows", async () => {
+  // The 2026-09-24 failure, as the verb now reports it: the conditions rejected
+  // every item, so the read answered with the rows they rejected rather than
+  // with none (`run-mug3tnti-9ab80b85` answered with none, and nothing could
+  // tell that from a page that held nothing).
+  const outcome: ListExtractionOutcome = {
+    records: [{ name: "Lamp", price: "$49.00", sku: "L-1" }, { name: "Mug", price: "$8.00", sku: "M-1" }],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    missingFields: [],
+    filtered: 2,
+    conditions: { applied: 2, kept: 0, rejected: [0, 2], unfiltered: true }
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction(COMMAND, deps, 1);
+
+  const [call] = calls;
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  // The rows are there, so a too-wide answer is what the judgement sees rather
+  // than an empty table it would read as legitimate.
+  assert.equal(call.evidence?.extracted, outcome.records);
+  const wire = wireSummary(call.validation, call.evidence) as { conditions?: unknown };
+  assert.deepEqual(wire.conditions, { applied: 2, kept: 0, rejected: [0, 2], unfiltered: true });
+  // And the prose says which condition emptied it, so a repair can act rather
+  // than guess among the conditions the model wrote.
+  const actual = call.validation.status === "passed" ? call.validation.actual : "";
+  assert.match(actual, /where kept none of the 2 items/u);
+  assert.match(actual, /returned unfiltered; where\[1\] rejected every one/u);
+  assert.match(actual, /narrow the conditions rather than trusting these rows/u);
+});
+
+test("a read emptied by its conditions together says that no one condition did it", async () => {
+  const outcome: ListExtractionOutcome = {
+    records: [{ name: "Lamp", price: "$49.00", sku: "L-1" }],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    missingFields: [],
+    filtered: 2,
+    conditions: { applied: 2, kept: 0, rejected: [1, 1], unfiltered: true }
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction(COMMAND, deps, 1);
+
+  const [call] = calls;
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  assert.match(
+    call.validation.status === "passed" ? call.validation.actual : "",
+    /no one condition rejected them all, so it was the conditions together/u
+  );
+});
+
 test("a read the capability refused reports the refusal and no summary", async () => {
   const refused = new Error("refused");
   const { deps, calls } = dependencies(refused);

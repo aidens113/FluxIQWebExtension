@@ -60,15 +60,25 @@ export async function beginLiveLlmRun(input: {
 }
 
 /**
- * The purpose a created Flow's repair grant carries: `diagnose_and_adapt`,
- * which iterates, may gather evidence, and holds its target override to a
- * proposal it never executes (`patches.ts`). `explore_and_adapt` was tried
- * first and cannot serve: it tries its repair live, a granted run may never
- * authorize an external side effect, so an override on a Save button is
- * refused at preflight (`runtime_patch.side_effect_not_authorized`,
- * run-mu7gfuph-a57c6b18) and nothing is proposed at all.
+ * The purpose a created Flow's repair grant carries: `explore_and_adapt`, which
+ * explores the page and tries its repair live.
+ *
+ * It was `diagnose_and_adapt` -- which only ever proposes a target override and
+ * never executes one -- because `explore_and_adapt` could not serve: a granted
+ * run was refused any external side effect, so an override on a Save button
+ * died at preflight (`runtime_patch.side_effect_not_authorized`,
+ * run-mu7gfuph-a57c6b18) and nothing was proposed at all. That refusal is gone:
+ * the permission gate no longer treats creating or sending as something to
+ * refuse, so a permitted patch now carries `sideEffectPermission: "permitted"`
+ * and the policy's side-effect lines are skipped.
+ *
+ * The narrow purpose had become the thing blocking every repair. The route that
+ * takes a wrong answer back into exploration accepts `explore_and_adapt` only,
+ * so under `diagnose_and_adapt` a run that answered wrongly was diagnosed and
+ * then refused `llm.runtime_patch_grant_scope_refused` -- three times in
+ * run-mug2h8ur-8aa317b6, with 15 of its 26 calls and $1.99 of its $2 unspent.
  */
-const CREATED_FLOW_REPAIR_PURPOSE = "diagnose_and_adapt" satisfies PersistedFlowLlmExecution["purpose"];
+const CREATED_FLOW_REPAIR_PURPOSE = "explore_and_adapt" satisfies PersistedFlowLlmExecution["purpose"];
 
 /**
  * What Core's result verification did on one run, as `snapshots/live-llm.json`

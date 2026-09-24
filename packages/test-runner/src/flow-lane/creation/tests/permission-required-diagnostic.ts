@@ -10,13 +10,13 @@ import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 /**
  * A build that pressed nothing it was not allowed to: its second decision
- * asked to press "Schedule post", which would publish, and neither a grant nor
+ * asked to press "Delete post", which would publish, and neither a grant nor
  * the instruction allowed that.
  */
 export async function permissionRequiredDiagnostic(): Promise<unknown> {
   const gate = new AutomationStudioActionPermissionGate({ stage: "authoring", instructionIds: ["instruction.schedule"], now: () => 5, newRequestId: () => "permission-request:one" });
-  gate.observe({ controls: [{ handle: "c7", name: "Schedule post" }] });
-  await gate.checkFor({ kind: "exploration_step", id: "web.press_control", ref: "call-3" })({ consequences: ["send_or_publish"], control: { name: "Schedule post", kind: "button" }, verb: "press" });
+  gate.observe({ controls: [{ handle: "c7", name: "Delete post" }] });
+  await gate.checkFor({ kind: "exploration_step", id: "web.press_control", ref: "call-3" })({ consequences: ["delete"], control: { name: "Delete post", kind: "button" }, verb: "press" });
   assert.ok(gate.request, "the gate raised a request");
   const trace = [
     { iteration: 1, decision: "tool_call" as const, callId: "call-1", toolId: "web.inspect_current_page", evidenceBytes: 900, effectApplied: false },

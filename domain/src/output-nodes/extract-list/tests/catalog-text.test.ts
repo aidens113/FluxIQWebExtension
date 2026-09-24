@@ -31,14 +31,33 @@ test("the grammar leads with the handle form, and says how to keep, rename and r
   // prompt honest, not for keeping a term undefined.
   assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
   assert.equal(grammar.includes("pages to read, not pages present"), true, "the grammar says what a page budget is for");
-  for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "paginate?: false (this page)", "absolute URL", "raw href"]) {
+  for (const term of ['handle: "extraction.N"', 'fields?: {yourKey: "colKey"|"colKey@href"}', "paginate?: false", "absolute URL", "raw href"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
   assert.equal(grammar.indexOf("handle") < grammar.indexOf("item: css"), true, "the handle form comes before the literal request");
   assert.match(grammar, /minItems \(default 1, 0 = none\), maxItems/u);
+  // Pagination is described once, for both branches. It was described twice
+  // until 2026-09-24, and the second copy is what paid for the clause below.
+  assert.equal(grammar.split("paginate?:").length - 1, 2, "paginate appears as the detected switch and as the literal shape, and not a third time");
 });
 
-test("the shape a model copies shows a mark, a bound and an exclusion by text, over a column under the plan's own key", () => {
+test("the grammar says filtering is optional before it says how to filter", () => {
+  // The fault the product owner named on 2026-09-24, after conditions a sharper
+  // vocabulary made writable rejected every row and a run returned 0 records
+  // where 13 were wanted (`run-mug3tnti-9ab80b85`): this text had made narrowing
+  // look compulsory on a first attempt, at the point the model is least certain.
+  // Creation writes the least it needs; the repair narrows it later.
+  const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
+  assert.equal(grammar.includes("where is optional"), true, "the grammar says filtering is optional");
+  assert.match(grammar, /omit it, keep every item, narrow later/u);
+  assert.equal(
+    grammar.indexOf("where is optional") < grammar.indexOf("atMost"),
+    true,
+    "optional comes before the vocabulary that makes a read narrower"
+  );
+});
+
+test("the shape a model copies shows a mark and a bound over a column under the plan's own key", () => {
   // Both first-page reads of the 2026-09-23 campaign wrote the one condition
   // this text showed -- the advertisement mark -- and no bound at all, under
   // instructions asking for items rated 4.0 or higher and priced under $50.
@@ -48,25 +67,22 @@ test("the shape a model copies shows a mark, a bound and an exclusion by text, o
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   assert.equal(grammar.includes('{field: "colKey", is: "absent"}'), true, "the mark condition is still shown");
   assert.equal(grammar.includes('{field: "yourKey", atLeast: 4, lessThan: 50}'), true, "a bound is shown, over a column under the plan's own key");
-  assert.equal(grammar.includes('{field: "yourKey", contains: "case", not: true}'), true, "an exclusion by text is shown");
   assert.equal(grammar.indexOf("where?:") < grammar.indexOf("item: css"), true, "the conditions belong to the handle form, before the literal request");
   // The comparisons no shape shows are still named, or they are not writable.
-  for (const term of ["atMost", "greaterThan", "equals", "startsWith", "endsWith", "matches", "list = any"]) {
+  // `contains` and `not` lost their shape here on 2026-09-24 to pay for the
+  // optionality clause, and keep it in the detect tool's description, which has
+  // room (`runtime/llm-evidence/tools.ts`).
+  for (const term of ["atMost", "greaterThan", "equals", "contains", "startsWith", "endsWith", "matches", "list = any", "not: true"]) {
     assert.equal(grammar.includes(term), true, `the grammar does not name ${term}`);
   }
 
-  // The example carries the whole instruction the grammar abbreviates. A key
-  // the example omits is a key the model is refused for writing beside
-  // `extractList`, and what the example shows inside `where` is the shape a
-  // model copies.
+  // The example is the least a read needs, plus the one exclusion that is nearly
+  // always right. It showed four conditions for a day, and the run after that
+  // wrote conditions rejecting every row (`run-mug3tnti-9ab80b85`): an example is
+  // the only complete request a model sees, so it models how much to write as
+  // well as what. `where` stays present because a key the example omits is a key
+  // the model is refused for writing beside `extractList`.
   const where = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.where as ReadonlyArray<Record<string, unknown>>;
-  assert.equal(where.length, 4);
-  assert.equal(where[0]?.is, "absent");
-  assert.deepEqual(where[1], { field: "rating", atLeast: 4 });
-  assert.deepEqual(where[2], { field: "price", lessThan: 50 });
-  assert.deepEqual(where[3], { field: "name", contains: ["ear tips", "charging case"], not: true });
-  const fields = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.fields as Record<string, unknown>;
-  for (const condition of where.slice(1)) {
-    assert.equal(Object.hasOwn(fields, String(condition.field)), true, "a literal condition names a column the request reads");
-  }
+  assert.deepEqual(where, [{ read: ".sponsored-label", is: "absent" }]);
+  assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "where"), true, "the example declares where, or a model cannot write it beside extractList");
 });

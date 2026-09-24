@@ -120,6 +120,18 @@ test("a condition may be written every way a column may be named, on its own or 
   }
 });
 
+test("an empty clause resolves to no conditions, because filtering is optional", async () => {
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+  // A plan that wrote `where: []` -- or wrote the key and then thought better
+  // of it -- gets the plain read it would have got by writing no clause, rather
+  // than a refusal it has to spend a repair on. `where: []` was refused until
+  // 2026-09-24.
+  const plain = { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: NAME } } } };
+  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where: [], paginate: false }), plain);
+  assert.deepEqual(await resolve(instance, { handle: extraction, fields: { name: "product-name" }, paginate: false }), plain);
+});
+
 test("a condition may say of a detected column everything the dispatch reader accepts, in the same words", async () => {
   const instance = runtime();
   const { extraction } = await detect(instance);
@@ -258,7 +270,6 @@ test("a condition that names no one detected column, or contradicts itself, is r
     [[{ field: "product-price", lessThan: "50" }], "web.handle.malformed", "extractList.where.0.lessThan"],
     [[{ field: "product-price", selector: ".price" }], "web.handle.malformed", "extractList.where.0.selector"],
     [[{ is: "absent" }], "web.handle.malformed", "extractList.where.0"],
-    [[], "web.handle.malformed", "extractList.where"],
     // The second condition is the bad one, and the position says so.
     [[{ field: "product-price", lessThan: 50 }, { field: "nothing" }], "web.handle.unknown_field", "extractList.where.1"]
   ];

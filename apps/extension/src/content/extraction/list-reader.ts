@@ -52,6 +52,23 @@
 // asked to read it. `filtered` counts them, so a read says how much of the run
 // it left out rather than only how much it kept.
 //
+// **Unless the conditions left nothing at all, in which case the read answers
+// with the rows it rejected and says so** (`conditions.unfiltered`). That is a
+// deliberate preference for too much over nothing, and it was bought with a
+// measurement: on 2026-09-24 `run-mug3tnti-9ab80b85` returned 0 records where 13
+// were wanted, because conditions a newly sharper vocabulary made writable
+// rejected every row, and an empty table is indistinguishable from a page that
+// had nothing on it. A superset is visibly too wide and the loop's own judgement
+// can say so; nothing is a plausible-looking answer that ends the loop.
+//
+// So the rejected rows are kept as they are read -- the record is built before
+// the conditions are asked, so this costs an array rather than a second pass --
+// and `conditions` reports what happened in counts alone: how many items the
+// conditions were applied to, how many survived, how many each condition
+// rejected, and whether the read fell back. A model that gets thirty rows and
+// "condition 2 rejected all thirty" can repair condition 2; a model that gets
+// nothing cannot repair anything.
+//
 // A record carries every included field: its value, or `null` for an optional
 // field the page could not read. `missingFields` names every required field
 // some record lacked, which is what makes the verb's validation fail instead of
@@ -76,6 +93,7 @@ import type { ExtractionCheckpoint } from "../../shared/extraction-continuation"
 import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../types";
 import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
+import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
 import { awaitListPresent, awaitPageRendered } from "./page-render";
@@ -96,6 +114,8 @@ export type ListExtractionOutcome = {
   missingFields: string[];
   /** Items of the run that a `where` condition left out, so they are not records (C5). */
   filtered: number;
+  /** What the request's conditions did, in counts alone, or absent for a request that named none. */
+  conditions?: ListExtractionConditionReport | undefined;
 };
 
 /**
@@ -122,7 +142,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const fields = fieldReaders(request.fields);
   // Before anything on the page is read, as every field is: a condition the
   // page cannot honour refuses the read rather than emptying a list midway.
-  const keeps = itemFilterFor(request);
+  const rejects = itemFilterFor(request);
   const paginate = request.paginate;
   const maxItems = itemBound(request.maxItems);
   const contentAware = paginate?.mode === "scroll";
@@ -130,6 +150,15 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
 
   const records: ExtractedListRecord[] = resume ? resume.records.map((record) => ({ ...record })) : [];
   const missing = new Set<string>(resume?.missingFields ?? []);
+  // The rows the conditions rejected, kept only so a read the conditions emptied
+  // has something to answer with. They are bounded and deduplicated exactly as
+  // the records are, and a read that kept anything at all never looks at them.
+  const rejectedRows = rejects === undefined ? undefined : {
+    records: [] as ExtractedListRecord[],
+    missing: new Set<string>(),
+    seen: new Set<string>(),
+    truncated: false
+  };
   // Every item already read, kept across pages, with its content key when
   // content counts (scroll mode) and "" when only the element does.
   const read = new Map<Element, string>();
@@ -164,11 +193,38 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let truncated = false;
   let timedOut = false;
   let filtered = resume?.filtered ?? 0;
+  // Items the conditions were asked about in this document, and how many of
+  // them each condition rejected. A continued read carries its predecessor's
+  // `filtered` and not its rejected rows, so these counts say what this
+  // document did and `filtered` says what the whole read did.
+  let applied = 0;
+  let kept = 0;
+  const rejectedEach = (request.where ?? []).map(() => 0);
+
+  /** The read as it stands, with `filtered-answer.ts` deciding which rows it answers with. */
+  const outcome = (ended: { timedOut: boolean }): ListExtractionOutcome => {
+    const answer = filteredListAnswer({
+      kept: records,
+      keptMissing: missing,
+      rejected: rejectedRows?.records ?? [],
+      rejectedMissing: rejectedRows?.missing ?? new Set(),
+      rejectedTruncated: rejectedRows?.truncated ?? false
+    }, truncated);
+    return {
+      records: answer.records,
+      pagesRead: progress.pagesRead,
+      truncated: answer.truncated,
+      timedOut: ended.timedOut,
+      missingFields: answer.missingFields,
+      filtered,
+      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } })
+    };
+  };
 
   // A document continuing a read was reached by the control the last one
   // followed, so it is waited on as that control's page would have been.
   if (resume && paginate && await awaitPageRendered(paginate, progress) === "timed_out") {
-    return { records, pagesRead: progress.pagesRead, truncated, timedOut: true, missingFields: [...missing].sort(), filtered };
+    return outcome({ timedOut: true });
   }
   // The page this read starts on gets the same wait as every page it moves to
   // (`page-render.ts`): a read dispatched at a page still rendering its list
@@ -194,7 +250,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // condition can tell from the page that it has already seen every item it
       // could keep -- which is how the picker's five-row preview is read
       // without scrolling the page a person is looking at.
-      await awaitListComplete(item, keeps ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
+      await awaitListComplete(item, rejects ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
       if (required > 1) await awaitListPresent(item, required, false, progress);
     }
   }
@@ -217,12 +273,25 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       const key = keyOf(itemRead);
       if (seen === key) continue;
       // An item a condition rejects is not a record: it is remembered as read
-      // so a growing list still knows it has been looked at, and nothing else
-      // about it -- not its content, not the fields it lacked -- is kept.
-      if (keeps && !keeps(element, itemRead.record)) {
-        if (seen === undefined) filtered += 1;
-        read.set(element, key);
-        continue;
+      // so a growing list still knows it has been looked at. It is kept aside
+      // only so a read the conditions emptied has something to answer with,
+      // and a read that kept anything never returns it.
+      if (rejects) {
+        const rejectedBy = rejects(element, itemRead.record);
+        if (seen === undefined) applied += 1;
+        if (rejectedBy.length > 0) {
+          if (seen === undefined) {
+            filtered += 1;
+            // Each index is a position in `where`, which is what `rejectedEach`
+            // was sized from, so the fallback is for the compiler rather than
+            // for a case that happens.
+            for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
+            rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, maxItems);
+          }
+          read.set(element, key);
+          continue;
+        }
+        if (seen === undefined) kept += 1;
       }
       const content = earlierPages ? contentKey(itemRead.record, fields) : "";
       if (earlierPages?.has(content)) {
@@ -248,7 +317,29 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     break;
   }
 
-  return { records, pagesRead: progress.pagesRead, truncated, timedOut, missingFields: [...missing].sort(), filtered };
+  return outcome({ timedOut });
+}
+
+/** The rejected rows a read may have to fall back to, kept to the same item bound and the same deduplication as the records. */
+function rememberRejected(
+  aside: { records: ExtractedListRecord[]; missing: Set<string>; seen: Set<string>; truncated: boolean } | undefined,
+  itemRead: ItemRead,
+  fields: FieldReaders,
+  deduplicate: boolean,
+  maxItems: number
+): void {
+  if (aside === undefined) return;
+  if (aside.records.length >= maxItems) {
+    aside.truncated = true;
+    return;
+  }
+  if (deduplicate) {
+    const content = contentKey(itemRead.record, fields);
+    if (aside.seen.has(content)) return;
+    aside.seen.add(content);
+  }
+  aside.records.push(itemRead.record);
+  for (const name of itemRead.missing) aside.missing.add(name);
 }
 
 /** Whether the read moves from page to page -- replaced in place or loaded anew -- rather than growing one list. */

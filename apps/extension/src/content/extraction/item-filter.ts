@@ -30,6 +30,16 @@
 // happens to lack is not reported missing, because the request never asked for
 // it.
 //
+// **What this file does not decide is what happens when nothing survives.** A
+// condition that is slightly wrong -- a comparison against a column that holds
+// no number, an expression that compiles and matches nothing -- rejects every
+// item, and an empty table looks exactly like a page that had nothing on it. So
+// the reader keeps the rows it read and says the conditions emptied the list
+// (`list-reader.ts`), and this file's job is only to say which conditions did
+// it. The measurement: `run-mug3tnti-9ab80b85` returned 0 records where 13 were
+// wanted, from conditions this vocabulary made writable, and neither the person
+// nor the repair could tell that from a page with nothing to find.
+//
 // A condition reads through the one field reader (`field-reader.ts`), so a
 // value inside a sensitive control refuses the whole extraction here exactly as
 // it does in a column (decision D2), rather than quietly deciding a row.
@@ -51,20 +61,47 @@ type Condition = {
   says: WebAutomationExtractItemCondition;
 };
 
-/** Whether an item is a record, or `undefined` when the request names no conditions and every item is. */
-export type ExtractItemFilter = ((item: Element, record: ReadRecord) => boolean) | undefined;
+/**
+ * The conditions that rejected an item, by their position in `where`, and empty
+ * for an item every condition held of -- which is a record.
+ *
+ * It is the rejecting conditions rather than a yes or no because a read that
+ * kept nothing has to be able to say **which** condition emptied it
+ * (`list-reader.ts`). A model that wrote four conditions and got no rows back
+ * learns nothing from "no rows"; "the third rejected all thirty" is the one
+ * fact that tells it what to change.
+ *
+ * Every condition is asked, and none short-circuits the rest, so each one's
+ * count is its own rather than an artefact of the order they were written in.
+ */
+export type ExtractItemRejections = readonly number[];
+
+/** Which conditions reject an item, or `undefined` when the request names none and every item is a record. */
+export type ExtractItemFilter = ((item: Element, record: ReadRecord) => ExtractItemRejections) | undefined;
+
+/** No condition rejected the item, shared because it is the answer for every row a read keeps. */
+const KEPT: ExtractItemRejections = [];
 
 /**
  * The filter the request's `where` describes, or `undefined` for a request
- * that names none. Every condition is normalized before anything on the page is
- * read, as every field is, so a condition the page cannot honour refuses the
- * read before it starts rather than midway through a list.
+ * that names none -- an absent `where`, and an empty one, which says the same
+ * thing. Every condition is normalized before anything on the page is read, as
+ * every field is, so a condition the page cannot honour refuses the read before
+ * it starts rather than midway through a list.
  */
 export function itemFilterFor(request: WebAutomationExtractListRequest): ExtractItemFilter {
   const written = request.where;
   if (written === undefined || written.length === 0) return undefined;
   const conditions = written.map((condition, index) => normalize(condition, index, request));
-  return (item, record) => conditions.every((entry) => holds(entry, item, record));
+  return (item, record) => {
+    let rejectedBy: number[] | undefined;
+    for (const [index, entry] of conditions.entries()) {
+      if (holds(entry, item, record)) continue;
+      rejectedBy ??= [];
+      rejectedBy.push(index);
+    }
+    return rejectedBy ?? KEPT;
+  };
 }
 
 function normalize(condition: WebAutomationExtractItemCondition, index: number, request: WebAutomationExtractListRequest): Condition {

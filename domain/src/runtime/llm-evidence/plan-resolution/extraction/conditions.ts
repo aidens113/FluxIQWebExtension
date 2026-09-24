@@ -69,6 +69,7 @@ import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionC
 import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionConditions =
+  /** `where` is empty when the clause was written and says nothing, which is what writing no clause says. */
   | { ok: true; where: WebAutomationExtractItemCondition[] }
   | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
 
@@ -102,10 +103,14 @@ const HEADER_PREFIX = "column:";
  * One condition written on its own is read as a list of one: a model that has
  * one thing to say about which items it wants should not have to remember a
  * shape to say it in.
+ *
+ * An empty clause resolves to no conditions rather than being refused. Writing
+ * `where: []` says what writing no `where` says, filtering is optional, and
+ * where a shape can be read two ways the wider reading wins.
  */
 export function keptWebExtractionConditions(where: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): WebExtractionConditions {
   const written = Array.isArray(where) ? where : [where];
-  if (written.length === 0) return { ok: false, issue: "web.handle.malformed", path };
+  if (written.length === 0) return { ok: true, where: [] };
   const conditions: WebAutomationExtractItemCondition[] = [];
   for (const [index, entry] of written.entries()) {
     const at = Array.isArray(where) ? [...path, index] : path;

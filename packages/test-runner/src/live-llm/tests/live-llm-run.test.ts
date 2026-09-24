@@ -177,11 +177,14 @@ test("a create-flow run fits only a scenario run that carries an instruction tas
   assert.equal(JSON.stringify(described).includes(CREDENTIAL.value), false);
 });
 
-test("a create-flow run's Flow runs under the proposal-only repair grant, so its repair can be held, applied and replayed", () => {
+test("a create-flow run's Flow repairs under the exploring grant, so its repair can be tried, applied and replayed", () => {
   const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
-  assert.deepEqual([create.repairsFlow, create.proposesRepairOnly], [true, true]);
+  // `explore_and_adapt` tries its repair rather than only proposing one, which
+  // is what the wrong-answer route requires: under the narrow grant a run that
+  // answered wrongly was refused `llm.runtime_patch_grant_scope_refused`.
+  assert.deepEqual([create.repairsFlow, create.proposesRepairOnly], [true, false]);
   // The repair lane names the playback's grant; the dry run still describes the build's.
-  assert.deepEqual(create.describeRepair(), { task: "create-flow", purpose: "diagnose_and_adapt" });
+  assert.deepEqual(create.describeRepair(), { task: "create-flow", purpose: "explore_and_adapt" });
   assert.equal(create.describe().purpose, "build_and_adapt");
   const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
   assert.deepEqual([adapt.repairsFlow, adapt.proposesRepairOnly, adapt.describeRepair()], [true, true, { task: "adapt", purpose: "diagnose_and_adapt" }]);
@@ -272,23 +275,23 @@ test("a build over its run budget, over its call count, or run on another model 
 });
 
 // A created Flow's playback runs under its own grant, so a Flow that fails is
-// repaired rather than refused for want of a model. The grant is proposal-only
-// and bound by the same caps as the build; its spend is settled beside the
-// build's, never folded into it.
-test("a create-flow run repairs the Flow it built under a proposal-only diagnose_and_adapt grant, and settles that spend beside the build", async () => {
+// repaired rather than refused for want of a model. The grant explores and
+// tries its repair, and is bound by the same caps as the build; its spend is
+// settled beside the build's, never folded into it.
+test("a create-flow run repairs the Flow it built under an explore_and_adapt grant, and settles that spend beside the build", async () => {
   const { core, run, written, published, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   const execution = await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  assert.deepEqual(execution, { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" });
+  assert.deepEqual(execution, { grantId: "llm-grant:test", purpose: "explore_and_adapt" });
   const request = core.issueRequests[1];
-  assert.equal(request?.purpose, "diagnose_and_adapt");
+  assert.equal(request?.purpose, "explore_and_adapt");
   for (const cap of ["maxCalls", "maxTotalTokensPerRun", "maxEstimatedCostUsd", "timeoutMs"]) assert.equal(request?.[cap], core.issueRequests[0]?.[cap], `the repair asks for no more ${cap} than the build`);
 
   await run.settleRepair({ getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
   assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
-  assert.equal(snapshot.repair.purpose, "diagnose_and_adapt");
+  assert.equal(snapshot.repair.purpose, "explore_and_adapt");
   assert.equal(snapshot.repair.runId, "run-1");
   assert.equal(snapshot.repair.observed.calls, 3);
   assert.equal(snapshot.repair.observed.observedCalls.length, 3);

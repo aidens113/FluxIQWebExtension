@@ -195,15 +195,15 @@ test("a build that stopped to ask a person reports permission.required with the 
   const core = fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic: await permissionRequiredDiagnostic() } } });
   const { run, settled } = await runLane(core);
   await assert.rejects(run, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
-    && /FluxIQ asked for permission before building a Flow from the task's instruction \(permission\.required: send_or_publish\)/u.test(error.message)
+    && /FluxIQ asked for permission before building a Flow from the task's instruction \(permission\.required: delete\)/u.test(error.message)
     && !/generation_http/u.test(error.message)
     && (error.details?.outcome === "permission.required")
-    && JSON.stringify(error.details?.missing) === JSON.stringify(["send_or_publish"])
+    && JSON.stringify(error.details?.missing) === JSON.stringify(["delete"])
     // Codes only: the control's name stays on the build record.
-    && !JSON.stringify(error.details).includes("Schedule post"));
+    && !JSON.stringify(error.details).includes("Delete post"));
   // The build is settled -- what it spent is published -- before the lane stops.
   assert.equal(settled[0]?.outcome, "permission_required");
-  assert.deepEqual(settled[0]?.permissionRequest?.missing, ["send_or_publish"]);
+  assert.deepEqual(settled[0]?.permissionRequest?.missing, ["delete"]);
   for (const step of ["approve", "apply", "start", "publish"]) assert.equal(core.calls.includes(step), false, `${step} ran after a build that asked for permission`);
 });
 

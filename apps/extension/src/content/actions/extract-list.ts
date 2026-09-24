@@ -82,7 +82,8 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     pagesRead: outcome.pagesRead,
     truncated: outcome.truncated,
     missingFields: [...outcome.missingFields],
-    fieldNames: [...fieldNames]
+    fieldNames: [...fieldNames],
+    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {})
   };
 }
 
@@ -102,10 +103,35 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
  * because four of the twenty items on the page were advertisements has done
  * something different from one that found sixteen items, and the number of rows
  * alone cannot tell the two apart.
+ *
+ * **A read whose conditions kept nothing says so first**, because that is the
+ * one thing about it worth reading. It answers with the rows they rejected
+ * rather than with none (`extraction/list-reader.ts`), so without the phrase the
+ * result would look like a plain unfiltered read that happened to match
+ * everything -- and on 2026-09-24 the empty version of the same mistake cost a
+ * whole run before anyone could see which of two things had gone wrong
+ * (`run-mug3tnti-9ab80b85`).
  */
 function readSummary(outcome: Outcome): string {
-  const left = outcome.filtered > 0 ? `, ${count(outcome.filtered, "item")} left out by where` : "";
-  return `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${left}`;
+  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}`;
+  const report = outcome.conditions;
+  if (report?.unfiltered) {
+    return `${read}, but where kept none of the ${count(report.applied, "item")} it was applied to, so the rows it rejected were returned unfiltered${culprits(report)} -- narrow the conditions rather than trusting these rows`;
+  }
+  return `${read}${outcome.filtered > 0 ? `, ${count(outcome.filtered, "item")} left out by where` : ""}`;
+}
+
+/**
+ * The conditions that rejected every item they were asked about, named by their
+ * position in `where`. One of them is what emptied the read, and saying which
+ * is the difference between a repair that can act and a repair that guesses
+ * among four conditions. Nothing is said when every condition rejected only
+ * some items and it was their combination that left nothing.
+ */
+function culprits(report: NonNullable<Outcome["conditions"]>): string {
+  const all = report.rejected.flatMap((rejected, index) => (report.applied > 0 && rejected === report.applied ? [index] : []));
+  if (all.length === 0) return "; no one condition rejected them all, so it was the conditions together";
+  return `; ${all.map((index) => `where[${index}]`).join(" and ")} rejected every one`;
 }
 
 function count(value: number, noun: string): string {

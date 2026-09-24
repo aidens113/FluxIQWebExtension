@@ -46,6 +46,21 @@ test("a numeric bound is kept as written, and a bound beside `absent` is refused
   assert.equal(read([{ field: "name", is: "present", lessThan: 50 }])?.where?.length, 1);
 });
 
+test("filtering is optional: no clause and an empty clause are the same request, and both keep every item", () => {
+  // The direction of 2026-09-24, after conditions a sharper vocabulary made
+  // writable emptied a whole run (`run-mug3tnti-9ab80b85`): nothing about
+  // filtering is required to get a plain extraction, and where a shape can be
+  // read two ways the wider reading wins.
+  const plain = webAutomationExtractListRequestValue(BASE);
+  assert.notEqual(plain, undefined);
+  assert.equal(Object.hasOwn(plain!, "where"), false, "a request that named no conditions carries none");
+  // An empty clause says what no clause says. It used to refuse the request.
+  const empty = read([]);
+  assert.notEqual(empty, undefined, "an empty clause is not a refusal");
+  assert.equal(Object.hasOwn(empty!, "where"), false, "an empty clause leaves rather than arriving as a clause that filters nothing");
+  assert.deepEqual(empty, plain);
+});
+
 test("a textual comparison is kept as a list, whichever way it was written", () => {
   // The everything-store instruction of 2026-09-24, whose two exclusions had
   // nowhere to go (`run-mug1z9k9-ef625d8b`): no sponsored placements, and no
@@ -104,7 +119,6 @@ test("a condition the page could not act on refuses the whole request", () => {
     ["two values named", [{ field: "name", read: ".other" }]],
     ["a field the request does not read", [{ field: "missing" }]],
     ["a bare string, which could only ever mean present", ["name"]],
-    ["an empty list", []],
     ["a key the grammar does not know", [{ field: "name", selector: ".x" }]],
     ["a presence the grammar does not know", [{ field: "name", is: "sometimes" }]],
     ["a bound that is not a number", [{ field: "name", lessThan: "50" }]],

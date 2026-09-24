@@ -101,7 +101,9 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
 
   const request: JsonObject = { item: binding.extractList.item, fields: columns.fields as unknown as JsonObject };
-  if (where !== undefined) request.where = where.where as unknown as JsonValue;
+  // An empty clause resolves to no conditions, and the request carries no
+  // `where` at all rather than an empty one the dispatch would have to read.
+  if (where !== undefined && where.ok && where.where.length > 0) request.where = where.where as unknown as JsonValue;
   if (paginate !== undefined) request.paginate = paginate as unknown as JsonObject;
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;

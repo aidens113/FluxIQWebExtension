@@ -19,9 +19,9 @@ import type { ExistingFlowAdaptation } from "../../../existing-fluxiq-control.js
  */
 export async function parkedProposalConsequences(): Promise<NonNullable<ExistingFlowAdaptation["consequences"]>> {
   const gate = new AutomationStudioActionPermissionGate({ stage: "authoring", instructionIds: ["instruction.schedule"], now: () => 5, newRequestId: () => "permission-request:one" });
-  gate.observe({ controls: [{ handle: "c1", name: "Post text" }, { handle: "c7", name: "Schedule post" }] });
+  gate.observe({ controls: [{ handle: "c1", name: "Post text" }, { handle: "c7", name: "Delete post" }] });
   await gate.checkFor({ kind: "exploration_step", id: "web.output.dom-type", ref: "call-2" })({ consequences: [], control: { name: "Post text", kind: "textbox" }, verb: "enter" });
-  await gate.checkFor({ kind: "flow_step", id: "web.output.dom-click", ref: "main.s6" })({ consequences: ["send_or_publish"], control: { name: "Schedule post", kind: "button" }, verb: "press" });
+  await gate.checkFor({ kind: "flow_step", id: "web.output.dom-click", ref: "main.s6" })({ consequences: ["delete"], control: { name: "Delete post", kind: "button" }, verb: "press" });
   assert.ok(gate.request, "the gate raised a request");
   const crossCheck = automationStudioActionDeclarationCrossCheck({ declarations: gate.declarations, instructed: [] });
   // Through Core, through JSON, and through the Lab's own reader, which is
