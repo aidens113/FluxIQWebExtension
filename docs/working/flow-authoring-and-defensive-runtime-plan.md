@@ -613,6 +613,29 @@ cause behind five of six failures - is in
 Its pagination conclusion was later falsified; see `Open Questions`.
 
 ## Open Questions
+- **The 23-record failure is fixed, and it took three wrong answers to find the
+  right one.** The cause was that the grammar for `extractList` named `maxPages`
+  and its ceiling and never said what the number does, so a model read it as a
+  description of the page and wrote the count it could see. The proof is a pair,
+  not an argument: "the products shown on the first page of the catalog" and
+  "every product, across all of its pages" produced the *identical* authored
+  node, `paginate: { maxPages: 3 }`, one failing at 23 of 8 and one passing at
+  23 of 23. With the clause in - "maxPages/maxScrolls = pages to read, not pages
+  present: read only the page shown unless asked for more" - the same pair
+  produced `paginate: null` and `maxPages: 3`, 8 of 8 and 23 of 23. The clause
+  needed room Core's 600-character parameter description did not have, and Core
+  truncates rather than refusing, so the bound moved to 700 with it.
+- **Three attempts missed first**, each diagnosed from record counts alone: the
+  detector's page proposal, the worked example's `maxPages: 5`, and the node's
+  own "across pages" description. None was the cause. What found it was
+  recording the parameters the model actually wrote, then running the two
+  opposite instructions as a pair - one run each, about a cent apiece. **The
+  instrumentation should have come before the first fix, not after the third.**
+- **The next cause on that task is already visible**, and it is the same one
+  property-listings has: a column mapped to the wrong element. All 8 rows, all
+  32 fields present, and `rating` reads `$49.00` where "4.6 out of 5" was
+  expected; property-listings' `address` reads its listing URL. Two sites, one
+  shape of error, and it is now the largest open failure in the extract lane.
 - **Eleven tasks across six sites never measured before: 4 passed, 6 failed, 1
   no result.** Two of the failures are new causes, each diagnosed to the field.
   - `admin-console-customer-book`: expected 240, observed **19**, none matching,
