@@ -256,9 +256,14 @@ test("the call, token and cost numbers the Lab mirrors are Core's own", async ()
   // source rather than the build is deliberate: the build can lag it, and a Lab
   // run against a Core build older than Core's source is refused outright
   // (`scripts/lab/core-build-stale.mjs`).
-  const source = await readFile(new URL("../../../src/programs/automation-studio/runtime/llm/execution-grants.ts", import.meta.resolve("fluxiq/automation-studio")), "utf8");
+  // The path moved on 2026-09-24: Core split `llm/execution-grants.ts` into
+  // `llm/execution/`, because three files shared the `execution-` prefix and the
+  // store had outgrown its line limit. Reading a file by path is what makes that
+  // a test failure rather than a silent pass, which is the trade this assertion
+  // already accepted when it chose source over build.
+  const source = await readFile(new URL("../../../src/programs/automation-studio/runtime/llm/execution/grants.ts", import.meta.resolve("fluxiq/automation-studio")), "utf8");
   const totalCost = /^const MAX_TOTAL_COST_USD = ([0-9_.]+);/mu.exec(source);
-  assert.ok(totalCost?.[1], "MAX_TOTAL_COST_USD is no longer a plain numeric constant in Core's execution-grants.ts");
+  assert.ok(totalCost?.[1], "MAX_TOTAL_COST_USD is no longer a plain numeric constant in Core's llm/execution/grants.ts");
   assert.equal(Number(totalCost[1].replaceAll("_", "")), planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd);
 });
 

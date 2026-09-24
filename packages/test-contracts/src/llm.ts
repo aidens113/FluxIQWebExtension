@@ -35,7 +35,7 @@ export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 64_000 as const;
 /**
  * The most provider calls any Lab run may declare: FluxIQ Core's absolute
  * backstop against a runaway loop (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS`
- * in Core's `runtime/llm/execution-grants.ts`), mirrored because this package
+ * in Core's `runtime/llm/execution/grants.ts`), mirrored because this package
  * depends only on Core's public contracts.
  *
  * It is deliberately far above what an adaptation needs and is not a per-task
