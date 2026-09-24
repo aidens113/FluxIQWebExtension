@@ -597,126 +597,11 @@ followed them, each diagnosed to its cause - is in
 [archive/2026-09-23-wave-one-ledger-and-partition.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-23-wave-one-ledger-and-partition.md).
 Its causes are all closed and its findings are in `Current State`.
 
-### 2026-09-23 - The loop plans again after looking, so a refusal can be checked
-
-- Agent: supervisor, direct. Core task branch `task/t114-replan-after-exploring`.
-- Changed: Core only. New
-  `runtime/recovery/annotation/replan.ts`; `diagnosis-chain.ts` gains the set of
-  refusals a page could overturn; `annotate.ts` re-orders stages C and D around
-  the re-plan; `patch-reserve.ts` can hold more than one call; `stages.ts`
-  records the second plan; and the two task-kind gates in
-  `llm/harness/explored-evidence.ts` and `llm/harness/context-packet.ts` now
-  admit a re-planning diagnosis.
-- Why: t113 found that `annotate` gated exploration on
-  `plan.explorationRequested && plan.patchRequest.request`, so the moment a
-  diagnosis answered `stillAchievable: "no"` the look was cancelled with it. The
-  one claim a page could settle was the one claim that stopped the page being
-  looked at. Removing the gate alone would have bought a look nothing re-plans
-  from, which is why the re-plan is the change and the gate is a consequence of
-  it.
-- What it does now: on a `goal_unachievable` refusal the loop explores anyway,
-  then makes a second `runtime_diagnosis` at the `plan` stage - a legal one-step
-  advance through Core's fixed order, and the stage the patch has always
-  declared as its `previousStage` without any call ever occupying it - carrying
-  the explored packets and the model's own earlier answer. The plan is rebuilt
-  from what comes back. A refusal that survives keeps its code and changes rung
-  from `plan` to `exploration`, which is the whole difference between "the model
-  declined" and "the model declined after looking". A second call that returns
-  no diagnosis leaves the first plan standing and records it as unchecked rather
-  than confirmed.
-- Only `goal_unachievable` is checkable. `policy_allows_no_kind` is a person's
-  setting no page can speak to; the three diagnosis-call refusals leave no claim
-  to check; `resolved_without_model` was Core's own classifier. And
-  `diagnosis_asked_for_none` is unreachable here by construction, because the
-  `!explorationNeeded` that decides it is the same flag that stops an
-  exploration running - so it is left out rather than listed harmlessly.
-- Validation: Core `pnpm exec tsc --noEmit -p packages/fluxiq/tsconfig.json`
-  exit 0; `node scripts/structure-audit.mjs` `structure-audit: passed (181
-  warning(s), 360 baselined)` exit 0; `vitest run` over
-  `runtime/recovery` and `runtime/llm` `Test Files 73 passed (73)`,
-  `Tests 851 passed (851)`. Core's full package suite
-  `Test Files 3 failed | 367 passed (370)`, `Tests 3 failed | 3222 passed`; all
-  three failures are `Test timed out in 15000ms` and all three pass run alone -
-  `run-detail-preservation` in 4.1s, and two `deepseek-bootstrap-exploration`
-  cases at 12.8s and 12.6s against a 15s limit, so parallel load is the cause.
-  `run-detail-preservation` is the one of the three that touches this change, and
-  it drives a repaired run's recovery annotation through apply, replay and
-  restart. Web `pnpm check` exit 0, ten projects `Done`,
-  `structure-audit: passed (99 warning(s), 121 baselined)`.
-- Outcome: Done
-- Follow-up: re-run `everything-store-first-page-plus-earbuds` and read whether
-  the refusal now carries `refusalRung: "exploration"`. The Lab needed no change
-  - `packages/test-contracts/src/harness-recovery.ts` already lists
-  `exploration` among its rungs and `flow-lane/harness-recovery.ts` passes
-  Core's value through untouched.
-- Not verified: no live run has exercised the re-plan; whether a model shown the
-  page actually changes its answer is exactly what the next run measures, and
-  this change only makes the question askable.
-
-### 2026-09-23 - The repair is shown what the run survived, not only what killed it
-
-- Agent: supervisor, direct. Core task branch `task/t115-repair-sees-recovered-failures`.
-- Changed: Core only. `recovery/context.ts` gains a `recovered_failures`
-  section; `llm/harness/locator-text.ts` gains the escaped-id shape; tests for
-  both.
-- Why: t113's first cause. The deterministic ladder is good at its job, and that
-  is exactly how the evidence went missing. A node that fails, is retried and
-  then succeeds leaves `recent_nodes` with nothing to show, because that section
-  keeps only `succeeded` attempts - and `detail.recoveryAttempts` has been
-  written on every run since it existed and read by nothing but a counter. So
-  the model repairing the terminal failure was told about that failure alone, as
-  though the run had walked a clean path up to it.
-- What that cost, in `run-muesyox4-930bef98`: three clicks failed on the same
-  control before the fourth worked, each with six controls of the same family in
-  front of the recovery, and the offsets said why - the fixture opens a modal
-  about four seconds after load and the first clicks fired at roughly 1.0s and
-  2.4s. Then `s6` failed for good on an 819-byte page with no same-family
-  control on it, and that starved packet was the whole of what the repair was
-  given. The run had already proved this page mutates on a timer. Nothing
-  carried it.
-- What it does now: one entry per failed attempt the run survived, in order,
-  with Core's failure category, the offset from the run's start that makes a
-  timing pattern legible, and - where a recovery record matches - how many
-  candidates the ladder had and which rung resolved it, plus the totals the
-  slice cannot convey. The attempt under repair is excluded, because it is the
-  `failure` section; a test pins that the two never overlap whether the caller
-  names the attempt or Core finds it in the record.
-- A second defect, found by writing the test rather than by looking for it: the
-  locator screen's id rule is `#` followed by a letter or underscore, and the id
-  this product actually meets is React's `useId` output `:r13b8o:`, addressable
-  only as an escaped `#\:r13b8o\:`. The screen walked straight past the one
-  selector shape this repository has a task named after. It is now a named
-  shape, so it is withheld from the failure record's own sentences too, which is
-  where it was reaching the model before.
-- A third defect, and this one would have made t114 dead code. `plan.ts` read
-  `explorationRequested` straight off the model's own `explorationNeeded`, so a
-  model that answered "the goal is gone" and "no need to look" had both made a
-  claim about the page and cancelled the only thing that could test it. That is
-  not hypothetical: thirteen live repair-lane runs on 2026-09-17 answered
-  `explorationNeeded: false` every single time - it is why
-  `deterministicExplorationNeeded` exists - so the re-plan would have fired
-  almost never. Core now decides this one for a refusal it calls checkable, the
-  way its own "a person must act" already outranks a model that disagrees. A
-  refusal no page can speak to is still not explored, so it buys exactly one
-  look and not a look per dead end.
-- Validation: Core `pnpm exec tsc --noEmit -p packages/fluxiq/tsconfig.json`
-  exit 0; `node scripts/structure-audit.mjs` `structure-audit: passed (181
-  warning(s), 360 baselined)`; `vitest run` over `runtime/recovery`,
-  `runtime/llm` and `runtime/tests/refuted-result` `Test Files 74 passed (74)`,
-  `Tests 873 passed (873)`. Core's full package suite, run before the third fix,
-  was clean for the first time this session: `Test Files 370 passed (370)`,
-  `Tests 3230 passed | 1 skipped (3231)`, no timeouts.
-- Outcome: Done
-- Compaction: this entry took the document past 800 lines, so it was compacted
-  first, per the protocol. The six-worker implementation partition and the eight
-  ledger entries that ran under it - superseded on 2026-09-23 when the work
-  narrowed to the instruction path and became supervisor-direct tasks - moved to
-  `archive/2026-09-23-wave-one-ledger-and-partition.md`, with a pointer left at
-  each removal. 896 lines to 797; nothing deleted.
-- Not verified: no live run has been made since t114 or t115, so neither the
-  re-plan nor this section has been exercised against a real page. What a model
-  does when it is finally shown that the page mutates on a timer is the thing
-  the next run measures.
+The three entries for t114, t115 and t117 - the repair loop learning to
+re-plan after looking, to see what a run survived, and to resolve a grant the
+verification already claimed - are in
+[archive/2026-09-24-t114-t117-repair-loop.md](./flow-authoring-and-defensive-runtime-plan/archive/2026-09-24-t114-t117-repair-loop.md).
+All three are merged and pushed; what they changed is in `Current State`.
 
 ### 2026-09-24 - The furthest run yet, and the two things that stopped it
 
@@ -773,6 +658,78 @@ Its causes are all closed and its findings are in `Current State`.
   named; cause A is not fixed, and cause B is instrumented rather than fixed.
 - Next: re-run, read `refusalCause` to learn which grant refusal it is, and fix
   that; then the intruder row.
+
+### 2026-09-24 - The extract campaign, and one cause behind five of six failures
+
+- Agent: supervisor, with four read-only investigation workers and one
+  implementation worker.
+- **First passing run in the project's history.** `product-catalog-first-page`,
+  `run-mueydi5d-8fad7bb7`: an instruction became a one-node Flow
+  (`web.dom.extract_list`), the Flow replayed, and the dataset it produced was
+  judged correct. 9 calls, $0.0070. Across every campaign before this, the
+  number of instruction-built Flows that produced the right answer was zero.
+- **And one cause behind almost every failure beside it.** Six
+  `product-catalog` extract runs; five failed, and all five failed identically:
+  `expectedRecords 8, observedRecords 23, matchedRecords 8`. Twenty-three is the
+  whole three-page catalogue, 8 + 8 + 7. Every one of those runs read all eight
+  page-one records perfectly - `presentFields == expectedFields`, no unexpected
+  fields, no non-string values, including `text-variant`'s "16.00 USD" prices and
+  `sparse-cards`' absent price and rating. Nothing was wrong with the read. The
+  Flow took three pages for a request that said one.
+- **Why.** `detectPagination` proposed `maxPages` as the count of the pager's
+  numbered controls, or the domain's ceiling when it had none. How a list
+  continues is a fact about the page; how much of it to take is a fact about what
+  was asked for, and a proposal that answers the second turns "the first page"
+  into "every page" with nobody choosing. The run that passed is the one whose
+  model authored no pagination block at all.
+- Fixed: a proposal now asks for the page in front of it and names its mode
+  explicitly rather than leaning on what an omitted one happens to mean. A read
+  that wants more pages says so, and one stopped by the bound reports
+  `truncated`, so a Flow that should have taken more says it took fewer rather
+  than quietly answering short.
+- **The corpus's most common event is a rejection, and it is model thrash.**
+  Across 33 runs the build-loop result codes are led by
+  `web.action.rejected.no_repeating_structure` at 39, against 19
+  `web.action.succeeded`. The worst, `run-mueyx0xe-e4615f3c` on
+  `product-catalog` `text-variant`, called `web.detect_repeating_structure`
+  twenty-eight times: refused twenty-seven, answered once, 38 provider calls in
+  all. So the model is calling the detection tool rather than guessing selectors
+  at an extract node, which is the right tool - it just keeps being told no.
+  **Not a detection defect**, on the evidence: the same task in the earlier
+  campaign (`run-mueyh9ey-5ce143dc`) was refused five times on the same page and
+  got there, and the plain `first-page` run found its list in one call. The page
+  has a readable run and detection finds it; the variance is the model's.
+  **And the guard that should bound it is a streak, not a total.** Core does
+  count a refused look as no progress - `automationStudioLlmEvidenceLookWasRefused`
+  is true for an `observe` tool answering `{ok:false}`, which is exactly what a
+  refused detection returns - and trips at `maxStepsWithoutProgress`, 24. But
+  `progressed()` resets the count to zero on any answered call, so twenty-seven
+  refusals with three successes among them never come near it. The streak is
+  bounded and the total is not. A build can be told "there is no list there"
+  indefinitely as long as it occasionally looks at something else.
+  Bounding the total is the open item. It is worth roughly a third of a bad
+  build's calls, and the threshold should come from more than one run, so it is
+  written down rather than guessed at here.
+  `bootstrap.invalid_subflows` is the same shape, five times in that one run.
+- **`everything-store` is a different failure, and it is not extraction.** Its
+  instruction says "narrow the results to Brightaisle Plus items". The Flow
+  searched and correctly excluded sponsored placements - 20 cards on the page,
+  16 rows returned - and never clicked the Plus rail, so it read the unnarrowed
+  list: `matchedRecords 7`, `matchedInAnyOrder 13`, the rest displaced. An
+  earlier reading of this as "one intruder row shifting the list by one" was
+  wrong; expected 12 was observed at 15, not 13. Whether the model was ever shown
+  the Plus control cannot be answered from any artifact, because nothing records
+  what a packet contained - which is now being fixed.
+- Validation: extension `node apps/extension/scripts/test-extension.mjs`
+  `# tests 747 # pass 747 # fail 0`; `tsc --noEmit` on the extension exit 0.
+- Outcome: Partial - one cause fixed and pending re-measurement, one named and
+  open, one unanswerable until the packet record lands.
+- **An operational mistake worth writing down.** The first attempt at this
+  campaign aborted after 5 tasks because Core source was edited while it ran,
+  leaving Core's dist stale; the Lab's own guard caught it and refused to
+  continue - "Nothing measured here is a product result until that is fixed."
+  That guard is correct and cost nothing but time. Work during a live campaign
+  belongs in a worktree, which is what the rest of this session used.
 
 ## Open Questions
 
