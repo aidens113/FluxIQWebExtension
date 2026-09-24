@@ -27,17 +27,47 @@ export type RunHarnessRecovery = {
   /** The change proposals the run created (Core's `runDetail.changeProposalIds`). */
   changeProposalIds: string[];
   /**
-   * Why recovery was not attempted, as Core's gate code (`runDetail.metadata.llmGate.code`):
+   * Why this run got no repair, as Core's own code, never its sentence.
+   *
+   * From the gate when recovery never started (`runDetail.metadata.llmGate.code`):
    * `llm.gate.training_mode` when the Flow's settings do not allow LLM
    * intervention, `llm.gate.training_budget_exhausted`, or
    * `llm.gate.<prior action>` when a deterministic answer must come first
    * (`known_recovery`, `reroute`, `known_adaptation`, `manual_intervention`).
-   * A code, never Core's sentence. `null` when recovery was attempted or Core
-   * recorded no refusal, which is a run that did not fail. Absent in a record
+   *
+   * From the loop when it started and stopped without repairing anything
+   * (`llmGate.patchSkippedCode`, `llmGate.patchHeldCode`): the plan asked for
+   * no patch, the grant's scope allowed none, a person's permission was
+   * needed. **That half was missing.** The field had to be `null` whenever
+   * `attempted` was true, so a recovery that engaged, spent a diagnosis call
+   * and then declined recorded no reason at all: live run
+   * `run-muesyox4-930bef98` (2026-09-23) filed two interventions, no patch
+   * attempt and a `null` refusal, which reads exactly like a repair loop that
+   * is switched off.
+   *
+   * `null` when Core recorded no refusal, and when the recovery produced
+   * something -- a patch attempt, an adaptation, a change proposal -- because
+   * then what it did is the answer and the lists carry it. Absent in a record
    * written before the field existed, which says nothing either way.
    */
   refusalCode?: string | null;
+  /**
+   * Which rung of Core's recovery loop declined, beside the code for why.
+   * `gate` is a recovery that never started; the other four are Core's own
+   * loop stages. `null` when there is no refusal to attribute, and **absent**
+   * when Core named no rung -- an older Core, not an unattributed refusal.
+   */
+  refusalRung?: HarnessRecoveryRung | null;
 };
+
+/**
+ * The rungs a refusal can come from: Core's gate, then its four loop stages
+ * (`recovery/stages.ts`). The code says why nothing was repaired; this says
+ * who decided, which is the difference between "the plan would not ask for a
+ * patch" and "a person has to answer first".
+ */
+export const harnessRecoveryRungs = ["gate", "diagnosis", "plan", "exploration", "resolution"] as const;
+export type HarnessRecoveryRung = (typeof harnessRecoveryRungs)[number];
 
 /**
  * One LLM intervention Core recorded. `kind` is Core's intervention kind

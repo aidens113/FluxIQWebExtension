@@ -1,4 +1,4 @@
-import { validateRunHarnessRecovery, type RunHarnessPatchAttempt, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { harnessRecoveryRungs, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control/index.js";
@@ -45,7 +45,7 @@ export async function readHarnessRecovery(
   runDetail: Readonly<Record<string, unknown>>,
   bounds: FluxIQHttpOptions,
 ): Promise<RunHarnessRecovery> {
-  if (!recoveryRecorded(runDetail)) return conforming({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: gateRefusalCode(runDetail) });
+  if (!recoveryRecorded(runDetail)) return conforming({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], ...recoveryRefusal(runDetail) });
   const detail = await control.getRunDetail(scope.projectId, scope.runId, bounds);
   const interventions = (detail.interventions ?? []).map((item) => ({ kind: item.kind, validationOk: item.validationOk ?? null, validationCodes: [...(item.validationCodes ?? [])] }));
   const refusals = targetOverrideRefusalCases(runDetail);
@@ -64,22 +64,43 @@ export async function readHarnessRecovery(
   const adaptationIds = identifiers(detail.adaptationIds ?? [], "runDetail.adaptationIds");
   const changeProposalIds = identifiers(detail.changeProposalIds ?? [], "runDetail.changeProposalIds");
   const attempted = interventions.length + runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
-  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, refusalCode: attempted ? null : gateRefusalCode(runDetail) });
+  // A refusal belongs on any run that got no repair, not only on one whose
+  // recovery never started. `refusalCode` was `attempted ? null : ...`, so the
+  // loop's own reasons -- the plan asked for no patch, the grant's scope
+  // allowed none, a person's answer was needed -- had nowhere to go the moment
+  // a single intervention existed. What silences it now is a recovery that
+  // produced something, because then the lists are the answer.
+  const produced = runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
+  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)) });
 }
 
 /**
- * Why Core's recovery never started, as its gate's code, or `null` when the
- * gate recorded no refusal. Core writes `llmGate: { invoked: false, code,
- * reason }` at each early return; `reason` is Core's sentence and stays behind,
- * and `code` is taken as written, so the contract, not this read, decides
- * whether it is code-shaped -- a sentence in its place fails the read by path.
+ * Why this run got no repair, as Core's code and the rung that decided, or
+ * nulls when Core recorded no refusal.
+ *
+ * Three places, in the order a recovery reaches them. Core writes
+ * `llmGate: { invoked: false, code, reason }` at each early return, so an
+ * `invoked: false` code is the gate declining before the loop began. Once the
+ * loop has run, `patchSkippedCode` is why no patch call followed and
+ * `patchSkippedRung` is which stage decided; `patchHeldCode` is a patch the
+ * model wrote that a person has to allow first. Core's sentences -- `reason`,
+ * `patchSkipped` -- stay behind in every case.
  */
-function gateRefusalCode(runDetail: Readonly<Record<string, unknown>>): string | null {
+function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null } {
+  const none = { refusalCode: null, refusalRung: null };
   const metadata = runDetail.metadata;
   const gate = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).llmGate : undefined;
-  if (!gate || typeof gate !== "object" || Array.isArray(gate)) return null;
-  const { invoked, code } = gate as Record<string, unknown>;
-  return invoked === false && code !== undefined ? code as string : null;
+  if (!gate || typeof gate !== "object" || Array.isArray(gate)) return none;
+  const { invoked, code, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate as Record<string, unknown>;
+  if (invoked === false && code !== undefined) return { refusalCode: code as string, refusalRung: "gate" };
+  if (patchSkippedCode !== undefined) return { refusalCode: patchSkippedCode as string, refusalRung: rung(patchSkippedRung) };
+  if (patchHeldCode !== undefined) return { refusalCode: patchHeldCode as string, refusalRung: rung(patchHeldRung) ?? "resolution" };
+  return none;
+}
+
+/** One of Core's rungs, or `null` when Core named none or named a word it does not own. */
+function rung(value: unknown): HarnessRecoveryRung | null {
+  return typeof value === "string" && (harnessRecoveryRungs as readonly string[]).includes(value) ? value as HarnessRecoveryRung : null;
 }
 
 /**

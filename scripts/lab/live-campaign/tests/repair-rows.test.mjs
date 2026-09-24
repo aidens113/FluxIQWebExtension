@@ -17,12 +17,23 @@ test("a repair task is judged by what the model did and the final state, never b
   assert.deepEqual([refused.judgement.passed, refused.succeeded, refused.judgeBy], [true, true, "refusal"]);
   assert.deepEqual(refused.repair, {
     measured: true, consulted: true, diagnosisValidated: true, patchKinds: ["temporary_target_override"], accepted: [], patchExecuted: false,
-    refused: true, refusedAt: "preflight", refusalCodes: ["runtime_patch.target_override_rejected", "runtime_patch.target_override_rejected.ambiguous"],
+    refused: true, refusedAt: "preflight", refusedRung: null, refusalCodes: ["runtime_patch.target_override_rejected", "runtime_patch.target_override_rejected.ambiguous"],
     changeProposalCreated: false, adaptationCreated: false, targetJudgement: null, replayProviderCalls: null,
   });
   assert.deepEqual([refused.providerCalls, refused.reportedTokens, refused.reportedCostUsd], [2, 7387, 0.00407132], "reported per-call spend, never Core's accounting");
   assert.equal(row(refusalTask, repairBundle(recovery(), { oracleVerdict: "passed" })).repair.refusedAt, "no-patch");
   assert.equal(row(refusalTask, repairBundle(recovery({ interventions: [diagnosed[0]] }), { oracleVerdict: "passed" })).repair.refusedAt, "no-validated-diagnosis");
+  // Live run `run-muesyox4-930bef98` (2026-09-23) summarised as `no-patch` with
+  // an empty code list -- the whole of what the campaign could say about a
+  // validated diagnosis that repaired nothing. Core's own refusal now travels
+  // with it, and the rung that gave it.
+  const stated = row(refusalTask, repairBundle(recovery({ refusalCode: "llm.runtime_patch_goal_unachievable", refusalRung: "plan" }), { oracleVerdict: "passed" }), "passed").repair;
+  assert.deepEqual([stated.refusedAt, stated.refusedRung, stated.refusalCodes], ["no-patch", "plan", ["llm.runtime_patch_goal_unachievable"]]);
+  // An older Core states the reason and no rung, and nothing that is not a code travels.
+  const unattributed = row(refusalTask, repairBundle(recovery({ refusalCode: "llm.runtime_patch_not_requested" }), { oracleVerdict: "passed" }), "passed").repair;
+  assert.deepEqual([unattributed.refusedRung, unattributed.refusalCodes], [null, ["llm.runtime_patch_not_requested"]]);
+  const sentence = row(refusalTask, repairBundle(recovery({ refusalCode: "The diagnosis says the result can no longer be achieved.", refusalRung: "the plan stage" }), { oracleVerdict: "passed" }), "passed").repair;
+  assert.deepEqual([sentence.refusalCodes, sentence.refusedRung], [[], null]);
 
   // A refusal fails when anything came of the repair, or when the final state shows something was done.
   const proposed = row(refusalTask, repairBundle(recovery({ runtimePatchAttempts: [patch({ changeProposalCreated: true })], changeProposalIds: ["proposal-1"] }), { oracleVerdict: "passed" }), "passed");

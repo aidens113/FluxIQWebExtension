@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { harnessPatchPermissionOutcomes, type HarnessPatchPermissionOutcome } from "@fluxiq-web-extension/test-contracts";
+import { harnessPatchPermissionOutcomes, harnessRecoveryRungs, type HarnessPatchPermissionOutcome, type HarnessRecoveryRung } from "@fluxiq-web-extension/test-contracts";
 import { parseAutomationStudioActionPermissionRequest, type AutomationStudioActionPermissionRequest } from "fluxiq/automation-studio/action-permissions";
 import { RunnerFailure } from "./failure.js";
 import {
@@ -36,8 +36,12 @@ export type ExistingRunLlmGate = {
   reason?: string;
   code?: string;
   patchSkippedCode?: string;
+  /** Which rung of Core's recovery loop skipped the patch call, when Core named one. */
+  patchSkippedRung?: HarnessRecoveryRung;
   /** Why a patch the model wrote did not run although the patch call was made: `llm.runtime_patch_permission_required`. */
   patchHeldCode?: string;
+  /** The rung that held it: always `resolution`, and absent when Core named none. */
+  patchHeldRung?: HarnessRecoveryRung;
   /** What the recovery's permission gate held, as Core's classes only: granted, instructed, and lapsed. */
   permissions?: { granted: string[]; instructed: string[]; lapsed: string[] };
 };
@@ -637,8 +641,24 @@ function runLlmGate(value: JsonRecord): ExistingRunLlmGate {
       : undefined;
   const publishedPatchHeldCode = bounded(value.patchHeldCode, "patchHeldCode", 128);
   const patchHeldCode = publishedPatchHeldCode && /^llm\.runtime_patch_[a-z_]+$/u.test(publishedPatchHeldCode) ? publishedPatchHeldCode : undefined;
+  // Which rung of Core's recovery loop declined, beside the code for why. Core
+  // names it (`recovery/annotation/annotate.ts`); an older Core names none and
+  // leaves it absent, which reads as "the reason is stated, the rung is not".
+  const patchSkippedRung = rung(value.patchSkippedRung, `${at}.patchSkippedRung`);
+  const patchHeldRung = rung(value.patchHeldRung, `${at}.patchHeldRung`);
   const permissions = gatePermissions(value.permissions, `${at}.permissions`);
-  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}), ...(patchSkippedCode ? { patchSkippedCode } : {}), ...(patchHeldCode ? { patchHeldCode } : {}), ...(permissions ? { permissions } : {}) };
+  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}), ...(patchSkippedCode ? { patchSkippedCode } : {}), ...(patchSkippedRung ? { patchSkippedRung } : {}), ...(patchHeldCode ? { patchHeldCode } : {}), ...(patchHeldRung ? { patchHeldRung } : {}), ...(permissions ? { permissions } : {}) };
+}
+
+/**
+ * One of Core's four recovery rungs, or `undefined` when Core named none. A
+ * word Core does not use is not carried: this is a closed vocabulary, and an
+ * unknown word would be an unbounded string reaching a bundle.
+ */
+function rung(value: unknown, at: string): HarnessRecoveryRung | undefined {
+  if (value === undefined || value === null) return undefined;
+  const parsed = text(value, at);
+  return (harnessRecoveryRungs as readonly string[]).includes(parsed) ? parsed as HarnessRecoveryRung : undefined;
 }
 
 /** Core's classes of lasting consequence, as the gate records them: lowercase words joined by underscores. */
