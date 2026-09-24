@@ -1,9 +1,9 @@
 # Flow Authoring And Defensive Runtime
 
 Status: Active
-Status detail: Waves one and two landed 2026-09-22, t076 to t082 and t087 to t089. The ladder is measured absorbing 6 of 6 adversarial conditions at zero provider calls. t090 (branches and loops in the draft) and t091 (the permission gate is built and has never been asked anything) are out.
+Status detail: Eleven tasks landed 2026-09-23 (t095-t111), all merged and pushed in both repositories. Three live runs then failed at three successively later points -- blocked asking permission to read, every record refused on a type mismatch after reading all 16 correctly, and a selector built on a React-generated id. t112 and t113 are in flight.
 Created: 2026-09-22
-Last updated: 2026-09-23
+Last updated: 2026-09-24
 Owner: Senior supervisor agent
 Scope: Make a model-authored Flow faithful to what the model actually did, and make a Flow's execution survive a site we do not control. Covers the build loop's authoring model, the draft Flow and its edit and dry-run tools, branch and loop authoring, the runtime's deterministic recovery ladder, and the adversarial fixture conditions that measure both. It deliberately does not cover the real-site lane itself, the campaign measurement, new extraction capabilities, or the Week 2 exit criteria, which stay in their own documents.
 Paired document: `F:\!FluxIQ\docs\working\flow-authoring-and-defensive-runtime-plan.md`
@@ -18,76 +18,78 @@ only path that counts is: a person writes an instruction, the model explores the
 live page by running real Flow nodes, and the Flow it builds then runs
 deterministically and produces the right answer. **Recording-built Flows are not
 to be tested, measured, or reported as progress**, and **the ten realistic
-campaign sites are the only test surface** — a fixture chosen because it passes
-is not evidence. Nothing else is worked on until language-driven Flow creation
-works properly; something that genuinely blocks that path is in scope precisely
-because it blocks it, and should be named as such.
+campaign sites are the only test surface**.
 
-**Why this plan exists.** Round 1 of the live campaign, 2026-09-21, across those
-ten sites: about seventy attempts to build a Flow from an instruction, one Flow
-produced, and it failed on replay (`week2-exit-plan/reports/w2x-e2e-lane-{a..e}.md`).
-Two findings made it a design problem rather than a defect list. **The Flow the
-model saved was not what the model did** — on `everything-store` the build
-dismissed a cookie banner and a notification prompt, proposed a Flow containing
-neither, and its `navigate` node reported success while the tab never left the
-start page. And **a failing node had no cheap way to recover**: retries repeated
-the same attempt, the recorded expected state was read by nothing, and the model
-was the only escalation, itself blocked for granted runs.
+**Where the product actually is, measured 2026-09-23/24.** Three live runs of
+`everything-store-first-page-plus-earbuds` against `deepseek-flash`, each
+diagnosed to its cause and fixed before the next. Total spend for the three:
+**$0.10**. No run has yet produced the right answer, and across every campaign
+ever run that number is still zero — but each of the three failed further along
+the chain than the one before, and every cause is now closed:
 
-**What was settled, and by whom.** The user's direction was that exploring should
-be like taking a recording the model can edit and retry in flight, with the
-exploratory calls being the Flow's own nodes rather than a second vocabulary.
-Recorded state must drive execution: retries on by default, the recorded state
-read at execution time, and a recorded delay treated as a *maximum wait* for the
-expected state rather than a sleep. Core edits were authorized ("yes good, i want
-to edit core"), so the framework half lives in `F:\!FluxIQ` and is recorded in
-its paired document; the web-specific judgements stay here.
+1. `run-mueozmp8-348a2057` — **no Flow at all.** The build spent 21 calls,
+   explored the page, then asked the person for permission to *read a list*, the
+   very thing the instruction requested. Nobody was there, so it parked.
+   Cause: a declaration could say what class of consequence an action carried
+   but not whether it acted at all. Fixed in t109.
+2. `run-mueqynzb-ac54aab9` — **Flow built, 11 nodes, its own `navigate` node,
+   replayed end to end, extraction ran and read exactly the 16 expected rows** —
+   and Core refused all 16, because the record schema the model authored typed
+   `price` and `rating` as numbers and a page returns text. The capture then
+   reported success with an empty array, so the node was told nothing. Fixed in
+   t111, both halves.
+3. `run-muesyox4-930bef98` — **failed before extraction.** The Flow recorded a
+   selector on a React `useId` value (`#\:r13b8o\: > div > ...`), which is
+   regenerated every render, so it was unreplayable the moment it was written.
+   The look-alike recovery saw six same-family controls and scored the best at
+   **-0.12**. The repair loop then engaged, spent two diagnosis calls, validated
+   the second, and produced **no patch, no adaptation and no refusal code**.
+   Open as t112 (selector authoring) and t113 (the silent repair).
 
-**Everything planned has landed, in both repositories.** Waves one and two, then
-the routing work: tasks t076 to t082 and t087 to t091. Workstream A is complete
-except A13's successor work, workstream B except the three ladder rungs that
-have no input written, workstream C, and workstream D. Each was verified by the
-supervisor re-running its proof rather than reading its report; the ledger
-carries the run ids and observed output.
+**Eleven tasks landed on 2026-09-23, t095 to t111**, all merged and pushed in
+both repositories. The model can now see a page's filter controls (a facet
+ranked 56th of 611 never reached it, so Flows read the unnarrowed list); a field
+reads the value the page states rather than the sentence around it; a read waits
+for a lazily loaded list to be complete; the Lab reports the failure that
+decided a run rather than a recovered one, and stopped waiting 300s for a
+recovery record that never comes (campaign wall clock ~959s to ~347s); a Flow
+must reach its own page and now can, because the domain refuses every call until
+it has; a clean run that answers wrongly is a repairable failure; a repair sees
+screened step parameters and the Flow's real routing; a successful run is
+checked on a decaying schedule; and an unattended run can both judge and make a
+repair, funded by a standing Flow-scoped authorization with a ceiling and an
+expiry.
 
-**What now works that did not this morning.** Exploration runs the real node
-registry, so a proposed Flow is assembled from steps that provably worked. A
-build must replay its draft from a reset page, with no model attached, and may
-not propose until that replay is clean — live, the first proposal was refused,
-the model amended it, and the second passed. A draft can carry a branch, a loop
-and its own recovery edge; one live Flow holds two join nodes and dismissals the
-model marked optional itself. The recovery ladder measurably absorbs **6 of 6
-adversarial conditions at zero provider calls**. And the permission gate bites:
-verified in the supervisor's own run, the press that publishes declares
-`send_or_publish` in all three places it appears while nineteen other actions
-correctly declare nothing, and a blocked act now opens a conversation ask that
-parks the build until the person answers.
+**Cost work, measured.** The cacheable prefix went from 1,272 bytes to 50,693 of
+50,711, and the first live run after it reconciled at **62.3% cache hits**
+(143,872 of 230,895 input tokens; $0.030 observed against $0.072 all-miss). The
+model is `deepseek-flash` and is now configurable rather than hardcoded in six
+places; the old prices were wrong in both directions and r5 recomputes from
+$0.1720 to $0.1188.
 
-**The one thing that does not work, and it is the whole question.** A Flow built
-from an instruction still does not reliably produce the right answer. A
-form-filling instruction does: `run-mudny8g6-7eb38ec5` built a six-node Flow and
-passed its goal. An extraction instruction does not: the Flow replays every step
-with no model attached and returns **0 records against 16 expected**. Round 1's
-number — one Flow in about seventy attempts across the ten sites — predates every
-change above and **has not been re-measured**.
+**Not done, and the next things.** t112 and t113 are in flight with worktrees at
+`F:/fxwork/t112-volatile-selector-ids` and `F:/fxwork/t113/`, nothing committed
+on either. Then: re-run the same task, and only then fan out to other sites and
+goal shapes. Nine of the ten sites have not been touched by current code.
 
-**Next, and only this.** The campaign is stopped at two runs, and those two
-runs are the whole evidence base. Both have been diagnosed from artifacts
-already on disk, and three tasks are in flight against what they showed: t095
-makes a field read the page's own tightest statement of a value rather than the
-sentence containing it (`"3.7 out of 5 stars"` where `"3.7"` was expected, which
-alone cost every one of twelve rows); t096 makes a read wait for a lazily loaded
-list to be *complete* rather than merely present, and finds out why the model
-writes no `where` although the mechanism for it landed; and a read-only
-post-mortem walks both runs action by action for the causes the first pass did
-not name -- `web.target.not_found`, `ambiguous_or_unknown`, a built Flow holding
-no `navigate` node on a navigate-and-extract scenario, and why each run stopped
-at one attempt of an allowed three instead of repairing itself.
+**Known and written down, not yet worked:** Core's flow-bootstrap catalog
+actively teaches the model to author a record schema for a node that derives a
+correct one itself, offering value types a page can never return — its own
+header records three earlier live refusals from the same cause. The 40-element
+evidence bound now cuts four of six packets with up to 2,233 bytes unspent.
+Crossborder's header links crowd out its filters. A repair drains the shared
+authorization about 150x faster than a check, so a repeatedly failing Flow
+spends its purse and then stops being checked, with nothing telling the person.
+The authorization clause has no UI or API. Cache-hit tokens are read by Core but
+lost before the Lab can record them.
 
-**The standing rule this works under, restated by the user on 2026-09-23.**
-Every run is diagnosed to its cause and the cause is fixed directly. Runs exist
-to prove a specific fix, never to produce a score, and a mass or campaign-scale
-run is never launched without asking first.
+**Environment traps that cost five invocations before the first run started:**
+the Lab executes Core's *compiled* output, so a Core merge invalidates it and
+`pnpm --filter fluxiq build` must run first; `.env.local` configures an
+`existing` target while every campaign run uses `isolated`; and blanking the
+existing-install keys does not work because empty values are rejected. The
+working invocation is `FLUXIQ_TEST_ENV_FILES=none FLUXIQ_TEST_TARGET=isolated`
+with `DEEPSEEK_API_KEY` exported into the shell.
 
 **Blockers:** none.
 
@@ -661,6 +663,53 @@ reports are in `flow-authoring-and-defensive-runtime-plan/reports/`.
 - Outcome: Partial — diagnosed, not fixed
 - Follow-up: two tasks were briefed and then stopped unstarted, so they are free to pick up. One: prefer the page's own tightest statement of a value (an attribute, a microdata property, a child holding the value alone) over the sentence containing it — **no word list and no suffix stripping**, which `domain/src/actions/extraction/request.ts` explains. Two: wait for a lazily loaded list to be *complete*, not merely present, and find out why the model does not write a `where`. Both must be proved model-free in the content harness, and the fixtures must not be edited to match the code.
 - Standing rule, from the user: **never launch a mass or campaign-scale run without asking first**, state its cost and duration beforehand, and debug the single failing case from artifacts already on disk before measuring the many.
+
+
+---
+
+### 2026-09-24 - Eleven fixes, then three live runs, each failing further along
+- Agent: supervisor; workers `fa-extraction-value-shape`, `fa-extraction-rowset`,
+  `fa-lab-truthful-reporting`, `fa-build-cost-fixes`, `fa-repair-wrong-answer`,
+  `fa-evidence-controls`, `fa-flow-reaches-its-own-page`, `fa-training-mode-design`,
+  `fa-result-check-schedule`, `fa-build-destination-channel`,
+  `fa-repair-sees-parameters-and-routing`, `fa-deepseek-flash-model`,
+  `fa-evidence-budget-waste`, `fa-unattended-repair-verification`,
+  `fa-unattended-repair-authority`, `fa-extraction-is-not-consequential`,
+  `fa-every-record-refused`, `fa-t102-t099-merge`, `fa-r5-postmortem`, `fa-build-cost`
+- Changed: t095 to t111 in both repositories, merged and pushed. Web `be72712`
+  to `fbde015`; Core `8b145c7` to `6bdfce2`.
+- Why: the user restated that every run is diagnosed to its cause and the cause
+  fixed directly, then authorised fresh runs across sites. Two r5 runs were the
+  whole evidence base; the 107 runs of the 2026-09-21 campaign were deliberately
+  NOT mined, because they predate almost all of this code and r5 already answers
+  the question they would have.
+- Validation: `pnpm check` on `dev` in both repositories, observed exit 0 -
+  web `structure-audit: passed (99 warning(s), 121 baselined)` and all ten
+  projects `check: Done`; Core `passed (181 warning(s), 360 baselined)` and all
+  four projects `Done`. Three live runs, each read from its own artifacts:
+  `run-mueozmp8-348a2057` `buildOutcome: permission_required`,
+  `permissionRequest {verb: "extract list", missing: ["create_new"]}`,
+  `answeredBy: nobody`, 21 calls, $0.030;
+  `run-mueqynzb-ac54aab9` 11 nodes with `navigationNodes: 1`,
+  `permissionRequest: null`, `crossCheckVerdict: agreed`, extraction succeeded,
+  `core.result.every_record_refused`, `expectedRecords 16 / observedRecords 0`,
+  24 calls, $0.0319; `run-muesyox4-930bef98` `ownPage {reached: true}`,
+  three clicks `web.target.not_found` on `#\:r13b8o\:`, extraction
+  `status: not_run`, `harnessRecovery {attempted: true, runtimePatchAttempts: [],
+  refusalCode: null}`, 33 calls, $0.0387. Cache: $0.030024132 reconciles exactly
+  against $0.072322 all-miss, so 143,872 of 230,895 input tokens hit.
+- Outcome: Partial - every diagnosed cause fixed, no run yet correct
+- Follow-up: t112 (a selector must not be authored on a generated id; the
+  look-alike score went negative with six candidates present) and t113 (a
+  validated diagnosis produced no patch and no refusal code) are dispatched with
+  worktrees and nothing committed. Then re-run the same task, then fan out.
+- Not verified: no run has produced a correct answer; nine of the ten sites are
+  untouched by current code; Core's full suite is not reliably green on this
+  machine (disk-bound tests time out under parallel load and pass alone).
+- Standing rules restated by the user this session: announce what you are about
+  to do before doing it; report a failure with its cause and how far the run
+  got, never as a bare verdict; do not delay the product's own work to save
+  money; the deep-debugging rule is forward-looking rather than a backlog.
 
 ## Open Questions
 
