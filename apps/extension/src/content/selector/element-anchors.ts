@@ -16,6 +16,23 @@
 //
 // Attributes are read with `getAttribute`, not the `id` property: a `<form>`
 // holding an `<input name="id">` answers `form.id` with that input.
+//
+// One identifier is refused, and it is an id: one a rendering generated rather
+// than one an author wrote (`volatile-identifier.ts`). An id is the strongest
+// anchor here only because an author wrote it to name the element, so it
+// survives a re-render; `:r13b8o:` was written by React's `useId` or by a
+// build seed, and survives nothing. Quoting it produced a Flow that could not
+// replay on any later rendering of its own page, which is what
+// `test-runs/run-muesyox4-930bef98` recorded. A test id and a form name are
+// not filtered: both are authored by definition, and a generated one would be
+// an application naming its own controls, which is a different thing.
+//
+// What the element gets instead is whatever is left: its test id, its name,
+// or -- with none of those -- the structural path `unique-selector.ts` builds
+// by climbing past the generated ancestor to something that will still be
+// there. That is weaker than a real id and stronger than an address to nowhere.
+
+import { isVolatileIdentifier } from "./volatile-identifier";
 
 /** One identifier, as a selector that stands alone and as a qualifier on a step. */
 export type ElementAnchor = { selector: string; qualifier: string };
@@ -26,7 +43,7 @@ const TEST_ID_ATTRIBUTES = ["data-testid", "data-test", "data-cy"] as const;
 export function elementAnchors(element: Element): ElementAnchor[] {
   const anchors: ElementAnchor[] = [];
   const id = element.getAttribute("id");
-  if (id) {
+  if (id && !isVolatileIdentifier(id)) {
     const byId = `#${CSS.escape(id)}`;
     anchors.push({ selector: byId, qualifier: byId });
   }

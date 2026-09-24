@@ -27,7 +27,7 @@
 //
 // The runner is Node, so there is no `document.evaluate` here to read these
 // back with -- these rows pin the exact text, and
-// `e2e/content/tests/unique-selectors.spec.ts` resolves the same five shapes in
+// `e2e/content/tests/selectors/tests/unique-selectors.spec.ts` resolves the same five shapes in
 // Chromium against the element each was written for.
 
 import assert from "node:assert/strict";
@@ -100,7 +100,8 @@ const STUB_ELEMENT = Object.getPrototypeOf(element("div")).constructor;
  * It does not judge whether an expression is valid, deliberately -- deciding
  * that here would be the guard's own rule written twice, and a test that agrees
  * with itself. The browser's half of the argument is measured where a real
- * XPath engine exists: `e2e/content/tests/unique-selectors.spec.ts` evaluates
+ * XPath engine exists: `e2e/content/tests/selectors/tests/unique-selectors.spec.ts`
+ * evaluates
  * the old escaped form in Chromium and shows it throwing. What these rows
  * establish is the other half -- which expressions reach `evaluate` at all.
  */

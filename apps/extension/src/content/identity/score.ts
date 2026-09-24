@@ -20,6 +20,21 @@
 // which moves every score down without telling the resolver anything -- and it
 // drags the whole pool under the floor, turning a clear winner into a refusal.
 //
+// **And only the ones that still mean something.** An id a rendering generated
+// -- React's `useId`, a build seed, a component library's counter
+// (`../selector/volatile-identifier.ts`) -- is not an identity: it is a token
+// drawn fresh each time, so the page that regenerated it has not named a
+// different control, it has renamed the same one. Core cannot see that. It has
+// two answers for an identifier, agreement at +1 and contradiction at -0.8, and
+// it charges the second against weight 26, which is more than any two agreeing
+// words can repay. So a generated id, and a selector addressed through one, are
+// left out -- unless a candidate in the pool carries that very token, which
+// means the rendering did not regenerate it after all and the comparison is
+// real. This is what makes a Flow built before the anchor rule existed scorable
+// at all: its selector reads `#\:r13b8o\: > div > div:nth-of-type(2) >
+// button:nth-of-type(1)` (`test-runs/run-muesyox4-930bef98`), and the token in
+// it belongs to one rendering of one page.
+//
 // **The floor and the margin.** Core reports `normalizedScore` in [-1, 1]: the
 // share of the compared weight that agreed, minus the share that disagreed. The
 // floor is the point below which a candidate is not the recorded control but
@@ -40,6 +55,7 @@ import {
   type ElementFingerprint,
   type ElementFingerprintScore
 } from "fluxiq/automation-studio/fingerprinting";
+import { isVolatileIdentifier, selectorQuotesVolatileIdentifier } from "../selector";
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
 import { agreesWithRecordedRecord, type RecordIdentity } from "./record";
@@ -166,7 +182,7 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   const eligible = candidates.filter((candidate) => agreesWithRecordedRecord(target.context?.record, candidate.element));
   if (!eligible.length) return { outcome: "unmatched", ranked: [] };
   const elements = new Map(eligible.map((candidate) => [candidate.fingerprint, candidate.element]));
-  const fingerprint = comparableFingerprint(target);
+  const fingerprint = comparableFingerprint(target, eligible);
   if (!hasIdentitySignal(fingerprint)) return { outcome: "unmatched", ranked: [] };
   const ranked = matcher
     // Core drops anything below zero by default. The full ranking is kept so a
@@ -200,7 +216,7 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
  * applies before ranking.
  */
 export function scoreTargetCandidate(target: RecordedIdentity, candidate: TargetCandidate): ElementFingerprintScore | undefined {
-  const fingerprint = comparableFingerprint(target);
+  const fingerprint = comparableFingerprint(target, [candidate]);
   if (!hasIdentitySignal(fingerprint)) return undefined;
   return matcher.scoreCandidate(fingerprint, candidate.fingerprint);
 }
@@ -216,20 +232,44 @@ export function scoreTargetCandidate(target: RecordedIdentity, candidate: Target
  * or from the attribute the recording carried it in, because the two paths
  * disagree about which one is filled.
  */
-function comparableFingerprint(target: RecordedIdentity): ElementFingerprint {
+function comparableFingerprint(target: RecordedIdentity, pool: readonly TargetCandidate[]): ElementFingerprint {
   const testId = target.testId ?? target.attributes?.["data-testid"];
   const role = target.role?.trim() || target.implicitRole?.trim();
+  const id = comparableIdentifier(target.id, pool);
+  const selector = comparableSelector(target.selector, pool);
   return {
     ...(target.visibleText ? { visibleText: target.visibleText } : {}),
     ...(target.accessibleName ? { accessibleName: target.accessibleName } : {}),
     ...(target.label ? { label: target.label } : {}),
-    ...(target.id ? { id: target.id } : {}),
+    ...(id ? { id } : {}),
     ...(testId ? { testId } : {}),
     ...(target.tagName ? { tagName: target.tagName.toLowerCase() } : {}),
     ...(role ? { role } : {}),
-    ...(target.selector ? { selector: target.selector } : {}),
+    ...(selector ? { selector } : {}),
     ...(target.classNames?.length ? { classNames: target.classNames } : {})
   };
+}
+
+/**
+ * The recorded id, unless a rendering generated it and no candidate still
+ * carries that token.
+ *
+ * The exception is the whole of the rule's safety. Where the token *is* still
+ * on the page -- the ordinary same-build replay, where Level 1 matched by id
+ * and the veto is asking whether to act on it -- nothing is dropped and the
+ * comparison is the one it always was. Only a token the page no longer holds
+ * anywhere is set aside, and that is exactly the case where Core would read a
+ * rename as a contradiction.
+ */
+function comparableIdentifier(id: string | undefined, pool: readonly TargetCandidate[]): string | undefined {
+  if (!id || !isVolatileIdentifier(id)) return id;
+  return pool.some((candidate) => candidate.fingerprint.id === id) ? id : undefined;
+}
+
+/** The recorded selector, under the same rule: dropped only where the token it is addressed through has gone. */
+function comparableSelector(selector: string | undefined, pool: readonly TargetCandidate[]): string | undefined {
+  if (!selector || !selectorQuotesVolatileIdentifier(selector)) return selector;
+  return pool.some((candidate) => candidate.fingerprint.selector === selector) ? selector : undefined;
 }
 
 /**
