@@ -38,13 +38,22 @@ the chain than the one before, and every cause is now closed:
    `price` and `rating` as numbers and a page returns text. The capture then
    reported success with an empty array, so the node was told nothing. Fixed in
    t111, both halves.
-3. `run-muesyox4-930bef98` — **failed before extraction.** The Flow recorded a
-   selector on a React `useId` value (`#\:r13b8o\: > div > ...`), which is
-   regenerated every render, so it was unreplayable the moment it was written.
-   The look-alike recovery saw six same-family controls and scored the best at
-   **-0.12**. The repair loop then engaged, spent two diagnosis calls, validated
-   the second, and produced **no patch, no adaptation and no refusal code**.
-   Open as t112 (selector authoring) and t113 (the silent repair).
+3. `run-muesyox4-930bef98` — **failed before extraction**, and my first reading
+   of it was wrong. The two `#\:r13b8o\:` click failures were **not** the
+   volatile id: that is the notifications modal, which this fixture opens four
+   seconds after every load, and the clicks fired at about 1.0s and 2.4s before
+   it existed. The third, at about 4.4s, succeeded. The recovery's **-0.12** is
+   arithmetically what a same-family button scores when it shares only its
+   family, so refusing was correct. **The Flow clicks a modal on a four-second
+   timer with no wait node, and survived only by accident of the three-attempt
+   retry ladder** — recorded state is supposed to drive execution, and here it
+   did not. The run's *terminal* failure was a different node, `s6`
+   (`main > div:nth-of-type(2) > aside > div:nth-of-type(1) > a`, "0 control(s)
+   of the same family"), untouched and still open. Separately the volatile id
+   **is** fatal across builds — under another seed `:r13b8o:` becomes
+   `:r05rcq:` and the recorded address matches nothing — and t112 closed that.
+   The repair loop engaged, spent two diagnosis calls, validated the second, and
+   produced **no patch, no adaptation and no refusal code**; open as t113.
 
 **Eleven tasks landed on 2026-09-23, t095 to t111**, all merged and pushed in
 both repositories. The model can now see a page's filter controls (a facet
@@ -67,9 +76,8 @@ model is `deepseek-flash` and is now configurable rather than hardcoded in six
 places; the old prices were wrong in both directions and r5 recomputes from
 $0.1720 to $0.1188.
 
-**Not done, and the next things.** t112 and t113 are in flight with worktrees at
-`F:/fxwork/t112-volatile-selector-ids` and `F:/fxwork/t113/`, nothing committed
-on either. Then: re-run the same task, and only then fan out to other sites and
+**Not done, and the next things.** t112 is merged. t113 is in flight with a
+worktree at `F:/fxwork/t113/`, nothing committed. Then: re-run the same task, and only then fan out to other sites and
 goal shapes. Nine of the ten sites have not been touched by current code.
 
 **Known and written down, not yet worked:** Core's flow-bootstrap catalog
