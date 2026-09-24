@@ -69,6 +69,10 @@ const ALLOWED_PACKET_KEYS = new Set([
   // A failure packet's statements about the failed action: which control it
   // addressed, and which parameters a repair fills (`element`, the one every
   // repairable action has).
+  // What the packet was made of, in counts. Its own keys are fixed; the keys
+  // *inside* the two histograms are band numbers, which `BAND_KEY` below
+  // allows, and nothing else may appear there.
+  "composition", "included", "dropped",
   "failedTarget", "failedTargetMissing", "failedTargetUnknown", "repairParameters", "element",
   "repairCandidates", "status", "action", "parameter", "candidates", "target", "match", "roles", "refusals", "category", "count",
   // Page context.
@@ -79,6 +83,16 @@ const ALLOWED_PACKET_KEYS = new Set([
   "value", "label", "index", "total", "row", "column", "header",
 ]);
 
+/**
+ * A band key, written out here rather than imported, because this file's whole
+ * method is to state what may appear instead of deriving it from the code it is
+ * checking. A decimal band number, or `unranked` for an element the capture did
+ * not rank; anything else inside a histogram is page text by another route.
+ */
+const BAND_KEY = /^(?:\d{1,4}|unranked)$/u;
+
+const allowedPacketKey = (key: string): boolean => ALLOWED_PACKET_KEYS.has(key) || BAND_KEY.test(key);
+
 function realisticSnapshot(): Record<string, unknown> {
   return {
     url: "https://shop.example.test/checkout?session=private#fragment",
@@ -86,8 +100,8 @@ function realisticSnapshot(): Record<string, unknown> {
     frame: { isTop: true },
     focusedElement: { tagName: "input", selector: "input#coupon", name: "Coupon code" },
     interactiveElements: [
-      { tagName: "button", selector: "#place-order", visibleText: "Place order", attributes: { type: "submit" } },
-      { tagName: "input", selector: "input#coupon", name: "Coupon code", context: { formName: "discount", heading: "Have a code?" } },
+      { tagName: "button", selector: "#place-order", visibleText: "Place order", attributes: { type: "submit" }, snapshotBucket: 2 },
+      { tagName: "input", selector: "input#coupon", name: "Coupon code", context: { formName: "discount", heading: "Have a code?" }, snapshotBucket: 1 },
       { tagName: "input", selector: "form.checkout > .row:nth-child(2) input", name: "Postcode" },
       { tagName: "input", selector: '[data-testid="quantity"]', name: "Quantity", inputType: "number", context: { listPosition: { index: 2, total: 6 } } },
       { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3" } },
@@ -154,7 +168,7 @@ test("no selector from a realistic page survives into the packet", () => {
   // anywhere in it, is one somebody wrote down here. A field added later --
   // whatever it is called, however deeply it is nested -- fails this line
   // rather than quietly shipping whatever it holds to a language model.
-  assert.deepEqual([...packetKeys(evidence)].filter((key) => !ALLOWED_PACKET_KEYS.has(key)), []);
+  assert.deepEqual([...packetKeys(evidence)].filter((key) => !allowedPacketKey(key)), []);
 });
 
 test("a failure packet, marked and naming its repair parameters, still carries no selector", () => {
@@ -169,7 +183,7 @@ test("a failure packet, marked and naming its repair parameters, still carries n
     assert.doesNotMatch(serialized, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"), selector);
   }
   assert.doesNotMatch(serialized, /"(?:selector|selectors|xpath|queryPath|css|locator|cssSelector|path)"/u);
-  assert.deepEqual([...packetKeys(evidence)].filter((key) => !ALLOWED_PACKET_KEYS.has(key)), []);
+  assert.deepEqual([...packetKeys(evidence)].filter((key) => !allowedPacketKey(key)), []);
 });
 
 /** Every key name appearing anywhere in the packet, at any depth. */

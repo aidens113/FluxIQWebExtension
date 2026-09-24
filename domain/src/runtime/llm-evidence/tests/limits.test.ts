@@ -151,24 +151,30 @@ test("gives up page facts before the last element, and refuses only when nothing
     title: evidence.title !== undefined,
     loading: evidence.loading !== undefined,
     dialogs: evidence.dialogs !== undefined,
+    composition: evidence.composition !== undefined,
     truncated: evidence.truncated,
     budget: evidence.budgetTruncated === true,
   });
 
   const whole = rung(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
-  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false, budget: false });
+  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, composition: true, truncated: false, budget: false });
   const oneElement = rung(bytes(whole) - 1);
-  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true, budget: true });
+  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, composition: true, truncated: true, budget: true });
   const noSelection = rung(bytes(oneElement) - 1);
-  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true, budget: true });
+  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, composition: true, truncated: true, budget: true });
   const noTitle = rung(bytes(noSelection) - 1);
-  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true, budget: true });
+  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, composition: true, truncated: true, budget: true });
   const noLoading = rung(bytes(noTitle) - 1);
-  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true, budget: true });
+  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, composition: true, truncated: true, budget: true });
   const noDialogs = rung(bytes(noLoading) - 1);
-  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
-  const nothing = rung(bytes(noDialogs) - 1);
-  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
+  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, composition: true, truncated: true, budget: true });
+  // The account of what this trimming did is the last thing given up, one rung
+  // before the element itself: a model can act on an element and cannot act on
+  // a count, and the packet still says `budgetTruncated` once the count is gone.
+  const noComposition = rung(bytes(noDialogs) - 1);
+  assert.deepEqual(shape(noComposition), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, composition: false, truncated: true, budget: true });
+  const nothing = rung(bytes(noComposition) - 1);
+  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, composition: false, truncated: true, budget: true });
 
   // Past the last rung the budget cannot hold the page at all: a refusal the
   // model is told about (`evidence_budget_exhausted`), not a fault.

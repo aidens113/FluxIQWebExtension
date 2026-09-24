@@ -329,6 +329,18 @@ test("identity, repeat index, lane, and measurements are bounded", () => {
     "negative snapshot": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [-1], packetComposition: [], truncationCount: 0 } },
     "negative truncation": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: -1 } },
     "extra evidence property": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0, rawHtml: "<p>" } },
+    // The composition runs one entry per packet, so a reader can say "the third
+    // packet" and mean the same packet in both lists.
+    "composition short of a packet": { evidence: { sanitizedPacketBytes: [2048], rawSnapshotBytes: [], packetComposition: [], truncationCount: 0 } },
+    "composition longer than the packets": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: [null], truncationCount: 0 } },
+    "composition not a list": { evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], packetComposition: {}, truncationCount: 0 } },
+    // A composition is counts keyed by band, and nothing else: a key that is not
+    // a band is the one way page text could reach a run artifact through it.
+    "composition band that is page text": { evidence: { sanitizedPacketBytes: [1], rawSnapshotBytes: [], packetComposition: [{ included: { "Brightaisle Plus": 1 }, dropped: {} }], truncationCount: 0 } },
+    "composition count that is not one": { evidence: { sanitizedPacketBytes: [1], rawSnapshotBytes: [], packetComposition: [{ included: { 1: 1.5 }, dropped: {} }], truncationCount: 0 } },
+    "composition count below zero": { evidence: { sanitizedPacketBytes: [1], rawSnapshotBytes: [], packetComposition: [{ included: {}, dropped: { 1: -1 } }], truncationCount: 0 } },
+    "composition missing a half": { evidence: { sanitizedPacketBytes: [1], rawSnapshotBytes: [], packetComposition: [{ included: {} }], truncationCount: 0 } },
+    "composition with an extra property": { evidence: { sanitizedPacketBytes: [1], rawSnapshotBytes: [], packetComposition: [{ included: {}, dropped: {}, elements: [] }], truncationCount: 0 } },
     "unknown property": { corpusRowId: "W26" },
   })) rejects({ ...flowRun(), ...mutation }, label);
   for (const key of [
@@ -337,6 +349,11 @@ test("identity, repeat index, lane, and measurements are bounded", () => {
   ]) rejects(without(flowRun(), key), `missing ${key}`);
   // A harness activation with the provider disabled is a measured Week 1 failure, so the contract must be able to record one.
   assert.equal(validateRunEvaluation({ ...flowRun(), harnessActivations: 2 }).valid, true);
+  // What a recorded composition looks like: counts per band, `unranked` for a
+  // capture that ranked nothing, and `null` for a packet that counted none.
+  const evidence = { sanitizedPacketBytes: [4071, 3900], rawSnapshotBytes: [], truncationCount: 1,
+    packetComposition: [{ included: { 1: 3, 6: 37 }, dropped: { 1: 9, unranked: 2 } }, null] };
+  assert.equal(validateRunEvaluation({ ...flowRun(), evidence }).valid, true);
 });
 
 test("Week 2 fields are present, and a bare number is never one of them", () => {

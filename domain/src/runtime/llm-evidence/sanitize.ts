@@ -91,15 +91,22 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
   budgetTruncated?: true;
   /**
    * How many elements of each of the capture's relevance bands this packet
-   * describes, and how many it left behind. Counts and nothing else, and always
-   * present: a packet that says nothing about its own composition is what made
-   * `run-muexhp0k-73172f73` unanswerable (`composition.ts`).
+   * describes, and how many it left behind. Counts and nothing else
+   * (`composition.ts`), and written on every packet: a packet that says nothing
+   * about its own composition is what made `run-muexhp0k-73172f73`
+   * unanswerable.
    *
    * Recounted after every trim, so it describes the packet as sent rather than
-   * the packet as first assembled, and never droppable -- like the truncation
-   * flags, it describes the trimming and is worth its few bytes.
+   * the packet as first assembled.
+   *
+   * Absent only from a packet trimmed so hard that nothing else was left to
+   * give up. It is the last thing dropped, after every page fact and after the
+   * repair parameters, because the sixty-odd bytes it costs are worth less than
+   * the last element the packet describes -- a model can act on an element and
+   * cannot act on a count. Such a packet still says `budgetTruncated`, so its
+   * silence reads as "the budget took it" rather than "nobody counted".
    */
-  composition: WebLlmEvidenceComposition;
+  composition?: WebLlmEvidenceComposition;
   /** The opaque handle of the element the failed action addressed. Only on a failure packet, and never a selector. */
   failedTarget?: string;
   /** The failed action's control is not among the elements described: it left the page, or, with `budgetTruncated`, the trim cut it. */
@@ -242,8 +249,10 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     tellWebLlmLookAlikesApart(evidence.elements, cues);
     // Recounted in the same callback, and for the same reason: what is measured
     // against the budget has to be what is sent, and a trim moves elements from
-    // the included side of the histogram to the dropped side.
-    evidence.composition = composeCurrent(evidence.elements, bands, compose);
+    // the included side of the histogram to the dropped side. Only while the
+    // packet still has one -- a later pop must not put back a composition the
+    // trim had already given up to make room.
+    if (evidence.composition) evidence.composition = composeCurrent(evidence.elements, bands, compose);
   });
   return { evidence, selectors, records };
 }
@@ -303,15 +312,13 @@ function budgetFor(options: WebLlmSanitizeOptions): number {
 }
 
 /**
- * The fields a packet can lose and still be worth reading. `composition` is not
- * among them: it costs a few dozen bytes and it is the only account of what the
- * trimming did, so dropping it to fit would be dropping the record of the very
- * thing that made the packet too small. Ordered least useful
+ * The fields a packet can lose and still be worth reading. Ordered least useful
  * first where they are dropped: the page facts, then the repair parameters,
  * which are worth more than any page fact to a repair but less than the last
- * element, since a packet describing nothing has nothing to repair to.
+ * element, since a packet describing nothing has nothing to repair to, and last
+ * of all the composition.
  */
-type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "dialogs" | "blockedBy" | "frame" | "repairParameters";
+type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "dialogs" | "blockedBy" | "frame" | "repairParameters" | "composition";
 
 /**
  * Trim until the packet fits, lowest value first: the ranked tail of elements
@@ -353,7 +360,11 @@ function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map
     markBudgetTruncated();
     describe();
   };
-  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters"];
+  // `composition` is last, after even the repair parameters: it is the account
+  // of what this trimming did, so it is given up only when the alternative is
+  // dropping the packet's last element, which a model can act on and a count
+  // cannot.
+  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame", "repairParameters", "composition"];
   describe();
   while (renumberedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {

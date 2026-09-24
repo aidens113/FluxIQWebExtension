@@ -162,7 +162,15 @@ const fullyDescribed: DomElementDescriptor = {
   implicitRole: "button",
   context: { formId: "settings-form", formName: "settings", fieldsetLegend: "General", landmark: "region", landmarkName: "Workspace", heading: "Workspace settings" },
   changed: true,
-  recentlyInteracted: true
+  recentlyInteracted: true,
+  // Snapshot-scoped, like the two above and like `repeatCount`: where one
+  // capture ranked this element against the others it held. It exists so a
+  // finished run can say what an evidence packet was made of
+  // (`run-muexhp0k-73172f73`), and it has no business on a recorded event's
+  // target, where it would be a stale number the moment the page changed. The
+  // field list below is what proves it does not cross.
+  snapshotBucket: 1,
+  repeatCount: 12
 };
 
 function wireElement(element: DomElementDescriptor): Record<string, unknown> {

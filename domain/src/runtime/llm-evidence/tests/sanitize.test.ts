@@ -19,6 +19,11 @@ test("sanitizes extension snapshots without values, sensitive controls, or URL s
     // Four elements were captured and three are described: the packet says so
     // rather than letting the model conclude the form has no password field.
     elementTotal: 4, truncated: false,
+    // Four offered and three described: the composition says which band the
+    // fourth was in, so "the model was not shown it" is a fact a finished run
+    // can be asked about. This capture stamped no bands, so every element
+    // counts as unranked.
+    composition: { included: { unranked: 3 }, dropped: { unranked: 1 } },
     elements: [
       { target: "target.1", tag: "input", name: "Name" },
       { target: "target.2", tag: "a", text: "Next", href: "https://example.test/next" },
@@ -286,6 +291,10 @@ test("the parameters are paid for inside the budget, and given up only after the
   assert.equal(starved.title, undefined);
   assert.equal(starved.elements.length, 1);
   assert.equal(starved.budgetTruncated, true);
+  // The composition goes before the last element does: a model can act on an
+  // element and cannot act on a count. Its absence is not "nobody counted" --
+  // `budgetTruncated` above says the budget took it.
+  assert.equal(starved.composition, undefined);
 });
 
 function failurePage(): Record<string, unknown> {

@@ -411,7 +411,7 @@ test("each action's evidence packet sizes reach the flow-lane snapshot, and the 
   // Without the members that join an attempt to its node, which this test is
   // not about and which carry the fake's own identifiers and clock.
   assert.deepEqual(snapshot.actions.map(({ nodeId: _node, attemptIndex: _index, startedAt: _at, durationMs: _ms, ...rest }) => rest), [
-    { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: Buffer.byteLength(JSON.stringify(summary), "utf8"), truncated: true }] },
+    { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: Buffer.byteLength(JSON.stringify(summary), "utf8"), truncated: true, composition: null }] },
   ]);
   const serialised = JSON.stringify(snapshot);
   for (const content of ["private.person", "#account-summary", "web.state.2"]) assert.equal(serialised.includes(content), false, `${content} must not reach the snapshot`);

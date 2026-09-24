@@ -38,10 +38,50 @@ test("every measured packet's bytes, in action order and then capture order, and
   assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), {
     sanitizedPacketBytes: [2_048, 1_024, 0, 4_096], rawSnapshotBytes: [], packetComposition: [null, null, null, null], truncationCount: 2,
     packets: [
-      { actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false }, { actionPosition: 1, point: "afterAction", bytes: 1_024, truncated: true },
-      { actionPosition: 3, point: "beforeAction", bytes: 0, truncated: false }, { actionPosition: 3, point: "afterAction", bytes: 4_096, truncated: true },
+      { actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false, composition: null }, { actionPosition: 1, point: "afterAction", bytes: 1_024, truncated: true, composition: null },
+      { actionPosition: 3, point: "beforeAction", bytes: 0, truncated: false, composition: null }, { actionPosition: 3, point: "afterAction", bytes: 4_096, truncated: true, composition: null },
     ],
   });
+});
+
+// The question `run-muexhp0k-73172f73` could not be asked of a finished run:
+// how many of the page's narrowing controls -- band 1 -- did the packet the
+// model read actually describe, and how many did it leave behind.
+test("a packet's composition travels beside its size, one entry per packet in the same order", (t) => {
+  const composition = { included: { "1": 3, "6": 37 }, dropped: { "1": 9, "6": 412, unranked: 2 } };
+  const snapshot = {
+    actions: [
+      { actionType: "web.dom.click", status: "succeeded", evidencePackets: [
+        // The packet that counted, and the packet beside it that did not.
+        { point: "beforeAction", bytes: 4_071, truncated: true, composition },
+        { point: "afterAction", bytes: 3_900, truncated: false },
+      ] },
+    ],
+  };
+  const evidence = flowLaneEvidenceSizes(bundleWith(t, snapshot));
+  assert.deepEqual(evidence.sanitizedPacketBytes, [4_071, 3_900]);
+  assert.deepEqual(evidence.packetComposition, [composition, null]);
+  assert.deepEqual(evidence.packets.map((packet) => packet.composition), [composition, null]);
+});
+
+test("a composition is carried only in the shape the contract states, so a malformed one cannot put page text in an evaluation", (t) => {
+  const snapshot = {
+    actions: [
+      { evidencePackets: [{ point: "beforeAction", bytes: 10, truncated: false, composition: {
+        // A key that is not a band, a count that is not one, and a band that is
+        // both: only the last survives.
+        included: { "Brightaisle Plus": 4, "1": "many", "2": 6, "3": -1, "4": 1.5 },
+        dropped: { unranked: 1 },
+      } }] },
+      // Compositions that are not one at all: each reads as "not recorded".
+      { evidencePackets: [{ point: "beforeAction", bytes: 11, truncated: false, composition: "included: 4" }] },
+      { evidencePackets: [{ point: "beforeAction", bytes: 12, truncated: false, composition: { included: { "1": 1 } } }] },
+      { evidencePackets: [{ point: "beforeAction", bytes: 13, truncated: false, composition: null }] },
+    ],
+  };
+  const evidence = flowLaneEvidenceSizes(bundleWith(t, snapshot));
+  assert.deepEqual(evidence.packetComposition, [{ included: { "2": 6 }, dropped: { unranked: 1 } }, null, null, null]);
+  assert.equal(JSON.stringify(evidence).includes("Brightaisle"), false);
 });
 
 test("a snapshot that is absent, unreadable, unparseable, or has no list of actions yields no sizes and never throws", (t) => {
@@ -79,7 +119,7 @@ test("only an entry in the shape the lane writes is measured: a size the evaluat
   assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), {
     sanitizedPacketBytes: [512, 0], rawSnapshotBytes: [], packetComposition: [null, null], truncationCount: 1,
     // A position counts every entry of `actions`, so the last packet's action is the file's seventh entry.
-    packets: [{ actionPosition: 1, point: "afterAction", bytes: 512, truncated: true }, { actionPosition: 7, point: "beforeAction", bytes: 0, truncated: false }],
+    packets: [{ actionPosition: 1, point: "afterAction", bytes: 512, truncated: true, composition: null }, { actionPosition: 7, point: "beforeAction", bytes: 0, truncated: false, composition: null }],
   });
 });
 
@@ -89,9 +129,9 @@ test("a packet's point is one the lane writes or null: a measured entry naming a
   };
   const evidence = flowLaneEvidenceSizes(bundleWith(t, snapshot));
   assert.deepEqual(evidence.packets, [
-    { actionPosition: 1, point: null, bytes: 64, truncated: false },
-    { actionPosition: 1, point: null, bytes: 32, truncated: true },
-    { actionPosition: 1, point: "afterAction", bytes: 16, truncated: false },
+    { actionPosition: 1, point: null, bytes: 64, truncated: false, composition: null },
+    { actionPosition: 1, point: null, bytes: 32, truncated: true, composition: null },
+    { actionPosition: 1, point: "afterAction", bytes: 16, truncated: false, composition: null },
   ]);
   assert.deepEqual(evidence.sanitizedPacketBytes, [64, 32, 16]);
   assert.equal(JSON.stringify(evidence).includes("private.person"), false);

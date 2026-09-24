@@ -438,14 +438,18 @@ test("an attempt with no target resolution, or one Core does not write, carries 
 const utf8Bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8");
 
 test("each packet Core captured around an attempt travels as its UTF-8 size and truncation flag, never as content", async () => {
-  const before = { schemaVersion: "web-llm-evidence.v1", title: "Compte — démo", url: "http://127.0.0.1:4310/scenarios/account", elements: [{ selector: "#email-address", label: "Adresse électronique" }], truncated: false };
-  const after = { ...before, title: "Signed in as private.person", truncated: true };
+  // The `before` packet counted what it was made of and the `after` packet did
+  // not, so one attempt exercises both. The composition's keys are bands and
+  // its values are counts, which is the whole of what may travel.
+  const composition = { included: { "1": 2, "6": 38 }, dropped: { "1": 7, "6": 194 } };
+  const before = { schemaVersion: "web-llm-evidence.v1", title: "Compte — démo", url: "http://127.0.0.1:4310/scenarios/account", elements: [{ selector: "#email-address", label: "Adresse électronique" }], truncated: false, composition };
+  const after = { ...before, title: "Signed in as private.person", truncated: true, composition: undefined };
   const ref = (point: string, summary: Record<string, unknown>) => ({ stateSnapshotId: `web.state.${point}`, stateRef: `web.state.${point}@attempt.one:${point}`, capturedAt: 1_010, summary });
   const { client } = control({}, { actionAttempts: [attempt({ metadata: { stateRefs: { beforeAction: ref("before_action", before), afterAction: ref("after_action", after), stateDiff: { changedPaths: ["title"] } } } })] });
   const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
   assert.deepEqual(outcome.actions[0]?.evidencePackets, [
-    { point: "beforeAction", bytes: utf8Bytes(before), truncated: false },
-    { point: "afterAction", bytes: utf8Bytes(after), truncated: true },
+    { point: "beforeAction", bytes: utf8Bytes(before), truncated: false, composition },
+    { point: "afterAction", bytes: utf8Bytes(after), truncated: true, composition: null },
   ]);
   // Bytes, not characters: the non-ASCII title makes the two differ.
   assert.notEqual(utf8Bytes(before), JSON.stringify(before).length);
@@ -472,7 +476,28 @@ test("an attempt with no packet, or a summary that is not one, carries no eviden
   // A packet beside a summary that is not one: only the packet is measured.
   const { client: mixed } = control({}, { actionAttempts: [attempt({ metadata: { stateRefs: { beforeAction: { summary: { title: "t" } }, afterAction: { summary: { truncated: false } } } } })] });
   const read = await executeRecordedFlowRun(mixed, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-  assert.deepEqual(read.actions[0]?.evidencePackets, [{ point: "afterAction", bytes: utf8Bytes({ truncated: false }), truncated: false }]);
+  assert.deepEqual(read.actions[0]?.evidencePackets, [{ point: "afterAction", bytes: utf8Bytes({ truncated: false }), truncated: false, composition: null }]);
+});
+
+/**
+ * The composition is the one part of a packet whose keys the bundle's own code
+ * does not fix, so it is the one route by which page text could reach a run
+ * artifact. The run detail is untrusted JSON: a key that does not read as a
+ * band is dropped rather than recorded.
+ */
+test("a packet's composition is rebuilt from bands and counts, and a malformed one is recorded as none", async () => {
+  const packetWith = async (composition: unknown) => {
+    const summary = { schemaVersion: "web-llm-evidence.v2", truncated: false, composition };
+    const { client } = control({}, { actionAttempts: [attempt({ metadata: { stateRefs: { beforeAction: { summary } } } })] });
+    const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+    return outcome.actions[0]?.evidencePackets?.[0]?.composition;
+  };
+  assert.deepEqual(await packetWith({ included: { "1": 2 }, dropped: { unranked: 9 } }), { included: { "1": 2 }, dropped: { unranked: 9 } });
+  // Kept entry by entry: the band that reads as one survives, the rest do not.
+  assert.deepEqual(await packetWith({ included: { "Brightaisle Plus": 3, "2": 5, "3": "many" }, dropped: {} }), { included: { "2": 5 }, dropped: {} });
+  for (const malformed of [undefined, null, "included", 4, [{ included: {} }], { included: { "1": 1 } }, { dropped: {} }]) {
+    assert.equal(await packetWith(malformed), null, JSON.stringify(malformed) ?? "undefined");
+  }
 });
 
 /**
