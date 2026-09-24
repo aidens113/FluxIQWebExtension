@@ -272,7 +272,27 @@ test("the list extraction describes its request for a model to write one", () =>
   const extractList = node.parameters.find((candidate) => candidate.id === "extractList");
   const grammar = extractList?.description ?? "";
   assert.equal(grammar.length <= 700, true, `${grammar.length} characters`);
-  for (const term of ["item", "fields", "css@attr", "column:", "paginate", "minItems", "maxItems", ...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES, ...WEB_AUTOMATION_EXTRACT_FIELD_KINDS]) {
+  // Every pagination mode is named, because a model that cannot name the one
+  // this page uses writes the one it can.
+  //
+  // Not every field kind is, and that changed on 2026-09-24. The kinds are
+  // reachable only through the spec form `{kind: ...}`, which belongs to the
+  // literal branch -- the path this text exists to steer a model away from --
+  // and no live run has failed for want of it. The characters it held went to
+  // the filtering vocabulary, after a run whose instruction carried five
+  // conditions into a Flow that expressed none of them
+  // (`run-mug1z9k9-ef625d8b`, 55 rows for 13 wanted, 0 matching). The string
+  // grammar still names the three kinds a model writes without the spec form,
+  // and `value` -- a form control's live value, inside a repeating list -- is
+  // the one that left. The reader accepts all five exactly as before
+  // (`actions/extraction/read-request.ts`).
+  const namedKinds = WEB_AUTOMATION_EXTRACT_FIELD_KINDS.filter((kind) => kind !== "value");
+  for (const term of ["item", "fields", "css@attr", "column:", "paginate", "minItems", "maxItems", ...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES, ...namedKinds]) {
+    assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
+  }
+  // What a condition may say is named, or it is not writable: the grammar and
+  // the detect tool's description are the only places a model reads it.
+  for (const term of ["is: \"absent\"", "atLeast", "lessThan", "atMost", "greaterThan", "equals", "contains", "startsWith", "endsWith", "matches", "not: true"]) {
     assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
   }
   assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_PAGES)), true);

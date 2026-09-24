@@ -14,16 +14,17 @@
 // before the page changes, so it needs no repeat policy of its own, and a
 // second target is a different request.
 //
-// Refusals are bare codes, as every tool's are: a handle the model was not
-// shown, whose element has left the page, or whose selector now names elements
-// in more than one run, is `target_unobserved`; a page
-// with no readable list there is `no_repeating_structure`; a list whose every
+// Refusals carry a code and a reason, as every tool's do (`../tool-rejection.ts`):
+// a handle the model was not shown, whose element has left the page, or whose
+// selector now names elements in more than one run, is `target_unobserved`; a
+// page with no readable list there is `no_repeating_structure`, and which of
+// the four ways that happens is decided in `./refusal.ts`; a list whose every
 // field is a sensitive control is `sensitive_value`. A client that does not
 // declare the capability, or that answers without a detection, is a fault
 // rather than a refusal, because nothing the model does next can change it.
 
 import type { JsonObject } from "fluxiq/core";
-import { webAutomationStructureDetectionValue, type WebAutomationStructureDetectionRefusal } from "../../../extraction";
+import { webAutomationStructureDetectionValue } from "../../../extraction";
 import {
   assertActive,
   captureEvidence,
@@ -37,21 +38,14 @@ import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
-import { recoverable, rejectionDetail, type WebLlmToolRejectionCode } from "../tool-rejection";
+import { recoverable, rejectionDetail } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
 import { splitDetectedStructure } from "./packet";
+import { webLlmStructureRefusal } from "./refusal";
 
 const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
-
-/** What the page's refusal means to the model. */
-const REFUSAL_CODES = {
-  target_not_found: "target_unobserved",
-  ambiguous_target: "target_unobserved",
-  no_repeating_run: "no_repeating_structure",
-  sensitive_region: "sensitive_value"
-} as const satisfies Record<WebAutomationStructureDetectionRefusal, WebLlmToolRejectionCode>;
 
 export type WebLlmStructureDetectionContext = {
   gateway: WebLlmEvidenceGateway;
@@ -95,7 +89,9 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
 
   const detection = webAutomationStructureDetectionValue(payload.structure);
   if (detection === undefined) throw new Error("the web client answered the capture without a structure detection");
-  if (!detection.ok) recoverable(REFUSAL_CODES[detection.refused]);
+  // The page sends one of four words; which of them means what to the model,
+  // and what the capture says about why, is `./refusal.ts`.
+  if (!detection.ok) webLlmStructureRefusal({ refused: detection.refused, target, page });
 
   const handle = context.handles.reserve();
   const split = splitDetectedStructure({

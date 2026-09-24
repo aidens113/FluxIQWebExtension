@@ -60,27 +60,34 @@ export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
  *
  * What the condition tests is **a value the page states**, named the way every
  * other read here is named: a field of this request by key, or a field of its
- * own for a value the record does not carry. A sponsored card is told apart
- * from an organic one by the mark its own author put on it -- the ad label it
- * carries, the `data-ad-id` on its container -- and never by reading its words
- * and guessing. This repository deleted a word-list heuristic on 2026-09-18
- * and does not want it back under another name, so there is deliberately no
- * substring or equality test over page text here; see `where` below.
+ * own for a value the record does not carry. Never a word found somewhere in
+ * the item's prose: a word-list heuristic that guessed which cards were
+ * advertisements was deleted on 2026-09-18 and is not wanted back.
  *
- * `is` tests whether the page has the value at all, which is what a mark is:
- * `absent` keeps the items that do not carry it. A numeric bound tests the
- * number in the value -- `$1,299.00` is 1299, `4.5 out of 5 stars` is 4.5 --
- * and an item whose value is missing or holds no number fails it, because a row
- * with no price is not a row under $50.
+ * What may be said about that value, and what each phrase means, is
+ * `./condition-grammar.ts` and `./condition-match.ts`. In short:
  *
- * An empty condition -- neither `is` nor a bound -- means `is: "present"`.
+ * - `is` tests whether the page has the value at all, which is the whole of
+ *   what a mark says: `absent` keeps the items that do not carry it;
+ * - a bound and `equals` test the number in the value -- `$1,299.00` is 1299,
+ *   `3.7 out of 5 stars` is 3.7, `16.00 USD` is 16 -- and an item whose value is
+ *   missing or holds no number fails one, because a row with no price is not a
+ *   row under $50;
+ * - `matches`, `contains`, `startsWith`, `endsWith` and a string `equals` test
+ *   the value's text, ignoring its layout and its case;
+ * - `not` inverts the whole condition, which is how an exclusion is written.
+ *
+ * Each of the last three takes one value or a list of them, and a list means
+ * any of them. Every phrase written must hold before `not` is applied.
+ *
+ * An empty condition -- neither `is` nor a comparison -- means `is: "present"`.
  */
 export type WebAutomationExtractItemCondition = {
   /** A key of this request's `fields`, whose value the condition tests. Exactly one of `field` and `read`. */
   field?: string | undefined;
   /** What the condition reads inside the item, for a value the record does not carry. Exactly one of `field` and `read`. */
   read?: WebAutomationExtractField | undefined;
-  /** Whether the item must have the value or must not. Refused beside a bound, which already requires one. */
+  /** Whether the item must have the value or must not. Refused beside a comparison, which already requires one. */
   is?: "present" | "absent" | undefined;
   /** The number in the value must be at least this. */
   atLeast?: number | undefined;
@@ -90,10 +97,22 @@ export type WebAutomationExtractItemCondition = {
   lessThan?: number | undefined;
   /** The number in the value must be above this. */
   greaterThan?: number | undefined;
+  /** The value must be one of these: a number against the number in it, a string against its text. */
+  equals?: WebAutomationExtractConditionValue | WebAutomationExtractConditionValue[] | undefined;
+  /** The value's text must match one of these regular expressions. A bare source ignores case; `/source/flags` says what the flags say. */
+  matches?: string | string[] | undefined;
+  /** The value's text must contain one of these. */
+  contains?: string | string[] | undefined;
+  /** The value's text must start with one of these. */
+  startsWith?: string | string[] | undefined;
+  /** The value's text must end with one of these. */
+  endsWith?: string | string[] | undefined;
+  /** Keep the items the rest of this condition rejects, and reject the ones it keeps. How an exclusion is written. */
+  not?: boolean | undefined;
 };
 
-/** What a condition may say about its value, beside naming it. Every key a condition may carry is one of these or names the value. */
-export const WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS = ["atLeast", "atMost", "lessThan", "greaterThan"] as const satisfies readonly (keyof WebAutomationExtractItemCondition)[];
+/** One thing a value may be compared with: a number, read against the number the value states, or a string, read against its text. */
+export type WebAutomationExtractConditionValue = string | number;
 
 export const WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE = ["present", "absent"] as const satisfies readonly NonNullable<WebAutomationExtractItemCondition["is"]>[];
 
@@ -201,12 +220,13 @@ export type WebAutomationExtractListRequest = {
    * it. Absent, every item of the run is a record, which is what a read with
    * no `where` has always meant.
    *
-   * There is no condition that matches page text, and that is the contract
-   * rather than an omission. A mark the page's own author wrote -- an ad label,
-   * a `data-ad-id`, a pinned badge -- is a fact about the item; a word found in
-   * its prose is a guess about what the words mean, and this repository has
-   * already paid for one of those. A read that can only be expressed by
-   * matching words is a read this contract deliberately cannot express.
+   * A condition tests a column the author named, and only that column. A mark
+   * the page's own author wrote -- an ad label, a `data-ad-id`, a pinned badge
+   * -- is a fact about the item, and so is the text of a column someone pointed
+   * at. What this contract still cannot express, deliberately, is a search for
+   * a word *somewhere* in an item: the product inferring which words matter is
+   * the guess this repository deleted on 2026-09-18, and a person naming the
+   * words they do not want in a column they named is not that.
    */
   where?: WebAutomationExtractItemCondition[] | undefined;
 };

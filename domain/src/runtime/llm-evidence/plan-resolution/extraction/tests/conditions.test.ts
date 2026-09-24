@@ -120,6 +120,81 @@ test("a condition may be written every way a column may be named, on its own or 
   }
 });
 
+test("a condition may say of a detected column everything the dispatch reader accepts, in the same words", async () => {
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+  const rows: Array<[JsonValue, JsonObject[]]> = [
+    // The two exclusions the everything-store instruction of 2026-09-24 carried
+    // and the Flow did not (`run-mug1z9k9-ef625d8b`): a sponsored placement,
+    // and the accessories sold beside the thing asked for.
+    [[{ field: "product-name", contains: ["ear tips", "charging case"], not: true }], [{ read: NAME, contains: ["ear tips", "charging case"], not: true }]],
+    [[{ field: "product-name", matches: "^Acme" }], [{ read: NAME, matches: ["^Acme"] }]],
+    [[{ field: "stock-badge", equals: "In stock" }], [{ read: BADGE, equals: ["In stock"] }]],
+    [[{ field: "product-name", startsWith: "Acme", endsWith: "Black" }], [{ read: NAME, startsWith: ["Acme"], endsWith: ["Black"] }]],
+    // Written under another name, and read as the phrase it means.
+    [[{ field: "product-price", lt: 50 }], [{ read: PRICE, lessThan: 50 }]],
+    [[{ field: "product-name", regex: "^Acme" }], [{ read: NAME, matches: ["^Acme"] }]],
+    // The whole instruction, as four conditions on one node.
+    [
+      [
+        { field: "stock-badge", is: "absent" },
+        { field: "product-price", lessThan: 50 },
+        { field: "product-name", contains: "charging case", not: true }
+      ],
+      [
+        { read: BADGE, is: "absent" },
+        { read: PRICE, lessThan: 50 },
+        { read: NAME, contains: ["charging case"], not: true }
+      ]
+    ]
+  ];
+  for (const [where, expected] of rows) {
+    const resolved = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false });
+    assert.deepEqual(
+      resolved,
+      { status: "resolved", parameters: { extractList: { item: CARD, fields: { name: NAME }, where: expected } } },
+      JSON.stringify(where)
+    );
+    // And what it resolved to is a request the page reads as written: the
+    // resolver and the dispatch share one grammar, so a condition one accepts
+    // is never a condition the other refuses.
+    const request = resolved.status === "resolved" ? resolved.parameters.extractList : undefined;
+    assert.notEqual(webAutomationExtractListRequestValue(request), undefined, JSON.stringify(where));
+    assert.deepEqual(webAutomationExtractListIssues(request), [], JSON.stringify(where));
+  }
+});
+
+test("a comparison the page could not run is refused where it was written", async () => {
+  const instance = runtime();
+  const { extraction } = await detect(instance);
+  const rows: Array<[JsonValue, string]> = [
+    // A regular expression that does not compile would fail every row and read
+    // as an empty page, so it never reaches one.
+    [[{ field: "product-name", matches: "(unclosed" }], "extractList.where.0.matches"],
+    [[{ field: "product-name", contains: "" }], "extractList.where.0.contains"],
+    [[{ field: "product-name", not: "maybe" }], "extractList.where.0.not"],
+    [[{ field: "product-name", equals: null }], "extractList.where.0.equals"],
+    [[{ field: "product-name", startsWith: [] }], "extractList.where.0.startsWith"],
+    // Two spellings of one phrase that disagree name no one condition.
+    [[{ field: "product-price", lessThan: 50, lt: 40 }], "extractList.where.0.lt"]
+  ];
+  for (const [where, position] of rows) {
+    const refused = await resolve(instance, { handle: extraction, fields: { name: "product-name" }, where, paginate: false });
+    assert.deepEqual(refused, { status: "refused", issueCodes: ["web.handle.malformed", HINT, `web.handle.malformed:${position}`] }, JSON.stringify(where));
+  }
+  // "The value is not there" and "its text contains a case" cannot both have
+  // been meant, and no one key explains it, so the condition is refused whole.
+  assert.deepEqual(
+    await resolve(instance, {
+      handle: extraction,
+      fields: { name: "product-name" },
+      where: [{ field: "product-name", is: "absent", contains: "case" }],
+      paginate: false
+    }),
+    { status: "refused", issueCodes: ["web.handle.malformed", HINT, "web.handle.malformed:extractList.where.0"] }
+  );
+});
+
 test("a condition may name a column by the key this plan keeps it under, which is the name the plan has just invented for it", async () => {
   const instance = runtime();
   const { extraction } = await detect(instance);

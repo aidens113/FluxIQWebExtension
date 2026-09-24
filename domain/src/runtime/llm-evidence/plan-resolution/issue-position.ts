@@ -14,6 +14,7 @@
 // among its object's keys, and an array entry as its index. Core bounds a code
 // to 100 characters, so a longer path is cut at the end.
 
+import { WEB_AUTOMATION_EXTRACT_CONDITION_KEYS } from "../../../actions/extraction";
 import { isJsonRecord } from "../untrusted-json";
 import type { WebPlanValuePath } from "./handle-tokens";
 
@@ -25,10 +26,13 @@ const PARAMETER_ID = /^[a-z][A-Za-z0-9]{0,39}$/u;
 const GRAMMAR_KEYS: ReadonlySet<string> = new Set([
   "handle", "location", "item", "itemElement", "fields", "columns", "paginate", "minItems", "maxItems",
   "key", "field", "column", "header", "attribute", "required", "kind", "selector",
-  // Which items are records (C5): the clause, the two keys that name its
-  // value, and what it may say about it. Each is the grammar's own word, so
-  // spelling it quotes nothing the model read off the page.
-  "where", "read", "is", "atLeast", "atMost", "lessThan", "greaterThan",
+  // Which items are records (C5): the clause, the key that names its value,
+  // and every spelling of what it may say about it, taken from the grammar
+  // that reads them (`actions/extraction/condition-grammar.ts`) so the two
+  // cannot drift. Each is the grammar's own word, so spelling it quotes
+  // nothing the model read off the page, and a refusal that says
+  // `where.0.matches` is one a model can act on where `where.0.1` is not.
+  "where", "read", ...WEB_AUTOMATION_EXTRACT_CONDITION_KEYS,
   "mode", "next", "control", "pages", "maxPages", "maxScrolls",
   "parameters", "extractList", "target", "element", "recordOutput", "outputId"
 ]);

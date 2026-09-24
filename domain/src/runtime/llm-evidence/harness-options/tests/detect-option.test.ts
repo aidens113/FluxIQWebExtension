@@ -186,11 +186,24 @@ test("answers with a packet Core would carry: none of the domain's denied keys a
   assert.deepEqual(captureSelectors.filter((selector) => serialized.includes(selector)), []);
 });
 
-test("a page with no list there is an answer, not a stop; a client that cannot detect is a fault", async () => {
-  const noList = harness({ url: CATALOG.url, elements: [LINK], structure: { ok: false, refused: "no_repeating_run" } });
-  const refused = await run(noList.registry, WEB_RECOVERY_DETECT_OPTION_ID, {});
-  assert.deepEqual(refused, rejection("no_repeating_structure"));
-  assert.equal(webAutomationExplorationRefusalClassifier(refused.resultCode), undefined);
+test("a page with no list there is an answer, not a stop, and says which kind of answer; a client that cannot detect is a fault", async () => {
+  // A page offering one control is not the content: a robot check, a consent
+  // wall, a page that has not drawn. The exploration's next move is to deal
+  // with what is in the way, and it is told so rather than told "no".
+  const covered = harness({ url: CATALOG.url, elements: [LINK], structure: { ok: false, refused: "no_repeating_run" } });
+  const wall = await run(covered.registry, WEB_RECOVERY_DETECT_OPTION_ID, {});
+  assert.deepEqual(wall, rejection("no_repeating_structure", { reason: "page_is_not_the_content", groupsSeen: 0, rowsSeen: 0, controlsSeen: 1 }));
+
+  // A working page that simply has no list on it is the other answer, and the
+  // recovery gets the same distinctions authoring does -- they run the same
+  // detection (`../../structure/detect.ts`).
+  const control = (name: string): JsonObject => ({ tagName: "button", selector: `#${name}`, accessibleName: name });
+  const empty = harness({ url: CATALOG.url, elements: [control("search"), control("filter"), control("sort"), LINK], structure: { ok: false, refused: "no_repeating_run" } });
+  const refused = await run(empty.registry, WEB_RECOVERY_DETECT_OPTION_ID, {});
+  assert.deepEqual(refused, rejection("no_repeating_structure", { reason: "nothing_repeats_on_page", groupsSeen: 0, rowsSeen: 0, controlsSeen: 4 }));
+
+  // Neither ends the exploration: each names a different thing to do next.
+  for (const answer of [wall, refused]) assert.equal(webAutomationExplorationRefusalClassifier(answer.resultCode), undefined);
 
   const unable = harness(undefined, false);
   await assert.rejects(run(unable.registry, WEB_RECOVERY_DETECT_OPTION_ID, {}), /does not declare repeating-structure detection/u);

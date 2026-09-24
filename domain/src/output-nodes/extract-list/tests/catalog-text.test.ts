@@ -35,25 +35,38 @@ test("the grammar leads with the handle form, and says how to keep, rename and r
     assert.equal(grammar.includes(term), true, `the grammar does not say ${term}`);
   }
   assert.equal(grammar.indexOf("handle") < grammar.indexOf("item: css"), true, "the handle form comes before the literal request");
-  assert.match(grammar, /Both take minItems \(default 1; 0 allows none\), maxItems/u);
+  assert.match(grammar, /minItems \(default 1, 0 = none\), maxItems/u);
 });
 
-test("the shape a model copies shows a bound as well as a mark, over a column under the plan's own key", () => {
+test("the shape a model copies shows a mark, a bound and an exclusion by text, over a column under the plan's own key", () => {
   // Both first-page reads of the 2026-09-23 campaign wrote the one condition
   // this text showed -- the advertisement mark -- and no bound at all, under
   // instructions asking for items rated 4.0 or higher and priced under $50.
+  // The everything-store run of 2026-09-24 then wrote no condition at all under
+  // an instruction carrying five (`run-mug1z9k9-ef625d8b`), two of which were
+  // exclusions by wording that this grammar could not express.
   const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
   assert.equal(grammar.includes('{field: "colKey", is: "absent"}'), true, "the mark condition is still shown");
   assert.equal(grammar.includes('{field: "yourKey", atLeast: 4, lessThan: 50}'), true, "a bound is shown, over a column under the plan's own key");
+  assert.equal(grammar.includes('{field: "yourKey", contains: "case", not: true}'), true, "an exclusion by text is shown");
   assert.equal(grammar.indexOf("where?:") < grammar.indexOf("item: css"), true, "the conditions belong to the handle form, before the literal request");
+  // The comparisons no shape shows are still named, or they are not writable.
+  for (const term of ["atMost", "greaterThan", "equals", "startsWith", "endsWith", "matches", "list = any"]) {
+    assert.equal(grammar.includes(term), true, `the grammar does not name ${term}`);
+  }
 
-  // The example carries one of each too. A key the example omits is a key the
-  // model is refused for writing beside `extractList`, and what the example
-  // shows inside `where` is the shape a model copies.
+  // The example carries the whole instruction the grammar abbreviates. A key
+  // the example omits is a key the model is refused for writing beside
+  // `extractList`, and what the example shows inside `where` is the shape a
+  // model copies.
   const where = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.where as ReadonlyArray<Record<string, unknown>>;
-  assert.equal(where.length, 2);
+  assert.equal(where.length, 4);
   assert.equal(where[0]?.is, "absent");
-  assert.deepEqual(where[1], { field: "price", lessThan: 50 });
+  assert.deepEqual(where[1], { field: "rating", atLeast: 4 });
+  assert.deepEqual(where[2], { field: "price", lessThan: 50 });
+  assert.deepEqual(where[3], { field: "name", contains: ["ear tips", "charging case"], not: true });
   const fields = WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.fields as Record<string, unknown>;
-  assert.equal(Object.hasOwn(fields, String(where[1]?.field)), true, "a literal condition names a column the request reads");
+  for (const condition of where.slice(1)) {
+    assert.equal(Object.hasOwn(fields, String(condition.field)), true, "a literal condition names a column the request reads");
+  }
 });

@@ -11,8 +11,10 @@
 //   reader accepts unchanged;
 // - a target handle an inspect issued is bound through its selector, even one
 //   every card shares, and is refused once the page or the element has moved on;
-// - the page's refusals, sensitive fields and a producer's stray keys reach the
-//   model as nothing but bare codes and fewer fields;
+// - each way a page can have no readable list is its own refusal, carrying the
+//   counts behind it and not one word of the page;
+// - sensitive fields and a producer's stray keys reach the model as fewer
+//   fields and nothing else;
 // - unknown, foreign and stale handles are refused, and each is told apart;
 // - a client that cannot detect is a fault, not a refusal.
 
@@ -52,7 +54,7 @@ const EXPECTED_PAGINATION: Record<CapturedDetectionName, WebLlmStructurePaginati
   "infinite-feed-load-more": "load_more_button"
 };
 
-type FakePage = { url: string; title?: string; elements?: JsonObject[]; structure?: unknown };
+type FakePage = { url: string; title?: string; elements?: JsonObject[]; structure?: unknown; evidence?: JsonObject; elementTotal?: number };
 
 function fakeGateway(page: () => FakePage, declares = true): { gateway: WebLlmEvidenceGateway; commands: Array<{ actionType: string; parameters: JsonObject }> } {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
@@ -61,6 +63,9 @@ function fakeGateway(page: () => FakePage, declares = true): { gateway: WebLlmEv
     if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
     const current = page();
     const snapshot: JsonObject = { url: current.url, title: current.title ?? "Fixture", interactiveElements: current.elements ?? [] };
+    // Written by name rather than spread, as every producer of this contract is.
+    if (current.evidence !== undefined) snapshot.evidence = current.evidence;
+    if (current.elementTotal !== undefined) snapshot.elementTotal = current.elementTotal;
     if (command.parameters.detectStructure === undefined || current.structure === undefined) return { status: "succeeded", payload: { snapshot } };
     return { status: "succeeded", payload: { snapshot, structure: current.structure as JsonValue } };
   };
@@ -245,17 +250,111 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assert.equal(binding.ok && binding.binding.frameId, 7);
 });
 
-test("the page's refusals and a malformed call reach the model as bare codes", async () => {
-  const cases = [
-    ["target_not_found", "target_unobserved"],
-    ["ambiguous_target", "target_unobserved"],
-    ["no_repeating_run", "no_repeating_structure"],
-    ["sensitive_region", "sensitive_value"]
-  ] as const;
-  for (const [refused, code] of cases) {
-    const { gateway } = fakeGateway(() => ({ url: "https://example.test/list", structure: { ok: false, refused } }));
-    assert.deepEqual(await detect(createWebAutomationLlmEvidenceRuntime(gateway)), rejection(code), refused);
+/** A control, with whatever the case under test needs the capture to say about it. */
+function control(name: string, extra: JsonObject = {}): JsonObject {
+  const element: JsonObject = { tagName: "button", selector: `#${name.toLowerCase().replaceAll(" ", "-")}`, accessibleName: name };
+  for (const [key, value] of Object.entries(extra)) element[key] = value;
+  return element;
+}
+
+/** A control the page put in a record -- a row, a card -- named by that record's own words. */
+function inRecord(name: string, record: string): JsonObject {
+  return control(name, { context: { record: { text: record } } });
+}
+
+/** A page whose detection refuses, with the elements and page facts the case needs. */
+function refusing(refused: string, page: Omit<FakePage, "structure">): FakePage {
+  const next: FakePage = { url: page.url, structure: { ok: false, refused } };
+  if (page.title !== undefined) next.title = page.title;
+  if (page.elements !== undefined) next.elements = page.elements;
+  if (page.evidence !== undefined) next.evidence = page.evidence;
+  if (page.elementTotal !== undefined) next.elementTotal = page.elementTotal;
+  return next;
+}
+
+const LISTING = "https://example.test/list";
+
+/**
+ * The defect this pins is `run-mug25fdp-21ba8385`: 24 of 30 build decisions
+ * were this tool answered `no_repeating_structure`, 85 bytes each and
+ * identical, and the build ended having executed nothing. One word stood for
+ * four situations with four different next moves, so a model that had just
+ * been told "no" had nothing to change and asked again.
+ */
+test("each way a page can have no readable list is its own refusal, with the counts behind it", async () => {
+  const cases: ReadonlyArray<readonly [string, FakePage, JsonObject]> = [
+    // The page repeats -- its controls sit in two records -- and the detection
+    // would read none of it. Naming one of those rows is the move.
+    ["records", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), inRecord("Open", "First listing"), inRecord("Open", "Second listing")] }),
+      { reason: "repeating_groups_not_readable", groupsSeen: 2, rowsSeen: 0, controlsSeen: 4 }],
+    // The same answer from the other repetition signal: one control the page
+    // says it drew twelve times.
+    ["repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Open", { repeatCount: 12 })] }),
+      { reason: "repeating_groups_not_readable", groupsSeen: 0, rowsSeen: 12, controlsSeen: 4 }],
+    // A working page with nothing on it that repeats: this is not where the list is.
+    ["nothing repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Help")], elementTotal: 9 }),
+      { reason: "nothing_repeats_on_page", groupsSeen: 0, rowsSeen: 0, controlsSeen: 9 }],
+    // Almost nothing on it at all: the shape of a robot check.
+    ["bare", refusing("no_repeating_run", { url: LISTING, elements: [control("Verify you are human")] }),
+      { reason: "page_is_not_the_content", groupsSeen: 0, rowsSeen: 0, controlsSeen: 1 }],
+    // A modal stands over it, so nothing behind the modal was readable.
+    ["modal", refusing("no_repeating_run", {
+      url: LISTING,
+      elements: [control("Search"), control("Filter"), control("Sort"), inRecord("Open", "First listing")],
+      evidence: { dialogs: { open: [{ selector: "#consent", role: "dialog", modal: true, native: false, label: "Before you continue" }] } }
+    }), { reason: "page_is_not_the_content", groupsSeen: 1, rowsSeen: 0, controlsSeen: 4 }],
+    // Something is painted over the controls, which is the same answer for the
+    // same reason: what was captured is not the content.
+    ["overlay", refusing("no_repeating_run", {
+      url: LISTING,
+      elements: [control("Search"), control("Filter"), control("Sort"), control("Help")],
+      evidence: { overlays: { blockers: [{ selector: "#wall", role: "banner", label: "Checking your browser", blocks: 12, blocked: [] }] } }
+    }), { reason: "page_is_not_the_content", groupsSeen: 0, rowsSeen: 0, controlsSeen: 4 }]
+  ];
+  for (const [name, page, detail] of cases) {
+    const { gateway } = fakeGateway(() => page);
+    const refusal = await detect(createWebAutomationLlmEvidenceRuntime(gateway));
+    assert.deepEqual(refusal, rejection("no_repeating_structure", detail), name);
+    // The counts are all a refusal may add: no word of the page rides with them.
+    const wire = JSON.stringify(refusal);
+    for (const word of ["listing", "Search", "Filter", "consent", "wall", "Checking", "Before you", "#"]) {
+      assert.equal(wire.includes(word), false, `${name} refusal quotes ${word}`);
+    }
   }
+});
+
+test("a page refusal about the target says which way the handle stopped naming one list, and a sensitive run stays a bare code", async () => {
+  const card = (name: string): JsonObject => ({ tagName: "a", selector: '[data-testid="card-link"]', accessibleName: name, attributes: { href: "/listings/1", "data-testid": "card-link" } });
+  let page: FakePage = refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), card("A listing")] });
+  const { gateway } = fakeGateway(() => page);
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.refusals", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const target = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements.find((element) => element.tag === "a")!.target;
+
+  // The page looked where the call pointed and found no repeating children
+  // there. That says nothing about the rest of the page, and the model is told
+  // so rather than being told the page has no list.
+  assert.deepEqual(await detect(runtime, { target }), rejection("no_repeating_structure", {
+    reason: "nothing_repeats_around_target", target, groupsSeen: 0, rowsSeen: 0, controlsSeen: 4
+  }), "no repeating run around the target");
+
+  // The selector the handle stands for names nothing in the frame the capture
+  // ran in, and the selector it names elements of several runs, are the two
+  // reasons this domain already has for a handle that stopped naming one
+  // control. Both were a bare `target_unobserved` until now.
+  page = refusing("target_not_found", { url: LISTING, elements: page.elements! });
+  assert.deepEqual(await detect(runtime, { target }), rejection("target_unobserved", { reason: "handle_no_longer_on_page", target }));
+  page = refusing("ambiguous_target", { url: LISTING, elements: page.elements! });
+  assert.deepEqual(await detect(runtime, { target }), rejection("target_unobserved", { reason: "handle_names_several_now", target }));
+
+  // A run whose every field is a sensitive control: the code is the whole of
+  // what the model can act on, and nothing is added to it.
+  page = refusing("sensitive_region", { url: LISTING, elements: page.elements! });
+  assert.deepEqual(await detect(runtime, { target }), rejection("sensitive_value"));
+  assert.deepEqual(await detect(runtime), rejection("sensitive_value"));
+});
+
+test("a malformed call reaches no page and is told which way it was malformed", async () => {
   const { gateway, commands } = fakeGateway(() => captured("data-table-largest"));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   // Each malformed call is told which way it was malformed, and a call whose

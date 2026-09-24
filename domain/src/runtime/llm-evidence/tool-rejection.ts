@@ -36,11 +36,22 @@
 //    consequence classes;
 // 3. **an identifier Core minted** -- the id of the permission request now in
 //    front of the person.
+// 4. **a count of what the packet the model was already shown describes** --
+//    how many records its controls sit in, how many copies the most-repeated
+//    of them has, how many controls the page offered.
 //
 // None of those is page content. No text from the page, no selector, no value,
-// no count of what is on it, and nothing drawn from a capture the model was not
-// shown. A detail that would need any of those is not added; the reason says
-// what to do instead, which is what the model needed in the first place.
+// and nothing drawn from a capture the model was not shown. A detail that would
+// need any of those is not added; the reason says what to do instead, which is
+// what the model needed in the first place.
+//
+// The fourth was added on 2026-09-24, relaxing a rule that had been written as
+// "no count of what is on it". A count says how many, never which or what, and
+// these three are already published fields of the packet the model holds, so a
+// refusal repeating one tells it nothing new -- it tells it which of them the
+// refusal turned on. Still refused: a count of a capture the model was not
+// shown, and any number that could only come from reading a value.
+// `structure/refusal.ts` has the run this was measured on.
 //
 // One kind of refusal carries more than that: a refusal the page caused. When a
 // press is refused because a dialog or a banner covers the control, the model
@@ -67,8 +78,11 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  *
  * `no_repeating_structure` is the structure-detection tool's answer when the
  * page has nothing there that repeats readably. It is a fact about the page
- * rather than a policy, but it is reported the same way, so the answer can
- * carry nothing from the page either.
+ * rather than a policy, and it is reported the same way, so the answer carries
+ * no page content either -- only which of the four situations in
+ * `WEB_LLM_TOOL_REJECTION_REASONS` it was, and the counts behind that
+ * (`structure/refusal.ts`). One word for all four is what a model asked 24
+ * times in a row on `run-mug25fdp-21ba8385`.
  *
  * The codes from `blocked_by_dialog` on are what the page did rather than what
  * policy refused. Each was a thrown error until 2026-09-21, and Core ended the
@@ -174,6 +188,20 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  * - `not_a_text_field`: the control named is neither a text entry nor a select,
  *   so there is nothing to enter a value into. Press it instead.
  *
+ * What the page holds, or does not (`no_repeating_structure`):
+ * - `nothing_repeats_around_target`: the call named an element, and what it
+ *   sits in holds no repeating children. Detect without a target, or name an
+ *   element inside a row of the list actually wanted.
+ * - `repeating_groups_not_readable`: the page does repeat, and none of its runs
+ *   is a list a field can be read from. Name an element inside one, or narrow
+ *   the page first.
+ * - `nothing_repeats_on_page`: nothing on this page repeats at all, so this is
+ *   not where the list is. Go where it is, or search first.
+ * - `page_is_not_the_content`: what was captured stands in front of the content
+ *   rather than being it -- a modal, an overlay, or almost no controls at all,
+ *   which is the shape of a robot check or a page that has not drawn. Deal with
+ *   what is in the way; asking again is answered the same.
+ *
  * What the page did, or did not (`no_progress`):
  * - `page_unchanged_after_action`: the action ran and the page came back
  *   identical, so nothing was learned. Try something else.
@@ -210,6 +238,10 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "not_a_url",
   "value_not_text",
   "not_a_text_field",
+  "nothing_repeats_around_target",
+  "repeating_groups_not_readable",
+  "nothing_repeats_on_page",
+  "page_is_not_the_content",
   "page_unchanged_after_action",
   "already_at_destination",
   "nothing_changed_while_waiting",
@@ -262,6 +294,21 @@ export type WebLlmToolRejectionDetail = {
    * it has not been shown -- it tells it where to go so it can be shown one.
    */
   startLocation?: string;
+  /**
+   * The three counts a structure detection's refusal carries, and no other
+   * refusal does (`structure/refusal.ts`). They are what separates "this page
+   * has nothing that repeats" from "this page repeats and the detection would
+   * not read it", and what makes `page_is_not_the_content` checkable rather
+   * than asserted.
+   *
+   * How many separate records -- rows, cards, list items -- the capture's own
+   * controls sit in.
+   */
+  groupsSeen?: number;
+  /** The most copies any one control has: the largest repeating run the capture saw (`elements[].repeats`). */
+  rowsSeen?: number;
+  /** How many controls the page offered, before the packet's own bounds cut it (`elementTotal`). */
+  controlsSeen?: number;
 };
 
 export type WebLlmToolRejection = {
@@ -355,6 +402,9 @@ export function rejectionDetail(fields: {
   missing?: readonly string[] | undefined;
   requestId?: string | undefined;
   startLocation?: string | undefined;
+  groupsSeen?: number | undefined;
+  rowsSeen?: number | undefined;
+  controlsSeen?: number | undefined;
 }): WebLlmToolRejectionDetail {
   return present<WebLlmToolRejectionDetail>({
     reason: fields.reason === "parameters_not_resolved" && fields.instead !== undefined
@@ -365,8 +415,18 @@ export function rejectionDetail(fields: {
     instead: fields.instead === undefined ? undefined : [...fields.instead],
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
-    startLocation: fields.startLocation
+    startLocation: fields.startLocation,
+    // A count only, and only a whole one: a fraction or an infinity is a defect
+    // in the counting rather than a fact about the page, and is left out.
+    groupsSeen: wholeCount(fields.groupsSeen),
+    rowsSeen: wholeCount(fields.rowsSeen),
+    controlsSeen: wholeCount(fields.controlsSeen)
   });
+}
+
+/** A count fit to put on the wire, or nothing. */
+function wholeCount(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 export function toolRejection(code: WebLlmToolRejectionCode, page?: WebLlmPageEvidence, detail?: WebLlmToolRejectionDetail): WebLlmToolRejection {

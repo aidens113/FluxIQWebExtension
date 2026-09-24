@@ -72,10 +72,17 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
       // key or by a field of its own, so `read` carries the same shape a
       // `fields` entry does, described under `metadata` for the same reason:
       // Core's dialect has no `oneOf`, and the lift enforces the union.
+      //
+      // The comparisons over text, and `equals`, take one value or a list of
+      // them and are declared as the list, since that is the shape the reader
+      // keeps (`./condition-grammar.ts`). `equals` compares a number against
+      // the number in the value and a string against its text, so its items
+      // carry no declared type. An editor writing a lone value rather than a
+      // list is read, as every other forgiving spelling is.
       where: {
         type: "array",
         label: "Only items where",
-        description: "Each condition names a value by `field` (a key of `fields`) or `read` (a field of its own), and says `is: \"present\" | \"absent\"` or a numeric bound. Every condition must hold or the item is not read.",
+        description: "Each condition names a value by `field` (a key of `fields`) or `read` (a field of its own), and compares it: `is: \"present\" | \"absent\"`, a bound or `equals` on the number in it, `matches` / `contains` / `startsWith` / `endsWith` on its text, and `not` to keep what the rest rejects. Every condition must hold or the item is not read.",
         items: {
           type: "object",
           label: "Condition",
@@ -85,7 +92,13 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
             atLeast: { type: "number", label: "At least" },
             atMost: { type: "number", label: "At most" },
             lessThan: { type: "number", label: "Less than" },
-            greaterThan: { type: "number", label: "Greater than" }
+            greaterThan: { type: "number", label: "Greater than" },
+            equals: { type: "array", label: "Equals any of" },
+            matches: { type: "array", label: "Matches any of", items: { type: "string" } },
+            contains: { type: "array", label: "Contains any of", items: { type: "string" } },
+            startsWith: { type: "array", label: "Starts with any of", items: { type: "string" } },
+            endsWith: { type: "array", label: "Ends with any of", items: { type: "string" } },
+            not: { type: "boolean", label: "Keep the items this rejects" }
           },
           metadata: { read: fieldSpecSchema }
         }

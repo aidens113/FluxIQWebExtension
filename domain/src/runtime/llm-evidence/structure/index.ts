@@ -3,8 +3,10 @@
 // handle stands for.
 //
 // `detect.ts` is the tool, `packet.ts` splits what the page detected into the
-// model's half and the handle's half, and `handles.ts` keeps the handle's half
-// behind `resolveExtractionHandle`.
+// model's half and the handle's half, `handles.ts` keeps the handle's half
+// behind `resolveExtractionHandle`, and `refusal.ts` says which of the four
+// things "no repeating structure" means happened. Only `refusal.ts` is not
+// re-exported: nothing outside this directory refuses a detection.
 
 export { detectRepeatingStructure, type WebLlmStructureDetectionContext } from "./detect";
 export {

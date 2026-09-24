@@ -27,10 +27,9 @@
 import type { JsonObject } from "fluxiq/core";
 import { elementFingerprint } from "../../output-nodes/targets";
 import type { WebAutomationElementFingerprint } from "../types";
+import { webAutomationExtractConditionSayingValue } from "./condition-grammar";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import {
-  WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS,
-  WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE,
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
@@ -123,29 +122,23 @@ function conditionsValue(value: unknown, fields: Record<string, WebAutomationExt
 
 function conditionValue(value: unknown, fields: Record<string, WebAutomationExtractField>): WebAutomationExtractItemCondition | undefined {
   const written = jsonObject(value);
-  if (!written || Object.keys(written).some((key) => !CONDITION_KEYS.includes(key))) return undefined;
+  if (!written) return undefined;
   const field = optionalValue(written.field, (entry) => readableFieldKey(entry, fields));
   const read = optionalValue(written.read, (entry) => readableCondition(entry));
   if (field === REFUSED || read === REFUSED) return undefined;
   // One value, named once. Neither, and there is nothing to test; both, and two
   // readings of the same condition would disagree on which value it is about.
   if ((field === undefined) === (read === undefined)) return undefined;
-  const is = optionalValue(written.is, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE));
-  if (is === REFUSED) return undefined;
-  const bounds: Partial<Record<(typeof WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS)[number], number>> = {};
-  for (const key of WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS) {
-    const bound = optionalValue(written[key], finiteNumber);
-    if (bound === REFUSED) return undefined;
-    if (bound !== undefined) bounds[key] = bound;
-  }
-  // "The value is absent" and "the number in the value is under 50" cannot both
-  // be what was meant, so the pair is refused rather than read one way.
-  if (is === "absent" && Object.keys(bounds).length > 0) return undefined;
+  // What the condition says about that value is one grammar, read in one place,
+  // so the page runs exactly what the plan resolver accepted
+  // (`./condition-grammar.ts`). A key it cannot place refuses the condition,
+  // which is what refuses the whole request.
+  const says = webAutomationExtractConditionSayingValue(written, CONDITION_NAMING_KEYS);
+  if (!says.ok) return undefined;
   return {
     ...(field !== undefined ? { field } : {}),
     ...(read !== undefined ? { read } : {}),
-    ...(is !== undefined ? { is } : {}),
-    ...bounds
+    ...says.says
   };
 }
 
@@ -164,8 +157,8 @@ function readableCondition(value: unknown): WebAutomationExtractField | undefine
   return typeof field === "string" || field.handling === undefined || field.handling === "include" ? field : undefined;
 }
 
-/** Every key one condition may carry: the two that name its value, and what it says about it. */
-const CONDITION_KEYS: readonly string[] = ["field", "read", "is", ...WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS];
+/** The keys that name a condition's value, which this file reads and the condition grammar leaves alone. */
+const CONDITION_NAMING_KEYS: readonly string[] = ["field", "read"];
 
 /**
  * `web.dom.extract`'s structured read (C3), copied field by field.
@@ -301,10 +294,6 @@ function optionalValue<T>(value: unknown, read: (entry: unknown) => T | undefine
 
 function booleanValue(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
-}
-
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function nonNegativeInteger(value: unknown): number | undefined {

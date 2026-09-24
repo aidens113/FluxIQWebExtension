@@ -34,9 +34,9 @@
 
 import type { JsonObject } from "fluxiq/core";
 import {
-  WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
-  WEB_AUTOMATION_EXTRACT_MAX_PAGES
+  WEB_AUTOMATION_EXTRACT_MAX_PAGES,
+  WEB_AUTOMATION_EXTRACT_PAGINATION_MODES
 } from "../../actions/extraction";
 
 /** Words of a scraping request. A tag of two words is ranked as both. */
@@ -123,14 +123,38 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * this node's own description) each left that pair unchanged, which is what
  * pointed here. The clause needed room Core's 600-character parameter
  * description did not have, so Core's bound moved with it.
+ *
+ * **What the filtering vocabulary cost, and what paid for it.** On 2026-09-24
+ * this text stood at 699 characters of Core's 700, and the everything-store run
+ * carried five conditions in its instruction -- Plus eligible, rated 4.0 or
+ * higher, under $50, not sponsored, no ear tips or charging cases -- into a Flow
+ * that expressed none of them, returning 55 rows of which 13 were wanted and 0
+ * matched (`run-mug1z9k9-ef625d8b`). Fitting the words for those five cost two
+ * things, and both are the least-evidenced text here:
+ *
+ * - **the field-spec form** `{kind: text|attribute|...}` and its members. The
+ *   string grammar still shows what a field may be, in the branch this text
+ *   exists to steer a model away from, and the resolver accepts the spec form
+ *   exactly as before. No live run has ever failed for want of it;
+ * - **`Keys A-Za-z0-9_-`**, the field-key charset. A key outside it is refused
+ *   before the Flow runs, by name, with `web.extract_list.invalid_field_key`
+ *   (`./issues.ts`), which a model can repair from. A `where` clause that does
+ *   not fit is not refused: it is truncated in silence, and the answer is
+ *   simply wrong.
+ *
+ * That ordering is the rule this budget is spent by. A clause whose absence is
+ * a **named refusal** is cheaper than a clause whose absence is a **wrong
+ * answer**, so the refusable ones go first. At 697 of 700 there are three
+ * characters left, which is the finding: the next measured clause has nowhere
+ * to go, and Core's bound is where it will have to come from.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false (this page)};`,
-  "link gives the absolute URL, @href the raw href.",
-  `Else {item: css, fields: {key: "css"|"css@attr"|"column:Header"|{kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?}},`,
-  `paginate?: {mode: "next", next: css, maxPages} (loadMore: control, numbered: pages)|{mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
-  `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`,
-  "maxPages/maxScrolls = pages to read, not pages present: read only the page shown unless asked for more."
+  `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}, {field: "yourKey", contains: "case", not: true}], paginate?: false (this page)};`,
+  "where: all hold; also atMost/greaterThan/equals (number), startsWith/endsWith/matches (text); list = any.",
+  "link = absolute URL, @href = raw href.",
+  `Or {item: css, fields: {key: css|css@attribute|column:<header>}, paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}}.`,
+  `minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`,
+  "maxPages/maxScrolls = pages to read, not pages present: read only the page shown unless asked."
 ].join(" ");
 
 /**
@@ -151,17 +175,30 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * rows a person asked for. It shows the literal form, since the example is a
  * literal request; the detected form names a detected column by `field`.
  *
- * It shows two conditions, and the second is the one the campaign of
- * 2026-09-23 never wrote: a bound on the number in a column, over a column the
- * request itself keeps. An instruction's filter is usually a number -- under
- * fifty, four stars and up, in stock -- and a model shown only "leave the
- * advertisements out" wrote only that, twice, while the rows it returned
- * included a $79.99 pair asked for under $50.
+ * It shows four conditions, and they are one real instruction rather than a
+ * tour of the grammar: "the Plus-eligible products rated 4.0 or higher and
+ * under $50, no sponsored placements, and no accessories like ear tips or
+ * charging cases". That instruction ran on 2026-09-24 and reached the Flow
+ * carrying none of its five conditions, returning 55 rows where 13 were wanted
+ * and none matched (`run-mug1z9k9-ef625d8b`). So the shape shows a mark left
+ * out, a bound over a column the request keeps, a second bound, and an
+ * exclusion by text -- which are what that instruction is, written down.
+ *
+ * Core reads only the example's **top-level** keys as the declaration of what
+ * may be written beside `extractList` (`flow-bootstrap/authoring/matching.ts`),
+ * so what is inside `where` is here to be copied rather than to be permitted.
+ * The example is sent whole or not at all and is cut off above 600 bytes, which
+ * this is well inside.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   item: "li.product",
-  fields: { name: ".name", price: ".price", url: "a@href" },
-  where: [{ read: ".sponsored-label", is: "absent" }, { field: "price", lessThan: 50 }],
+  fields: { name: ".name", price: ".price", rating: ".stars", url: "a@href" },
+  where: [
+    { read: ".sponsored-label", is: "absent" },
+    { field: "rating", atLeast: 4 },
+    { field: "price", lessThan: 50 },
+    { field: "name", contains: ["ear tips", "charging case"], not: true }
+  ],
   paginate: { mode: "next", next: "a.next", maxPages: 5 },
   minItems: 1
 };

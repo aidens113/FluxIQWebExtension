@@ -16,10 +16,18 @@
 //
 //   where: [{ field: "ad_label", is: "absent" }]
 //   where: [{ field: "rating", atLeast: 4 }, { field: "price", lessThan: 50 }]
+//   where: [{ field: "title", contains: ["ear tips", "charging case"], not: true }]
 //
 // The column is named exactly as a kept column is -- a detected key, a key in
 // another case, `column:Header` or a bare header -- and refused exactly as one
 // is, so there is one vocabulary for "which column" and not two.
+//
+// What the condition then *says* about that column is not this file's
+// vocabulary either: it is `actions/extraction/condition-grammar.ts`, the one
+// the dispatch reader also uses. On 2026-09-24 an instruction carrying three
+// qualifying conditions and two exclusions reached the Flow carrying none of
+// them (`run-mug1z9k9-ef625d8b`), and a grammar the resolver accepted but the
+// page refused would be the same wrong answer with more steps.
 //
 // **The resolved condition carries the column's own spec rather than a field
 // key**, and that is deliberate. The item a read leaves out is usually one it
@@ -54,7 +62,7 @@
 // complement of what was asked for is worse than one that refuses.
 
 import type { WebAutomationExtractField, WebAutomationExtractItemCondition } from "../../../../actions/extraction";
-import { WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS, WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE } from "../../../../actions/extraction";
+import { webAutomationExtractConditionSayingValue } from "../../../../actions/extraction";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
 import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnIssue } from "./columns";
@@ -76,15 +84,14 @@ export type WebExtractionConditionColumns = {
 /** The keys a condition may use to name its column, in the order they are read. The first one written wins, and two that disagree are malformed. */
 const COLUMN_KEYS = ["field", "read", "column", "key"] as const;
 
-/** Every key one condition may carry. */
-const CONDITION_KEYS: ReadonlySet<string> = new Set<string>([
-  ...COLUMN_KEYS,
-  "header",
-  "handle",
-  "location",
-  "is",
-  ...WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS
-]);
+/**
+ * The keys this file reads for itself: the ones that name the column, and the
+ * two a `read` reference carries. Every other key is a phrase about the value,
+ * read by the one grammar the dispatch also reads
+ * (`actions/extraction/condition-grammar.ts`), so a condition this resolver
+ * accepts is a condition the page runs.
+ */
+const NAMING_KEYS: readonly string[] = [...COLUMN_KEYS, "header", "handle", "location"];
 
 const HEADER_PREFIX = "column:";
 
@@ -113,34 +120,31 @@ type OneCondition = { ok: true; condition: WebAutomationExtractItemCondition } |
 
 function readCondition(entry: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): OneCondition {
   if (!isJsonRecord(entry)) return { ok: false, issue: "web.handle.malformed", path };
-  const stray = Object.keys(entry).find((key) => !CONDITION_KEYS.has(key));
-  if (stray !== undefined) return { ok: false, issue: "web.handle.malformed", path: [...path, stray] };
   const named = columnName(entry);
   if (named === undefined) return { ok: false, issue: "web.handle.malformed", path };
   const column = conditionColumn(named, columns, path);
   if (!column.ok) return column;
-  const is = entry.is === undefined ? undefined : presenceOf(entry.is);
-  if (entry.is !== undefined && is === undefined) return { ok: false, issue: "web.handle.malformed", path: [...path, "is"] };
-  const bounds: Partial<Record<(typeof WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS)[number], number>> = {};
-  for (const key of WEB_AUTOMATION_EXTRACT_CONDITION_BOUNDS) {
-    const bound = entry[key];
-    if (bound === undefined) continue;
-    if (typeof bound !== "number" || !Number.isFinite(bound)) return { ok: false, issue: "web.handle.malformed", path: [...path, key] };
-    bounds[key] = bound;
-  }
-  // "The value is not there" and "the number in it is under fifty" cannot both
-  // have been meant, so the pair is refused rather than read one way.
-  if (is === "absent" && Object.keys(bounds).length > 0) return { ok: false, issue: "web.handle.malformed", path };
+  const says = webAutomationExtractConditionSayingValue(entry, NAMING_KEYS);
+  // A key the grammar cannot place or act on is refused where it was written;
+  // a condition contradicting itself is refused as a whole, since no one key
+  // explains it.
+  if (!says.ok) return { ok: false, issue: "web.handle.malformed", path: says.key === undefined ? path : [...path, says.key] };
   return {
     ok: true,
     condition: present<WebAutomationExtractItemCondition>({
       field: undefined,
       read: column.field,
-      is,
-      atLeast: bounds.atLeast,
-      atMost: bounds.atMost,
-      lessThan: bounds.lessThan,
-      greaterThan: bounds.greaterThan
+      is: says.says.is,
+      atLeast: says.says.atLeast,
+      atMost: says.says.atMost,
+      lessThan: says.says.lessThan,
+      greaterThan: says.says.greaterThan,
+      equals: says.says.equals,
+      matches: says.says.matches,
+      contains: says.says.contains,
+      startsWith: says.says.startsWith,
+      endsWith: says.says.endsWith,
+      not: says.says.not
     })
   };
 }
@@ -165,10 +169,4 @@ function columnName(entry: Record<string, unknown>): string | undefined {
   const named = names[0] as string | undefined;
   if (named !== undefined) return entry.header === undefined ? named : undefined;
   return typeof entry.header === "string" && entry.header !== "" ? `${HEADER_PREFIX}${entry.header}` : undefined;
-}
-
-function presenceOf(value: unknown): "present" | "absent" | undefined {
-  return typeof value === "string" && (WEB_AUTOMATION_EXTRACT_CONDITION_PRESENCE as readonly string[]).includes(value)
-    ? value as "present" | "absent"
-    : undefined;
 }

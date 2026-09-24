@@ -203,16 +203,20 @@ export type {
 } from "./extraction";
 export { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./extraction";
 
-// The four readers that decide what an extraction *is*, re-exported for the
-// same reason the types above are: `domain/client` reaches this module and does
-// not reach `actions/extraction/` itself, so without these an extension-side
-// caller has to approximate a rule the domain already owns. It did. The
-// background worker shipped a flat 60,000 ms extraction timeout because
+// The readers that decide what an extraction *is*, and whether one of its
+// conditions holds of a value, re-exported for the same reason the types above
+// are: `domain/client` reaches this module and does not reach
+// `actions/extraction/` itself, so without these an extension-side caller has
+// to approximate a rule the domain already owns. It did. The background worker
+// shipped a flat 60,000 ms extraction timeout because
 // `webAutomationExtractListTimeoutMs` could not be imported, which truncated
 // any read past six pages, and restated the field-key pattern as a literal in a
-// test. A rule worth owning once is worth exporting once.
+// test. A rule worth owning once is worth exporting once, and "under $50" is
+// exactly such a rule: the page deciding a row differently from the resolver
+// that accepted the condition is a wrong answer nothing would report.
 export {
   isWebAutomationExtractFieldKey,
+  webAutomationExtractConditionHolds,
   webAutomationExtractListRequestValue,
   webAutomationExtractListTimeoutMs,
   webAutomationRecordedExtraction

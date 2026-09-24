@@ -46,6 +46,58 @@ test("a numeric bound is kept as written, and a bound beside `absent` is refused
   assert.equal(read([{ field: "name", is: "present", lessThan: 50 }])?.where?.length, 1);
 });
 
+test("a textual comparison is kept as a list, whichever way it was written", () => {
+  // The everything-store instruction of 2026-09-24, whose two exclusions had
+  // nowhere to go (`run-mug1z9k9-ef625d8b`): no sponsored placements, and no
+  // accessories. A lone value is read as a list of one, because "no charging
+  // cases" is one thing to say and `["..."]` is a shape to remember.
+  assert.deepEqual(read([{ field: "name", contains: "charging case" }])?.where, [{ field: "name", contains: ["charging case"] }]);
+  assert.deepEqual(read([{ field: "name", contains: ["ear tips", "charging case"], not: true }])?.where, [
+    { field: "name", contains: ["ear tips", "charging case"], not: true }
+  ]);
+  for (const key of ["matches", "startsWith", "endsWith"]) {
+    assert.deepEqual(read([{ field: "name", [key]: "case" }])?.where, [{ field: "name", [key]: ["case"] }], key);
+  }
+  // An equality keeps each value as written, since a number is compared against
+  // the number in the value and a string against its text.
+  assert.deepEqual(read([{ field: "name", equals: 4 }])?.where, [{ field: "name", equals: [4] }]);
+  assert.deepEqual(read([{ field: "name", equals: ["Plus", 4] }])?.where, [{ field: "name", equals: ["Plus", 4] }]);
+  // A number where a text was expected is read as its digits rather than refused.
+  assert.deepEqual(read([{ field: "name", contains: 50 }])?.where, [{ field: "name", contains: ["50"] }]);
+  // `not: false` is what no `not` at all means, so it is not carried.
+  assert.deepEqual(read([{ field: "name", contains: "case", not: false }])?.where, [{ field: "name", contains: ["case"] }]);
+  assert.deepEqual(read([{ field: "name", contains: "case", not: "true" }])?.where, [{ field: "name", contains: ["case"], not: true }]);
+  // A condition the resolver emitted reads back as itself, which is what lets
+  // the plan resolver hand its output to this reader.
+  const canonical = read([{ field: "name", contains: ["case"], not: true }])?.where;
+  assert.deepEqual(read(canonical)?.where, canonical);
+});
+
+test("a phrase written under another name is read as the one it means", () => {
+  const rows: Array<[unknown, unknown]> = [
+    [{ field: "name", min: 4 }, { field: "name", atLeast: 4 }],
+    [{ field: "name", gte: 4 }, { field: "name", atLeast: 4 }],
+    [{ field: "name", max: 50 }, { field: "name", atMost: 50 }],
+    [{ field: "name", lt: 50 }, { field: "name", lessThan: 50 }],
+    [{ field: "name", gt: 0 }, { field: "name", greaterThan: 0 }],
+    // Case and punctuation are ignored, so one meaning is not five keys.
+    [{ field: "name", greater_than: 0 }, { field: "name", greaterThan: 0 }],
+    [{ field: "name", GreaterThan: 0 }, { field: "name", greaterThan: 0 }],
+    [{ field: "name", regex: "^Acme" }, { field: "name", matches: ["^Acme"] }],
+    [{ field: "name", pattern: "^Acme" }, { field: "name", matches: ["^Acme"] }],
+    [{ field: "name", includes: "case" }, { field: "name", contains: ["case"] }],
+    [{ field: "name", equalTo: "Plus" }, { field: "name", equals: ["Plus"] }],
+    [{ field: "name", contains: "case", exclude: true }, { field: "name", contains: ["case"], not: true }],
+    // Canonical order, whatever order it was written in.
+    [{ field: "name", not: true, contains: "case", min: 4 }, { field: "name", atLeast: 4, contains: ["case"], not: true }]
+  ];
+  for (const [written, expected] of rows) {
+    assert.deepEqual(read([written])?.where, [expected], JSON.stringify(written));
+  }
+  // Two spellings of one phrase are one phrase when they agree.
+  assert.deepEqual(read([{ field: "name", atLeast: 4, min: 4 }])?.where, [{ field: "name", atLeast: 4 }]);
+});
+
 test("a condition the page could not act on refuses the whole request", () => {
   const rows: Array<[string, unknown]> = [
     ["no value named", [{ is: "absent" }]],
@@ -58,7 +110,25 @@ test("a condition the page could not act on refuses the whole request", () => {
     ["a bound that is not a number", [{ field: "name", lessThan: "50" }]],
     ["a bound that is not finite", [{ field: "name", atLeast: Number.POSITIVE_INFINITY }]],
     ["a read the page cannot honour", [{ read: { kind: "attribute" } }]],
-    ["one good condition and one bad", [{ field: "name" }, { field: "missing" }]]
+    ["one good condition and one bad", [{ field: "name" }, { field: "missing" }]],
+    // A regular expression the page could not compile would fail every row and
+    // look like an empty page, so it is refused here instead.
+    ["a pattern that does not compile", [{ field: "name", matches: "(unclosed" }]],
+    ["a pattern longer than one may be", [{ field: "name", matches: "a".repeat(201) }]],
+    // `contains: ""` holds of every item, which is a filter that does nothing.
+    ["an empty text", [{ field: "name", contains: "" }]],
+    ["an empty list of texts", [{ field: "name", contains: [] }]],
+    ["a text that is not one", [{ field: "name", contains: { source: "case" } }]],
+    ["an equality that is not a value", [{ field: "name", equals: null }]],
+    ["a direction that is not a boolean", [{ field: "name", contains: "case", not: "maybe" }]],
+    // "The value is not there" and "its text contains a case" cannot both have
+    // been meant, exactly as with a bound.
+    ["absent beside a textual comparison", [{ field: "name", is: "absent", contains: "case" }]],
+    ["absent beside an equality", [{ field: "name", is: "absent", equals: "Plus" }]],
+    // Two spellings of one phrase that disagree name no one condition, and
+    // `not: false` is one such value rather than a value that was never said.
+    ["two spellings that disagree", [{ field: "name", atLeast: 4, min: 5 }]],
+    ["two directions that disagree", [{ field: "name", contains: "case", not: false, exclude: true }]]
   ];
   for (const [why, where] of rows) assert.equal(read(where), undefined, why);
 });

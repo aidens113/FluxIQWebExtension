@@ -57,7 +57,13 @@ import { webLlmToolRejectionResultCode } from "../vocabulary";
  *   unsafe. The inspect and press options never raise it; the sanitizer drops a
  *   secret-bearing control before the model can name it.
  * - `no_repeating_structure` is detection saying the page has no readable list
- *   there, which is an answer, not a stop.
+ *   there, which is an answer, not a stop. It stays unclassified now that it
+ *   says *which* of the four situations it is (`../structure/refusal.ts`), and
+ *   more firmly than before: each of the four names a different next move the
+ *   exploration can make -- point somewhere else, ask page-wide, deal with what
+ *   covers the page, go where the content is -- so ending the exploration on it
+ *   would end one that had just been told what to do. What bounds a model that
+ *   ignores all four is the budget, below, and Core's no-progress guard.
  *
  * Every unclassified refusal is still charged against the action budget, so a
  * model that does nothing but get refused ends in `budget_exhausted` rather
