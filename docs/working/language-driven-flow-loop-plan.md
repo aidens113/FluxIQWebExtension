@@ -1,9 +1,9 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Opened 2026-09-24 on the user's instruction, replacing corpus-wide measurement with a strict one-run, one-debug, one-fix loop on complex multi-node scenarios. Discovery is out with three workers; the first live run waits on the instrumentation gate in Phase 0.
+Status detail: Eleven live runs in. Rung 1 has passed once and is not yet held; rung 3, `everything-store`, has failed six times and the last run built no Flow at all. Task t125 closes the two Phase 0 items that half-landed, so the next run can name its own cause.
 Created: 2026-09-24
-Last updated: 2026-09-24
+Last updated: 2026-09-25
 Owner: Senior supervisor agent
 Scope: Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running one complex, multi-node live scenario at a time, debugging that single run end to end, fixing every cause it exposes, and running again. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop.
 Paired document: `none yet — Core-side changes land under FluxIQ Core's own working documents as this loop names them.`
@@ -19,62 +19,64 @@ node runs, not single-node extraction. One run, one debug, fix those errors,
 continue — repeated until language-driven Flows run successfully, repair
 themselves, and measure their own progress.
 
-**Why the previous approach was retired.** The nineteen-task extract lane read
-11 of 19 twice over. Every one of the nine reliable passes was a single
-`web.dom.extract_list` node on a page that was already the right page — nothing
-navigated, searched, clicked, filtered or branched. The headline number
-described the easy part of the product while the hard part had never once
-produced a correct answer, and about one task in five changed verdict between
-identical runs, so the number could not separate a fix from noise anyway. The
-corpus lane is not a development instrument and is not used as one here.
+**Where the ladder actually is, after eleven live runs.** Rung 1,
+`product-catalog-search-lamp`, has passed **once** (`run-mug1g8ai-7e79384d`,
+17 calls) and failed once before it — so it is not yet held, because a rung is
+not left until its scenario passes twice in a row. The loop then moved to rung
+3, `everything-store-plus-earbuds-under-50`, which has now failed **six** times
+and has still never produced a correct answer. Three other fixtures were tried
+once each and failed. Rung 2 has never been run.
 
-**What is actually known to work.** Single-step extraction from genuinely
-difficult pages: 280 records and 1120 fields matched in five provider calls,
-reordered table columns, sparse cards, prices as `16.00 USD`, images hidden in
-`data-src`. That capability is real and is not the subject of this document.
+**What has been fixed along the way.** Phase 0's instrumentation merged
+(`7369504`), and it works: a failed build now writes `flow-lane.json` at all,
+and its decision rows carry `iteration`, `evidenceBytes` and per-call `usage`
+where they once carried two fields. Extraction gained the declarative filtering
+the instruction's qualifying clauses need (`2d2324d`, `08d4ff8`), and Core
+gained a build-time answerability check that refuses to propose a Flow which
+could not answer the instruction at all (Core `636d425`).
 
-**What has never worked.** Multi-step automation. `everything-store` — search,
-apply a filter, then extract — has never produced a correct answer. No
-instruction-built Flow with a navigation, a click and an extraction in sequence
-has been shown to run clean.
+**The last run, `run-mug776kx-0214b287`, and why it failed.** 38 provider
+calls, 694,574 ms, $0.038, **no Flow created**, stopped at `build` with
+`flow_bootstrap.evidence_unusable_decision`. How far it got: it reached the
+page and acted on it successfully twice, then never ran an extraction node at
+all, so it could never propose a Flow that answers the instruction. Why: from
+iteration 12 onward **every** node call was refused
+`web.action.rejected.invalid_input` — fourteen times, each an identical 649-byte
+payload — and the loop never corrected it before its budget was gone. Eight
+`web.action.rejected.target_unobserved` refusals preceded them. The new
+answerability check fired four times and is working as designed; it is a
+consequence of the blockage, not its cause.
 
-**Where this document is now.** Opened today. Two of three discovery reports are
-in, both verified by the supervisor against source rather than taken on the
-worker's word.
+**That cause cannot be named precisely, because two Phase 0 items half-landed.**
+This is the same wall the phase was created to remove, hit again with a
+different word:
 
-**A run cannot currently be debugged, which is why Phase 0 exists.** The failed
-multi-step run `run-muf8dstp-0135804a` has no `flow-lane.json` at all — that
-artifact is only written when the build succeeded — and all 32 of its decision
-rows carry exactly two fields, `toolId` and `resultCode`, with
-`web.action.rejected.target_unobserved` repeated **twenty indistinguishable
-times** inside one undivided 99,375 ms gap. Three different defects with three
-different fixes are collapsed into one word, twenty times over. Of the six
-debug stages, only stage 1 and a shallow stage 2 can be answered today. The
-previous effort learned this the expensive way — three pagination theories
-proposed and falsified from record counts alone — so the instrumentation comes
-before the first fix this time, not after the third.
+- **E2 is incomplete.** The domain computes 33 closed rejection reasons
+  (`tool-rejection.ts`), each chosen because it implies a different next move.
+  None of them travels. Core's `evidence-loop-decision.ts` gates a tool
+  execution on `exactKeys([...])`, which does not name a reason field, so the
+  reason stops at the domain boundary and fourteen refusals share one word.
+- **E4 landed as a type and not as an emission.** `at` is declared on the
+  published step and parsed by it, and **nothing in `evidence-loop.ts` ever
+  writes one**: 0 of 41 rows in the last run carry a timestamp, so 694 seconds
+  is still a single undivided gap.
+- Relatedly, which node a `core.run_node` call named is recorded nowhere, so
+  "which node was refused" is unanswerable.
 
-**The loop's three capabilities all exist and are wired; four specific defects
-break them.** The repair vocabulary is five patch kinds, all temporary, and
-**none can amend an extraction, a filter parameter, or insert a step** — so it
-cannot express the fixes our actual failures need. A wrong-answer repair never
-re-runs inside its own run. A Flow that stores no record set **is never judged
-and reports success**, which falsifies the self-measurement criterion for
-exactly the multi-node Flows this document targets. And the repair is shown a
-fresh page rather than the one that broke. Detail in
-`Where The Three Capabilities Actually Stand`.
+Byte arithmetic puts the 649-byte payload at `node_not_runnable_here` carrying
+all 18 runnable node ids (610 bytes, plus a 27-character node name = 649
+exactly). That is a hypothesis and is deliberately not being fixed on: this
+document's own rule is that theories built from counts get falsified, so the
+instrumentation goes in first and the next run names its own cause.
 
-**The complex corpus already exists, and the extract lane was the wrong 19
-tasks.** Of 134 live tasks across 27 fixtures, about 115 are multi-node. The
-extract lane's nineteen are exactly the nineteen single-node ones — it measured
-one node authored nineteen times and could never have shown whether the model
-can chain two. Nothing needs authoring to start.
+**The next action** is task `t125`, which closes E2 and E4 end to end at zero
+provider cost — Core accepts and publishes `resultReason` and `nodeId` and
+stamps every trace row with `at`; the domain emits them — and then the same
+`everything-store` run again.
 
-**The next action** is Phase 0, the twelve zero-cost instrumentation fixes, then
-the first multi-node live run in the project's history: rung 1,
-`product-catalog-search-lamp`.
-
-**Blockers:** none.
+**Blockers:** none. Note that `git worktree add` fails on this machine with
+`cannot spawn git: Exec format error` from any shell, so a Core-paired task
+takes a plain branch in each repository rather than the nested worktree layout.
 
 ---
 
@@ -311,9 +313,9 @@ This phase costs no provider calls and comes before the first live run.
 | Id | Work | Repo |
 | --- | --- | --- |
 | E1 | **Write `flow-lane.json` for a failed build.** `flow-lane/creation/lane.ts:160-163` throws before the writer at `run-scenario.ts:389`, losing `authoredNodes`, `route`, `ownPage`, `extraction` and the evidence packets — the whole of stage 3 — on exactly the runs that need them. | L |
-| E2 | **Carry the refusal's own reason through.** `domain/src/runtime/llm-evidence/tool-rejection.ts:128-176` already computes six closed reasons; the bundle flattens them to one word. Today `nothing_observed_yet`, `handle_not_in_packet` and `page_moved_since_packet` — three defects with three different fixes — are one indistinguishable code. Highest value per line changed. | D, L |
+| E2 | **Half-landed, reopened as t125 on 2026-09-25.** The domain's 33 reasons exist and are correct; none of them reaches the bundle, because Core's `evidence-loop-decision.ts` gates a tool execution on an `exactKeys` list that names no reason field. `run-mug776kx-0214b287` therefore published fourteen identical `invalid_input` rows. **Carry the refusal's own reason through.** `domain/src/runtime/llm-evidence/tool-rejection.ts:128-176` already computes six closed reasons; the bundle flattens them to one word. Today `nothing_observed_yet`, `handle_not_in_packet` and `page_moved_since_packet` — three defects with three different fixes — are one indistinguishable code. Highest value per line changed. | D, L |
 | E3 | **Stop discarding the per-row fields Core already keeps.** `evidence-trace.ts:42-61` retains `iteration`, `callId`, `evidenceBytes` and `usage` per row; they are dropped twice, at Core's `evidence-loop-steps.ts:40-46` and at `build-proposal.ts:314-319` (duplicated at `:329`). Extend `hasExactFields` at `generation-failure.ts:725` in lockstep or the widened record is rejected. | C, L |
-| E4 | **A timestamp per decision row**, so 32 steps stop collapsing into one 99,375 ms gap and a stall can be located in time. | C, L |
+| E4 | **Half-landed, reopened as t125 on 2026-09-25**: `at` is declared on the published step and parsed by it, and nothing in `evidence-loop.ts` ever emits one — 0 of 41 rows in the last run carry a timestamp. **A timestamp per decision row**, so 32 steps stop collapsing into one 99,375 ms gap and a stall can be located in time. | C, L |
 | E5 | **A per-call ledger for builds.** `build-usage.ts:35-37` hard-codes `observedCalls: []` and `perCallRecords: "not recorded"`. Core's `run-call-record.ts` already does this for runs; a build is simply not a run. | C, L |
 | E6 | **Stop hiding 21 of 22 tool calls.** `vocabulary()` at `build-proposal.ts:371-373` filters the whole `core.` prefix, which removes `core.run_node` — nearly every call the model made. | L |
 | E7 | **Wire a screenshot adapter.** `run-scenario.ts:123` builds the capture controller without one, so every non-error capture is `capture-unavailable`; the policy allowed 100 and both specimens have zero. Stage 6 cannot show the page as it was when it broke. | L |
@@ -322,7 +324,7 @@ This phase costs no provider calls and comes before the first live run.
 | E11 | **Done.** The Lab's terminal-detail wait is now derived from the Flow's action-node count: `min(600_000, 90_000 + (n-1) × 91_250)` ms — unchanged at 90 s for one node, 546 s for six, capped at 600 s from seven up. Every term comes from Core's own published constants: 90 s is the existing load-proven fixed cost, 91,250 ms is Core's per-node worst case (a 30 s readiness cap awaited once per attempt × 3 attempts, plus the 250 ms and 1 s backoffs), and the cap is Core's maximum granted run. **The bite was worse than the entry assumed**: the wait's expiry rethrows the request's own HTTP timeout *as the run's result*, so a six-node Flow still executing at second 91 was recorded as a product failure, and deterministic replays reach that path on essentially every multi-node run because the client request bound is 30 s. Granted runs and caller aborts are deliberately unchanged. Proven against a virtual clock, never yet against a real multi-node Flow. | L |
 | E12 | **Record resolved parameter values.** The values a node's parameters actually resolved to at execution time are recorded nowhere, so stage 3 cannot tell a node that was authored wrong from one that was authored right and resolved wrong. | C, D, L |
 | E13 | **The upstream row rebuilder, found while E3 was landing.** `existing-fluxiq-control/adaptation-evidence-loop.ts:121-130` rebuilds every decision row as exactly `toolId` / `effectApplied` / `resultCode`, stripping the widened members before they reach the consumer E3 fixes. E3 is half-landed without it. Its doc comment states a deliberate policy — "nothing the tool returned and nothing the model wrote is admitted" — which stands; the Phase 0 decision draws the compatible line at identifiers, closed codes, counts, byte sizes and timestamps. | L |
-| E14 | **A refusal that names its own way out.** Three attempts were spent before the first live run reached the product, because this machine's `.env.local` configures an existing FluxIQ install and neither refusal said where the offending value came from or that `FLUXIQ_TEST_ENV_FILES=none` exists for exactly this case. The escape is documented only in a comment above the function implementing it. | L |
+| E14 | **Done 2026-09-25.** `loadTestEnvironment` now records which repository env file each name was read from, weakly keyed to the environment it describes so a provenance record can never be mistaken for a configuration value, and a name the operator set on the command line is never blamed on a file. Both refusals append the source and the escape: `isolated target cannot use existing-install configuration: FLUXIQ_TEST_BASE_URL, FLUXIQ_TEST_GATEWAY_URL. They were read from .env.local in the repository root, not from this command; run with FLUXIQ_TEST_ENV_FILES=none to ignore them for this run without editing the file.` Two regression tests; `dist/tests/target-config.test.js` reports 17 of 17 passing. **A refusal that names its own way out.** Three attempts were spent before the first live run reached the product, because this machine's `.env.local` configures an existing FluxIQ install and neither refusal said where the offending value came from or that `FLUXIQ_TEST_ENV_FILES=none` exists for exactly this case. The escape is documented only in a comment above the function implementing it. | L |
 | E10 | **Already done before the phase opened, and the entry was wrong.** It was carried over verbatim from the retired plan's D0a without re-checking it against the current tree. Commit 84e44ce had already made a retried node attributable: `run-flow-lane.ts:452-480` emits `nodeId`, `attemptIndex`, `retry` and `hostTargetResolution`. Verified directly. Only the regression tests were missing, and they have been added. **The lesson is the entry, not the code**: an item inherited from an older document is a claim about a tree that has since moved, and every such item must be re-verified before it becomes work. This was the only inherited entry in Phase 0 — E1 to E9 and E12 came from audits run today against the current tree. | L |
 
 **Decision: two tiers of evidence, taken by the supervisor 2026-09-24.** The
@@ -417,6 +419,43 @@ Three discovery briefs were dispatched on 2026-09-24. Their reports are in
 - Outcome: Accepted
 - Follow-up: fill Phases 0 and 1 from the three discovery reports, then run the
   first complex scenario.
+
+### 2026-09-24 — Phase 0 landed, and the ladder was climbed out of order
+- Agent: supervisor, with workers on t124 and the Core side
+- Changed: Phase 0 instrumentation (`7369504`, Core `16ea5b9`); extraction
+  filtering (`2d2324d`, `08d4ff8`); Core's build-time answerability check
+  (`636d425`); Core's empty-result judgement and refusal reasons (`bb45f4b`)
+- Why: the first live runs exposed causes in each of these, and Phase 0's
+  instrumentation was the precondition for diagnosing any of them.
+- Validation: eleven live runs against DeepSeek. `run-mug1g8ai-7e79384d`
+  passed rung 1 (`product-catalog` / `search`, 17 calls, 286 s). The other ten
+  failed. Phase 0's effect is directly observable: `run-mug776kx-0214b287`
+  wrote a `flow-lane.json` for a *failed* build, with 41 decision rows carrying
+  `iteration`, `evidenceBytes` and per-call `usage`, where the pre-Phase-0
+  specimen wrote no such file at all.
+- Outcome: Accepted, with two corrections recorded below.
+- Follow-up: rung 1 passed once, not twice, so it is not held; rung 2 was
+  skipped entirely and the loop went to rung 3. Return to the ladder's order
+  once t125 lands.
+
+### 2026-09-25 — The last run named no cause, so t125 reopens Phase 0
+- Agent: supervisor
+- Changed: `docs/working/language-driven-flow-loop-plan.md` (Current State and
+  this ledger, both of which had not been updated since the document opened),
+  `reports/build-answers-instruction.md` committed (`0d65c16`)
+- Why: `run-mug776kx-0214b287` spent 38 provider calls and built nothing, and
+  its failure is fourteen identical `web.action.rejected.invalid_input` rows.
+  The reason behind each is computed in the domain and discarded at the Core
+  boundary, and no row carries a timestamp, so the run cannot be debugged —
+  which is exactly the condition Phase 0 exists to remove.
+- Validation: read directly from the run's own artifacts, not inferred —
+  `flow-lane.json` gives 41 rows whose only distinguishing members are
+  `toolId`, `iteration`, `effectApplied`, `resultCode`, `evidenceBytes` and
+  `usage`; `at` is present on 0 of 41. Core's `evidence-loop-decision.ts`
+  `exactKeys` list was read and confirmed to name no reason field.
+- Outcome: Accepted
+- Follow-up: t125 (branch `task/t125-evidence-names-its-reason` in both
+  repositories), then rerun `everything-store-plus-earbuds-under-50`.
 
 ---
 

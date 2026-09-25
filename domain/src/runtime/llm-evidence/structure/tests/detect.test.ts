@@ -104,12 +104,28 @@ async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObjec
     : { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value, maxEvidenceBytes: options.maxEvidenceBytes });
 }
 
-/** The refusal as the model receives it, with the reason that says what to do next. */
+/**
+ * The refusal as the model receives it, with the reason that says what to do
+ * next -- and as the run's own record keeps it, which is the same reason said
+ * once more beside the code.
+ *
+ * The second half is what makes a failed run readable afterwards. Core traces
+ * `resultCode`, and every refusal of a kind reads the same there:
+ * `run-mug776kx-0214b287` published 14 identical
+ * `web.action.rejected.invalid_input` rows for what were several different
+ * mistakes. `resultReason` is the word that tells them apart, so a refusal that
+ * carries a reason for the model and not for the record is a defect, and these
+ * expectations name both rather than either.
+ */
 function rejection(code: string, detail?: JsonObject) {
   const evidence: JsonObject = detail === undefined
     ? { schemaVersion: "web-llm-tool-result.v1", ok: false, code }
     : { schemaVersion: "web-llm-tool-result.v1", ok: false, code, detail };
-  return { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode: `web.action.rejected.${code}` };
+  const resultCode = `web.action.rejected.${code}`;
+  const reason = detail?.reason;
+  return typeof reason === "string"
+    ? { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode, resultReason: reason }
+    : { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode };
 }
 
 /** Every key at every depth of a JSON value. */

@@ -156,7 +156,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
-        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined })
+        present<WebNodeDraftStatement>({ actionId: node.definitionId, effect: "observe", input: safeCall(value, parameters), ranWith: nodeCall(value, parameters), proposes: false, replay: undefined }),
+        // A look that worked refuses nothing, so it says neither why it refused
+        // nor which node it would have named: the draft statement beside it
+        // already carries `actionId`, and a successful call is not the row a
+        // reader of a failed run is trying to tell apart from another.
+        { resultReason: undefined, nodeId: undefined }
       );
     }
     current = await currentPage(run, run.request);
@@ -321,7 +326,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // step found no page at all -- so what it records is where it was sent,
         // which is what a reset has to put the page back to (`./replay.ts`).
         replay: webNodeReplayStatement({ location: current?.evidence.location ?? run.request.startLocation ?? after.evidence.location, payload: result.payload as JsonValue | undefined, reads: node.proposes })
-      })
+      }),
+      // The node ran and nothing was refused, so neither field is said: the
+      // draft statement above already names the node under `actionId`.
+      { resultReason: undefined, nodeId: undefined }
     );
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
@@ -369,7 +377,15 @@ function refusal(
     // A step that did not work is a step nothing will run again: the replay
     // gate reads the absence of this as "not replayable", which is right.
     replay: undefined
-  }));
+  }), {
+    // Taken from the detail rather than derived again, so a refusal site that
+    // gains a sharper reason later carries it into the trace with no edit here.
+    resultReason: detail?.reason,
+    // The node the call named, and only when the catalog resolved it: `record`
+    // carries no `actionId` for a call that named nothing runnable, which is
+    // what keeps the model's invented string out of the run's own record.
+    nodeId: record.actionId
+  });
 }
 
 /**

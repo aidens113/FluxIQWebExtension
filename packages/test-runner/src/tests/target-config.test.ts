@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadTestEnvironment, parseEnvironmentFile, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "../target-config.js";
+import { loadTestEnvironment, parseEnvironmentFile, testEnvironmentValueSource, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "../target-config.js";
 
 const existingEnvironment: NodeJS.ProcessEnv = {
   FLUXIQ_TEST_TARGET: "existing",
@@ -156,6 +156,48 @@ test("FLUXIQ_TEST_ENV_FILES=none skips .env and .env.local, and any other value 
     assert.equal(skipped.FLUXIQ_TEST_BASE_URL, undefined);
     assert.equal(skipped.FLUXIQ_TEST_FLOW_ID, "from-process");
     await assert.rejects(loadTestEnvironment(root, { FLUXIQ_TEST_ENV_FILES: "local-only" }), /FLUXIQ_TEST_ENV_FILES must be none/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a refusal names the file the inherited value came from and the switch that ignores it", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-target-config-"));
+  try {
+    // The trap this covers, verbatim from the machine it was found on: an
+    // .env.local describing an existing install, and an isolated run that
+    // inherits it without the operator having configured anything.
+    await writeFile(path.join(root, ".env.local"), "FLUXIQ_TEST_BASE_URL=http://127.0.0.1:3000/\nFLUXIQ_TEST_GATEWAY_URL=wss://127.0.0.1:3001/\n", "utf8");
+    const environment = await loadTestEnvironment(root, {});
+
+    assert.equal(testEnvironmentValueSource(environment, "FLUXIQ_TEST_BASE_URL"), ".env.local");
+    assert.equal(testEnvironmentValueSource(environment, "FLUXIQ_TEST_PROJECT_ID"), undefined);
+
+    assert.throws(() => resolveTargetConfiguration({ cliTarget: "isolated", env: environment }), (error: Error) => {
+      assert.match(error.message, /isolated target cannot use existing-install configuration/);
+      assert.match(error.message, /were read from \.env\.local in the repository root, not from this command/);
+      assert.match(error.message, /FLUXIQ_TEST_ENV_FILES=none/);
+      return true;
+    });
+
+    assert.throws(() => resolveTargetConfiguration({ cliTarget: "existing", env: environment }), (error: Error) => {
+      assert.match(error.message, /FLUXIQ_TEST_PROJECT_ID is required/);
+      assert.match(error.message, /\.env\.local/);
+      assert.match(error.message, /FLUXIQ_TEST_ENV_FILES=none/);
+      return true;
+    });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a value the operator set on the command line is never blamed on a file", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-target-config-"));
+  try {
+    await writeFile(path.join(root, ".env.local"), "FLUXIQ_TEST_BASE_URL=http://127.0.0.1:3000/\n", "utf8");
+    const environment = await loadTestEnvironment(root, { FLUXIQ_TEST_BASE_URL: "http://127.0.0.1:4000/" });
+    assert.equal(testEnvironmentValueSource(environment, "FLUXIQ_TEST_BASE_URL"), undefined);
+    assert.throws(() => resolveTargetConfiguration({ cliTarget: "isolated", env: environment }), (error: Error) => {
+      assert.match(error.message, /cannot use existing-install configuration/);
+      assert.doesNotMatch(error.message, /\.env\.local/);
+      return true;
+    });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

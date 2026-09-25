@@ -15,7 +15,14 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { webActionFailureRejectionCode, type WebFailedActionResult } from "./action-failure";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
-import { recoverable, RecoverableToolRejection, type WebLlmToolRejectionCode } from "./tool-rejection";
+import {
+  recoverable,
+  RecoverableToolRejection,
+  WEB_LLM_TOOL_REJECTION_REASONS,
+  WEB_LLM_TOOL_RESULT_SCHEMA_VERSION,
+  type WebLlmToolRejectionCode,
+  type WebLlmToolRejectionReason
+} from "./tool-rejection";
 import { jsonRecord } from "./untrusted-json";
 
 type ClientActionResult = WebFailedActionResult & {
@@ -48,6 +55,35 @@ export type WebLlmEvidenceToolExecution = {
   effectApplied: boolean;
   targetsUnchanged?: boolean;
   resultCode?: string;
+  /**
+   * Which refusal this was, in this domain's own closed vocabulary
+   * (`./tool-rejection.ts`).
+   *
+   * The code alone is one word for several different defects, and Core traces
+   * the code. Measured on `run-mug776kx-0214b287`, 2026-09-25: 38 provider
+   * calls produced 14 identical `web.action.rejected.invalid_input` rows and 8
+   * identical `web.action.rejected.target_unobserved` rows, and nothing else --
+   * so three or four separate faults with three or four separate fixes were
+   * indistinguishable to anyone reading the run afterwards. The reason that
+   * tells them apart was already computed for the model's own evidence and
+   * thrown away on the way out; this is that same value, said once more where a
+   * reader of the run can see it.
+   *
+   * It is one of `WEB_LLM_TOOL_REJECTION_REASONS` and never a sentence, for the
+   * same reason the detail is: a refusal must not become a side channel for the
+   * page content it refused. A successful call has no reason and carries none.
+   */
+  resultReason?: WebLlmToolRejectionReason;
+  /**
+   * The catalog id of the node the call named, when this domain resolved one
+   * (`./node-run/catalog.ts`).
+   *
+   * Only a resolved id. Where the call named a node this domain cannot run, the
+   * reason `node_not_runnable_here` says so on its own and the model's invented
+   * string stays out of the trace -- a name nobody minted is not an identifier,
+   * and publishing it would make the run's own record quote the model.
+   */
+  nodeId?: string;
   /**
    * What this one call did, for the draft Core is accruing.
    *
@@ -113,14 +149,66 @@ export function toolMetadata(input: WebLlmEvidenceToolRequest): JsonObject {
   return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
 }
 
+/**
+ * What a call says about itself beyond its code: why it refused, and which node
+ * of the library it named.
+ *
+ * Deliberately not exported. A caller writes an object literal, which is
+ * excess-checked against this type at the call site, and the packet's own
+ * producer stays the one place the fields are named.
+ */
+type WebLlmEvidenceToolCallFacts = {
+  resultReason?: WebLlmToolRejectionReason | undefined;
+  nodeId?: string | undefined;
+};
+
 export function toolExecution(
   evidence: JsonValue,
   effectApplied: boolean,
   resultCode: string,
   targetsUnchanged?: boolean,
-  draft?: WebLlmEvidenceToolExecution["draft"]
+  draft?: WebLlmEvidenceToolExecution["draft"],
+  said?: WebLlmEvidenceToolCallFacts
 ): WebLlmEvidenceToolExecution {
-  return present<WebLlmEvidenceToolExecution>({ kind: "llm_evidence_tool_execution", evidence, effectApplied, targetsUnchanged, resultCode, draft });
+  return present<WebLlmEvidenceToolExecution>({
+    kind: "llm_evidence_tool_execution",
+    evidence,
+    effectApplied,
+    targetsUnchanged,
+    resultCode,
+    // Said by the caller where it holds the reason, and otherwise read back out
+    // of the refusal this call is already returning (`refusedReason`).
+    resultReason: said?.resultReason ?? refusedReason(evidence),
+    nodeId: said?.nodeId,
+    draft
+  });
+}
+
+/**
+ * The reason inside a refusal a caller is already handing back.
+ *
+ * Every refusal site in this package answers with a `WebLlmToolRejection`, and
+ * the reason is in it; lifting it here is what makes a site that gains a reason
+ * later carry it into the trace with no edit at all -- including the one site
+ * that raises a refusal outside this directory's own files (`../tools.ts`
+ * catches what `./structure/detect.ts` throws). Nothing is derived and nothing
+ * is invented: a value that is not one of this domain's closed reasons is
+ * dropped rather than published, so a packet that ever carried something else
+ * could not put it on a decision row.
+ *
+ * A success is not a refusal and never matches: a page packet and a structure
+ * packet each carry their own `schemaVersion`, neither of which is this one.
+ */
+function refusedReason(evidence: JsonValue): WebLlmToolRejectionReason | undefined {
+  if (evidence === null || typeof evidence !== "object" || Array.isArray(evidence)) return undefined;
+  const packet = evidence as JsonObject;
+  if (packet.schemaVersion !== WEB_LLM_TOOL_RESULT_SCHEMA_VERSION || packet.ok !== false) return undefined;
+  const detail = packet.detail;
+  if (detail === null || typeof detail !== "object" || Array.isArray(detail)) return undefined;
+  const reason = (detail as JsonObject).reason;
+  return typeof reason === "string" && (WEB_LLM_TOOL_REJECTION_REASONS as readonly string[]).includes(reason)
+    ? (reason as WebLlmToolRejectionReason)
+    : undefined;
 }
 
 /** Cancellation is fatal, never a recoverable rejection: nothing is left to tell the model. */
