@@ -68,11 +68,17 @@ async function run(registry: AutomationStudioHarnessOptionRegistry, optionId: st
  * has been left, or the call was not the option's shape -- and each of those
  * wants a different next call, so the expectations here name it.
  */
-function rejection(code: string, detail?: JsonObject): { kind: string; evidence: JsonObject; effectApplied: boolean; resultCode: string } {
+function rejection(code: string, detail?: JsonObject): { kind: string; evidence: JsonObject; effectApplied: boolean; resultCode: string; resultReason?: string } {
   const evidence: JsonObject = detail === undefined
     ? { schemaVersion: "web-llm-tool-result.v1", ok: false, code }
     : { schemaVersion: "web-llm-tool-result.v1", ok: false, code, detail };
-  return { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode: `web.action.rejected.${code}` };
+  const resultCode = `web.action.rejected.${code}`;
+  // The same reason beside the code, so whoever reads the run afterwards can
+  // tell one refusal of a kind from another (`../../capture.ts`).
+  const reason = detail?.reason;
+  return typeof reason === "string"
+    ? { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode, resultReason: reason }
+    : { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode };
 }
 
 function linkHandle(packet: JsonObject): string {

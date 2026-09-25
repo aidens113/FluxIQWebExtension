@@ -98,8 +98,17 @@ export type CreatedFlowBuildStep = Readonly<{
   callId?: string;
   /** Bytes of evidence this one call admitted. A size, never a value. */
   evidenceBytes?: number;
-  /** The refusal's own reason, where the row was one and Core named it. */
-  reason?: string;
+  /**
+   * The refusal's own reason, where the row was one and the domain named it:
+   * `node_not_runnable_here`, `handle_not_in_packet`, `unexpected_input_keys`
+   * and thirty others, which is what tells four defects apart behind the two
+   * codes they shared.
+   */
+  resultReason?: string;
+  /** The node the call ran, where the domain resolved one against its catalog; never a name the model invented. */
+  nodeId?: string;
+  /** When the row was recorded, in epoch milliseconds, so a stall can be located in time. */
+  at?: number;
   /** What this one call spent, as Core reported it. */
   usage?: Readonly<Record<string, string | number | boolean>>;
   [field: string]: CreatedFlowBuildStepValue | undefined;

@@ -109,7 +109,20 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
           // A refusal the page caused carries the page, shown like any packet
           // so its handles can be pressed next (`../capture.ts`).
           const page = error.page === undefined ? undefined : shown(handled, error.page);
-          return toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code));
+          // The reason goes out beside the code as well as inside the evidence:
+          // the model reads the evidence, and whoever reads the run afterwards
+          // reads the code, and one word for four refusals is what made
+          // `run-mug776kx-0214b287` undiagnosable (`../capture.ts`).
+          return toolExecution(
+            toolRejection(error.code, page?.evidence, error.detail),
+            false,
+            webLlmToolRejectionResultCode(error.code),
+            undefined,
+            undefined,
+            // A harness option is not a node of the library: it names no
+            // catalog id, so there is none to publish.
+            { resultReason: error.detail?.reason, nodeId: undefined }
+          );
         }
         throw error;
       }
