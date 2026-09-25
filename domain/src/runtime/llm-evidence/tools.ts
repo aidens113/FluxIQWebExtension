@@ -61,7 +61,7 @@ import {
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { runWebOutputNode, webObservationNodeId } from "./node-run";
+import { runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -148,7 +148,22 @@ export type WebAutomationLlmEvidenceRuntime = {
    * node ids from the registry itself, so a node registered later is runnable
    * with nothing here to edit (`AS/runtime/llm/harness-options/binding.ts`).
    */
-  runsNodes?: { initial?: JsonObject };
+  runsNodes?: {
+    initial?: JsonObject;
+    /**
+     * The nodes this domain will actually run, by id. Core narrows the library
+     * it offers the model to these.
+     *
+     * It is said because the registry's own list is wider than this domain:
+     * Core's built-ins are available in every scope, so the enum the model was
+     * given held `builtin.control.for-each`, `builtin.data.filter-list` and the
+     * rest, and every call naming one arrived here and was refused
+     * `node_not_runnable_here`. Nothing the model needs to express is lost --
+     * control flow is authored as a routing word on steps that ran, and
+     * filtering and record output are parameters of the extraction node.
+     */
+    runnable?: readonly string[];
+  };
   /** Options declared in full rather than as bare tools, so a runtime-only recovery option never reaches Flow authoring. */
   harnessOptions: AutomationStudioHarnessOptionBundle;
   /** How Core reads one of this domain's result codes as a refusal, without learning any of them. */
@@ -274,7 +289,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
     // One free look before the first paid decision, so the model's first
     // question is asked with the page already in front of it. The argument is
     // this domain's, not the model's, which is what makes it safe to take.
-    runsNodes: observationNode ? { initial: { node: observationNode, parameters: {}, consequences: [] } } : {},
+    // The library this domain answers for, and one free look before the first
+    // paid decision so the model's first question is asked with the page
+    // already in front of it. The look's argument is this domain's, not the
+    // model's, which is what makes it safe to take. `runnable` is said on both
+    // paths: a domain that offered no observation node still runs only these.
+    runsNodes: observationNode
+      ? { initial: { node: observationNode, parameters: {}, consequences: [] }, runnable: webRunnableNodeIds() }
+      : { runnable: webRunnableNodeIds() },
     async executeTool(input) {
       assertActive(input.signal);
       boundedIdentifier(input.projectId, "projectId");
