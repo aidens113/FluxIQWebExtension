@@ -379,11 +379,23 @@ one pass is not evidence.
 
 | Rung | Task | Why it is the right next step |
 | --- | --- | --- |
-| 1 | `product-catalog-search-lamp` (~3 nodes) | The cheapest task that genuinely qualifies: type a search, submit it, extract the results. An unfiltered catalog would have the right shape and the wrong rows, so the oracle can tell doing the work from reading the page. This is the first multi-node run ever attempted. |
-| 2 | `member-directory-hollis-admins` (~3 nodes) | A second three-node chain on a different fixture, so rung 1's result can be told apart from something site-specific. |
-| 3 | `everything-store-plus-earbuds-under-50` (~11 nodes) | Search, then filter, then extract — the case that has never produced a correct answer, at four times the length. |
-| 4 | `social-scheduler` `whats-new` / `no-announcement` pair, then `social-network-feed-confirm-requests` | The cleanest routing test in the corpus: one pair of instructions whose correct Flows differ only by a branch. Then per-row branching with mid-loop rate-limit recovery, which is the first task needing the recovery ladder inside a loop. |
-| 5 | `bigbox-retail-pickup-order` (~20 nodes), then `job-board-apply-quillmark` (~28) | Guest checkout with a deliberate stall to retry and a real order placed — the first task whose instruction authorises a consequential act, so the permission and escalation path is exercised rather than assumed. Then the longest chain in the corpus: a second tab, an ATS iframe, a typeahead, a bot check and a derived reference. |
+| 1 | `everything-store-plus-earbuds-under-50` (~11 nodes) | Search, then filter, then extract. Seven separate obligations in one instruction, and the case that has never produced a correct answer. Already in progress. |
+| 2 | `company-website-gas-engineers` (~8 nodes) | The shortest chain among the ten, on a different site, so rung 1's result can be told apart from something site-specific. Three interruptions before the work starts. |
+| 3 | `social-network-feed-confirm-requests` (~11 nodes, **routing and a retry**) | The first task that needs authored routing and a mid-loop recovery, rather than a straight line. |
+| 4 | `professional-network-withdraw-stale-requests` (~10 nodes, **a loop**) | A recorded chain of 31 clicks expressed as a loop with per-row skipping — the first task where the Flow must be shorter than the work. |
+| 5 | `bigbox-retail-pickup-order` (~20 nodes), then `job-board-apply-quillmark` (~28) | Guest checkout with a deliberate stall to retry and a real order placed — the first instruction authorising a consequential act, so the permission and escalation path is exercised rather than assumed. Then the longest chain in the corpus: a second tab, an ATS iframe, a typeahead, a bot check and a derived reference. |
+
+**Only the ten realistic sites.** Restated by the user on 2026-09-25: the loop
+runs on `everything-store`, `crossborder-marketplace`, `bigbox-retail`,
+`job-board`, `local-classifieds`, `auction-marketplace`, `photo-social`,
+`social-network-feed`, `company-website` and `professional-network`, and
+nowhere else. Every task on those ten is multi-node and every one of them opens
+behind at least one page-wide interruption, so the complexity gate is met by
+construction. **The Lab fixtures are not a rung and never were** — the earlier
+ladder opened on `product-catalog-search-lamp` and `member-directory-hollis-admins`,
+which are Lab fixtures, and the one pass recorded against rung 1 is therefore
+not evidence about the product's real target. Those two rows are removed rather
+than reordered.
 
 **The command** is `pnpm lab:campaign <task-id>` for a single task. One live run
 in flight at a time.
