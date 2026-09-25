@@ -4,6 +4,7 @@ import type { JsonObject } from "fluxiq/core";
 import {
   bindWebAutomationLlmEvidenceRuntime,
   createWebAutomationLlmEvidenceRuntime,
+  webRunnableNodeIds,
   sanitizeWebLlmSnapshot,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_ENTER_FIELD_TOOL_ID,
@@ -102,7 +103,13 @@ test("binds from the production host seam and selects the sole trusted web clien
   // One tool of this domain's own. Everything else a build does is a node of
   // the library, which Core offers because Core is what enumerates the registry.
   assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
-  assert.deepEqual(bound?.runsNodes, { initial: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  // `runnable` names what this domain will actually run, and Core narrows the
+  // library it offers the model to it. Without that the enum held Core's
+  // built-ins too -- available in every scope -- and every call naming one
+  // arrived here only to be refused (`../../../../docs` t126).
+  assert.deepEqual(bound?.runsNodes?.initial, { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] });
+  assert.deepEqual(bound?.runsNodes?.runnable, webRunnableNodeIds());
+  assert.ok(!bound?.runsNodes?.runnable?.some(id => id.startsWith("builtin.")), "only this domain's own nodes are offered");
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },

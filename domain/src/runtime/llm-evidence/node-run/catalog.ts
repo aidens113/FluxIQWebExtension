@@ -23,8 +23,30 @@
 //     look. A snapshot is how the model sees where it is; it is a node, it runs
 //     like a node, and a Flow full of snapshots would be a Flow that does
 //     nothing.
+//
+// **A name is resolved, not looked up.** The fourth question -- which node did
+// this call mean -- used to be a bare `Map.get`, and a model that wrote the
+// separator wrong got `node_not_runnable_here`: a paid provider call spent
+// telling it that it mistyped. The ids invite exactly that mistake, because
+// `web.dom.extract_list` becomes `web.output.dom-extract_list` -- dots turned
+// into hyphens, underscores left alone (`output-nodes/definitions.ts`) -- so
+// the kebab-case form a model naturally writes,
+// `web.output.dom-extract-list`, names nothing. Live run
+// `run-mug776kx-0214b287` was refused that way fourteen times in a row and
+// never corrected itself. So a miss now falls through to Core's name matcher
+// over these same ids, and only a name nothing plausible was written for is
+// still unknown. The matcher is Core's rather than a second one written here
+// because the same correction has to hold for the Flow the model goes on to
+// propose, which Core resolves (`AS/nodes/name-match/`).
+//
+// **What comes back is the catalog's node, never the model's spelling.** The
+// caller runs `actionType` and records `definitionId`, so a corrected call
+// dispatches the real command and appends a draft step under the real id. The
+// written form survives only inside the step's opaque `input`/`ranWith` JSON,
+// which Core carries without reading and hands back here for a replay -- where
+// it is resolved through this same function, and so corrected again.
 
-import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import { automationStudioMatchName, type AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { webAutomationActionEffect } from "../../../actions/effect";
 import { WEB_AUTOMATION_ACTION_SAFETY } from "../../../actions/safety";
 import type { WebAutomationActionType } from "../../../actions/types";
@@ -56,6 +78,7 @@ export type WebRunnableNode = {
 // structure rules exist to prevent, and one that would silently make every node
 // unrunnable.
 let cached: Map<string, WebRunnableNode> | undefined;
+let cachedCandidates: { id: string }[] | undefined;
 
 function runnableNodes(): Map<string, WebRunnableNode> {
   if (cached) return cached;
@@ -75,9 +98,35 @@ function runnableNodes(): Map<string, WebRunnableNode> {
   return cached;
 }
 
-/** The node a call named, when this domain can run it against a page. */
+/**
+ * The runnable ids as the matcher wants them.
+ *
+ * No `accepts`: a node id is not a slot with a value shape, so there is
+ * nothing here for the matcher's tie-break to read, and saying so would be
+ * inventing information rather than withholding it.
+ */
+function runnableCandidates(): { id: string }[] {
+  cachedCandidates ??= [...runnableNodes().keys()].map((id) => ({ id }));
+  return cachedCandidates;
+}
+
+/**
+ * The node a call named, when this domain can run it against a page.
+ *
+ * Exactly, then by nearest name. `undefined` still means the call named
+ * nothing plausible -- `node_not_runnable_here` stays reachable for a name
+ * that is genuinely nothing, because a correction nobody wrote a near version
+ * of would be noise rather than help.
+ */
 export function webRunnableNode(definitionId: unknown): WebRunnableNode | undefined {
-  return typeof definitionId === "string" ? runnableNodes().get(definitionId) : undefined;
+  if (typeof definitionId !== "string") return undefined;
+  const nodes = runnableNodes();
+  // The common path, and free: a call that wrote the id correctly is never
+  // scored against the whole catalog.
+  const exact = nodes.get(definitionId);
+  if (exact) return exact;
+  const matched = automationStudioMatchName(definitionId, runnableCandidates());
+  return matched ? nodes.get(matched.id) : undefined;
 }
 
 /** Every node this domain can run, by catalog id, for a refusal that says what it could have named. */

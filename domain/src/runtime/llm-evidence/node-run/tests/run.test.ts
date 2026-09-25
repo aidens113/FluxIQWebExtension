@@ -41,7 +41,12 @@ test("the runnable library is derived from the domain's own node definitions", (
 test("the runtime offers detection beside Core's library verb, and says it runs nodes", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(stub().gateway);
   assert.deepEqual(runtime.tools.map((tool) => tool.toolId), ["web.detect_repeating_structure"]);
-  assert.deepEqual(runtime.runsNodes, { initial: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  // `runnable` is said beside the first look, because Core narrows the library
+  // it offers to it and a refusal names it back (`../../tools.ts`).
+  assert.deepEqual(runtime.runsNodes, {
+    initial: { node: SNAPSHOT, parameters: {}, consequences: [] },
+    runnable: webRunnableNodeIds()
+  });
 });
 
 test("running a node dispatches the node's own command and records the step it becomes", async () => {
