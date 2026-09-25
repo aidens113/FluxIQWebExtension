@@ -71,7 +71,7 @@ export function resolveTargetConfiguration(input: ResolveTargetConfigurationInpu
   if (input.cliWorkspace && envWorkspace && input.cliWorkspace.trim() !== envWorkspace) throw new Error(`--workspace ${input.cliWorkspace.trim()} conflicts with FLUXIQ_TEST_PERSISTENT_WORKSPACE=${envWorkspace}`);
   if (mode === "isolated" || mode === "persistent-isolated") {
     const incompatible = [...configuredExistingKeys, ...(input.cliFlowId ? ["--flow"] : []), ...(input.cliFreshLogin ? ["--fresh-login"] : [])];
-    if (incompatible.length) throw new Error(`${mode} target cannot use existing-install configuration: ${incompatible.join(", ")}`);
+    if (incompatible.length) throw new Error(`${mode} target cannot use existing-install configuration: ${incompatible.join(", ")}${wayOut(input.env, configuredExistingKeys, true)}`);
     if (mode === "isolated" && (input.cliWorkspace || envWorkspace)) throw new Error("--workspace and FLUXIQ_TEST_PERSISTENT_WORKSPACE require the persistent-isolated target");
     const username = optionalText(input.env.FLUXIQ_TEST_USERNAME, "FLUXIQ_TEST_USERNAME");
     const password = optionalText(input.env.FLUXIQ_TEST_PASSWORD, "FLUXIQ_TEST_PASSWORD");
@@ -88,7 +88,7 @@ export function resolveTargetConfiguration(input: ResolveTargetConfigurationInpu
 
   const baseUrl = httpOrigin(required(input.env.FLUXIQ_TEST_BASE_URL, "FLUXIQ_TEST_BASE_URL"), "FLUXIQ_TEST_BASE_URL");
   const gatewayValue = optionalText(input.env.FLUXIQ_TEST_GATEWAY_URL, "FLUXIQ_TEST_GATEWAY_URL");
-  const projectId = required(input.env.FLUXIQ_TEST_PROJECT_ID, "FLUXIQ_TEST_PROJECT_ID");
+  const projectId = requiredForTarget(input.env, "FLUXIQ_TEST_PROJECT_ID");
   const flowId = input.cliFlowId ? nonEmpty(input.cliFlowId, "--flow") : required(input.env.FLUXIQ_TEST_FLOW_ID, "FLUXIQ_TEST_FLOW_ID");
   const username = required(input.env.FLUXIQ_TEST_USERNAME, "FLUXIQ_TEST_USERNAME");
   const password = required(input.env.FLUXIQ_TEST_PASSWORD, "FLUXIQ_TEST_PASSWORD");
@@ -174,10 +174,42 @@ function environmentFileNames(processEnvironment: NodeJS.ProcessEnv): readonly s
   throw new Error("FLUXIQ_TEST_ENV_FILES must be none when set");
 }
 
+/**
+ * Which repository env file each name in a loaded environment came from.
+ *
+ * Kept beside the environment rather than inside it, so a provenance record
+ * can never be mistaken for a configuration value, and keyed weakly so it
+ * lives exactly as long as the environment it describes. A refusal reads this
+ * to say where the offending value came from: without it, a run refused for a
+ * value the operator never typed can only name the variable, which is how a
+ * one-attempt mistake became a three-attempt one (`E14`).
+ */
+const environmentProvenance = new WeakMap<NodeJS.ProcessEnv, ReadonlyMap<string, string>>();
+
+/**
+ * The repository env file a name was read from, or `undefined` when the value
+ * was not read from a file — it came from the process, or this environment was
+ * not built by `loadTestEnvironment` at all.
+ */
+export function testEnvironmentValueSource(environment: NodeJS.ProcessEnv, name: string): string | undefined {
+  return environmentProvenance.get(environment)?.get(name);
+}
+
 export async function loadTestEnvironment(repositoryRoot: string, processEnvironment: NodeJS.ProcessEnv): Promise<NodeJS.ProcessEnv> {
   const fromFile: NodeJS.ProcessEnv = {};
-  for (const name of environmentFileNames(processEnvironment)) Object.assign(fromFile, await readEnvironmentFile(path.join(repositoryRoot, name)));
-  return { ...fromFile, ...processEnvironment };
+  const source = new Map<string, string>();
+  for (const name of environmentFileNames(processEnvironment)) {
+    const values = await readEnvironmentFile(path.join(repositoryRoot, name));
+    for (const key of Object.keys(values)) source.set(key, name);
+    Object.assign(fromFile, values);
+  }
+  // A process variable overrides a file value, so it also overrides the file
+  // as that name's source: saying `.env.local` set something the operator set
+  // on the command line would send them to edit the wrong thing.
+  for (const key of Object.keys(processEnvironment)) source.delete(key);
+  const environment = { ...fromFile, ...processEnvironment };
+  environmentProvenance.set(environment, source);
+  return environment;
 }
 
 export async function loadAllowlistedTestEnvironment(repositoryRoot: string, processEnvironment: NodeJS.ProcessEnv, allowedNames: readonly string[]): Promise<NodeJS.ProcessEnv> {
@@ -239,6 +271,41 @@ function credentials(env: NodeJS.ProcessEnv, username: string, password: string,
   const totp = optionalText(env.FLUXIQ_TEST_TOTP, "FLUXIQ_TEST_TOTP");
   if (requirePin && !authorizationPin) throw new Error("FLUXIQ_TEST_PIN is required for an existing target");
   return { username, password, ...(authorizationPin ? { authorizationPin } : {}), ...(totp ? { totp } : {}) };
+}
+
+/**
+ * What a refused run can do about it, appended to the refusal itself.
+ *
+ * Two refusals here are reached most often by an operator who configured
+ * nothing: this machine's `.env.local` describes an existing FluxIQ install,
+ * and an isolated run inherits it. Neither message said the value came from a
+ * file, which file, or that a supported switch ignores both — the switch was
+ * documented in a comment above the function implementing it and nowhere the
+ * operator of a refused run would look. Three attempts were spent on that
+ * before the first live run of this loop reached the product.
+ */
+function wayOut(env: NodeJS.ProcessEnv, names: readonly string[], alreadyNamed = false): string {
+  const sourced = names.map((name) => [name, testEnvironmentValueSource(env, name)] as const).filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
+  if (!sourced.length) return "";
+  const files = [...new Set(sourced.map(([, file]) => file))].join(" and ");
+  const one = sourced.length === 1;
+  // The refusal that lists the offending names does not want them listed
+  // again one clause later; the one that names a missing value does.
+  const subject = alreadyNamed ? (one ? "It" : "They") : sourced.map(([name]) => name).join(", ");
+  return `. ${subject} ${one ? "was" : "were"} read from ${files} in the repository root, not from this command; run with FLUXIQ_TEST_ENV_FILES=none to ignore ${one ? "it" : "them"} for this run without editing the file`;
+}
+
+/**
+ * A value an existing or clone target cannot do without, refused by a message
+ * that also says where the rest of this machine's target configuration came
+ * from — because a missing project id on a machine configured for an existing
+ * install usually means the target itself was inherited rather than chosen.
+ */
+function requiredForTarget(env: NodeJS.ProcessEnv, name: (typeof existingKeys)[number]): string {
+  const resolved = optionalText(env[name], name);
+  if (resolved) return resolved;
+  const inherited = existingKeys.filter((key) => testEnvironmentValueSource(env, key) !== undefined);
+  throw new Error(`${name} is required for an existing or clone target${wayOut(env, inherited)}`);
 }
 
 function required(value: string | undefined, name: string): string { const resolved = optionalText(value, name); if (!resolved) throw new Error(`${name} is required for an existing or clone target`); return resolved; }
