@@ -186,6 +186,14 @@ function resultReauthor(value: unknown): RunHarnessResultReauthor | null | undef
     adaptationId: routed && isCoreIdentifier(record.adaptationId) ? record.adaptationId : null,
     applied: routed && record.applied === true,
     failureCode: routed && isCoreCode(code) ? code : null,
+    // What kind of failure that code was. Only on a taken route, and each one
+    // only where Core recorded it: the code alone is a stage's default and says
+    // nothing a reader can act on (`@fluxiq-web-extension/test-contracts`).
+    ...(routed && isCoreKind(record.stage) ? { failureStage: record.stage } : {}),
+    ...(routed && typeof record.retryable === "boolean" ? { failureRetryable: record.retryable } : {}),
+    ...(routed && isCoreKind(record.providerInvocation) ? { providerInvocation: record.providerInvocation } : {}),
+    ...(routed && isCoreKind(record.providerResponse) ? { providerResponse: record.providerResponse } : {}),
+    ...(routed && Number.isSafeInteger(record.providerStatus) ? { providerStatus: record.providerStatus as number } : {}),
   };
 }
 

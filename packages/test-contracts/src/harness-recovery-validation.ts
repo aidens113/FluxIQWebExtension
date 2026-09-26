@@ -12,7 +12,7 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
 const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "refusalCause", "contextSections", "resultReauthor", "resultRepair"] as const satisfies readonly (keyof RunHarnessRecovery)[];
-const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
+const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode", "failureStage", "failureRetryable", "providerInvocation", "providerResponse", "providerStatus"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
 const resultRepairKeys = ["attempted", "nodeId", "code"] as const satisfies readonly (keyof RunHarnessResultRepair)[];
 const contextSectionKeys = ["included", "omitted"] as const;
 const contextOmissionKeys = ["section", "reason"] as const;
@@ -141,6 +141,16 @@ function checkResultReauthor(input: unknown, path: string, issues: ValidationIss
     checkCode(value.failureCode, `${path}.failureCode`, issues);
     if (value.routed === false) add(issues, `${path}.failureCode`, "must be null for a run that was never routed: a refusal is named by refusal, not by a failure");
   }
+  // What kind of failure it was. Optional throughout: absent means Core did not
+  // record it, which is a different fact from recording it as none, and a run
+  // whose route was never taken has no failure to characterise.
+  for (const member of ["failureStage", "providerInvocation", "providerResponse"] as const) {
+    if (value[member] === undefined) continue;
+    checkKind(value[member], `${path}.${member}`, issues);
+    if (value.routed === false) add(issues, `${path}.${member}`, "belongs to a route that was taken");
+  }
+  if (value.failureRetryable !== undefined && typeof value.failureRetryable !== "boolean") add(issues, `${path}.failureRetryable`, "must be a boolean");
+  if (value.providerStatus !== undefined && !Number.isSafeInteger(value.providerStatus)) add(issues, `${path}.providerStatus`, "must be a whole number");
 }
 
 /** Core's marker that the result reached the failure entry point: a flag, the node it was filed against, and the verdict code that sent it there. */

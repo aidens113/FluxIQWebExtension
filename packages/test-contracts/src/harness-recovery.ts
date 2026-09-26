@@ -164,6 +164,26 @@ export type RunHarnessResultReauthor = {
   applied: boolean;
   /** The code a taken route failed under (`flow_bootstrap.extend_failed`, ...), or `null` when no step of it failed. */
   failureCode: string | null;
+  /**
+   * Which kind of failure that code was, where Core read it.
+   *
+   * **The code alone could not be acted on.** `run-muhqop38-997ee8e5`, the
+   * first run in which this route ever opened, failed
+   * `flow_bootstrap.provider_request_failed` — the default code for the whole
+   * `provider_request` stage, which says only that a request was attempted and
+   * its answer is unknown. A per-request timeout, a transport error, a refused
+   * grant and a provider status are all that one word, and Core parsed the
+   * diagnostic that told them apart and kept only the code.
+   *
+   * Every member is absent when Core did not record it, so "not recorded" and
+   * "recorded as none" stay different facts. Closed words, flags and a status
+   * number; nothing Core wrote as prose.
+   */
+  failureStage?: string;
+  failureRetryable?: boolean;
+  providerInvocation?: string;
+  providerResponse?: string;
+  providerStatus?: number;
 };
 
 /**
