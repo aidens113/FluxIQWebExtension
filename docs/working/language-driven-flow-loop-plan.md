@@ -148,6 +148,49 @@ criteria in `The MVP Exit Criteria` all hold.
 
 ---
 
+### Several Lanes At Once, One Run Step At A Time
+
+**The user's instruction, 2026-09-26.** "I want you to use more subagents and
+speed things up. Do multiple test loops at once. Test loop being test live on
+REALISTIC 1 of 10 HARD SCENARIOS ONLY, debug thoroughly, fix errors and bugs, try
+that scenario again till its working perfectly, continue to a new scenario."
+
+The parallelism is **across scenarios, never inside one**. A lane owns one of the
+ten sites, runs it live, debugs that run completely, fixes what the debug named,
+and runs the same scenario again until it works perfectly. Only then does the lane
+take a new scenario. What this must not become is a sweep: ten sites each failing
+once with none of them understood.
+
+**How the concurrency is actually obtained.** Most of a loop's wall clock is
+debugging and fixing, not running, and both parallelize freely:
+
+- **Debug is read-only** and cannot collide, so every finished run gets its own
+  debug worker immediately.
+- **Fixes are partitioned by file.** Two workers in one file is how one of them
+  loses its work — which has already happened here once, when another agent's
+  commit swept up five of a worker's files mid-task.
+- **Live runs are isolated per lane by `FLUXIQ_LAB_INSTANCE`.** The Lab is built
+  for this: its build phase is serialized across instances by one
+  repository-wide lock and its run phase is not, so N instances build one after
+  another and then run at the same time. Each instance owns its extension bundle,
+  scenario bundle and host bundle under `.lab-instances/<instance>/`, which is
+  what stops one lane's rebuild deleting modules another lane's browser is
+  loading.
+- **A lane cannot start while its build is stale.** The Lab refuses a run whose
+  Core build is older than Core's source, and since 2026-09-26 it asks the same
+  of this repository's own two builds. So no lane starts while a worker is still
+  editing Core or the domain: the fixes land, the builds are rebuilt, and the
+  lanes then fire together.
+
+**The standing caution.** `AGENTS.md` records, with measurements from
+2026-09-23, that concurrent live runs can starve each other for browsers, ports
+and CPU, and that the loser stalls, exhausts a wait, and is recorded as a product
+failure that never happened. Instanced lanes address the file collisions, not the
+machine's capacity. So the lane count is raised by measurement — watch each
+lane's wall clock against the ~300 s a healthy run takes, and treat a lane that
+stalls as evidence about the machine rather than about the product.
+
+
 ## What Counts As A Complex Scenario
 
 A task qualifies only if the **minimum correct Flow has several real nodes that
@@ -632,33 +675,26 @@ debug and partitioned so neither touches the other's files:
 
 ## Work Ledger
 
-### 2026-09-24 — Document opened, discovery dispatched
-- Agent: supervisor
-- Changed: `docs/working/language-driven-flow-loop-plan.md`, `docs/working/README.md`
-- Why: the user replaced corpus-wide measurement with a one-run, one-debug loop
-  on complex multi-node scenarios only, and set the MVP exit condition.
-- Validation: not validated — no code changed and no run was made.
-- Outcome: Accepted
-- Follow-up: fill Phases 0 and 1 from the three discovery reports, then run the
-  first complex scenario.
-
-### 2026-09-24 — Phase 0 landed, and the ladder was climbed out of order
+### 2026-09-24 — Document opened, Phase 0 landed, and the ladder was climbed out of order
 - Agent: supervisor, with workers on t124 and the Core side
-- Changed: Phase 0 instrumentation (`7369504`, Core `16ea5b9`); extraction
-  filtering (`2d2324d`, `08d4ff8`); Core's build-time answerability check
-  (`636d425`); Core's empty-result judgement and refusal reasons (`bb45f4b`)
-- Why: the first live runs exposed causes in each of these, and Phase 0's
+- Compacted 2026-09-26; the two original entries are in git history at `4896d96`.
+- Changed: this document and `docs/working/README.md`; Phase 0 instrumentation
+  (`7369504`, Core `16ea5b9`); extraction filtering (`2d2324d`, `08d4ff8`);
+  Core's build-time answerability check (`636d425`); Core's empty-result
+  judgement and refusal reasons (`bb45f4b`)
+- Why: the user replaced corpus-wide measurement with a one-run, one-debug loop
+  on complex multi-node scenarios only, and set the MVP exit condition. The first
+  live runs then exposed causes in each of the areas above, and Phase 0's
   instrumentation was the precondition for diagnosing any of them.
-- Validation: eleven live runs against DeepSeek. `run-mug1g8ai-7e79384d`
-  passed rung 1 (`product-catalog` / `search`, 17 calls, 286 s). The other ten
-  failed. Phase 0's effect is directly observable: `run-mug776kx-0214b287`
-  wrote a `flow-lane.json` for a *failed* build, with 41 decision rows carrying
-  `iteration`, `evidenceBytes` and per-call `usage`, where the pre-Phase-0
-  specimen wrote no such file at all.
-- Outcome: Accepted, with two corrections recorded below.
-- Follow-up: rung 1 passed once, not twice, so it is not held; rung 2 was
-  skipped entirely and the loop went to rung 3. Return to the ladder's order
-  once t125 lands.
+- Validation: eleven live runs against DeepSeek. `run-mug1g8ai-7e79384d` passed
+  the old rung 1 (`product-catalog`); the other ten failed. Phase 0's effect is
+  directly observable — `run-mug776kx-0214b287` wrote a `flow-lane.json` for a
+  *failed* build with 41 decision rows, where the pre-Phase-0 specimen wrote no
+  such file at all.
+- Outcome: Accepted, with two corrections recorded in later entries.
+- Follow-up: the `product-catalog` pass is not evidence about the product's
+  target, which is the ten realistic sites; rung 1 became
+  `everything-store-plus-earbuds-under-50`.
 
 ### 2026-09-25 — The last run named no cause, so t125 reopens Phase 0
 - Agent: supervisor
