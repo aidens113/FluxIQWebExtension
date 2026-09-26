@@ -560,47 +560,10 @@ a run must be able to name the version it judged.
 
 ## What A Run Spends Its Time On
 
-Measured 2026-09-25 from the per-row timestamps E4 added, which is the first
-time this could be asked at all. The user's question was why a run of one
-instruction took sixteen minutes; the answer was that almost none of it was the
-product thinking.
-
-`run-muher0en-508ddb69`, 949.6 s:
-
-| Phase | Time |
-| --- | --- |
-| Setup — browser, extension, isolated FluxIQ | 67.5 s |
-| Exploration — the actual work | 192 s |
-| The Flow's four actions | 12.6 s |
-| **Repair phase, waiting, producing nothing** | **568 s** |
-| Tail | 60 s |
-
-**The 568 s was a wait for something that was never coming.** Core records a
-refuted result as a failure on the last record-storing attempt, so a Flow whose
-every node executed as authored reads `failed` on that attempt. The Lab's
-`recoveryCouldBeRunning` took that for a node fault and spent the full
-five-minute `RECOVERY_RECORD_WAIT_MS` — on a recovery Core had already declined
-to plan, because Core plans from the diagnosis of an attempt that *would not
-run* and a refuted result hands it none. Fixed by `everyNodeRan`
-(`packages/test-runner/src/flow-lane/node-recovery.ts`): a node that ran and was
-then judged wrong is a node that ran. **Measured effect on the next run:
-949.6 s → 437.2 s, with the repair phase at 81.5 s.**
-
-**What is left, and it is now the largest cost.** Six exploration calls at
-**11.04 s each, identical to the centisecond**, plus two decisions at ~15.5 s —
-118 s of a 216 s build. Uniformity to that precision is a deadline being
-exhausted, not provider latency and not page work, and it reproduces across
-runs (`run-muher0en-508ddb69` shows the same 11.04 s eight times). The calls
-return `web.inspect.succeeded`, so whatever is being waited for is not required
-for the answer. `NAVIGATION_END_TIMEOUT_MS` in
-`apps/extension/src/runtime/click-landing.ts` was checked and ruled out —
-`landing()` returns early when no navigation starts. Open as t127.
-
-**The rule this establishes.** A run's duration is evidence like any other and
-is read from the timestamps, not estimated. Before concluding that the product
-is slow, account for where the seconds went: on the two runs measured so far,
-60% and then 19% of the wall clock was a harness wait, and the exploration
-itself never exceeded four minutes.
+Measured 2026-09-25 from the per-row timestamps Phase 0 added, and moved to
+[archive/run-time-spent-2026-09-25.md](./language-driven-flow-loop-plan/archive/run-time-spent-2026-09-25.md)
+on 2026-09-26 under the compaction threshold. Read it before optimising a run's
+wall clock; the runs it measures are those of 2026-09-25.
 
 ---
 
@@ -750,78 +713,25 @@ debug and partitioned so neither touches the other's files:
 
 ## Work Ledger
 
-### 2026-09-24 — Document opened, Phase 0 landed, and the ladder was climbed out of order
-- Agent: supervisor, with workers on t124 and the Core side
-- Compacted 2026-09-26; the two original entries are in git history at `4896d96`.
-- Changed: this document and `docs/working/README.md`; Phase 0 instrumentation
-  (`7369504`, Core `16ea5b9`); extraction filtering (`2d2324d`, `08d4ff8`);
-  Core's build-time answerability check (`636d425`); Core's empty-result
-  judgement and refusal reasons (`bb45f4b`)
-- Why: the user replaced corpus-wide measurement with a one-run, one-debug loop
-  on complex multi-node scenarios only, and set the MVP exit condition. The first
-  live runs then exposed causes in each of the areas above, and Phase 0's
-  instrumentation was the precondition for diagnosing any of them.
-- Validation: eleven live runs against DeepSeek. `run-mug1g8ai-7e79384d` passed
-  the old rung 1 (`product-catalog`); the other ten failed. Phase 0's effect is
-  directly observable — `run-mug776kx-0214b287` wrote a `flow-lane.json` for a
-  *failed* build with 41 decision rows, where the pre-Phase-0 specimen wrote no
-  such file at all.
-- Outcome: Accepted, with two corrections recorded in later entries.
-- Follow-up: the `product-catalog` pass is not evidence about the product's
-  target, which is the ten realistic sites; rung 1 became
-  `everything-store-plus-earbuds-under-50`.
-
-### 2026-09-25 — The last run named no cause, so t125 reopens Phase 0
-- Agent: supervisor
-- Changed: `docs/working/language-driven-flow-loop-plan.md` (Current State and
-  this ledger, both of which had not been updated since the document opened),
-  `reports/build-answers-instruction.md` committed (`0d65c16`)
-- Why: `run-mug776kx-0214b287` spent 38 provider calls and built nothing, and
-  its failure is fourteen identical `web.action.rejected.invalid_input` rows.
-  The reason behind each is computed in the domain and discarded at the Core
-  boundary, and no row carries a timestamp, so the run cannot be debugged —
-  which is exactly the condition Phase 0 exists to remove.
-- Validation: read directly from the run's own artifacts, not inferred —
-  `flow-lane.json` gives 41 rows whose only distinguishing members are
-  `toolId`, `iteration`, `effectApplied`, `resultCode`, `evidenceBytes` and
-  `usage`; `at` is present on 0 of 41. Core's `evidence-loop-decision.ts`
-  `exactKeys` list was read and confirmed to name no reason field.
-- Outcome: Accepted
-- Follow-up: t125 (branch `task/t125-evidence-names-its-reason` in both
-  repositories), then rerun `everything-store-plus-earbuds-under-50`.
-
----
-
-### 2026-09-25 — Three runs on rung 1, and the repair was never reachable
-- Agent: supervisor, with workers on t125, t126 and t127
-- Changed: Core `7848f93` (the offered library is what the domain runs),
-  `638ab1c` (the fourth rebuilder carries the refusal's reason), `75563f0`
-  (closest-match name resolution), `85e0d38` (the wrong-answer repair route);
-  this repository `9002620`, `37ebcf1`, `fd1fc14` (a run judged wrong is not a
-  run still recovering)
-- Why: the user restated that only the ten realistic scenarios count, asked why
-  a run took sixteen minutes, and asked whether the repair was triggering at
-  all. The third question found the largest defect in the document.
-- Validation: three live runs of `everything-store-plus-earbuds-under-50`,
-  each debugged in full.
-  - `run-mug776kx-0214b287` — 38 calls, no Flow, fourteen identical
-    `invalid_input` refusals.
-  - `run-muhd1vc7-0ec27a16` — 21 calls, a Flow built and replayed, 16 records
-    across 2 sets, 0 observed by the oracle, refuted correctly.
-  - `run-muher0en-508ddb69` — 27 calls, one extraction, **15 observed, 52 of 52
-    fields present, 1 matched**; the qualifying clauses never reached the node.
-  - `run-muhnh0s5-98a27f42` — 34 calls, **437 s against 949 s**, a seven-node
-    Flow that searches — `navigate, click ×4, type, click ×3, extract_list` —
-    and **8 observed, 3 matched in order, 5 in any order** against 13 expected.
-  Core: 3020 of 3021 automation-studio tests, 418 recovery tests, 279
-  flow-bootstrap. This repository: 811 domain tests, 6 terminal-wait tests.
-- Outcome: Accepted. Rung 1 has not passed and is not left.
-- Follow-up: t127's 11.04 s wait; whether the repair now produces a patch, which
-  the run in flight is the first ever able to show; and the 60 s tail.
-
----
-
----
+### 2026-09-24 to 2026-09-25 — Archived: the loop opened, Phase 0 landed, and the repair was found unreachable
+- Agent: supervisor, with workers on t124 to t127
+- Full entries, with every run id, commit hash and validation figure, moved to
+  [archive/ledger-to-2026-09-25.md](./language-driven-flow-loop-plan/archive/ledger-to-2026-09-25.md)
+  on 2026-09-26 under the compaction threshold.
+- What they settled: the loop's operating procedure and the MVP exit condition;
+  Phase 0's instrumentation, without which no run could be debugged at all; the
+  ten realistic scenarios as the only corpus; and the largest finding of the loop
+  to that point — the wrong-answer repair had never once run, because its route
+  was gated on a grant purpose no instruction-built Flow ever carries (Core
+  `85e0d38`). Fourteen live runs, all debugged.
+- Validation: fourteen live runs against DeepSeek across the two days, each
+  debugged in full, with every run id, command and observed figure in the archived
+  entries. The one pass in that period, `run-mug1g8ai-7e79384d`, was against the
+  old rung 1 (`product-catalog`) and is not evidence about the product's target.
+  Nothing in this summary line was re-validated on 2026-09-26; it is a pointer to
+  validation already recorded, not a fresh claim.
+- Outcome: Accepted. Superseded as a description of the present by the entry
+  below.
 
 ### 2026-09-26 — Four more runs on rung 1, and the model cannot correct its own draft
 - Agent: supervisor, with workers on t136, t139, t140 and t141

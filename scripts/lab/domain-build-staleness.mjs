@@ -22,7 +22,7 @@
 // and reads as a product result.
 
 import path from "node:path";
-import { scanNewest } from "./core/build/staleness.mjs";
+import { scanNewest } from "./core/index.mjs";
 
 /**
  * The builds a run loads from this repository, each with the source that
