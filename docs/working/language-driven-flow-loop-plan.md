@@ -182,6 +182,28 @@ debugging and fixing, not running, and both parallelize freely:
   editing Core or the domain: the fixes land, the builds are rebuilt, and the
   lanes then fire together.
 
+**The ten lanes, one hard multi-node task each.** Every one is
+`navigate-and-extract` and judged against an expected dataset, so a lane's verdict
+is an answer compared to a known right answer rather than a playback impression.
+Variant tasks are not lanes: a lane takes the plain task until it works.
+
+| Lane | Scenario | Task |
+| --- | --- | --- |
+| A | `everything-store` | `everything-store-plus-earbuds-under-50` |
+| B | `job-board` | `job-board-remote-rust-roles` |
+| C | `crossborder-marketplace` | `crossborder-marketplace-spain-hubs` |
+| D | `bigbox-retail` | `bigbox-retail-pickup-towels` |
+| E | `local-classifieds` | `local-classifieds-bike-search` |
+| F | `auction-marketplace` | `auction-marketplace-watch-endings` |
+| G | `company-website` | `company-website-gas-engineers` |
+| H | `photo-social` | `photo-social-giveaway-entries` |
+| I | `social-network-feed` | `social-network-feed-feed-digest` |
+| J | `professional-network` | `professional-network-rotterdam-data-engineers` |
+
+A lane runs as `FLUXIQ_LAB_INSTANCE=lane-<letter> pnpm lab:campaign <taskId>`,
+which spawns the Lab with that lane's own build output and writes its run under
+`test-runs/<runId>/` as every other run does.
+
 **The standing caution.** `AGENTS.md` records, with measurements from
 2026-09-23, that concurrent live runs can starve each other for browsers, ports
 and CPU, and that the loser stalls, exhausts a wait, and is recorded as a product
