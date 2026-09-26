@@ -722,9 +722,10 @@ debug and partitioned so neither touches the other's files:
 | t148 | A still page is not an empty one, and `required` stops defaulting to true | built, bundle rebuilt |
 | t149 | A near-miss column resolves on the *detected* path, which the authoring text steers the model to | in flight |
 | t150 | `run-scenario.ts` under the hard limit, which is blocking `pnpm check` and the index | in flight |
-| t151 | The screen's vocabulary gets its own module; one carried/withheld inconsistency settled | in flight |
+| t151 | The screen's vocabulary gets its own module; `expectedState`'s comparand carried, since withholding it was a false claim about the same request | built |
 | t152 | A refusal that never reached a provider says so, and the screened refusal reaches a reader | in flight |
 | t153 | The read's account of its wait becomes a countable field, not prose | in flight |
+| t154 | The two screens on one request agree, so a credential cannot reach the model through the looser one | in flight |
 
 ---
 
