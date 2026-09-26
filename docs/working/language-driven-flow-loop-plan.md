@@ -720,12 +720,14 @@ debug and partitioned so neither touches the other's files:
 | t144 | A build failure that parses, which is why run 8's re-author reported one useless word | in flight |
 | t145 | A provider refusal names itself, screened; and those two runs were never a provider 400 | built |
 | t148 | A still page is not an empty one, and `required` stops defaulting to true | built, bundle rebuilt |
-| t149 | A near-miss column resolves on the *detected* path, which the authoring text steers the model to | in flight |
+| t149 | A near-miss column resolves on the *detected* path; `accepts` derived from each column's spec, since a detection carries no sample values | built |
 | t150 | `run-scenario.ts` under the hard limit, which is blocking `pnpm check` and the index | in flight |
 | t151 | The screen's vocabulary gets its own module; `expectedState`'s comparand carried, since withholding it was a false claim about the same request | built |
 | t152 | A refusal that never reached a provider says so, and the screened refusal reaches a reader | in flight |
 | t153 | The read's account of its wait becomes a countable field, not prose | in flight |
 | t154 | The two screens on one request agree, so a credential cannot reach the model through the looser one | in flight |
+| t155 | An assumed column says so in the run's record, instead of being dropped at `resolve-plan-node.ts` | in flight |
+| t156 | A short column word resolves against a long detected key — the instruction asks for `url`, and `url` scores below the floor | in flight |
 
 ---
 
