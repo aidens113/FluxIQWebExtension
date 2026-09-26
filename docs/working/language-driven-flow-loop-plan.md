@@ -112,32 +112,24 @@ it yields a chain the Flow never had. And `conditions.{applied,kept,rejected}` i
 per-document rather than per-read, so `run-muhubegx`'s `applied: 0` beside
 `recordCount: 43, pagesRead: 5` describes page five alone.
 
-**The two causes that debug named, both now built in Core and awaiting a live
-run.** t140 and t141 are done, uncommitted, and verified only by their own checks
-— no provider call has exercised either. Five further tasks came out of them and
-are in flight: t142 (the extraction expresses the instruction and its read says
-what it did), t143 (read-only: which of four things each zero-record run was),
-t144 (a build failure that parses, which is why run 8's re-author reported one
-useless word), t145 (the HTTP 400 naming itself), t146 (the refusals reach the
-stored record, a declined rerun says so, and `evidence-loop.ts` comes under its
-budget), t147 (what a filter compared *against* reaches the repair).
+**The fixes run 8's debug produced** are tabled in `Worker Briefs`. All are
+uncommitted and none has been exercised by a provider call; each was verified only
+by its own checks.
 
-- **t140 — a refused amendment tells the model why.**
-  `applyAutomationStudioFlowDraftAmendments` computes a precise refusal for every
-  amendment it does not apply (`no_such_step`, `already_so`, `no_such_position`,
-  `run_by_the_loop`, `no_step_before_it`, `not_a_kept_step`) and
-  `runtime/llm/evidence-loop.ts` reads only `amended.applied`. The reason is
-  computed and discarded, so the model repeats the edit and then gives up. This
-  is the third time this loop has found a reason computed and thrown away at a
-  boundary, after `invalid_input` (t125) and the fourth rebuilder (`638ab1c`).
-- **t141 — an extraction's own vocabulary reaches the repair that must fix it.**
-  Run 8's filter cannot be read from any artifact it wrote:
-  `recovery/repair-context/parameter-screen.ts` withholds `where[i].read`,
-  `where[i].is` and every `fields.*.kind`, because `nameDepth` advances on every
-  object level and a compound parameter's own declared keys therefore always sit
-  past `MAX_NAMED_KEY_DEPTH`. `is` is in `NAME_KEYS` and is withheld anyway. The
-  wrong-answer repair is being asked to narrow an extraction without being told
-  what it filtered on, which is the likeliest reason run 8's re-author failed.
+**What is now known about run 8's one-condition Flow.** It was **not** an
+expressiveness failure. Five of the instruction's six qualifying clauses were
+already expressible before t142 changed anything, and source order and
+once-per-row-across-pages were already guaranteed by the read — merely
+undocumented, so nothing could know it. What remains, and is unassigned: the
+authoring text does not show the model the filter vocabulary, and the repair
+cannot amend a node's parameters. Both are the next wave, behind the workers in
+`flow-bootstrap/` and the authoring text.
+
+**Two loose ends recorded rather than fixed.** `parameter-screen.ts` passed its
+400-line advisory under three consecutive tasks (t151 is splitting it), and
+`expectedState.conditions[].expected` stayed withheld while an extraction's
+comparand became carried — the same structure under a different key, which t151 is
+settling.
 
 **What is proven working, live, that this document once recorded as broken.**
 Self-judgement on a multi-node Flow: five consecutive runs stored plausible
@@ -708,6 +700,23 @@ debug and partitioned so neither touches the other's files:
   filter condition's and a field declaration's own declared vocabulary at the
   depth a compound parameter actually puts them, while `text`, `value`, a
   locator-shaped string and a secret-shaped string stay withheld and stay named.
+
+### The Tasks Run 8's Debug Produced
+
+| | What it does | State |
+| --- | --- | --- |
+| t140 | A refused amendment tells the model why, with the positions that do exist and how close the loop is to stopping | built |
+| t141 | A filter condition's and a field declaration's own declared keys reach the repair | built |
+| t142 | The read tolerates a bad part instead of refusing the whole request; nearest-column resolution on the literal path | built |
+| t143 | Read-only: the zero read is our own 2 s early settle | answered |
+| t146 | The refusals reach the stored trace, a declined rerun says so, `evidence-loop.ts` 941 → 636 lines | built |
+| t147 | What a filter compared *against* reaches the repair; a reduced URL is named as reduced | built |
+| t144 | A build failure that parses, which is why run 8's re-author reported one useless word | in flight |
+| t145 | The HTTP 400 names what the provider said | in flight |
+| t148 | A still page is not an empty one, and `required` stops defaulting to true | in flight |
+| t149 | A near-miss column resolves on the *detected* path, which the authoring text steers the model to | in flight |
+| t150 | `run-scenario.ts` under the hard limit, which is blocking `pnpm check` and the index | in flight |
+| t151 | The screen's vocabulary gets its own module; one carried/withheld inconsistency settled | in flight |
 
 ---
 
