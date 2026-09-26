@@ -41,10 +41,11 @@ binding. They are stated in full under `The Binding Rules`.
 3. **The judge says what to fix.** It is given the same context as the other modes and returns
    explicit instructions and suggestions about the data, not a label.
 
-**Dispatched for these, all in flight as of writing:** the cross-repository defensive audit
-(t163), the judge's context and instructions (t164), Core's default node policy at the
-dispatch seam (t165), the grant removal across both repositories (t166), and the web nodes'
-own defences (t167).
+**Dispatched for these:** the cross-repository defensive audit (t163, **done** — its findings
+are in `What The Audit Found` and they reframe rule 1), the judge's context and instructions
+(t164), Core's default node policy and the gate that blocks it (t165), the grant removal across
+both repositories (t166), the web nodes' own defences and the failure-code table (t167), and
+the provider retry the audit found nobody was doing (t168).
 
 **The one thing standing between the tree and a measurement.** Nothing has been exercised
 live. Core, the domain and the extension all hold uncommitted work from many workers; the Lab
@@ -55,6 +56,66 @@ rebuilt first. That rebuild is the gate, and `The Order Of Work` treats it as su
 with `cannot spawn git: Exec format error`, so a Core-paired task takes a plain branch in each
 repository; and a Core build that exits `3221225477` is this machine's RAM fault and builds on
 retry.
+
+---
+
+## What The Audit Found
+
+The cross-repository audit (t163) is the evidence this plan rests on. Its conclusion reframes
+rule 1: **the defensive runtime already exists and is on by default, and is gated behind one
+boolean that almost nothing sets.** So the work is less building a policy than making the one
+that exists reachable, and filling what was never written.
+
+**One gate decides all deterministic recovery.** `runtime/executor/retry-policy.ts:88` returns
+false for an attempt whose `failure.retryable !== true`, and for any attempt staged
+`verification` or `confirmation`. That result gates ladder rungs 2, 3 **and** 4. Everything it
+refuses drops to `llm_diagnosis`, which is never executed in-run, which ends the run at
+`graph-run.ts:471`.
+
+**The largest live failure cause is two files contradicting each other.**
+`web.validation.output_not_observed` is declared `retryable: true` in the domain's code table
+and discarded by Core on its stage. **11 of roughly 18 reportable live runs died there.** Both
+files carry comments claiming a deliberate reading.
+
+**Nothing retries a provider fault.** The DeepSeek adapter marks 429, 5xx, timeouts and network
+errors retryable; the only consumer writes the flag into metadata, and a grep for
+`backoff|sleep|delay` over the whole `runtime/llm/` tree returns **zero hits**. Two runs died
+here. With the above, these two account for 13 of roughly 18 reportable failures.
+
+**Every web node executes outside Core's only try/catch.** The guard covers the
+`definition.execute` path alone; the native-executor, effect-dispatch and composite awaits are
+unguarded, and all 18 web output nodes take those paths. `runGraphFromSeed` has no try/catch
+either, so a throw ends the session and rethrows — no attempt row, no ladder, no repair.
+
+**Three of the ladder's four rungs are dead, and that is now measured rather than inferred.**
+`readyState` and `clearsInterference` have no writer in either repository; `expectedState` is
+written only by the recording path. Across all 150 run directories: `retry_node` fired in 12
+runs, `await_recorded_state` in **0**, `clear_interference` in **0**. The ladder is one rung
+deep and that rung works.
+
+**Two gates defeat themselves.** The `clear_interference` rung is gated off by `retryable`, and
+the code it exists for — `web.action.blocked_by_dialog` — is `retryable: false`, so the rung for
+dialogs is switched off by the dialog code. And the justification for not retrying record-less
+attempts assumes every web action emits a record, which holds for the content-script path only,
+not for two catch paths nor 37 of Core's 41 built-in nodes.
+
+**The scale.** Of Core's 41 built-in nodes, 4 emit any failure record and **0** can reach the
+retry rung on their own record. Of the domain's 16 failure codes, **4** can reach a retry.
+
+**One case that must get *less* defensive.** A browser-API refusal —
+`Cannot access contents of url "about:blank". Extension manifest must request permission…` —
+was classified `web.action.failed` with `retryable: true`, retried at 250 ms and 1 000 ms, and
+then ended the run. The machinery worked as designed; the closed code set had nothing better to
+say. Absorbing the transient and refusing the deterministic is one rule, and the deterministic
+half needs its own code.
+
+**Two earlier symptoms are confirmed already fixed**, from source: the list wait is now a
+10 000 ms render window, and the required-field default reports a stated gap instead of failing
+forty good rows.
+
+**Who owns each.** The gate, the unguarded seam and the dead rungs went to t165; the domain's
+code table and the browser-API code to t167; the provider retry, which nobody held, to t168.
+The audit's ranked fix list has eight entries, each sized as one task.
 
 ---
 
