@@ -661,7 +661,7 @@ debug and partitioned so neither touches the other's files:
 | t145 | A provider refusal names itself, screened; and those two runs were never a provider 400 | built |
 | t148 | A still page is not an empty one, and `required` stops defaulting to true | built, bundle rebuilt |
 | t149 | A near-miss column resolves on the *detected* path; `accepts` derived from each column's spec, since a detection carries no sample values | built |
-| t150 | `run-scenario.ts` under the hard limit, which is blocking `pnpm check` and the index | in flight |
+| t150 | `run-scenario.ts` 812 → 688 lines across 20 modules; the audit and the index gate are open again | built |
 | t151 | The screen's vocabulary gets its own module; `expectedState`'s comparand carried, since withholding it was a false claim about the same request | built |
 | t152 | A refusal that never reached a provider says so, and the screened refusal reaches a reader | in flight |
 | t153 | The read's account of its wait becomes a countable field, and `itemsSeen` crosses a document boundary | built |
