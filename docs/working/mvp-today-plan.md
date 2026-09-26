@@ -163,6 +163,52 @@ not yet assigned, and deliberately **not** done by widening the evidence result'
 
 ---
 
+## What The Judge Now Does
+
+**The judge was strictly poorer than the repair it triggers.** t164 measured it: the call was
+shown each step as `{nodeId, definitionId}`, while the repair has had each step's screened
+parameters since this morning. So the judge was being asked whether the Flow had "a step that
+could have narrowed" the result — against a list of names in which a Flow filtering on the right
+field and one filtering on the wrong field are **the same list**. It was also denied the
+conversation, which the repair reads, in a file whose own comment says a repair that cannot read
+it repairs blind.
+
+**Parity, through the same screens.** `flowShape` now carries each step's label, parameters and
+withheld paths through `automationStudioScreenedNodeParameters` — the same screen, the same
+credential and locator rules, the same dotted-index paths settled earlier today. Page evidence
+is genuinely unavailable to a judge, because a clean run captures no failure; that is an absence,
+not a withholding.
+
+**The instructions reach the repair through the channel that already exists.** The repair is
+handed `failure.expected` and `failure.actual` and nothing else. So the directive rides there:
+`expected` carries what the request asked for plus the fix lines, `actual` carries the
+observation — both bounded to the record's 1,024 characters. No change was needed outside the
+verification directory for that to work.
+
+**Nothing new is demanded of the model.** No response field, no schema key, no parse. The
+judgement is read off the `expected`/`observed`/`changed` the diagnosis reply already carries,
+with the reply's summary as fallback advice. A wrong type, whitespace, 900 characters, a
+credential-shaped or locator-shaped value: each is absent or redacted, **the verdict stands**,
+and `withheld: true` says so. That is the "easy to produce" rule holding under adversarial input.
+
+**The ask itself is now written** (supervisor, direct): the judge is told to say in `observed`
+which rows or columns are wrong and in `changed` what to change — naming the clause of the
+request the result fails and the step whose parameters would have to change — and told plainly
+that a bare verdict is not the job because the repair gets what it writes and nothing else. The
+closing sentence is load-bearing in the other direction: **a refusal with no advice is still a
+valid refusal and nothing fails for it**, which the code already honours.
+
+**Cost, measured rather than estimated:** the summary grows 710 → 1,262 bytes for a realistic
+five-step web Flow, about **+138 input tokens per judged call** — 0.03–0.06% of a build's
+441,531 tokens, zero output tokens, zero extra calls, and the packet's ceiling unchanged.
+
+**Two widenings outstanding**, handed to the worker holding that file: carry the conversation to
+the judge, and carry `recordCount` on recent actions so the judge can see that the step meant to
+narrow the result stored the same count as the step before it — which is precisely the shape of
+the 43-where-13-expected answer.
+
+---
+
 ## The Binding Rules
 
 These are product requirements. A design that weighs them as options has misread them.
