@@ -8,6 +8,7 @@ import {
 } from "./existing-fluxiq-control/index.js";
 import type { PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
+import type { ProviderFailureLog } from "./provider-failure/index.js";
 
 export type ExistingProject = { id: string; name: string; description: string; domainId?: string | null; createdAt: number; updatedAt: number };
 export type ExistingFlowSummary = { flowId: string; name: string; description?: string; sourceMode: "visual" | "code"; nodeCount: number; edgeCount: number; updatedAt: number; version?: string };
@@ -132,6 +133,18 @@ export type ExistingNodeDefinition = {
 export type FlowBootstrapGenerationEnvelope = { status: number; ok: boolean; payload: unknown };
 
 export class ExistingFluxIQControlClient extends FluxIQControlClient {
+  private providerFailures: ProviderFailureLog | undefined;
+
+  /**
+   * Where a refused generation's whole reply is recorded, locally, for a run
+   * that wants to know why. Nothing is recorded until this is called, and the
+   * log the run supplies owns the redaction and the bounds; this client only
+   * hands it what arrived. See `provider-failure/provider-failure-record.ts`.
+   */
+  recordProviderFailuresTo(log: ProviderFailureLog): void {
+    this.providerFailures = log;
+  }
+
   async automationStudioCall(endpoint: string, payload: JsonRecord = {}, bounds: FluxIQHttpOptions = {}, domainId?: string): Promise<unknown> {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(endpoint)) throw new Error("Automation Studio endpoint is malformed");
     const suffix = domainId ? `?domainId=${encodeURIComponent(domainId)}` : "";
@@ -289,9 +302,24 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
    */
   async generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds: FluxIQHttpOptions = {}): Promise<FlowBootstrapGenerationEnvelope> {
     const response = await this.authenticatedResponse("/api/programs/automation-studio/generate-flow-bootstrap-adaptation", input, "POST", bounds, "runtime.behavior");
-    const body: unknown = await response.json().catch(() => undefined);
+    // Read as text, then parse. The envelope this returns is unchanged, and the
+    // raw reply is what the local provider-failure diagnostic keeps: `payload`
+    // alone drops Core's top-level refusal sentence, and a body that is not
+    // JSON at all -- a proxy page, an empty 502 -- used to leave the run with
+    // nothing but a status.
+    const raw = await response.text().catch(unreadableReplyBody);
+    const body: unknown = parsedJson(raw);
     const envelope = body && typeof body === "object" && !Array.isArray(body) ? body as JsonRecord : {};
-    return { status: response.status, ok: response.ok && envelope.ok === true, payload: envelope.payload };
+    const ok = response.ok && envelope.ok === true;
+    if (!ok) {
+      this.providerFailures?.record({
+        route: "generate-flow-bootstrap-adaptation",
+        httpStatus: response.status,
+        body: raw,
+        controlRequestBytes: Buffer.byteLength(JSON.stringify(input), "utf8"),
+      });
+    }
+    return { status: response.status, ok, payload: envelope.payload };
   }
 
   async revertFlowAdaptation(input: { projectId: string; flowId: string; adaptationId: string; authorizationPin: string; reason: string }): Promise<ExistingFlowAdaptation> {
@@ -732,5 +760,9 @@ function routeDecision(value: unknown, at: string): ExistingRouteDecision { cons
 function subflowExecution(value: unknown, at: string): ExistingSubflowExecution { const item = record(value, at); const metadata = optionalRecord(item.metadata, `${at}.metadata`); return { entryId: text(item.entryId, `${at}.entryId`), subflowId: text(item.subflowId, `${at}.subflowId`), status: status(item.status, `${at}.status`), ...(typeof metadata?.graphFlowId === "string" ? { graphFlowId: metadata.graphFlowId } : {}), ...(typeof metadata?.routeDecisionId === "string" ? { routeDecisionId: metadata.routeDecisionId } : {}) }; }
 function status(value: unknown, at: string): RuntimeStatus { return enumeration(value, ["queued", "running", "waiting", "succeeded", "failed", "cancelled"] as const, at); }
 function safeId(value: string): string { return /^[A-Za-z0-9._:+-]+$/.test(value) ? value : "[invalid-id]"; }
+/** A reply body parsed where it is JSON, and `undefined` where it is not. Replaces `response.json()` so the raw text survives the parse; `JSON.parse` raises nothing but a syntax error, and anything else is a defect worth seeing. */
+function parsedJson(raw: string): unknown { try { return JSON.parse(raw) as unknown; } catch (error) { if (error instanceof SyntaxError) return undefined; throw error; } }
+/** What a reply whose body could not be read at all leaves behind. The status is still the answer, and it is the one `refused` falls back to. */
+function unreadableReplyBody(): string { return ""; }
 function hashJson(value: unknown): string { return createHash("sha256").update(stableJson(value)).digest("hex"); }
 function stableJson(value: unknown): string { if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`; if (value && typeof value === "object") return `{${Object.entries(value as JsonRecord).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`; return JSON.stringify(value); }

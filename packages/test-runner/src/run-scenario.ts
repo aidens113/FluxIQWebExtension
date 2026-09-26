@@ -30,6 +30,7 @@ import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.
 import { awaitFinalizedRecording, createdFlowLaneSnapshot, createdFlowSecretInputs, declaredSecretValues, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, resolveCreatedFlowSecrets, runLiveRepairLane, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
+import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
@@ -116,6 +117,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // scanned, so a scenario declaring literals there stays unattested (`pending`) instead of verified.
   const redactionLiterals = target.mode === "existing" && scenario.secrets?.length ? undefined : [...scenarioRedactionLiterals(scenario), ...(live?.redactionLiterals ?? [])];
   let redaction: RunRedactionAttestation | undefined;
+  const providerFailures = runProviderFailureLog({ secrets, live }); // The run's second tier of evidence: what a refused provider call said, kept locally and never published (`provider-failure/`).
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
   setFacilityStage("bundle.initialize");
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
@@ -219,6 +221,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       existingPreflight = await preflightExistingFluxIQ(existingControl, target);
       topology = { ...topology, gatewayUrl: existingPreflight.gatewayUrl, control: existingControl };
     }
+    topology.control?.recordProviderFailuresTo(providerFailures);
     if (target.mode === "clone") {
       if (!topology.control || !topology.authorizationPin || !cloneState.clonePackage) throw new RunnerFailure("environment.missing", "Isolated clone destination did not provide authenticated Core control");
       const destinationControl = topology.control;
@@ -676,6 +679,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);
     bundle.registerEvidencePolicy(evidence.capture);
     const finalized = await bundle.finalize({ verdict, metrics });
+    await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
     return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}) };
   } finally {
     if (topology && !topologyStateRemoved) await removeRunOwnedTopologyState(topology).catch(() => undefined);

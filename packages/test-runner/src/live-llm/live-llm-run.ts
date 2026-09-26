@@ -19,6 +19,7 @@ import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExp
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
+import type { ProviderFailureRequestBounds } from "../provider-failure/index.js";
 
 /** What the run needs from whichever Core it is driving, kept structural so this module imports no topology. */
 export type LiveLlmRunCredentials = { projectId?: string; authorizationPassword?: string; authorizationPin?: string };
@@ -197,6 +198,26 @@ export class LiveLlmRun {
    */
   get redactionLiterals(): readonly string[] {
     return [this.credential.value];
+  }
+
+  /**
+   * The bounds the run authorized a single provider call to have, for the
+   * local provider-failure diagnostic to record beside a failure. A request
+   * refused for its size means nothing without the limit it was refused
+   * against, and the published bundle's `live-llm.json` is a different file
+   * that a reader of the diagnostic may not have.
+   */
+  get providerRequestBounds(): ProviderFailureRequestBounds {
+    return {
+      provider: this.plan.provider,
+      model: this.plan.model,
+      maxInputTokens: this.plan.tokenLimits.maxInputTokens,
+      maxOutputTokens: this.plan.tokenLimits.maxOutputTokens,
+      maxTotalTokensPerRequest: this.plan.tokenLimits.maxTotalTokens,
+      maxCallsPerRun: this.plan.maxCalls,
+      maxTotalTokensPerRun: this.plan.maxTotalTokensPerRun,
+      timeoutMs: this.plan.timeoutMs,
+    };
   }
 
   /**
