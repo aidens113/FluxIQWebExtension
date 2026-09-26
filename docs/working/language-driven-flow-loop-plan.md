@@ -1,9 +1,9 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has run four times and not passed. Run 4 builds a seven-node Flow that searches and gets 3 of 13 rows right in 437 s. The wrong-answer repair was found never to have run at all and is now reachable for the first time.
+Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has run eight times and not passed. Run 8 explores best of the eight and answers worst since run 2, for one reason: seven of its nine draft amendments applied nothing and it was never told why. Two Core fixes are in flight for that and for the extraction vocabulary the repair cannot see. The wrong-answer repair route is open and has applied a correction once.
 Created: 2026-09-24
-Last updated: 2026-09-25
+Last updated: 2026-09-26
 Owner: Senior supervisor agent
 Scope: Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running one complex, multi-node live scenario at a time, debugging that single run end to end, fixing every cause it exposes, and running again. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop.
 Paired document: `none yet — Core-side changes land under FluxIQ Core's own working documents as this loop names them.`
@@ -26,45 +26,70 @@ themselves, and measure their own progress.
 fixtures are not rungs and the one pass recorded against the old rung 1
 (`product-catalog`) is not evidence about the product's target.
 
-**The largest finding of the loop so far: the wrong-answer repair had never
-run.** Five live runs each recorded an empty `runtimePatchAttempts`, and that
-was twice attributed to the repair's patch vocabulary being unable to express
-the fix. It was not. The route was gated on the grant purpose being the literal
-`explore_and_adapt`, and a Flow built from an instruction runs under
-`build_and_adapt`, so every run of this loop was refused at the gate and
-stopped. Detail and the general lesson are in
-`Where The Three Capabilities Actually Stand`, item 0. Fixed in Core `85e0d38`.
+**A model's change to a Flow must be revertible**, instructed 2026-09-26 after
+run 5 destroyed work it had itself proved. The instruction and the shape it
+requires are in `A Model's Change To A Flow Must Be Revertible`; the design is
+Core's t136, `F:\!FluxIQ\docs\workinglow-version-history-plan.md`. Its first
+phase is built: Core `d035e1b` records which graph Flows a run executed and at
+which revision, and writes the verdict into `flow_graph_judgements` against
+exactly those versions. **Nothing rolls back yet** — the record exists and no
+reader acts on it, which is Phase 2 and 3 of that plan, and Phase 3 additionally
+needs the provenance column t139 deliberately did not build
+(`reports/t139-version-recorded-with-verdict.md`).
 
 **Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has run
-four times and has not passed. It is not left until it passes twice in a row.
-The chain has moved a long way in those four runs:
+eight times and has not passed. It is not left until it passes twice in a row.
 
-| | Run 1 | Run 2 | Run 3 | Run 4 |
-| --- | --- | --- | --- | --- |
-| Flow built | no | yes | yes | yes |
-| Nodes | — | 5 | 3 | **7, with a search** |
-| Observed records | — | 0 | 15 | 8 |
-| Matched in order | — | 0 | 0 | **3** |
-| Wall clock | 695 s | 839 s | 950 s | **437 s** |
+| Run | Id | Calls | Flow | Answer | Ended as |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `run-mug776kx-0214b287` | 38 | none | — | fourteen identical `invalid_input` refusals |
+| 2 | `run-muhd1vc7-0ec27a16` | 21 | 5 nodes | 16 records, 0 observed | refuted |
+| 3 | `run-muher0en-508ddb69` | 27 | 3 nodes | 15 observed, 1 matched | refuted |
+| 4 | `run-muhnh0s5-98a27f42` | 34 | 7 nodes, a search | 8 observed, **3 matched in order** | refuted |
+| 5 | `run-muht9lpw-a39aa056` | 17 | **1 node, 0 navigation** | none | replay died on `about:blank` |
+| 6 | `run-muhtuizo-c458e49c` | 1 | none | — | the provider answered **HTTP 400** at the first call |
+| 7 | `run-muhu0tjc-bb62f6f4` | 19 | 3 nodes | 0 observed | refuted, **and the re-author applied a correction** |
+| 8 | `run-muhubegx-9469de5e` | 35 | 10 nodes, a search | **43 observed against 13**, 7 in any order | refuted, re-author failed `extend_failed` |
 
-Run 4 (`run-muhnh0s5-98a27f42`) builds `navigate, click ×4, type, click ×3,
-extract_list` — it dismisses the fixture's interruptions and **types a search**,
-which no earlier run managed. Three of thirteen expected rows come back in the
-right position. The remaining answer defect is the qualifying clauses: the
-instruction's filters and its "every page" clause reach the model and not
-always the node.
+Run 8 is the best-explored run of the eight and the worst answer since run 2,
+and those two facts have one cause. Its exploration worked — eight successful
+`core.run_node` calls, two structure detections, the page's interruptions
+dismissed, a search typed. Then **nine `amend_draft` decisions, of which seven
+applied nothing**, five consecutively, and the model completed with an extraction
+carrying one filter condition for an instruction with four qualifying clauses and
+no pagination follow-through. It returned every row on the page.
 
-**What is proven working, live, that the document previously recorded as
-broken.** Self-judgement on a multi-node Flow: three consecutive runs stored
-plausible, well-formed tables and all three were refuted rather than reported
-as answers (`core.result.does_not_answer_request`). The runtime recovery ladder
-also fires and recovers real faults — run 4 recovered three
-`web.target.not_found` failures, one of them on a page reading "Checking your
-browser…".
+**The two causes that debug named, both in flight as Core fixes.**
 
-**The next action** is the run now in flight, which is **the first in the
-project's history in which a wrong answer can reach the repair**. After it:
-t127's 11.04 s wait, and whatever that run's debug names.
+- **t140 — a refused amendment tells the model why.**
+  `applyAutomationStudioFlowDraftAmendments` computes a precise refusal for every
+  amendment it does not apply (`no_such_step`, `already_so`, `no_such_position`,
+  `run_by_the_loop`, `no_step_before_it`, `not_a_kept_step`) and
+  `runtime/llm/evidence-loop.ts` reads only `amended.applied`. The reason is
+  computed and discarded, so the model repeats the edit and then gives up. This
+  is the third time this loop has found a reason computed and thrown away at a
+  boundary, after `invalid_input` (t125) and the fourth rebuilder (`638ab1c`).
+- **t141 — an extraction's own vocabulary reaches the repair that must fix it.**
+  Run 8's filter cannot be read from any artifact it wrote:
+  `recovery/repair-context/parameter-screen.ts` withholds `where[i].read`,
+  `where[i].is` and every `fields.*.kind`, because `nameDepth` advances on every
+  object level and a compound parameter's own declared keys therefore always sit
+  past `MAX_NAMED_KEY_DEPTH`. `is` is in `NAME_KEYS` and is withheld anyway. The
+  wrong-answer repair is being asked to narrow an extraction without being told
+  what it filtered on, which is the likeliest reason run 8's re-author failed.
+
+**What is proven working, live, that this document once recorded as broken.**
+Self-judgement on a multi-node Flow: five consecutive runs stored plausible
+tables and every one was refuted rather than reported as an answer. The runtime
+recovery ladder fires and recovers real faults. And the wrong-answer repair,
+which five earlier runs recorded as never having run, now routes: run 7 applied a
+correction and run 8 reached the re-author and failed inside it. The gate is
+open; what is behind it is now measurable for the first time.
+
+**The next action** is to land t140 and t141, rebuild Core, and run rung 1 again
+— the first run in which the model can be told why its own edits are being
+refused. After it: run 6's HTTP 400 if it recurs, t127's 11.04 s wait, and
+whatever that run's debug names.
 
 **Blockers:** none. Two environment notes: `git worktree add` fails on this
 machine with `cannot spawn git: Exec format error` from any shell, so a
@@ -359,6 +384,54 @@ iterations will run into, and each is fixed when a run's debug names it — with
 one exception, the 90-second replay bound, which is a harness defect that would
 manufacture a false product failure and so belongs in Phase 0.
 
+## A Model's Change To A Flow Must Be Revertible
+
+**The user's instruction, 2026-09-26.** "it sounds like there is a potential for
+bad regression due to a bad model decision. I think we need a version control
+type system for flows & subflows at the core lvl. Where the changes a model
+makes can be easily rolled back if they break a flow/subflow according to the
+evaluator."
+
+**What prompted it.** `run-muht9lpw-a39aa056`. The exploration succeeded
+outright — 19 decision rows, eight successful `core.run_node` calls, two
+structure detections, no refusals after the start-location one at iteration 0.
+It navigated, cleared the page's interruptions and found the list. Then
+`amend_draft` decisions cut the draft down to a single `web.dom.extract_list`
+with `navigationNodes: 0`, and the Flow failed at replay with `Cannot access
+contents of url "about:blank"`. **The model destroyed work it had itself
+proved, and nothing could put it back.**
+
+**Why this is structural rather than a nicety.** This document's whole premise
+is that creation is imperfect and repair converges. Convergence needs a ratchet:
+a way of keeping the best version reached so far rather than the most recent
+one. A model that can improve a Flow can also ruin one, and without a history
+the only Flow that exists after a bad decision is the damaged one — the two are
+indistinguishable after the fact because there is nothing to compare against and
+nothing to return to.
+
+**The shape, as instructed.** Every model-made change — a build, a repair, a
+re-authoring, an applied patch — is a new version rather than an edit in place,
+and the previous one stays reachable. **Subflows version independently**, because
+a repair usually touches one and rolling the whole Flow back would discard good
+changes elsewhere: the unit versioned must match the unit edited. The judgement
+is **the evaluator's**, never the model grading its own edit, and the rollback is
+automatic — the person asked for the automation to work, and keeping a working
+Flow working is part of that ask.
+
+**Where it is being designed.** Core, as the user said: t136, in
+`F:\!FluxIQ\docs\workinglow-version-history-plan.md`. It is a design
+first — what a version is, what identifies it, what "worse" means and who
+decides it, when a rollback must *not* fire, how it composes with the one-cycle
+repair bound and with a run already in flight, and what the cheap correct
+version is rather than versioning everything forever.
+
+**The consequence for everything else in this document.** An edit path that
+cannot say which version it produced cannot be rolled back, so an unversioned
+edit path is a defect in this system rather than a shortcut. Anything that judges
+a run must be able to name the version it judged.
+
+---
+
 ## What A Run Spends Its Time On
 
 Measured 2026-09-25 from the per-row timestamps E4 added, which is the first
@@ -534,6 +607,19 @@ Three discovery briefs were dispatched on 2026-09-24. Their reports are in
   self-judgement: what exists, what is wired, what is unreachable, what is
   absent, and what breaks first on a Flow of six nodes with a branch.
 
+Two fix briefs were dispatched into Core on 2026-09-26, both out of run 8's
+debug and partitioned so neither touches the other's files:
+
+- **t140, `runtime/llm/`** — carry the refusal
+  `applyAutomationStudioFlowDraftAmendments` already computes, tell the model why
+  its amendment changed nothing before asking it again, and record the reasons on
+  the decision row. It may not change the no-progress guard's arithmetic and may
+  not guess which step a refusal meant.
+- **t141, `runtime/recovery/repair-context/parameter-screen.ts`** — carry a
+  filter condition's and a field declaration's own declared vocabulary at the
+  depth a compound parameter actually puts them, while `text`, `value`, a
+  locator-shaped string and a secret-shaped string stay withheld and stay named.
+
 ---
 
 ## Work Ledger
@@ -615,6 +701,45 @@ Three discovery briefs were dispatched on 2026-09-24. Their reports are in
   the run in flight is the first ever able to show; and the 60 s tail.
 
 ---
+
+---
+
+### 2026-09-26 — Four more runs on rung 1, and the model cannot correct its own draft
+- Agent: supervisor, with workers on t136, t139, t140 and t141
+- Changed: Core `5836d47`, `66ec9cc`, `a8cc85e`, `bd2a9db`, `61d4fab`, `b2fab59`,
+  `a28365a`, `d035e1b`; this repository `4e0e318`, `5671780`, `96833cf`,
+  `84215fb`, `6992b45`, and this document's Current State, header and ledger
+- Why: runs 5 to 8 of `everything-store-plus-earbuds-under-50`. Run 5 explored
+  successfully and then amended its own draft down to a single extraction with no
+  navigation, which is what prompted the user's Flow-versioning instruction
+  (`A Model's Change To A Flow Must Be Revertible`). Run 8 explored better than
+  any run before it and answered worse than any since run 2.
+- Validation: four live runs against DeepSeek, each read from its own artifacts.
+  - `run-muht9lpw-a39aa056` — 17 calls, a one-node Flow with 0 navigation nodes,
+    replay died `Cannot access contents of url "about:blank"`.
+  - `run-muhtuizo-c458e49c` — the provider answered HTTP 400 at
+    `provider_request` on the first call; no Flow. Core `a28365a` was written so
+    the next such answer is readable rather than discarded.
+  - `run-muhu0tjc-bb62f6f4` — 19 calls, a three-node Flow, 0 records observed,
+    refuted, and **the first re-author in the project's history to apply a
+    correction** (`adaptation.bootstrap.2b40744c-fe6f-41f0-92ae-20a417ba62d5`).
+  - `run-muhubegx-9469de5e` — 35 calls, 305 s, $0.049, a ten-node Flow that
+    searches; **43 records observed against 13 expected**, 52 of 52 fields
+    present, 0 matched in order and 7 in any order; refuted
+    (`core.result.does_not_answer_request`); re-author routed and failed
+    `flow_bootstrap.extend_failed`. Its decision trace: 8 successful
+    `core.run_node` calls, 2 structure detections, 2 dry-run refusals, 2 invalid
+    decisions, and **9 `amend_draft` decisions of which 7 applied nothing**.
+  Core t139's own checks are in `reports/t139-version-recorded-with-verdict.md`:
+  87 result-verification tests, 12 flow-version tests, 201 storage tests, and
+  `flow_graph_judgements` asserted by the existing schema test.
+- Outcome: Accepted. Rung 1 has not passed and is not left.
+- Follow-up: t140 (a refused amendment tells the model why) and t141 (an
+  extraction's vocabulary reaches the repair), both dispatched into Core; then
+  rebuild and run rung 1 again. `evidence-loop.ts` at 908 lines and
+  `flow-bootstrap/generation-failure.ts` at 817 are over the audit's budget with
+  no baseline entry and were already red on `dev` before this work.
+
 
 ## Open Questions
 
