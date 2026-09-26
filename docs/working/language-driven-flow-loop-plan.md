@@ -67,7 +67,15 @@ node that returns either everything or nothing is not a node whose filter is
 slightly wrong; it is a node whose read and whose filter both need to be able to
 say what they did.
 
-**The two causes that debug named, both in flight as Core fixes.**
+**The two causes that debug named, both now built in Core and awaiting a live
+run.** t140 and t141 are done, uncommitted, and verified only by their own checks
+— no provider call has exercised either. Five further tasks came out of them and
+are in flight: t142 (the extraction expresses the instruction and its read says
+what it did), t143 (read-only: which of four things each zero-record run was),
+t144 (a build failure that parses, which is why run 8's re-author reported one
+useless word), t145 (the HTTP 400 naming itself), t146 (the refusals reach the
+stored record, a declined rerun says so, and `evidence-loop.ts` comes under its
+budget), t147 (what a filter compared *against* reaches the repair).
 
 - **t140 — a refused amendment tells the model why.**
   `applyAutomationStudioFlowDraftAmendments` computes a precise refusal for every
