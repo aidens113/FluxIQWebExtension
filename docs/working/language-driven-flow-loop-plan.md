@@ -26,16 +26,11 @@ themselves, and measure their own progress.
 fixtures are not rungs and the one pass recorded against the old rung 1
 (`product-catalog`) is not evidence about the product's target.
 
-**A model's change to a Flow must be revertible**, instructed 2026-09-26 after
-run 5 destroyed work it had itself proved. The instruction and the shape it
-requires are in `A Model's Change To A Flow Must Be Revertible`; the design is
-Core's t136, `F:\!FluxIQ\docs\workinglow-version-history-plan.md`. Its first
-phase is built: Core `d035e1b` records which graph Flows a run executed and at
-which revision, and writes the verdict into `flow_graph_judgements` against
-exactly those versions. **Nothing rolls back yet** — the record exists and no
-reader acts on it, which is Phase 2 and 3 of that plan, and Phase 3 additionally
-needs the provenance column t139 deliberately did not build
-(`reports/t139-version-recorded-with-verdict.md`).
+**A model's change to a Flow must be revertible**, instructed 2026-09-26 after run 5
+destroyed work it had itself proved. The instruction and the shape are in
+`A Model's Change To A Flow Must Be Revertible`; the design is Core's t136. Its first phase is
+built — Core `d035e1b` records which graph Flows a run executed at which revision and writes
+the verdict against exactly those versions — and **nothing rolls back yet**.
 
 **Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has been
 attempted **fourteen times** since 2026-09-25 19:35 and has not passed. It is not
@@ -137,12 +132,10 @@ authoring text does not show the model the filter vocabulary, and the repair
 cannot amend a node's parameters. Both are the next wave, behind the workers in
 `flow-bootstrap/` and the authoring text.
 
-**Two bracket minters are still unscreened, and are fine only while they stay that way.**
-t160 fixed the notation where Core mints a path that then passes the locator screen, and
-found two more minters — `llm/deepseek/request-shape.ts` and `model/recording-domain.ts` —
-which produce bracketed paths that nothing screens today. They are harmless now and
-become the same defect the moment either output is screened. Dotting them is cheap;
-nobody has been asked to.
+**The three binding product rules the user set on 2026-09-26 — a defensive runtime for every
+node, grants only for genuinely risky actions, and a judge that issues fix instructions — and
+the ordered path to a passing live run are in [mvp-today-plan.md](./mvp-today-plan.md).** Read
+that first; this document remains the operating loop and the run history.
 
 These findings, and what each one obliges the next agent to do, are in
 `What This Batch Established`. Read it before adding a field to anything the domain sends
@@ -169,6 +162,13 @@ retry.
 ---
 
 ## What This Batch Established
+
+**Two bracket minters are still unscreened, and are fine only while they stay that way.**
+t160 fixed the notation where Core mints a path that then passes the locator screen, and
+found two more minters — `llm/deepseek/request-shape.ts` and `model/recording-domain.ts` —
+which produce bracketed paths that nothing screens today. They are harmless now and
+become the same defect the moment either output is screened. Dotting them is cheap;
+nobody has been asked to.
 
 **A new member on the evidence execution result refuses the whole call. Read this before
 adding a field to anything the domain sends Core.** t155 was asked to carry a recorded
