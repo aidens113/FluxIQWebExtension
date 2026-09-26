@@ -718,11 +718,13 @@ debug and partitioned so neither touches the other's files:
 | t146 | The refusals reach the stored trace, a declined rerun says so, `evidence-loop.ts` 941 → 636 lines | built |
 | t147 | What a filter compared *against* reaches the repair; a reduced URL is named as reduced | built |
 | t144 | A build failure that parses, which is why run 8's re-author reported one useless word | in flight |
-| t145 | The HTTP 400 names what the provider said | in flight |
-| t148 | A still page is not an empty one, and `required` stops defaulting to true | in flight |
+| t145 | A provider refusal names itself, screened; and those two runs were never a provider 400 | built |
+| t148 | A still page is not an empty one, and `required` stops defaulting to true | built, bundle rebuilt |
 | t149 | A near-miss column resolves on the *detected* path, which the authoring text steers the model to | in flight |
 | t150 | `run-scenario.ts` under the hard limit, which is blocking `pnpm check` and the index | in flight |
 | t151 | The screen's vocabulary gets its own module; one carried/withheld inconsistency settled | in flight |
+| t152 | A refusal that never reached a provider says so, and the screened refusal reaches a reader | in flight |
+| t153 | The read's account of its wait becomes a countable field, not prose | in flight |
 
 ---
 
