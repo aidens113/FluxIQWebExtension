@@ -131,6 +131,17 @@ authoring text does not show the model the filter vocabulary, and the repair
 cannot amend a node's parameters. Both are the next wave, behind the workers in
 `flow-bootstrap/` and the authoring text.
 
+**One of t144's two handovers needed changing rather than applying.** It asked for
+`service.ts`'s private `unclassifiedThrowCode` to be replaced by the exported
+`flowBootstrapUnclassifiedThrowCode`, which would have lost information: the build's
+catch tracks a *phase-specific* code in `failureCode`, and the exported function falls
+back to the stage's generic default. A straight swap would have answered
+`flow_bootstrap.provider_transport_unknown` where the caller already knew
+`flow_bootstrap.instruction_resolution_failed`. The shared function now takes an
+optional `fallback` for a caller that knows better, so there is one classification and
+no loss. Verified: `npx tsc --noEmit` clean, 608 tests across 37 files, Core's audit
+passing.
+
 **Two loose ends recorded rather than fixed.** `parameter-screen.ts` passed its
 400-line advisory under three consecutive tasks (t151 is splitting it), and
 `expectedState.conditions[].expected` stayed withheld while an extraction's
@@ -659,6 +670,7 @@ debug and partitioned so neither touches the other's files:
 | t156 | A short column word resolves against a long detected key — the instruction asks for `url`, and `url` scores below the floor | in flight |
 | t157 | A draft that must shrink is still a draft — `automationStudioFlowDraftEntry` returns `undefined` on committed `dev` | in flight |
 | t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle, across three readers that copy fixed key sets | in flight |
+| — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
 
 ---
 
