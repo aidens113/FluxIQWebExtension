@@ -17,6 +17,7 @@ import path from "node:path";
 import { withBuildLock } from "./build-lock.mjs";
 import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core/index.mjs";
 import { coreBuildStaleness } from "./core/index.mjs";
+import { repositoryBuilds, staleRepositoryBuild } from "./domain-build-staleness.mjs";
 import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { scanCoreSources } from "./core/index.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
@@ -93,6 +94,30 @@ Rebuild with: pnpm --filter fluxiq build (in ${coreRoot}). Set FLUXIQ_LAB_ALLOW_
       process.exit(1);
     }
     note({ lab: "core-build", state: "stale-allowed", why: "FLUXIQ_LAB_ALLOW_STALE_CORE=1 was set, so this run proceeds against a build older than Core's source." });
+  }
+}
+
+// The same question asked of this repository's own two builds, which a run
+// loads exactly as it loads Core's: `domain/dist` for the web domain's nodes
+// and rejections, and the extension's build for what the browser runs.
+//
+// It cost two runs on 2026-09-26, both after Core was rebuilt and the domain
+// was not: `run-muhp2yip-3a0f198b` hung for 675 s on its first provider call
+// and produced nothing, and `run-muhs8hx3-6fd929e6` came back HTTP 400 on its
+// build. Neither was a product result, neither said why, and the first was
+// diagnosed wrongly before the second showed the pattern. Core's guard had
+// existed for nine days; this side had none.
+{
+  const stale = await staleRepositoryBuild(repositoryBuilds(repositoryRoot, paths.extensionBuildRoot));
+  if (stale) {
+    note({ lab: "repository-build", state: "stale", build: stale.name, behindMs: stale.behindMs, why: stale.message });
+    if (process.env.FLUXIQ_LAB_ALLOW_STALE_BUILD !== "1") {
+      process.stderr.write(`${stale.message}
+Rebuild with: ${stale.rebuild}. Set FLUXIQ_LAB_ALLOW_STALE_BUILD=1 to run anyway.
+`);
+      process.exit(1);
+    }
+    note({ lab: "repository-build", state: "stale-allowed", build: stale.name, why: "FLUXIQ_LAB_ALLOW_STALE_BUILD=1 was set, so this run proceeds against a build older than its source." });
   }
 }
 

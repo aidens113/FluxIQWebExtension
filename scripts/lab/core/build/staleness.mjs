@@ -55,6 +55,22 @@ export async function scanCoreSources(coreRoot) {
   return found;
 }
 
+/**
+ * The newest shipped file under one directory, by modification time.
+ *
+ * The same walk `scanCoreSources` does, asked of an arbitrary root, so this
+ * repository's own builds can be held to the rule Core's build is held to
+ * (`../../domain-build-staleness.mjs`) instead of a second copy of it.
+ *
+ * @param {string} root
+ * @returns {Promise<{ newestMs: number, newestPath: string | null }>}
+ */
+export async function scanNewest(root) {
+  const found = { newestMs: 0, newestPath: null };
+  await walk(root, found);
+  return found;
+}
+
 async function walk(directory, found) {
   let entries;
   try {

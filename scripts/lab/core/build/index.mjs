@@ -11,4 +11,4 @@
 
 export { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./watch.mjs";
 export { coreBuildStaleness } from "./stale.mjs";
-export { scanCoreSources } from "./staleness.mjs";
+export { scanCoreSources, scanNewest } from "./staleness.mjs";
