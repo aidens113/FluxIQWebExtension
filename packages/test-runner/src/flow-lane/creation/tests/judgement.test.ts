@@ -54,6 +54,45 @@ function readAbsolutely(records: readonly ExtractionRecord[], origin: string): E
   });
 }
 
+/**
+ * A run whose Flow had two extraction nodes: the first stored `records`, the
+ * second stored nothing, and Core returned the empty one first.
+ *
+ * Core's dataset order is its own, so this is the shape the judge must not be
+ * at the mercy of.
+ */
+function runStoringFromTwoNodes(records: readonly ExtractionRecord[]): PersistedFlowRunOutcome {
+  return {
+    ...runStoring(records),
+    actions: [
+      { actionType: "web.dom.extract_list", nodeId: "node.first", status: "succeeded", startedAt: "2026-09-26T00:00:00.000Z", failure: null },
+      { actionType: "web.dom.extract_list", nodeId: "node.second", status: "succeeded", startedAt: "2026-09-26T00:00:20.000Z", failure: null }
+    ] as PersistedFlowRunOutcome["actions"],
+    extracted: [
+      { datasetId: "dataset.second", nodeIds: ["node.second"], records: [], recordCount: 0, storeTruncated: false, invalidCount: 0, nonStringValues: 0, pages: 1 },
+      { datasetId: "dataset.first", nodeIds: ["node.first"], records: [...records], recordCount: records.length, storeTruncated: false, invalidCount: 0, nonStringValues: 0, pages: 1 }
+    ]
+  };
+}
+
+test("a Flow with two extraction nodes is judged on the one that ran first, not on Core's dataset order", async () => {
+  // **This scored a real run as returning nothing while its answer sat in the
+  // other table.** `judgeCreatedFlowDataset` passed an empty candidate order,
+  // and an empty order is not "no order" but an arbitrary one: every dataset
+  // sorts to the same position, so `ordered[0]` is whichever set Core returned
+  // first. On `run-muhrf6c4-9714939f` Core stored "8 records, across 2 record
+  // sets", the judged step measured 0, and the 8 were in the other one.
+  const { workflow, stepId, expected } = await catalogTask("product-catalog-first-page");
+  const absolute = readAbsolutely(expected, scenarioOrigin);
+  const judged = judgeCreatedFlowDataset({ workflow, stepId, run: runStoringFromTwoNodes(absolute), actionTypes, scenarioOrigin });
+  const measured = judged.measurements[0]!;
+  assert.deepEqual(
+    [measured.observedRecords, measured.comparedRecords, measured.matchedRecords],
+    [8, 8, 8],
+    "the first extraction's dataset is the answer, although Core returned the empty one first"
+  );
+});
+
 test("product-catalog-first-page: a url column read absolutely on the run's origin matched 0 of 8 before, and matches 8 of 8", async () => {
   const { workflow, stepId, entry, expected } = await catalogTask("product-catalog-first-page");
   assert.equal(expected.length, 8);

@@ -7,6 +7,7 @@
 import type { ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import { assertFlowExtraction, judgeFlowExtraction, type FlowExtractionJudgement } from "../expectations.js";
+import { extractionReadsByNode } from "../extraction-read.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 
 /**
@@ -31,12 +32,46 @@ export function judgeCreatedFlowDataset(input: {
     script: step ? [step] : [],
     datasets: input.run.extracted,
     actionTypes: input.actionTypes,
-    candidateOrder: new Map(),
+    // The order the Flow's own nodes ran in.
+    //
+    // **It was an empty map, and an empty map is not "no order" — it is an
+    // arbitrary one.** Every dataset then sorts to the same position and
+    // `ordered[0]` is whichever set Core happened to return first, so a Flow
+    // with two extraction nodes had its expected step paired with either of
+    // them by chance. Measured on `run-muhrf6c4-9714939f`: Core stored "8
+    // records, across 2 record sets", the judged step measured **0**, and the
+    // 8 were in the other one. The Flow had found the answer and this scored
+    // the empty table, then reported the run as returning nothing.
+    //
+    // A created Flow has no recording to take an order from, which is why this
+    // was empty; it has its own execution instead. The node that ran first is
+    // first, which pairs the scenario's single expected step with the Flow's
+    // first extraction rather than with a coin toss.
+    candidateOrder: executionOrder(input.run.actions),
     durationsByNode: input.run.extractionDurationsByNode,
+    readsByNode: extractionReadsByNode(input.run.actions),
     scenarioOrigin: input.scenarioOrigin,
   });
   const steps = judgement.steps.map((judged) => ({ ...judged, stepIndex, measurement: { ...judged.measurement, stepIndex } }));
   return { ...judgement, steps, measurements: steps.map((judged) => judged.measurement) };
+}
+
+/**
+ * Each node's position in the order its first attempt ran, for nodes that ran
+ * at all.
+ *
+ * First attempt rather than last: a node the ladder retried ran where it first
+ * ran, and a retry late in the run must not move its dataset behind one that
+ * started after it.
+ */
+function executionOrder(actions: readonly { nodeId?: string | null }[]): ReadonlyMap<string, number> {
+  const order = new Map<string, number>();
+  for (const action of actions) {
+    const nodeId = action.nodeId;
+    if (typeof nodeId !== "string" || !nodeId || order.has(nodeId)) continue;
+    order.set(nodeId, order.size);
+  }
+  return order;
 }
 
 /**
