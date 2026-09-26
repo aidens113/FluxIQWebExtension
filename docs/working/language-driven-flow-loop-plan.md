@@ -137,6 +137,20 @@ authoring text does not show the model the filter vocabulary, and the repair
 cannot amend a node's parameters. Both are the next wave, behind the workers in
 `flow-bootstrap/` and the authoring text.
 
+**Run 8's seven silent amendments are t140's defect and not the draft's — established,
+not assumed.** t157 was dispatched on the hypothesis that the model had been shown no
+draft, and refuted it from the run's own rows: the five consecutive `draft_unchanged`
+decisions at iterations 27–31 all report an identical `inputTokens: 15463`, so the request
+was byte-stable and the draft was present, and iterations 13, 17 and 26 recorded
+`draft_amended` and `draft_rerun`, so the model was reading it. What run 8 lacked was an
+answer to a no-op amendment, which is exactly what t140 built.
+
+The defect t157 found is real and was worse than the failing test suggested: any
+`maxEvidenceContextBytes` below 4,824 switched the draft off entirely, and
+`evidence-loop.ts` then filtered the `undefined` away — no draft, no refusal, no trace
+row, no log. The live profile uses 24,000, so this loop was clear of it by luck. t162
+makes that class of misconfiguration loud.
+
 **Two downstream assertions in this repository will fail the moment Core is rebuilt,
 and that is correct.** t156 predicted them by replaying its algorithm over the real key
 sets rather than by running them, because Core's `dist` was stale:
@@ -684,8 +698,9 @@ debug and partitioned so neither touches the other's files:
 | t154 | The two screens on one request agree; a credential in an authored condition no longer reaches the model through the looser path | built |
 | t155 | An assumed column says so in the run's record, instead of being dropped at `resolve-plan-node.ts` | in flight |
 | t156 | A short column word resolves against a long detected key: `url` 0.042 → 0.497, `name`/`price`/`rating` identical, `banana` still refused, floor unchanged | built |
-| t157 | A draft that must shrink is still a draft — `automationStudioFlowDraftEntry` returns `undefined` on committed `dev` | in flight |
+| t157 | A draft that must shrink is still a draft; a 1,109-byte guidance floor was discarding twelve real steps and reporting nothing to show | built |
 | t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle, across three readers that copy fixed key sets | in flight |
+| t162 | A budget too small to show the draft is loud, the trace says whether the model saw all of it, and the guidance's growth is measured | in flight |
 | t161 | The model is shown the filter vocabulary it already had, and the node's guarantees it could not know about | in flight |
 | t160 | A withheld path through a list index is not a selector, and stops being eaten by the locator screen | in flight |
 | t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
