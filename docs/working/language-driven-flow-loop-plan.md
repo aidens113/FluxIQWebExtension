@@ -42,8 +42,14 @@ attempted **fourteen times** since 2026-09-25 19:35 and has not passed. It is no
 left until it passes twice in a row. Ten of those attempts reached the product
 and built a Flow; four never did and are not results — `run-muhp2yip-3a0f198b`
 (`lab.generation_unfinished`, a stale domain build), `run-muhs8hx3-6fd929e6` and
-`run-muhtuizo-c458e49c` (the provider answered **HTTP 400** at
-`provider_request`), and `run-muhru6ny-a84eb4a2`, which wrote no lane record at
+`run-muhtuizo-c458e49c`, which were read all day as the provider answering HTTP 400
+and were **not**: t145 established that a genuine provider 400 already produces
+`flow_bootstrap.provider_http_error` carrying its status, while both of these
+recorded `providerCalls: null`, no `providerStatus`, and 167 s and 194 s against a
+25 s per-call deadline. **No request was ever made.** The reachable producer
+matching every field is a refused run-budget reservation, misprojected as a
+provider transport fault because a refusal still hands back provider metadata
+(t144 and t152), and `run-muhru6ny-a84eb4a2`, which wrote no lane record at
 all.
 
 | Time | Id | Calls | Flow | Records observed | Ended as |
