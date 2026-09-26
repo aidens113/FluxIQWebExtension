@@ -42,14 +42,20 @@ attempted **fourteen times** since 2026-09-25 19:35 and has not passed. It is no
 left until it passes twice in a row. Ten of those attempts reached the product
 and built a Flow; four never did and are not results — `run-muhp2yip-3a0f198b`
 (`lab.generation_unfinished`, a stale domain build), `run-muhs8hx3-6fd929e6` and
-`run-muhtuizo-c458e49c`, which were read all day as the provider answering HTTP 400
-and were **not**: t145 established that a genuine provider 400 already produces
-`flow_bootstrap.provider_http_error` carrying its status, while both of these
-recorded `providerCalls: null`, no `providerStatus`, and 167 s and 194 s against a
-25 s per-call deadline. **No request was ever made.** The reachable producer
-matching every field is a refused run-budget reservation, misprojected as a
-provider transport fault because a refusal still hands back provider metadata
-(t144 and t152), and `run-muhru6ny-a84eb4a2`, which wrote no lane record at
+`run-muhtuizo-c458e49c`, whose cause has now been wrong twice and is still not
+established. They were read all day as the provider answering HTTP 400; t145 showed the
+`httpStatus: 400` is Core's own route status and a real provider 400 already produces
+`flow_bootstrap.provider_http_error` carrying its status, and proposed a refused
+run-budget reservation instead; t152 then refuted that — `runBudget` is passed by three
+production callers and the Flow Bootstrap build is not one, so that branch cannot fire
+on a build, and both runs were builds. The fit is `llm.provider_request_failed`, a throw
+Core could not structurally type, projected through the `default` arm to
+`provider_transport_unknown`. t152 also explains the 167 s and 194 s, which looked like
+a stall against a 25 s deadline and are not: they are the ten or twelve ordinary
+exploration calls *before* the failing one, and `evidenceLoop: null` /
+`providerCalls: null` say nothing about how many calls preceded a failure because a
+failed build fills neither. What actually threw is unknown, and t159 is making the next
+occurrence say so, and `run-muhru6ny-a84eb4a2`, which wrote no lane record at
 all.
 
 | Time | Id | Calls | Flow | Records observed | Ended as |
@@ -663,13 +669,14 @@ debug and partitioned so neither touches the other's files:
 | t149 | A near-miss column resolves on the *detected* path; `accepts` derived from each column's spec, since a detection carries no sample values | built |
 | t150 | `run-scenario.ts` 812 → 688 lines across 20 modules; the audit and the index gate are open again | built |
 | t151 | The screen's vocabulary gets its own module; `expectedState`'s comparand carried, since withholding it was a false claim about the same request | built |
-| t152 | A refusal that never reached a provider says so, and the screened refusal reaches a reader | in flight |
+| t152 | Every harness return states `providerInvocation`, a refused reservation stops presenting provider metadata, and the refusal gets a typed home | built |
 | t153 | The read's account of its wait becomes a countable field, and `itemsSeen` crosses a document boundary | built |
 | t154 | The two screens on one request agree, so a credential cannot reach the model through the looser one | in flight |
 | t155 | An assumed column says so in the run's record, instead of being dropped at `resolve-plan-node.ts` | in flight |
 | t156 | A short column word resolves against a long detected key — the instruction asks for `url`, and `url` scores below the floor | in flight |
 | t157 | A draft that must shrink is still a draft — `automationStudioFlowDraftEntry` returns `undefined` on committed `dev` | in flight |
 | t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle, across three readers that copy fixed key sets | in flight |
+| t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
 | — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
 
 ---
