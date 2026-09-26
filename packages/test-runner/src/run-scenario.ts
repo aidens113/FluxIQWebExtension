@@ -24,6 +24,7 @@ import {
   createDeterministicCloneIdMap,
 } from "./clone-policy.js";
 import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePackageIntoIsolatedDestination } from "./isolated-flow-importer.js";
+import { createPageScreenshotAdapter } from "./evidence-capture/index.js";
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
@@ -137,8 +138,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let panelVerification: FluxIQPanelVerificationOutcome | undefined;
   let stepRunner: ScenarioStepRunner | undefined;
   let consoleErrors: ConsoleErrorWatch | undefined;
-  // What a capture is a picture of: the step runner's active page while a script is running, else the scenario tab -- the rule the failure screenshot below already used, and the same `sensitive-input` exclusion. Both controllers take it, so a `runtime.dispatch`, a `runtime.settle` and an `error` are pictures rather than `capture-unavailable`; before the tab exists there is nothing to photograph and they say so.
-  const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => { const shown = stepRunner?.activePage() ?? scenarioPage; return shown && !shown.isClosed() ? { bytes: await shown.screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const } : undefined; } };
+  // What a capture is a picture of: the step runner's active page while a script is running, else the scenario tab. Both controllers take it, and so does the failure screenshot below -- one adapter rather than the rule written out twice, which is also what stops the failing run paying for the same photograph twice (`evidence-capture/page-screenshot-adapter.ts`, which carries the measurement). So a `runtime.dispatch`, a `runtime.settle` and an `error` are pictures rather than `capture-unavailable`; before the tab exists there is nothing to photograph and they say so.
+  const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : createPageScreenshotAdapter(() => stepRunner?.activePage() ?? scenarioPage);
   const capture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
   let recordingBaseline: Set<string> | undefined;
   let recordedEvents: Record<string, number> | undefined;
@@ -515,12 +516,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const httpTransportDetails = httpTransportFailureDetails(error);
     const topologyReadinessDetails = topologyReadinessFailureDetails(error);
     const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
-    const failurePage = stepRunner?.activePage() ?? scenarioPage;
-    const bytes = evidence.failureScreenshot && scenario.id !== "sensitive-input" && failurePage && !failurePage.isClosed() ? await failurePage.screenshot({ type: "png" }).catch(() => undefined) : undefined;
-    if (bytes) {
-      const digest = sha256(bytes);
+    // Through the controller's own adapter, which makes this attempt and the `capture.trigger` below one question rather than two. A failing run photographed the page here, got nothing, and then had the event's publication photograph the same page again; on a tab that cannot produce a frame each of those waits out Playwright's 30 s default, and that pair is the 60.0 s from the repair settling to the failure being published in `run-muhnh0s5-98a27f42` and `run-muher0en-508ddb69`.
+    const failureVisual = evidence.failureScreenshot && screenshotAdapter ? await screenshotAdapter.capture(failureEvent) : undefined;
+    if (failureVisual) {
+      const digest = sha256(failureVisual.bytes);
       const artifactPath = `screenshots/failure-${digest.slice(0, 12)}.png`;
-      await bundle.writeVerifiedVisual(artifactPath, { bytes, mediaType: "image/png", redactionVerified: true });
+      await bundle.writeVerifiedVisual(artifactPath, failureVisual);
       await bundle.appendEvent({ ...failureEvent, screenshot: { path: artifactPath, sha256: digest } });
     } else await capture.trigger(failureEvent).catch(() => undefined);
   } finally {
