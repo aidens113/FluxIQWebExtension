@@ -137,6 +137,13 @@ authoring text does not show the model the filter vocabulary, and the repair
 cannot amend a node's parameters. Both are the next wave, behind the workers in
 `flow-bootstrap/` and the authoring text.
 
+**Two bracket minters are still unscreened, and are fine only while they stay that way.**
+t160 fixed the notation where Core mints a path that then passes the locator screen, and
+found two more minters — `llm/deepseek/request-shape.ts` and `model/recording-domain.ts` —
+which produce bracketed paths that nothing screens today. They are harmless now and
+become the same defect the moment either output is screened. Dotting them is cheap;
+nobody has been asked to.
+
 These findings, and what each one obliges the next agent to do, are in
 `What This Batch Established`. Read it before adding a field to anything the domain sends
 Core, and before updating a test that a resolution change made fail.
@@ -614,7 +621,7 @@ debug and partitioned so neither touches the other's files:
 | t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle; an unfamiliar stop word resolves to `unknown` and keeps the read. **Spans both repositories and neither half works alone** | built |
 | t162 | A budget too small to show the draft is loud, the trace says whether the model saw all of it, and the guidance's growth is measured | in flight |
 | t161 | The model is shown the filter vocabulary it already had, and the node's guarantees it could not know about | in flight |
-| t160 | A withheld path through a list index is not a selector, and stops being eaten by the locator screen | in flight |
+| t160 | A withheld path uses dotted indices, so it stops reading as a class selector — the notation was the defect, not the screen | built |
 | t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
 | — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
 
