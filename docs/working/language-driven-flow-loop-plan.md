@@ -241,8 +241,52 @@ judged wrong by `result-verification/verify.ts:95`, with
 `result-check-schedule/decide.ts:39` deciding whether a run is checked at all.
 The loop is not missing; it is defective in four specific ways.
 
-**0. The whole wrong-answer repair was unreachable, and that outranks the four
-below.** Found 2026-09-25 from `run-muhnh0s5-98a27f42`, after five live runs had
+**0. The wrong-answer repair has never run, and the cause is still not known.
+This outranks the four below.**
+
+**Correction, 2026-09-25.** This entry first claimed the cause was found: that
+the route gated on the grant purpose being `explore_and_adapt` while a Flow
+built from an instruction runs under `build_and_adapt`. **That was wrong.** The
+Lab already grants the *created Flow's own run* an `explore_and_adapt` grant —
+`CREATED_FLOW_REPAIR_PURPOSE` in
+`packages/test-runner/src/live-llm/live-llm-run.ts`, whose comment records that
+this precise trap was found and fixed once before — so the purpose gate was
+already being satisfied and Core `85e0d38` widened a gate that was not closed.
+That change is harmless and defensible on its own terms, and it was not the
+fix. `run-muhpo10p-771abad6`, the first run after it, still made zero repair
+calls: its only two calls outside the build were `llm.loop_verification`.
+
+**What is actually established.** Six live runs, every one recording
+`runtimePatchAttempts: []`, `adaptationIds: []` and `changeProposalIds: []`,
+with no provider call ever attributable to a repair. The two `diagnosis`
+interventions in `harnessRecovery` are the ladder's placeholder, written with
+the run's first save, and say nothing about whether a repair ran —
+`terminal-run-wait.ts` documents that.
+
+**Why it is still unknown, and this is the finding worth keeping.** Core
+computes the answer and this facility drops it.
+`automationStudioRefutedResultReauthorDecision` returns one of four closed
+refusals — `not_a_wrong_answer`, `flow_unavailable`,
+`grant_does_not_buy_exploration`, `adaptations_not_permitted` — and records it
+on the run detail under `resultReauthor`, beside `resultRepair`'s
+`{attempted, nodeId, code}`. Neither key reaches the bundle:
+`grep -c resultReauthor bundle.complete.json` is 0. So the supervisor
+attributed the silence to a known defect twice, once to the patch vocabulary
+and once to the purpose gate, and both were reasoning from absence. t130
+publishes both keys.
+
+**The lesson, which is the same one twice.** An empty record is not evidence
+about *why* it is empty. Before attributing a capability's silence to a known
+defect, publish the decision that capability makes and read it. This is the
+second time in two days that a diagnosis had to wait on instrumentation the
+loop already knew it needed — the first was the refusal reason that
+`sanitizeEvidenceLoopTrace` was dropping.
+
+**The original entry follows, for the record.** It remains true that the route
+is worth widening and that the capability is wired end to end.
+
+**0a. The route's purpose gate was narrow, though that was not what blocked
+it.** Found 2026-09-25 from `run-muhnh0s5-98a27f42`, after five live runs had
 each recorded `runtimePatchAttempts: []`, `adaptationIds: []` and
 `changeProposalIds: []` and the supervisor had twice attributed that to defect 1.
 It was not defect 1. A Flow built from an instruction runs under the create-flow
