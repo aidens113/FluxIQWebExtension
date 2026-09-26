@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Eleven live runs in. Rung 1 has passed once and is not yet held; rung 3, `everything-store`, has failed six times and the last run built no Flow at all. Task t125 closes the two Phase 0 items that half-landed, so the next run can name its own cause.
+Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has run four times and not passed. Run 4 builds a seven-node Flow that searches and gets 3 of 13 rows right in 437 s. The wrong-answer repair was found never to have run at all and is now reachable for the first time.
 Created: 2026-09-24
 Last updated: 2026-09-25
 Owner: Senior supervisor agent
@@ -19,65 +19,58 @@ node runs, not single-node extraction. One run, one debug, fix those errors,
 continue — repeated until language-driven Flows run successfully, repair
 themselves, and measure their own progress.
 
-**Where the ladder actually is, after eleven live runs.** Rung 1,
-`product-catalog-search-lamp`, has passed **once** (`run-mug1g8ai-7e79384d`,
-17 calls) and failed once before it — so it is not yet held, because a rung is
-not left until its scenario passes twice in a row. The loop then moved to rung
-3, `everything-store-plus-earbuds-under-50`, which has now failed **six** times
-and has still never produced a correct answer. Three other fixtures were tried
-once each and failed. Rung 2 has never been run.
+**Only the ten realistic scenarios**, restated by the user 2026-09-25:
+`everything-store`, `crossborder-marketplace`, `bigbox-retail`, `job-board`,
+`local-classifieds`, `auction-marketplace`, `photo-social`,
+`social-network-feed`, `company-website`, `professional-network`. The Lab
+fixtures are not rungs and the one pass recorded against the old rung 1
+(`product-catalog`) is not evidence about the product's target.
 
-**What has been fixed along the way.** Phase 0's instrumentation merged
-(`7369504`), and it works: a failed build now writes `flow-lane.json` at all,
-and its decision rows carry `iteration`, `evidenceBytes` and per-call `usage`
-where they once carried two fields. Extraction gained the declarative filtering
-the instruction's qualifying clauses need (`2d2324d`, `08d4ff8`), and Core
-gained a build-time answerability check that refuses to propose a Flow which
-could not answer the instruction at all (Core `636d425`).
+**The largest finding of the loop so far: the wrong-answer repair had never
+run.** Five live runs each recorded an empty `runtimePatchAttempts`, and that
+was twice attributed to the repair's patch vocabulary being unable to express
+the fix. It was not. The route was gated on the grant purpose being the literal
+`explore_and_adapt`, and a Flow built from an instruction runs under
+`build_and_adapt`, so every run of this loop was refused at the gate and
+stopped. Detail and the general lesson are in
+`Where The Three Capabilities Actually Stand`, item 0. Fixed in Core `85e0d38`.
 
-**The last run, `run-mug776kx-0214b287`, and why it failed.** 38 provider
-calls, 694,574 ms, $0.038, **no Flow created**, stopped at `build` with
-`flow_bootstrap.evidence_unusable_decision`. How far it got: it reached the
-page and acted on it successfully twice, then never ran an extraction node at
-all, so it could never propose a Flow that answers the instruction. Why: from
-iteration 12 onward **every** node call was refused
-`web.action.rejected.invalid_input` — fourteen times, each an identical 649-byte
-payload — and the loop never corrected it before its budget was gone. Eight
-`web.action.rejected.target_unobserved` refusals preceded them. The new
-answerability check fired four times and is working as designed; it is a
-consequence of the blockage, not its cause.
+**Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has run
+four times and has not passed. It is not left until it passes twice in a row.
+The chain has moved a long way in those four runs:
 
-**That cause cannot be named precisely, because two Phase 0 items half-landed.**
-This is the same wall the phase was created to remove, hit again with a
-different word:
+| | Run 1 | Run 2 | Run 3 | Run 4 |
+| --- | --- | --- | --- | --- |
+| Flow built | no | yes | yes | yes |
+| Nodes | — | 5 | 3 | **7, with a search** |
+| Observed records | — | 0 | 15 | 8 |
+| Matched in order | — | 0 | 0 | **3** |
+| Wall clock | 695 s | 839 s | 950 s | **437 s** |
 
-- **E2 is incomplete.** The domain computes 33 closed rejection reasons
-  (`tool-rejection.ts`), each chosen because it implies a different next move.
-  None of them travels. Core's `evidence-loop-decision.ts` gates a tool
-  execution on `exactKeys([...])`, which does not name a reason field, so the
-  reason stops at the domain boundary and fourteen refusals share one word.
-- **E4 landed as a type and not as an emission.** `at` is declared on the
-  published step and parsed by it, and **nothing in `evidence-loop.ts` ever
-  writes one**: 0 of 41 rows in the last run carry a timestamp, so 694 seconds
-  is still a single undivided gap.
-- Relatedly, which node a `core.run_node` call named is recorded nowhere, so
-  "which node was refused" is unanswerable.
+Run 4 (`run-muhnh0s5-98a27f42`) builds `navigate, click ×4, type, click ×3,
+extract_list` — it dismisses the fixture's interruptions and **types a search**,
+which no earlier run managed. Three of thirteen expected rows come back in the
+right position. The remaining answer defect is the qualifying clauses: the
+instruction's filters and its "every page" clause reach the model and not
+always the node.
 
-Byte arithmetic puts the 649-byte payload at `node_not_runnable_here` carrying
-all 18 runnable node ids (610 bytes, plus a 27-character node name = 649
-exactly). That is a hypothesis and is deliberately not being fixed on: this
-document's own rule is that theories built from counts get falsified, so the
-instrumentation goes in first and the next run names its own cause.
+**What is proven working, live, that the document previously recorded as
+broken.** Self-judgement on a multi-node Flow: three consecutive runs stored
+plausible, well-formed tables and all three were refuted rather than reported
+as answers (`core.result.does_not_answer_request`). The runtime recovery ladder
+also fires and recovers real faults — run 4 recovered three
+`web.target.not_found` failures, one of them on a page reading "Checking your
+browser…".
 
-**The next action** is task `t125`, which closes E2 and E4 end to end at zero
-provider cost — Core accepts and publishes `resultReason` and `nodeId` and
-stamps every trace row with `at`; the domain emits them — and then the same
-`everything-store` run again.
+**The next action** is the run now in flight, which is **the first in the
+project's history in which a wrong answer can reach the repair**. After it:
+t127's 11.04 s wait, and whatever that run's debug names.
 
-**Blockers:** none. Note that `git worktree add` fails on this machine with
-`cannot spawn git: Exec format error` from any shell, so a Core-paired task
-takes a plain branch in each repository rather than the nested worktree layout.
-
+**Blockers:** none. Two environment notes: `git worktree add` fails on this
+machine with `cannot spawn git: Exec format error` from any shell, so a
+Core-paired task takes a plain branch in each repository; and a Core build that
+exits `3221225477` is this machine's RAM fault, not the code — it builds on
+retry.
 ---
 
 ## The Loop
@@ -248,6 +241,39 @@ judged wrong by `result-verification/verify.ts:95`, with
 `result-check-schedule/decide.ts:39` deciding whether a run is checked at all.
 The loop is not missing; it is defective in four specific ways.
 
+**0. The whole wrong-answer repair was unreachable, and that outranks the four
+below.** Found 2026-09-25 from `run-muhnh0s5-98a27f42`, after five live runs had
+each recorded `runtimePatchAttempts: []`, `adaptationIds: []` and
+`changeProposalIds: []` and the supervisor had twice attributed that to defect 1.
+It was not defect 1. A Flow built from an instruction runs under the create-flow
+entry point, whose grant purpose is **`build_and_adapt`**, and
+`recovery/refuted-result/reauthor.ts` gated the route on the purpose being the
+single literal `explore_and_adapt`:
+
+    if (input.grantPurpose !== EXPLORING_GRANT_PURPOSE) return { route: false, refusal: "grant_does_not_buy_exploration" };
+
+So every live run of this document's loop reached that gate, was refused, and
+stopped. **No wrong answer has ever been repaired, and none of the four defects
+below has ever been reached on a wrong answer.** The port was registered in
+`service.ts:2601`, the reauthor path was written, the re-run after repair
+existed — all of it dead behind one string comparison.
+
+Fixed in Core `85e0d38`: the gate asks whether the grant the run already holds
+buys exploring, which `build_and_adapt` answers more plainly than
+`explore_and_adapt` does, since it is the purpose the build loop itself runs
+under. Written as a set so a purpose added to the contract is a decision rather
+than a silent no. 418 recovery tests pass.
+
+**The lesson is larger than the bug.** A capability can be wired end to end,
+tested at every unit, and unreachable in production behind one gate, and the
+only thing that showed it was reading the live run's own record and following
+the gate backwards. An empty `runtimePatchAttempts` was read twice as "the
+repair tried and could not express the fix" when it meant "the repair never
+started". **Before attributing a capability's silence to a known defect, prove
+the capability was entered.** The plan's own audit had declared this door open
+on 2026-09-24 by reading the source, and the source was there; what nobody
+checked was whether anything could get through it.
+
 **1. The repair cannot express the fixes our failures need.** Verified
 directly: the vocabulary is exactly five patch kinds
 (`llm/harness/structured-response.ts:155`), every one of them `temporary_` —
@@ -288,6 +314,52 @@ These four are not fixed pre-emptively. They are what the loop's first
 iterations will run into, and each is fixed when a run's debug names it — with
 one exception, the 90-second replay bound, which is a harness defect that would
 manufacture a false product failure and so belongs in Phase 0.
+
+## What A Run Spends Its Time On
+
+Measured 2026-09-25 from the per-row timestamps E4 added, which is the first
+time this could be asked at all. The user's question was why a run of one
+instruction took sixteen minutes; the answer was that almost none of it was the
+product thinking.
+
+`run-muher0en-508ddb69`, 949.6 s:
+
+| Phase | Time |
+| --- | --- |
+| Setup — browser, extension, isolated FluxIQ | 67.5 s |
+| Exploration — the actual work | 192 s |
+| The Flow's four actions | 12.6 s |
+| **Repair phase, waiting, producing nothing** | **568 s** |
+| Tail | 60 s |
+
+**The 568 s was a wait for something that was never coming.** Core records a
+refuted result as a failure on the last record-storing attempt, so a Flow whose
+every node executed as authored reads `failed` on that attempt. The Lab's
+`recoveryCouldBeRunning` took that for a node fault and spent the full
+five-minute `RECOVERY_RECORD_WAIT_MS` — on a recovery Core had already declined
+to plan, because Core plans from the diagnosis of an attempt that *would not
+run* and a refuted result hands it none. Fixed by `everyNodeRan`
+(`packages/test-runner/src/flow-lane/node-recovery.ts`): a node that ran and was
+then judged wrong is a node that ran. **Measured effect on the next run:
+949.6 s → 437.2 s, with the repair phase at 81.5 s.**
+
+**What is left, and it is now the largest cost.** Six exploration calls at
+**11.04 s each, identical to the centisecond**, plus two decisions at ~15.5 s —
+118 s of a 216 s build. Uniformity to that precision is a deadline being
+exhausted, not provider latency and not page work, and it reproduces across
+runs (`run-muher0en-508ddb69` shows the same 11.04 s eight times). The calls
+return `web.inspect.succeeded`, so whatever is being waited for is not required
+for the answer. `NAVIGATION_END_TIMEOUT_MS` in
+`apps/extension/src/runtime/click-landing.ts` was checked and ruled out —
+`landing()` returns early when no navigation starts. Open as t127.
+
+**The rule this establishes.** A run's duration is evidence like any other and
+is read from the timestamps, not estimated. Before concluding that the product
+is slow, account for where the seconds went: on the two runs measured so far,
+60% and then 19% of the wall clock was a harness wait, and the exploration
+itself never exceeded four minutes.
+
+---
 
 ## Phases
 
@@ -468,6 +540,35 @@ Three discovery briefs were dispatched on 2026-09-24. Their reports are in
 - Outcome: Accepted
 - Follow-up: t125 (branch `task/t125-evidence-names-its-reason` in both
   repositories), then rerun `everything-store-plus-earbuds-under-50`.
+
+---
+
+### 2026-09-25 — Three runs on rung 1, and the repair was never reachable
+- Agent: supervisor, with workers on t125, t126 and t127
+- Changed: Core `7848f93` (the offered library is what the domain runs),
+  `638ab1c` (the fourth rebuilder carries the refusal's reason), `75563f0`
+  (closest-match name resolution), `85e0d38` (the wrong-answer repair route);
+  this repository `9002620`, `37ebcf1`, `fd1fc14` (a run judged wrong is not a
+  run still recovering)
+- Why: the user restated that only the ten realistic scenarios count, asked why
+  a run took sixteen minutes, and asked whether the repair was triggering at
+  all. The third question found the largest defect in the document.
+- Validation: three live runs of `everything-store-plus-earbuds-under-50`,
+  each debugged in full.
+  - `run-mug776kx-0214b287` — 38 calls, no Flow, fourteen identical
+    `invalid_input` refusals.
+  - `run-muhd1vc7-0ec27a16` — 21 calls, a Flow built and replayed, 16 records
+    across 2 sets, 0 observed by the oracle, refuted correctly.
+  - `run-muher0en-508ddb69` — 27 calls, one extraction, **15 observed, 52 of 52
+    fields present, 1 matched**; the qualifying clauses never reached the node.
+  - `run-muhnh0s5-98a27f42` — 34 calls, **437 s against 949 s**, a seven-node
+    Flow that searches — `navigate, click ×4, type, click ×3, extract_list` —
+    and **8 observed, 3 matched in order, 5 in any order** against 13 expected.
+  Core: 3020 of 3021 automation-studio tests, 418 recovery tests, 279
+  flow-bootstrap. This repository: 811 domain tests, 6 terminal-wait tests.
+- Outcome: Accepted. Rung 1 has not passed and is not left.
+- Follow-up: t127's 11.04 s wait; whether the repair now produces a patch, which
+  the run in flight is the first ever able to show; and the 60 s tail.
 
 ---
 
