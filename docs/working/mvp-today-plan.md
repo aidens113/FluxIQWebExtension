@@ -119,6 +119,50 @@ The audit's ranked fix list has eight entries, each sized as one task.
 
 ---
 
+## What The Defences Now Do
+
+**The web side is built (t167).** Its survey found the inversion exactly: **nine of the fifteen
+verbs resolved their target once, synchronously, in the millisecond the command arrived**, and
+failed outright. The only verbs that waited were the three whose whole purpose is waiting, plus
+the list read — so the runtime was defensive only where *the model* had authored a wait node,
+which is the inversion the user rejected.
+
+Every verb now runs behind a bounded retry at one seam, `executeContentAction`: four rungs at
+250/500/1000/2000 ms for a target the page has not drawn, two at 250/500 ms for a blip, a
+5 000 ms whole budget measured from the command's start and never exceeding its own `timeoutMs`.
+**Worst case about five seconds added, and zero where the verb already spent the command's
+time.** A retry calls the verb afresh, so re-resolution, a moved target and a stale reference are
+one fix. A verb that can move the page absorbs only a fault thrown *before* anything was
+dispatched, so a click is never pressed twice — asserted for all four post-gesture codes.
+
+**The contradiction is settled with an argument, not a coin toss.** `verification` correctly
+describes where `output_not_observed` is decided and `retryable: true` correctly answers Core's
+question; the defect is that Core's gate uses the **stage as a proxy for side-effect safety**,
+which the stage does not carry — a read and a click both fail post-conditions at `verification`
+and only one is unsafe to repeat. The fix is for Core to ask `sideEffectClassForNode` directly.
+Rewriting the stage would have made the field mean "what Core will retry" and destroyed the
+question. Meanwhile the extension does not wait for Core: an unpaginated list read whose
+post-condition failed is re-read **in the page**, before the gate is consulted, which covers the
+measured 11-run case. A paginated read still needs Core's change.
+
+**Two new failure codes, in opposite directions.** `web.browser.permission_denied` is
+non-retryable, so a manifest or permission refusal is refused once instead of retried three times
+and then reported as a mystery; `web.transport.transient` is retryable. The browser's own message
+is read into one of them, and a message it does not recognise keeps the caller's existing code —
+so the reading can only sharpen, never mislead.
+
+**One more total-versus-partial failure found and fixed, in neither brief.** The list reader's row
+loop had no catch, so **one recycled or detached element threw out of the read and every row
+already gathered was discarded.** Rows that throw are now skipped and counted, a failed page
+advance ends the read with the pages it has, and both are named in the read's own account.
+
+**What is still owed on this half.** The recovery account reaches Core only as prose on the
+validation's `actual`. Making it countable is a four-line change across `domain/src/actions/types.ts`,
+`domain/src/client/gateway-mapping.ts` and a Core projection — specified in t167's report section 7,
+not yet assigned, and deliberately **not** done by widening the evidence result's top-level keys.
+
+---
+
 ## The Binding Rules
 
 These are product requirements. A design that weighs them as options has misread them.
