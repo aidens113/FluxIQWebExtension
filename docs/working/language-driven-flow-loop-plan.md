@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has run eight times and not passed. Run 8 explores best of the eight and answers worst since run 2, for one reason: seven of its nine draft amendments applied nothing and it was never told why. Two Core fixes are in flight for that and for the extraction vocabulary the repair cannot see. The wrong-answer repair route is open and has applied a correction once.
+Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has been attempted fourteen times and not passed; ten reached the product. Its extraction reads either nothing (six of ten) or everything (55 and 43 against 13). The best-explored run answers worst, for one reason: seven of its nine draft amendments applied nothing and it was never told why. Two Core fixes are in flight for that and for the extraction vocabulary the repair cannot see. The wrong-answer repair route is open and has applied a correction once.
 Created: 2026-09-24
 Last updated: 2026-09-26
 Owner: Senior supervisor agent
@@ -37,27 +37,35 @@ reader acts on it, which is Phase 2 and 3 of that plan, and Phase 3 additionally
 needs the provenance column t139 deliberately did not build
 (`reports/t139-version-recorded-with-verdict.md`).
 
-**Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has run
-eight times and has not passed. It is not left until it passes twice in a row.
+**Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has been
+attempted **fourteen times** since 2026-09-25 19:35 and has not passed. It is not
+left until it passes twice in a row. Ten of those attempts reached the product
+and built a Flow; four never did and are not results — `run-muhp2yip-3a0f198b`
+(`lab.generation_unfinished`, a stale domain build), `run-muhs8hx3-6fd929e6` and
+`run-muhtuizo-c458e49c` (the provider answered **HTTP 400** at
+`provider_request`), and `run-muhru6ny-a84eb4a2`, which wrote no lane record at
+all.
 
-| Run | Id | Calls | Flow | Answer | Ended as |
+| Time | Id | Calls | Flow | Records observed | Ended as |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `run-mug776kx-0214b287` | 38 | none | — | fourteen identical `invalid_input` refusals |
-| 2 | `run-muhd1vc7-0ec27a16` | 21 | 5 nodes | 16 records, 0 observed | refuted |
-| 3 | `run-muher0en-508ddb69` | 27 | 3 nodes | 15 observed, 1 matched | refuted |
-| 4 | `run-muhnh0s5-98a27f42` | 34 | 7 nodes, a search | 8 observed, **3 matched in order** | refuted |
-| 5 | `run-muht9lpw-a39aa056` | 17 | **1 node, 0 navigation** | none | replay died on `about:blank` |
-| 6 | `run-muhtuizo-c458e49c` | 1 | none | — | the provider answered **HTTP 400** at the first call |
-| 7 | `run-muhu0tjc-bb62f6f4` | 19 | 3 nodes | 0 observed | refuted, **and the re-author applied a correction** |
-| 8 | `run-muhubegx-9469de5e` | 35 | 10 nodes, a search | **43 observed against 13**, 7 in any order | refuted, re-author failed `extend_failed` |
+| 19:35 | `run-muhd1vc7-0ec27a16` | 19 | 5 nodes | 0 of 13 | refuted |
+| 20:23 | `run-muher0en-508ddb69` | 25 | 3 nodes | 15, **1 matched** | refuted |
+| 00:27 | `run-muhnh0s5-98a27f42` | 32 | 7 nodes, a search | 8, **3 matched in order** | refuted |
+| 01:28 | `run-muhpo10p-771abad6` | 37 | — | 0 | refuted |
+| 01:57 | `run-muhqop38-997ee8e5` | 27 | — | **55** | refuted |
+| 02:17 | `run-muhrf6c4-9714939f` | 18 | — | 0 | refuted |
+| 02:33 | `run-muhrz0at-39a25508` | 23 | — | 0 | refuted |
+| 03:09 | `run-muht9lpw-a39aa056` | 17 | **1 node, 0 navigation** | 0, never ran | replay died on `about:blank` |
+| 03:30 | `run-muhu0tjc-bb62f6f4` | 17 | 3 nodes | 0 | refuted, **and the re-author applied a correction** |
+| 03:43 | `run-muhubegx-9469de5e` | 33 | 10 nodes, a search | **43** | refuted, re-author failed `extend_failed` |
 
-Run 8 is the best-explored run of the eight and the worst answer since run 2,
-and those two facts have one cause. Its exploration worked — eight successful
-`core.run_node` calls, two structure detections, the page's interruptions
-dismissed, a search typed. Then **nine `amend_draft` decisions, of which seven
-applied nothing**, five consecutively, and the model completed with an extraction
-carrying one filter condition for an instruction with four qualifying clauses and
-no pagination follow-through. It returned every row on the page.
+**The dominant failure is bimodal and it is the extraction's read.** Six of the
+ten read **nothing at all**, and two read far too much — 55 and 43 against an
+expected 13. Only two ever landed in the right range, and the best answer any run
+has produced remains run `run-muhnh0s5`'s three rows in the right position. A
+node that returns either everything or nothing is not a node whose filter is
+slightly wrong; it is a node whose read and whose filter both need to be able to
+say what they did.
 
 **The two causes that debug named, both in flight as Core fixes.**
 
