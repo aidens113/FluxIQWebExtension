@@ -671,11 +671,12 @@ debug and partitioned so neither touches the other's files:
 | t151 | The screen's vocabulary gets its own module; `expectedState`'s comparand carried, since withholding it was a false claim about the same request | built |
 | t152 | Every harness return states `providerInvocation`, a refused reservation stops presenting provider metadata, and the refusal gets a typed home | built |
 | t153 | The read's account of its wait becomes a countable field, and `itemsSeen` crosses a document boundary | built |
-| t154 | The two screens on one request agree, so a credential cannot reach the model through the looser one | in flight |
+| t154 | The two screens on one request agree; a credential in an authored condition no longer reaches the model through the looser path | built |
 | t155 | An assumed column says so in the run's record, instead of being dropped at `resolve-plan-node.ts` | in flight |
 | t156 | A short column word resolves against a long detected key — the instruction asks for `url`, and `url` scores below the floor | in flight |
 | t157 | A draft that must shrink is still a draft — `automationStudioFlowDraftEntry` returns `undefined` on committed `dev` | in flight |
 | t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle, across three readers that copy fixed key sets | in flight |
+| t160 | A withheld path through a list index is not a selector, and stops being eaten by the locator screen | in flight |
 | t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
 | — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
 
