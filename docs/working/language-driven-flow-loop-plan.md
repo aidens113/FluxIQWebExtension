@@ -137,6 +137,16 @@ authoring text does not show the model the filter vocabulary, and the repair
 cannot amend a node's parameters. Both are the next wave, behind the workers in
 `flow-bootstrap/` and the authoring text.
 
+**Two downstream assertions in this repository will fail the moment Core is rebuilt,
+and that is correct.** t156 predicted them by replaying its algorithm over the real key
+sets rather than by running them, because Core's `dist` was stale:
+`domain/src/runtime/llm-evidence/plan-resolution/extraction/tests/column-match.test.ts`
+— "a column with no plausible candidate is still an honest failure" — now sees `title`
+(0.497) and `prce` (0.597) resolve, and its comment is wrong; and that directory's
+`slot.test.ts` `unknownField` third entry, keyed `"title"`, now resolves. Both must be
+updated to assert the new behaviour, with `banana` and a selector still refused, during
+the integration pass and not before, since neither can be validated until Core is built.
+
 **One of t144's two handovers needed changing rather than applying.** It asked for
 `service.ts`'s private `unclassifiedThrowCode` to be replaced by the exported
 `flowBootstrapUnclassifiedThrowCode`, which would have lost information: the build's
@@ -673,9 +683,10 @@ debug and partitioned so neither touches the other's files:
 | t153 | The read's account of its wait becomes a countable field, and `itemsSeen` crosses a document boundary | built |
 | t154 | The two screens on one request agree; a credential in an authored condition no longer reaches the model through the looser path | built |
 | t155 | An assumed column says so in the run's record, instead of being dropped at `resolve-plan-node.ts` | in flight |
-| t156 | A short column word resolves against a long detected key — the instruction asks for `url`, and `url` scores below the floor | in flight |
+| t156 | A short column word resolves against a long detected key: `url` 0.042 → 0.497, `name`/`price`/`rating` identical, `banana` still refused, floor unchanged | built |
 | t157 | A draft that must shrink is still a draft — `automationStudioFlowDraftEntry` returns `undefined` on committed `dev` | in flight |
 | t158 | `listWait`, `itemsSeen` and `emptyRecords` reach a run bundle, across three readers that copy fixed key sets | in flight |
+| t161 | The model is shown the filter vocabulary it already had, and the node's guarantees it could not know about | in flight |
 | t160 | A withheld path through a list index is not a selector, and stops being eaten by the locator screen | in flight |
 | t159 | The refusal reaches a run's stored accounting, and three workers' overlapping assumptions are reconciled | in flight |
 | — | **Supervisor, direct:** `service.ts` adopts the shared throw classifier and the never-null diagnostic; its private copy of the classification is gone and it is 4584 → 4566 lines | built |
