@@ -1,4 +1,4 @@
-import type { AutomationStudioFailureRecord, ExpectedAction, ExpectedExtraction, ExpectedFailure, RunExtractionMeasurement, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import type { AutomationStudioFailureRecord, ExpectedAction, ExpectedExtraction, ExpectedFailure, RunExtractionMeasurement, RunExtractionRead, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 import { assertExtraction, measureExtraction, type ExtractedValueContext, type ObservedExtraction } from "../run-expectations/index.js";
 import type { FlowRunDataset } from "./run-datasets.js";
@@ -118,6 +118,19 @@ export type FlowExtractionStep = {
   entries: readonly ExpectedExtraction[];
   /** The dataset paired with this step by candidate order, absent when the run stored none for it. */
   dataset: FlowRunDataset | undefined;
+  /**
+   * What the reads that wrote this step's dataset said about **themselves**, in
+   * attempt order: the counts, flags and closed words the extraction computed
+   * and nothing downstream could see (`extraction-read.ts`).
+   *
+   * They are found through the dataset, because the dataset is what names the
+   * nodes that wrote to it; a step the run stored no dataset for has none, and
+   * the whole run's reads are published per attempt in `actions[]` regardless.
+   * `[]` for a step whose reads reported no summary -- an older extension build
+   * among them -- which is a step that says nothing about itself rather than
+   * one that says it read nothing.
+   */
+  reads: readonly RunExtractionRead[];
   /** Members the entries declared that this lane cannot observe, by name. */
   unjudged: readonly string[];
   /** What the lane observed of this step, which the measurement and the assertion share. */
@@ -175,6 +188,12 @@ export function judgeFlowExtraction(input: {
   candidateOrder: ReadonlyMap<string, number>;
   /** Per-node extraction durations, summed from the run's attempts on that node. */
   durationsByNode: ReadonlyMap<string, number>;
+  /**
+   * What each node's reads said about themselves, by node id
+   * (`extractionReadsByNode`). Absent for a caller that does not read them, and
+   * then every step's `reads` is `[]`.
+   */
+  readsByNode?: ReadonlyMap<string, readonly RunExtractionRead[]> | undefined;
   /** Where the run's scenario was served from: a root-relative expected URL resolves against it (`extractedValueMatches`). */
   scenarioOrigin: string;
 }): FlowExtractionJudgement {
@@ -189,6 +208,7 @@ export function judgeFlowExtraction(input: {
     const observed = observedExtraction(dataset, input.durationsByNode);
     return {
       stepIndex, stepId: step.id, entries, dataset, observed,
+      reads: (dataset?.nodeIds ?? []).flatMap((nodeId) => input.readsByNode?.get(nodeId) ?? []),
       unjudged: [...new Set(declared.flatMap((entry) => LANE_UNOBSERVABLE.filter(({ member }) => entry[member] !== undefined).map(({ member }) => member)))],
       measurement: {
         stepIndex,

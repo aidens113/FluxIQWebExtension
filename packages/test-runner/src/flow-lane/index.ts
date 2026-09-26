@@ -4,6 +4,7 @@
 // through `authorizeLiveLlm`, and the lane only decides when to use it.
 export * from "./declared-secrets.js";
 export * from "./expectations.js";
+export * from "./extraction-read.js";
 export * from "./finalized-recording.js";
 export * from "./flow-action-types.js";
 export * from "./harness-recovery.js";

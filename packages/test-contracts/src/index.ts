@@ -9,6 +9,7 @@ export * from "./validation.js";
 export * from "./run-validation.js";
 export * from "./evidence-validation.js";
 export * from "./evaluation-validation.js";
+export * from "./extraction-read/index.js";
 export * from "./harness-recovery.js";
 export * from "./harness-recovery-validation.js";
 export * from "./authored-flow-node.js";

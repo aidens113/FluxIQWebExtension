@@ -285,7 +285,7 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
     extraction: {
       expectation: "judged", extractNodes: 1, unpairedDatasets: 0, nonStringValues: 2, declaredSteps: ["read-catalog"], measurements: [],
       steps: [{
-        stepIndex: 1, stepId: "read-catalog", entries: [], dataset: undefined, unjudged: ["pages"], observed: { nonStringValues: 2 },
+        stepIndex: 1, stepId: "read-catalog", entries: [], dataset: undefined, reads: [], unjudged: ["pages"], observed: { nonStringValues: 2 },
         measurement: { stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false, comparedRecords: 2, matchedRecords: 2, expectedFields: 2, presentFields: 2, unexpectedFields: 0, expectedPages: 3, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 2 },
       }],
     },
@@ -310,6 +310,9 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
     stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, comparedRecords: 2, matchedRecords: 2,
     expectedFields: 2, presentFields: 2, unexpectedFields: 0, nonStringValues: 2, unjudged: ["pages"],
     storeTruncated: null, invalidRows: null, datasetPages: null,
+    // The read's own account of itself sits beside the comparison; `[]` for a
+    // step whose reads reported none, which is not a read that found nothing.
+    reads: [],
   }]);
   assert.ok(!JSON.stringify(snapshot).includes("read-catalog"), "a step id is fixture vocabulary, and the snapshot states positions instead");
 });

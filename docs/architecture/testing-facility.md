@@ -1174,16 +1174,19 @@ never page content (`flowLaneSnapshot`):
   **not** judge, and Core's own dataset flags. No step id, field name or value
   is in it. The `unjudged` list is the point of the block: a reader who sees a
   green extraction must be able to see what was not compared without opening
-  the code;
+  the code. Beside each step's comparison sits `reads`: what the reads that
+  wrote that step's dataset said about **themselves**, and `[]` for a step
+  whose reads reported none;
 - per attempt, in order: the Flow node it ran and its position in Core's
   attempt order; its action type, status, start time and duration; the ladder
   rung that asked for it, when it is not the node's first attempt; what the run
   did about the state the node expected before it ran; its failure record;
   Core's transition comparison status when Core reported one, kept only when it
   is shaped like one of Core's names; **both** target resolutions, each narrowed
-  to closed words and numbers; and the size in bytes and truncation flag of
-  each sanitized evidence packet Core captured before and after it. The packets
-  themselves never travel;
+  to closed words and numbers; the read's own account of itself for an attempt
+  that dispatched one (`extraction`); and the size in bytes and truncation flag
+  of each sanitized evidence packet Core captured before and after it. The
+  packets themselves never travel;
 - a `recovery` block: which recovery answered for each node, which rungs ran,
   and the busiest node's attempt count (`recoveryAttributionSnapshot`).
 
@@ -1206,6 +1209,39 @@ only evidence of the recovery that has no ladder rung, because the browser
 re-resolves a renamed control before Core is told anything failed -- so a
 `fingerprint` or `scored-candidate` strategy on a **succeeded** attempt is the
 record that a rename was survived.
+
+### What a list read says about itself
+
+A read of zero records is the same record, everywhere else in the bundle,
+whether its `item` selector named nothing, the page genuinely held nothing, or
+its `where` conditions rejected every row -- and the three want three different
+repairs. `run-muhrf6c4-9714939f` published `observedRecords: 0, comparedRecords:
+0, expectedFields: 0` against an expectation of 13 records, which says the
+answer was wrong and nothing about why.
+
+The read had already computed the answer. `web.dom.extract_list` reports a
+summary of its own read (`domain/src/actions/extraction/summary.ts`): the
+records returned, the pages covered, whether a cap cut it short, which declared
+fields a row did not yield, whether the list it waited for ever appeared
+(`listPresence`), and what each `where` condition kept and rejected. It reached
+Core on the dispatched result payload and stopped there, because the run detail
+reduces an attempt's outputs to names and counts.
+
+Core now projects it onto the attempt as `metadata.extraction`
+(`runtime/service/summaries/extraction-summary.ts`), exactly as it projects the
+host's target resolution and for the same reason, and the Lab reads it into the
+bundle (`flow-lane/extraction-read.ts`) under the published contract
+`RunExtractionRead`. It is published twice: on each extract attempt in
+`actions[]`, and on each judged step in `extraction.steps[]` beside the oracle's
+comparison -- both, because a Flow may hold more extract nodes than the workflow
+judges, and a read no step paired with is exactly the one nothing else records.
+
+Counts, booleans, one word from a closed set, and record field keys, and nothing
+else. A field key is 1 to 100 characters of `A-Z a-z 0-9 _ -`, so it holds no
+space and therefore no page text, selector, URL or sentence; the same keys are
+already published in full under `authoredNodes[].parameters.extractList.fields`.
+A summary the reader cannot rebuild whole is absent rather than half-read, and
+an attempt that reported none publishes none.
 
 ### Who answers a permission question in a campaign
 

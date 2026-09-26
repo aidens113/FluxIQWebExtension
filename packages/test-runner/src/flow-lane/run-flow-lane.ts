@@ -4,6 +4,7 @@ import type { FluxIQHttpOptions } from "../http-control/index.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "./declared-uploads.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure, judgeFlowExtraction, type FlowExtractionJudgement } from "./expectations.js";
+import { extractionReadsByNode } from "./extraction-read.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
@@ -205,6 +206,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     actionTypes,
     candidateOrder,
     durationsByNode: run.extractionDurationsByNode,
+    readsByNode: extractionReadsByNode(run.actions),
     scenarioOrigin: input.scenarioOrigin,
   });
   // The oracle and the publish both come before the asserts. An assert throws
@@ -293,6 +295,11 @@ export function flowExtractionSnapshot(judgement: FlowExtractionJudgement) {
       storeTruncated: step.dataset?.storeTruncated ?? null,
       invalidRows: step.dataset?.invalidCount ?? null,
       datasetPages: step.dataset?.pages ?? null,
+      // The read's own account of itself, beside the comparison above: the
+      // counts say the answer was wrong, and only these say why. `[]` for a
+      // step whose reads reported no summary, which is not the same as a read
+      // that found nothing.
+      reads: [...step.reads],
     })),
   };
 }
@@ -478,6 +485,12 @@ export function flowActionsSnapshot(run: PersistedFlowRunOutcome) {
     ...(action.comparisonStatus ? { comparisonStatus: action.comparisonStatus } : {}),
     ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
     ...(action.hostTargetResolution ? { hostTargetResolution: action.hostTargetResolution } : {}),
+    // What the read said about itself, for an attempt that dispatched one. It
+    // is published on the attempt as well as on the judged step because a Flow
+    // may hold more extract nodes than the workflow judges, and a read the
+    // judgement never paired with a step is exactly the one nothing else in the
+    // bundle would record.
+    ...(action.extraction ? { extraction: action.extraction } : {}),
     ...(action.evidencePackets ? { evidencePackets: action.evidencePackets } : {}),
   }));
 }

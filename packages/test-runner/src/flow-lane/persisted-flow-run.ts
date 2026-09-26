@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming, type RunExtractionRead, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS } from "fluxiq/automation-studio";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
+import { extractionReadOf } from "./extraction-read.js";
 import { attemptNodeId, hostTargetResolutionOf, readinessOf, retryOf, type PersistedFlowActionReadiness, type PersistedFlowActionRetry, type PersistedHostTargetResolution } from "./persisted-attempt.js";
 import { FLUXIQ_HTTP_MAX_TIMEOUT_MS, isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
@@ -135,6 +136,21 @@ export type PersistedFlowAction = {
    * captured none.
    */
   recordCount?: number;
+  /**
+   * What the read said about **itself**, from Core's `metadata.extraction`.
+   *
+   * `recordCount` above says how many rows the attempt captured and cannot say
+   * why that was the number. This can: whether the list the read waited for was
+   * ever on the page, which declared fields a row did not yield, whether a cap
+   * cut the read short, and what each `where` condition kept and rejected. A
+   * read of zero records is otherwise the same record whether its selector
+   * named nothing, the page held nothing, or its conditions rejected every row
+   * -- and those want three different repairs.
+   *
+   * Absent for every attempt that dispatched no list read, and for a read whose
+   * summary this reader could not rebuild whole (`extractionReadOf`).
+   */
+  extraction?: RunExtractionRead;
   /**
    * Core's comparison of what the attempt did against the transition its node
    * expected, by Core's name for it (`matched`, `blocked`, ...; Core
@@ -610,6 +626,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const readiness = readinessOf(attempt);
   const evidencePackets = evidencePacketsOf(attempt);
   const comparisonStatus = comparisonStatusOf(attempt);
+  const extraction = extractionReadOf(attempt);
   return {
     actionType: actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     nodeId: attemptNodeId(nodeId),
@@ -620,6 +637,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
     ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
+    ...(extraction ? { extraction } : {}),
     ...(comparisonStatus ? { comparisonStatus } : {}),
     ...(retry ? { retry } : {}),
     ...(readiness ? { readiness } : {}),
