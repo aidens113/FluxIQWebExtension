@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has been attempted fourteen times and not passed; ten reached the product. Its extraction reads either nothing (six of ten) or everything (55 and 43 against 13). The best-explored run answers worst, for one reason: seven of its nine draft amendments applied nothing and it was never told why. Two Core fixes are in flight for that and for the extraction vocabulary the repair cannot see. The wrong-answer repair route is open and has applied a correction once.
+Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has been attempted fourteen times and not passed; ten reached the product. The zero read that dominated it is a regression this repository shipped seventeen hours earlier: the wait gives up two seconds into a page whose gates clear on four- and eight-second timers. Two more of the apparent zeros were mis-scored by an already-fixed judge. The best-explored run answers worst, for one reason: seven of its nine draft amendments applied nothing and it was never told why. Two Core fixes are in flight for that and for the extraction vocabulary the repair cannot see. The wrong-answer repair route is open and has applied a correction once.
 Created: 2026-09-24
 Last updated: 2026-09-26
 Owner: Senior supervisor agent
@@ -59,13 +59,58 @@ all.
 | 03:30 | `run-muhu0tjc-bb62f6f4` | 17 | 3 nodes | 0 | refuted, **and the re-author applied a correction** |
 | 03:43 | `run-muhubegx-9469de5e` | 33 | 10 nodes, a search | **43** | refuted, re-author failed `extend_failed` |
 
-**The dominant failure is bimodal and it is the extraction's read.** Six of the
-ten read **nothing at all**, and two read far too much — 55 and 43 against an
-expected 13. Only two ever landed in the right range, and the best answer any run
-has produced remains run `run-muhnh0s5`'s three rows in the right position. A
-node that returns either everything or nothing is not a node whose filter is
-slightly wrong; it is a node whose read and whose filter both need to be able to
-say what they did.
+**The dominant failure was ours, and it is a wait rather than a model.** t143
+read all fourteen attempts and closed the question by duration alone. Every
+extraction read that returned zero records ended at **~2 s** — exactly
+`PAGE_STILL_MS`/`EMPTY_PAGE_SETTLE_MS`, the early settle this repository shipped
+in `a05134a` at 18:29 on 2026-09-25. Every read that returned rows either found
+its list at once or waited much longer:
+
+```
+2089, 2576, 2109, 2082 ms                              -> zero records
+255, 4631, 6935, 10068, 11082, 14256, 14258, 14264 ms  -> records
+```
+
+The fixture's own gates clear on a 4 s timer (`notifications`) and an 8 s timer
+(`softCheckAuto`). A page waiting on a `setTimeout` is mutation-quiet and
+`readyState: "complete"`, which is the one state `documentStillness` cannot tell
+from a finished page — so the read declared the page incapable of producing a list
+while the list was still two to six seconds away. **The zero read is a
+seventeen-hour-old regression of ours, not a model or draft failure**, and t148 is
+fixing it in `apps/extension/src/content/extraction/page-render.ts`.
+
+Two corrections to the table above follow from the same reading, and both were
+this repository's defects rather than the product's answers:
+
+- `run-muhd1vc7-0ec27a16` **stored 16 rows** and `run-muhrf6c4-9714939f`
+  **stored 8**. Both were scored against the wrong record set by the judge pairing
+  that `96833cf` fixed at 19:59, after both runs. Their rows were stored and
+  published; only the score was wrong.
+- `run-muhrz0at-39a25508` read 14264 ms and got rows, then read 2082 ms and got
+  none, and stored "0 records across 1 record set". Its two extraction nodes both
+  carry a `recordOutput`; the leading hypothesis, not established, is that the
+  empty second read replaced the first's rows in a shared dataset.
+
+So of the ten, one never ran (`run-muht9lpw`, no navigation node), two were
+mis-scored, one was probably overwritten by its own second read, two read nothing
+because of the wait, and two read far too much. **Only `run-muhnh0s5`'s three rows
+in the right position remain a real partial answer**, and the two over-wide reads
+are the only evidence about filtering that survives.
+
+**Two further defects t143 found that no fix was dispatched for yet.** The loop
+dry-ran `run-muhu0tjc`'s draft and completed it anyway — `dryrun.1.12=extract
+list` followed by `decision_complete` with no decision row between, and a dry
+run's record count is published nowhere, so if that dry run read zero the loop
+finalised a draft it had already watched fail. And a successful trace step is
+anonymous: across all 159 bundles, 22 steps carry a `nodeId` and none of those 22
+carries a success code, so the exploration's successful extractions cannot be
+attributed or counted. Both are Core questions.
+
+**A warning for anyone reading these bundles.** `authoredNodes` is ordered
+lexicographically by node id, so `s10` sorts between `s1` and `s2`: read as given
+it yields a chain the Flow never had. And `conditions.{applied,kept,rejected}` is
+per-document rather than per-read, so `run-muhubegx`'s `applied: 0` beside
+`recordCount: 43, pagesRead: 5` describes page five alone.
 
 **The two causes that debug named, both now built in Core and awaiting a live
 run.** t140 and t141 are done, uncommitted, and verified only by their own checks
