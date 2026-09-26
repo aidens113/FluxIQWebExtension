@@ -16,8 +16,24 @@
 // Nothing here reads a failure record, a status word other than Core's own
 // `succeeded`, or anything the page produced.
 
-/** As much of one attempt as this rule reads: Core's status word, and the node it ran. */
-export type NodeAttempt = { readonly status?: unknown; readonly nodeId?: unknown };
+/**
+ * As much of one attempt as this rule reads: Core's status word, the node it
+ * ran, and the stage its failure belongs to.
+ *
+ * The stage is a closed word of Core's own, in the same class as the status,
+ * and it is read for one question only: whether an attempt failed because the
+ * node would not run or because the finished run's result was judged wrong.
+ * Nothing here reads a failure's message, its expected or actual text, or
+ * anything the page produced.
+ */
+export type NodeAttempt = { readonly status?: unknown; readonly nodeId?: unknown; readonly failure?: { readonly stage?: unknown } | null };
+
+/**
+ * The stage a refuted result's failure carries. Core records the refutation on
+ * the last record-storing attempt, so the attempt reads `failed` although the
+ * node itself ran exactly as written.
+ */
+const VERIFICATION_STAGE = "verification";
 
 /**
  * One entry per attempt, in the order given: whether the node that ran that
@@ -52,4 +68,33 @@ export function everyNodeEndedSucceeded(attempts: readonly NodeAttempt[]): boole
 /** An attempt that names no node is its own group; a named one joins its node. */
 function nodeKey(attempt: NodeAttempt, index: number): string {
   return typeof attempt.nodeId === "string" && attempt.nodeId.length > 0 ? `node:${attempt.nodeId}` : `unnamed:${index}`;
+}
+
+/**
+ * Whether every node the run attempted actually ran, counting a node whose only
+ * failure was the verdict on the run's result as having run.
+ *
+ * **Why this is a different question from `everyNodeEndedSucceeded`.** Core
+ * records a refuted result as a failure on the last record-storing attempt, so
+ * that attempt reads `failed` although the node executed exactly as authored
+ * and produced rows. Core's recovery, though, plans from the deterministic
+ * diagnosis of an attempt that *would not run*; a refuted result hands it none,
+ * so it takes the unclassified path, writes no record, and there is nothing in
+ * flight for a reader to wait for.
+ *
+ * Measured on `run-muher0en-508ddb69`: a three-node Flow whose every node ran,
+ * refuted on its result, spent 568 s — 60% of a 949 s run — waiting out the
+ * terminal-detail bound and then the full five-minute recovery-record wait for
+ * a record that was never going to be written. The exploration that did the
+ * actual work took 192 s and the Flow's own actions took 12.6 s.
+ */
+export function everyNodeRan(attempts: readonly NodeAttempt[]): boolean {
+  const ended = new Map<string, NodeAttempt>();
+  attempts.forEach((attempt, index) => { ended.set(nodeKey(attempt, index), attempt); });
+  for (const attempt of ended.values()) {
+    if (attempt.status === "succeeded") continue;
+    if (attempt.failure && attempt.failure.stage === VERIFICATION_STAGE) continue;
+    return false;
+  }
+  return true;
 }

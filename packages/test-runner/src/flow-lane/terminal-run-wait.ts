@@ -21,7 +21,7 @@
 
 import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
-import { everyNodeEndedSucceeded, type NodeAttempt } from "./node-recovery.js";
+import { everyNodeRan, type NodeAttempt } from "./node-recovery.js";
 
 /**
  * What a run costs beyond its nodes, and so the whole bound for a Flow of one.
@@ -321,9 +321,17 @@ export function pendingWork(
  * diagnosis placeholder is written with the run's first save, so an
  * intervention says nothing about whether a recovery is running -- which is
  * exactly why the wait could not tell the two apart before.
+ *
+ * **A node that ran and was then judged wrong is a node that ran.** Core marks
+ * a refuted result as a failure on the last record-storing attempt, so this
+ * read `failed` for a Flow whose every node executed as authored, and took the
+ * five-minute wait for a recovery Core had already declined to plan. On
+ * `run-muher0en-508ddb69` that cost 568 s of a 949 s run -- against 192 s of
+ * exploration and 12.6 s of actual Flow actions -- for a record that was never
+ * going to be written. `everyNodeRan` is what tells the two apart.
  */
 function recoveryCouldBeRunning(detail: TerminalRunCandidate): boolean {
-  return !everyNodeEndedSucceeded(detail.actions);
+  return !everyNodeRan(detail.actions);
 }
 
 /** Whether Core's recovery wrote its record: the gate that decided it, or the trace of its stages. */

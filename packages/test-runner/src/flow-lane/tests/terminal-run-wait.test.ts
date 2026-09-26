@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation-studio";
-import { TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
+import { awaitTerminalRunDetail, TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, TERMINAL_DETAIL_POLL_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
 
 test("one node's allowance is every attempt's readiness ceiling plus every retry's backoff, as Core defines them", () => {
   // Core awaits readiness once per attempt and sleeps a backoff before each
@@ -49,4 +49,71 @@ test("the derived bound is capped at the longest run this facility allows", () =
   // the count still governs every Flow smaller than that.
   assert.ok(terminalDetailWaitMs(6) < TERMINAL_DETAIL_MAX_WAIT_MS);
   assert.equal(terminalDetailWaitMs(7), TERMINAL_DETAIL_MAX_WAIT_MS);
+});
+
+// A node that ran and was then judged wrong is a node that ran.
+//
+// Core marks a refuted result as a failure on the last record-storing attempt,
+// so a Flow whose every node executed as authored reads `failed` on that
+// attempt. The wait took that for a node fault and spent the full five-minute
+// recovery-record wait on a recovery Core had already declined to plan --
+// 568 s of `run-muher0en-508ddb69`'s 949 s, against 192 s of exploration and
+// 12.6 s of Flow actions.
+test("a run refuted on its result takes the grace, not the five-minute recovery wait", async () => {
+  const detail = {
+    summaryStatus: "failed",
+    actions: [
+      { status: "succeeded", nodeId: "n1" },
+      { status: "succeeded", nodeId: "n2" },
+      // Executed, then refuted: Core's own stage word for the verdict.
+      { status: "failed", nodeId: "n3", failure: { stage: "verification" } }
+    ],
+    resultVerification: "refuted",
+    runDetail: {}
+  };
+  let clock = 0;
+  const settled = await awaitTerminalRunDetail(
+    async () => detail,
+    new Error("unused"),
+    {
+      now: () => clock,
+      sleep: async (ms: number) => { clock += ms; },
+      timeoutMs: 272_500,
+      awaitRecovery: true,
+      recoveryWaitMs: 300_000,
+      recoveryGraceMs: 5_000
+    }
+  );
+  assert.equal(settled.unsettled, "recovery");
+  // The grace, not the wait: five seconds rather than five minutes.
+  assert.ok(clock <= 5_000 + TERMINAL_DETAIL_POLL_MS, `waited ${clock}ms`);
+});
+
+test("a run with a node that would not run still takes the full recovery wait", async () => {
+  const detail = {
+    summaryStatus: "failed",
+    actions: [
+      { status: "succeeded", nodeId: "n1" },
+      // A node fault, which Core's recovery can plan from, so the record may
+      // genuinely be coming.
+      { status: "failed", nodeId: "n2", failure: { stage: "dispatch" } }
+    ],
+    resultVerification: null,
+    runDetail: {}
+  };
+  let clock = 0;
+  const settled = await awaitTerminalRunDetail(
+    async () => detail,
+    new Error("unused"),
+    {
+      now: () => clock,
+      sleep: async (ms: number) => { clock += ms; },
+      timeoutMs: 272_500,
+      awaitRecovery: true,
+      recoveryWaitMs: 300_000,
+      recoveryGraceMs: 5_000
+    }
+  );
+  assert.equal(settled.unsettled, "recovery");
+  assert.ok(clock > 5_000 + TERMINAL_DETAIL_POLL_MS, `waited only ${clock}ms`);
 });
