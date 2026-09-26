@@ -100,6 +100,99 @@ export type RunHarnessRecovery = {
    * written before this member existed, which says nothing either way.
    */
   contextSections?: RunHarnessRecoveryContextSections | null;
+  /**
+   * What became of the route a wrong answer takes back into the build loop.
+   *
+   * A run refuted for its *answer* is not the patch ladder's business -- a
+   * ladder repairs a step that broke, and a Flow that answered wrongly is
+   * usually missing a step -- so Core hands it to the exploration-and-authoring
+   * loop instead, and records the decision on the run under `resultReauthor`
+   * (Core `runtime/recovery/refuted-result/reauthor.ts`). Four gates can close
+   * that route, and Core names which one did.
+   *
+   * **It was computed, written by Core, and dropped here.** Six live runs in a
+   * row recorded `runtimePatchAttempts: []`, `adaptationIds: []` and
+   * `changeProposalIds: []` with `refusalCode: null`, which reads as a repair
+   * loop switched off; the metadata that said which of the four gates had
+   * closed never reached the bundle, and the cause was twice attributed to the
+   * wrong thing. `run-muhpo10p-771abad6` is the specimen: refuted, two
+   * diagnosis interventions, nothing repaired, and no run artifact could say
+   * why.
+   *
+   * `null` when Core wrote something under the key this record cannot read,
+   * and **absent** when Core wrote nothing at all. The two are kept apart
+   * deliberately: a run Core never took to the route and a run Core refused are
+   * different facts, and neither may be published as the other.
+   */
+  resultReauthor?: RunHarnessResultReauthor | null;
+  /**
+   * Whether this run's result was taken through the failure entry point at all,
+   * and on which node (Core's sibling key `resultRepair`, written by
+   * `runtime/recovery/refuted-result/repair.ts`).
+   *
+   * It is what `resultReauthor` is read against: the repair marker says the
+   * verdict reached the recovery, so a run with a marker and no reauthor record
+   * stopped somewhere between the two, and a run with neither never entered.
+   *
+   * `null` and absent mean what they mean for `resultReauthor`.
+   */
+  resultRepair?: RunHarnessResultRepair | null;
+};
+
+/**
+ * What became of the route back into the build loop for one refuted run.
+ *
+ * `routed` is Core's own flag. The rest is what each side of it carries:
+ * a refused route names the gate that closed it, and a taken one names the
+ * adaptation it produced, whether that edit reached the Flow, and the code any
+ * step of it failed under. Closed words, Core identifiers and flags only --
+ * Core's sentences stay on the run.
+ */
+export type RunHarnessResultReauthor = {
+  /** Whether the run re-entered the exploration-and-authoring loop. */
+  routed: boolean;
+  /**
+   * Which gate closed the route, as Core's own word
+   * (`harnessResultReauthorRefusals`). `null` when the route was taken, and
+   * `null` for a refusal whose word this record could not carry, which is a
+   * shape Core does not write today.
+   */
+  refusal: string | null;
+  /** The adaptation a taken route produced, or `null` when it produced none. */
+  adaptationId: string | null;
+  /** Whether that edit reached the Flow. `false` for a route that was refused, and for one that built an edit it could not apply. */
+  applied: boolean;
+  /** The code a taken route failed under (`flow_bootstrap.extend_failed`, ...), or `null` when no step of it failed. */
+  failureCode: string | null;
+};
+
+/**
+ * Core's four words for why a refuted run did not re-enter the build loop
+ * (`AutomationStudioRefutedResultReauthorRefusal`): the run failed for
+ * something other than its answer, no Flow was in hand to extend, the run's
+ * grant does not buy exploring, or training settings forbid creating an
+ * adaptation.
+ *
+ * The record checks a refusal's *shape* rather than its membership here, so a
+ * fifth word Core adds travels and is read, instead of failing a run over a
+ * vocabulary this repository has not caught up with. This is the set to key on;
+ * it is not a gate.
+ */
+export const harnessResultReauthorRefusals = ["not_a_wrong_answer", "flow_unavailable", "grant_does_not_buy_exploration", "adaptations_not_permitted"] as const;
+export type HarnessResultReauthorRefusal = (typeof harnessResultReauthorRefusals)[number];
+
+/**
+ * Core's record that a run's result was taken through the failure entry point.
+ *
+ * `attempted` is Core's own flag, `nodeId` the node whose attempt the refuted
+ * result was filed against, and `code` the result verdict that sent it there
+ * (`core.result.does_not_answer_request`). `code` is `null` where Core wrote
+ * none, which is a verification that did not perform.
+ */
+export type RunHarnessResultRepair = {
+  attempted: boolean;
+  nodeId: string | null;
+  code: string | null;
 };
 
 /** Section names only, never a section's contents. See `contextSections`. */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import { DEFAULT_LLM_MODEL, type RunHarnessRecovery, validateRunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, harnessResultReauthorRefusals, type RunHarnessRecovery, validateRunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { ExistingFluxIQControlClient, type ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import { flowLaneObservation } from "../lane-observation.js";
@@ -442,4 +442,132 @@ test("a recovery that engaged and then repaired nothing states the rung that dec
     const snapshot = JSON.stringify(snapshotOf(outcome).harnessRecovery);
     assert.equal(snapshot.includes("PRIVATE"), false, `${refusalCode}: Core's sentence stays behind`);
   }
+});
+
+// The silence of six live runs. A Flow that answers wrongly is supposed to be
+// repaired automatically, and across six runs it never was: each recorded
+// `runtimePatchAttempts: []`, `adaptationIds: []` and `changeProposalIds: []`,
+// and the only provider calls outside the build were two verifications. Core
+// decides that route in `recovery/refuted-result/reauthor.ts`, names which of
+// four gates closed it, and writes the decision on the run under
+// `resultReauthor` beside the `resultRepair` marker -- and nothing here read
+// either key, so `grep -c resultReauthor` over `run-muhpo10p-771abad6` returned
+// 0 and the cause was twice attributed to the wrong gate. The mutation this is
+// written against: dropping either key again, or reading Core's one `code`
+// member into one field, which would publish a refusal word as a failure.
+const REFUTED_MARKER = { attempted: true, nodeId: "node.bootstrap.04b8.main.s6", code: "core.result.does_not_answer_request" };
+
+/** A run Core refuted for its answer: the diagnoses it spent, nothing repaired, and whatever the route recorded. */
+const refutedRun = (metadata: Record<string, unknown>, interventionCount = 2) => () => ({
+  summary: { ...summary, status: "failed", interventionCount, adaptationCount: 0 },
+  routeDecisions: [], subflows: [], actionAttempts: [attempt],
+  interventions: Array.from({ length: interventionCount }, (_, index) => ({ interventionId: `intervention.diagnosis.${index}`, kind: "diagnosis", validation: { ok: true, issues: [] }, createdAt: 1_100 + index })),
+  adaptationIds: [], changeProposalIds: [],
+  metadata: { resultRepair: REFUTED_MARKER, ...metadata },
+});
+
+/** What such a run's record holds apart from the route. */
+const refutedBase = (interventionCount = 2): RunHarnessRecovery => ({
+  attempted: interventionCount > 0,
+  interventions: Array.from({ length: interventionCount }, () => ({ kind: "diagnosis", validationOk: true, validationCodes: [] })),
+  runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], refusalCode: null, refusalRung: null,
+});
+
+test("a wrong answer Core declined to re-author says which gate closed the route, on the run and in the snapshot", async (t) => {
+  const { control, serve } = await core(t);
+  for (const refusal of harnessResultReauthorRefusals) {
+    serve(refutedRun({ resultReauthor: { routed: false, code: refusal } }));
+    const outcome = await run(control);
+    const expected: RunHarnessRecovery = {
+      ...refutedBase(),
+      resultReauthor: { routed: false, refusal, adaptationId: null, applied: false, failureCode: null },
+      resultRepair: REFUTED_MARKER,
+    };
+    assert.deepEqual(outcome.harnessRecovery, expected, refusal);
+    assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery }, refusal);
+    // The two readers of a failed run: `snapshots/flow-lane.json`, and the evaluation the bench reads.
+    assert.deepEqual(snapshotOf(outcome).harnessRecovery, expected, `${refusal}: the snapshot`);
+    assert.deepEqual(flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", run: outcome, automationFailureExpected: null }).harnessRecovery, expected, `${refusal}: the observation`);
+  }
+  // A word Core adds later travels rather than failing the run that carried it.
+  serve(refutedRun({ resultReauthor: { routed: false, code: "flow_is_a_subflow" } }));
+  assert.equal((await run(control)).harnessRecovery?.resultReauthor?.refusal, "flow_is_a_subflow");
+});
+
+test("a refused route is recorded for a run that spent nothing, and costs no second read", async (t) => {
+  const { control, calls, serve } = await core(t);
+  serve(refutedRun({ resultReauthor: { routed: false, code: "grant_does_not_buy_exploration" } }, 0));
+  const outcome = await run(control);
+  assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail"]);
+  assert.deepEqual(outcome.harnessRecovery, {
+    ...refutedBase(0),
+    resultReauthor: { routed: false, refusal: "grant_does_not_buy_exploration", adaptationId: null, applied: false, failureCode: null },
+    resultRepair: REFUTED_MARKER,
+  });
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+});
+
+test("a wrong answer that did re-enter the build loop records the adaptation, whether it reached the Flow, and what failed", async (t) => {
+  const { control, serve } = await core(t);
+  const cases = [
+    ["built and applied", { routed: true, adaptationId: ADAPTATION_ID, applied: true }, { routed: true, refusal: null, adaptationId: ADAPTATION_ID, applied: true, failureCode: null }],
+    ["built and not applied", { routed: true, adaptationId: ADAPTATION_ID, code: "flow_bootstrap.apply_failed" }, { routed: true, refusal: null, adaptationId: ADAPTATION_ID, applied: false, failureCode: "flow_bootstrap.apply_failed" }],
+    ["never built", { routed: true, code: "flow_bootstrap.extend_failed" }, { routed: true, refusal: null, adaptationId: null, applied: false, failureCode: "flow_bootstrap.extend_failed" }],
+  ] as const;
+  for (const [name, written, published] of cases) {
+    serve(refutedRun({ resultReauthor: written }));
+    const outcome = await run(control);
+    assert.deepEqual(outcome.harnessRecovery?.resultReauthor, published, name);
+    assert.deepEqual(outcome.harnessRecovery?.resultRepair, REFUTED_MARKER, name);
+    assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery }, name);
+    assert.deepEqual(snapshotOf(outcome).harnessRecovery?.resultReauthor, published, `${name}: the snapshot`);
+  }
+});
+
+// Absent, not a fabricated "not attempted". A run Core never took to the route
+// and a run Core refused are different facts, and a default record would report
+// the first as the second -- which is the misattribution this pair exists to
+// end, in a new shape.
+test("a run Core wrote no route record for leaves both members absent, and an unreadable one reads as null", async (t) => {
+  const { control, serve } = await core(t);
+  const outcome = await run(control);
+  assert.deepEqual(outcome.harnessRecovery, RECOVERED, "the recovered run is unchanged, both members absent");
+  for (const member of ["resultReauthor", "resultRepair"]) assert.equal(member in (outcome.harnessRecovery ?? {}), false, member);
+
+  // Core's marker with no route recorded: the verdict reached the entry point and stopped before the decision.
+  serve(refutedRun({}));
+  const marked = await run(control);
+  assert.deepEqual(marked.harnessRecovery?.resultRepair, REFUTED_MARKER);
+  assert.equal("resultReauthor" in (marked.harnessRecovery ?? {}), false, "no route decision is no decision");
+
+  // Something under the key this record cannot read is null: stated as unreadable, never as a decision.
+  for (const written of ["routed", 7, ["routed"]] as const) {
+    serve(refutedRun({ resultReauthor: written }));
+    const unreadable = await run(control);
+    assert.equal(unreadable.harnessRecovery?.resultReauthor, null, String(written));
+    assert.deepEqual(validateRunHarnessRecovery(unreadable.harnessRecovery), { valid: true, value: unreadable.harnessRecovery }, String(written));
+  }
+});
+
+// A route record is closed words, Core identifiers and flags. Core writes no
+// sentence into either key today; what this fixes in place is that one could
+// not start travelling, and that a value this record cannot carry costs the run
+// nothing -- a note about a run whose outcome Core has already decided must
+// never fail the run it describes.
+test("a sentence where a route's word belongs is dropped, and the run it describes still reports", async (t) => {
+  const { control, serve } = await core(t);
+  serve(refutedRun({
+    resultReauthor: { routed: false, code: "PRIVATE-ISSUE: the run's grant does not buy exploring" },
+    resultRepair: { attempted: true, nodeId: "PRIVATE-PAGE-TEXT the second extract step", code: "PRIVATE-ISSUE: eight rows where thirteen were expected" },
+  }));
+  const outcome = await run(control);
+  assert.deepEqual(outcome.harnessRecovery?.resultReauthor, { routed: false, refusal: null, adaptationId: null, applied: false, failureCode: null });
+  assert.deepEqual(outcome.harnessRecovery?.resultRepair, { attempted: true, nodeId: null, code: null });
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+  for (const [name, serialized] of [["record", JSON.stringify(outcome.harnessRecovery)], ["snapshot", JSON.stringify(snapshotOf(outcome))]] as const) {
+    for (const text of MUST_NOT_TRAVEL) assert.equal(serialized.includes(text), false, `the ${name} carries ${text}`);
+  }
+  // Core's empty `code` is no code, never a code of no characters.
+  serve(refutedRun({ resultRepair: { attempted: true, nodeId: "node.one", code: "" } }));
+  assert.deepEqual((await run(control)).harnessRecovery?.resultRepair, { attempted: true, nodeId: "node.one", code: null });
 });

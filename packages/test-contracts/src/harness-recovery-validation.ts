@@ -1,4 +1,4 @@
-import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, type RunHarnessRecovery } from "./harness-recovery.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, type RunHarnessRecovery, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "./harness-recovery.js";
 import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
@@ -11,7 +11,9 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "refusalCause", "contextSections"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "refusalCause", "contextSections", "resultReauthor", "resultRepair"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
+const resultRepairKeys = ["attempted", "nodeId", "code"] as const satisfies readonly (keyof RunHarnessResultRepair)[];
 const contextSectionKeys = ["included", "omitted"] as const;
 const contextOmissionKeys = ["section", "reason"] as const;
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
@@ -34,6 +36,17 @@ export function isCoreIdentifier(input: unknown): input is string {
 /** Whether `input` is shaped like one of Core's kind or status words: at most 64 characters, lowercase words joined by underscores. */
 export function isCoreKind(input: unknown): input is string {
   return typeof input === "string" && input.length <= KIND_MAX_LENGTH && KIND.test(input);
+}
+
+/**
+ * Whether `input` is shaped like one of Core's codes rather than one of its
+ * sentences: no space, so no message. The same shape `checkCode` refuses a
+ * record for, exported so a reader can decide *before* building a record
+ * whether a value may travel, rather than only finding out when the whole
+ * record is refused.
+ */
+export function isCoreCode(input: unknown): input is string {
+  return typeof input === "string" && CODE.test(input);
 }
 
 /**
@@ -87,8 +100,59 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
     if (value.contextSections !== undefined && value.contextSections !== null) {
       checkContextSections(value.contextSections, "$.contextSections", issues);
     }
+    // Why a wrong answer was or was not re-authored. Absent when Core wrote
+    // nothing under the key and null when it wrote something unreadable, so
+    // neither can be mistaken for a stated decision.
+    if (value.resultReauthor !== undefined && value.resultReauthor !== null) {
+      checkResultReauthor(value.resultReauthor, "$.resultReauthor", issues);
+    }
+    if (value.resultRepair !== undefined && value.resultRepair !== null) {
+      checkResultRepair(value.resultRepair, "$.resultRepair", issues);
+    }
   }
   return result(input, issues);
+}
+
+/**
+ * What became of the route back into the build loop. Core writes one of two
+ * shapes and this holds the record to them: a refusal names the gate and
+ * nothing else, and only a taken route may carry an adaptation, an applied
+ * edit or a failure code.
+ *
+ * The refusal is checked as one of Core's kind words rather than against the
+ * four it writes today, so a fifth is read instead of failing the run that
+ * carried it.
+ */
+function checkResultReauthor(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, resultReauthorKeys, path, issues);
+  if (typeof value.routed !== "boolean") add(issues, `${path}.routed`, "must be a boolean");
+  if (value.refusal !== null) {
+    checkKind(value.refusal, `${path}.refusal`, issues);
+    if (value.routed === true) add(issues, `${path}.refusal`, "must be null for a route that was taken");
+  }
+  if (value.adaptationId !== null) {
+    checkIdentifier(value.adaptationId, `${path}.adaptationId`, issues);
+    if (value.routed === false) add(issues, `${path}.adaptationId`, "must be null for a run that was never routed");
+  }
+  if (typeof value.applied !== "boolean") add(issues, `${path}.applied`, "must be a boolean");
+  if (value.applied === true && value.routed !== true) add(issues, `${path}.applied`, "cannot be true for a run that was never routed");
+  if (value.failureCode !== null) {
+    checkCode(value.failureCode, `${path}.failureCode`, issues);
+    if (value.routed === false) add(issues, `${path}.failureCode`, "must be null for a run that was never routed: a refusal is named by refusal, not by a failure");
+  }
+}
+
+/** Core's marker that the result reached the failure entry point: a flag, the node it was filed against, and the verdict code that sent it there. */
+function checkResultRepair(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, resultRepairKeys, path, issues);
+  if (typeof value.attempted !== "boolean") add(issues, `${path}.attempted`, "must be a boolean");
+  if (value.nodeId !== null) {
+    checkIdentifier(value.nodeId, `${path}.nodeId`, issues);
+    if (value.attempted === false) add(issues, `${path}.nodeId`, "must be null for a result that was never taken through the failure entry point");
+  }
+  if (value.code !== null) checkCode(value.code, `${path}.code`, issues);
 }
 
 function checkContextSections(input: unknown, path: string, issues: ValidationIssue[]): void {
@@ -161,7 +225,7 @@ function checkKind(input: unknown, path: string, issues: ValidationIssue[]): voi
   if (!isCoreKind(input)) add(issues, path, `must be a kind name of at most ${KIND_MAX_LENGTH} lowercase words joined by underscores`);
 }
 function checkCode(input: unknown, path: string, issues: ValidationIssue[]): void {
-  if (typeof input !== "string" || !CODE.test(input)) add(issues, path, "must be an issue code, never an issue message");
+  if (!isCoreCode(input)) add(issues, path, "must be an issue code, never an issue message");
 }
 function checkIdentifier(input: unknown, path: string, issues: ValidationIssue[]): void {
   if (!isCoreIdentifier(input)) add(issues, path, `must be a Core identifier of at most ${IDENTIFIER_MAX_LENGTH} characters`);

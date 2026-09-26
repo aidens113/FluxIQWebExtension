@@ -1,4 +1,4 @@
-import { harnessRecoveryRungs, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery, type RunHarnessRecoveryContextSections } from "@fluxiq-web-extension/test-contracts";
+import { harnessRecoveryRungs, isCoreCode, isCoreIdentifier, isCoreKind, validateRunHarnessRecovery, type HarnessRecoveryRung, type RunHarnessPatchAttempt, type RunHarnessRecovery, type RunHarnessRecoveryContextSections, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control/index.js";
@@ -45,7 +45,7 @@ export async function readHarnessRecovery(
   runDetail: Readonly<Record<string, unknown>>,
   bounds: FluxIQHttpOptions,
 ): Promise<RunHarnessRecovery> {
-  if (!recoveryRecorded(runDetail)) return conforming({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], ...recoveryRefusal(runDetail) });
+  if (!recoveryRecorded(runDetail)) return conforming({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [], ...recoveryRefusal(runDetail), ...refutedResultRoute(runDetail) });
   const detail = await control.getRunDetail(scope.projectId, scope.runId, bounds);
   const interventions = (detail.interventions ?? []).map((item) => ({ kind: item.kind, validationOk: item.validationOk ?? null, validationCodes: [...(item.validationCodes ?? [])] }));
   const refusals = targetOverrideRefusalCases(runDetail);
@@ -72,7 +72,7 @@ export async function readHarnessRecovery(
   // produced something, because then the lists are the answer.
   const produced = runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
   const contextSections = recoveryContextSections(runDetail);
-  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)), ...(contextSections !== undefined ? { contextSections } : {}) });
+  return conforming({ attempted, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(produced ? { refusalCode: null, refusalRung: null } : recoveryRefusal(runDetail)), ...(contextSections !== undefined ? { contextSections } : {}), ...refutedResultRoute(runDetail) });
 }
 
 /**
@@ -89,10 +89,9 @@ export async function readHarnessRecovery(
  */
 function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null; refusalCause?: string } {
   const none = { refusalCode: null, refusalRung: null };
-  const metadata = runDetail.metadata;
-  const gate = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).llmGate : undefined;
-  if (!gate || typeof gate !== "object" || Array.isArray(gate)) return none;
-  const { invoked, code, cause, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate as Record<string, unknown>;
+  const gate = plainRecord(metadataValue(runDetail, "llmGate"));
+  if (!gate) return none;
+  const { invoked, code, cause, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate;
   // Core's own cause behind the gate's code, where it named one. Only a string:
   // the slot is Core's vocabulary, and the contract holds it to a code shape.
   if (invoked === false && code !== undefined) {
@@ -121,17 +120,98 @@ function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusa
  * stable in a fixture.
  */
 function recoveryContextSections(runDetail: Readonly<Record<string, unknown>>): RunHarnessRecoveryContextSections | null | undefined {
-  const metadata = runDetail.metadata;
-  const gate = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).llmGate : undefined;
-  if (!gate || typeof gate !== "object" || Array.isArray(gate)) return undefined;
-  const summary = (gate as Record<string, unknown>).recoveryContext;
+  const gate = plainRecord(metadataValue(runDetail, "llmGate"));
+  if (!gate) return undefined;
+  const summary = gate.recoveryContext;
   if (summary === undefined) return undefined;
-  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return null;
-  const { included, omitted } = summary as Record<string, unknown>;
+  const sections = plainRecord(summary);
+  if (!sections) return null;
+  const { included, omitted } = sections;
   return {
     included: entries(included).map((entry) => String(entry.section)),
     omitted: entries(omitted).map((entry) => ({ section: String(entry.section), reason: String(entry.reason) }))
   };
+}
+
+/**
+ * What became of the route a wrong answer takes back into the build loop, and
+ * Core's marker that the result reached the failure entry point at all.
+ *
+ * **This is the fact six live runs could not state.** Core decides the route in
+ * `runtime/recovery/refuted-result/reauthor.ts` and records the decision on the
+ * run under `resultReauthor`, with its sibling `resultRepair` for the marker;
+ * both were computed, both were stored, and neither reached a bundle. A reader
+ * of `run-muhpo10p-771abad6` saw `runtimePatchAttempts: []` and a `null`
+ * refusal, which reads as a repair loop switched off, and the cause was twice
+ * attributed to the wrong gate.
+ *
+ * Each member is absent when Core wrote nothing under its key, so a run that
+ * never reached the route is never published as one that was refused. The
+ * mutation this is written against: defaulting either member to a
+ * "not attempted" record.
+ */
+function refutedResultRoute(runDetail: Readonly<Record<string, unknown>>): Pick<RunHarnessRecovery, "resultReauthor" | "resultRepair"> {
+  const reauthor = resultReauthor(metadataValue(runDetail, "resultReauthor"));
+  const repair = resultRepair(metadataValue(runDetail, "resultRepair"));
+  return {
+    ...(reauthor === undefined ? {} : { resultReauthor: reauthor }),
+    ...(repair === undefined ? {} : { resultRepair: repair }),
+  };
+}
+
+/**
+ * Core's `resultReauthor` record, as closed words, Core identifiers and flags.
+ *
+ * Core writes one of two shapes -- `{ routed: true, adaptationId?, applied?,
+ * code? }` or `{ routed: false, code: <one of four refusal words> }` -- so the
+ * one key `code` means two different things, and they are separated here:
+ * `refusal` for the gate that closed the route, `failureCode` for the step a
+ * taken route failed at. Reading them into one member would publish a refusal
+ * word as if a step had failed under it.
+ *
+ * A value Core wrote in a shape this record cannot carry becomes `null` rather
+ * than failing the read. This is a note *about* a run whose outcome Core has
+ * already decided, and a whole product result must not be thrown away over it.
+ */
+function resultReauthor(value: unknown): RunHarnessResultReauthor | null | undefined {
+  if (value === undefined) return undefined;
+  const record = plainRecord(value);
+  if (!record) return null;
+  const routed = record.routed === true;
+  const code = record.code;
+  return {
+    routed,
+    // Core's word for the gate, only on the side of the decision that has one.
+    refusal: !routed && isCoreKind(code) ? code : null,
+    adaptationId: routed && isCoreIdentifier(record.adaptationId) ? record.adaptationId : null,
+    applied: routed && record.applied === true,
+    failureCode: routed && isCoreCode(code) ? code : null,
+  };
+}
+
+/** Core's `resultRepair` marker: whether the result entered the failure entry point, the node it was filed against, and the verdict code that sent it there. */
+function resultRepair(value: unknown): RunHarnessResultRepair | null | undefined {
+  if (value === undefined) return undefined;
+  const record = plainRecord(value);
+  if (!record) return null;
+  const attempted = record.attempted === true;
+  return {
+    attempted,
+    nodeId: attempted && isCoreIdentifier(record.nodeId) ? record.nodeId : null,
+    // Core writes an empty string where the verification did not perform, which
+    // is no code rather than a code of no characters.
+    code: isCoreCode(record.code) ? record.code : null,
+  };
+}
+
+/** One member of Core's run metadata, or nothing when the run carries no metadata record. */
+function metadataValue(runDetail: Readonly<Record<string, unknown>>, key: string): unknown {
+  return plainRecord(runDetail.metadata)?.[key];
+}
+
+/** A plain record, or nothing when the value is absent, null, a list or a scalar. */
+function plainRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 /** A list of Core's `{ section, ... }` records, or nothing when it is not one. */
@@ -188,13 +268,12 @@ const REFUSAL_CASE_MAX_LENGTH = 64;
  * nothing the sentence carries can reach the record.
  */
 function targetOverrideRefusalCases(runDetail: Readonly<Record<string, unknown>>): Array<string | undefined> {
-  const metadata = runDetail.metadata;
-  const attempts = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).runtimePatchAttempts : undefined;
+  const attempts = metadataValue(runDetail, "runtimePatchAttempts");
   if (!Array.isArray(attempts)) return [];
   return attempts.map((attempt) => {
-    const refusal = attempt && typeof attempt === "object" && !Array.isArray(attempt) ? (attempt as Record<string, unknown>).targetOverrideRefusal : undefined;
-    if (!refusal || typeof refusal !== "object" || Array.isArray(refusal)) return undefined;
-    const { status, reason } = refusal as Record<string, unknown>;
+    const refusal = plainRecord(plainRecord(attempt)?.targetOverrideRefusal);
+    if (!refusal) return undefined;
+    const { status, reason } = refusal;
     if (status !== "absent" && status !== "ambiguous") return undefined;
     if (reason === undefined) return status;
     return typeof reason === "string" && reason.length <= REFUSAL_CASE_MAX_LENGTH && REFUSAL_CASE.test(reason) ? reason : undefined;
