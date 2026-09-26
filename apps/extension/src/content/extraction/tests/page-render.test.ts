@@ -9,6 +9,13 @@
 // that prompted it paid six times over at 11.04 seconds a call
 // (`run-muhnh0s5-98a27f42`).
 //
+// **What the wait costs is half of it; what it says is the other half.** Ending
+// the wait early saves the seconds, and the read that follows still answers
+// `succeeded` with zero records -- the same answer a page holding nothing
+// gives. So the wait also reports whether the list was ever there, and the rows
+// at the bottom are that report: appeared, and never appeared, on each of the
+// ways the wait can end.
+//
 // Node has no page, so `document` and `MutationObserver` are stood up here as
 // the two things the wait actually asks of them: a `querySelectorAll` that
 // counts, a `readyState`, and an observer whose callback the fake page calls
@@ -18,7 +25,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { awaitListPresent } from "../page-render";
+import { awaitListPresent, type ListPresence } from "../page-render";
 
 /** The ceiling the wait pays when it cannot conclude anything, and the settle that lets it conclude. */
 const PAGE_STILL_MS = 2_000;
@@ -56,11 +63,16 @@ function fakePage(options: { readyState?: DocumentReadyState } = {}): FakePage {
   };
 }
 
+/** What `awaitListPresent` answered, and how long it took to answer it. */
+async function runWait(item: string, required: number, settle: boolean, timeoutMs: number): Promise<{ took: number; presence: ListPresence }> {
+  const started = Date.now();
+  const presence = await awaitListPresent(item, required, settle, { deadline: started + timeoutMs, hasUnreadItem: () => false });
+  return { took: Date.now() - started, presence };
+}
+
 /** How long `awaitListPresent` took, in milliseconds. */
 async function timeWait(item: string, required: number, settle: boolean, timeoutMs: number): Promise<number> {
-  const started = Date.now();
-  await awaitListPresent(item, required, settle, { deadline: started + timeoutMs, hasUnreadItem: () => false });
-  return Date.now() - started;
+  return (await runWait(item, required, settle, timeoutMs)).took;
 }
 
 test("a list that is already there is not waited for at all", async () => {
@@ -132,6 +144,72 @@ test("a list that arrives while the page is still working is read the moment it 
   } finally {
     clearTimeout(arrival);
     clearInterval(stirring);
+    page.restore();
+  }
+});
+
+test("a list that is there is reported as having appeared, settle or no settle", async () => {
+  const page = fakePage();
+  page.draw(3);
+  try {
+    assert.equal((await runWait(".item", 1, false, 10_000)).presence, "appeared");
+    // The growth settle runs after the list is found and must not change the answer.
+    const settled = await runWait(".item", 1, true, 10_000);
+    assert.equal(settled.presence, "appeared");
+    assert.ok(settled.took >= 850, `the settle still runs, waited ${settled.took}ms`);
+  } finally {
+    page.restore();
+  }
+});
+
+test("a selector that names nothing on a settled page is reported as never having appeared", async () => {
+  const page = fakePage();
+  try {
+    const { took, presence } = await runWait(".nothing-here", 1, false, 30_000);
+    assert.equal(presence, "never_appeared", "the one thing a read of zero records cannot say for itself");
+    assert.ok(took < PAGE_STILL_MS + 1_000, `expected the settle, waited ${took}ms`);
+  } finally {
+    page.restore();
+  }
+});
+
+test("a selector that names nothing is still never_appeared when the ceiling or the deadline ends the wait", async () => {
+  const page = fakePage();
+  const stirring = setInterval(() => page.stir(), 100);
+  try {
+    // A page that never stops working: only the command's deadline ends this
+    // one, and the answer is the same fact arrived at the expensive way.
+    const { took, presence } = await runWait(".nothing-here", 1, false, 3_000);
+    assert.equal(presence, "never_appeared");
+    assert.ok(took >= 2_900, `expected the full command deadline, waited ${took}ms`);
+  } finally {
+    clearInterval(stirring);
+    page.restore();
+  }
+});
+
+test("a list that arrives while the page works appeared, however late", async () => {
+  const page = fakePage();
+  const arrival = setTimeout(() => page.draw(5), 400);
+  const stirring = setInterval(() => page.stir(), 100);
+  try {
+    assert.equal((await runWait(".item", 1, false, 10_000)).presence, "appeared");
+  } finally {
+    clearTimeout(arrival);
+    clearInterval(stirring);
+    page.restore();
+  }
+});
+
+test("a list too short for the request still appeared: the selector names something", async () => {
+  const page = fakePage();
+  page.draw(2);
+  try {
+    // The wait for a required sixteenth item runs out, which is a read that came
+    // up short -- not a selector that names nothing, and not the same repair.
+    const { presence } = await runWait(".item", 16, false, 3_000);
+    assert.equal(presence, "appeared");
+  } finally {
     page.restore();
   }
 });

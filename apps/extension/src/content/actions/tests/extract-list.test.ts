@@ -262,3 +262,103 @@ test("a read the capability refused reports the refusal and no summary", async (
 
   assert.deepEqual(calls, [{ builder: "failure", error: refused }]);
 });
+
+test("a read whose item selector named nothing says the list never appeared, and still succeeds", async () => {
+  // The defect `run-muhnh0s5-98a27f42` paid for six times over: the selector
+  // named nothing, the wait ran out, the read answered `succeeded` with zero
+  // records, and nothing in the reply told the model that from a page that had
+  // nothing on it. The verb now says which of the two it was.
+  const outcome: ListExtractionOutcome = {
+    records: [],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    listPresence: "never_appeared",
+    missingFields: [],
+    filtered: 0
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction(COMMAND, deps, 1);
+
+  const [call] = calls;
+  // A fact on a successful read, not a refusal and not a failed action: the
+  // builder is still `success`, as it is for a page that legitimately held
+  // nothing.
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  const summary = {
+    recordCount: 0,
+    pagesRead: 1,
+    truncated: false,
+    missingFields: [],
+    fieldNames: ["name", "price", "sku"],
+    listPresence: "never_appeared"
+  };
+  assert.deepEqual(call.evidence?.extraction, summary);
+  // And it survives the domain's wire copy, which is what puts it in front of
+  // the build and the repair rather than only in the page.
+  assert.deepEqual(wireSummary(call.validation, call.evidence), summary);
+  // `minItems` defaults to 1, so zero records still fails the post-condition --
+  // unchanged by this. What changed is that the phrase says why.
+  assert.equal(call.validation.status, "failed");
+  const actual = call.validation.status === "failed" ? call.validation.actual : "";
+  assert.match(actual, /0 records from 1 page; the item selector named nothing on the page, so the list never appeared/u);
+  assert.match(actual, /change the selector rather than the fields or the conditions/u);
+  // Counts and closed words only: nothing the page held rides out on it.
+  assert.ok(!actual.includes(".row"), `the selector itself must not be quoted back: ${actual}`);
+});
+
+test("a page that really held nothing is a read that appeared, and reads as an empty page", async () => {
+  const outcome: ListExtractionOutcome = {
+    records: [],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    listPresence: "appeared",
+    missingFields: [],
+    filtered: 0
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction(COMMAND, deps, 1);
+
+  const [call] = calls;
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  assert.deepEqual(call.evidence?.extraction, {
+    recordCount: 0,
+    pagesRead: 1,
+    truncated: false,
+    missingFields: [],
+    fieldNames: ["name", "price", "sku"],
+    listPresence: "appeared"
+  });
+  const actual = call.validation.status === "failed" ? call.validation.actual : "";
+  assert.doesNotMatch(actual, /never appeared/u);
+});
+
+test("a read its conditions emptied is unchanged: its list appeared, and the conditions still have the phrase", async () => {
+  const outcome: ListExtractionOutcome = {
+    records: [{ name: "Lamp", price: "$49.00", sku: "L-1" }, { name: "Mug", price: "$8.00", sku: "M-1" }],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    listPresence: "appeared",
+    missingFields: [],
+    filtered: 2,
+    conditions: { applied: 2, kept: 0, rejected: [0, 2], unfiltered: true }
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction(COMMAND, deps, 1);
+
+  const [call] = calls;
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  const wire = wireSummary(call.validation, call.evidence) as { listPresence?: unknown; conditions?: unknown };
+  assert.equal(wire.listPresence, "appeared");
+  assert.deepEqual(wire.conditions, { applied: 2, kept: 0, rejected: [0, 2], unfiltered: true });
+  // The condition phrase is the one this read needs, and the list phrase does
+  // not displace it: the items were there, the conditions turned them down.
+  const actual = call.validation.status === "passed" ? call.validation.actual : "";
+  assert.match(actual, /where kept none of the 2 items/u);
+  assert.doesNotMatch(actual, /never appeared/u);
+});

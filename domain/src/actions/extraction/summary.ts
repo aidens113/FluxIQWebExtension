@@ -1,12 +1,13 @@
 // The result half of `web.dom.extract_list` (contract C2): what a list read
 // says about itself, beside the records it returns in `extracted`.
 //
-// Every value here is a count, a flag, or a declared field key. None is read
-// from the page, which is what lets the wire payload carry the summary for any
-// element. That holds only while the shape stays this way, so the copy below
-// admits nothing else: a string that is not a well-formed field key, or a
-// missing field that is not one of the read's own fields, drops the whole
-// summary rather than letting page text ride on a field nothing redacts.
+// Every value here is a count, a flag, a word from a closed set, or a declared
+// field key. None is read from the page, which is what lets the wire payload
+// carry the summary for any element. That holds only while the shape stays this
+// way, so the copy below admits nothing else: a string that is not a
+// well-formed field key, a word outside its set, or a missing field that is not
+// one of the read's own fields, drops the whole summary rather than letting
+// page text ride on a field nothing redacts.
 
 import { isWebAutomationExtractFieldKey } from "./field-key";
 
@@ -21,9 +22,36 @@ export type WebAutomationExtractionSummary = {
   missingFields: string[];
   /** The request's field keys, excluded fields left out (D12). */
   fieldNames: string[];
+  /** Whether the page ever showed the list, or absent for a read that never waited for one. */
+  listPresence?: WebAutomationExtractionListPresence | undefined;
   /** What `where` did, or absent for a read whose request named no conditions. */
   conditions?: WebAutomationExtractionConditionReport | undefined;
 };
+
+/**
+ * Whether the `item` selector ever named an element on the page (C2).
+ *
+ * It is the same defect as the condition report below, one layer up. A read
+ * whose selector matches nothing waits for the list, gives up, reads the page
+ * anyway and answers `succeeded` with zero records -- which is precisely what a
+ * page holding nothing answers, and the two want different repairs: one changes
+ * the selector, the other the instruction. Live run `run-muhnh0s5-98a27f42`
+ * paid that six times over at 11.04 seconds a call while the model amended one
+ * extraction and reran it, because nothing in the reply said the list had never
+ * been there.
+ *
+ * `"never_appeared"` is therefore a fact about a successful read, never a
+ * failure: an empty page is a legitimate answer and a read that finds one still
+ * succeeds. It is absent from a read that never waited for a list of its own --
+ * a continued read, which resumes on the page its predecessor's control
+ * reached.
+ *
+ * A closed word rather than a count, because the count that matters is already
+ * here: `recordCount` says how much was read, and what it cannot say is whether
+ * there was anything there to read. One of two words cannot be confused with a
+ * quantity, and, like every other value here, it carries nothing off the page.
+ */
+export type WebAutomationExtractionListPresence = "appeared" | "never_appeared";
 
 /**
  * What a read's `where` conditions did to it (C5), in counts alone.
@@ -77,14 +105,28 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // arriving as a report that says something the read did not do.
   const conditions = summary.conditions === undefined ? undefined : conditionReportValue(summary.conditions);
   if (summary.conditions !== undefined && conditions === undefined) return undefined;
+  // Optional, and held to the same rule: a word this side does not know is a
+  // producer saying something about the read that this contract cannot read
+  // back, so it drops the summary rather than arriving as a half-understood
+  // fact. Optional is what keeps an extension build that predates it -- the
+  // unpacked one a browser may still have loaded -- sending summaries that
+  // still arrive whole.
+  const listPresence = listPresenceValue(summary.listPresence);
+  if (summary.listPresence !== undefined && listPresence === undefined) return undefined;
   return {
     recordCount,
     pagesRead,
     truncated: summary.truncated,
     missingFields,
     fieldNames,
+    ...(listPresence !== undefined ? { listPresence } : {}),
     ...(conditions !== undefined ? { conditions } : {})
   };
+}
+
+/** The one word that says whether the list was ever there, or `undefined` for anything else. */
+function listPresenceValue(value: unknown): WebAutomationExtractionListPresence | undefined {
+  return value === "appeared" || value === "never_appeared" ? value : undefined;
 }
 
 /** The condition report copied count by count, or `undefined` for one that is not well formed. */

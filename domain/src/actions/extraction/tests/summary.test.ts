@@ -68,3 +68,29 @@ test("the summary's own rules are unchanged: a malformed count or an undeclared 
   assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, missingFields: ["rating"] }), undefined);
   assert.equal(webAutomationExtractionSummaryValue(undefined), undefined);
 });
+
+test("a read that never saw its list carries the word that says so, and one that saw it carries the other", () => {
+  // `run-muhnh0s5-98a27f42`: six reads whose selector named nothing, each
+  // `succeeded` with zero records, and nothing on the wire to tell that from a
+  // page holding nothing.
+  const empty = { ...SUMMARY, recordCount: 0, missingFields: [], listPresence: "never_appeared" };
+  assert.deepEqual(webAutomationExtractionSummaryValue(empty), empty);
+  const found = { ...SUMMARY, listPresence: "appeared" };
+  assert.deepEqual(webAutomationExtractionSummaryValue(found), found);
+  // A read that never waited for a list of its own -- a continued read -- says
+  // nothing, and the summary is the one it always was.
+  assert.deepEqual(webAutomationExtractionSummaryValue(SUMMARY), SUMMARY);
+  assert.equal("listPresence" in (webAutomationExtractionSummaryValue(SUMMARY) ?? {}), false);
+});
+
+test("a word this contract does not know drops the whole summary rather than riding beside it", () => {
+  const rows: unknown[] = ["maybe", "", "APPEARED", 0, true, null, ["appeared"], { presence: "appeared" }];
+  for (const listPresence of rows) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, listPresence }), undefined, `listPresence: ${JSON.stringify(listPresence)}`);
+  }
+});
+
+test("the list word and the condition report travel together, since a read can have both", () => {
+  const both = { ...SUMMARY, listPresence: "appeared", conditions: { applied: 30, kept: 0, rejected: [30], unfiltered: true } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(both), both);
+});

@@ -53,6 +53,20 @@
 // The run before it, `run-muher0en-508ddb69`, shows the same figure eight
 // times.
 //
+// **And a wait that ran out is a fact about the read, not a detail of the
+// wait.** Stopping early saves the seconds; it does not tell the model why it
+// got nothing. A read whose `item` selector named nothing still answers
+// `succeeded` with zero records, which is exactly what a page holding nothing
+// answers, and the two need different repairs: one changes the selector, the
+// other the instruction. That is the same defect
+// `WebAutomationExtractionConditionReport` was written for one layer down --
+// "a filtered read that answers with nothing is indistinguishable from a page
+// with nothing on it" -- so it is answered the same way, with a fact in the
+// summary rather than a failure. `awaitListPresent` therefore says whether the
+// list was ever there (`ListPresence`), `list-reader.ts` carries it out on the
+// read's outcome, and `domain/src/actions/extraction/summary.ts` puts it on the
+// wire in one closed word.
+//
 // So `awaitListPresent` stops when the answer stops being able to change.
 // `querySelectorAll` can only start matching when a node is added or removed or
 // an attribute changes; no CSS selector reads text, so character data cannot do
@@ -68,6 +82,15 @@ import { waitUntil } from "./list-wait";
 
 /** Whether the page arrived, or the command's deadline passed first. */
 export type PageArrival = "arrived" | "timed_out";
+
+/**
+ * Whether the `item` selector named anything by the time the wait for it
+ * ended. `"never_appeared"` is the wait having run out -- on the page settling,
+ * on the ceiling, or on the command's deadline -- with the selector still
+ * naming nothing, which is the one thing a read of zero records cannot say for
+ * itself.
+ */
+export type ListPresence = "appeared" | "never_appeared";
 
 /** What the wait needs to know about the read: its deadline, and whether the page shows an item it has not taken. */
 export type RenderProgress = { deadline: number | undefined; hasUnreadItem(): boolean };
@@ -130,8 +153,13 @@ export async function awaitPageRendered(paginate: WebAutomationExtractListPagina
  * them is not a failure here: the read proceeds and reads what the page holds,
  * so what it reports is still the page as it stands rather than an error this
  * module invented.
+ *
+ * What it returns is whether the list was there when the wait ended, which is
+ * the fact a read of zero records has no other way to state. It is not a
+ * verdict: `"never_appeared"` does not stop the read, and the caller carries it
+ * as a fact beside the records rather than as a reason to refuse or retry.
  */
-export async function awaitListPresent(item: string, required: number, settle: boolean, progress: RenderProgress): Promise<void> {
+export async function awaitListPresent(item: string, required: number, settle: boolean, progress: RenderProgress): Promise<ListPresence> {
   const wanted = Math.max(1, required);
   // The stillness is only asked of the wait for the list to appear. The growth
   // settle below is already a statement about the page having stopped changing,
@@ -143,7 +171,7 @@ export async function awaitListPresent(item: string, required: number, settle: b
   } finally {
     still.stop();
   }
-  if (!settle) return;
+  if (!settle) return presence(item);
   let count = matchCount(item);
   let stableSince = Date.now();
   await waitUntil(
@@ -160,6 +188,17 @@ export async function awaitListPresent(item: string, required: number, settle: b
     RENDER_POLL_MS,
     progress.deadline
   );
+  return presence(item);
+}
+
+/**
+ * Whether the list is there now, which is what the caller needs: the read that
+ * follows queries the same document a moment later. It is asked at the end
+ * rather than recorded through the wait, because the wait already ends the
+ * moment the answer can no longer change.
+ */
+function presence(item: string): ListPresence {
+  return matchCount(item) > 0 ? "appeared" : "never_appeared";
 }
 
 /**

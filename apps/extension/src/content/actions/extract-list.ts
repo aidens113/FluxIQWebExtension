@@ -14,7 +14,8 @@
 //
 // Beside the records, every read that returned reports its own account as the
 // result's `extraction` (C2): how many records, how many pages, whether a cap
-// cut it short, and which required fields some record lacked. Its `fieldNames` are the
+// cut it short, whether the page ever showed the list at all, and which
+// required fields some record lacked. Its `fieldNames` are the
 // request's field keys with excluded fields left out, because an excluded
 // column is never read (D12). The domain's wire copy drops the whole summary
 // when a missing field is not one of `fieldNames`, so the two lists are built
@@ -83,6 +84,7 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     truncated: outcome.truncated,
     missingFields: [...outcome.missingFields],
     fieldNames: [...fieldNames],
+    ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {})
   };
 }
@@ -104,8 +106,16 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
  * something different from one that found sixteen items, and the number of rows
  * alone cannot tell the two apart.
  *
- * **A read whose conditions kept nothing says so first**, because that is the
- * one thing about it worth reading. It answers with the rows they rejected
+ * **A read whose `item` selector named nothing says so first**, because a read
+ * of zero records reads exactly like a page that held nothing, and the two want
+ * different repairs: one changes the selector, the other the instruction.
+ * Nothing else in the phrase can say which happened, and the wait that would
+ * have found the list has already given up by the time this is written
+ * (`extraction/page-render.ts`). It is said and the read still succeeds: an
+ * empty page is a legitimate answer, so this adds a fact rather than a verdict.
+ *
+ * **A read whose conditions kept nothing says so next**, because that is the
+ * one thing about such a read worth reading. It answers with the rows they rejected
  * rather than with none (`extraction/list-reader.ts`), so without the phrase the
  * result would look like a plain unfiltered read that happened to match
  * everything -- and on 2026-09-24 the empty version of the same mistake cost a
@@ -114,6 +124,9 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
  */
 function readSummary(outcome: Outcome): string {
   const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}`;
+  if (outcome.listPresence === "never_appeared") {
+    return `${read}; the item selector named nothing on the page, so the list never appeared -- change the selector rather than the fields or the conditions`;
+  }
   const report = outcome.conditions;
   if (report?.unfiltered) {
     return `${read}, but where kept none of the ${count(report.applied, "item")} it was applied to, so the rows it rejected were returned unfiltered${culprits(report)} -- narrow the conditions rather than trusting these rows`;

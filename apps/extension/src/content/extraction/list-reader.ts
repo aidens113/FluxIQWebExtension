@@ -96,7 +96,7 @@ import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
-import { awaitListPresent, awaitPageRendered } from "./page-render";
+import { awaitListPresent, awaitPageRendered, type ListPresence } from "./page-render";
 import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
 
 /** One record: each included field's value, or `null` for an optional field the page could not read. */
@@ -110,6 +110,8 @@ export type ListExtractionOutcome = {
   truncated: boolean;
   /** Whether the command's `timeoutMs` ran out before the list ended. */
   timedOut: boolean;
+  /** Whether the page ever showed the list at all (C2): `"never_appeared"` for a read whose `item` selector named nothing, and absent for a continued read, which waits for its predecessor's page rather than for a list. */
+  listPresence?: ListPresence | undefined;
   /** Required fields that at least one record did not yield. */
   missingFields: string[];
   /** Items of the run that a `where` condition left out, so they are not records (C5). */
@@ -192,6 +194,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
   let truncated = false;
   let timedOut = false;
+  // "Your item selector names nothing" and "the page holds nothing" are
+  // different repairs, and a read of zero records cannot tell them apart (C2).
+  let listPresence: ListPresence | undefined;
   let filtered = resume?.filtered ?? 0;
   // Items the conditions were asked about in this document, and how many of
   // them each condition rejected. A continued read carries its predecessor's
@@ -217,6 +222,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       timedOut: ended.timedOut,
       missingFields: answer.missingFields,
       filtered,
+      ...(listPresence === undefined ? {} : { listPresence }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } })
     };
   };
@@ -244,19 +250,21 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     // is one scroll from holding sixteen items holds twelve, and waiting there
     // spends the whole command on a sixteenth that was never going to come.
     const required = requiredItems(request.minItems);
-    await awaitListPresent(item, 1, paginate === undefined, progress);
+    listPresence = await awaitListPresent(item, 1, paginate === undefined, progress);
     if (paginate === undefined) {
       // `maxItems` bounds records rather than items, so only a read with no
       // condition can tell from the page that it has already seen every item it
       // could keep -- which is how the picker's five-row preview is read
       // without scrolling the page a person is looking at.
       await awaitListComplete(item, rejects ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
-      if (required > 1) await awaitListPresent(item, required, false, progress);
+      if (required > 1) listPresence = await awaitListPresent(item, required, false, progress);
     }
   }
 
   for (;;) {
     const shown = Array.from(document.querySelectorAll(item));
+    // A list no wait saw but the read does -- a later page's, or one drawn between the two -- still appeared.
+    if (listPresence === "never_appeared" && shown.length > 0) listPresence = "appeared";
     progress.shown = shown;
     progress.pagesRead += 1;
     const thisPage: string[] = [];
