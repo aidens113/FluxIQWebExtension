@@ -1,12 +1,12 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1, `everything-store-plus-earbuds-under-50`, has been attempted fourteen times and not passed; ten reached the product. The zero read that dominated it is a regression this repository shipped seventeen hours earlier: the wait gives up two seconds into a page whose gates clear on four- and eight-second timers. Two more of the apparent zeros were mis-scored by an already-fixed judge. The best-explored run answers worst, for one reason: seven of its nine draft amendments applied nothing and it was never told why. Two Core fixes are in flight for that and for the extraction vocabulary the repair cannot see. The wrong-answer repair route is open and has applied a correction once.
+Status detail: Rung 1 remains active with a zero-pass streak and run 4 remains the latest accepted failed product measurement. Its measured draft-input loss is corrected inside the unchanged reservation; provider-free Core/downstream gates and corrected-order output freshness are green apart from the documented downstream worktree-fixture environment block. Final candidate review, integration, and a fresh no-hindsight authorization remain; no provider call is authorized.
 Created: 2026-09-24
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 Owner: Senior supervisor agent
 Scope: Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running several complex, multi-node live scenarios in parallel lanes, debugging every run end to end, fixing every cause it exposes, and re-running that same scenario until it works. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop.
-Paired document: `none yet — Core-side changes land under FluxIQ Core's own working documents as this loop names them.`
+Paired document: none
 Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-defensive-runtime-plan.md) (the design backlog this loop draws fixes from), [first-class-data-extraction-plan.md](./first-class-data-extraction-plan.md), [MVP agent instructions](../../MVP_AGENT_INSTRUCTIONS.md)
 
 ---
@@ -32,26 +32,16 @@ destroyed work it had itself proved. The instruction and the shape are in
 built — Core `d035e1b` records which graph Flows a run executed at which revision and writes
 the verdict against exactly those versions — and **nothing rolls back yet**.
 
-**Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has been
-attempted **fourteen times** since 2026-09-25 19:35 and has not passed. It is not
-left until it passes twice in a row. Ten of those attempts reached the product
-and built a Flow; four never did and are not results — `run-muhp2yip-3a0f198b`
-(`lab.generation_unfinished`, a stale domain build), `run-muhs8hx3-6fd929e6` and
-`run-muhtuizo-c458e49c`, whose cause has now been wrong twice and is still not
-established. They were read all day as the provider answering HTTP 400; t145 showed the
-`httpStatus: 400` is Core's own route status and a real provider 400 already produces
-`flow_bootstrap.provider_http_error` carrying its status, and proposed a refused
-run-budget reservation instead; t152 then refuted that — `runBudget` is passed by three
-production callers and the Flow Bootstrap build is not one, so that branch cannot fire
-on a build, and both runs were builds. The fit is `llm.provider_request_failed`, a throw
-Core could not structurally type, projected through the `default` arm to
-`provider_transport_unknown`. t152 also explains the 167 s and 194 s, which looked like
-a stall against a 25 s deadline and are not: they are the ten or twelve ordinary
-exploration calls *before* the failing one, and `evidenceLoop: null` /
-`providerCalls: null` say nothing about how many calls preceded a failure because a
-failed build fills neither. What actually threw is unknown, and t159 is making the next
-occurrence say so, and `run-muhru6ny-a84eb4a2`, which wrote no lane record at
-all.
+**Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has been attempted
+**eighteen times** since 2026-09-25 19:35 and has not passed; it is not left until it passes twice in
+a row. Eleven attempts built a Flow. Seven stopped before a Flow: `run-muhp2yip-3a0f198b` on a stale
+domain build; `run-muhs8hx3-6fd929e6` and `run-muhtuizo-c458e49c` on untyped provider-request
+failures whose exact throws remained unknown; `run-muhru6ny-a84eb4a2` without a lane record; and
+run 1, `run-muj2kzx1-8f9f8271`, run 3, `run-mujd550n-e8fbe7aa`, and run 4,
+`run-muje0grk-4d8d2d3f`, after exploration without a proposal. Run 4 is the latest accepted result. The consecutive-pass streak
+remains 0.
+
+The table below is the earlier ten-run scored/Flow-producing subset, not the complete 18-attempt ledger.
 
 | Time | Id | Calls | Flow | Records observed | Ended as |
 | --- | --- | --- | --- | --- | --- |
@@ -66,8 +56,7 @@ all.
 | 03:30 | `run-muhu0tjc-bb62f6f4` | 17 | 3 nodes | 0 | refuted, **and the re-author applied a correction** |
 | 03:43 | `run-muhubegx-9469de5e` | 33 | 10 nodes, a search | **43** | refuted, re-author failed `extend_failed` |
 
-**The dominant failure was ours, and it is a wait rather than a model.** t143
-read all fourteen attempts and closed the question by duration alone. Every
+**In the fourteen attempts then available, the dominant failure was ours: a wait, not a model.** T143 closed that batch's question by duration alone. Every
 extraction read that returned zero records ended at **~2 s** — exactly
 `PAGE_STILL_MS`/`EMPTY_PAGE_SETTLE_MS`, the early settle this repository shipped
 in `a05134a` at 18:29 on 2026-09-25. Every read that returned rows either found
@@ -83,8 +72,7 @@ The fixture's own gates clear on a 4 s timer (`notifications`) and an 8 s timer
 `readyState: "complete"`, which is the one state `documentStillness` cannot tell
 from a finished page — so the read declared the page incapable of producing a list
 while the list was still two to six seconds away. **The zero read is a
-seventeen-hour-old regression of ours, not a model or draft failure**, and t148 is
-fixing it in `apps/extension/src/content/extraction/page-render.ts`.
+seventeen-hour-old regression of ours, not a model or draft failure**; t148 was assigned to fix it.
 
 Two corrections to the table above follow from the same reading, and both were
 this repository's defects rather than the product's answers:
@@ -104,61 +92,51 @@ because of the wait, and two read far too much. **Only `run-muhnh0s5`'s three ro
 in the right position remain a real partial answer**, and the two over-wide reads
 are the only evidence about filtering that survives.
 
-**Two further defects t143 found that no fix was dispatched for yet.** The loop
-dry-ran `run-muhu0tjc`'s draft and completed it anyway — `dryrun.1.12=extract
-list` followed by `decision_complete` with no decision row between, and a dry
-run's record count is published nowhere, so if that dry run read zero the loop
-finalised a draft it had already watched fail. And a successful trace step is
-anonymous: across all 159 bundles, 22 steps carry a `nodeId` and none of those 22
-carries a success code, so the exploration's successful extractions cannot be
-attributed or counted. Both are Core questions.
-
-**A warning for anyone reading these bundles.** `authoredNodes` is ordered
-lexicographically by node id, so `s10` sorts between `s1` and `s2`: read as given
-it yields a chain the Flow never had. And `conditions.{applied,kept,rejected}` is
-per-document rather than per-read, so `run-muhubegx`'s `applied: 0` beside
-`recordCount: 43, pagesRead: 5` describes page five alone.
-
-**The fixes run 8's debug produced** are tabled in `Worker Briefs`. All are
-uncommitted and none has been exercised by a provider call; each was verified only
-by its own checks.
-
-**What is now known about run 8's one-condition Flow.** It was **not** an
-expressiveness failure. Five of the instruction's six qualifying clauses were
-already expressible before t142 changed anything, and source order and
-once-per-row-across-pages were already guaranteed by the read — merely
-undocumented, so nothing could know it. What remains, and is unassigned: the
-authoring text does not show the model the filter vocabulary, and the repair
-cannot amend a node's parameters. Both are the next wave, behind the workers in
-`flow-bootstrap/` and the authoring text.
-
 **The three binding product rules the user set on 2026-09-26 — a defensive runtime for every
 node, grants only for genuinely risky actions, and a judge that issues fix instructions — and
 the ordered path to a passing live run are in [mvp-today-plan.md](./mvp-today-plan.md).** Read
 that first; this document remains the operating loop and the run history.
 
+**Latest accepted rung-1 measurement.** `run-muje0grk-4d8d2d3f` is an integrity-valid,
+redaction-verified failed product measurement. It reached Stage 2, used all 26 build decisions and
+22 tool calls, then stopped before proposal with `flow_bootstrap.evidence_unusable_decision` at
+`provider_output_validation` and issue `bootstrap.cannot_answer_instruction`. No Flow, runtime,
+oracle comparison, judgement, repair, persistence, or replay exists. The pass streak remains 0.
+
+Build and observed accounting are the same 26-call representation: 370,882 input plus 3,642 output
+tokens, 374,524 total, estimated USD 0.049289784; all calls are itemized. The 33 screened steps carry
+57,868 step-level bytes while the summary reports 70,126 total evidence bytes; these projections are
+not added. Run 4 triggers the predeclared stop after run 3's same terminal family.
+
 These findings, and what each one obliges the next agent to do, are in
 `What This Batch Established`. Read it before adding a field to anything the domain sends
 Core, and before updating a test that a resolution change made fail.
 
-**What is proven working, live, that this document once recorded as broken.**
-Self-judgement on a multi-node Flow: five consecutive runs stored plausible
-tables and every one was refuted rather than reported as an answer. The runtime
-recovery ladder fires and recovers real faults. And the wrong-answer repair,
-which five earlier runs recorded as never having run, now routes: run 7 applied a
-correction and run 8 reached the re-author and failed inside it. The gate is
-open; what is behind it is now measurable for the first time.
+**What is proven working, live, that this document once recorded as broken.** Run 2 remains the live
+proof that a multi-node created Flow can reach playback, exact extraction comparison, model-backed
+self-judgement, and wrong-answer routing. Run 3 additionally proves that terminal build exhaustion
+now retains its actionable issue instead of flattening to iteration-limit. The post-run-2 repair/
+grant-continuation chain is locally validated but remains live-unproven; no current run proves repair
+persistence, provider-free replay, recursive post-replay judgement, or terminal grant revocation.
 
-**The next action** is to land t140 and t141, rebuild Core, and run rung 1 again
-— the first run in which the model can be told why its own edits are being
-refused. After it: run 6's HTTP 400 if it recurs, t127's 11.04 s wait, and
-whatever that run's debug names.
+**The next action** remains provider-free. Core reproduces the 26-decision failure and an 11-decision
+fixture-defined completion, and the unchanged-budget `step_rows_v1` correction retains all 7-22
+bounded inputs through decision 26; this is not provider convergence. The supervisor observed Core
+`pnpm check` and downstream `pnpm -r check`, `pnpm test`, and `pnpm build` exit 0; worker evidence
+records Core root test/build/docs/structure success and t409 records corrected-order output freshness
+and identity. Downstream root `pnpm check` remains qualified only by the known task-fixture block:
+89/120 passed and 31 `git worktree add` cases failed with `cannot spawn git: Exec format error`;
+all non-worktree gates passed. Freeze the repositories, complete final candidate/staged-path review,
+reconcile Current State, and decide integration. Only after exact identity, dry-run, no-hindsight
+Stage 1 and its 13-record oracle, the evidence/debug contract, and the one-Lab machine predicate are
+frozen may the supervisor issue one fresh command-specific authorization. No unchanged run 5 or
+provider call is authorized now.
 
-**Blockers:** none. Two environment notes: `git worktree add` fails on this
-machine with `cannot spawn git: Exec format error` from any shell, so a
-Core-paired task takes a plain branch in each repository; and a Core build that
-exits `3221225477` is this machine's RAM fault, not the code — it builds on
-retry.
+**Blockers:** Flow creation remains unreliable and run 4's later stages remain unmeasured. The
+draft-loss correction is provider-free validated and output-fresh but is not integrated or live-
+proven; final candidate/staged-path review and a fresh command-specific authorization still precede
+any provider call. The bounded artifacts publish no terminal grant lifecycle property, and the
+worktree-spawn limitation remains operational rather than product evidence.
 ---
 
 ## What This Batch Established
@@ -646,8 +624,8 @@ debug and partitioned so neither touches the other's files:
   old rung 1 (`product-catalog`) and is not evidence about the product's target.
   Nothing in this summary line was re-validated on 2026-09-26; it is a pointer to
   validation already recorded, not a fresh claim.
-- Outcome: Accepted. Superseded as a description of the present by the entry
-  below.
+- Outcome: Accepted
+- Follow-up: superseded as a description of the present by the entry below.
 
 ### 2026-09-26 — Four more runs on rung 1, and the model cannot correct its own draft
 - Agent: supervisor, with workers on t136, t139, t140 and t141
@@ -678,12 +656,54 @@ debug and partitioned so neither touches the other's files:
   Core t139's own checks are in `reports/t139-version-recorded-with-verdict.md`:
   87 result-verification tests, 12 flow-version tests, 201 storage tests, and
   `flow_graph_judgements` asserted by the existing schema test.
-- Outcome: Accepted. Rung 1 has not passed and is not left.
+- Outcome: Accepted
 - Follow-up: t140 (a refused amendment tells the model why) and t141 (an
   extraction's vocabulary reaches the repair), both dispatched into Core; then
-  rebuild and run rung 1 again. `evidence-loop.ts` at 908 lines and
+  rebuild and run rung 1 again; rung 1 has not passed and is not left.
+  `evidence-loop.ts` at 908 lines and
   `flow-bootstrap/generation-failure.ts` at 817 are over the audit's budget with
   no baseline entry and were already red on `dev` before this work.
+
+### 2026-09-26 — Run 2 reached Stage 6 but failed before repair application
+- Agent: supervisor, with workers on t225 to t231
+- Changed: bounded run-2 debug/evidence reports and both plans' Current State
+- Why: Measure creation, execution, judgement, repair routing, persistence, and replay in one default-profile hard-scenario run.
+- Validation: `node packages/test-runner/dist/cli.js inspect run-muj39xl6-f6a5d4e5` -> exit 0; independent marker/index and selected-artifact byte, SHA-256, and redaction checks -> all matched, with run redaction verified. Stage 6 reached with a failed product verdict and zero pass streak.
+- Outcome: Accepted
+- Follow-up: diagnose the reauthor failure and rerun the same default-profile scenario; t217 terminal final-exhaustion remains unmeasured live.
+
+### 2026-09-27 — Final local repair-path validation and launch readiness passed
+- Agent: supervisor with t258–t316
+- Changed: Core repair/grant-continuation production path, focused test reconciliation, downstream readiness evidence, and no-hindsight launch records
+- Why: Carry a refuted answer through durable apply, authoritative binding read, selected-Subflow replay, recursive judgement, and enclosing revocation without widening authority.
+- Validation: focused suites t290 81/81, t293 51/51, and t304 web 11/11 plus Core 30/30; Core root test 3,994 passed with one skip and Core check passed; downstream builds/freshness passed; exact dry-run returned ready with zero provider calls; Stage 1 matched its frozen 39-line source.
+- Outcome: Accepted as local/readiness evidence; not live proof.
+- Follow-up: measure the unchanged default-profile hard scenario; pass streak remains 0.
+
+### 2026-09-27 — Run 3 failed truthfully before Flow proposal
+- Agent: supervisor with t325–t329
+- Changed: `language-driven-flow-loop-plan/debugs/run-mujd550n-e8fbe7aa.md`, evidence/disposition reports, and both plans' Current State
+- Why: Measure the four MVP criteria after the complete post-run-2 repair-path correction.
+- Validation: `inspect run-mujd550n-e8fbe7aa` passed identity, default-path, digest, and redaction gates; bounded artifacts show Stage 2, 26 build calls, 21 tool calls, and terminal `flow_bootstrap.evidence_unusable_decision` / `bootstrap.cannot_answer_instruction`, with no Flow or later-stage evidence.
+- Outcome: Accepted failed product measurement; consecutive-pass streak 0.
+- Follow-up: permit one unchanged controlled retry; if the same Stage-2 exhaustion repeats, stop retries and require deterministic reproduction or an evidence-backed fix.
+
+### 2026-09-27 — Run 4 repeated Stage-2 exhaustion and stopped live retries
+- Agent: supervisor with t331–t348
+- Changed: `language-driven-flow-loop-plan/debugs/run-muje0grk-4d8d2d3f.md`, evidence/disposition reports, and both plans' Current State
+- Why: Measure the single authorized unchanged retry under a predeclared stop rule.
+- Validation: independent t347 audit accepted the finalized redacted bundle at Stage 2 with 26 build decisions, 22 tool calls, and terminal `flow_bootstrap.evidence_unusable_decision` / `bootstrap.cannot_answer_instruction`; no proposal or later stage exists.
+- Outcome: Accepted failed product measurement; consecutive-pass streak 0; the no-run-5 stop fired.
+- Follow-up: deterministic reproduction, privacy-safe stable progress evidence, measured source correction, and full validation before a fresh live authorization.
+
+### 2026-09-27 — Run-4 fix-first correction reached provider-free closure
+- Agent: supervisor with [t385](./mvp-today-plan/reports/t385-downstream-post-core-validation.md), [t395](./mvp-today-plan/reports/t395-core-timeout-stability-review.md), [t397](./mvp-today-plan/reports/t397-generated-reference-re-review.md), [t405](./mvp-today-plan/reports/t405-updated-docs-privacy-scan.md), [t406](./mvp-today-plan/reports/t406-core-baseline-final-audit.md), [t409](./mvp-today-plan/reports/t409-post-supervisor-build-freshness.md), and [t410](./mvp-today-plan/reports/t410-final-closure-synthesis.md)
+- Changed: The unchanged-budget `step_rows_v1` correction retains every bounded fixture input through decision 26; Core/downstream provider-free gates and corrected-order output freshness are green.
+- Why: Remove run 4's measured information loss before testing whether the same default profile can converge; fixture completion is not provider convergence.
+- Validation: Supervisor observed Core `pnpm check` and downstream `pnpm -r check`, `pnpm test`, and `pnpm build` exit 0; linked workers observed Core root test 5,437 passed / 1 skip, root build/docs/structure green, and corrected-order freshness 6/6 with markers 12/12.
+- Exception: Downstream root `pnpm check` exited 1 only at `pnpm task:test`: 89/120 passed and 31 `git worktree add` cases failed with `cannot spawn git: Exec format error`; all non-worktree gates passed.
+- Outcome: Partial
+- Follow-up: Run 4 remains latest and the streak remains 0; complete final candidate review/integration and all frozen no-hindsight gates before any fresh command-specific authorization.
 
 
 ## Open Questions
