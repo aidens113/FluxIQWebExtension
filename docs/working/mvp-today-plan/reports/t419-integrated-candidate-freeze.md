@@ -88,3 +88,144 @@ contract.
 No provider was called. I did not start, stop, inspect, or manage Lab, browser, or panel state; open
 raw artifacts; stage; commit; push; or edit source/shared plans. Generated outputs were changed only
 through their owning build commands. This report is my only authored repository path.
+
+## Wrapper independent review
+
+**NO-GO as written. Do not execute the t422 one-shot wrapper.** Static comparison confirms that its
+live CLI tokens are ordinally identical to t419's accepted dry-run command with only terminal
+`--dry-run` removed. It contains exactly one live `run` invocation and one provider-free `inspect`
+invocation, no loop/retry branch, memory-held stdout, null stderr, final-nonblank-line parsing,
+rename-before-path/verdict/inspect ordering, a pre-rename destination collision check, post-rename
+pending-file identity check, default run-path/verdict checks, silent integrity inspection, and
+`finally` cleanup of the live and inspection raw lines/objects. On the success path, only the safe
+summary object can reach the pipeline.
+
+Two static stop-path defects prevent the stronger claims that the run id is path-safe and that raw
+content can never print:
+
+1. The accepted character regex also accepts the complete ids `.` and `..`. When interpolated into
+   `test-runs/$runId` and normalized with `GetFullPath`, those values resolve to `test-runs` itself
+   or its parent, outside the required `test-runs/<run-id>` child. Reject `.` and `..` explicitly
+   before constructing either destination, then require the normalized expected path's parent to be
+   exactly the normalized default `test-runs` directory.
+2. Live and inspect JSON parse failures are caught and replaced with bounded messages, but
+   `artifact-index.json` and `run.json` are piped to `ConvertFrom-Json -ErrorAction Stop` without a
+   sanitizing catch. PowerShell JSON parse errors may include input context. An invalid indexed file
+   can therefore reach the operator as exception text before `finally` clears the variables. Wrap
+   each file read/parse in a local `try/catch` that throws only a fixed sanitized message; do not
+   attach the caught exception or its message.
+
+The index/manifest variables are otherwise nulled in `finally`, and the renamed no-hindsight debug
+correctly remains bound on every later stop. After the two corrections, re-run this static review;
+no provider, wrapper, Lab, browser, or panel execution is needed for that review.
+
+### Corrected-wrapper disposition
+
+**GO on static wrapper review; execution remains separately unauthorized.** T422 now rejects the
+complete ids `.` and `..`, canonicalizes the expected run directory, and proves it is an immediate
+child of the normalized default `test-runs` root. It also replaces both artifact-index and manifest
+read/JSON failures with fixed messages that do not include the caught exception. The two prior
+blockers are closed.
+
+The corrected block retains exact CLI argument equivalence with only `--dry-run` removed, one live
+invocation and no retry, memory-only stdout/null stderr, safe-id and destination-collision gates,
+rename-before-path/verdict/inspect ordering, default-path and closed-verdict checks, silent inspect,
+conservative index/redaction/manifest gates, and `finally` cleanup of every raw line/object. Static
+rescan found no new blocker and no success or stop path that intentionally prints raw content. I did
+not execute the wrapper or inspect any live/run artifact.
+
+## Stage-1 evidence-contract attestation
+
+**NO-GO for final evidence-contract closure pending one marker-schema gate and one allowlist wording
+reconciliation.** Static source confirms that evidence finalization writes schema `0.1`, then an
+`artifact-index.json` containing safe relative path, byte count, SHA-256, and redaction state for
+every payload, then `bundle.complete.json` containing schema `0.1` and the index digest before the
+staging directory is renamed final. `inspect` parses the marker and index, compares the marker's
+index digest, verifies every indexed artifact's bytes and digest, and parses `run.json`. T422 then
+adds index schema `0.1`, unique/safe path, exact run identity/path/verdict, and redaction gates.
+
+The conservative disclosure values are exact: every indexed artifact must be `applied` or
+`verified`; the manifest must be `verified` or `not_applicable`. Source types also admit indexed
+`not-required` and manifest `pending`/`failed`, but the launch contract intentionally rejects those
+weaker states.
+
+After integrity succeeds, the exact bounded semantic read order is:
+
+1. `run.json`
+2. `summary.json`
+3. `evaluation.json`
+4. `snapshots/live-llm.json`
+5. `snapshots/flow-lane.json` when present and necessary
+6. `snapshots/extraction-mismatches.json` when present and necessary
+7. `snapshots/repair-lane.json` when present and necessary
+8. `snapshots/redaction-attestation.json` when present and necessary
+
+Before opening any item, require exactly one safe indexed entry; an absent optional/conditional fact
+is `NO EVIDENCE`. `artifact-index.json` and `bundle.complete.json` are integrity metadata, not
+semantic evidence. No other structured file, raw provider/page material, event/log, HTML, image,
+selector, credential, authorization value, browser state, raw dataset, or unindexed artifact is in
+the allowlist.
+
+Two documentation/gate mismatches remain. First, current `inspect` and the corrected t422 wrapper
+validate the marker's index digest but never assert `bundle.complete.json.schemaVersion === '0.1'`;
+t422 asserts only the index schema. Add a sanitized marker-schema check before semantic reads.
+Second, t421's frozen allowlist correctly includes `snapshots/redaction-attestation.json`, while
+t422's earlier “Required capture order” list stops at `snapshots/repair-lane.json`. Reconcile t422
+and the pending Stage-1 payload to the eight-path order above. I performed no wrapper/provider/Lab/
+browser/panel execution and opened no run artifact.
+
+### Minimal safe completion-marker contract
+
+Apply this metadata-only gate after successful silent `inspect` and before any semantic artifact
+read. Derive both paths from the already normalized `$expectedRunPath`; they must be the exact leaf
+siblings `$expectedRunPath\bundle.complete.json` and `$expectedRunPath\artifact-index.json`. Require
+the normalized parent of each to equal `$expectedRunPath`, require both to be regular leaves, and
+reject `ReparsePoint` on the normalized default `test-runs` root, the run directory, and both leaves.
+Do not accept a caller-supplied path or a path taken from marker/index content.
+
+Read and parse the marker inside a sanitizing `try/catch`. Its closed shape is exactly two
+case-sensitive fields: `schemaVersion` and `artifactIndexSha256`. Require schema string `0.1` and a
+lower-case 64-hex digest. Hash the exact current bytes of the exact sibling index file with SHA-256
+and compare ordinally to `artifactIndexSha256`; do not hash decoded/re-serialized JSON and do not
+print either digest. Perform the index read/schema/safe-path/redaction checks against that same
+already-identified index path. Any filesystem, parse, shape, reparse, containment, or digest failure
+must become one fixed message without the caught exception, path detail, JSON context, or hash.
+
+Current `inspect` already parses the exact sibling marker and index, compares the marker digest to
+the exact index bytes, verifies every indexed artifact's byte count and SHA-256, and parses
+`run.json`. It does **not** assert marker schema/closed shape/digest syntax, reject reparse points,
+prove canonical containment, or protect the post-`inspect` index from replacement. Therefore the
+wrapper should still perform the compact gate above rather than treating `inspect.valid` alone as
+the completion-marker schema attestation. This is a static contract only; no artifact was opened.
+
+### Final stable-wrapper review
+
+**NO-GO as written: one execution-compatibility blocker remains.** The stable t422 wrapper closes
+all earlier identity, traversal, reparse, marker-schema, exact-byte digest, normalized-index,
+redaction, raw-output, cleanup, and eight-path allowlist defects. Its live arguments still differ
+from the accepted dry run only by removal of `--dry-run`; it retains one invocation and no retry.
+
+The index hash uses `[Convert]::ToHexString(...)` and
+`[Security.Cryptography.SHA256]::HashData(...)`. Those APIs require modern .NET and are not
+available to the repository's Windows PowerShell/.NET Framework host; the wrapper says only “fresh
+PowerShell process” and has no `pwsh`/runtime version gate. It would consume no provider call before
+this late hash site, but it would deterministically end `capture_gate.no_go` after the authorized
+live invocation and inspection, making an otherwise valid measurement unreadable.
+
+Preserve the exact-byte property with a host-compatible in-memory hash:
+`[Security.Cryptography.SHA256]::Create().ComputeHash($indexBytes)`, convert with
+`[BitConverter]::ToString(...).Replace('-', '').ToLowerInvariant()`, dispose the hash object in a
+`finally`, and clear that object with the other marker variables. Alternatively, require and verify
+a specific `pwsh`/.NET runtime before any provider call. Re-run static review after that single
+correction. I did not execute the wrapper or read any artifact.
+
+#### Compatibility correction disposition
+
+**GO on final static wrapper review; live execution remains separately authorization-gated.** The
+stable t422 wrapper now hashes the already-read index bytes through the Windows PowerShell
+5.1-compatible `SHA256.Create().ComputeHash(...)` and `BitConverter` path, disposes the algorithm in
+the inner `finally`, and repeats disposal defensively plus clears both algorithm and hash bytes in
+the outer cleanup. The correction preserves exact-byte hashing, lower-case ordinal comparison,
+fixed sanitized terminal output, and all previously accepted command, single-invocation, no-retry,
+capture, path, reparse, marker/index, redaction, allowlist, and cleanup gates. Final re-read found no
+remaining static blocker. I did not execute the wrapper or read any artifact.

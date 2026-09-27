@@ -137,3 +137,158 @@ I reconciled only the assigned Current State and t331/t340/t346/t407 reports. I 
 artifacts, provider/page/browser content, secrets, the panel, Lab, a browser, or a provider; did not
 run tests/builds or inspect live processes; and did not edit source, a shared working document, or
 Stage 1. This report is my only write and does not itself authorize a live run.
+
+## Prospective-command equivalence audit
+
+**GO, conditional on executing t422's complete wrapper in the required fresh PowerShell process.**
+T419's accepted provider-free argument vector and t422's prospective live argument vector use the
+same executable path, subcommand, scenario, and ordered option/value tokens. The sole request
+mutation is removal of the final `--dry-run` token:
+
+```text
+node packages/test-runner/dist/cli.js run everything-store
+--target isolated
+--live-llm
+--llm-profile mvp-hard-scenario
+--llm-provider deepseek
+--llm-task create-flow
+--instruction-task everything-store-plus-earbuds-under-50
+--replays 1
+```
+
+PowerShell whitespace, backtick continuations, `@(...)`, assignment of `$LASTEXITCODE`, and
+`2>$null` do not add, remove, reorder, or alter CLI arguments. The array assignment retains stdout
+in process memory; null redirection discards stderr. They are capture controls, not request
+mutations. The later safe-id parsing, pending-debug rename, inspection, index/redaction checks, and
+safe summary happen after the one live child and cannot change its request.
+
+The environment difference is also wrapper-only safety normalization, not a wider request:
+
+- both seams explicitly set `FLUXIQ_TEST_ENV_FILES=none` and `FLUXIQ_TEST_TARGET=isolated`;
+- t422 first removes inherited `FLUXIQ_LAB_INSTANCE` and `FLUXIQ_TEST_RUNS_DIR` by name, without
+  reading their values, and proves them absent before the child starts; this narrows execution to
+  the default Lab instance and repository `test-runs/` root;
+- no model, seed, workflow, evidence, Flow, budget, timeout, retry, concurrency, Lab-instance, or
+  run-root argument or replacement environment override is introduced; and
+- the credential resolver behavior is unchanged: the wrapper neither injects nor copies a secret.
+
+T419 did not itself show an explicit removal of the two inherited location variables, so full
+parent-process environment byte identity between the dry run and live run is not established. That
+does not create a request mismatch: t422's clearing is the required fail-closed normalization of
+the accepted default-location contract. If either variable survives the absence check, equivalence
+is **NO-GO** and the live child must not start.
+
+No unsafe persistence remains under t422's stated requirement to run the whole block in a **fresh
+PowerShell process** and let that process end after the safe result. Inside that temporary process,
+the wrapper intentionally removes the two inherited variables and leaves
+`FLUXIQ_TEST_ENV_FILES=none` / `FLUXIQ_TEST_TARGET=isolated` set for both `run` and `inspect`; this
+keeps the two commands on one environment contract. Running the block piecemeal in a reusable
+interactive shell would persist those environment changes for later commands and is **NO-GO**
+unless the caller first snapshots and restores them without printing values. Likewise, copying
+only the `$liveRaw` command out of the wrapper would omit the location-variable absence proof and
+is not equivalent to the reviewed seam.
+
+This audit read only t419, the current t422 report, and the relevant command/environment resolution
+sources. It did not execute a command, inspect an artifact or secret, or invoke a build, Lab,
+provider, browser, or panel. The only edit is this appended audit.
+
+## Independent PowerShell disclosure and path audit
+
+**NO-GO as written. Do not execute the current t422 wrapper.** T419 correctly identified two
+blocking defects: `.` and `..` pass the run-id regex and escape the required immediate-child path,
+and uncaught `ConvertFrom-Json` failures for `artifact-index.json` / `run.json` may echo source
+context. This review confirms both and finds additional fail-closed work needed before the wrapper
+can truthfully promise that only sanitized output reaches the operator.
+
+### Path and rename findings
+
+- `^[A-Za-z0-9._-]{1,128}$` excludes separators and drive/ADS punctuation but admits `.` and `..`,
+  Windows device basenames (`CON`, `NUL`, `COM1`, and peers, including with extensions), and names
+  ending in a dot that Windows may alias. The first two can normalize to `test-runs` or its parent;
+  device/trailing-dot names can make collision, rename, and existence checks disagree with the
+  actual filesystem object.
+- `$expectedRunPath` is built from the untrusted id before proving its normalized parent is exactly
+  the default `test-runs` directory. Equality with the reported path does not cure this: both can
+  agree on the same escaped path.
+- `Rename-Item -NewName "$runId.md"` is otherwise directionally correct: it supplies only a leaf
+  name, checks collision first, renames before inspection, and rechecks the pending payload hash.
+  But `PathType Leaf` permits a reparse-point leaf, and neither the debug directory, pending file,
+  destination, run root, nor finalized run directory is rejected when it is a reparse point.
+- Collision is checked before rename and `Rename-Item` should fail rather than overwrite, but its
+  failure is presently an uncaught PowerShell error. The same is true of hash, path, existence,
+  file-read, and rename operations. Those errors may print filesystem paths, exception detail, and
+  wrapper source context rather than one reviewed status.
+- Artifact-index paths reject rooted values and a literal `..` segment, but they are not normalized
+  and proved below the run directory, device/invalid segments are not rejected, and duplicate
+  detection is not explicitly ordinal-ignore-case for the Windows filesystem. The wrapper opens
+  only fixed `artifact-index.json` and `run.json`, so this is not current arbitrary-file reading,
+  but the index is not yet a safe authority for the promised later bounded reads.
+
+### Disclosure and parse-path findings
+
+- Live and inspect stdout are captured, their stderr is discarded, only the final nonblank line is
+  parsed, and the local JSON parse catches replace parse detail with fixed prose. Their `finally`
+  blocks clear the raw arrays, lines, and parsed objects. These paths do not intentionally emit raw
+  content.
+- The live and inspection JSON values are not first required to be one object with the expected
+  properties. With strict mode, a scalar, array, or missing property can raise an uncaught property
+  error outside the local parse catch.
+- The index and manifest parse pipelines have no sanitizing catch, confirming t419's raw-context
+  defect. Their subsequent property enumeration can also throw on a malformed entry and escape the
+  `finally` as an unsanitized PowerShell error.
+- The final success object contains only the already syntax-bounded run id, closed verdict, numeric
+  exit code, and fixed gate labels. No other success-path command uses `-PassThru`, and assigned
+  pipeline results do not ordinarily reach the operator. The unsafe surface is failure formatting:
+  there is no outer disclosure boundary, so any unanticipated cmdlet, .NET, strict-mode, or property
+  error can be rendered by PowerShell. Nulling variables does not suppress an error record already
+  emitted.
+
+### Exact fixes required before static re-review
+
+1. **Constrain the generated identity before any path use.** Require the facility's actual shape,
+   for example `^run-[a-z0-9]+-[0-9a-f]{8}$`, rather than a generic filename regex. Independently
+   reject `.` / `..`, trailing dot, and case-insensitive Windows reserved basenames before the first
+   dot (`CON`, `PRN`, `AUX`, `NUL`, `CLOCK$`, `COM1`–`COM9`, `LPT1`–`LPT9`). Do not construct the
+   debug or run destination until all checks pass.
+2. **Prove immediate-child containment.** Normalize the fixed `$runsDirectory` first, then join and
+   normalize the candidate. Require `[IO.Directory]::GetParent($expectedRunPath).FullName` to equal
+   `$runsDirectory` and `[IO.Path]::GetFileName($expectedRunPath)` to equal `$runId`. Apply the same
+   parent/leaf proof to `$debugPath` against the fixed debug directory and `"$runId.md"`. Continue
+   to require the reported and inspected paths to equal this already-contained path.
+3. **Reject link traversal.** Before hashing or renaming, require the debug directory and pending
+   file to be ordinary non-reparse objects at their exact expected paths. After the run, require the
+   default runs directory, immediate run child, artifact index, and manifest to be ordinary
+   non-reparse objects before any content read. Treat inability to establish attributes as a fixed
+   NO-GO; never follow a junction/symlink to satisfy containment.
+4. **Make rename failure closed and atomic at the reviewed boundary.** Keep the pre-existing
+   destination refusal, invoke the rename with `-ErrorAction Stop`, and after it returns require the
+   old pending path absent, the exact destination present/non-reparse, and its in-memory digest
+   unchanged. Never delete or replace a colliding destination, and never move the bound debug back
+   after any later failure.
+5. **Sanitize every JSON boundary.** Wrap each artifact-index and manifest read-plus-parse in its own
+   `try/catch` that throws only a fixed code/message and never interpolates `$_`,
+   `$_.Exception.Message`, input text, or paths. Require live result, inspection, index, manifest,
+   and every index entry to be the expected object/array shape and to contain the required
+   properties before property access. Put shape/property validation inside the same sanitized
+   boundary.
+6. **Normalize indexed paths before trusting them later.** For every entry, require a nonblank
+   relative path made only of accepted segments, reject `.` / `..`, drive-relative/colon values,
+   invalid/device/trailing-dot segments, normalize it below `$expectedRunPath`, and prove
+   containment. Detect normalized duplicates with `StringComparer.OrdinalIgnoreCase`. Before each
+   later allowlisted read, repeat the unique-index, contained-path, regular-file/non-reparse, and
+   conservative-redaction checks.
+7. **Add one outer disclosure boundary.** Enclose the entire wrapper in an outer `try/catch/finally`.
+   The catch must ignore the caught object and emit exactly one fixed, predeclared sanitized
+   status/code (then exit nonzero); it must never let PowerShell format the original `ErrorRecord`.
+   Maintain a closed `$safeFailureCode` set before each risky operation if distinct operator
+   reasons are needed. The outer `finally` must clear all raw/parsed objects, hashes, index/manifest
+   values, and path values on every stop path. Keep the existing safe success object as the only
+   success-stream output.
+8. **Re-review the complete corrected block without execution.** Confirm one live invocation, no
+   retry, rename-before-inspect, fixed default paths, all local and outer catches, and exactly one
+   sanitized terminal object on both success and every modeled failure. Only then can the capture
+   procedure become GO; the provider authorization remains a separate later decision.
+
+This was a static read-only audit of t419's findings and the current t422 wrapper. I did not run
+PowerShell, a provider, Lab, browser, panel, build, test, or artifact command; did not inspect raw
+content or a secret; and did not edit t422. This appended section is the only change.

@@ -158,3 +158,121 @@ Status: **NO-GO for describing 26 calls / USD 2 as a whole-invocation ceiling; o
 
 This was a source-only/read-only audit. I did not execute the CLI, Lab, provider, browser, build, or
 test and did not inspect credential values or artifacts.
+
+## Stage-1 identity attestation
+
+Status: **GO for no-hindsight source/oracle/evidence identity; no pending Stage-1 file was created.**
+
+### Normalization and source identities
+
+All text sources were decoded as strict UTF-8, CRLF/lone CR normalized to LF, existing terminal
+newlines removed, and exactly one terminal LF added before byte count and SHA-256. Every named
+source is BOM-free and currently LF-only. The instruction identity is the decoded string literal,
+not its TypeScript quoting, normalized with the same single terminal LF.
+
+| Identity | Source and slice | Lines / UTF-8 bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| Task declaration | `apps/scenario-lab/src/scenarios/everything-store/live-tasks.ts:20-27` | 8 / 649 | `4fa34d5ce9c7bb5f68ebde5e1208422627e0d1c55650452623f6bfd1455d525f` |
+| Canonical instruction scalar | `live-tasks.ts:24` decoded value | 415 Unicode scalars / 416 bytes | `46bd24470ade5869622a93cdc549071136bb29b0eaaa877c6940a7d3959351de` |
+| Nine-step chain | `docs/working/mvp-today-plan/reports/t331-run4-no-hindsight-stage1-draft.md:49-57` | 9 / 1,424 | `60bd00a3bb29478dab0fbefc1a8d6a1fb46a04c2842876e0566ac668b9c1d319` |
+| Oracle definition | `apps/scenario-lab/src/scenarios/everything-store/workflows/plus-under-fifty.ts` | 81 / 4,814 | `17d62daffd0ff2a99a17b06e6b6597ab12b1cb74ad39362d07f524b08709febd` |
+| Oracle record mapper | `apps/scenario-lab/src/scenarios/everything-store/workflows/earbud-records.ts` | 15 / 569 | `fdebf3d9f715d059f3b39e9bfb5904d59cfe9d68976fe3861bc10b9bb7e27777` |
+| Search ordering | `apps/scenario-lab/src/scenarios/everything-store/catalog/search.ts` | 101 / 4,850 | `e09e8df552f0bd050966547856b725f0dcc0ddadf3c7a4f295469ffc0de5e88c` |
+| Page-boundary model | `apps/scenario-lab/src/scenarios/everything-store/catalog/results-page.ts` | 61 / 2,176 | `5a92ce9272d6c9d129b955619138da067b047e3e23a4baf2004bf91250c3fb16` |
+
+The chain slice contains consecutive ordinals 1 through 9 exactly once and in order: **9/9**. Its
+identity is the accepted t331 source attested by t340, not a reconstruction from a live result.
+
+### Oracle identity
+
+The authored workflow's `extract-plus-under-fifty` entry declares 13 records and contains 13:
+**13/13**. Canonicalization is `JSON.stringify(records)` followed by one LF, preserving
+array and field order; it is 3,457 UTF-8 bytes with SHA-256
+`c8b7f87109cf593d6601863f19a488b4c2fa915bec65707813a19bab09e8c866`.
+No record value was printed or copied.
+
+Every record has exactly four string fields in the frozen order `name`, `price`, `rating`, `url`.
+Re-deriving the answer through the source search and mapper is ordinal-exact with the stored oracle.
+All 13/13 source products satisfy kind `earbuds`, Plus eligibility, rating at least 4, and price
+strictly below 5,000 cents; all 13/13 identities are unique. The definition filters the complete
+organic relevance-ordered search outcome before page slicing, so adverts are excluded, later-page
+members remain represented, authored order is stable, and repeated display-page boundaries do not
+duplicate the oracle. Count alone remains insufficient.
+
+### Evidence schema and disclosure contract
+
+The evidence identity set is:
+
+| Source | Lines / bytes | SHA-256 |
+| --- | ---: | --- |
+| `packages/test-evidence/src/types.ts` | 104 / 2,956 | `81c0949bc935b77b71d859305a148a3bd7eb226db5cf68975f73c3463bdb3ad3` |
+| `packages/test-evidence/src/bundle.ts` | 354 / 16,803 | `ddc884838ad5653ac2b34d731c4eaf5bfce0d44555a30c39136a49c14e1703e3` |
+| `packages/test-runner/src/inspect.ts` | 28 / 1,898 | `1bd1a76d047ca28a282089281908fde53bde9a0d0101e6591ac0a119c283522d` |
+| `packages/test-contracts/src/run-validation.ts` | 197 / 16,658 | `e5ddcaf963afb37e06c26b7c9d0abc905323aa331cea48e44cc8cfc567913739` |
+
+The composite is each normalized `path`, NUL, source digest, LF in the table's order: 415 bytes,
+SHA-256 `be0a71851a5ec7ec8eede281dcc7996b75e0166aa61e6c41a3fcb5a4698552db`.
+It freezes schema `0.1`; a finalized `artifact-index.json`; a `bundle.complete.json` marker binding
+the index digest; per-entry safe relative path, byte count and digest; and `inspect` verification of
+the marker, every indexed artifact, and parsed `run.json`.
+
+The stricter launch gate permits only indexed redaction `applied` or `verified`, then requires
+manifest redaction `verified` or `not_applicable` and matching run identity/closed verdict. The
+bounded semantic allowlist is `run.json`, `summary.json`, `evaluation.json`,
+`snapshots/live-llm.json`, and only when present and necessary,
+`snapshots/flow-lane.json`, `snapshots/extraction-mismatches.json`,
+`snapshots/repair-lane.json`, and `snapshots/redaction-attestation.json`. The index and complete
+marker are integrity metadata, not semantic evidence. Every requested path must have exactly one
+safe index entry; missing evidence becomes `NO EVIDENCE`.
+
+Explicit limits remain: do not print/open raw stdout or inspection objects, provider prompts or
+responses, page values or raw datasets, logs/events, HTML/screenshots, selectors, headers/cookies,
+credentials, authorization material, browser profiles/state, unindexed files, or run-artifact
+digests. The digests above identify pre-run authored sources and the value-redacted oracle only.
+This attestation ran no Lab, provider, browser, build, or test and changed no pending debug or shared
+working document.
+
+## Final PowerShell disclosure/path review
+
+Status: **GO on the final static wrapper; execution and provider authorization remain separate.**
+
+The authoritative facility contract is narrower than its public validators. A normal `run` has no
+run-id option: `packages/test-runner/src/run-scenario.ts` generates
+`run-<base36 time>-<8 lower-case hex>` and passes it through
+`assertSafeScenarioRunId` before bundle construction. With both location variables absent,
+`resolveLabPaths` fixes the root at repository `test-runs`. `EvidenceBundle` converts authored
+artifact paths to forward-slash relative form, indexes only files found below its staging tree,
+writes schema-`0.1` index and digest marker, and publishes by staging-directory rename. `inspect`
+uses the broader `^[A-Za-z0-9._-]{1,128}$` input gate, then verifies marker-to-index digest and every
+indexed byte count/digest and parses `run.json`; its broad gate and unnormalized indexed-path joins
+are not sufficient authorities for the stricter disclosure procedure by themselves.
+
+Protections necessary at this boundary are present in t422's final block: clearing the two inherited
+location overrides before the child; exact generated-id-shape validation; canonical default-root,
+reported-path, and inspected-path equality; collision-free rename-before-inspection with identity
+recheck; an outer catch that ignores the `ErrorRecord` and emits only one fixed sanitized terminal
+object; strict object/required-property checks before access; ordinary/non-reparse fixed metadata
+paths; silent `inspect`; exact case-sensitive completion-marker shape/schema/digest syntax; SHA-256
+binding of the current exact index bytes; strict UTF-8 parse of those same bytes; ordinal-ignore-case
+normalized index uniqueness/containment; conservative per-entry redaction; and unique indexed
+manifest identity/verdict/redaction attestation. The compatible in-memory digest path uses
+`SHA256.Create().ComputeHash(...)` and `BitConverter`, so it works in the actual Windows PowerShell
+5.1 / .NET Framework shell; the earlier `.NET 5+` `HashData` / `ToHexString` blocker is gone.
+
+Some checks are deliberate defense in depth rather than independent necessities. Once the exact
+generated-id regex passes, separate `.` / `..`, trailing-dot, and Windows-device-name rejection
+cannot fire, and the immediate-child proof is mathematically implied; retaining them makes the path
+invariant explicit. A facility-authored index cannot normally contain duplicates or unsafe paths
+because it is built by walking bundle-owned files, but normalization, containment, and duplicate
+checks are still necessary before the wrapper treats post-run index content as authority for later
+semantic reads. Rechecking the index digest after `inspect` duplicates its earlier integrity work
+but closes the later read boundary and adds the marker schema contract that `inspect` omits. Nulling
+variables in a fresh process is hygiene against accidental reuse/output, not secure memory erasure.
+
+Final re-read found exactly one live `run`, one provider-free `inspect`, no retry/rerun branch, and
+no `--dry-run`. Raw child output remains captured, stderr discarded, Stage 1 is renamed before any
+run-path/verdict/bundle inspection, all modeled failures converge on the fixed no-go object, and
+success exposes only syntax-bounded identity/verdict/gate facts. Later semantic review must still
+repeat unique safe-index, containment, ordinary-file, and redaction checks for each allowlisted
+artifact before opening it. I did not execute the wrapper, Lab, provider, browser, panel, build, or
+test and did not edit t422 or any shared document.
