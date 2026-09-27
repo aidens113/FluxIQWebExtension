@@ -99,6 +99,36 @@ extension cannot drive — `unsupportedAutomationPageReason`
 (`runtime/unsupported-page.ts`), read from the tab rather than from the
 connection's last observation. The six observe-only verbs are exempt.
 
+### Default browser recovery
+
+Every page-side action runs inside the same bounded recovery loop
+(`content/action-runtime/recovery/`). A target that is not present is retried
+after 250, 500, 1,000 and 2,000 ms; the other retryable browser blips use 250
+and 500 ms. The whole loop is capped at five seconds and checks the command's
+own deadline again after every wait, so a backoff never grants time the command
+did not have.
+
+The loop is deliberately narrower for an action that can change the page.
+Clicks, typing and the other mutating verbs retry only a target miss that
+happened before dispatch. Read-only verbs may retry the full browser-retryable
+set. `web.dom.extract_list` counts as read-only only when it is unpaginated,
+because advancing a page is itself a mutation and replaying it could skip or
+duplicate work. Recovery details are appended when the final result has a
+writable bounded validation or failure description. A successful evidence-only
+result whose validation status is `none` has neither carrier, so its recovery
+account is currently omitted. There is no separate structured recovery field
+on the gateway result.
+
+The extraction request reader also separates an unusable request from one
+whose optional advice was unusable. `item` and `fields` remain mandatory, and
+an explicitly refused child frame remains a refusal. Invalid optional
+`itemElement`, `paginate`, `minItems`, and individual `where.N` entries are
+dropped and named, while safe nearest-column and normalized-name assumptions
+are reported as assumptions. The structured extraction summary remains the
+machine-readable account: counts, flags, closed words and declared field keys.
+Per-item read faults, page-advance faults, blank fields and incomplete records
+remain bounded prose on the action result rather than new summary fields.
+
 ## Capability Matrix
 
 | Capability | State | Outcome validated | Represented as | Owning files | Why this state |
@@ -122,11 +152,28 @@ connection's last observation. The six observe-only verbs are exempt.
 | Downloads | Partially supported | Yes | `web.browser.download` (parameter `download`) | `runtime/browser-download.ts`, `apps/extension/manifest.chrome.json`, `manifest.firefox.json`, `manifest.e2e.json` | Waits for a download to complete — optionally the one with a given file name, matched on the base name and accepting the browser's `name (1).ext` form — through `chrome.downloads`, with a 30 s default bounded to 1–120 s and a 15 s lookback so a download that finished between the click and the wait still counts. A timeout is `timed_out` with Core's `timeout` category. The `downloads` permission is declared in all three manifests, and a build without it fails as a capability refusal rather than hanging. The action only observes: it cannot start a download, choose a destination, or assert anything about the file beyond its name. The wait loop has never run in a browser. |
 | Basic file uploads | Fully supported | Yes | `web.dom.upload` (parameter `upload`); input `web.user.files_chosen` | `content/actions/upload.ts`, `content/action-runtime/file-input.ts`, `domain/src/client/gateway-action-parameters.ts`, `domain/src/output-nodes/upload-binding.ts` | Files travel inline as base64 because the page, not the worker, owns the input; they are built into a `DataTransfer`, assigned to the input, and followed by `input` and `change`. The names the input ended up holding are read back off the element, and the post-condition passes only when they are exactly the names asked for, in order, so an upload that put nothing anywhere reports `failed`. The validation compares names but quotes none: `expected` and `actual` say only how many files there are and whether their names match, and a refusal names a file by its position. A chosen file's name is the user's data, and what the verb writes there is kept in Core's saved command attempt. A target that is not a file input, a command with no files, a single-file input given several files, and malformed or oversized content are all refused before anything is dispatched; the 1 MiB per-file and 4 MiB total bounds are enforced by the domain on the way in and again in the page. File contents never appear in a result, a message, or a log. Multi-file uploads are coded but untested. A recorded file choice replays as this action, asking for its files at run time rather than carrying any, and a command whose request the run did not answer is refused before dispatch ([Recorded Actions](#recorded-actions)). |
 | Form interaction | Partially supported | Yes | composed from `web.dom.check`, click, type, clear, select, and Enter; `dom.submit` remains a recording event kind only | `content/actions/check.ts`, `content/action-runtime/checkable-state.ts`, `content/action-runtime/keyboard/implicit-submission.ts`, `domain/src/io/input-model.ts` | A checkbox or radio is set to a state rather than toggled, which is what makes a replayed step idempotent, and `checked` is read back after the control's own events run, so a handler that reverted the change reports `failed`. A control that is not checkable, one that is `:disabled` or `aria-disabled` — a disabled `<fieldset>`'s descendants included — and unchecking a radio, which no user gesture can do, are each ACTION_REJECTED rather than faked. `web.dom.check` does not use the actionability gate: it has its own disabled check and does not hit-test, so a control covered by an overlay is still set. There is no submit action — a form is submitted by Enter in a field or by clicking its button — a recorded submit maps to no input, and validation errors are not observed. |
-| Dynamic elements | Partially supported | Yes | the two wait actions, `web.dom.assert`, the actionability gate, and the wait a recording proposes before a late click target | `content/action-runtime/wait-conditions.ts`, `content/action-runtime/actionability.ts`, `content/action-runtime/resolve-target.ts`, `domain/src/recording/proposals/late-target-wait.ts` | The gate scrolls a target into view and refuses one that is not yet visible or not yet enabled, with a code saying which, so an action against a half-rendered page fails for a stated reason instead of appearing to work; `web.dom.assert` re-queries its selector until its claim holds or the timeout passes. But no acting verb waits first: `resolveTarget` tries its strategies and then scores the page's candidates once and throws, and nothing in the action path polls or retries. A recording supplies the wait where it saw the page add the target: a recorded DOM addition followed by a click in the same top document proposes `web.dom.wait_for_selector` on that click's selector, ahead of the click ([Recorded Actions](#recorded-actions); how it is recorded and proposed in [the extension client architecture](extension-client.md#a-wait-before-a-late-target)). Every other late target needs a wait authored before the action: in a Flow built by hand, for any verb but a click, for a click in a child frame, and for a target the page revealed without adding a node. |
+| Dynamic elements | Partially supported | Yes | the two wait actions, `web.dom.assert`, the actionability gate, default browser recovery, and the wait a recording proposes before a late click target | `content/action-runtime/wait-conditions.ts`, `content/action-runtime/actionability.ts`, `content/action-runtime/resolve-target.ts`, `content/action-runtime/recovery/`, `domain/src/recording/proposals/late-target-wait.ts` | The gate scrolls a target into view and refuses one that is not yet visible or enabled, with a code saying which; `web.dom.assert` re-queries until its claim holds or the timeout passes. Every page-side verb now retries a pre-dispatch target miss within the default recovery budget, and read-only verbs can also retry other browser-transient failures. An authored wait is still the durable way to describe a late state transition: a recording that saw a top-document node appear before a click proposes `web.dom.wait_for_selector` ahead of it ([Recorded Actions](#recorded-actions); [extension client architecture](extension-client.md#a-wait-before-a-late-target)). Recovery is only a short bounded cushion, not a replacement for a Flow step that must wait for a known page condition. |
 | Modal/dialog interaction | Partially supported | Yes | `web.dom.dialog` (parameter `dialog`); DOM modals are ordinary elements | `content/actions/dialog.ts`, `content/action-runtime/dialog-control.ts`, `page-world/dialog-override.ts`, `shared/dialog-channel.ts` | A native dialog blocks the page's script, so the answer is armed before the dialog opens: `alert`, `confirm`, and `prompt` are replaced in the page's own world at `document_start`, ahead of any page script, and the verb arms the next dialog's response — accept, dismiss, or accept with `promptText` — through a synchronous DOM handshake. Arming that is not acknowledged means the override is not installed, and the verb fails at once as `dialog_override_missing` rather than arming something nothing will answer. An unarmed dialog is left alone: the page behaves as it would without the extension, and what was answered is recorded as evidence the next action reports. Two gaps: `beforeunload` is in the observed-dialog union but is not a function that can be replaced, so it is unhandled; and `world: "MAIN"` is honoured only from Chrome 111 and Firefox 128, while the Firefox manifest admits 109, so on Firefox 109–127 the override lands in the isolated world and every dialog action fails honestly instead of working. |
 | URL checks | Fully supported | Yes | `web.dom.assert` with `kind: "url"`; also the `url` wait condition and navigate's landed-URL comparison | `content/actions/assert.ts`, `content/action-runtime/assertion-evaluation.ts`, `runtime/navigation-outcome.ts` | An authored claim about the address, retried until it holds or the timeout passes (5 s by default, `timeoutMs: 0` for a single immediate check). The landed URL counts as the requested one when it equals it, contains it, or resolves to it against the document's base. A claim that does not hold is STATE_MISMATCH — Core's `unexpected_state`, not retryable, at the `verification` stage — not `output_not_observed`, because the difference between a wrong expectation and an action that did not take is how a Flow recovers. A claim whose subject never appeared at all has not been judged against the page but has run out of time waiting for it, and is `timed_out`. |
 | Element existence checks | Fully supported | Yes | `web.dom.assert` with `kind` `exists`, `visible`, or `enabled` | `content/actions/assert.ts`, `content/action-runtime/assertion-evaluation.ts` | The claim is judged immediately and then polled every 50 ms until the deadline, so an element that arrives late satisfies it and a wrong claim fails fast instead of costing a full wait timeout. The selector is re-queried on every attempt rather than resolved once; an element handed over without a selector must still be connected. `exists` with neither a selector nor an element is reported as such rather than guessed at, and an assertion's target may come from coordinates, visual bounds, or a fingerprint, in which case a miss leaves an empty target reported as "nothing matched" rather than a throw. |
 | Element nonexistence checks | Fully supported | Yes | `web.dom.assert` with `kind: "absent"`; also the `absent` wait condition | `content/actions/assert.ts`, `content/action-runtime/wait-conditions.ts` | Absence is a first-class outcome on both paths: the assertion holds when nothing matches the selector, or when the element handed to it has detached, and the wait condition satisfies when the selector matches nothing or the text has gone. A spinner disappearing is therefore expressible both as a claim that fails fast and as a wait that reports `timed_out` if it never goes. |
+
+### Partial and wide list answers
+
+List extraction preserves useful work instead of converting every local fault
+into an empty answer. A field is optional unless its structured specification
+explicitly sets `required: true`; an unread optional field is `null`. An item
+whose own read faults is skipped and counted, and a fault while advancing to a
+later page returns the pages already read with that fault named in the bounded
+result description. When authored `where` conditions reject every row, the
+reader returns the unfiltered rows and marks `conditions.unfiltered` rather
+than discarding the only evidence available.
+
+Pagination is checkpointed across a full-document navigation. The continuation
+reattaches in the replacement document with its earlier records and counters,
+waits for that document's list, and de-duplicates rows repeated across pages.
+This is the same read resumed, not a second action whose earlier answer was
+lost.
 
 ## Actions Outside The 24
 

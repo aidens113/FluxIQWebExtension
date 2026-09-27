@@ -1,359 +1,325 @@
 # MVP Today
 
 Status: Active
-Status detail: The four MVP criteria, the four binding product rules that get them over the line, and the ordered path from the current tree to a live run that passes. Creation and self-judgement work live; deterministic replay has never been demonstrated because no run has yet produced a correct answer; the repair route is open and has applied a correction once.
+Status detail: Run 4 remains the latest accepted failed product measurement and the pass streak remains 0. Its measured draft-input loss is corrected inside the unchanged 4,000-byte reservation; provider-free Core/downstream gates and corrected-order output freshness are green apart from the documented downstream worktree-fixture environment block. Final candidate review, integration, and a fresh no-hindsight authorization remain; no provider call is authorized.
 Created: 2026-09-26
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 Owner: Senior supervisor agent
-Scope: Getting the MVP over the line — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself, and judges its own answer — by making the runtime defensive by default for every node, removing every grant that gates anything but a genuinely risky action, making the judge issue fix instructions rather than a verdict, and then running the live loop until a hard scenario passes twice. It deliberately does not re-plan the loop's operating procedure, which is in language-driven-flow-loop-plan.md, and does not cover recorded Flows or any surface that does not block these four criteria.
-Paired document: `none yet — the Core-side changes land under FluxIQ Core's own working documents as this plan names them.`
-Related: [language-driven-flow-loop-plan.md](./language-driven-flow-loop-plan.md) (the operating loop, the run history, and the twenty-three tasks already built), [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-defensive-runtime-plan.md) (the earlier defensive-runtime design this supersedes on defaults), [fluxiq-conversations-plan.md](./fluxiq-conversations-plan.md) (where a genuinely risky action's question reaches the person)
+Scope: Close the MVP loop in which an instruction becomes a Flow, runs deterministically, repairs itself when judged wrong, and judges its own answer. This plan owns the binding rules and live exit criteria; operating history remains in `language-driven-flow-loop-plan.md`.
+Paired document: none
+Related: [language-driven-flow-loop-plan.md](./language-driven-flow-loop-plan.md), [archived coordination](./mvp-today-plan/archive/2026-09-26-pre-run-and-run1-coordination.md), [worker reports](./mvp-today-plan/reports/)
 
 ---
 
 ## Current State
 
-**Why this document exists.** The loop document records twenty-three tasks built today, all
-verified by unit tests and isolation measurements and **none by a provider call**. The user's
-assessment on 2026-09-26 was that the MVP is close and that the remaining distance is not more
-debugging but three rules that have been stated repeatedly and not applied as defaults. This
-document is those rules and the ordered path to a passing live run.
+**Purpose.** Apply three binding rules: every node executes defensively by default; only move-money,
+delete, and send/publish consequences require a separate grant; and a judge's refutation carries
+screened, actionable repair direction.
 
-**Where the four criteria actually stand.**
-
-| Criterion | State | What it still needs |
+| MVP criterion | Current evidence | Still required |
 | --- | --- | --- |
-| Created from language | **Works, repeatedly.** Ten-node Flows built from an instruction with no recording, including navigation, interruption dismissal, a typed search and an extraction | Fidelity: the built Flow must match what exploration proved, and must carry the instruction's qualifying clauses |
-| Runs deterministically | **Unproven.** Gated behind a correct answer, which has never happened; best ever is 3 of 13 rows in position | A defensive runtime, so a replay survives the page it did not author |
-| Repairs itself | **Route open, fired once.** Was never reachable at all until `85e0d38`; one run applied a correction, the next reached the re-author and failed inside it | A judge that says what to fix; the ability to amend a node's parameters; no gate in the way |
-| Judges its own answer | **Works.** Five consecutive runs stored plausible tables and all five were refuted rather than reported | Its refutation must carry instructions, not just a verdict |
+| Created from language | Run 2 built and reviewed a five-node Flow; runs 3 and 4 stopped before proposal after 26 build calls each. | A faithful Flow that returns the exact expected dataset under the default profile. |
+| Runs deterministically | Run 2 executed through extraction and judgement; runs 3 and 4 produced no runtime or replay evidence. | Provider-free replay with the exact expected dataset. |
+| Repairs itself | Run 2 routed wrong-answer recovery but failed before adaptation; runs 3 and 4 never reached repair. | A created, applied, persisted repair proven by deterministic replay. |
+| Judges its own answer | Run 2 correctly refuted a 12-of-13 result; runs 3 and 4 never reached judgement. | Preserve the refutation through successful directed repair and post-replay judgement. |
 
-**The three rules this document exists to apply**, all from the user on 2026-09-26 and all
-binding. They are stated in full under `The Binding Rules`.
+**Implemented.** Defensive Core/browser execution, bounded provider retry, the risk-only permission
+boundary, screened judge directives, and extraction/recovery changes are complete. After run 2,
+Core also gained truthful three-state request provenance; exact held-grant continuation across the
+authorized binding update; durable repair apply plus authoritative binding read; selected-Subflow
+zero-provider replay; recursive judgement; enclosing terminal revoke; and fail-closed post-apply
+provenance. These changes are locally validated but have not completed the live path.
 
-1. **The runtime is defensive by default, for every node, core or custom.** A recoverable
-   fault — a changed page, a late element, a 429 or a 500, a timeout, a dropped connection —
-   is absorbed. A Flow never stops for something that could have been retried.
-2. **The user's instruction is the grant.** Grants gate only genuinely high-risk real-world
-   actions: deleting, checking out, paying, sending, publishing. Everything else — repair,
-   re-authoring, rollback, re-running, extraction, judgement — has free rein. Every other gate
-   is removed, not defaulted open.
-3. **The judge says what to fix.** It is given the same context as the other modes and returns
-   explicit instructions and suggestions about the data, not a label.
+**Pre-packing validation baseline.** The earlier Core root suite passed 3,994 tests with one intentional skip, and
+Core `pnpm check` passed. Focused reconciliations passed t290 81/81, t293 51/51, and t304 web 11/11
+plus Core 30/30. Downstream builds, equivalent package/structure checks, source identity, and all
+six output-freshness comparisons passed. The exact provider-free command returned `ready`, the
+intended isolated created-Flow request, default 26 calls, and zero provider calls. This is local/
+readiness evidence that predates the current packing correction, not validation of the current tree
+or live proof. The root task-fixture check remains machine-limited by inability to spawn `git worktree add`.
 
-**Dispatched for these:** the cross-repository defensive audit (t163, **done** — its findings
-are in `What The Audit Found` and they reframe rule 1), the judge's context and instructions
-(t164), Core's default node policy and the gate that blocks it (t165), the grant removal across
-both repositories (t166), the web nodes' own defences and the failure-code table (t167), and
-the provider retry the audit found nobody was doing (t168).
+**Live run 1.** `run-muj2kzx1-8f9f8271` reached Stage 2 exploration and stopped before proposal.
+All 26 provider calls were build calls: 360,775 input plus 5,435 output tokens, 366,210 total,
+estimated USD 0.0573657. No runtime run id, dataset, judgement, repair, persistence, or replay was
+produced. The last completion failed `bootstrap.cannot_answer_instruction`; the old loop exit then
+misreported generic iteration-limit.
 
-**The one thing standing between the tree and a measurement.** Nothing has been exercised
-live. Core, the domain and the extension all hold uncommitted work from many workers; the Lab
-refuses a run whose build is older than its source, so the next live run needs all three
-rebuilt first. That rebuild is the gate, and `The Order Of Work` treats it as such.
+**Live run 2.** `run-muj39xl6-f6a5d4e5` is an accepted measurement with a failed product verdict.
+It reached Stage 6: a reviewed five-node Flow ran, the oracle measured 12 observed records against 13
+expected, and the model-backed judge refuted the answer. Recovery and result reauthoring routed, but
+the stored failure was `flow_bootstrap.unexpected_error` under the service's broad `provider_request`
+classification window before an adaptation, persistence result, or replay was published. T229 found
+that this window begins before the actual harness call, so the record does not independently prove a
+provider request was sent. The consecutive-pass streak remains 0.
 
-**Blockers:** none. Two environment notes carry over: `git worktree add` fails on this machine
-with `cannot spawn git: Exec format error`, so a Core-paired task takes a plain branch in each
-repository; and a Core build that exits `3221225477` is this machine's RAM fault and builds on
-retry.
+**Run-2 accounting.** Evaluation records 21 calls. Build/main observation is one 19-call bucket
+(239,801 input, 3,705 output, 243,506 total tokens, USD 0.03085158); two calls lack per-call records.
+Repair observation and verification are the same two-call representation (5,930 input, 733 output,
+6,663 total tokens, USD 0.0017178). These representations are not double-counted, and no combined
+token/cost roll-up is published. Typed accounting reports zero breaches and zero pending calls.
 
----
+**t217 correction.** Core preserves a final unusable issue through Flow Bootstrap's stalled
+callback; ordinary usable non-completion still reports iteration-limit. Run 3 now validates this
+live: exhaustion ended `flow_bootstrap.evidence_unusable_decision` with
+`bootstrap.cannot_answer_instruction`. No budget, answerability, draft, or convergence rule changed.
 
-## What The Audit Found
+**Run-2 evidence status.** Marker, index, and bounded structured artifacts passed byte, digest, and
+redaction verification. This is a product failure, not a facility failure. It proves creation,
+runtime, exact comparison, judgement, and recovery routing; not repair application, persistence, or
+deterministic replay.
 
-The cross-repository audit (t163) is the evidence this plan rests on. Its conclusion reframes
-rule 1: **the defensive runtime already exists and is on by default, and is gated behind one
-boolean that almost nothing sets.** So the work is less building a policy than making the one
-that exists reachable, and filling what was never written.
+**Live run 3.** `run-mujd550n-e8fbe7aa` is an integrity-valid, redaction-verified failed product
+measurement. It reached Stage 2 and stopped before proposal with
+`flow_bootstrap.evidence_unusable_decision` at `provider_output_validation` and issue
+`bootstrap.cannot_answer_instruction`. No Flow, runtime, oracle comparison, judgement, repair,
+persistence, or replay was produced. The consecutive-pass streak remains 0.
 
-**One gate decides all deterministic recovery.** `runtime/executor/retry-policy.ts:88` returns
-false for an attempt whose `failure.retryable !== true`, and for any attempt staged
-`verification` or `confirmation`. That result gates ladder rungs 2, 3 **and** 4. Everything it
-refuses drops to `llm_diagnosis`, which is never executed in-run, which ends the run at
-`graph-run.ts:471`.
+**Run-3 accounting and evidence status.** Build and observed are one 26-call representation:
+362,468 input plus 5,999 output tokens, 368,467 total, estimated USD 0.057534336; 25 calls are
+itemized and one is unrecorded. There is no repair/verification bucket to add. The bounded artifacts
+publish no terminal grant lifecycle property. The run proves truthful classification and a live
+creation-reliability deficiency, not a deterministic leaf-code fault or the repair chain.
 
-**The largest live failure cause is two files contradicting each other.**
-`web.validation.output_not_observed` is declared `retryable: true` in the domain's code table
-and discarded by Core on its stage. **11 of roughly 18 reportable live runs died there.** Both
-files carry comments claiming a deliberate reading.
+**Live run 4.** `run-muje0grk-4d8d2d3f` is an independently accepted, integrity-valid failed product
+measurement. It again used all 26 build decisions and stopped at Stage 2 with
+`flow_bootstrap.evidence_unusable_decision` / `bootstrap.cannot_answer_instruction`: 22 tool calls,
+33 screened steps, 57,868 step-level evidence bytes, and 70,126 total summary evidence bytes. No
+proposal or later-stage evidence exists. This fires the predeclared no-run-5 unchanged-retry rule.
 
-**Nothing retries a provider fault.** The DeepSeek adapter marks 429, 5xx, timeouts and network
-errors retryable; the only consumer writes the flag into metadata, and a grep for
-`backoff|sleep|delay` over the whole `runtime/llm/` tree returns **zero hits**. Two runs died
-here. With the above, these two account for 13 of roughly 18 reportable failures.
+**Run-4 accounting.** Build and observed are the same representation: 370,882 input plus 3,642
+output tokens, 374,524 total, estimated USD 0.049289784. All 26 calls are itemized, with zero
+unrecorded or pending calls and zero typed budget breaches. The two evidence-byte projections and
+the two accounting projections are retained separately and are not added.
 
-**Every web node executes outside Core's only try/catch.** The guard covers the
-`definition.execute` path alone; the native-executor, effect-dispatch and composite awaits are
-unguarded, and all 18 web output nodes take those paths. `runGraphFromSeed` has no try/catch
-either, so a throw ends the session and rethrows — no attempt row, no ladder, no repair.
+**Next.** The provider-free correction gates are green: the supervisor observed Core `pnpm check`
+and downstream `pnpm -r check`, `pnpm test`, and `pnpm build` exit 0; worker evidence records Core
+root test/build/docs/structure success and t409 records corrected-order output freshness and identity.
+Downstream root `pnpm check` remains qualified only by the known task-fixture environment block:
+89/120 passed and 31 `git worktree add` cases failed with `cannot spawn git: Exec format error`;
+all non-worktree gates passed. Freeze the exact repositories, complete the final candidate/staged-
+path sensitive-data and inclusion review, reconcile Current State, and make the integration decision.
+Only after the exact identity, provider-free dry-run, no-hindsight Stage 1, 13-record oracle,
+evidence/debug contract, and one-Lab machine predicate are frozen may the supervisor issue one fresh,
+explicit, command-specific authorization. No provider call is authorized now.
 
-**Three of the ladder's four rungs are dead, and that is now measured rather than inferred.**
-`readyState` and `clearsInterference` have no writer in either repository; `expectedState` is
-written only by the recording path. Across all 150 run directories: `retry_node` fired in 12
-runs, `await_recorded_state` in **0**, `clear_interference` in **0**. The ladder is one rung
-deep and that rung works.
+**Fix-first local evidence.** The deterministic Core service fixture now reproduces 26 decisions,
+22 tool calls, repeated unchanged answerability, exact accounting, no persistence, and one revoke;
+its same-prefix branch reaches its fixture-defined completion at decision 11 and persists a
+registered record-producing node. Core publishes bounded, content-free progress fields by contract
+and owns their non-content-derived identity provenance; downstream applies closed-shape and bounded-
+syntax screening, which does not by itself prove provenance. Earlier focused loop tests passed
+394/394 and the service pair passed 2/2. T367 reported 49/49 for the downstream progress-projection
+sanitizer/privacy/accounting work, and the read-only t371 follow-up recorded in t366 returned GO; that
+does not yet close the later packing integration.
 
-**Two gates defeat themselves.** The `clear_interference` rung is gated off by `retryable`, and
-the code it exists for — `web.action.blocked_by_dialog` — is `retryable: false`, so the rung for
-dialogs is switched off by the dialog code. And the justification for not retrying record-less
-attempts assumes every web action emits a record, which holds for the content-script path only,
-not for two catch paths nor 37 of Core's 41 built-in nodes.
+The provider-free discriminator ruled out lost feedback, decision grammar, catalog visibility, and
+answerability handling, then measured its sole failed signal: the 4,000-byte draft projection
+withheld 4, 10, 15, and 21 bounded inputs at decisions 23-26. A complete fitting draft retains the
+ordinary object shape. When an all-bounded-input draft no longer fits, Core tries lossless,
+self-describing `step_rows_v1` candidates before withholding oldest input. A draft containing an
+input over the unchanged 512-byte bound stays in object form and retains `inputTooLarge: true`.
+Focused results are t375 14/14 measurement tests, t377 20/20 entry tests plus Core check, and t378
+three selected discriminator/service tests plus Core check. The unchanged-budget fixture retains all
+7-22 bounded inputs through decision 26; the same-prefix branch reaches its fixture-defined decision-
+11 completion. This does not establish provider convergence. T370/t374 separately set the exact
+represented-draft ceiling to 129, reject 130, and leave the 128-revision and 64-amendment ceilings
+unchanged. Provider-free Core/downstream command gates and corrected-order output freshness are green,
+subject to the documented downstream worktree-fixture environment block; final candidate review and
+integration remain. This does not establish provider convergence.
 
-**The scale.** Of Core's 41 built-in nodes, 4 emit any failure record and **0** can reach the
-retry rung on their own record. Of the domain's 16 failure codes, **4** can reach a retry.
-
-**One case that must get *less* defensive.** A browser-API refusal —
-`Cannot access contents of url "about:blank". Extension manifest must request permission…` —
-was classified `web.action.failed` with `retryable: true`, retried at 250 ms and 1 000 ms, and
-then ended the run. The machinery worked as designed; the closed code set had nothing better to
-say. Absorbing the transient and refusing the deterministic is one rule, and the deterministic
-half needs its own code.
-
-**Two earlier symptoms are confirmed already fixed**, from source: the list wait is now a
-10 000 ms render window, and the required-field default reports a stated gap instead of failing
-forty good rows.
-
-**Who owns each.** The gate, the unguarded seam and the dead rungs went to t165; the domain's
-code table and the browser-API code to t167; the provider retry, which nobody held, to t168.
-The audit's ranked fix list has eight entries, each sized as one task.
-
----
-
-## What The Defences Now Do
-
-**The web side is built (t167).** Its survey found the inversion exactly: **nine of the fifteen
-verbs resolved their target once, synchronously, in the millisecond the command arrived**, and
-failed outright. The only verbs that waited were the three whose whole purpose is waiting, plus
-the list read — so the runtime was defensive only where *the model* had authored a wait node,
-which is the inversion the user rejected.
-
-Every verb now runs behind a bounded retry at one seam, `executeContentAction`: four rungs at
-250/500/1000/2000 ms for a target the page has not drawn, two at 250/500 ms for a blip, a
-5 000 ms whole budget measured from the command's start and never exceeding its own `timeoutMs`.
-**Worst case about five seconds added, and zero where the verb already spent the command's
-time.** A retry calls the verb afresh, so re-resolution, a moved target and a stale reference are
-one fix. A verb that can move the page absorbs only a fault thrown *before* anything was
-dispatched, so a click is never pressed twice — asserted for all four post-gesture codes.
-
-**The contradiction is settled with an argument, not a coin toss.** `verification` correctly
-describes where `output_not_observed` is decided and `retryable: true` correctly answers Core's
-question; the defect is that Core's gate uses the **stage as a proxy for side-effect safety**,
-which the stage does not carry — a read and a click both fail post-conditions at `verification`
-and only one is unsafe to repeat. The fix is for Core to ask `sideEffectClassForNode` directly.
-Rewriting the stage would have made the field mean "what Core will retry" and destroyed the
-question. Meanwhile the extension does not wait for Core: an unpaginated list read whose
-post-condition failed is re-read **in the page**, before the gate is consulted, which covers the
-measured 11-run case. A paginated read still needs Core's change.
-
-**Two new failure codes, in opposite directions.** `web.browser.permission_denied` is
-non-retryable, so a manifest or permission refusal is refused once instead of retried three times
-and then reported as a mystery; `web.transport.transient` is retryable. The browser's own message
-is read into one of them, and a message it does not recognise keeps the caller's existing code —
-so the reading can only sharpen, never mislead.
-
-**One more total-versus-partial failure found and fixed, in neither brief.** The list reader's row
-loop had no catch, so **one recycled or detached element threw out of the read and every row
-already gathered was discarded.** Rows that throw are now skipped and counted, a failed page
-advance ends the read with the pages it has, and both are named in the read's own account.
-
-**What is still owed on this half.** The recovery account reaches Core only as prose on the
-validation's `actual`. Making it countable is a four-line change across `domain/src/actions/types.ts`,
-`domain/src/client/gateway-mapping.ts` and a Core projection — specified in t167's report section 7,
-not yet assigned, and deliberately **not** done by widening the evidence result's top-level keys.
-
----
-
-## What The Judge Now Does
-
-**The judge was strictly poorer than the repair it triggers.** t164 measured it: the call was
-shown each step as `{nodeId, definitionId}`, while the repair has had each step's screened
-parameters since this morning. So the judge was being asked whether the Flow had "a step that
-could have narrowed" the result — against a list of names in which a Flow filtering on the right
-field and one filtering on the wrong field are **the same list**. It was also denied the
-conversation, which the repair reads, in a file whose own comment says a repair that cannot read
-it repairs blind.
-
-**Parity, through the same screens.** `flowShape` now carries each step's label, parameters and
-withheld paths through `automationStudioScreenedNodeParameters` — the same screen, the same
-credential and locator rules, the same dotted-index paths settled earlier today. Page evidence
-is genuinely unavailable to a judge, because a clean run captures no failure; that is an absence,
-not a withholding.
-
-**The instructions reach the repair through the channel that already exists.** The repair is
-handed `failure.expected` and `failure.actual` and nothing else. So the directive rides there:
-`expected` carries what the request asked for plus the fix lines, `actual` carries the
-observation — both bounded to the record's 1,024 characters. No change was needed outside the
-verification directory for that to work.
-
-**Nothing new is demanded of the model.** No response field, no schema key, no parse. The
-judgement is read off the `expected`/`observed`/`changed` the diagnosis reply already carries,
-with the reply's summary as fallback advice. A wrong type, whitespace, 900 characters, a
-credential-shaped or locator-shaped value: each is absent or redacted, **the verdict stands**,
-and `withheld: true` says so. That is the "easy to produce" rule holding under adversarial input.
-
-**The ask itself is now written** (supervisor, direct): the judge is told to say in `observed`
-which rows or columns are wrong and in `changed` what to change — naming the clause of the
-request the result fails and the step whose parameters would have to change — and told plainly
-that a bare verdict is not the job because the repair gets what it writes and nothing else. The
-closing sentence is load-bearing in the other direction: **a refusal with no advice is still a
-valid refusal and nothing fails for it**, which the code already honours.
-
-**Cost, measured rather than estimated:** the summary grows 710 → 1,262 bytes for a realistic
-five-step web Flow, about **+138 input tokens per judged call** — 0.03–0.06% of a build's
-441,531 tokens, zero output tokens, zero extra calls, and the packet's ceiling unchanged.
-
-**Two widenings outstanding**, handed to the worker holding that file: carry the conversation to
-the judge, and carry `recordCount` on recent actions so the judge can see that the step meant to
-narrow the result stored the same count as the step before it — which is precisely the shape of
-the 43-where-13-expected answer.
+**Blockers.** Flow creation remains unreliable, and runs 3 and 4 leave runtime, exact answer,
+judgement, repair persistence, zero-provider replay, recursive post-replay judgement, and terminal
+revocation unmeasured. The draft-loss correction is provider-free validated and output-fresh but is
+not integrated or live-proven. Final candidate/staged-path review and a fresh command-specific
+authorization still precede any provider call.
 
 ---
 
 ## The Binding Rules
 
-These are product requirements. A design that weighs them as options has misread them.
+### 1. Defensive execution is the default
 
-### 1. Defensive execution is the default, for every node
+Every core or custom node enters the same bounded defensive envelope. Recoverable late-page, target,
+transport, timeout, 429, and 5xx faults are absorbed and recorded when retrying is safe. Deterministic
+permission/refusal failures remain terminal. A side-effecting action is never blindly repeated after
+dispatch, and a no-op is never reported as success.
 
-Every node executes defensively without opting in — Core's built-ins, the web domain's output
-nodes, a native or host-executed node, and one added tomorrow. The policy lives at the seam
-every dispatch passes through, so a new node inherits it rather than implementing it.
+### 2. The instruction is the grant
 
-- **Retries on by default**, with a sensible attempt count nobody configures, and backoff.
-- **The fault class decides the response.** Transient HTTP (429, 500, 502, 503, 504), timeouts,
-  aborted requests, dropped connections, malformed response bodies, detached elements,
-  navigation races: retried. A deterministic refusal — bad input, an unmapped output — is not,
-  because retrying it only spends time.
-- **A recorded delay is a ceiling, not a sleep.** The gap recorded during authoring is the
-  *maximum* wait for that node's expected state. If the state appears sooner the node runs
-  immediately; if it never appears the node is still attempted at the deadline rather than
-  failed outright.
-- **Partial beats nothing.** A read that got some rows returns them and says what it missed. A
-  request with one unusable part drops that part, names it, and runs. The worst failures in this
-  product's history were total rather than partial.
-- **Nothing is swallowed silently.** Every absorbed fault is recorded — which fault, which
-  attempt, what it cost. A defence nobody can see is a defence nobody can trust.
-- **Bounded.** Worst-case added wall clock per node and per run is stated and capped. A defence
-  that turns a fast failure into a hang makes live runs worse.
-- **A mutating action does not act twice.** A click whose confirmation was missed is not retried
-  blindly; each mutating node says how its retry is made safe or why it is excluded.
-
-The runtime carries this, **not the model**. Answering a brittle runtime by making the model
-smarter, or by asking it to author retries, or by leaving robustness to the repair loop, does
-not satisfy this rule. The repair loop improves a Flow's intent; it is not a substitute for a
-node that survives an ordinary web page.
-
-### 2. The user's instruction is the grant
-
-A person asking for an automation has granted everything the automation needs in order to work.
-There is no second permission for the product doing its job.
-
-- **A grant is reserved for genuinely high-risk real-world consequences**: deleting, completing
-  a purchase or checkout, paying, sending or publishing on the person's behalf. Those ask the
-  person, and that machinery should get better rather than weaker.
-- **Nothing else may be gated**: triggering a repair, repairing again, editing or re-authoring a
-  Flow or subflow, rolling a version back, re-running, exploring, extracting, judging, retrying a
-  node, persisting what was learned, being in an unusual mode, spending a call.
-- **Only an explicit instruction or setting narrows a Flow.** A restriction must never arise from
-  the architecture's own caution.
-- **Remove, do not default open.** A gate left in place with a permissive default is the same trap
-  one setting away.
-
-This is a bug report, not a preference. The wrong-answer repair never executed once across five
-live runs because its route was gated on the grant purpose being the literal
-`explore_and_adapt`, while a Flow built from an instruction runs under `build_and_adapt`. The
-gate made nobody safer; it silently disabled the feature the MVP is for and hid that for days.
+Only consequences independently requiring human authority are gated: moving money, deleting, and
+sending or publishing. Exploration, extraction, judgement, repair, re-authoring, rollback, ordinary
+creation/modification, persistence, and replay are not permission events. An unmapped state input
+still cannot become executable authority.
 
 ### 3. The judge says what to fix
 
-- **Same context as the other modes.** Whatever creation and repair are shown — the instruction,
-  the Flow, the run's actions and results, the page evidence, the extracted data, the conversation
-  — the judge sees.
-- **A refutation carries instructions.** Which rows or columns are wrong, which qualifying clause
-  was not applied, which step most plausibly caused it, and concrete suggested fixes.
-- **Encouraged, never demanded.** The asking says a bare verdict is not the job; a terse
-  judgement is still a valid refusal, and no run fails because the judge offered no advice.
-- **Easy to produce.** Few required fields, forgiving parsing, anything derivable computed by
-  Core. A malformed suggestion must not cost the verdict.
+The judge receives screened evaluation context and returns a structured, actionable repair directive,
+not only a label. Repair uses screened parameters, changes and persists the relevant Flow definition,
+and proves the correction by provider-free replay.
 
-The judgement is the input to the repair. A repair handed only "wrong" pays for a second full
-exploration; one handed "the rating floor never reached the extraction" acts immediately.
+### 4. Existing safety boundaries remain
 
-### 4. The rules already in force that these compose with
-
-Stated here because a defensive default must not contradict them: a node is usable with
-**minimal parameters** and an omitted parameter gets a permissive default; an unknown name the
-model writes **resolves to its nearest match** using name and shape rather than being refused; a
-**removal is always an explicit model decision** and attributable in the run's record; and every
-model change to a Flow or subflow is a **new version** that the evaluator can roll back.
+Secrets, raw prompts/responses, recorded page content, selectors, browser state, and tokens never
+enter tracked evidence. Recovery remains bounded; redaction and grant enforcement are not weakened.
+Exact dataset comparison—not a plausible table or matching count—decides the hard scenario.
 
 ---
 
-## The Order Of Work
+## Current Runtime And Judge Contracts
 
-Each step gates the next. The point of the ordering is that the first live run measures a tree
-that is whole, because a run against a half-built tree is not a result.
+- Core bases recovery on side-effect class and structured failure rather than a broad stage proxy.
+- The extension re-resolves targets in a bounded envelope and distinguishes transient transport from
+  deterministic browser permission refusal.
+- List extraction supports strict predicates, bounded continuation, partial retention, identity-based
+  de-duplication, stable order, and explicit recovery accounting.
+- Provider faults retry only within configured bounds and grant accounting.
+- Final unusable build decisions retain their actionable diagnosis at literal iteration exhaustion.
+- Judgement and repair use screened directives; deterministic replay must make zero provider calls.
 
-**1. Land the five dispatched tasks.** The defensive audit, the judge, Core's node policy, the
-grant removal, and the web nodes' defences. The audit is read-only and informs the rest; the
-other four edit disjoint files.
-
-**2. Apply what the workers could not reach.** The grant removal is deliberately partitioned
-away from files other workers hold, and reports its remaining changes as exact before/after
-edits. The supervisor applies those once the holders finish. Same for anything else a report
-hands back.
-
-**3. Rebuild all three trees and run the narrow checks.** Core, the domain, the extension. Then
-`pnpm check` in this repository and the Core suites, and the two assertions a name-resolution
-change is known to flip — `column-match.test.ts`'s honest-failure case and `slot.test.ts`'s
-`unknownField` entry, both of which must be updated to assert the new behaviour with `banana`
-and a selector still refused.
-
-**4. One live run on `everything-store-plus-earbuds-under-50`, debugged in full.** This is the
-first run since twenty-eight tasks landed, so attribution is harder than usual and the debug
-must be explicit about which change each observation exercises. Expect to learn more from it
-than from any run so far, because for the first time the model is told why its edits fail, the
-read waits properly, the filter vocabulary is visible, and the judge says what to fix.
-
-**5. Fix what that run names, and run it again.** Until it passes twice in a row. A scenario is
-finished when it works, not when it has been attempted.
-
-**6. Then open the other nine lanes**, concurrently, one hard task each, isolated by
-`FLUXIQ_LAB_INSTANCE`. The lane table is in the loop document.
+The detailed audit, integration narrative, and t170–t218 briefs are preserved in the
+[archive snapshot](./mvp-today-plan/archive/2026-09-26-pre-run-and-run1-coordination.md).
 
 ---
 
-## What Would Make This Fail
+## Live Validation Contract
 
-Recorded so the plan is falsifiable rather than optimistic.
+The qualifying command uses the isolated `everything-store` created-Flow lane, DeepSeek
+`mvp-hard-scenario`, task `everything-store-plus-earbuds-under-50`, one replay, and no budget override.
+Only one Lab run may exist at a time.
 
-- **A defensive default that hides a real defect.** If a node now retries past a genuine product
-  failure and reports success, the loop loses its ability to measure. This is why every absorbed
-  fault must be recorded: the defence and the evidence of it are one requirement, not two.
-- **A removed gate that lets a consequential act through.** The rule keeps the high-risk gates;
-  if the removal over-reaches, a test asserting a genuinely risky action is refused will break,
-  and that break is a stop signal rather than a test to update.
-- **Twenty-eight changes measured at once.** Attribution across them is the known cost of having
-  fanned out this wide. The mitigation is that most of them make the run *say* more, so the next
-  debug reads causes off the artifacts instead of inferring them from durations.
-- **A wrong answer that is now harder to see.** Six of ten runs read nothing because of a
-  two-second wait; with that fixed, reads will return data, and a wide-but-wrong answer is more
-  work to judge than an empty one. The judge's new instructions are what carries that weight.
+A pass requires a finalized, integrity-valid bundle proving all of these:
+
+1. The authored Flow implements the complete instruction: exact predicates, organic-only extraction,
+   all-page traversal, stable order, and identity-based de-duplication.
+2. Runtime reaches its own page; each action produces its intended effect/output or records a bounded,
+   correctly classified recovery or terminal failure.
+3. The dataset exactly matches all 13 expected ordered records across `name`, `price`, `rating`, and
+   `url`; count-only comparison cannot pass.
+4. Core judges the result. If wrong, a screened directive triggers an applied, persisted repair.
+5. The persisted Flow replays successfully with zero provider calls.
+6. No secret/redaction, integrity, unexpected permission, budget, or concurrency failure occurs.
+
+The exit condition is two consecutive independent passes under the unchanged default profile. A
+failure resets the streak and is fully debugged before a measured fix or another provider call.
+
+---
+
+## Active Order Of Work
+
+1. Reconcile run 4's independent evidence and preserve the hard no-provider stop in both plans.
+2. Add a deterministic Core service fixture for the 26-decision exhaustion and a companion success branch.
+3. Add privacy-safe stable draft/step identity, answerability state, and semantic progress projection through Core and downstream snapshots.
+4. Use the deterministic evidence to select and implement a measured convergence correction; do not raise limits or weaken answerability.
+5. Run focused failure/success tests, then full Core/downstream check, test, build, identity, and freshness closure.
+6. Freeze a new no-hindsight authorization and repeat provider-free readiness and one-Lab gates before any next provider call.
+7. After the first complete live pass, obtain one further independent consecutive pass; then validate the remaining nine lanes serially.
+8. Reconcile final docs, manifests, sensitive-path scan, commits, task branches, and paired push.
+
+---
+
+## Worker Briefs
+
+Completed t170–t218 briefs are in the [archive](./mvp-today-plan/archive/2026-09-26-pre-run-and-run1-coordination.md).
+Each worker owns only its uniquely named report and never commits.
+
+Completed t219–t311 briefs are in the [run-2 through run-3 launch-gate archive](./mvp-today-plan/archive/2026-09-26-run2-through-run3-launch-gate-briefs.md).
 
 ---
 
 ## Work Ledger
 
-### 2026-09-26 — Document opened with three binding rules and five tasks dispatched
-- Agent: supervisor
-- Changed: `docs/working/mvp-today-plan.md`, `docs/working/README.md`
-- Why: the user's assessment was that the MVP is close and the remaining distance is three
-  rules stated repeatedly and not applied as defaults — a defensive runtime for every node, a
-  grant system that gates only genuinely risky actions, and a judge that issues fix instructions.
-  All three were saved to durable memory in the same turn so they stop being restated.
-- Validation: not validated — no code changed by this entry. The four criteria's states quoted in
-  `Current State` come from observed live runs recorded in
-  `language-driven-flow-loop-plan.md`'s ledger, not from this document's own work.
+### 2026-09-26 — Opened and integrated the MVP closeout plan
+- Agent: supervisor with t163–t203
+- Changed: Core runtime/judge/permission code, downstream runtime/extraction/runner code, tests, docs, and this plan
+- Why: Apply the three binding rules and make the hard scenario measurable end to end.
+- Validation: Core 3,964 tests with one skip plus check/build; downstream 3,920 tests plus build/package checks -> passed; task-fixture worktree spawn remains environment-limited.
 - Outcome: Accepted
-- Follow-up: t163 through t167 are in flight; steps 2 and 3 of `The Order Of Work` are the
-  supervisor's and begin as those land.
+- Follow-up: run the provider-backed hard scenario.
+
+### 2026-09-26 — Run 1 produced a valid failure measurement
+- Agent: supervisor with t210–t216
+- Changed: `language-driven-flow-loop-plan/debugs/run-muj2kzx1-8f9f8271.md` and t210–t216 reports
+- Why: Measure the four MVP criteria on one provider-backed hard scenario and requested replay.
+- Validation: finalized evidence -> 26 build calls, 366,210 tokens, estimated USD 0.0573657, Stage 2 failure before proposal/runtime.
+- Outcome: Accepted
+- Follow-up: preserve the final unusable diagnosis and repeat the default-profile scenario.
+
+### 2026-09-26 — Final build refusal now survives iteration exhaustion
+- Agent: supervisor with t213, t215, and t217
+- Changed: Core evidence-loop exhaustion handling and focused tests
+- Why: Preserve `bootstrap.cannot_answer_instruction` instead of replacing it with iteration-limit.
+- Validation: focused Vitest -> 57/57 passed; Core `pnpm check` and root `pnpm build` -> passed.
+- Outcome: Accepted
+- Follow-up: no MVP criterion receives pass credit until live evidence reaches it.
+
+### 2026-09-26 — Compacted completed pre-run and run-1 coordination history
+- Agent: supervisor with t221
+- Changed: this plan and archive `2026-09-26-pre-run-and-run1-coordination.md`
+- Why: The active document exceeded 800 lines and completed briefs obscured current run-2 state.
+- Validation: archived predecessor retained intact; active Current State and document are below limits.
+- Outcome: Accepted
+- Follow-up: execute t219's default-profile run-2 procedure.
+
+### 2026-09-26 — Run 2 reached judgement and failed before repair application
+- Agent: supervisor with t225–t231
+- Changed: run-2 debug/evidence reports and both active plans' Current State
+- Why: Measure all four MVP criteria on the same default-profile hard scenario after run 1.
+- Validation: `node packages/test-runner/dist/cli.js inspect run-muj39xl6-f6a5d4e5` -> exit 0; independent marker/index and selected-artifact byte, SHA-256, and redaction checks -> all matched, with run redaction verified. Stage 6 reached with a failed product verdict and zero pass streak.
+- Outcome: Accepted
+- Follow-up: diagnose and fix `flow_bootstrap.unexpected_error`, then repeat the default-profile scenario; t217 terminal exhaustion remains unmeasured live.
+
+### 2026-09-27 — Run-2 repair and grant-continuation path completed locally
+- Agent: supervisor with t233–t304
+- Changed: Core request provenance, grant continuation, refuted-result repair/replay, focused tests, and downstream permission expectations
+- Why: Carry run 2's refutation through durable repair and provider-free replay without minting or widening authority.
+- Validation: production-focused set 135/135; t290 81/81; t293 51/51; t304 web 11/11 plus Core 30/30; independent security/export/privacy reviews -> GO.
+- Outcome: Accepted as local implementation evidence; no live repair/replay credit.
+- Follow-up: measure the complete path under the unchanged hard scenario.
+
+### 2026-09-27 — Final validation and provider-free launch readiness passed
+- Agent: supervisor with t297–t316
+- Changed: final-tree validation evidence, downstream freshness/identity, zero-provider request audit, and frozen Stage-1 record
+- Why: Prove the exact settled source/build/request state before a provider-backed measurement.
+- Validation: Core root 3,994 passed with one skip and Core check passed; downstream builds/freshness/identity passed; exact dry-run -> ready, zero provider calls, default 26-call request; Stage 1 -> 39-line exact match.
+- Outcome: Accepted as readiness evidence; pass streak remained 0.
+- Follow-up: execute one live run under the frozen command and fully debug it.
+
+### 2026-09-27 — Run 3 failed truthfully before Flow proposal
+- Agent: supervisor with t325–t329
+- Changed: `language-driven-flow-loop-plan/debugs/run-mujd550n-e8fbe7aa.md`, evidence/disposition reports, and both active plans
+- Why: Measure creation, deterministic execution, self-repair, and judgement after the post-run-2 correction chain.
+- Validation: `inspect run-mujd550n-e8fbe7aa` passed integrity/identity/redaction; bounded evidence -> Stage 2, 26 build calls, terminal `flow_bootstrap.evidence_unusable_decision` / `bootstrap.cannot_answer_instruction`, no Flow or later-stage evidence.
+- Outcome: Accepted failed product measurement; consecutive-pass streak 0.
+- Follow-up: allow one unchanged controlled retry; repeated identical exhaustion requires fix-first investigation.
+
+### 2026-09-27 — Compacted run-2 through run-3 launch-gate worker briefs
+- Agent: supervisor with t306, t319, and t330
+- Changed: this plan and `mvp-today-plan/archive/2026-09-26-run2-through-run3-launch-gate-briefs.md`
+- Why: The active plan exceeded 800 lines and settled briefs obscured current run state.
+- Validation: recovered archive -> 76 complete briefs, 688 normalized lines, 54,297 UTF-8 bytes, SHA-256 `bde4b6c65df45e7a762df17edb24533adac2b668c5a77937584627771af672d1`; endpoints/order/fields/encoding/diff-check -> passed. Exact pre-cut byte fidelity is unavailable and explicitly not claimed.
+- Outcome: Accepted semantic/structural compaction with the t330 fidelity limitation recorded.
+- Follow-up: execute only the Current State's run-4 gate; reports retain detailed evidence.
+
+### 2026-09-27 — Run 4 repeated Stage-2 exhaustion and fired the fix-first stop
+- Agent: supervisor with t331–t348
+- Changed: run-4 debug/evidence reports and both active plans
+- Why: Execute the single authorized unchanged reliability retry under a frozen no-hindsight contract.
+- Validation: finalized bundle identity/integrity/redaction passed; independent t347 audit accepted Stage 2 with 26 build decisions, 22 tool calls, terminal `flow_bootstrap.evidence_unusable_decision` / `bootstrap.cannot_answer_instruction`, and no proposal or later-stage evidence.
+- Outcome: Accepted failed product measurement; consecutive-pass streak 0; unchanged run 5 forbidden.
+- Follow-up: deterministic service reproduction plus privacy-safe stable progress evidence, a measured source fix, and full closure before new live authorization.
+
+### 2026-09-27 — Run-4 packing correction reached provider-free closure
+- Agent: supervisor with [t385](./mvp-today-plan/reports/t385-downstream-post-core-validation.md), [t395](./mvp-today-plan/reports/t395-core-timeout-stability-review.md), [t397](./mvp-today-plan/reports/t397-generated-reference-re-review.md), [t405](./mvp-today-plan/reports/t405-updated-docs-privacy-scan.md), [t406](./mvp-today-plan/reports/t406-core-baseline-final-audit.md), [t409](./mvp-today-plan/reports/t409-post-supervisor-build-freshness.md), and [t410](./mvp-today-plan/reports/t410-final-closure-synthesis.md)
+- Changed: Lossless `step_rows_v1` packing, ownership-correct tests and local timeout budgets, generated references, and corrected-order downstream outputs.
+- Why: Remove run 4's measured bounded-input loss without changing the 4,000-byte reservation or provider budgets, then prove the provider-free cross-repository correction before another live decision.
+- Validation: Supervisor observed Core `pnpm check` and downstream `pnpm -r check`, `pnpm test`, and `pnpm build` exit 0 (847/847 domain, 832/832 extension, 571/571 Scenario Lab, 1,470/1,470 test-runner); linked workers observed Core root test 5,437 passed / 1 skip, root build/docs/structure green, and corrected-order freshness 6/6 with markers 12/12.
+- Exception: Downstream root `pnpm check` exited 1 only at `pnpm task:test`: 89/120 passed and 31 `git worktree add` cases failed with `cannot spawn git: Exec format error`; all non-worktree gates passed.
+- Outcome: Partial
+- Follow-up: Complete final candidate/staged-path sensitive-data and inclusion review, reconcile/freeze identity, and decide integration; no provider call before a fresh no-hindsight command-specific authorization.
+
+---
+
+## Open Questions
+
+- None.

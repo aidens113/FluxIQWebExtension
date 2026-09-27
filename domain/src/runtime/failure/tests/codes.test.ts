@@ -38,6 +38,12 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   ["AUTH_REQUIRED", "web.auth.required", "auth_required", false, "confirmation"],
   ["USER_INTERVENTION_REQUIRED", "web.intervention.required", "user_intervention_required", false, "execution"],
   ["BLOCKED_BY_DIALOG", "web.action.blocked_by_dialog", "unexpected_state", false, "execution"],
+  // t163's finding 2. A manifest-permission refusal reported as the retryable
+  // `web.action.failed` cost run-muht9lpw-a39aa056 three attempts and then the
+  // run, so the refusal has its own non-retryable row and the dead channel it
+  // used to be confused with has its own retryable one.
+  ["BROWSER_PERMISSION_DENIED", "web.browser.permission_denied", "blocked_by_capability_or_policy", false, "dispatch"],
+  ["TRANSPORT_TRANSIENT", "web.transport.transient", "action_failed", true, "execution"],
   ["UNSUPPORTED_TYPE", "web.action.unsupported_type", "blocked_by_capability_or_policy", false, "dispatch"],
   ["NOT_IMPLEMENTED", "web.action.not_implemented", "blocked_by_capability_or_policy", false, "dispatch"],
   ["INVALID_PARAMETER", "web.action.invalid_parameter", "graph_validation_or_unknown_node", false, "dispatch"],

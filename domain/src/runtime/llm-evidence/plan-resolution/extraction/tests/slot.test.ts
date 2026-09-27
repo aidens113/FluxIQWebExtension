@@ -116,6 +116,53 @@ test("a detected list keeps the columns the plan names, under the plan's keys, o
   );
 });
 
+test("a column named in the instruction's own words resolves to the detected one rather than refusing", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+
+  // Word for word what the seven catalog builds of `run-mu4wwkbc-df6cfe60` and
+  // its neighbours wrote, because those are the instruction's words. Every
+  // column was refused `web.handle.unknown_field`, and the build fell back to
+  // guessed CSS that read eight cards and no field. It now resolves to the
+  // request the fixture's own recording reads, and a condition written in the
+  // same words resolves with it.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, {
+      extractList: {
+        handle: extraction,
+        fields: { name: "name", price: "price", rating: "rating", url: "product-link@href" },
+        where: [{ field: "rating", atLeast: 4 }, { field: "stock", is: "present" }],
+        paginate: false
+      }
+    }),
+    resolvedList({
+      item: CARD,
+      fields: CARD_FIELDS,
+      where: [
+        { read: CARD_FIELDS.rating, atLeast: 4 },
+        { read: { kind: "text", selector: testId("stock-badge"), required: true }, is: "present" }
+      ]
+    })
+  );
+
+  // A selector written where a column name goes is a name too: Core's normalizer
+  // folds `.` with the other separators, so `.product-name` is the `product-name`
+  // column spelled differently rather than a guess at one.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: ".product-name" }, paginate: false } }),
+    resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name } })
+  );
+  // A field that names its column by nothing but the key it is kept under.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: extraction } }, paginate: false } }),
+    resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name } })
+  );
+
+  // What each name assumed to get there is on the slot's own resolution, which
+  // `column-match.test.ts` measures; `resolvePlanNodeParameters` does not carry
+  // it yet, and that hop is named on `WebExtractionSlotResolution`.
+});
+
 test("the handle keeps every detected column and the detected pagination unless the plan says otherwise", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
@@ -239,12 +286,15 @@ test("what cannot name one detected list or column is refused with where the han
   const second = (await detect(runtime)).extraction;
   assert.notEqual(second, extraction);
 
+  // A name with no plausible candidate at all. `banana` is a measured miss
+  // below Core's floor, and `column:Name` names a header where nothing has one.
+  // `title` is not such a miss: the matcher plausibly relates ordinary title
+  // vocabulary to product-name, which is the recovery this module promises.
+  // `column-match.test.ts` holds the names that now resolve instead.
   const unknownField: JsonObject[] = [
-    { handle: extraction, fields: { name: "name" } },
-    { handle: extraction, fields: { name: ".product-name" } },
+    { handle: extraction, fields: { name: "banana" } },
     { handle: extraction, fields: { name: "column:Name" } },
-    { item: { handle: extraction }, fields: { name: { handle: extraction, key: "title" } } },
-    { handle: extraction, fields: { name: { handle: extraction } } }
+    { item: { handle: extraction }, fields: { name: { handle: extraction, key: "banana" } } }
   ];
   for (const extractList of unknownField) {
     assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.unknown_field", "extractList.fields.0", EXTRACTION_HINT), JSON.stringify(extractList));
@@ -268,8 +318,10 @@ test("what cannot name one detected list or column is refused with where the han
     [{ handle: extraction, itemElement: { tagName: "li" } }, "extractList.itemElement"],
     [{ handle: extraction, location: "" }, "extractList.location"],
     [{ handle: 7 }, "extractList.handle"],
-    [{ handle: extraction, minItems: 9, maxItems: 8 }, "extractList"],
-    [{ handle: extraction, minItems: -1 }, "extractList"],
+    // The reader now drops an unreadable `minItems` rather than refusing the
+    // whole request, so the resolver's own check of it names the member.
+    [{ handle: extraction, minItems: 9, maxItems: 8 }, "extractList.minItems"],
+    [{ handle: extraction, minItems: -1 }, "extractList.minItems"],
     [{ item: { handle: extraction, extra: true }, fields: RENAMED }, "extractList.item"],
     [{ item: 7, fields: { name: { handle: extraction, key: "product-name" } } }, "extractList.item"]
   ];

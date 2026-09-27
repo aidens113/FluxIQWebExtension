@@ -19,8 +19,9 @@
 //   where: [{ field: "title", contains: ["ear tips", "charging case"], not: true }]
 //
 // The column is named exactly as a kept column is -- a detected key, a key in
-// another case, `column:Header` or a bare header -- and refused exactly as one
-// is, so there is one vocabulary for "which column" and not two.
+// another case, `column:Header` or a bare header, or the nearest column to a
+// name written slightly wrong (`./column-match.ts`) -- and refused exactly as
+// one is, so there is one vocabulary for "which column" and not two.
 //
 // What the condition then *says* about that column is not this file's
 // vocabulary either: it is `actions/extraction/condition-grammar.ts`, the one
@@ -65,12 +66,13 @@ import type { WebAutomationExtractField, WebAutomationExtractItemCondition } fro
 import { webAutomationExtractConditionSayingValue } from "../../../../actions/extraction";
 import { present } from "../../present";
 import { isJsonRecord } from "../../untrusted-json";
-import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnIssue } from "./columns";
+import { webExtractionComparedShape, type WebExtractionColumnAssumption } from "./column-match";
+import { webExtractionNamedColumn, type WebExtractionColumn, type WebExtractionColumnIssue, type WebExtractionColumnLook } from "./columns";
 import type { WebPlanValuePath } from "../handle-tokens";
 
 export type WebExtractionConditions =
   /** `where` is empty when the clause was written and says nothing, which is what writing no clause says. */
-  | { ok: true; where: WebAutomationExtractItemCondition[] }
+  | { ok: true; where: WebAutomationExtractItemCondition[]; assumed: WebExtractionColumnAssumption[] }
   | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
 
 /**
@@ -110,32 +112,41 @@ const HEADER_PREFIX = "column:";
  */
 export function keptWebExtractionConditions(where: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): WebExtractionConditions {
   const written = Array.isArray(where) ? where : [where];
-  if (written.length === 0) return { ok: true, where: [] };
+  if (written.length === 0) return { ok: true, where: [], assumed: [] };
   const conditions: WebAutomationExtractItemCondition[] = [];
+  const assumed: WebExtractionColumnAssumption[] = [];
   for (const [index, entry] of written.entries()) {
     const at = Array.isArray(where) ? [...path, index] : path;
     const condition = readCondition(entry, columns, at);
     if (!condition.ok) return condition;
     conditions.push(condition.condition);
+    if (condition.assumed !== undefined) assumed.push(condition.assumed);
   }
-  return { ok: true, where: conditions };
+  return { ok: true, where: conditions, assumed };
 }
 
-type OneCondition = { ok: true; condition: WebAutomationExtractItemCondition } | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
+type OneCondition =
+  | { ok: true; condition: WebAutomationExtractItemCondition; assumed: WebExtractionColumnAssumption | undefined }
+  | { ok: false; issue: WebExtractionColumnIssue; path: WebPlanValuePath };
 
 function readCondition(entry: unknown, columns: WebExtractionConditionColumns, path: WebPlanValuePath): OneCondition {
   if (!isJsonRecord(entry)) return { ok: false, issue: "web.handle.malformed", path };
   const named = columnName(entry);
   if (named === undefined) return { ok: false, issue: "web.handle.malformed", path };
-  const column = conditionColumn(named, columns, path);
-  if (!column.ok) return column;
+  // What the condition *says* is read before the column it says it about,
+  // because a comparison on the number in a value is a signal for which column
+  // was meant (`./column-match.ts`). Which refusal wins is unchanged: the column
+  // is still answered for before the grammar is.
   const says = webAutomationExtractConditionSayingValue(entry, NAMING_KEYS);
+  const column = conditionColumn(named, columns, webExtractionComparedShape(says.ok ? says.says : undefined), path);
+  if (!column.ok) return column;
   // A key the grammar cannot place or act on is refused where it was written;
   // a condition contradicting itself is refused as a whole, since no one key
   // explains it.
   if (!says.ok) return { ok: false, issue: "web.handle.malformed", path: says.key === undefined ? path : [...path, says.key] };
   return {
     ok: true,
+    assumed: column.assumed,
     condition: present<WebAutomationExtractItemCondition>({
       field: undefined,
       read: column.field,
@@ -158,13 +169,39 @@ function readCondition(entry: unknown, columns: WebExtractionConditionColumns, p
  * The column a condition names, read in the detection's vocabulary first and
  * then in the plan's own: a name the detection knows always means the column
  * the detection showed, and only a name it does not know is looked for among
- * the columns this plan keeps. A name neither knows is refused as before.
+ * the columns this plan keeps.
+ *
+ * **Both vocabularies are read strictly before either is guessed at**, and the
+ * order is what makes the plan's own keys usable at all. A plan that renames a
+ * detected column to `rating` and then writes `{field: "rating", atLeast: 4}` has
+ * named the key it invented two lines above, exactly; if a guess at the detected
+ * keys answered first, that exact name would resolve to whichever detected
+ * column happened to be nearest and the condition would test the wrong column
+ * while looking resolved. A guess is the last thing tried, never the first.
+ *
+ * `wanted` is the shape the condition's own comparison needs, passed down so a
+ * guess among similarly named columns can be settled by it. A name with no
+ * plausible candidate in either vocabulary is still refused, with the detection's
+ * refusal, because the detection is the vocabulary the model was shown.
  */
-function conditionColumn(named: string, columns: WebExtractionConditionColumns, path: WebPlanValuePath): WebExtractionColumn {
-  const detected = webExtractionNamedColumn(named, columns.detected, path);
-  if (detected.ok || detected.issue !== "web.handle.unknown_field") return detected;
-  const kept = webExtractionNamedColumn(named, columns.kept, path);
-  return kept.ok || kept.issue !== "web.handle.unknown_field" ? kept : detected;
+function conditionColumn(
+  named: string,
+  columns: WebExtractionConditionColumns,
+  wanted: WebExtractionColumnLook["wanted"],
+  path: WebPlanValuePath
+): WebExtractionColumn {
+  let unknown: WebExtractionColumn | undefined;
+  for (const look of [
+    { guess: false, wanted, among: "detected" },
+    { guess: false, wanted, among: "kept" },
+    { guess: true, wanted, among: "detected" },
+    { guess: true, wanted, among: "kept" }
+  ] as const satisfies readonly WebExtractionColumnLook[]) {
+    const column = webExtractionNamedColumn(named, look.among === "kept" ? columns.kept : columns.detected, path, look);
+    if (column.ok || column.issue !== "web.handle.unknown_field") return column;
+    unknown ??= column;
+  }
+  return unknown!;
 }
 
 /** The column the condition names: one of the naming keys, or a table header. Two that disagree name no one column. */

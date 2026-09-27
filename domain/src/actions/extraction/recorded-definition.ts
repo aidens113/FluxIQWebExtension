@@ -22,8 +22,11 @@
 //   value, and `docs/architecture/sensitive-values.md` says so;
 // - counts, and the dataset's own id and name.
 //
-// The request itself is read by `webAutomationExtractListRequestValue`, which
-// copies field by field on the same principle. Its field specs may carry an
+// The request itself is read by `webAutomationExtractListRequestWhole`, which
+// copies field by field on the same principle -- whole or not at all. The
+// tolerance a dispatch reads with is for a model's slip, and the producer here is
+// the recorder: a definition arriving with its pagination quietly dropped would
+// replay a read the user never recorded. Its field specs may carry an
 // element fingerprint, which does hold the element's text and value -- that is
 // why a *proposal* (`extraction/proposal.ts`) cannot carry one, and why a
 // recorded definition may: by then the user has seen the columns and chosen
@@ -31,7 +34,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import { isWebAutomationExtractFieldKey } from "./field-key";
-import { webAutomationExtractListRequestValue, webAutomationExtractReadValue } from "./read-request";
+import { webAutomationExtractListRequestWhole, webAutomationExtractReadValue } from "./read-request";
 import type { WebAutomationExtractListRequest, WebAutomationExtractRead } from "./request";
 
 /**
@@ -88,7 +91,7 @@ export function webAutomationRecordedExtraction(value: unknown): WebAutomationRe
 function recordedListExtraction(definition: JsonObject): WebAutomationRecordedListExtraction | undefined {
   const datasetId = datasetIdValue(definition.datasetId);
   const label = labelValue(definition.label);
-  const request = webAutomationExtractListRequestValue(definition.request);
+  const request = webAutomationExtractListRequestWhole(definition.request);
   const itemCount = nonNegativeInteger(definition.itemCount);
   if (datasetId === undefined || label === undefined || request === undefined || itemCount === undefined) return undefined;
   const fieldLabels = fieldLabelsValue(definition.fieldLabels, request);

@@ -42,9 +42,10 @@ import {
   type WebLlmEvidenceToolRequest
 } from "../capture";
 import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
+import type { WebLlmNameAssumption } from "../name-assumption";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNodeParameters, type WebPlanHandleStores } from "../plan-resolution";
+import { resolveWebPlanNode, type WebPlanHandleStores } from "../plan-resolution";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { withoutWebLlmDeniedKeys } from "../denied-keys";
@@ -105,6 +106,28 @@ export type WebNodeOutcome = {
 /** What the call reports to the draft Core is accruing (`AS/runtime/flow-draft/`). */
 export type WebNodeDraftStatement = NonNullable<WebLlmEvidenceToolExecution["draft"]>;
 
+/**
+ * What one call was, accumulated as the call proceeds, so a refusal raised at
+ * any point records the same facts a success does.
+ *
+ * `assumed` is set once the resolution has run and then stands for every
+ * refusal after it -- a missing declaration, a permission the person has not
+ * given, another origin, and the page's own failure, which arrives as an
+ * exception caught outside the block the resolution ran in. Threading it
+ * through each of those call sites instead would mean the one site somebody
+ * forgot silently lost the guess, which is the shape of defect this field
+ * exists to close.
+ */
+type WebNodeCallRecord = {
+  actionId?: string;
+  effect?: "observe" | "mutate";
+  proposes?: boolean;
+  call?: JsonObject;
+  parameters?: JsonObject;
+  status?: string;
+  assumed?: WebLlmNameAssumption[] | undefined;
+};
+
 export type WebNodeRun = {
   gateway: WebLlmEvidenceGateway;
   sessionId: string;
@@ -130,7 +153,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // nothing and is answered from what the catalog says.
   if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), undefined, { call: value });
   const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
-  const record = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: isJsonRecord(value.parameters) ? value.parameters : {} };
+  const record: WebNodeCallRecord = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: isJsonRecord(value.parameters) ? value.parameters : {} };
   if (!parameters || Object.keys(value).some((key) => !CALL_KEYS.includes(key))) {
     return refusal(undefined, "invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined }), undefined, record);
   }
@@ -160,8 +183,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // A look that worked refuses nothing, so it says neither why it refused
         // nor which node it would have named: the draft statement beside it
         // already carries `actionId`, and a successful call is not the row a
-        // reader of a failed run is trying to tell apart from another.
-        { resultReason: undefined, nodeId: undefined }
+        // reader of a failed run is trying to tell apart from another. It named
+        // nothing either, so it assumed nothing.
+        { resultReason: undefined, nodeId: undefined, assumed: undefined }
       );
     }
     current = await currentPage(run, run.request);
@@ -183,10 +207,15 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // below against the page the model is looking at, with a refusal that
     // carries that page back to it. Resolution gates a *step of a Flow*, which
     // is a different question asked at a different time.
-    const resolved = await resolveWebPlanNodeParameters(
+    // `resolveWebPlanNode` rather than the narrow answer Core asks for, because
+    // this is a record of a call: a column name the resolution had to guess at
+    // is the difference between a wrong answer nobody can explain and one whose
+    // cause is written down (`../name-assumption.ts`).
+    const { resolution: resolved, assumed } = await resolveWebPlanNode(
       { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters: written, gatedByCaller: true },
       run.stores
     );
+    record.assumed = assumed;
     if (resolved.status === "refused") {
       // The handle codes say which way the handle stopped naming one control,
       // and each implies a different next call.
@@ -327,9 +356,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // which is what a reset has to put the page back to (`./replay.ts`).
         replay: webNodeReplayStatement({ location: current?.evidence.location ?? run.request.startLocation ?? after.evidence.location, payload: result.payload as JsonValue | undefined, reads: node.proposes })
       }),
-      // The node ran and nothing was refused, so neither field is said: the
-      // draft statement above already names the node under `actionId`.
-      { resultReason: undefined, nodeId: undefined }
+      // The node ran and nothing was refused, so neither of the refusal fields
+      // is said: the draft statement above already names the node under
+      // `actionId`. What the resolution had to assume is said, because this is
+      // the call the Flow's step is made of and the guess is in it.
+      { resultReason: undefined, nodeId: undefined, assumed }
     );
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
@@ -352,7 +383,7 @@ function refusal(
   code: WebLlmToolRejectionCode,
   detail: ReturnType<typeof rejectionDetail> | undefined,
   maxEvidenceBytes: number | undefined,
-  record: { actionId?: string; effect?: "observe" | "mutate"; proposes?: boolean; call?: JsonObject; parameters?: JsonObject; status?: string }
+  record: WebNodeCallRecord
 ): WebLlmEvidenceToolExecution {
   const budget = evidenceByteLimit(maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
   const bare = toolRejection(code, undefined, detail);
@@ -384,7 +415,11 @@ function refusal(
     // The node the call named, and only when the catalog resolved it: `record`
     // carries no `actionId` for a call that named nothing runnable, which is
     // what keeps the model's invented string out of the run's own record.
-    nodeId: record.actionId
+    nodeId: record.actionId,
+    // What the resolution assumed, for a refusal raised after it ran. Absent
+    // for every refusal before it, which is the honest answer: nothing had been
+    // resolved, so nothing was guessed at.
+    assumed: record.assumed
   });
 }
 

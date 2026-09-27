@@ -1,4 +1,4 @@
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApiFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import {
@@ -97,14 +97,26 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   return run;
 }
 
-/** The failed result for an action that threw before or while it ran. */
+/**
+ * The failed result for an action that threw before or while it ran.
+ *
+ * **The code is read off the browser's own message where the browser named a
+ * cause**, and only falls back to ACTION_FAILED where it named none. Every
+ * worker-side throw used to land on ACTION_FAILED, which the code table declares
+ * retryable, so a fault no retry can clear got a full ladder: on 2026-09-25 a
+ * manifest-permission refusal was retried at 250 ms and 1000 ms and then ended
+ * the run (`domain/src/runtime/failure/browser-api.ts` carries the measurement
+ * and the phrases, and says why reading this one message is acceptable when this
+ * repository otherwise decides nothing from prose).
+ */
 export function browserActionFailure(action: BrowserActionCommand, message: string): BrowserActionResult {
   const expected = "the action to run";
+  const code = webBrowserApiFailureCode(message) ?? "web.action.failed";
   return workerActionResult(action, Date.now(), {
     status: "failed",
     message,
     validation: { status: "failed", expected, actual: message },
-    failure: workerActionFailedFailure("web.action.failed", expected, message)
+    failure: workerActionFailedFailure(code, expected, message)
   });
 }
 

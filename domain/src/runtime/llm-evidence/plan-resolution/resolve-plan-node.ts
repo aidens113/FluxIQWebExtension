@@ -70,6 +70,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
+import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssumptionSaid } from "../name-assumption";
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 import { resolveWebExtractionSlot } from "./extraction";
@@ -154,12 +155,41 @@ export type WebPlanNodeResolutionInput = {
   gatedByCaller?: true;
 };
 
+/**
+ * The answer Core reads, and **nothing beside it**.
+ *
+ * Core accepts a resolved answer with exactly `status` and `parameters`
+ * (`AS/runtime/llm/harness-options/plan-parameter-resolution.ts`:
+ * `exactKeys(answer, ["status", "parameters"])`), and refuses the node as
+ * `bootstrap.parameter_resolution_invalid` for anything else. So a diagnostic
+ * added here would not be quietly dropped -- it would refuse every resolved
+ * node of every plan. What this resolution assumed on the way therefore travels
+ * beside it, on `WebPlanNodeOutcome`, and `resolveWebPlanNode` is the one place
+ * the two are separated.
+ */
 export type WebPlanNodeResolution =
   | { status: "unchanged" }
   | { status: "resolved"; parameters: JsonObject }
   | { status: "refused"; issueCodes: readonly (WebPlanHandleIssue | WebPlanStepIssueCode)[] }
   /** A person must answer this one. `requestId` is null where there was nobody to ask. */
   | { status: "needs_permission"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null };
+
+/**
+ * The whole of what resolving one node produced: the answer Core reads, and
+ * every name this resolution had to assume to reach it.
+ *
+ * A column name written slightly wrong resolves to the nearest detected column
+ * rather than being refused (`extraction/column-match.ts`), which is the
+ * standing rule -- and a near match is an assumption, so it is recorded where a
+ * run's evidence is kept. It used to be computed here and thrown away, which
+ * left a Flow built on a guessed column indistinguishable from one built on an
+ * exact match. `assumed` is absent rather than empty when nothing was assumed,
+ * and is already screened for what may travel (`../name-assumption.ts`).
+ */
+export type WebPlanNodeOutcome = {
+  resolution: WebPlanNodeResolution;
+  assumed: WebLlmNameAssumption[] | undefined;
+};
 
 export type WebPlanHandleStores = {
   targets: WebLlmTargetPackets;
@@ -244,7 +274,7 @@ type Resolved = { value: JsonValue; frameId: number | undefined; element: JsonOb
 type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath };
 type NodeOutcome =
   | { status: "unchanged" }
-  | { status: "resolved"; parameters: JsonObject }
+  | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[] }
   | { status: "refused"; refusals: Refusal[] };
 
 const TARGET_ISSUES = {
@@ -254,15 +284,36 @@ const TARGET_ISSUES = {
   not_unique: "web.handle.not_unique"
 } as const satisfies Record<"unknown" | "stale" | "ambiguous" | "not_unique", WebPlanHandleIssueCode>;
 
+/**
+ * The answer alone, which is what Core's binding asks for and all it accepts
+ * (`WebPlanNodeResolution`).
+ *
+ * A caller that records what a call did asks `resolveWebPlanNode` instead. This
+ * one returns the narrow answer by construction rather than by stripping a
+ * wider one, so no diagnostic can ever ride out to Core on it.
+ */
 export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeResolution> {
+  return (await resolveWebPlanNode(input, stores)).resolution;
+}
+
+/** The answer, and every name it assumed to reach it (`WebPlanNodeOutcome`). */
+export async function resolveWebPlanNode(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): Promise<WebPlanNodeOutcome> {
   const scope = { projectId: input.projectId, flowId: input.flowId };
   const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
     ? resolveRunOutput(input.parameters, scope, stores)
     : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
-  if (outcome.status === "refused") return refusal(input.parameters, outcome.refusals);
+  if (outcome.status === "refused") return answered(refusal(input.parameters, outcome.refusals), []);
+  // Rebuilt rather than handed on: the answer Core reads carries exactly
+  // `status` and `parameters` (`WebPlanNodeResolution`), and naming its members
+  // here is what keeps a field added to the outcome from reaching Core, where
+  // one more key refuses the node outright.
+  const assumed = outcome.status === "resolved" ? outcome.assumed : [];
+  const resolved: WebPlanNodeResolution = outcome.status === "resolved"
+    ? { status: "resolved", parameters: outcome.parameters }
+    : { status: "unchanged" };
   // The step is asked about with the parameters it would really run with, so
   // the request names the control the model was shown rather than a handle.
-  if (input.gatedByCaller) return outcome;
+  if (input.gatedByCaller) return answered(resolved, assumed);
   const acting = actingStep(input.nodeDefinitionId, outcome.status === "resolved" ? outcome.parameters : input.parameters);
   const permission = await webPlanStepPermission({
     nodeDefinitionId: acting.nodeDefinitionId,
@@ -270,9 +321,20 @@ export async function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionI
     check: input.permission,
     parameters: acting.parameters
   });
-  if (permission.kind === "undeclared") return { status: "refused", issueCodes: ["web.step.consequences_undeclared", "web.step.expected.consequences_classes_or_none"] };
-  if (permission.kind === "refused") return { status: "needs_permission", missing: permission.missing, requestId: permission.requestId };
-  return outcome;
+  // A step nobody declared, and a step nobody permitted, both resolved their
+  // names first, so both still report what they assumed: the guess happened
+  // whatever became of the step, and a reader looking for why an answer was
+  // wrong is looking at the whole call.
+  if (permission.kind === "undeclared") {
+    return answered({ status: "refused", issueCodes: ["web.step.consequences_undeclared", "web.step.expected.consequences_classes_or_none"] }, assumed);
+  }
+  if (permission.kind === "refused") return answered({ status: "needs_permission", missing: permission.missing, requestId: permission.requestId }, assumed);
+  return answered(resolved, assumed);
+}
+
+/** The outcome, with its assumptions screened for what may leave this domain (`../name-assumption.ts`). */
+function answered(resolution: WebPlanNodeResolution, assumed: readonly WebLlmNameAssumptionSaid[]): WebPlanNodeOutcome {
+  return { resolution, assumed: webLlmNameAssumptions(assumed) };
 }
 
 /**
@@ -289,13 +351,23 @@ function actingStep(nodeDefinitionId: string, parameters: JsonObject): { nodeDef
 
 function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Scope, stores: WebPlanHandleStores): NodeOutcome {
   const refusals: Refusal[] = [];
+  const assumed: WebLlmNameAssumptionSaid[] = [];
   const replaced = new Map<string, Resolved>();
   const extractionNode = nodeDefinitionId === EXTRACT_LIST_NODE_ID;
   for (const [key, value] of Object.entries(parameters)) {
     if (extractionNode && key === "extractList") {
       const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
-      if (slot.status === "resolved") replaced.set(key, { value: slot.request, frameId: slot.frameId, element: undefined });
-      else if (slot.status === "refused") refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path] });
+      if (slot.status === "resolved") {
+        replaced.set(key, { value: slot.request, frameId: slot.frameId, element: undefined });
+        // Written member by member rather than spread, because a spread carries
+        // no excess-property check and this value is on its way to the wire
+        // (`../present.ts`, and the `contract-spread` rule that holds this
+        // directory to it). The slot's path is relative to the parameter it was
+        // written in, so the parameter's own key goes in front of it.
+        for (const entry of slot.assumed) {
+          assumed.push({ path: [key, ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score });
+        }
+      } else if (slot.status === "refused") refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path] });
       else if (stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
       continue;
     }
@@ -345,7 +417,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   const identity = element?.element;
   if (identity !== undefined && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved.element = identity;
   if (frameId !== undefined && frameId !== 0) resolved.browserFrameId = frameId;
-  return { status: "resolved", parameters: resolved };
+  return { status: "resolved", parameters: resolved, assumed };
 }
 
 /** Core's Run Output node: a web output's payload resolved as that output's own node, and a handle anywhere else misplaced. */
@@ -366,7 +438,17 @@ function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanH
   if (inner?.status !== "resolved") return { status: "unchanged" };
   const resolved: JsonObject = {};
   for (const [key, value] of Object.entries(parameters)) resolved[key] = key === "parameters" ? inner.parameters : value;
-  return { status: "resolved", parameters: resolved };
+  // The payload's own assumptions, read from where they really are: the output
+  // runs inside `parameters`, so a name assumed there is at
+  // `parameters.extractList.…` on this node and a reader holding the Run Output
+  // node's authored parameters finds it exactly there.
+  const assumed = inner.assumed.map((entry) => nested(entry));
+  return { status: "resolved", parameters: resolved, assumed };
+}
+
+/** One assumption of a payload, said as a position on the node that carries the payload. */
+function nested(entry: WebLlmNameAssumptionSaid): WebLlmNameAssumptionSaid {
+  return { path: ["parameters", ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score };
 }
 
 function resolveTarget(value: Record<string, unknown>, scope: Scope, targets: WebLlmTargetPackets): Resolved | WebPlanHandleIssueCode {

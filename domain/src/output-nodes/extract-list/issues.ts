@@ -1,6 +1,6 @@
 // Why an `extractList` value would be refused, said before the Flow runs.
 //
-// The dispatch reader (`webAutomationExtractListRequestValue`) answers with a
+// The dispatch reader (`webAutomationExtractListRequestWhole`) answers with a
 // request or with nothing, which is right for dispatch and useless to an author:
 // a model that wrote a malformed extraction learns only that it failed, at run
 // time. This names the part that is wrong, so a plan can be refused when it is
@@ -8,22 +8,40 @@
 //
 // **The reader stays the judge.** Each part is checked by handing the reader a
 // request that is well formed except for that part, so a code here means the
-// reader refuses that part, and the rules are written once. A value the reader
-// refuses always has at least one code: if no part explains the refusal,
+// reader refuses or drops that part, and the rules are written once. A value the
+// reader refuses always has at least one code: if no part explains the refusal,
 // `web.extract_list.unreadable` does.
 //
-// **It is stricter than the reader in two ways, both on purpose.** A key the
+// **This file is where the strictness went.** The reader used to refuse a whole
+// request over one unreadable `paginate`, `minItems`, `itemElement` or
+// condition, and on 2026-09-26 it stopped: at dispatch there is nobody left to
+// repair the request, and a refusal there is an extraction that returns no rows
+// at all, which is the failure that dominated the everything-store rung. The
+// fault is still named here, at the moment an author can act on it, by asking
+// for the request **whole or not at all** (`webAutomationExtractListRequestWhole`)
+// rather than for whatever survived. So the codes are exactly what they were, one
+// rule still written once, and the tolerance applies only where a name would
+// reach no one.
+//
+// A `field` the reader resolved to a near-miss column is deliberately **not** an
+// issue. It is an assumption rather than a fault, and refusing the plan for it
+// would undo the resolution it exists to make.
+//
+// **It is stricter than the reader in three ways, all on purpose.** A key the
 // request schema does not declare is refused, where the reader ignores it: a
 // `pagination` meant as `paginate` would otherwise read one page and report
-// success. And a `maxItems` that is not a positive integer is refused, where the
-// reader drops it and reads up to its bound. The allowed keys come from the
-// schema (`actions/extraction/schema.ts`), so they cannot drift from it; a
-// frame key is one of the undeclared ones, since the frame is the command's.
+// success. A `maxItems` that is not a positive integer is refused, where the
+// reader drops it and reads up to its bound. And a `minItems` above the maximum
+// is refused, where the reader drops it and applies the default of 1 -- which
+// every maximum admits, since a maximum is a positive integer. The allowed keys
+// come from the schema (`actions/extraction/schema.ts`), so they cannot drift
+// from it; a frame key is one of the undeclared ones, since the frame is the
+// command's.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   isWebAutomationExtractFieldKey,
-  webAutomationExtractListRequestValue,
+  webAutomationExtractListRequestWhole,
   webAutomationExtractListSchema
 } from "../../actions/extraction";
 
@@ -74,7 +92,7 @@ export function webAutomationExtractListIssues(value: unknown): WebAutomationExt
   // rather than reporting one fault twice.
   if (value.where !== undefined && !readable({ ...conditionFields(value.fields), where: value.where })) issues.add("web.extract_list.invalid_where");
   addItemBoundIssues(value, issues);
-  if (issues.size === 0 && webAutomationExtractListRequestValue(value) === undefined) issues.add("web.extract_list.unreadable");
+  if (issues.size === 0 && webAutomationExtractListRequestWhole(value) === undefined) issues.add("web.extract_list.unreadable");
   return [...issues];
 }
 
@@ -125,8 +143,14 @@ function addItemBoundIssues(value: JsonObject, issues: IssueSet): void {
   if (!readable(maxItemsReadable && maxItems !== undefined ? { minItems, maxItems } : { minItems })) issues.add("web.extract_list.min_items_exceed_max");
 }
 
+/**
+ * Whether the reader reads the probe **without dropping any of it**. A dropped
+ * part is a fault an author can still repair, so it is a code here even though
+ * the reader would run the request without it; a part the reader *resolved* --
+ * a condition's near-miss column -- leaves `dropped` empty and is no code at all.
+ */
 function readable(overrides: JsonObject): boolean {
-  return webAutomationExtractListRequestValue({ ...PROBE_REQUEST, ...overrides }) !== undefined;
+  return webAutomationExtractListRequestWhole({ ...PROBE_REQUEST, ...overrides }) !== undefined;
 }
 
 /** The request's own fields for a `where` probe to read `field` conditions against, or none when the reader refuses them. */

@@ -72,6 +72,8 @@ export type ExistingAdaptationEvidenceLoop = {
  * arrives without a change on this side. What bounds the record is the shape of
  * each value (`publishable-step-value.ts`), which is what keeps the guarantee
  * that nothing the tool returned and nothing the model wrote is admitted.
+ * The named progress members are bounded identities, counters, flags and
+ * closed states; they never contain draft, instruction or page content.
  */
 export type ExistingAdaptationEvidenceLoopStep = {
   toolId: string;
@@ -87,6 +89,10 @@ export type ExistingAdaptationEvidenceLoopStep = {
   reason?: string;
   /** What this one call spent, as Core reported it. */
   usage?: Readonly<Record<string, string | number | boolean>>;
+  progress?: Readonly<{ draftRevisionBefore: number; draftRevisionAfter: number; pageState: "changed" | "unchanged" | "unobserved"; draftState: "changed" | "unchanged"; answerabilityState: "first_observed" | "changed" | "unchanged" | "unobserved" }>;
+  draftChange?: Readonly<{ targetedStepIds: readonly string[]; appliedCount: number; refusedCount: number; keptStepCount: number; rerunStepId?: string }>;
+  draft?: Readonly<{ bytes: number; budget: number; steps: number; instructionBytes: number; unlisted?: number; withoutInput?: number; inputTooLarge?: number; overBudget?: boolean; budgetBelowFloor?: boolean }>;
+  answerability?: Readonly<{ recordsRequested: boolean; recordProducerPresent: boolean; recordStorePresent: boolean; issueCode?: "bootstrap.cannot_answer_instruction" }>;
   [field: string]: PublishableStepValue | undefined;
 };
 

@@ -22,6 +22,8 @@
 const MAX_STEP_FIELDS = 24;
 const MAX_STEP_RECORD_FIELDS = 24;
 const MAX_STEP_LIST_ENTRIES = 32;
+/** Core's own maximum number of draft targets on one amendment decision. */
+const MAX_DRAFT_CHANGE_TARGETS = 16;
 /** The shape a field name must have to be one Core wrote: a plain member name, never a path or a sentence. */
 const STEP_FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/u;
 /**
@@ -31,9 +33,20 @@ const STEP_FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/u;
  * sentence.
  */
 const PUBLISHABLE_TEXT = /^[A-Za-z0-9_.:+-]{1,128}$/u;
+/** Content-derived digests are not stable build-local identities and must not become evidence. */
+const CONTENT_DIGEST = /^(?:sha(?:1|224|256|384|512)[:.-])?[a-f0-9]{32,}$/iu;
+/** The identifier grammar Core applies to a published evidence-loop step id. */
+const EVIDENCE_STEP_ID = /^[a-z0-9_.:-]{1,200}$/iu;
 
-/** What one member of a decision row may hold: a count, a flag, a closed code or identifier, a bounded list of those, or a bounded record of them (Core's per-call `usage`). */
-export type PublishableStepValue = string | number | boolean | readonly (string | number | boolean)[] | Readonly<Record<string, string | number | boolean>>;
+const PROGRESS_FIELDS = new Set(["draftRevisionBefore", "draftRevisionAfter", "pageState", "draftState", "answerabilityState"]);
+const DRAFT_CHANGE_FIELDS = new Set(["targetedStepIds", "appliedCount", "refusedCount", "keptStepCount", "rerunStepId"]);
+const DRAFT_FIELDS = new Set(["bytes", "budget", "steps", "instructionBytes", "unlisted", "withoutInput", "inputTooLarge", "overBudget", "budgetBelowFloor"]);
+const ANSWERABILITY_FIELDS = new Set(["recordsRequested", "recordProducerPresent", "recordStorePresent", "issueCode"]);
+
+type PublishableStepScalar = string | number | boolean;
+type PublishableStepRecordValue = PublishableStepScalar | readonly PublishableStepScalar[];
+/** What one member of a decision row may hold: a count, a flag, a closed code or identifier, a bounded list of those, or a bounded one-level record of them. */
+export type PublishableStepValue = PublishableStepScalar | readonly PublishableStepScalar[] | Readonly<Record<string, PublishableStepRecordValue>>;
 
 /**
  * One member of a decision row, or `undefined` for one that may not travel.
@@ -42,29 +55,37 @@ export type PublishableStepValue = string | number | boolean | readonly (string 
  * code's shape. A list keeps the members of it that do, as
  * `exploration-record.ts` does with a list of codes, and a record -- Core's
  * per-call `usage` today -- keeps the members of it that are scalars of the
- * same kind. Nothing nests further than that: a structure deep enough to hold
- * a page is not a member of a decision.
+ * same kind. Lists inside generic records do not travel. The sole nested-list
+ * seam, `draftChange.targetedStepIds`, is handled atomically by
+ * `publishableStepFields`: silently filtering or truncating an amendment's
+ * targets would publish a different claim. Nothing nests further than that.
  */
 export function publishableStepValue(value: unknown, nested = false): PublishableStepValue | undefined {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
-  if (typeof value === "string") return PUBLISHABLE_TEXT.test(value) ? value : undefined;
-  if (nested || typeof value !== "object" || value === null) return undefined;
+  if (typeof value === "string") return PUBLISHABLE_TEXT.test(value) && !CONTENT_DIGEST.test(value) ? value : undefined;
+  if (typeof value !== "object" || value === null) return undefined;
+  if (nested) return undefined;
   if (Array.isArray(value)) {
-    const kept = value.slice(0, MAX_STEP_LIST_ENTRIES).flatMap((item) => {
-      const member = publishableStepValue(item, true);
-      return member === undefined ? [] : [member as string | number | boolean];
-    });
+    const kept = publishableScalarList(value);
     return kept.length === 0 ? undefined : Object.freeze(kept);
   }
   if (!isRecord(value)) return undefined;
-  const members: Record<string, string | number | boolean> = {};
+  const members: Record<string, PublishableStepRecordValue> = {};
   for (const [field, member] of Object.entries(value)) {
     if (!STEP_FIELD_NAME.test(field) || Object.keys(members).length >= MAX_STEP_RECORD_FIELDS) continue;
     const kept = publishableStepValue(member, true);
-    if (kept !== undefined) members[field] = kept as string | number | boolean;
+    if (Array.isArray(kept) && kept.length === 0) continue;
+    if (kept !== undefined) members[field] = kept as PublishableStepRecordValue;
   }
   return Object.keys(members).length === 0 ? undefined : Object.freeze(members);
+}
+
+function publishableScalarList(value: readonly unknown[]): PublishableStepScalar[] {
+  return value.slice(0, MAX_STEP_LIST_ENTRIES).flatMap((item) => {
+    const member = publishableStepValue(item, true);
+    return member === undefined || typeof member === "object" ? [] : [member];
+  });
 }
 
 /**
@@ -80,10 +101,95 @@ export function publishableStepFields(entry: Record<string, unknown>): Record<st
   for (const [field, value] of Object.entries(entry)) {
     // `toolId` is already the first of the row's members, so it is counted here.
     if (field === "toolId" || !STEP_FIELD_NAME.test(field) || Object.keys(fields).length + 1 >= MAX_STEP_FIELDS) continue;
-    const kept = publishableStepValue(value);
+    const kept = publishableNamedStepField(field, value);
     if (kept !== undefined) fields[field] = kept;
   }
   return fields;
+}
+
+/**
+ * Core's four progress records are named public shapes, rather than arbitrary
+ * one-level records. Validate them as a unit before publishing them so the
+ * runtime contract matches the narrower TypeScript types exposed by both
+ * build readers. Every other member retains the generic legacy shape rule.
+ */
+function publishableNamedStepField(field: string, value: unknown): PublishableStepValue | undefined {
+  if (field === "progress") return progressRecord(value);
+  if (field === "draftChange") return draftChangeRecord(value);
+  if (field === "draft") return draftRecord(value);
+  if (field === "answerability") return answerabilityRecord(value);
+  return publishableStepValue(value);
+}
+
+function progressRecord(value: unknown): PublishableStepValue | undefined {
+  if (!isExactRecord(value, PROGRESS_FIELDS)
+    || !nonNegativeInteger(value.draftRevisionBefore) || !nonNegativeInteger(value.draftRevisionAfter)
+    || !oneOf(value.pageState, ["changed", "unchanged", "unobserved"])
+    || !oneOf(value.draftState, ["changed", "unchanged"])
+    || !oneOf(value.answerabilityState, ["first_observed", "changed", "unchanged", "unobserved"])) return undefined;
+  return Object.freeze({
+    draftRevisionBefore: value.draftRevisionBefore,
+    draftRevisionAfter: value.draftRevisionAfter,
+    pageState: value.pageState,
+    draftState: value.draftState,
+    answerabilityState: value.answerabilityState,
+  });
+}
+
+function draftChangeRecord(value: unknown): PublishableStepValue | undefined {
+  if (!isExactRecord(value, DRAFT_CHANGE_FIELDS) || !Array.isArray(value.targetedStepIds)
+    || value.targetedStepIds.length > MAX_DRAFT_CHANGE_TARGETS
+    || !value.targetedStepIds.every(buildLocalStepId)
+    || new Set(value.targetedStepIds).size !== value.targetedStepIds.length
+    || !nonNegativeInteger(value.appliedCount) || !nonNegativeInteger(value.refusedCount) || !nonNegativeInteger(value.keptStepCount)
+    || (value.rerunStepId !== undefined && !buildLocalStepId(value.rerunStepId))) return undefined;
+  return Object.freeze({
+    targetedStepIds: Object.freeze([...value.targetedStepIds]) as readonly string[],
+    appliedCount: value.appliedCount,
+    refusedCount: value.refusedCount,
+    keptStepCount: value.keptStepCount,
+    ...(value.rerunStepId === undefined ? {} : { rerunStepId: value.rerunStepId }),
+  });
+}
+
+function draftRecord(value: unknown): PublishableStepValue | undefined {
+  if (!isExactRecord(value, DRAFT_FIELDS)
+    || !nonNegativeInteger(value.bytes) || !nonNegativeInteger(value.budget)
+    || !nonNegativeInteger(value.steps) || !nonNegativeInteger(value.instructionBytes)
+    || !optionalNonNegativeInteger(value.unlisted) || !optionalNonNegativeInteger(value.withoutInput) || !optionalNonNegativeInteger(value.inputTooLarge)
+    || !optionalTrue(value.overBudget) || !optionalTrue(value.budgetBelowFloor)) return undefined;
+  return Object.freeze({ ...value }) as Readonly<Record<string, PublishableStepRecordValue>>;
+}
+
+function answerabilityRecord(value: unknown): PublishableStepValue | undefined {
+  if (!isExactRecord(value, ANSWERABILITY_FIELDS)
+    || typeof value.recordsRequested !== "boolean" || typeof value.recordProducerPresent !== "boolean" || typeof value.recordStorePresent !== "boolean"
+    || (value.issueCode !== undefined && value.issueCode !== "bootstrap.cannot_answer_instruction")) return undefined;
+  return Object.freeze({ ...value }) as Readonly<Record<string, PublishableStepRecordValue>>;
+}
+
+function buildLocalStepId(value: unknown): value is string {
+  return typeof value === "string" && EVIDENCE_STEP_ID.test(value) && !CONTENT_DIGEST.test(value);
+}
+
+function isExactRecord(value: unknown, fields: ReadonlySet<string>): value is Record<string, unknown> {
+  return isRecord(value) && Object.keys(value).every((field) => fields.has(field));
+}
+
+function nonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function optionalNonNegativeInteger(value: unknown): boolean {
+  return value === undefined || nonNegativeInteger(value);
+}
+
+function optionalTrue(value: unknown): boolean {
+  return value === undefined || value === true;
+}
+
+function oneOf(value: unknown, allowed: readonly string[]): value is string {
+  return typeof value === "string" && allowed.includes(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

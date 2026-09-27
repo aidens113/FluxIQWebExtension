@@ -11,6 +11,10 @@ export { extractList } from "./list-reader";
 
 export type { ExtractedListRecord, ListExtractionOptions, ListExtractionOutcome } from "./list-reader";
 
+// What the wait for the list did, which is the only thing that can tell a read
+// that gave up early from one that paid its whole window.
+export type { ListWait, ListWaitStop } from "./page-render";
+
 // What a read's `where` conditions did to it, and the rule that a read they
 // emptied answers with the rows they rejected rather than with none.
 export type { ListExtractionConditionReport } from "./filtered-answer";

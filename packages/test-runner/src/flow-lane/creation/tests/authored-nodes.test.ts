@@ -23,7 +23,7 @@ const authored = (nodes: readonly FlowNodeRecord[]) => createdFlowAuthoredNodes(
 
 test("every action node is recorded with its definition, its output and what it was told to do", () => {
   assert.deepEqual(authored(NODES), [
-    { nodeId: "node.open", definitionId: "web.output.browser-navigate", outputId: "web.browser.navigate", parameters: { url: "http://127.0.0.1:4100" }, parametersWithheld: [] },
+    { nodeId: "node.open", definitionId: "web.output.browser-navigate", outputId: "web.browser.navigate", parameters: { url: "http://127.0.0.1:4100" }, parametersWithheld: ["url"] },
     {
       nodeId: "node.extract",
       definitionId: "web.output.dom-extract_list",

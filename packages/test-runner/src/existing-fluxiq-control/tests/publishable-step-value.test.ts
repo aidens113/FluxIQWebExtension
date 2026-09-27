@@ -38,6 +38,91 @@ test("a record one level deep travels, which is what Core's per-call usage is", 
   assert.deepEqual(publishableStepValue({ inputTokens: 1_200, outputTokens: 300 }), { inputTokens: 1_200, outputTokens: 300 });
 });
 
+test("bounded draft progress records, including stable build-local id lists, travel", () => {
+  assert.deepEqual(publishableStepFields({
+    toolId: "core.decision_amend_draft",
+    progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+    draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+    draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, unlisted: 1, withoutInput: 1, inputTooLarge: 0 },
+    answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+  }), {
+    progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+    draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+    draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, unlisted: 1, withoutInput: 1, inputTooLarge: 0 },
+    answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+  });
+});
+
+test("draft progress cannot carry prose, page data, selectors, addresses, digests or nested content", () => {
+  const screened = publishableStepFields({
+    progress: { pageState: "private page changed", selector: "[data-testid=card]", nested: { value: "web.secret" } },
+    draftChange: { targetedStepIds: ["d1", "private product name"], contentHash: `sha256:${"a".repeat(64)}`, url: "http://127.0.0.1/private" },
+    answerability: { issueCode: "bootstrap.cannot_answer_instruction", explanation: "The page has a private value" },
+  });
+  assert.deepEqual(screened, {});
+  const serialized = JSON.stringify(screened);
+  for (const forbidden of ["private page", "data-testid", "private product", "sha256", "127.0.0.1", "private value"]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("draft target ids are string-only, unique, bounded, and atomic", () => {
+  const change = (targetedStepIds: readonly unknown[]) => publishableStepFields({
+    draftChange: { targetedStepIds, appliedCount: 1, refusedCount: 0, keptStepCount: 2, rerunStepId: "d2" },
+  });
+  const sixteen = Array.from({ length: 16 }, (_, index) => `d${index + 1}`);
+
+  assert.deepEqual(change(sixteen), { draftChange: { targetedStepIds: sixteen, appliedCount: 1, refusedCount: 0, keptStepCount: 2, rerunStepId: "d2" } });
+  for (const malformed of [
+    [...sixteen, "d17"],
+    ["d1", 2],
+    ["d1", true],
+    ["d1", "d1"],
+    ["d1", "private product name"],
+    ["d1", `sha256:${"a".repeat(64)}`],
+    ["d1", "x".repeat(201)],
+    ["d1", "[data-testid=card]"],
+    ["d1", ["d2"]],
+  ]) assert.deepEqual(change(malformed), {}, JSON.stringify(malformed));
+});
+
+test("nested lists are admitted only for the named draft-target path", () => {
+  assert.equal(publishableStepValue({ values: ["d1", "d2"] }), undefined);
+  assert.deepEqual(publishableStepFields({ arbitrary: { count: 2, values: ["d1"] } }), { arbitrary: { count: 2 } });
+  // Shape screening cannot prove provenance: code-shaped page values and
+  // digest-like strings remain generic scalars. Core must not mint ids from
+  // them, while this boundary prevents them gaining a new nested-list channel.
+  assert.deepEqual(publishableStepFields({ arbitrary: {
+    pageValue: "private_product", hostnameLike: "catalog.example", selectorLike: "data-testid",
+    uuidLike: "550e8400-e29b-41d4-a716-446655440000", nonHexDigest: "blake3.not-a-digest",
+  } }), {
+    arbitrary: {
+      pageValue: "private_product", hostnameLike: "catalog.example", selectorLike: "data-testid",
+      uuidLike: "550e8400-e29b-41d4-a716-446655440000", nonHexDigest: "blake3.not-a-digest",
+    },
+  });
+});
+
+test("named progress records are all-or-nothing closed runtime shapes", () => {
+  const valid = {
+    progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "first_observed" },
+    answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+  };
+  assert.deepEqual(publishableStepFields(valid), valid);
+  assert.deepEqual(publishableStepFields({ progress: { ...valid.progress, pageState: "private_value" } }), {});
+  assert.deepEqual(publishableStepFields({ answerability: { ...valid.answerability, issueCode: "bootstrap.made_up" } }), {});
+  assert.deepEqual(publishableStepFields({ draft: { bytes: 1, budget: 2, steps: 1, instructionBytes: 1, overBudget: false } }), {});
+});
+
+test("unrelated legacy scalars and top-level scalar lists keep their prior behavior", () => {
+  assert.deepEqual(publishableStepFields({ iteration: 2, effectApplied: true, resultCode: "web.action.succeeded", issueCodes: ["web.handle.unknown", "unsafe prose"] }), {
+    iteration: 2,
+    effectApplied: true,
+    resultCode: "web.action.succeeded",
+    issueCodes: ["web.handle.unknown"],
+  });
+});
+
 // A structure deep enough to hold a page is not a member of a decision, so
 // nesting stops at one level rather than being walked for publishable leaves.
 test("nothing nests further than that", () => {

@@ -85,8 +85,9 @@ export type CreatedFlowBuildStepValue = PublishableStepValue;
  * What bounds the record is the *shape* of each value, not a list of names:
  * counts, flags and whitespace-free codes and identifiers travel, and anything
  * that could be a sentence, an address, a selector or a value read off the page
- * does not. The fields below are the ones Core writes today and are named for a
- * reader; they are not the limit of what is carried.
+ * does not. The fields below are the ones Core writes today, including bounded
+ * content-free draft progress, and are named for a reader; they are not the
+ * limit of what is carried.
  */
 export type CreatedFlowBuildStep = Readonly<{
   toolId: string;
@@ -111,6 +112,14 @@ export type CreatedFlowBuildStep = Readonly<{
   at?: number;
   /** What this one call spent, as Core reported it. */
   usage?: Readonly<Record<string, string | number | boolean>>;
+  /** Content-free state transition measured for this decision. */
+  progress?: Readonly<{ draftRevisionBefore: number; draftRevisionAfter: number; pageState: "changed" | "unchanged" | "unobserved"; draftState: "changed" | "unchanged"; answerabilityState: "first_observed" | "changed" | "unchanged" | "unobserved" }>;
+  /** Stable build-local step ids and bounded amendment counts. */
+  draftChange?: Readonly<{ targetedStepIds: readonly string[]; appliedCount: number; refusedCount: number; keptStepCount: number; rerunStepId?: string }>;
+  /** Counts describing the draft entry shown to the provider, never its content. */
+  draft?: Readonly<{ bytes: number; budget: number; steps: number; instructionBytes: number; unlisted?: number; withoutInput?: number; inputTooLarge?: number; overBudget?: boolean; budgetBelowFloor?: boolean }>;
+  /** Content-free capability facts from the completion check. */
+  answerability?: Readonly<{ recordsRequested: boolean; recordProducerPresent: boolean; recordStorePresent: boolean; issueCode?: "bootstrap.cannot_answer_instruction" }>;
   [field: string]: CreatedFlowBuildStepValue | undefined;
 }>;
 export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;

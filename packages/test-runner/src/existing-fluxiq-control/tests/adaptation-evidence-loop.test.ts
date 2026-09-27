@@ -99,6 +99,10 @@ test("a decision row carries every member Core published on it", () => {
       reason: "web.action.rejected.target_unobserved",
       startedAt: "2026-09-24T11:04:07+00:00",
       usage: { inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500 },
+      progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+      draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+      draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, withoutInput: 1 },
+      answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
     }],
   }), "detail");
 
@@ -112,6 +116,10 @@ test("a decision row carries every member Core published on it", () => {
     reason: "web.action.rejected.target_unobserved",
     startedAt: "2026-09-24T11:04:07+00:00",
     usage: { inputTokens: 1_200, outputTokens: 300, totalTokens: 1_500 },
+    progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+    draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+    draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, withoutInput: 1 },
+    answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
   });
 });
 
@@ -125,8 +133,13 @@ test("nothing the tool returned and nothing the model wrote reaches the record",
       label: "Add to cart",
       reply: "I will click the Submit button next",
       input: { selector: { nested: "deep" } },
+      contentHash: `sha256:${"b".repeat(64)}`,
+      progress: { pageState: "private page changed", nested: { value: "private" } },
+      draftChange: { targetedStepIds: ["d1", "private product name"], selector: "[data-testid=card]" },
     }],
   }), "detail");
 
   assert.deepEqual(read?.steps?.[0], { toolId: "core.run_node", iteration: 3 });
+  const published = JSON.stringify(read);
+  for (const forbidden of ["data-testid", "127.0.0.1", "Add to cart", "Submit button", "sha256", "private page", "private product"]) assert.equal(published.includes(forbidden), false);
 });

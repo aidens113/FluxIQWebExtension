@@ -13,6 +13,7 @@ import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-st
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { webActionFailureRejectionCode, type WebFailedActionResult } from "./action-failure";
+import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
 import {
@@ -85,6 +86,34 @@ export type WebLlmEvidenceToolExecution = {
    */
   nodeId?: string;
   /**
+   * Every name this call resolved to something other than what was written,
+   * with what it was read as, how, and with what score
+   * (`./name-assumption.ts`).
+   *
+   * The standing rule is that a name spelled slightly wrong resolves to its
+   * closest match rather than being refused, and that **a near match is an
+   * assumption recorded where a run's evidence is kept**. Two paths make that
+   * guess -- a literal request's field keys
+   * (`actions/extraction/field-match.ts`) and a detection's columns
+   * (`plan-resolution/extraction/column-match.ts`) -- and until this field
+   * existed both computed the whole assumption and
+   * `plan-resolution/resolve-plan-node.ts` dropped it, so a Flow built on a
+   * guessed column produced a record that could not say a guess was made.
+   *
+   * Absent, not empty, for a call that assumed nothing: the two are different
+   * facts. Screened before it leaves, so nothing a page said can ride out on
+   * it; a call with nothing publishable carries the field absent as well, which
+   * `./name-assumption.ts` states the one case of.
+   *
+   * **Withheld from the wire until Core's reader learns the key**, by
+   * `readable` against `WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS` -- which is
+   * where the whole of that constraint is written down. Declared here rather
+   * than added later because the shape is decided and every producer must
+   * mention it (`./present.ts`); the hop that publishes it is Core's, and this
+   * domain's half of it is done.
+   */
+  assumed?: WebLlmNameAssumption[];
+  /**
    * What this one call did, for the draft Core is accruing.
    *
    * One tool runs whichever node of the library the call names, so the name to
@@ -150,17 +179,51 @@ export function toolMetadata(input: WebLlmEvidenceToolRequest): JsonObject {
 }
 
 /**
- * What a call says about itself beyond its code: why it refused, and which node
- * of the library it named.
+ * What a call says about itself beyond its code: why it refused, which node of
+ * the library it named, and which of the names it was given it had to assume.
  *
  * Deliberately not exported. A caller writes an object literal, which is
  * excess-checked against this type at the call site, and the packet's own
  * producer stays the one place the fields are named.
+ *
+ * **Every member is mandatory and may be `undefined`**, which is the same
+ * pairing `./present.ts` uses and for the same reason: a caller that omits a
+ * key loses nothing it can see, so a field added here would be written by
+ * whichever call site happened to be edited and silently absent from the rest.
+ * Mandatory-with-`undefined` makes the omission a compile error and leaves the
+ * field optional on the wire. A caller with none of these facts passes no
+ * `said` at all.
  */
 type WebLlmEvidenceToolCallFacts = {
-  resultReason?: WebLlmToolRejectionReason | undefined;
-  nodeId?: string | undefined;
+  resultReason: WebLlmToolRejectionReason | undefined;
+  nodeId: string | undefined;
+  assumed: WebLlmNameAssumption[] | undefined;
 };
+
+/**
+ * Every key Core accepts on an execution result, and all of them.
+ *
+ * Core reads the result against an **allow-list** --
+ * `automationStudioLlmEvidenceParseToolExecutionResult`
+ * (`AS/runtime/llm/evidence-loop-decision.ts`), `exactKeys(value, [...])` --
+ * and its own comment says what one key too many costs: *"a member a caller
+ * learns to report and this check has not learned is not an execution result
+ * arriving with a field too many -- it is the whole result refused as
+ * `llm_evidence_loop.tool_result_invalid`, and the call is recorded as a failure
+ * that never happened."* Not the field dropped: **the call**.
+ *
+ * So the list is restated here, on the producing side, and `toolExecution`
+ * withholds anything this domain has learned to report that Core has not yet
+ * learned to read. A producer that cannot see its reader's list emits into the
+ * dark, and the cost of guessing wrong is every node run of every live build
+ * recorded as a failure.
+ *
+ * Widening it is one entry here **after** Core's list has learned the same key,
+ * never before. `tests/name-assumption.test.ts` holds the two together.
+ */
+export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "nodeId", "draft"
+];
 
 export function toolExecution(
   evidence: JsonValue,
@@ -170,7 +233,7 @@ export function toolExecution(
   draft?: WebLlmEvidenceToolExecution["draft"],
   said?: WebLlmEvidenceToolCallFacts
 ): WebLlmEvidenceToolExecution {
-  return present<WebLlmEvidenceToolExecution>({
+  return readable(present<WebLlmEvidenceToolExecution>({
     kind: "llm_evidence_tool_execution",
     evidence,
     effectApplied,
@@ -180,8 +243,30 @@ export function toolExecution(
     // of the refusal this call is already returning (`refusedReason`).
     resultReason: said?.resultReason ?? refusedReason(evidence),
     nodeId: said?.nodeId,
+    assumed: said?.assumed,
     draft
-  });
+  }));
+}
+
+/**
+ * The result with any member Core's reader has not learned removed, and the one
+ * place this domain withholds a fact it has computed.
+ *
+ * Today that is exactly `assumed`: the whole chain that produces it is built and
+ * tested (`./name-assumption.ts`, `plan-resolution/resolve-plan-node.ts`,
+ * `node-run/run.ts`), and it stops here because Core's allow-list would refuse
+ * the call rather than the field
+ * (`WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS`). Removing something from a wire
+ * value is otherwise exactly the defect `./present.ts` exists to prevent, so it
+ * happens once, by name, against a list that says why -- never by a projection
+ * that copies the members it happens to know.
+ */
+function readable(result: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution {
+  const readableResult: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(result)) {
+    if (WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes(key)) readableResult[key] = value;
+  }
+  return readableResult as unknown as WebLlmEvidenceToolExecution;
 }
 
 /**

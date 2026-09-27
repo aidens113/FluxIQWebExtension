@@ -5,8 +5,8 @@
 // A read runs in the content script, and a Next that loads a new document
 // destroys that script with the command unanswered, so everything it had read
 // would go with it. So before each control is followed the page sends a
-// checkpoint -- the records and pages read so far -- and waits for it to be
-// taken. When the command's reply is then lost, `runtime/extract-list-continuation.ts`
+// checkpoint -- the records and pages read so far, and the counts the read's own
+// account is built from -- and waits for it to be taken. When the command's reply is then lost, `runtime/extract-list-continuation.ts`
 // waits for the tab's new document and sends the same command again carrying
 // that checkpoint, and the new document's read goes on from it
 // (`content/extraction/list-reader.ts`).
@@ -34,6 +34,25 @@ export type ExtractionCheckpoint = {
   missingFields: string[];
   /** Items a `where` condition left out so far, which are not records (C5). Absent in a checkpoint written before conditions existed. */
   filtered?: number | undefined;
+  /**
+   * Items the `item` selector named so far, across every document read, before
+   * any condition, any duplicate and the item bound (C2).
+   *
+   * It travels because a count that restarted at each document would understate
+   * the read: `recordCount` and `pagesRead` are what the whole read did, and a
+   * reader comparing them against an item count that means only the last
+   * document would conclude the selector had matched fewer items than it had.
+   * Summing is exact rather than approximate -- the page counts elements in a set
+   * because one document's list can be re-queried, and no element of a destroyed
+   * document can recur in its successor, so two documents' items are always
+   * distinct.
+   *
+   * Absent in a checkpoint from a page build that did not count it, and then it
+   * stays absent for the rest of the read rather than resuming from a number that
+   * is missing its beginning: an absent count says "unknown", and understating is
+   * worse than either (`content/extraction/list-reader.ts`).
+   */
+  itemsSeen?: number | undefined;
 };
 
 /**
@@ -62,19 +81,24 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields, filtered } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
   // Sent but unreadable is refused, as every other member is; absent is a
   // checkpoint from a document that had no conditions to count.
   if (filtered !== undefined && !isCount(filtered)) return undefined;
+  // The same rule, and absent is a checkpoint from a page that did not count its
+  // items. Refusing rather than dropping the member is what keeps an absent count
+  // meaning one thing: not counted, never counted wrongly.
+  if (itemsSeen !== undefined && !isCount(itemsSeen)) return undefined;
   return {
     records: records.map((record) => ({ ...record })),
     pagesRead,
     scrolls,
     missingFields: [...missingFields],
-    ...(filtered === undefined ? {} : { filtered })
+    ...(filtered === undefined ? {} : { filtered }),
+    ...(itemsSeen === undefined ? {} : { itemsSeen })
   };
 }
 

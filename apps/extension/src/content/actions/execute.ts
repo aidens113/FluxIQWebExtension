@@ -50,6 +50,22 @@
 // not check -- the resolver refuses a candidate the recording contradicts, and
 // nothing asks whether the page is still the page.
 
+// One thing more is not routing either, and it wraps everything above. Every
+// verb here resolves its target in the first millisecond the command arrives and
+// acts on it at once, so a page that had not drawn the element yet failed
+// TARGET_NOT_FOUND instantly and the Flow stopped -- unless the *model* had
+// authored a wait node, which made the runtime defensive only where a model
+// remembered to make it so. `action-runtime/recovery/` closes that for every
+// verb at once: a recoverable page fault is waited out and the verb is run
+// again, bounded to about five seconds and never past the command's own
+// `timeoutMs`, with an account of what was absorbed put on the result's texts.
+// A retry calls the verb afresh, so the target is re-resolved and no element
+// reference survives between attempts, which is what makes a moved target and a
+// stale reference the same fix as a late one. A verb that changes the page is
+// retried only on a fault decided before it dispatched anything, so a click
+// whose confirmation was lost is never pressed twice; `recovery/fault.ts` draws
+// that line and says why each side of it is where it is.
+
 import {
   WEB_AUTOMATION_FAILURE_CODES,
   webAutomationFailureRecord,
@@ -58,6 +74,7 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { recordRecovery, runWithRecovery } from "../action-runtime/recovery";
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { captureSnapshotAction } from "./capture-snapshot";
 import { waitForSelectorAction } from "./wait-for-selector";
@@ -113,8 +130,11 @@ class UnsupportedActionTypeError extends Error implements WebAutomationFailureCa
  */
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
   const startedAt = Date.now();
-  const startedOn = observePageIdentity();
-  return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+  const { result, account } = await runWithRecovery(action, startedAt, async () => {
+    const startedOn = observePageIdentity();
+    return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+  });
+  return recordRecovery(result, account);
 }
 
 /**

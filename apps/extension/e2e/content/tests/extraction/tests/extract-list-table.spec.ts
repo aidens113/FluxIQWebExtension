@@ -5,8 +5,9 @@
 // - a field declared `column:` reads the cell under that header;
 // - reading by column header survives the columns being reordered, which
 //   reading by position would not;
-// - a header the table does not have is reported missing rather than read from
-//   another column;
+// - a header the table does not have leaves its column blank and says so, rather
+//   than being read from another column -- and rather than failing the read, since
+//   the `column:` grammar cannot say `required` (2026-09-26);
 // - the `{ kind: "column" }` spec reads what the `column:` grammar does.
 
 import { expect, test } from "../../../index.js";
@@ -64,19 +65,22 @@ test.describe("on data-table", () => {
     expect(reply.extracted).toEqual(INVENTORY);
   });
 
-  test("a column header the table does not have is reported missing, not read from another column", async ({ openHarness }) => {
+  test("a column header the table does not have is left blank and said, not read from another column", async ({ openHarness }) => {
     const harness = await openHarness("data-table");
     const reply = await harness.runAction({
       commandId: "extract-renamed-column",
       actionType: "web.dom.extract_list",
       extractList: { item: ROW, fields: { product: "column:Product", sku: "column:SKU" } }
     });
+    // The point of the row is unchanged: `sku` is never read from another column.
+    // What changed is the verdict -- a renamed header reports the rename as a
+    // stated gap instead of destroying the twelve rows that were read correctly.
     expect(reply).toMatchObject({
-      status: "failed",
-      validation: { status: "failed", actual: "12 records from 1 page; missing from some records: sku" },
-      failure: { category: "output_not_observed" }
+      status: "succeeded",
+      validation: { status: "passed", actual: expect.stringContaining("12 records short of a declared field, blank in sku") },
+      extraction: { recordCount: 12, missingFields: [], itemsSeen: 12, emptyRecords: 0 }
     });
-    expect(reply.extracted).toEqual(INVENTORY.map((row) => ({ product: row.product })));
+    expect(reply.extracted).toEqual(INVENTORY.map((row) => ({ product: row.product, sku: null })));
   });
 
   test("a column spec reads the cell under its header, as the column: grammar does", async ({ openHarness }) => {

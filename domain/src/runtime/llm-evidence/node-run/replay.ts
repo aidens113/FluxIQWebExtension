@@ -37,7 +37,8 @@ import { assertActive, captureEvidence, toolExecution, toolMetadata, type WebLlm
 import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNodeParameters } from "../plan-resolution";
+import type { WebLlmNameAssumption } from "../name-assumption";
+import { resolveWebPlanNode } from "../plan-resolution";
 import { webLlmHandleRejectionReason, type WebLlmToolRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
@@ -119,7 +120,7 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
   if (permission.kind === "refused" || permission.kind === "invalid") {
     // A reset names no node of the library -- it is this module's own move --
     // so there is no catalog id to publish, only why it was not allowed.
-    return answer(REPLAY_RESULT_CODES.resetFailed, "the reset was not permitted", false, { resultReason: permissionReason(permission), nodeId: undefined });
+    return answer(REPLAY_RESULT_CODES.resetFailed, "the reset was not permitted", false, { resultReason: permissionReason(permission), nodeId: undefined, assumed: undefined });
   }
   const result = await run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters: { url: location }, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
@@ -145,8 +146,8 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // assembled, while a step whose parameters are not a record is a draft
   // statement written wrong. The node's id separates them for a reader, so the
   // one that has an id says it.
-  if (!node) return answer(REPLAY_RESULT_CODES.failed, "the step names nothing this domain can run", false, { resultReason: "node_not_runnable_here", nodeId: undefined });
-  if (!parameters) return answer(REPLAY_RESULT_CODES.failed, "the step carries no parameters to run with", false, { resultReason: undefined, nodeId: node.definitionId });
+  if (!node) return answer(REPLAY_RESULT_CODES.failed, "the step names nothing this domain can run", false, { resultReason: "node_not_runnable_here", nodeId: undefined, assumed: undefined });
+  if (!parameters) return answer(REPLAY_RESULT_CODES.failed, "the step carries no parameters to run with", false, { resultReason: undefined, nodeId: node.definitionId, assumed: undefined });
   const permission = await webActionPermission({
     check: run.request.permission,
     declared: value.consequences,
@@ -162,13 +163,15 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // arrive as `core.replay.failed`, and they are three separate fixes.
     return answer(REPLAY_RESULT_CODES.failed, "the step was not permitted", false, {
       resultReason: permissionReason(permission),
-      nodeId: node.definitionId
+      nodeId: node.definitionId,
+      // Nothing had been resolved when this answered, so nothing was assumed.
+      assumed: undefined
     });
   }
   // `gatedByCaller`, because the step was put to the gate a few lines above,
   // against this replay’s own declaration. Resolution would otherwise ask the
   // same question a second time and raise a second request for one act.
-  const resolved = await resolveWebPlanNodeParameters(
+  const { resolution: resolved, assumed } = await resolveWebPlanNode(
     { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters, gatedByCaller: true },
     run.stores
   );
@@ -182,7 +185,10 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // three defects, and `core.replay.failed` is one word for all three.
     return await answerWithPage(run, REPLAY_RESULT_CODES.failed, "the step's parameters could not be resolved", {
       resultReason: webLlmHandleRejectionReason(resolved.issueCodes),
-      nodeId: node.definitionId
+      nodeId: node.definitionId,
+      // A refusal resolved no name, so it assumed none: `assumed` is what the
+      // resolution answered with, and is absent whenever it refused.
+      assumed
     });
   }
   const ran = resolved.status === "resolved" ? resolved.parameters : parameters;
@@ -201,7 +207,8 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // node's id still says which step of the draft it was.
     return await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, {
       resultReason: undefined,
-      nodeId: node.definitionId
+      nodeId: node.definitionId,
+      assumed
     });
   }
   const produced = isJsonRecord(value.produced) ? value.produced : undefined;
@@ -211,11 +218,13 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // answer with an empty hand. Only the collapse is judged, because a list that
   // is shorter or in another order between two runs is the page, not the step.
   if (before !== undefined && before > 0 && now === 0) {
-    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, `the step read nothing where it read ${before}`, { resultReason: undefined, nodeId: node.definitionId });
+    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, `the step read nothing where it read ${before}`, { resultReason: undefined, nodeId: node.definitionId, assumed });
   }
   // A step that replayed refuses nothing and tells nothing apart, so it says
-  // neither field; the answers above it are the ones a reader has to separate.
-  return answer(REPLAY_RESULT_CODES.replayed, "the step ran again", true);
+  // neither of those; the answers above it are the ones a reader has to
+  // separate. What its parameters assumed it does say, because that is as true
+  // of a step that worked as of one that did not.
+  return answer(REPLAY_RESULT_CODES.replayed, "the step ran again", true, { resultReason: undefined, nodeId: undefined, assumed });
 }
 
 /** Which of the three permission refusals this was, in this domain's own words. */
@@ -257,7 +266,20 @@ type WebNodeReplayAnswer = { ok: boolean; code: string; said: string };
  * page would not run. Each wants a different fix, and the reason is already
  * computed on the way past.
  */
-type WebNodeReplayFacts = { resultReason?: WebLlmToolRejectionReason | undefined; nodeId?: string | undefined };
+type WebNodeReplayFacts = {
+  resultReason: WebLlmToolRejectionReason | undefined;
+  nodeId: string | undefined;
+  /**
+   * Every name the step's resolution had to assume (`../name-assumption.ts`).
+   *
+   * A replay resolves the step's parameters again, so it guesses at the same
+   * column the exploration guessed at -- by the same code, against the same
+   * binding. It is said here too because a replay is the last thing that runs
+   * before a draft may be proposed, and a reader of one answer should not have
+   * to find another to learn that a column was assumed.
+   */
+  assumed: WebLlmNameAssumption[] | undefined;
+};
 
 /** One replay's answer: the code Core reads, and one line of this domain's own. */
 function answer(code: string, said: string, replayed = false, about?: WebNodeReplayFacts): WebLlmEvidenceToolExecution {

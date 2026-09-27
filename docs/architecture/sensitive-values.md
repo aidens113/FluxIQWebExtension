@@ -218,6 +218,32 @@ neither guard stamps one, and the adapter strips any flag it did not honour.
   The tokens are carried on purpose, so a consumer can ask the rule itself
   instead of inheriting whatever the producer concluded.
 
+## Authored Data Shown To Judgement And Repair
+
+Authored parameters are not captured page evidence, but they still cross a
+model or artifact boundary only through Core's parameter screen. The
+created-Flow lane calls `automationStudioScreenedNodeParameters` and validates
+the result with the repository-local `AuthoredFlowNode` contract before
+writing `snapshots/flow-lane.json`. Each action-node entry carries only its
+`nodeId`, `definitionId`, `outputId`, screened `parameters`, and
+`parametersWithheld`, the dotted paths whose values the screen refused.
+
+Those fields preserve three different facts. A missing parameter was never
+authored. A safe transformation may survive -- for example an absolute URL can
+be reduced to its origin -- while `parametersWithheld: ["url"]` still records
+that the original URL did not. A value omitted because the screen reached a
+depth, key, item, string, or byte budget is likewise named as withheld rather
+than silently reading as absent. The local contract rechecks bounded trees,
+closed identifiers, denied keys and safe URL origins; it never treats the
+artifact as permission to retain selectors, page text or supplied values.
+
+The same rule applies to result judgement and repair. The result-repair
+directive is bounded and screened before model judgement can influence
+recovery, and the durable result record keeps Core's structured findings and
+fix rather than arbitrary model prose. This authored-data projection does not
+relax any rule for snapshots, extracted values, credentials, recorded page
+data, or failure comparisons elsewhere in this document.
+
 ## Extraction: Structure Crosses, Values Are Not Kept
 
 Extraction exists to read the page, so what each part of it may carry is stated
