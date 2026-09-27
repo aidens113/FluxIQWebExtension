@@ -292,3 +292,140 @@ can truthfully promise that only sanitized output reaches the operator.
 This was a static read-only audit of t419's findings and the current t422 wrapper. I did not run
 PowerShell, a provider, Lab, browser, panel, build, test, or artifact command; did not inspect raw
 content or a secret; and did not edit t422. This appended section is the only change.
+
+## Pending Stage-1 file review
+
+**NO-GO for launch from the current pending file; the frozen request/oracle/pass contract is
+substantively correct, but required prelaunch fields and stop-language corrections remain.** The
+reviewed file is
+`docs/working/language-driven-flow-loop-plan/debugs/pending-t171-run5-measured-correction.md`.
+This review did not edit it.
+
+### Verified contract coverage
+
+- The request command is ordinally the accepted t419 command with only `--dry-run` removed. It
+  fixes scenario `everything-store`, isolated created-Flow target, DeepSeek
+  `mvp-hard-scenario`, `create-flow`, task `everything-store-plus-earbuds-under-50`, and one replay,
+  with no CLI budget/timeout/retry/concurrency/Lab/run-root override.
+- The environment contract names `FLUXIQ_TEST_ENV_FILES=none` and
+  `FLUXIQ_TEST_TARGET=isolated`, requires inherited `FLUXIQ_LAB_INSTANCE` and
+  `FLUXIQ_TEST_RUNS_DIR` absent/cleared by name, and binds the default immediate-child
+  `test-runs/<run-id>` location. It correctly distinguishes capture/environment normalization from
+  request mutation.
+- Run 4, its accepted Stage-2 terminal pair, streak 0, the no-unchanged-retry rule, and the sole
+  `step_rows_v1` convergence hypothesis inside the unchanged 4,000-byte reservation are stated
+  without importing a predicted new-run result.
+- The canonical instruction source/count/digest and nine-step source/count/digest match the
+  independently recomputed current source slices. The four authored oracle-source hashes also
+  match current normalized bytes. The file states the exact 13-record ordered oracle, four compared
+  fields, organic/all-page/stable-order/identity-de-duplication rules, and exact predicates; it does
+  not disclose record values and rejects count-only passing.
+- The limits are correctly separated: per request 48,000 input / 8,000 output / 56,000 total
+  tokens, USD 0.25, effective 25 seconds, and zero retries; per grant 26 calls / 560,000 tokens /
+  USD 2; concurrency one. It discloses at most two sequential grants, the componentwise
+  52-call / 1,120,000-token / USD 4 invocation exposure, no third grant/renewal, and a zero-grant,
+  zero-provider replay.
+- The integrity/redaction/allowlist order, rename-before-verdict/inspection rule, safe immediate
+  child, conservative redaction, and raw-content prohibitions align with the corrected t422
+  wrapper. T419 and t421's later final reviews support the file's claim that the corrected wrapper
+  is statically GO; the older NO-GO findings were superseded after correction.
+- The complete pass-1 threshold, conditional repair requirements, streak 0-to-1 rule, independently
+  reauthorized unchanged-contract pass 2, and failure-to-zero rule are present.
+
+### Independent pending-payload identity
+
+The current pending bytes strictly decode as UTF-8 and contain 185 LF-terminated logical lines,
+10,993 bytes, no BOM, no CR, and exactly one terminal LF. SHA-256 is
+`8d5d291e1c75b7cd4771452ab183fd66e8b01d5c0586a87e798cc82c46024fed`.
+At review time Core was clean at the stated
+`f44930aba0640f850f2e09f06ea03c0343d69361`; downstream was at the stated pre-Stage-1 parent
+`98ceadad1f7f3a7329eceadc872a0f46033b80a8`, with this pending file as its only status path. This
+attests the reviewed payload and pre-commit state only; it is not the still-required clean
+containing-commit identity or immediate prelaunch recapture.
+
+### Required corrections and omissions
+
+1. **Only allowed header fields may be literally `pending`.** The contract permits literal
+   `pending` only for safe run id, UTC start/finish, observed model, provider accounting, reported
+   verdict/category, and highest stage. The current Stage 2, Stage 3, Stage 4, Stage 5, Stage 6, and
+   Final classification bodies each contain only literal `pending`. Replace those with immutable
+   field labels/instructions stating that each field is filled only from allowed post-gate evidence
+   and otherwise becomes `NO EVIDENCE`; do not insert predicted values.
+2. **Reserve the complete debug shape.** The generic stage headings do not explicitly reserve all
+   fields required by t420/t422: decision/tool/progress and answerability summaries; Flow
+   proposal/review/shape/authored nodes; runtime id/status/result verification/actions; exact oracle
+   comparison; judge/refutation; screened repair directive; application, persistence, and
+   authoritative binding; selected-Subflow zero-provider replay; post-replay judgement; and
+   terminal grant revocation. Add content-free labeled slots before launch.
+3. **Separate accounting representations.** One header line for “calls, tokens, and cost” does not
+   reserve the required disjoint build-grant and playback/repair-grant observations or protect
+   against adding overlapping evaluation/observed representations. Add separate labeled accounting
+   slots for each grant/representation and state that no combined total is published unless typed
+   evidence proves the components disjoint.
+4. **Do not imply the second grant already exists.** “The exact existing run-owned second grant” is
+   premature in a pre-run file. State instead that *if and once issued*, only that same run-owned
+   second grant may continue after the exact authorized binding update; it may not be minted again,
+   replaced, widened, reset, transferred, or spared terminal revocation.
+5. **Tighten the failure stop.** “Fully classify ... before considering another provider call” is
+   weaker than t420. State that any failure/facility fault consumes the invocation, resets/leaves
+   the streak at 0, and forbids another provider call until a measured fix and fresh provider-free
+   closure exist; classification alone is not retry authority.
+6. **Record the still-open launch gates without presenting them as observations.** The launch-
+   environment line currently reads as though absence/clearing already happened. Label it as a
+   required exact-launch-process invariant. Add content-free prelaunch gate fields for the final
+   containing downstream commit and clean status/diff check, unchanged Core identity/output
+   freshness, fresh one-Lab/no-competing-job result, credential name/source syntactic readiness
+   only, immutable pending-payload attestation, and fresh single-command authorization identity.
+   These may be satisfied in a separate immutable authorization record, but the Stage-1 file must
+   identify that dependency and must not claim a point-in-time result it did not record.
+7. **Re-attest after correction.** Any edit invalidates the payload identity above. Recompute strict
+   UTF-8 line/byte/hash/BOM/line-ending/terminal-LF facts, compare ordinally with the reviewed
+   source, commit it, recapture both clean repository identities and outputs, then perform the
+   immediate machine/environment/credential/authorization gates. Until then this review remains
+   NO-GO and no provider call is authorized.
+
+No instruction text is reproduced in this report, and no oracle record value, credential,
+provider/page/browser content, or raw run artifact was opened or copied. I used only the pending
+authored file, frozen contract/reports, repository metadata, and authored source identities; no
+provider, Lab, browser, panel, build, or test was invoked. This appended review is the only edit.
+
+## Final pending Stage-1 re-attestation
+
+**GO for the corrected no-hindsight Stage-1 payload. This GO does not authorize a provider call.**
+All seven correction groups from the preceding review are present, and no new omission or
+overclaim was found.
+
+- Literal `pending` now occurs eight times, only in the permitted header facts: run id; UTC
+  start/finish; observed model; separately named build-grant, playback/repair-grant, and
+  observed/evaluation accounting; reported verdict; and highest stage. Stages 2 through 6 and Final
+  classification now contain only content-free field obligations and the `NO EVIDENCE` rule.
+- The debug shape explicitly reserves decision/tool/progress/answerability, proposal/review/shape/
+  authored-node, runtime/result-verification/action, exact-oracle, judge/refutation, repair
+  direction/application/persistence/binding, selected-Subflow replay, post-replay judgement, and
+  terminal-revocation facts.
+- Accounting is separated by grant and representation, with overlapping forms forbidden from being
+  added absent typed disjointness. The second-grant continuation rule is correctly conditional on
+  that run-owned grant first being issued.
+- Any product or facility failure consumes the invocation, leaves/resets the streak to 0, and
+  forbids another provider call until a measured fix and fresh provider-free closure exist;
+  classification alone is explicitly not retry authority.
+- Environment/location absence is correctly labeled an exact-launch-process invariant rather than
+  an already observed fact. A separate immutable supervisor record must still bind the final clean
+  containing commit, unchanged Core/output identities, fresh one-Lab/no-competing-job result,
+  credential readiness by name/source only, this payload identity, and exact single-command
+  authorization with the disclosed two-grant exposure.
+- The exact command, source/instruction/chain/oracle identities, 13-record ordered acceptance
+  contract, request/grant/invocation limits, evidence/redaction boundary, complete pass-1 threshold,
+  streak 0-to-1 rule, and separately authorized unchanged-contract pass 2 remain intact.
+
+The superseding payload identity is: **235 LF-terminated logical lines, 14,287 bytes, SHA-256
+`2b4d33b85236d4347eda01b0dd6c6964e80fe4f92c021140e42641cb0968a6f0`, no BOM, no CR, and exactly
+one terminal LF.** `git diff --check` reports no error for the pending path. At re-attestation time,
+Core remained clean at `f44930aba0640f850f2e09f06ea03c0343d69361`; downstream remained at the
+stated pre-Stage-1 parent `98ceadad1f7f3a7329eceadc872a0f46033b80a8`. The pending file was still
+untracked, so the required containing commit and subsequent clean-tree recapture remain external
+prelaunch gates, not facts claimed by this GO.
+
+This re-attestation was read-only apart from this report append. I did not edit the pending file or
+invoke a provider, Lab, browser, panel, build, test, or artifact command. Any later pending-file
+byte change invalidates this identity and requires another attestation.

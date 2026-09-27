@@ -276,3 +276,52 @@ success exposes only syntax-bounded identity/verdict/gate facts. Later semantic 
 repeat unique safe-index, containment, ordinary-file, and redaction checks for each allowlisted
 artifact before opening it. I did not execute the wrapper, Lab, provider, browser, panel, build, or
 test and did not edit t422 or any shared document.
+
+## Pending Stage-1 identity review
+
+Status: **NO-GO pending one wording correction; all byte identities, structural assertions,
+privacy, and formatting otherwise pass.**
+
+I recomputed the pending file's identities from the current authored sources under its stated
+strict-UTF-8, newline-normalization, and single-terminal-LF rules. The task declaration is 8 lines /
+649 bytes with the listed digest; the decoded instruction is 415 scalars / 416 normalized bytes
+with the listed digest; its runner-convention no-terminal-LF form is 415 characters / 415 bytes with
+the separately listed digest; and the accepted chain is 9 lines / 1,424 bytes with the listed
+digest. Chain ordinals are consecutive 1 through 9 exactly once and in order: **9/9**.
+
+The oracle definition, mapper, search-order, and page-model digests all match the pending table and
+the fuller t421 attestation (respectively 81 / 4,814, 15 / 569, 101 / 4,850, and 61 / 2,176 normalized
+lines/bytes). The authored expected entry declares 13 records and contains 13; its canonical JSON
+plus LF is 3,457 bytes with the listed digest. All 13 have exactly the ordered string fields
+`name`, `price`, `rating`, `url`; the source-rederived mapper output is ordinal-exact; all predicates
+hold; and all source identities are unique. No value was printed or copied during this check.
+
+The four evidence-source identities independently reproduce the frozen 415-byte composite and its
+listed digest. Schema `0.1`, completion-marker/index binding, conservative redaction, and the exact
+eight-path semantic allowlist are present in the required order, each path exactly once. The file
+contains no secret/token-shaped value, raw instruction, record row, page/provider output, prompt or
+response, selector, cookie/header, credential, browser state, or run-artifact digest. Its Markdown
+has balanced fences, 12 level-two stages/sections, one terminal newline, and no trailing whitespace.
+
+One sentence overstates the page assertion: “all pages are represented.” The frozen t421 assertion
+is that the complete organic relevance-ordered outcome is filtered before page slicing, so
+qualifying **later-page members** remain represented and repeated boundaries do not duplicate the
+oracle. It does not assert that every rendered page contains a qualifying record. Source replay of
+the full five-page unfiltered outcome has qualifying counts 3, 5, 5, 2, and 0 by displayed page, so
+the current literal claim is false. Replace “all pages are represented” with “qualifying later-page
+members remain represented” (or the equivalent pre-slicing assertion) before freezing Stage 1.
+
+This was a read-only source/structure check. I did not edit the pending file, inspect any run
+artifact or secret, or invoke a Lab, provider, browser, panel, build, or test.
+
+### Immediate corrected-payload re-review
+
+Status: **GO.** The false every-page wording is replaced by the attested statement that qualifying
+later-page members remain represented. Recalculation against the current bytes again passes the
+task slice, normalized and runner-convention instruction identities, 9/9 chain, all four oracle
+source identities, 13/13 canonical oracle with exact field order, and the 415-byte evidence
+composite. The exact eight allowlisted paths each occur once in order. The added grant-accounting,
+prelaunch-attestation, evidence-only stage-slot, and no-retry language does not alter or overclaim
+the frozen identities. A fresh privacy/format scan reports zero secret patterns, two balanced code
+fences, zero trailing-whitespace lines, and one terminal newline. No further identity, privacy, or
+format correction is required.

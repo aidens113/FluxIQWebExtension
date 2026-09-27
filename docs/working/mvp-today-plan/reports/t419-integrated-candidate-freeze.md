@@ -229,3 +229,46 @@ the outer cleanup. The correction preserves exact-byte hashing, lower-case ordin
 fixed sanitized terminal output, and all previously accepted command, single-invocation, no-retry,
 capture, path, reparse, marker/index, redaction, allowlist, and cleanup gates. Final re-read found no
 remaining static blocker. I did not execute the wrapper or read any artifact.
+
+## Pending Stage-1 independent review
+
+**NO-GO for committing the pending record until two identity wordings are corrected; substantive
+no-hindsight content is otherwise GO.** I computed the pending file's SHA-256 internally and did not
+display it. The current checkout confirms downstream
+`98ceadad1f7f3a7329eceadc872a0f46033b80a8` with only the pending file untracked, and clean Core
+`f44930aba0640f850f2e09f06ea03c0343d69361`.
+
+Exact corrections required in the pending file:
+
+1. Its corrected-order build sentence says “Core web host.” T419's accepted command and owner are
+   the downstream domain **web-panel host** (`pnpm fluxiq:host:build`); replace that phrase so it
+   cannot be read as a Core web-app build.
+2. Its downstream identity is the correct current pre-Stage-1 parent, but t419's clean pre-report
+   snapshot was `8ca0c1f9d95942e52c1d0ae33852c2a363537681`. State that `98ce…` is the later containing parent.
+   The exact `8ca…98ce` diff contains only t419/t420/t421/t422 reports—no source, config, or generated
+   output—so t419's 6/6 freshness, 12/12 markers, manifest identity, and 3/3 Core runtime identity
+   remain correctly inherited.
+
+The prospective command is ordinally equivalent to t419's accepted dry run with only terminal
+`--dry-run` removed; its environment and working directory agree. Provider-call, token, timeout,
+cost, two-sequential-grant, continuation, zero-provider replay, and no-retry semantics agree with
+the corrected t419/t422 accounting. All observation-bearing header fields remain literally
+`pending`; Stages 2–6 and final classification now contain fill-from-evidence/`NO EVIDENCE`
+instructions but no observed claim. Hypotheses and pass/stop criteria are explicitly pre-run
+contracts, not predicted observations. No run output or artifact was inspected.
+
+### Corrected pending-payload disposition
+
+**GO for the supervisor's dedicated Stage-1 commit and final clean prelaunch attestation.** The two
+identity wordings are corrected: the build owner is the downstream domain web-panel host, and the
+current `98ceadad…` parent is explicitly related to t419's `8ca0c1f…` clean snapshot through the
+four report-only changes. T420/t421 corrections also separate build/playback grant accounting,
+qualify issuance of the second grant, strengthen the no-retry rule, and keep point-in-time launch
+facts outside the frozen Stage-1 claims.
+
+The reviewed pending payload is strict UTF-8 without BOM, contains 235 LF-terminated logical lines
+and 14,287 bytes, has no CRLF or lone CR, ends in exactly one LF, and has SHA-256
+`2b4d33b85236d4347eda01b0dd6c6964e80fe4f92c021140e42641cb0968a6f0`. Its command remains exact,
+budget/grant semantics remain correct, and no run-derived outcome is asserted: the header retains
+only allowed `pending` observations, while Stages 2–6 and final classification contain instructions
+to fill from gated evidence or `NO EVIDENCE`. No run output or artifact was inspected.
