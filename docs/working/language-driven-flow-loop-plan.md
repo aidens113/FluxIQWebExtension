@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1 remains active with a zero-pass streak and run 4 remains the latest accepted failed product measurement. Its measured draft-input loss is corrected inside the unchanged reservation; provider-free gates, corrected-order output freshness, final candidate review, and local Core/downstream integration are green. Remote delivery is blocked by expired GitHub authentication, and a fresh no-hindsight authorization remains; no provider call is authorized.
+Status detail: Rung 1 remains active with a zero-pass streak and run 4 remains the latest accepted failed product measurement. Its measured draft-input loss is corrected inside the unchanged reservation; final candidate review, full integration, and remote delivery are complete. Task t171 is refreshing the provider-free dry run, output identities, no-hindsight contract, privacy gate, credential readiness, and one-Lab predicate before any fresh command-specific authorization; no provider call is authorized.
 Created: 2026-09-24
 Last updated: 2026-09-27
 Owner: Senior supervisor agent
@@ -121,21 +121,23 @@ persistence, provider-free replay, recursive post-replay judgement, or terminal 
 
 **The next action** remains provider-free. Core reproduces the 26-decision failure and an 11-decision
 fixture completion, while `step_rows_v1` retains all 7-22 bounded inputs through decision 26; this is
-not provider convergence. Final candidate/privacy/report gates are green, and t170 is merged locally
-into clean Core and downstream `dev` trees. Both real finish gates ran full `pnpm check`; downstream
-task fixtures passed 120/120 under a process-local `GIT_EXEC_PATH` correction for the machine's
-zero-byte internal Git executable. Remote refresh found zero inbound divergence, but the Core-first
-push stopped on expired GitHub authentication, so downstream was not pushed. After re-authentication,
-push Core then downstream. Then freeze integrated identities, dry-run, no-hindsight Stage 1 and its
-13-record oracle, the evidence/debug contract, and the one-Lab machine predicate. Panel management
-requires current-session user authorization before one fresh command-specific authorization. No
+not provider convergence. Final candidate/privacy/report/integration gates are green, and t170 is
+pushed in both repositories with each `dev` aligned to its remote. Both real finish gates ran full
+`pnpm check`; downstream task fixtures passed 120/120 with the documented process-local executable-
+path correction, after which Git itself was repaired. No post-repair fixture rerun has yet been
+recorded. Task t171 is refreshing the integrated identities, dry run, output
+freshness, no-hindsight Stage 1 and its 13-record oracle, evidence/debug contract, privacy gate,
+credential readiness, and one-Lab machine predicate. The isolated lane self-hosts and health-checks
+its private production panel, so the user's development panel is not involved. Only after all of
+those facts are frozen may the supervisor issue one fresh command-specific authorization. No
 unchanged run 5 or provider call is authorized now.
 
 **Blockers:** Flow creation remains unreliable and run 4's later stages remain unmeasured. The
-draft-loss correction is locally integrated but not live-proven; remote delivery waits on GitHub
-re-authentication, and a fresh command-specific authorization plus current-session panel permission
-still precede any provider call. The bounded artifacts publish no terminal grant lifecycle property;
-the repaired task-fixture launch path is operational evidence, not product evidence.
+draft-loss correction is integrated and delivered but not live-proven. The refreshed dry-run/output
+freeze, launch-process credential gate, final identity and machine rechecks, immutable Stage 1, and
+fresh command-specific authorization still precede any provider call. The bounded artifacts publish
+no terminal grant lifecycle property; the repaired task-fixture launch path is operational evidence,
+not product evidence.
 ---
 
 ## What This Batch Established

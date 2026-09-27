@@ -1,7 +1,7 @@
 # MVP Today
 
 Status: Active
-Status detail: Run 4 remains the latest accepted failed product measurement and the pass streak remains 0. Its measured draft-input loss is corrected inside the unchanged 4,000-byte reservation; provider-free gates, corrected-order output freshness, final candidate review, and local Core/downstream integration are green. Remote delivery is blocked by expired GitHub authentication, and a fresh no-hindsight authorization remains; no provider call is authorized.
+Status detail: Run 4 remains the latest accepted failed product measurement and the pass streak remains 0. Its measured draft-input loss is corrected inside the unchanged 4,000-byte reservation; final candidate review, full integration, and remote delivery are complete. Task t171 is refreshing the provider-free dry run, output identities, no-hindsight contract, privacy gate, credential readiness, and one-Lab predicate before any fresh command-specific authorization; no provider call is authorized.
 Created: 2026-09-26
 Last updated: 2026-09-27
 Owner: Senior supervisor agent
@@ -35,9 +35,9 @@ provenance. These changes are locally validated but have not completed the live 
 Core `pnpm check` passed. Focused reconciliations passed t290 81/81, t293 51/51, and t304 web 11/11
 plus Core 30/30. Downstream builds, equivalent package/structure checks, source identity, and all
 six output-freshness comparisons passed. The exact provider-free command returned `ready`, the
-intended isolated created-Flow request, default 26 calls, and zero provider calls. This is local/
-readiness evidence that predates the current packing correction, not validation of the current tree
-or live proof. The root task-fixture check remains machine-limited by inability to spawn `git worktree add`.
+intended isolated created-Flow request, default 26 calls, and zero provider calls. This is historical
+local/readiness evidence that predates the current packing correction, not validation of the current
+tree or live proof. Its task-fixture spawn limitation was later closed during t170.
 
 **Live run 1.** `run-muj2kzx1-8f9f8271` reached Stage 2 exploration and stopped before proposal.
 All 26 provider calls were build calls: 360,775 input plus 5,435 output tokens, 366,210 total,
@@ -92,16 +92,17 @@ output tokens, 374,524 total, estimated USD 0.049289784. All 26 calls are itemiz
 unrecorded or pending calls and zero typed budget breaches. The two evidence-byte projections and
 the two accounting projections are retained separately and are not added.
 
-**Next.** Final candidate, staged-path, privacy, report-chain, and working-document gates are green,
-and t170 is merged locally into `dev` in Core and downstream with clean trees. Both real finish gates
-ran full `pnpm check` successfully; downstream task fixtures passed 120/120 under a process-local
-`GIT_EXEC_PATH` correction for the machine's zero-byte internal Git executable. Remote refresh found
-zero inbound divergence, but the Core-first push stopped because GitHub authentication is expired;
-downstream was therefore not pushed. After authentication is restored, push Core then downstream.
-For the next measurement, freeze the integrated identities, provider-free dry-run, no-hindsight
-Stage 1, 13-record oracle, evidence/debug contract, and one-Lab machine predicate. Panel management
-requires current-session user authorization; only then may the supervisor issue one fresh, explicit,
-command-specific live authorization. No provider call is authorized now.
+**Next.** Final candidate, staged-path, privacy, report-chain, working-document, integration, and
+delivery gates are green. Core and downstream `dev` are pushed and aligned with their remotes. Both
+real finish gates ran full `pnpm check` successfully; the downstream task fixtures passed 120/120
+with the documented process-local executable-path correction, after which Git itself was repaired.
+No post-repair fixture rerun has yet been recorded. Task t171 is
+refreshing the integrated identities, provider-free dry run, output freshness, no-hindsight Stage 1,
+13-record oracle, evidence/debug contract, privacy gate, credential readiness, and one-Lab machine
+predicate. The isolated lane owns and health-checks a private production panel, so the user's
+development panel is not part of this run. Only after every remaining gate is frozen may the
+supervisor issue one fresh, explicit, command-specific live authorization. No provider call is
+authorized now.
 
 **Fix-first local evidence.** The deterministic Core service fixture now reproduces 26 decisions,
 22 tool calls, repeated unchanged answerability, exact accounting, no persistence, and one revoke;
@@ -124,15 +125,16 @@ three selected discriminator/service tests plus Core check. The unchanged-budget
 7-22 bounded inputs through decision 26; the same-prefix branch reaches its fixture-defined decision-
 11 completion. This does not establish provider convergence. T370/t374 separately set the exact
 represented-draft ceiling to 129, reject 130, and leave the 128-revision and 64-amendment ceilings
-unchanged. Provider-free Core/downstream command gates and corrected-order output freshness are green,
-subject to the documented downstream worktree-fixture environment block; final candidate review and
-integration remain. This does not establish provider convergence.
+unchanged. Provider-free Core/downstream command gates and corrected-order output freshness are green.
+The downstream worktree-fixture environment block, final candidate review, integration, and remote
+delivery were subsequently closed by t170. This does not establish provider convergence.
 
 **Blockers.** Flow creation remains unreliable, and runs 3 and 4 leave runtime, exact answer,
 judgement, repair persistence, zero-provider replay, recursive post-replay judgement, and terminal
-revocation unmeasured. The draft-loss correction is locally integrated but not live-proven. Remote
-delivery waits on GitHub re-authentication; a fresh command-specific authorization and current-session
-panel permission still precede any provider call.
+revocation unmeasured. The draft-loss correction is integrated and delivered but not live-proven.
+The refreshed dry-run/output freeze, launch-process credential gate, final identity and machine
+rechecks, immutable Stage 1, and fresh command-specific authorization still precede any provider
+call.
 
 ---
 
