@@ -13,7 +13,7 @@ stage it always carries.
 
 ## The Closed Set
 
-`WEB_AUTOMATION_FAILURE_CODES` names fifteen codes. Read a code from that
+`WEB_AUTOMATION_FAILURE_CODES` names eighteen codes. Read a code from that
 object rather than writing its string: the key is the name source code and
 this page use, and the value is the code Core stores and a scenario manifest's
 expected failure names.
@@ -30,6 +30,9 @@ expected failure names.
 | `TIMEOUT` | `web.action.timeout` | `timeout` | yes | `execution` |
 | `AUTH_REQUIRED` | `web.auth.required` | `auth_required` | no | `confirmation` |
 | `USER_INTERVENTION_REQUIRED` | `web.intervention.required` | `user_intervention_required` | no | `execution` |
+| `BLOCKED_BY_DIALOG` | `web.action.blocked_by_dialog` | `unexpected_state` | no | `execution` |
+| `BROWSER_PERMISSION_DENIED` | `web.browser.permission_denied` | `blocked_by_capability_or_policy` | no | `dispatch` |
+| `TRANSPORT_TRANSIENT` | `web.transport.transient` | `action_failed` | yes | `execution` |
 | `UNSUPPORTED_TYPE` | `web.action.unsupported_type` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `NOT_IMPLEMENTED` | `web.action.not_implemented` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `INVALID_PARAMETER` | `web.action.invalid_parameter` | `graph_validation_or_unknown_node` | no | `dispatch` |
@@ -52,6 +55,19 @@ choice, and it also allows `target_not_found` and `target_ambiguous` to name
 only the `target_resolution` stage. The rest are judged: a target that could
 not be found may appear once the page settles, while an ambiguous one stays
 ambiguous until the Flow says which it meant.
+
+That flag does not by itself authorize a browser replay. Two layers apply
+side-effect safety. The page-side content recovery loop retries a mutating
+action only for a pre-dispatch `TARGET_NOT_FOUND`; read-only actions may retry
+the browser-retryable faults that reach that loop. `TRANSPORT_TRANSIENT` is
+instead classified by the background worker before the verb is reached, so the
+content loop does not see it in practice. When that failure reaches Core, the
+defensive executor treats its outcome as ambiguous and replays a mutating node
+only when the node positively says repetition is safe; read-only work may be
+repeated. `BLOCKED_BY_DIALOG` is a stable page state that needs a different
+action, not a retry. `BROWSER_PERMISSION_DENIED` is a browser capability/policy
+refusal that must be resolved before dispatch, unlike `ACTION_REJECTED`, which
+is the actionability decision about a particular target on a drivable page.
 
 ## Why The Binding Matters
 
@@ -165,6 +181,13 @@ identity across bundles, and is compiler-checked at the throw.
 - **The expectation seam** (`domain/src/runtime/expectation/evaluate.ts`):
   `STATE_MISMATCH` and `TIMEOUT`, except where the client reported a code from
   the same set — it stood nearest the page and keeps its own record.
+
+Browser-specific recovery classification
+(`domain/src/runtime/failure/browser-api.ts`) adds the three distinctions the
+recovery loop needs: `BLOCKED_BY_DIALOG` for a browser dialog that prevents
+execution, `BROWSER_PERMISSION_DENIED` for an API refusal caused by browser
+permission or policy, and `TRANSPORT_TRANSIENT` for a short-lived browser
+transport failure. They are not collapsed into `ACTION_FAILED`.
 
 Two rows of the table have producers the list above names only in part, or not
 at all.

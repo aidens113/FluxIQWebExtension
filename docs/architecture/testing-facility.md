@@ -223,6 +223,12 @@ proposal API, and runs it. Both are described in
 never creates or rewrites the selected Flow: it executes the exact pre-existing
 Flow after checking its project scope and recording a stable content hash.
 
+Live instruction campaigns add a separate created-Flow lane: Core authors a
+Flow from the task instruction, the facility reviews and applies that proposal,
+then runs and judges it. It is not one of the ordinary `lab run` recording/
+recorded-Flow lane choices, and its artifact is described under
+[The instruction-created Flow lane and its authored artifact](#the-instruction-created-flow-lane-and-its-authored-artifact).
+
 ## Ownership boundary
 
 The testing facility belongs in this repository because it is specific to a
@@ -1210,6 +1216,53 @@ re-resolves a renamed control before Core is told anything failed -- so a
 `fingerprint` or `scored-candidate` strategy on a **succeeded** attempt is the
 record that a rename was survived.
 
+### The instruction-created Flow lane and its authored artifact
+
+Live instruction campaigns use a third, distinct lane. The created-Flow lane
+does not derive a Flow from a recording: Core builds one from the instruction,
+the lane applies the reviewed proposal, runs the persisted Flow, and judges the
+fixture result. Its `snapshots/flow-lane.json` records the bounded task request,
+build and review records, Flow id and shape, whether the Flow reached its own
+page, the runtime run and action evidence, extraction judgement, and any
+partial progress available when the lane stopped. A failed build or run does
+not erase the preceding stages by replacing the artifact with an all-or-nothing
+success record.
+
+`authoredNodes` makes the created Flow diagnosable without persisting its raw
+document. There is one entry per action node, carrying `nodeId`, `definitionId`,
+`outputId`, screened `parameters`, and `parametersWithheld`. The producer uses
+Core's `automationStudioScreenedNodeParameters`; the test-contract validator
+then rechecks the bounded tree, denied keys, identifiers, origins and withheld
+paths before the snapshot is accepted. A navigation parameter may therefore
+retain only its transformed safe origin while also naming `"url"` in
+`parametersWithheld`: the origin is useful authored structure, and the original
+path, query and fragment did not enter the artifact.
+
+Created-build decision rows also carry Core's bounded progress instrumentation
+through the same shape screen on both proposed and refused builds. `progress`,
+`draftChange`, `draft`, and `answerability` are optional additive records with
+closed runtime shapes: draft revisions, counts, flags, states and issue codes.
+`draftChange.targetedStepIds` is the only list admitted inside one of these
+records; it is accepted atomically only when it is bounded, string-only,
+duplicate-free and syntactically valid, rather than filtered or truncated into
+a different target claim. Core owns the stronger provenance guarantee that
+those ids are stable, build-local and not content-derived. The downstream
+screen enforces bounded syntax and rejects digest-shaped ids, but syntax alone
+cannot prove where an otherwise valid identifier originated. Generic nested
+lists remain excluded, as do instruction or draft prose, prompts or responses,
+selectors and URLs. The resulting rows are embedded unchanged in both
+`snapshots/flow-lane.json` and `snapshots/live-llm.json`; provider-call grouping
+and token/cost accounting continue to use only iteration and usage fields.
+
+The four optional progress records are additive for an older Core that omits
+them. The sanitizer change is narrower: digest-shaped strings no longer travel,
+and nested scalar lists are not accepted generically; only the atomically
+validated draft-target path above is added. Existing scalar and top-level
+scalar-list fields retain their prior screen.
+
+This is an artifact contract, not a claim that the current provider-backed
+hard scenario has passed live. A campaign result must supply that evidence.
+
 ### What a list read says about itself
 
 A read of zero records is the same record, everywhere else in the bundle,
@@ -1221,11 +1274,14 @@ answer was wrong and nothing about why.
 
 The read had already computed the answer. `web.dom.extract_list` reports a
 summary of its own read (`domain/src/actions/extraction/summary.ts`): the
-records returned, the pages covered, whether a cap cut it short, which declared
-fields a row did not yield, whether the list it waited for ever appeared
-(`listPresence`), and what each `where` condition kept and rejected. It reached
-Core on the dispatched result payload and stopped there, because the run detail
-reduces an attempt's outputs to names and counts.
+records returned, pages covered, matched items (`itemsSeen`), wholly empty
+records (`emptyRecords`), whether a cap cut it short, which required fields a
+row did not yield, whether the list it waited for ever appeared
+(`listPresence`), what ended that wait and how long it took (`listWait`), and
+what each `where` condition kept and rejected. It reached Core on the
+dispatched result payload and stopped there, because the run detail reduces an
+attempt's outputs to names and counts. Item-read and page-advance faults remain
+bounded result prose; they are not members of `RunExtractionRead`.
 
 Core now projects it onto the attempt as `metadata.extraction`
 (`runtime/service/summaries/extraction-summary.ts`), exactly as it projects the
