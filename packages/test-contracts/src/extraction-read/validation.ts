@@ -1,9 +1,10 @@
-import { RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_READ_BOUNDS, type RunExtractionConditionReport, type RunExtractionRead } from "./read.js";
+import { RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_READ_BOUNDS, RUN_EXTRACTION_WAIT_STOP, type RunExtractionConditionReport, type RunExtractionListWait, type RunExtractionRead } from "./read.js";
 import { add, array, enumeration, finite, keys, object, result, uniqueStrings, type JsonObject } from "../runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "../validation.js";
 
-const readKeys = ["recordCount", "pagesRead", "truncated", "fieldNames", "missingFields", "listPresence", "conditions"] as const satisfies readonly (keyof RunExtractionRead)[];
+const readKeys = ["recordCount", "pagesRead", "truncated", "fieldNames", "missingFields", "itemsSeen", "emptyRecords", "listPresence", "listWait", "conditions"] as const satisfies readonly (keyof RunExtractionRead)[];
 const conditionKeys = ["applied", "kept", "rejected", "unfiltered"] as const satisfies readonly (keyof RunExtractionConditionReport)[];
+const waitKeys = ["stoppedOn", "waitedMs", "waitedFor"] as const satisfies readonly (keyof RunExtractionListWait)[];
 
 /**
  * Whether `input` is a record field key this contract will publish: Core's own
@@ -34,6 +35,20 @@ export function isRunExtractionFieldKey(input: unknown): input is string {
  * `applied`, because a read cannot have kept more items than it looked at. And
  * a condition report may not sit on a read that declares no conditions in it —
  * `rejected` is positional, so an empty list means a report of nothing.
+ *
+ * **No relation is checked among `recordCount`, `itemsSeen` and `emptyRecords`,
+ * deliberately.** Each apparently impossible pairing is a real read that a
+ * diagnosis needs: `itemsSeen: 0` beside records is a continued read whose
+ * predecessor did the matching, `itemsSeen` far above `recordCount` is
+ * duplicates or the item bound, and `emptyRecords` equal to `recordCount` is the
+ * signature of fields read off the wrong element. A rule that refused any of
+ * them would throw away the report it exists to carry.
+ *
+ * **This is the strict side of the boundary.** `extractionReadOf` resolves what
+ * arrives from a producer — an unfamiliar `stoppedOn` becomes `unknown` there,
+ * rather than costing the read — and then calls this. So a word outside the set
+ * reaching here means the resolution did not happen, which is worth an issue
+ * rather than a silent pass.
  */
 export function validateRunExtractionRead(input: unknown): ValidationResult<RunExtractionRead> {
   const issues: ValidationIssue[] = []; const value = object(input, "$", issues);
@@ -49,10 +64,15 @@ export function validateRunExtractionRead(input: unknown): ValidationResult<RunE
       const undeclared = value.missingFields.filter((key) => !declared.has(key));
       if (undeclared.length > 0) add(issues, "$.missingFields", "must name only fields the read declared in fieldNames");
     }
+    // Absent from a read whose producer did not count them, and a count when
+    // sent. Nothing is cross-checked; see the doc comment above.
+    if (value.itemsSeen !== undefined) finite(value.itemsSeen, "$.itemsSeen", issues, 0, Number.MAX_SAFE_INTEGER, true);
+    if (value.emptyRecords !== undefined) finite(value.emptyRecords, "$.emptyRecords", issues, 0, Number.MAX_SAFE_INTEGER, true);
     // Absent for a read that waited for no list of its own; one of two words
     // otherwise. A word this contract does not know is a producer saying
     // something about the read that nothing downstream can act on.
     if (value.listPresence !== undefined) enumeration(value.listPresence, RUN_EXTRACTION_LIST_PRESENCE, "$.listPresence", issues);
+    if (value.listWait !== undefined) checkListWait(value.listWait, "$.listWait", issues);
     if (value.conditions !== undefined) checkConditions(value.conditions, "$.conditions", issues);
   }
   return result<RunExtractionRead>(input, issues);
@@ -65,6 +85,24 @@ function checkFieldKeys(value: unknown, path: string, issues: ValidationIssue[])
     if (!isRunExtractionFieldKey(entry)) add(found, at, "must be a record field key of letters, digits, _ and -");
   });
   uniqueStrings(value, path, issues, "field keys");
+}
+
+/**
+ * The wait's account: two durations and one word from the set, `unknown`
+ * included, because `unknown` is a published member rather than a fallback the
+ * validator is lenient about.
+ *
+ * Neither duration is bounded above. A wait longer than any constant this side
+ * knows is a fact about a page, and `waitedFor: 0` is merely surprising — and
+ * refusing either would cost the account for a number that is not unsafe.
+ */
+function checkListWait(value: unknown, path: string, issues: ValidationIssue[]): void {
+  const wait = object(value, path, issues) as JsonObject | undefined;
+  if (!wait) return;
+  keys(wait, waitKeys, path, issues);
+  enumeration(wait.stoppedOn, RUN_EXTRACTION_WAIT_STOP, `${path}.stoppedOn`, issues);
+  finite(wait.waitedMs, `${path}.waitedMs`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  finite(wait.waitedFor, `${path}.waitedFor`, issues, 0, Number.MAX_SAFE_INTEGER, true);
 }
 
 function checkConditions(value: unknown, path: string, issues: ValidationIssue[]): void {

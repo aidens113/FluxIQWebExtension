@@ -251,6 +251,30 @@ test("a create-flow run authorizes a build_and_adapt grant and records the build
   assert.equal(run.usage.calls, 5);
 });
 
+test("a refused build's content-free progress survives unchanged in the live snapshot", async () => {
+  const progressStep = {
+    toolId: "core.decision_amend_draft",
+    iteration: 2,
+    progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+    draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+    draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, withoutInput: 1 },
+    answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+  } as const;
+  const refused: CreatedFlowBuild = {
+    ...proposedBuild,
+    outcome: "failed",
+    adaptationId: null,
+    evidenceLoop: { ...proposedBuild.evidenceLoop!, decisionCount: 5, toolCallCount: 4, steps: [progressStep] },
+    failure: { code: "flow_bootstrap.evidence_unusable_decision", stage: "provider_output_validation", httpStatus: 400, issueCodes: ["bootstrap.cannot_answer_instruction"] },
+  };
+  const { written, settle } = await settleBuildOnce(refused);
+  await settle();
+  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.deepEqual(snapshot.build.evidenceLoop.steps, [progressStep]);
+  const serialized = JSON.stringify(snapshot);
+  for (const forbidden of ["Private instruction text", "data-testid=private-card", "http://127.0.0.1/private", "sha256:"]) assert.equal(serialized.includes(forbidden), false);
+});
+
 test("a build that reached no provider fails the run closed, after its evidence is written, and says where Core stopped", async () => {
   const refused: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, providerCalls: 0, providerInvocation: "not_attempted", accounting: null, evidenceLoop: null, failure: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 } };
   const { written, settle } = await settleBuildOnce(refused);

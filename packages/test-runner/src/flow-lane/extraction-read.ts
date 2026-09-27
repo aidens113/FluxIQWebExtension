@@ -31,7 +31,29 @@
 // why this refuses rather than throwing the way `harness-recovery.ts` does --
 // the recovery record is the measurement there, and here an unreadable summary
 // must not cost a run that otherwise says what it did.
-import { isRunExtractionFieldKey, validateRunExtractionRead, RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_READ_BOUNDS, type RunExtractionConditionReport, type RunExtractionListPresence, type RunExtractionRead } from "@fluxiq-web-extension/test-contracts";
+//
+// **One word is resolved rather than refused, and that is the whole difference
+// between this side and the contract's validator.** `listWait.stoppedOn`
+// enumerates the mechanisms that can end a read's wait for its list, and
+// mechanisms get added; the domain that produces them and this facility that
+// reads them ship separately, and nothing sequences the two. So a word this
+// reader has not been told about is rebuilt as `"unknown"` -- named, and carried
+// through with the two durations beside it -- rather than costing the read the
+// rest of its account. Strict where a read is authored, tolerant where one is
+// ingested, which is the shape this repository already takes with an
+// unrecognised failure category (`bench/evaluate-run.ts`, where a foreign
+// category becomes `"unknown"` rather than failing the run's evaluation).
+//
+// Redaction is untouched by that: the producer's word is **discarded**, not
+// republished, so what reaches the bundle is still one of a closed set. And the
+// tolerance stops at the word. Version skew adds words; it does not turn a
+// count into a string, so a malformed member still drops the read -- which is
+// also what keeps the *absence* of `listWait` meaning one thing, namely that the
+// read waited for no list of its own.
+import { isRunExtractionFieldKey, validateRunExtractionRead, RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_READ_BOUNDS, type RunExtractionConditionReport, type RunExtractionListPresence, type RunExtractionListWait, type RunExtractionRead, type RunExtractionWaitStop } from "@fluxiq-web-extension/test-contracts";
+
+/** The four mechanisms a producer can name; a fifth becomes `"unknown"` rather than costing the read. */
+const KNOWN_WAIT_STOPS: readonly RunExtractionWaitStop[] = ["list_present", "page_settled", "window_elapsed", "deadline_passed"];
 
 /**
  * Core's `metadata.extraction` for one attempt, rebuilt member by member, or
@@ -42,18 +64,31 @@ import { isRunExtractionFieldKey, validateRunExtractionRead, RUN_EXTRACTION_LIST
  * the entire summary rather than let one unreadable member through, on the
  * reasoning that a half-read account is worse than none, and reading it back
  * more permissively here would undo that.
+ *
+ * The one exception is an unfamiliar `listWait.stoppedOn`, which is rebuilt as
+ * `"unknown"` and keeps its read. The header says why: a word is the one thing a
+ * newer producer legitimately adds, and there the rule above costs a whole run
+ * every read's account rather than costing one word its name.
  */
 export function extractionReadOf(attempt: Record<string, unknown>): RunExtractionRead | undefined {
   const summary = optionalRecord(optionalRecord(attempt.metadata)?.extraction);
   if (!summary) return undefined;
-  const { recordCount, pagesRead, truncated, fieldNames, missingFields, listPresence, conditions } = summary;
+  const { recordCount, pagesRead, truncated, fieldNames, missingFields, itemsSeen, emptyRecords, listPresence, listWait, conditions } = summary;
   if (!isCount(recordCount) || !isCount(pagesRead) || typeof truncated !== "boolean") return undefined;
   const declared = fieldKeys(fieldNames);
   const missing = fieldKeys(missingFields);
   if (declared === undefined || missing === undefined) return undefined;
   // A field a row did not yield is one of the read's own declared fields.
   if (!missing.every((key) => declared.includes(key))) return undefined;
+  // Absent from a producer that did not count them, a count when sent, and never
+  // checked against `recordCount` or each other: `itemsSeen: 0` beside records,
+  // `itemsSeen` far above them, and `emptyRecords` equal to `recordCount` are
+  // each a real read that a diagnosis needs to see rather than a malformed one.
+  if (itemsSeen !== undefined && !isCount(itemsSeen)) return undefined;
+  if (emptyRecords !== undefined && !isCount(emptyRecords)) return undefined;
   if (listPresence !== undefined && !isListPresence(listPresence)) return undefined;
+  const wait = listWait === undefined ? undefined : listWaitOf(listWait);
+  if (listWait !== undefined && wait === undefined) return undefined;
   const report = conditions === undefined ? undefined : conditionReportOf(conditions);
   if (conditions !== undefined && report === undefined) return undefined;
   const read: RunExtractionRead = {
@@ -62,13 +97,38 @@ export function extractionReadOf(attempt: Record<string, unknown>): RunExtractio
     truncated,
     fieldNames: declared,
     missingFields: missing,
+    ...(isCount(itemsSeen) ? { itemsSeen } : {}),
+    ...(isCount(emptyRecords) ? { emptyRecords } : {}),
     ...(isListPresence(listPresence) ? { listPresence } : {}),
+    ...(wait ? { listWait: wait } : {}),
     ...(report ? { conditions: report } : {}),
   };
   // The published contract's own check, run on the way in rather than asserted
   // in a test alone: a member this reader rebuilt wrongly is then absent from
   // the bundle instead of published as a fact about the read.
   return validateRunExtractionRead(read).valid ? read : undefined;
+}
+
+/**
+ * What the read's wait for its list did: two durations and the mechanism that
+ * ended it, with a mechanism this reader does not know rebuilt as `"unknown"`.
+ *
+ * `undefined` only for an account that is not well formed — a duration that is
+ * not a count, or a `stoppedOn` that is not even a string — and then the whole
+ * read is dropped, so absence of `listWait` in a bundle keeps meaning exactly
+ * one thing: the read waited for no list of its own.
+ */
+function listWaitOf(value: unknown): RunExtractionListWait | undefined {
+  const wait = optionalRecord(value);
+  if (!wait) return undefined;
+  const { stoppedOn, waitedMs, waitedFor } = wait;
+  if (typeof stoppedOn !== "string" || !isCount(waitedMs) || !isCount(waitedFor)) return undefined;
+  return { stoppedOn: waitStopOf(stoppedOn), waitedMs, waitedFor };
+}
+
+/** The mechanism the producer named, or `"unknown"` for one this reader has not been told about. */
+function waitStopOf(value: string): RunExtractionWaitStop {
+  return (KNOWN_WAIT_STOPS as readonly string[]).includes(value) ? value as RunExtractionWaitStop : "unknown";
 }
 
 /** What the read's `where` did, in counts alone; `undefined` for a report that is not well formed. */

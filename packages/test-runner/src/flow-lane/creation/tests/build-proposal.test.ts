@@ -16,6 +16,15 @@ import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
  */
 
 const INSTRUCTION = "Scrape the first page with columns name and price.";
+const PROGRESS_STEP = {
+  toolId: "core.decision_amend_draft",
+  iteration: 2,
+  resultCode: "llm_evidence_loop.draft_amended",
+  progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+  draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+  draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384, withoutInput: 1 },
+  answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+} as const;
 
 async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?: number } = {}) {
   const core = fakeCreationCore(options);
@@ -83,6 +92,38 @@ test("a proposed build keeps the decisions Core published on the proposal, in th
   ]);
   // `toolIds` stays Core's own list on a proposal, which already excludes its decision steps.
   assert.deepEqual(record.evidenceLoop?.toolIds, ["web.recovery.inspect"]);
+});
+
+test("proposed and refused builds publish the same content-free draft progress row", async () => {
+  const proposed = await build({
+    evidenceLoop: {
+      providerCallCount: 2, decisionCount: 2, traceStepCount: 2, iterationCount: 2, toolCallCount: 1, evidenceBytes: 2_048,
+      toolIds: ["core.run_node"],
+      steps: [{
+        ...PROGRESS_STEP,
+        prompt: "Private instruction text must not travel",
+        selector: "[data-testid=private-card]",
+        url: "http://127.0.0.1/private",
+        contentHash: `sha256:${"c".repeat(64)}`,
+      }],
+    },
+  });
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_unusable_decision",
+    stage: "provider_output_validation",
+    retryable: false,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    evidenceLoop: { iterationCount: 2, decisionCount: 2, toolCallCount: 1, evidenceBytes: 2_048, steps: [PROGRESS_STEP] },
+    issueCodes: ["bootstrap.cannot_answer_instruction"],
+  };
+  const refused = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+
+  assert.deepEqual(proposed.record.evidenceLoop?.steps, [PROGRESS_STEP]);
+  assert.deepEqual(refused.record.evidenceLoop?.steps, [PROGRESS_STEP]);
+  assert.deepEqual(proposed.record.evidenceLoop?.steps, refused.record.evidenceLoop?.steps);
+  const serialized = JSON.stringify(proposed.record);
+  for (const forbidden of ["Private instruction", "data-testid", "127.0.0.1", "sha256"]) assert.equal(serialized.includes(forbidden), false);
 });
 
 test("a decision row carries every member Core published on it, and leaves behind anything that could be page content", async () => {

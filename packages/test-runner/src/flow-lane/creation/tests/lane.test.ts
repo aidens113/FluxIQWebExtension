@@ -108,7 +108,7 @@ test("a dataset task is built, settled, applied, run on a freshly presented page
   // keeps its place with `null`, and the navigation's URL is carried as its
   // origin alone.
   assert.deepEqual(snapshot.authoredNodes, [
-    { nodeId: "node.open", definitionId: "web.output.browser-navigate", outputId: "web.browser.navigate", parameters: { url: "http://127.0.0.1" }, parametersWithheld: [] },
+    { nodeId: "node.open", definitionId: "web.output.browser-navigate", outputId: "web.browser.navigate", parameters: { url: "http://127.0.0.1" }, parametersWithheld: ["url"] },
     { nodeId: "node.extract", definitionId: "web.output.dom-extract_list", outputId: "web.dom.extract_list", parameters: { fields: { name: null } }, parametersWithheld: ["selector", "fields.name"] },
   ]);
   assert.deepEqual(validateAuthoredFlowNodes(snapshot.authoredNodes, WEB_LLM_DENIED_EVIDENCE_KEYS), { valid: true, value: snapshot.authoredNodes });

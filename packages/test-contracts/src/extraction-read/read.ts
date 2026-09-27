@@ -14,7 +14,14 @@
  * - the page genuinely held nothing — `listPresence: "appeared"` with
  *   `recordCount: 0`, and the instruction is what to change;
  * - the `where` conditions rejected every row — `conditions.kept: 0` with
- *   `conditions.applied` above it, and the conditions are what to narrow.
+ *   `conditions.applied` above it, and the conditions are what to narrow;
+ * - the rows were there and every field was read off the wrong element —
+ *   `emptyRecords` equal to `recordCount`, and the field selectors are what to
+ *   change;
+ * - the wait gave up before the list finished drawing — `listWait.stoppedOn:
+ *   "page_settled"`, and the wait is what to fix. This one was diagnosed once by
+ *   timing fourteen attempts, because the read could not say it (see
+ *   `RunExtractionListWait`).
  *
  * The domain computes all three on every read (`domain/src/actions/extraction/
  * summary.ts`) and they were dropped on the way out: Core's run detail reduced
@@ -47,6 +54,28 @@ export type RunExtractionRead = {
   /** Declared fields at least one record did not yield. Always a subset of `fieldNames`. */
   missingFields: string[];
   /**
+   * Items the `item` selector matched, across every page the read covered,
+   * before any condition, any duplicate and the item bound — or absent from a
+   * read whose producer did not count them.
+   *
+   * It is the count that splits the two halves of a zero read that
+   * `listPresence` cannot and `conditions.applied` is often absent for.
+   * `itemsSeen: 0` is the selector; `itemsSeen` above `recordCount` with no
+   * conditions is duplicates or the bound.
+   */
+  itemsSeen?: number;
+  /**
+   * Records that yielded **no** declared field at all, of the records returned —
+   * or absent from a read whose producer did not count them.
+   *
+   * `missingFields` cannot say this: it names the fields *some* record lacked,
+   * so one bad row and forty empty ones read identically. `emptyRecords` equal
+   * to `recordCount` says the selector found the rows and every field was read
+   * off the wrong element; `0` says the fields were read and the answer is about
+   * the rows.
+   */
+  emptyRecords?: number;
+  /**
    * Whether the page ever showed the list the read waited for, or absent for a
    * read that waited for none — a continued read, which resumes on the page its
    * predecessor's control reached.
@@ -55,6 +84,8 @@ export type RunExtractionRead = {
    * empty page is a legitimate answer and a read that finds one still succeeds.
    */
   listPresence?: RunExtractionListPresence;
+  /** What the wait for that list did, in two durations and one closed word. Absent wherever `listPresence` is. */
+  listWait?: RunExtractionListWait;
   /** What the read's `where` did to it, or absent for a read whose request named no conditions. */
   conditions?: RunExtractionConditionReport;
 };
@@ -62,6 +93,52 @@ export type RunExtractionRead = {
 /** The two words a read uses for whether its `item` selector ever named an element on the page. */
 export const RUN_EXTRACTION_LIST_PRESENCE = ["appeared", "never_appeared"] as const;
 export type RunExtractionListPresence = (typeof RUN_EXTRACTION_LIST_PRESENCE)[number];
+
+/**
+ * What the read's wait for its list did, beside the word that says whether it
+ * found one.
+ *
+ * **It is in the bundle because the durations were once counted by hand.** Six
+ * live reads of the everything-store rung returned zero records and were
+ * indistinguishable in their bundles; what separated them, in the end, was
+ * arithmetic on `durationMs` — 2089, 2576, 2109 and 2082 ms against reads that
+ * succeeded at 255 ms and at 4.6 to 14.3 s — because the wait's own constant was
+ * 2000 ms and nothing published what a read had waited for or why it stopped.
+ * That is how a seventeen-hour-old regression in the wait survived ten live
+ * attempts. A scan over a hundred and fifty bundles cannot tally a duration
+ * against a constant it would have to know; it can group by `stoppedOn`.
+ */
+export type RunExtractionListWait = {
+  /** Which of the mechanisms below ended the wait, or `unknown` for one this contract has not been told about. */
+  stoppedOn: RunExtractionWaitStop;
+  /** How long the whole wait took, in milliseconds. */
+  waitedMs: number;
+  /** How many items the wait was waiting for: the request's own minimum, held to at least one. */
+  waitedFor: number;
+};
+
+/**
+ * What ended a read's wait for its list.
+ *
+ * `list_present` is the items arriving, `page_settled` the document holding
+ * still with some of the list drawn and the rest missing, `window_elapsed` the
+ * read's own render window running out, and `deadline_passed` the command's
+ * `timeoutMs`. `page_settled` beside `recordCount: 0` is the 2026-09-25
+ * regression's signature rather than a description of the product.
+ *
+ * `unknown` is the fifth, and it is a word about this boundary rather than about
+ * the page: the producer named a mechanism the reader had not been told about.
+ * It is here because the alternative is worse. The set enumerates *mechanisms*
+ * and mechanisms get added, the producing domain and the reading facility ship
+ * separately, and refusing an unfamiliar word would empty every bundle of the
+ * one account a zero read cannot be diagnosed without. The word the producer
+ * actually sent is **not** carried: every member of a read is a count, a
+ * boolean, a closed word or a field key precisely so that no free string can
+ * ride into a bundle, and `stoppedOn` is the one member a free string could
+ * arrive on.
+ */
+export const RUN_EXTRACTION_WAIT_STOP = ["list_present", "page_settled", "window_elapsed", "deadline_passed", "unknown"] as const;
+export type RunExtractionWaitStop = (typeof RUN_EXTRACTION_WAIT_STOP)[number];
 
 /**
  * What a read's `where` conditions did to it, in counts alone.

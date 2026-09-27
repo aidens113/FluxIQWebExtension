@@ -81,14 +81,31 @@ test("one paid call written as two rows is itemized once", () => {
   // the rerun's row under the single iteration that paid for both. Counting
   // rows would charge the build twice for one call, which is the arithmetic
   // that made every per-call figure of `run-mudw1ktb-0557816b` 27% too low.
-  const usage = liveLlmBuildUsage(buildWith([
-    { toolId: "core.decision_amend_draft", iteration: 1, usage: { inputTokens: 12_000, outputTokens: 500, totalTokens: 12_500, estimatedCostUsd: 0.008 } },
-    { toolId: RUN_NODE, iteration: 1, callId: "evidence.1", usage: { inputTokens: 12_000, outputTokens: 500, totalTokens: 12_500, estimatedCostUsd: 0.008 } },
+  const rows: CreatedFlowBuildStep[] = [
+    {
+      toolId: "core.decision_amend_draft", iteration: 1,
+      progress: { draftRevisionBefore: 2, draftRevisionAfter: 3, pageState: "unchanged", draftState: "changed", answerabilityState: "changed" },
+      draftChange: { targetedStepIds: ["f1", "d2"], appliedCount: 1, refusedCount: 1, keptStepCount: 2, rerunStepId: "d2" },
+      draft: { bytes: 2_048, budget: 8_192, steps: 2, instructionBytes: 384 },
+      answerability: { recordsRequested: true, recordProducerPresent: false, recordStorePresent: true, issueCode: "bootstrap.cannot_answer_instruction" },
+      usage: { inputTokens: 12_000, outputTokens: 500, totalTokens: 12_500, estimatedCostUsd: 0.008 },
+    },
+    {
+      toolId: RUN_NODE, iteration: 1, callId: "evidence.1",
+      progress: { draftRevisionBefore: 3, draftRevisionAfter: 3, pageState: "changed", draftState: "unchanged", answerabilityState: "unchanged" },
+      usage: { inputTokens: 12_000, outputTokens: 500, totalTokens: 12_500, estimatedCostUsd: 0.008 },
+    },
     { toolId: RUN_NODE, iteration: 2, callId: "evidence.2", usage: { inputTokens: 13_000, outputTokens: 500, totalTokens: 13_500, estimatedCostUsd: 0.009 } },
-  ], { providerCalls: 2, loopProviderCalls: 2 }));
+  ];
+  const usage = liveLlmBuildUsage(buildWith(rows, { providerCalls: 2, loopProviderCalls: 2 }));
+  const withoutProgress = rows.map(({ progress: _progress, draftChange: _draftChange, draft: _draft, answerability: _answerability, ...row }) => row);
+  const usageWithoutProgress = liveLlmBuildUsage(buildWith(withoutProgress, { providerCalls: 2, loopProviderCalls: 2 }));
 
   assert.equal(usage.observedCalls.length, 2);
   assert.equal(usage.perCallRecords, "recorded");
+  // Progress instrumentation is orthogonal to the complete call, token, cost,
+  // grouping and recorded/unrecorded accounting projection.
+  assert.deepEqual(usage, usageWithoutProgress);
   // The call id arrives on the second row of the iteration and is taken; the figures are not added up.
   assert.deepEqual(usage.observedCalls.map((call) => [call.requestId, call.totalTokens]), [["evidence.1", 12_500], ["evidence.2", 13_500]]);
 });

@@ -18,6 +18,8 @@ import { runScenario } from "../../run-scenario.js";
  */
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 const runnerSource = () => readFile(path.join(root, "packages", "test-runner", "src", "run-scenario.ts"), "utf8");
+/** One of the runner's own collaborators under `run-scenario/`, for a rule the split moved out of the spine. */
+const runnerModuleSource = (...segments: string[]) => readFile(path.join(root, "packages", "test-runner", "src", ...segments), "utf8");
 
 test("the runner evaluates every run it observes, exactly once", async () => {
   const source = await runnerSource();
@@ -418,6 +420,9 @@ test("the runner tells the created-Flow lane where the Flow starts, using the ad
   const source = await runnerSource();
   assert.match(source, /startLocation: scenarioStartUrl\(topology\.scenarioOrigin, scenario\),/u, "the created lane is told where its Flow starts");
   // The harness's own load goes through the same expression, so the page it
-  // opens and the page Core names can never be two different pages.
-  assert.match(source, /await page\.goto\(scenarioStartUrl\(scenarioOrigin, scenario\)\);/u);
+  // opens and the page Core names can never be two different pages. The load
+  // itself is `run-scenario/open-scenario-start.ts` since t150 split the runner;
+  // the guarantee is that the two addresses come from one expression, so it is
+  // checked wherever that expression is written.
+  assert.match(await runnerModuleSource("run-scenario", "open-scenario-start.ts"), /await page\.goto\(scenarioStartUrl\(scenarioOrigin, scenario\)\);/u);
 });
