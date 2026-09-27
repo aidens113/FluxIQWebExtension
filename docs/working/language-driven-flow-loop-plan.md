@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1 remains active with a zero-pass streak and run 4 remains the latest accepted failed product measurement. Its measured draft-input loss is corrected inside the unchanged reservation; provider-free Core/downstream gates and corrected-order output freshness are green apart from the documented downstream worktree-fixture environment block. Final candidate review, integration, and a fresh no-hindsight authorization remain; no provider call is authorized.
+Status detail: Rung 1 remains active with a zero-pass streak and run 4 remains the latest accepted failed product measurement. Its measured draft-input loss is corrected inside the unchanged reservation; provider-free gates, corrected-order output freshness, final candidate review, and local Core/downstream integration are green. Remote delivery is blocked by expired GitHub authentication, and a fresh no-hindsight authorization remains; no provider call is authorized.
 Created: 2026-09-24
 Last updated: 2026-09-27
 Owner: Senior supervisor agent
@@ -120,23 +120,22 @@ grant-continuation chain is locally validated but remains live-unproven; no curr
 persistence, provider-free replay, recursive post-replay judgement, or terminal grant revocation.
 
 **The next action** remains provider-free. Core reproduces the 26-decision failure and an 11-decision
-fixture-defined completion, and the unchanged-budget `step_rows_v1` correction retains all 7-22
-bounded inputs through decision 26; this is not provider convergence. The supervisor observed Core
-`pnpm check` and downstream `pnpm -r check`, `pnpm test`, and `pnpm build` exit 0; worker evidence
-records Core root test/build/docs/structure success and t409 records corrected-order output freshness
-and identity. Downstream root `pnpm check` remains qualified only by the known task-fixture block:
-89/120 passed and 31 `git worktree add` cases failed with `cannot spawn git: Exec format error`;
-all non-worktree gates passed. Freeze the repositories, complete final candidate/staged-path review,
-reconcile Current State, and decide integration. Only after exact identity, dry-run, no-hindsight
-Stage 1 and its 13-record oracle, the evidence/debug contract, and the one-Lab machine predicate are
-frozen may the supervisor issue one fresh command-specific authorization. No unchanged run 5 or
-provider call is authorized now.
+fixture completion, while `step_rows_v1` retains all 7-22 bounded inputs through decision 26; this is
+not provider convergence. Final candidate/privacy/report gates are green, and t170 is merged locally
+into clean Core and downstream `dev` trees. Both real finish gates ran full `pnpm check`; downstream
+task fixtures passed 120/120 under a process-local `GIT_EXEC_PATH` correction for the machine's
+zero-byte internal Git executable. Remote refresh found zero inbound divergence, but the Core-first
+push stopped on expired GitHub authentication, so downstream was not pushed. After re-authentication,
+push Core then downstream. Then freeze integrated identities, dry-run, no-hindsight Stage 1 and its
+13-record oracle, the evidence/debug contract, and the one-Lab machine predicate. Panel management
+requires current-session user authorization before one fresh command-specific authorization. No
+unchanged run 5 or provider call is authorized now.
 
 **Blockers:** Flow creation remains unreliable and run 4's later stages remain unmeasured. The
-draft-loss correction is provider-free validated and output-fresh but is not integrated or live-
-proven; final candidate/staged-path review and a fresh command-specific authorization still precede
-any provider call. The bounded artifacts publish no terminal grant lifecycle property, and the
-worktree-spawn limitation remains operational rather than product evidence.
+draft-loss correction is locally integrated but not live-proven; remote delivery waits on GitHub
+re-authentication, and a fresh command-specific authorization plus current-session panel permission
+still precede any provider call. The bounded artifacts publish no terminal grant lifecycle property;
+the repaired task-fixture launch path is operational evidence, not product evidence.
 ---
 
 ## What This Batch Established

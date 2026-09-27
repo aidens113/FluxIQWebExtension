@@ -1,7 +1,7 @@
 # MVP Today
 
 Status: Active
-Status detail: Run 4 remains the latest accepted failed product measurement and the pass streak remains 0. Its measured draft-input loss is corrected inside the unchanged 4,000-byte reservation; provider-free Core/downstream gates and corrected-order output freshness are green apart from the documented downstream worktree-fixture environment block. Final candidate review, integration, and a fresh no-hindsight authorization remain; no provider call is authorized.
+Status detail: Run 4 remains the latest accepted failed product measurement and the pass streak remains 0. Its measured draft-input loss is corrected inside the unchanged 4,000-byte reservation; provider-free gates, corrected-order output freshness, final candidate review, and local Core/downstream integration are green. Remote delivery is blocked by expired GitHub authentication, and a fresh no-hindsight authorization remains; no provider call is authorized.
 Created: 2026-09-26
 Last updated: 2026-09-27
 Owner: Senior supervisor agent
@@ -92,16 +92,16 @@ output tokens, 374,524 total, estimated USD 0.049289784. All 26 calls are itemiz
 unrecorded or pending calls and zero typed budget breaches. The two evidence-byte projections and
 the two accounting projections are retained separately and are not added.
 
-**Next.** The provider-free correction gates are green: the supervisor observed Core `pnpm check`
-and downstream `pnpm -r check`, `pnpm test`, and `pnpm build` exit 0; worker evidence records Core
-root test/build/docs/structure success and t409 records corrected-order output freshness and identity.
-Downstream root `pnpm check` remains qualified only by the known task-fixture environment block:
-89/120 passed and 31 `git worktree add` cases failed with `cannot spawn git: Exec format error`;
-all non-worktree gates passed. Freeze the exact repositories, complete the final candidate/staged-
-path sensitive-data and inclusion review, reconcile Current State, and make the integration decision.
-Only after the exact identity, provider-free dry-run, no-hindsight Stage 1, 13-record oracle,
-evidence/debug contract, and one-Lab machine predicate are frozen may the supervisor issue one fresh,
-explicit, command-specific authorization. No provider call is authorized now.
+**Next.** Final candidate, staged-path, privacy, report-chain, and working-document gates are green,
+and t170 is merged locally into `dev` in Core and downstream with clean trees. Both real finish gates
+ran full `pnpm check` successfully; downstream task fixtures passed 120/120 under a process-local
+`GIT_EXEC_PATH` correction for the machine's zero-byte internal Git executable. Remote refresh found
+zero inbound divergence, but the Core-first push stopped because GitHub authentication is expired;
+downstream was therefore not pushed. After authentication is restored, push Core then downstream.
+For the next measurement, freeze the integrated identities, provider-free dry-run, no-hindsight
+Stage 1, 13-record oracle, evidence/debug contract, and one-Lab machine predicate. Panel management
+requires current-session user authorization; only then may the supervisor issue one fresh, explicit,
+command-specific live authorization. No provider call is authorized now.
 
 **Fix-first local evidence.** The deterministic Core service fixture now reproduces 26 decisions,
 22 tool calls, repeated unchanged answerability, exact accounting, no persistence, and one revoke;
@@ -130,9 +130,9 @@ integration remain. This does not establish provider convergence.
 
 **Blockers.** Flow creation remains unreliable, and runs 3 and 4 leave runtime, exact answer,
 judgement, repair persistence, zero-provider replay, recursive post-replay judgement, and terminal
-revocation unmeasured. The draft-loss correction is provider-free validated and output-fresh but is
-not integrated or live-proven. Final candidate/staged-path review and a fresh command-specific
-authorization still precede any provider call.
+revocation unmeasured. The draft-loss correction is locally integrated but not live-proven. Remote
+delivery waits on GitHub re-authentication; a fresh command-specific authorization and current-session
+panel permission still precede any provider call.
 
 ---
 
