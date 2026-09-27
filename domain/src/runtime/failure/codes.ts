@@ -72,6 +72,39 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    * refusal. The model is told `web.action.rejected.blocked_by_dialog`.
    */
   BLOCKED_BY_DIALOG: "web.action.blocked_by_dialog",
+  /**
+   * The browser refused the action because this extension may not touch that
+   * page: a host the manifest does not request, a `chrome://` or gallery URL, or
+   * an enterprise policy that forbids scripting it.
+   *
+   * It has its own code because the closed set had none, and the cost of that was
+   * measured: `test-runs/run-muht9lpw-a39aa056` reported *"Cannot access contents
+   * of url \"about:blank\". Extension manifest must request permission to access
+   * this host."* as `web.action.failed`, which is **retryable**, so Core's ladder
+   * spent three attempts at 250 ms and 1000 ms on a fault only a manifest edit can
+   * clear, then fell to diagnosis and ended the run
+   * (`docs/working/language-driven-flow-loop-plan/reports/t163-defensive-runtime-audit.md`,
+   * section 2). The retry machinery was working exactly as designed and being fed
+   * a wrong answer.
+   *
+   * Absorbing the transient and refusing the deterministic is one rule, not two:
+   * a code that says "no retry can help" is as much a part of a defensive runtime
+   * as a code that says "wait and try again".
+   */
+  BROWSER_PERMISSION_DENIED: "web.browser.permission_denied",
+  /**
+   * The channel to the page failed in a way another attempt can clear: the
+   * content script had not been injected in the frame yet, the message port
+   * closed before the reply, or the frame was replaced while the command was in
+   * flight.
+   *
+   * Distinct from ACTION_FAILED, which it used to be reported as, because
+   * ACTION_FAILED means "the verb ran and failed for a reason no code names" and
+   * this means the verb was never reached. Both are retryable, so the difference
+   * buys no retry -- it buys a diagnosis that says where to look, which is the
+   * difference between a repair that changes the Flow and one that waits.
+   */
+  TRANSPORT_TRANSIENT: "web.transport.transient",
   /** The client does not implement the requested action type at all. */
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
@@ -147,6 +180,12 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.blocked_by_dialog": { category: "unexpected_state", retryable: false, stage: "execution" },
+  // A page this extension may not touch answers the same way however many times
+  // it is asked, so the row says so: `dispatch`, because the browser refused
+  // before the verb was reached, and not retryable.
+  "web.browser.permission_denied": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  // The verb was never reached and the next attempt may reach it.
+  "web.transport.transient": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },

@@ -17,9 +17,17 @@ export const webAutomationManifestOutputs = webAutomationActionDefinitions.map((
   description: action.description,
   schema: action.parameterSchema,
   capabilities: ["web.actions"],
+  // `level` describes how sure a target match must be before Core will act on
+  // it (`runtime/io-policy.ts`), which is the only thing Core reads it for, so it
+  // stays. `requiresApproval` was `!== "safe"` -- every output that touches the
+  // page, so every click, navigation and scroll -- and that is a claim that an
+  // action needs a person because of what kind of action it is. Nothing in Core
+  // reads it today, which is exactly why it was worth removing rather than
+  // leaving permissive: wiring it up later would gate scrolling (t166). What
+  // needs a person is decided by what an action declares it would cause, and
+  // Core's action permission gate still decides it.
   safety: {
-    level: WEB_AUTOMATION_ACTION_SAFETY[action.actionType],
-    requiresApproval: WEB_AUTOMATION_ACTION_SAFETY[action.actionType] !== "safe"
+    level: WEB_AUTOMATION_ACTION_SAFETY[action.actionType]
   },
   ...manifestMetadata(action)
 }));

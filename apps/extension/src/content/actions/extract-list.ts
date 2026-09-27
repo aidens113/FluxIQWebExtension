@@ -14,8 +14,9 @@
 //
 // Beside the records, every read that returned reports its own account as the
 // result's `extraction` (C2): how many records, how many pages, whether a cap
-// cut it short, whether the page ever showed the list at all, and which
-// required fields some record lacked. Its `fieldNames` are the
+// cut it short, how many items the selector named, how many rows came back
+// empty, whether the page ever showed the list at all, what the wait for it did,
+// and which required fields some record lacked. Its `fieldNames` are the
 // request's field keys with excluded fields left out, because an excluded
 // column is never read (D12). The domain's wire copy drops the whole summary
 // when a missing field is not one of `fieldNames`, so the two lists are built
@@ -76,7 +77,23 @@ function includedFieldNames(request: WebAutomationExtractListRequest): string[] 
     .map(([name]) => name);
 }
 
-/** The read's account of itself: counts, a flag and declared field keys, and nothing read off the page. */
+/**
+ * The read's account of itself: counts, a flag and declared field keys, and
+ * nothing read off the page.
+ *
+ * `itemsSeen` and `emptyRecords` are the two counts a zero read is diagnosed by,
+ * and they are sent only when the page counted them, because the domain's copy
+ * treats them as optional precisely so an older extension build still sends a
+ * summary that arrives whole (`domain/src/actions/extraction/summary.ts`).
+ *
+ * **`listWait` is the third, and it is a field rather than a phrase because a
+ * phrase cannot be counted.** The wait's account has been in the comparison text
+ * since the wait was fixed, and that reads well and tallies to nothing: the
+ * regression it describes was found by arithmetic on `durationMs` across ten
+ * bundles, and a scan looking for `stoppedOn: "page_settled"` beside
+ * `recordCount: 0` has to group by a field. The presence is not repeated inside
+ * it -- `listPresence` is that fact, and two copies of one fact can disagree.
+ */
 function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionSummary {
   return {
     recordCount: outcome.records.length,
@@ -84,19 +101,59 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     truncated: outcome.truncated,
     missingFields: [...outcome.missingFields],
     fieldNames: [...fieldNames],
+    ...(outcome.itemsSeen === undefined ? {} : { itemsSeen: outcome.itemsSeen }),
+    ...(outcome.emptyRecords === undefined ? {} : { emptyRecords: outcome.emptyRecords }),
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
+    ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
     ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {})
   };
 }
 
+/**
+ * Whether the post-condition held, and the phrase that says why.
+ *
+ * **A column some rows had nothing in is not a shortfall.** Only a field the
+ * author wrote `required: true` on is, and `outcome.missingFields` is that list
+ * (`extraction/field-spec.ts`). Until 2026-09-26 the string grammar asserted
+ * `required` for every field, so a page where three cards of forty-three carried
+ * no rating failed here -- `output_not_observed`, a failed node, nothing stored
+ * where forty good rows existed. A default that turns a wide answer into an empty
+ * one is the shape this product does not take.
+ *
+ * **What replaces the failure is a stated gap**, and it is stated whether the
+ * read passed or failed, because a read that answers with forty rows and says
+ * nothing about the three that are short reads as complete. `blankFields` names
+ * the columns and `incompleteRecords` counts the rows, so the answer is wide,
+ * visibly imperfect, and repairable -- which is what the loop converges on.
+ */
 function validationFor(outcome: Outcome, minItems: number, expected: string): BrowserActionValidation {
+  const gap = recordGap(outcome);
+  if (outcome.records.length >= minItems && outcome.missingFields.length === 0) {
+    return { status: "passed", expected, actual: `${readSummary(outcome)}; ${gap ?? "every declared field present"}` };
+  }
   const shortfalls = [
     ...(outcome.records.length < minItems ? [`fewer than the ${minItems} required`] : []),
-    ...(outcome.missingFields.length > 0 ? [`missing from some records: ${outcome.missingFields.join(", ")}`] : [])
+    ...(outcome.missingFields.length > 0 ? [`required fields missing from some records: ${outcome.missingFields.join(", ")}`] : []),
+    ...(gap ? [gap] : [])
   ];
-  return shortfalls.length === 0
-    ? { status: "passed", expected, actual: `${readSummary(outcome)}; every declared field present` }
-    : { status: "failed", expected, actual: `${readSummary(outcome)}; ${shortfalls.join("; ")}` };
+  return { status: "failed", expected, actual: `${readSummary(outcome)}; ${shortfalls.join("; ")}` };
+}
+
+/**
+ * The columns some returned rows had nothing in, and how many rows those were,
+ * or nothing at all for a read whose every row is whole. Field keys and counts
+ * only: no page text.
+ */
+function recordGap(outcome: Outcome): string | undefined {
+  const blank = outcome.blankFields ?? [];
+  const incomplete = outcome.incompleteRecords ?? 0;
+  if (blank.length === 0 && incomplete === 0) return undefined;
+  const rows = `${count(incomplete, "record")} short of a declared field`;
+  const empty = outcome.emptyRecords ?? 0;
+  const whole = empty > 0 && empty === outcome.records.length && outcome.records.length > 0
+    ? ", and every returned record is empty, so the fields were read off the wrong element"
+    : "";
+  return blank.length === 0 ? `${rows}${whole}` : `${rows}, blank in ${blank.join(", ")}${whole}`;
 }
 
 /**
@@ -114,6 +171,22 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
  * (`extraction/page-render.ts`). It is said and the read still succeeds: an
  * empty page is a legitimate answer, so this adds a fact rather than a verdict.
  *
+ * **And it says what the wait for the list did**, because "no records" with no
+ * account of the waiting is a duration to be interpreted rather than a fact to
+ * be read. On 2026-09-25 a wait that ended on two seconds of page stillness
+ * turned four live reads into zero-record answers on pages whose lists were
+ * four to eight seconds away, and establishing that from the bundles took a day
+ * of matching durations against constants, because the only thing published
+ * about the wait was that it had happened. So the phrase names how many items
+ * were waited for, how long it took, and which of four things ended it
+ * (`ListWait`). The same three facts are declared on the wire summary as
+ * `listWait` (`domain/src/actions/extraction/summary.ts`) and the two are not
+ * redundant: the field is what a scan over a run's bundles can group by, and the
+ * phrase is what a model reading one failure's evidence actually reads, since
+ * `client/gateway-mapping.ts` carries the comparison text as "the only place the
+ * evidence for a failure lives". `summaryOf` sends the field; this says it in
+ * words, and both are built from the same `ListWait`, so they cannot disagree.
+ *
  * **A read whose conditions kept nothing says so next**, because that is the
  * one thing about such a read worth reading. It answers with the rows they rejected
  * rather than with none (`extraction/list-reader.ts`), so without the phrase the
@@ -123,15 +196,56 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
  * (`run-mug3tnti-9ab80b85`).
  */
 function readSummary(outcome: Outcome): string {
-  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}`;
+  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${faultAccount(outcome)}`;
   if (outcome.listPresence === "never_appeared") {
-    return `${read}; the item selector named nothing on the page, so the list never appeared -- change the selector rather than the fields or the conditions`;
+    return `${read}; the item selector named nothing on the page, so the list never appeared${waitAccount(outcome.listWait)} -- change the selector rather than the fields or the conditions`;
   }
   const report = outcome.conditions;
   if (report?.unfiltered) {
     return `${read}, but where kept none of the ${count(report.applied, "item")} it was applied to, so the rows it rejected were returned unfiltered${culprits(report)} -- narrow the conditions rather than trusting these rows`;
   }
   return `${read}${outcome.filtered > 0 ? `, ${count(outcome.filtered, "item")} left out by where` : ""}`;
+}
+
+/**
+ * What the read could not get, for a read the page faulted under.
+ *
+ * It says the shortfall rather than hiding it, and that is the whole point of
+ * absorbing the fault at all: a read that skipped four rows because the page
+ * recycled them, or that stopped after three pages because the next control
+ * threw, is answering with less than it was asked for, and an answer that does
+ * not say so is worse than a failure. The rows it *did* get are still returned
+ * (`extraction/list-reader.ts`), which is what this repository's worst failures
+ * did not do -- one detached node used to discard forty good rows.
+ *
+ * Nothing is said for a read that faulted nowhere, so a clean read's phrase is
+ * unchanged.
+ */
+function faultAccount(outcome: Outcome): string {
+  const items = outcome.itemFaults ?? 0;
+  const parts = [
+    ...(items > 0 ? [`${count(items, "item")} could not be read and were skipped`] : []),
+    ...(outcome.pageFault ? ["the move to the next page failed, so the read ends with the pages it has"] : [])
+  ];
+  return parts.length === 0 ? "" : `, and ${parts.join(", and ")}`;
+}
+
+/** What ended the wait for the list, in words, so no reader has to know a constant to read the phrase. */
+const STOPPED_ON: Record<NonNullable<Outcome["listWait"]>["stoppedOn"], string> = {
+  list_present: "the list arriving",
+  page_settled: "the page holding still with the list already part drawn",
+  window_elapsed: "the read's own render window running out",
+  deadline_passed: "the command's timeout running out"
+};
+
+/**
+ * How long the read waited for the list, for how many items, and what ended the
+ * wait. Absent for a continued read, which waits for its predecessor's page
+ * rather than for a list and has no such account to give.
+ */
+function waitAccount(wait: Outcome["listWait"]): string {
+  if (!wait) return "";
+  return `, after waiting ${wait.waitedMs}ms for ${count(wait.waitedFor, "item")} and stopping on ${STOPPED_ON[wait.stoppedOn]}`;
 }
 
 /**

@@ -3,17 +3,37 @@
 // it.
 //
 // A field arrives in one of two forms (`WebAutomationExtractField`):
-// - today's string grammar, always required as it always was: a plain selector
-//   reads text, an empty one reads the item itself, `selector@attribute` reads
-//   an attribute, and `column:<header text>` reads the cell under that header.
-//   An `@` only introduces an attribute when what follows is a valid attribute
-//   name, so a selector that contains one -- `[data-owner="a@b"]` -- stays a
-//   selector;
+// - today's string grammar: a plain selector reads text, an empty one reads the
+//   item itself, `selector@attribute` reads an attribute, and
+//   `column:<header text>` reads the cell under that header. An `@` only
+//   introduces an attribute when what follows is a valid attribute name, so a
+//   selector that contains one -- `[data-owner="a@b"]` -- stays a selector;
 // - the structured spec, which names the same reads plus `link` (an `href`
 //   resolved against the page) and `value` (a form control's live value), and
-//   adds `required` (true unless it says `false`) and `handling`. A `column`
+//   adds `required` (true only when it says so) and `handling`. A `column`
 //   spec reads the cell under its header; it has no selector of its own, so one
 //   sent with it is not used.
+//
+// **A field is required only where the author said so, and the string grammar
+// says nothing.** Until 2026-09-26 `parseStringField` returned `required: true`
+// for every field, which was how it had always been -- and `required` is what
+// makes a record the page could not fill completely fail the verb's
+// post-condition (`content/actions/extract-list.ts`). So the ordinary thing a
+// model writes, `fields: { name: ".name", price: ".price", rating: ".rating" }`,
+// on a page where three cards of forty-three carry no rating, failed the whole
+// read: `output_not_observed`, a failed node, and **nothing stored where forty
+// good rows existed**. A default that turns a wide answer into an empty one is
+// the shape this product does not take -- the least the model could write has to
+// do something sensible, and the repair is what sharpens it. So an omitted
+// `required` means `false`: the record carries `null` for the cell the page
+// could not fill (D16), the read says which columns came back blank and how
+// many rows were short, and `required: true` stays available and still means
+// exactly what it says for a Flow that means it.
+//
+// What it costs, stated: a page that renamed a column no longer fails the read
+// on its own. It reports the rename instead -- the column named among the blank
+// ones, and, where every column went, `emptyRecords` equal to the record count.
+// Forty rows with a gap the read names is a repairable answer; nothing is not.
 //
 // Handling is decided here, before anything on the page is read:
 // - `exclude` drops the field, so `normalizeExtractField` answers `undefined`
@@ -55,11 +75,15 @@ export function normalizeExtractField(name: string, field: ExtractField): Extrac
   return normalizeSpec(name, field);
 }
 
+/**
+ * A field written as a bare selector. The grammar has no way to say `required`,
+ * so nothing here is required: see the header for what asserting it cost.
+ */
 function parseStringField(spec: string): ExtractFieldReader {
   if (spec.startsWith(COLUMN_PREFIX)) {
     const header = normalizeText(spec.slice(COLUMN_PREFIX.length));
     if (!header) throw new Error(`The extract_list field ${JSON.stringify(spec)} names no column header.`);
-    return { kind: "column", header, required: true };
+    return { kind: "column", header, required: false };
   }
   const at = spec.lastIndexOf("@");
   const candidate = at < 0 ? "" : spec.slice(at + 1);
@@ -67,8 +91,8 @@ function parseStringField(spec: string): ExtractFieldReader {
   const selector = (attribute === undefined ? spec : spec.slice(0, at)).trim();
   const where = selector ? { selector } : {};
   return attribute === undefined
-    ? { kind: "text", ...where, required: true }
-    : { kind: "attribute", ...where, attribute, required: true };
+    ? { kind: "text", ...where, required: false }
+    : { kind: "attribute", ...where, attribute, required: false };
 }
 
 function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader | undefined {
@@ -77,7 +101,11 @@ function normalizeSpec(name: string, spec: ExtractFieldSpec): ExtractFieldReader
   if (handling === "encrypt") throw encryptNotImplemented(name);
   if (handling !== "include") throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a handling the page does not know.`);
 
-  const required = spec.required !== false;
+  // Only an explicit `true` requires the field, so a spec the model wrote without
+  // one means what the same field written as a bare selector means (see the
+  // header). The picker never relies on the default -- `infer-fields.ts` sets
+  // `required` from the coverage it measured on the page.
+  const required = spec.required === true;
   const selector = typeof spec.selector === "string" ? spec.selector.trim() : "";
   const where = selector ? { selector } : {};
   const kind: unknown = spec.kind;

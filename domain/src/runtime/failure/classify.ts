@@ -17,6 +17,7 @@
 // can never reach the wire structureless.
 
 import type { WebAutomationActionStatus, WebAutomationActionType, WebAutomationActionValidation } from "../../actions/types";
+import { webBrowserApiFailureCode } from "./browser-api";
 import { carriedWebAutomationFailure } from "./carrier";
 import {
   WEB_AUTOMATION_FAILURE_CODES,
@@ -91,12 +92,19 @@ function classifyOutcome(error: unknown, outcome: WebAutomationActionOutcome): C
     return { code, comparison: compared };
   }
   if (error !== undefined && error !== null) {
-    return { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, comparison: withActual(compared, errorMessage(error) ?? "the action threw a value that carried no message") };
+    const thrown = errorMessage(error);
+    // The browser's own refusal, when that is what threw. ACTION_FAILED is
+    // retryable, so a manifest-permission fault reported as one costs a whole
+    // ladder before answering the same way; `browser-api.ts` has the measurement.
+    return {
+      code: webBrowserApiFailureCode(thrown) ?? WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED,
+      comparison: withActual(compared, thrown ?? "the action threw a value that carried no message")
+    };
   }
   if (outcome.status === "failed" || outcome.status === "unknown") {
     const message = outcome.message;
     if (message === undefined || message.trim().length === 0) return { code: WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, comparison: compared };
-    return { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, comparison: withActual(compared, message) };
+    return { code: webBrowserApiFailureCode(message) ?? WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, comparison: withActual(compared, message) };
   }
   return undefined;
 }

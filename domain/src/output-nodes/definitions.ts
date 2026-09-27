@@ -1,7 +1,6 @@
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
-import { WEB_AUTOMATION_ACTION_SAFETY } from "../actions/safety";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionDefinition } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
@@ -80,6 +79,54 @@ const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description
 const VERIFIES_STATE_METADATA_KEY = "verifiesState";
 
 /**
+ * Whether a verb reads the page or changes it, stated per verb so Core can ask
+ * the node about repeat safety instead of inferring it from a failure's stage.
+ *
+ * Core's defensive policy admits a retry after a `verification`-staged failure
+ * when the node says it only observes (`automationStudioNodeRepeatIsSafe`), and
+ * withholds one for an ambiguous fault when the node says it mutates
+ * (`automationStudioNodeMutates`). Without this every web verb was
+ * indistinguishable to it: all eighteen dispatch through `builtin.policy.action`,
+ * whose side-effect class is `external` unconditionally, so a rule keyed on that
+ * class alone was a no-op for every node in this domain.
+ *
+ * It is the same vocabulary as Core's `AutomationStudioActionEffect`, so it
+ * introduces no concept. It is a **total** record rather than two lists, so a
+ * verb added later does not compile until somebody has decided whether repeating
+ * it is safe -- which is the one question this answers and the one that must not
+ * be answered by default.
+ *
+ * A read is `observe` even when it waits or scrolls: waiting again is harmless
+ * and a delta scroll that runs twice moves the viewport, which no downstream step
+ * depends on. `web.browser.tab` observes because the operations it performs are
+ * idempotent in the sense that matters here -- asking for the same tab twice
+ * leaves one tab. Everything that presses, types, uploads, answers a dialog,
+ * navigates or downloads mutates, and mutating is the answer whenever there is
+ * doubt: this record is read to decide whether an action may be repeated, so the
+ * cost of being wrong is one-sided.
+ */
+const WEB_AUTOMATION_ACTION_EFFECT: Readonly<Record<WebAutomationActionType, "observe" | "mutate">> = Object.freeze({
+  "web.browser.navigate": "mutate",
+  "web.browser.download": "mutate",
+  "web.browser.tab": "observe",
+  "web.dom.click": "mutate",
+  "web.dom.type": "mutate",
+  "web.dom.clear": "mutate",
+  "web.dom.select": "mutate",
+  "web.dom.keypress": "mutate",
+  "web.dom.check": "mutate",
+  "web.dom.upload": "mutate",
+  "web.dom.dialog": "mutate",
+  "web.dom.scroll": "observe",
+  "web.dom.wait_for_selector": "observe",
+  "web.dom.wait_for_text": "observe",
+  "web.dom.extract": "observe",
+  "web.dom.extract_list": "observe",
+  "web.dom.capture_snapshot": "observe",
+  "web.dom.assert": "observe"
+});
+
+/**
  * The outputs that prove state rather than change it: each succeeds only when
  * the page shows what the node asked for. A click, a typed value or a
  * navigation succeeding says nothing about whether the page then looked right,
@@ -109,7 +156,6 @@ export const webAutomationOutputNodeDefinitions: AutomationStudioNodeDefinition[
 );
 
 export function createWebAutomationOutputNodeDefinition(definition: WebAutomationActionDefinition): AutomationStudioNodeDefinition {
-  const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
   const requiredParameters = new Set(
     Array.isArray(definition.parameterSchema.required)
       ? definition.parameterSchema.required.filter((value): value is string => typeof value === "string")
@@ -133,9 +179,23 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     availability: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID },
     capabilities: { executable: true, stateAware: true, recordable: true },
     requiredRuntimeCapabilities: ["web.actions"],
+    // **No node is privileged or approval-gated for being the kind of action it
+    // is (t166).** These two flags were `!safeOutput` -- true for every output
+    // that touches the page, which is every click, keypress, navigation, scroll,
+    // selection and upload -- and Core reads them as permission rather than as
+    // description. `runtime/llm/harness-options/registry.ts` drops an option
+    // whose `requiresOperatorApproval` is true and whose tool id nobody
+    // pre-approved, silently, so the model is not offered the tool at all; and
+    // `runtime/flow-bootstrap/plan/risk.ts` marks any plan containing a
+    // privileged node `high`, which is what keeps a repair from applying itself.
+    // Neither asks what the action would actually cause. What it would cause is
+    // declared per action and gated by Core's action permission gate, which is
+    // untouched and is where a delete or a checkout is still stopped and put to
+    // the person. `requiredPermissions` stays: that is who may operate this
+    // domain at all, not whether this press is allowed.
     safety: {
-      privileged: !safeOutput,
-      requiresOperatorApproval: !safeOutput,
+      privileged: false,
+      requiresOperatorApproval: false,
       requiredPermissions: ["web-automation.action"]
     },
     outputAction: { fixedOutputId: definition.actionType },
@@ -155,6 +215,9 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
       parameterSchema: definition.parameterSchema,
+      // Read or change: the question Core's defensive policy asks before it
+      // repeats an action. See WEB_AUTOMATION_ACTION_EFFECT above.
+      effect: WEB_AUTOMATION_ACTION_EFFECT[definition.actionType],
       // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
       // recorded fingerprint against the runtime candidates, and applies its
       // confidence floor, only for an output that declares this. The flag is

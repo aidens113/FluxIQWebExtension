@@ -153,3 +153,59 @@ test("each of the seven new action types dispatches under its own output id", as
     assert.deepEqual(effect?.payload, { outputId, parameters: { selector: "#target" } });
   }
 });
+
+/**
+ * A throw out of the implementation, which used to end the whole session.
+ *
+ * All eighteen of these nodes run through Core's `options.nativeNodeExecutor`
+ * (`AS/runtime/executor/node-execution.ts:87`), which sits **outside** the try
+ * block that guards `definition.execute`. A throw here propagated to
+ * `service.ts`, which ended the session and rethrew: no attempt row, no ladder,
+ * no repair, and no trace row naming the node that did it
+ * (`docs/working/language-driven-flow-loop-plan/reports/t163-defensive-runtime-audit.md`,
+ * section 3). Core gaining that guard is Core's half; this is the half that does
+ * not depend on it.
+ *
+ * The throw is provoked through the parameters rather than by stubbing, because a
+ * `getter` on the context's own parameters is what a real fault looks like here:
+ * something the implementation reads while preparing the command misbehaves.
+ */
+test("an implementation that throws while preparing its command returns a failed result instead of ending the run", async () => {
+  const implementation = bundle.implementations["web.dom.click"];
+  assert.ok(implementation, "web.dom.click has no bound implementation");
+  const parameters = {} as Record<string, JsonValue>;
+  Object.defineProperty(parameters, "selector", {
+    enumerable: true,
+    get() {
+      throw new Error("reading the parameter threw");
+    }
+  });
+  const context = { inputs: {}, parameters, log: () => undefined } as unknown as AutomationStudioNativeNodeContext;
+
+  const result = await implementation(context);
+  assert.equal(result.status, "failed");
+  assert.equal(result.route, "failed");
+  assert.deepEqual(result.effects, [], "nothing may be dispatched for a command that could not be prepared");
+  assert.equal(result.failure?.code, "output_node.implementation_threw");
+  assert.equal(result.failure?.retryable, false, "the same parameters will not parse differently next time");
+  assert.equal(result.failure?.stage, "dispatch");
+  assert.match(String(result.failure?.actual), /reading the parameter threw/u);
+  assert.match(String(result.message), /could not be prepared/u);
+});
+
+test("the extraction node's own throw is caught the same way, and reports the node rather than the reason alone", async () => {
+  const implementation = bundle.implementations["web.dom.extract_list"];
+  assert.ok(implementation, "web.dom.extract_list has no bound implementation");
+  const parameters = {} as Record<string, JsonValue>;
+  Object.defineProperty(parameters, "extractList", {
+    enumerable: true,
+    get() {
+      throw new Error("the request threw while being read");
+    }
+  });
+  const context = { inputs: {}, parameters, log: () => undefined } as unknown as AutomationStudioNativeNodeContext;
+
+  const result = await implementation(context);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.outputs, { error: { code: "output_node.implementation_threw", outputId: "web.dom.extract_list" } });
+});

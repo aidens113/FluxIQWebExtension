@@ -53,29 +53,60 @@
 // The run before it, `run-muher0en-508ddb69`, shows the same figure eight
 // times.
 //
+// **On 2026-09-25 that observation was acted on the wrong way round, and it
+// became the loop's dominant failure.** `a05134a` ended the wait for the list
+// to *appear* as soon as the document had finished loading and been
+// mutation-quiet for `PAGE_STILL_MS`, whether or not a single item had matched,
+// reasoning that `querySelectorAll` can only start matching when a node is
+// added or removed or an attribute changes, so a quiet complete document cannot
+// discover anything in the rest of the window. The reasoning is right about the
+// DOM and wrong about pages: **a page whose next change comes from a
+// `setTimeout` is mutation-quiet and `readyState: "complete"`, and is
+// indistinguishable from a finished one.** That is every gate a real site puts
+// in front of a list -- a notification prompt whose backdrop covers the whole
+// page and lifts four seconds after load, a browser check that passes a
+// shopper who simply waits eight seconds in and then reloads onto what was
+// asked for. Fourteen live extraction attempts at
+// `everything-store-plus-earbuds-under-50` separate on this and on nothing
+// else: 2089, 2576, 2109 and 2082 ms read **zero** records, while 255, 4631,
+// 6935, 10068, 11082, 14256, 14258 and 14264 ms read rows. The read declared
+// the page incapable of producing a list while the list was two to six seconds
+// away. (`docs/working/language-driven-flow-loop-plan/reports/
+// t143-why-the-read-returns-nothing.md` is the measurement.)
+//
+// **So stillness is evidence about a list that is there, never about one that
+// is not.** A quiet document holding twelve items where the read wants sixteen
+// has said what it has -- the sixteenth is not coming, and that wait ends on
+// `PAGE_STILL_MS`, which is the saving `a05134a` was after and the part of it
+// that was sound. A quiet document holding *none* has said nothing at all: an
+// empty match and a settled page are two different facts, and only the first is
+// about the answer. That wait therefore pays `RENDER_WINDOW_MS`, the command's
+// `timeoutMs` and its own deadline, exactly as it did before `a05134a`, and a
+// page that truly never had a list pays the whole of it -- which is the price of
+// not reporting a gate as an empty page. Making `PAGE_STILL_MS` larger would
+// not have fixed it and would have slowed every honest empty read: no constant
+// tells a page that is finished from a page that is waiting on a timer.
+//
 // **And a wait that ran out is a fact about the read, not a detail of the
-// wait.** Stopping early saves the seconds; it does not tell the model why it
-// got nothing. A read whose `item` selector named nothing still answers
-// `succeeded` with zero records, which is exactly what a page holding nothing
-// answers, and the two need different repairs: one changes the selector, the
-// other the instruction. That is the same defect
+// wait.** A read whose `item` selector named nothing answers `succeeded` with
+// zero records, which is exactly what a page holding nothing answers, and the
+// two need different repairs: one changes the selector, the other the
+// instruction. That is the same defect
 // `WebAutomationExtractionConditionReport` was written for one layer down --
 // "a filtered read that answers with nothing is indistinguishable from a page
 // with nothing on it" -- so it is answered the same way, with a fact in the
-// summary rather than a failure. `awaitListPresent` therefore says whether the
-// list was ever there (`ListPresence`), `list-reader.ts` carries it out on the
-// read's outcome, and `domain/src/actions/extraction/summary.ts` puts it on the
-// wire in one closed word.
-//
-// So `awaitListPresent` stops when the answer stops being able to change.
-// `querySelectorAll` can only start matching when a node is added or removed or
-// an attribute changes; no CSS selector reads text, so character data cannot do
-// it. A document that has finished loading and has had neither for
-// `PAGE_STILL_MS` is therefore a document whose answer is settled, and waiting
-// out the rest of the ceiling cannot discover anything. A page that is still
-// drawing, fetching into the DOM, spinning a skeleton or toggling a class is
-// not still, and pays exactly the ceiling it paid before -- which is what keeps
-// this from being the number made smaller and hoped over.
+// summary rather than a failure. `awaitListPresent` therefore returns a
+// `ListWait`: whether the list was ever there, how many items were being waited
+// for, how long the wait took, and which of the four things ended it.
+// `list-reader.ts` carries it out on the read's outcome,
+// `domain/src/actions/extraction/summary.ts` declares all four on the wire --
+// the presence in one closed word and the rest as `listWait` -- and
+// `content/actions/extract-list.ts` also says them in the result's `actual`,
+// because a field is what a scan over a run's bundles can group by and a phrase
+// is what the model reading one failure actually reads. Working those four zero
+// reads back to a two-second settle from their durations alone took a day, and a
+// read that waited and found nothing should say what it waited for rather than
+// leave it to be reconstructed.
 
 import type { WebAutomationExtractListPagination } from "../types";
 import { waitUntil } from "./list-wait";
@@ -92,6 +123,35 @@ export type PageArrival = "arrived" | "timed_out";
  */
 export type ListPresence = "appeared" | "never_appeared";
 
+/**
+ * Which of the four things ended the wait for the list to appear.
+ *
+ * `"page_settled"` is only ever reached by a wait that already had items and
+ * wanted more of them (see the header), so it can never be the reason a read of
+ * zero records stopped. That is the whole of the 2026-09-25 regression stated as
+ * a type: before, `"page_settled"` and `"never_appeared"` could and did occur
+ * together, and the pair was the answer the loop kept getting.
+ */
+export type ListWaitStop = "list_present" | "page_settled" | "window_elapsed" | "deadline_passed";
+
+/**
+ * What the wait for the list did, which is what a read of zero records has no
+ * other way to state: whether the list was ever there, how many items were
+ * being waited for, how long the whole wait took, and why it stopped.
+ *
+ * None of it is a verdict. `"never_appeared"` does not stop the read, and the
+ * caller carries the account beside the records rather than as a reason to
+ * refuse or retry.
+ */
+export type ListWait = {
+  presence: ListPresence;
+  stoppedOn: ListWaitStop;
+  /** How long the whole of `awaitListPresent` took, the growth settle included. */
+  waitedMs: number;
+  /** How many items the wait was waiting for: the request's own minimum, held to at least one. */
+  waitedFor: number;
+};
+
 /** What the wait needs to know about the read: its deadline, and whether the page shows an item it has not taken. */
 export type RenderProgress = { deadline: number | undefined; hasUnreadItem(): boolean };
 
@@ -102,10 +162,11 @@ const EMPTY_PAGE_SETTLE_MS = 2_000;
 /** How long a one-page read's list must stop growing to be read: the window `pagination.ts` gives a lazy list to grow. */
 const LIST_GROWTH_SETTLE_MS = 900;
 /**
- * How long the document must hold still, with the list still not there, before
- * a wait for it gives up: the same window `EMPTY_PAGE_SETTLE_MS` gives a page
- * that has drawn its controls and no record, asked of a page that has drawn
- * nothing the read can name.
+ * How long the document must hold still, with *some* of the list drawn and the
+ * rest of it missing, before the wait for the rest gives up: the same window
+ * `EMPTY_PAGE_SETTLE_MS` gives a page that has drawn its controls and no
+ * record. It is deliberately not asked of a page that has drawn nothing the
+ * read can name -- see the header, and `ListWaitStop`.
  */
 const PAGE_STILL_MS = 2_000;
 const RENDER_POLL_MS = 50;
@@ -138,8 +199,9 @@ export async function awaitPageRendered(paginate: WebAutomationExtractListPagina
  * first Flow built after this wait landed (`run-mudqlqsk-8876a3ea`), so a wait
  * that took it literally would have been switched off by the one party it
  * exists to protect. A list that is there is still read at once; a list that
- * never appears pays the window while the page is still working, and
- * `PAGE_STILL_MS` once it has stopped (see the header).
+ * never appears pays the window, the command's `timeoutMs` or the read's
+ * deadline, whichever comes first, because a page that has gone quiet without
+ * drawing a single item has not said the list is not coming (see the header).
  *
  * The settle is only for a read that does not page. A paginated read has its
  * own mechanism for a list that grows -- `pagination.ts` follows the control
@@ -149,29 +211,68 @@ export async function awaitPageRendered(paginate: WebAutomationExtractListPagina
  * bottom scrolls into view does, would be read at its first part.
  *
  * All of it is bounded by `RENDER_WINDOW_MS`, by the command's own deadline and
- * by the document holding still (see the header), and running out of any of
- * them is not a failure here: the read proceeds and reads what the page holds,
- * so what it reports is still the page as it stands rather than an error this
- * module invented.
- *
- * What it returns is whether the list was there when the wait ended, which is
- * the fact a read of zero records has no other way to state. It is not a
- * verdict: `"never_appeared"` does not stop the read, and the caller carries it
- * as a fact beside the records rather than as a reason to refuse or retry.
+ * -- once the list is partly there -- by the document holding still (see the
+ * header), and running out of any of them is not a failure here: the read
+ * proceeds and reads what the page holds, so what it reports is still the page
+ * as it stands rather than an error this module invented.
  */
-export async function awaitListPresent(item: string, required: number, settle: boolean, progress: RenderProgress): Promise<ListPresence> {
+export async function awaitListPresent(item: string, required: number, settle: boolean, progress: RenderProgress): Promise<ListWait> {
+  const startedAt = Date.now();
   const wanted = Math.max(1, required);
-  // The stillness is only asked of the wait for the list to appear. The growth
-  // settle below is already a statement about the page having stopped changing,
-  // measured on the list itself rather than on the whole document, and asking
-  // both would let the coarser one end the finer one early.
-  const still = documentStillness();
+  const stoppedOn = await searchForList(item, wanted, progress);
+  if (settle) await awaitListStoppedGrowing(item, progress);
+  // Asked at the end rather than recorded through the wait, because the read
+  // that follows queries this same document a moment later: a list drawn during
+  // the growth settle is one the read will see.
+  return { presence: matchCount(item) > 0 ? "appeared" : "never_appeared", stoppedOn, waitedMs: Date.now() - startedAt, waitedFor: wanted };
+}
+
+/**
+ * Waits for the item selector to name `wanted` elements, and says what ended
+ * the wait.
+ *
+ * The stillness is asked only of a poll that already names something, which is
+ * the rule the header argues for: a settled page holding some of the list has
+ * said the rest is not coming, and a settled page holding none of it has said
+ * nothing. So it is also *created* only then -- a wait for a list that is not
+ * there yet observes no document at all, and one whose list arrives in parts
+ * measures its quiet from the moment the first part landed rather than from a
+ * clock that started before the page had drawn anything.
+ *
+ * The growth settle in `awaitListStoppedGrowing` is not given the stillness
+ * either: it is already a statement about the page having stopped changing,
+ * measured on the list itself rather than on the whole document, and asking
+ * both would let the coarser one end the finer one early.
+ */
+async function searchForList(item: string, wanted: number, progress: RenderProgress): Promise<ListWaitStop> {
+  let still: { settled(): boolean; stop(): void } | undefined;
+  let stopped: ListWaitStop | undefined;
   try {
-    await waitUntil(() => matchCount(item) >= wanted || still.settled(), RENDER_WINDOW_MS, RENDER_POLL_MS, progress.deadline);
+    const ended = await waitUntil(
+      () => {
+        const matched = matchCount(item);
+        if (matched >= wanted) {
+          stopped = "list_present";
+          return true;
+        }
+        if (matched === 0) return false;
+        still ??= documentStillness();
+        if (!still.settled()) return false;
+        stopped = "page_settled";
+        return true;
+      },
+      RENDER_WINDOW_MS,
+      RENDER_POLL_MS,
+      progress.deadline
+    );
+    return stopped ?? (ended === "timed_out" ? "deadline_passed" : "window_elapsed");
   } finally {
-    still.stop();
+    still?.stop();
   }
-  if (!settle) return presence(item);
+}
+
+/** Waits for a one-page read's list to stop growing on its own; see `awaitListPresent`. */
+async function awaitListStoppedGrowing(item: string, progress: RenderProgress): Promise<void> {
   let count = matchCount(item);
   let stableSince = Date.now();
   await waitUntil(
@@ -188,17 +289,6 @@ export async function awaitListPresent(item: string, required: number, settle: b
     RENDER_POLL_MS,
     progress.deadline
   );
-  return presence(item);
-}
-
-/**
- * Whether the list is there now, which is what the caller needs: the read that
- * follows queries the same document a moment later. It is asked at the end
- * rather than recorded through the wait, because the wait already ends the
- * moment the answer can no longer change.
- */
-function presence(item: string): ListPresence {
-  return matchCount(item) > 0 ? "appeared" : "never_appeared";
 }
 
 /**
@@ -208,9 +298,10 @@ function presence(item: string): ListPresence {
  * `attributes` every attribute a selector could match on; character data is
  * deliberately not observed, because no CSS selector reads text and a ticking
  * clock or a live counter would otherwise hold a settled page open for the
- * whole ceiling. The clock starts at the first call rather than at the page's
- * own load, so the wait always gives the page `PAGE_STILL_MS` of its own before
- * it concludes anything.
+ * whole ceiling. The clock starts at construction, and `searchForList`
+ * constructs this at the first poll whose selector names an item, so a list
+ * arriving in parts always gets `PAGE_STILL_MS` of quiet after its first part
+ * before anything is concluded from the quiet.
  *
  * `readyState` is asked as well as the observer: a document still parsing or
  * still fetching its subresources has not had its say, however quiet the

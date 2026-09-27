@@ -7,11 +7,13 @@
 // conditions that say which items are records in `extraction/conditions.ts`).
 
 export {
+  resolveWebPlanNode,
   resolveWebPlanNodeParameters,
   WEB_PLAN_HANDLE_ISSUE_CODES,
   type WebPlanHandleIssue,
   type WebPlanHandleIssueCode,
   type WebPlanHandleStores,
+  type WebPlanNodeOutcome,
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./resolve-plan-node";

@@ -12,9 +12,11 @@
 // - a structured field spec reads by kind -- text, an attribute, or a link
 //   resolved against the page -- and an optional field the page cannot read is
 //   `null` rather than a field the record lacks;
-// - a declared field no record yields, or fewer records than `minItems`, fails
-//   the validation with `output_not_observed`, so a dropped column or an empty
-//   list cannot pass as a clean read;
+// - a column no record yields is stated rather than failed, because a field the
+//   author did not write `required: true` on is not required (2026-09-26), while
+//   one that says so still fails with `output_not_observed`;
+// - fewer records than `minItems` fails the validation with
+//   `output_not_observed`, so an empty list cannot pass as a clean read;
 // - the command's `timeoutMs` bounds the whole read, and running out of it
 //   reports `timed_out` with what was read.
 //
@@ -126,7 +128,12 @@ test.describe("on product-catalog", () => {
     expect(reply.extracted).toEqual(FIRST_PAGE.slice(0, 3));
   });
 
-  test("a declared field no record yields fails the validation with output_not_observed", async ({ openHarness }) => {
+  test("a column no card has is stated, not failed: the eight rows come back with it blank", async ({ openHarness }) => {
+    // Until 2026-09-26 the string grammar asserted `required` for every field, so
+    // this read failed `output_not_observed` and the eight rows it had were stored
+    // as nothing. A default that turns a wide answer into an empty one is the
+    // shape this product does not take: the rows come back, the gap is named, and
+    // the repair narrows it.
     const harness = await openHarness("product-catalog");
     const reply = await harness.runAction({
       commandId: "extract-missing-field",
@@ -134,19 +141,18 @@ test.describe("on product-catalog", () => {
       extractList: { item: CARD, fields: { name: cardFields.name, sku: '[data-testid="product-sku"]' } }
     });
     expect(reply).toMatchObject({
-      status: "failed",
+      status: "succeeded",
       message: "List extracted.",
       validation: {
-        status: "failed",
+        status: "passed",
         expected: "at least 1 record, each carrying name, sku",
-        actual: "8 records from 1 page; missing from some records: sku"
+        actual: expect.stringContaining("8 records short of a declared field, blank in sku")
       },
-      failure: { category: "output_not_observed", code: "web.validation.output_not_observed", retryable: true, stage: "verification" },
-      // Every missing field is a declared one, so the domain's wire copy keeps the summary.
-      extraction: { recordCount: 8, pagesRead: 1, truncated: false, missingFields: ["sku"], fieldNames: ["name", "sku"] }
+      // No field was required, so none is missing; the gap rides on the counts.
+      extraction: { recordCount: 8, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "sku"], itemsSeen: 8, emptyRecords: 0 }
     });
-    // The records that were read are still reported: the failure is the missing field, not the read.
-    expect(reply.extracted).toEqual(FIRST_PAGE.map((record) => ({ name: record.name })));
+    // Every row is returned, with `null` in the cell the page had nothing for (D16).
+    expect(reply.extracted).toEqual(FIRST_PAGE.map((record) => ({ name: record.name, sku: null })));
   });
 
   test("an item selector matching nothing fails with output_not_observed", async ({ openHarness }) => {
@@ -279,11 +285,13 @@ test.describe("structured field specs, on product-catalog", () => {
     const reply = await harness.runAction({
       commandId: "extract-required-spec",
       actionType: "web.dom.extract_list",
-      extractList: { item: CARD, fields: { name: cardFields.name, sku: { kind: "text", selector: '[data-testid="product-sku"]' } } }
+      // `required: true` is written out: only an explicit one requires a field now,
+      // and this row is what proves the capability still means what it says.
+      extractList: { item: CARD, fields: { name: cardFields.name, sku: { kind: "text", selector: '[data-testid="product-sku"]', required: true } } }
     });
     expect(reply).toMatchObject({
       status: "failed",
-      validation: { status: "failed", actual: "8 records from 1 page; missing from some records: sku" },
+      validation: { status: "failed", actual: expect.stringContaining("required fields missing from some records: sku") },
       failure: { category: "output_not_observed" },
       extraction: { missingFields: ["sku"], fieldNames: ["name", "sku"] }
     });

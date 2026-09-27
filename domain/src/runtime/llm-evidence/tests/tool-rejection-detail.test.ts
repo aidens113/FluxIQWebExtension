@@ -192,11 +192,23 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
 
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish", "create_new"] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["delete", "send_or_publish", "create_new"] } });
 
+  // Only the high-risk part of the declaration is missing. Ordinary creation
+  // remains free, while both deletion and communicating on the person's behalf
+  // need instruction or grant authority.
   assert.equal(codeOf(refused), "permission_required");
-  assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["send_or_publish", "create_new"] });
+  assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["delete", "send_or_publish"] });
   assert.deepEqual(clicks, []);
+
+  const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish", "create_new"] } });
+  assert.equal(codeOf(sent), "permission_required");
+  assert.deepEqual(detailOf(sent), { reason: "nobody_to_ask", missing: ["send_or_publish"] });
+  assert.deepEqual(clicks, []);
+
+  const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["create_new"] } });
+  assert.notEqual(codeOf(created), "permission_required");
+  assert.equal(clicks.length, 1);
 
   // A declaration Core could not read is not a refusal to ask about: nothing was asked and nothing was pressed.
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["sell_the_company"] } });

@@ -257,12 +257,18 @@ test("a condition that names no one detected column, or contradicts itself, is r
   const instance = runtime();
   const { extraction } = await detect(instance);
   const rows: Array<[JsonValue, string, string]> = [
-    // A column nothing detected: the model was shown the keys and may only use them.
+    // A column no detected name is near. The catalog has no advertisement mark
+    // at all, so this is the honest failure the rule allows: nothing plausible
+    // was written, rather than something written slightly wrong
+    // (`./column-match.test.ts` holds the names that resolve).
     [[{ field: "sponsored" }], "web.handle.unknown_field", "extractList.where.0"],
     // A bare string could only mean "present", which is the opposite of what a
     // person writing it about sponsored placements means.
     [["stock-badge"], "web.handle.malformed", "extractList.where.0"],
-    // A selector, which the model was never shown and could only have guessed.
+    // A whole selector, which the model was never shown and could only have
+    // guessed. Its brackets, quotes and `=` survive the name fold, so it scores
+    // below Core's floor and stays a refusal -- unlike a bare `.class`, which
+    // folds to the column's own name and resolves.
     [[{ field: '[data-testid="stock-badge"]' }], "web.handle.unknown_field", "extractList.where.0"],
     // "Not there" and "under fifty" cannot both have been meant.
     [[{ field: "product-price", is: "absent", lessThan: 50 }], "web.handle.malformed", "extractList.where.0"],

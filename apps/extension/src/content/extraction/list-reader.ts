@@ -38,12 +38,13 @@
 // records on the same page are still two records, as the page shows them.
 //
 // A read can outlive its document. With a `checkpoint`, the records and pages
-// read so far are handed over, and awaited, before each control is followed;
+// read so far, and the item count its account is built from, are handed over,
+// and awaited, before each control is followed;
 // with `resume`, a new document goes on from such a checkpoint -- its records
-// count toward the bound, its pages toward `maxPages`, and in every mode none
-// of its records is read again, since a new document can only show them as new
-// elements -- after waiting for the page to show its records
-// (`page-render.ts`). The worker's side of that is
+// count toward the bound, its pages toward `maxPages`, its items toward
+// `itemsSeen`, and in every mode none of its records is read again, since a new
+// document can only show them as new elements -- after waiting for the page to
+// show its records (`page-render.ts`). The worker's side of that is
 // `runtime/extract-list-continuation.ts`.
 //
 // An item a `where` condition rejects is not a record and never becomes one:
@@ -72,9 +73,20 @@
 // A record carries every included field: its value, or `null` for an optional
 // field the page could not read. `missingFields` names every required field
 // some record lacked, which is what makes the verb's validation fail instead of
-// silently returning blanks. A `column` header that no header cell matches is
-// missing from every record, so a page that renamed a column reports the
-// rename rather than quietly returning records without it.
+// silently returning blanks.
+//
+// **Almost nothing is required any more, and the gap is stated instead.** A
+// field is required only where the author wrote `required: true`
+// (`field-spec.ts`), because until 2026-09-26 the string grammar asserted it for
+// every field and three ratingless cards of forty-three therefore failed the
+// whole read and stored nothing. What replaces the failure is an account: the
+// records come back with `null` in the cells the page had nothing for,
+// `blankFields` names those columns, `incompleteRecords` counts the rows that
+// are short, and `emptyRecords` counts the rows that yielded nothing at all --
+// which is the reading of a page whose columns were all read off the wrong
+// element, a renamed `column:` header included. `itemsSeen` sits beside them and
+// says how many items the selector named, so a zero is attributable: no items,
+// items the conditions removed, or items whose every field came back empty.
 //
 // Three conditions are not "the page differs" but "the request cannot be
 // performed", so they throw and become a failed result: a `column` field on
@@ -96,7 +108,7 @@ import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
-import { awaitListPresent, awaitPageRendered, type ListPresence } from "./page-render";
+import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
 import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
 
 /** One record: each included field's value, or `null` for an optional field the page could not read. */
@@ -110,10 +122,68 @@ export type ListExtractionOutcome = {
   truncated: boolean;
   /** Whether the command's `timeoutMs` ran out before the list ended. */
   timedOut: boolean;
+  /**
+   * Items the read could not read at all, because reading them threw.
+   *
+   * A virtualized list recycles its rows while it is being read, and a page that
+   * re-renders under a paginated read detaches the elements a field reader is
+   * holding. Until 2026-09-26 one such throw ended the whole read: the loop had
+   * no catch, `actions/extract-list.ts` reported `deps.failure`, and **every row
+   * already read was discarded** -- the total-instead-of-partial failure this
+   * repository has paid for repeatedly. The item is skipped and counted instead,
+   * and the count is what stops the skip being silent.
+   *
+   * Absent for a read that skipped nothing, so the two are different facts.
+   */
+  itemFaults?: number | undefined;
+  /**
+   * Whether moving to the next page threw, which ends the read with the pages it
+   * already has rather than with nothing.
+   *
+   * It is not `truncated` and not `timedOut`: no cap was reached and no time ran
+   * out, so overloading either would make a count a reader groups by say
+   * something the read did not do.
+   */
+  pageFault?: boolean | undefined;
   /** Whether the page ever showed the list at all (C2): `"never_appeared"` for a read whose `item` selector named nothing, and absent for a continued read, which waits for its predecessor's page rather than for a list. */
   listPresence?: ListPresence | undefined;
-  /** Required fields that at least one record did not yield. */
+  /** What the wait for the list did, for a read that has to say why it found none: what it waited for, how long, and what ended it. Absent wherever `listPresence` is. */
+  listWait?: ListWait | undefined;
+  /** Required fields that at least one record did not yield, which is what fails the verb's post-condition. */
   missingFields: string[];
+  /**
+   * Items the `item` selector named, across every page and every document read,
+   * before any condition, any duplicate and the item bound -- the count that
+   * separates a selector which matched nothing from a page the conditions
+   * emptied.
+   *
+   * It is the whole read's count, never one document's, because `recordCount` and
+   * `pagesRead` beside it are the whole read's and a reader comparing them against
+   * the last document alone would conclude the selector matched fewer items than
+   * it did. A continued read therefore adds its own document's items to the count
+   * its predecessor checkpointed.
+   *
+   * Absent only where it is genuinely unknown: a continuation resumed from a
+   * checkpoint written by a page build that did not count items has no beginning
+   * to add to, and says nothing rather than reporting its own document's items as
+   * the read's.
+   */
+  itemsSeen?: number | undefined;
+  /**
+   * Fields at least one returned record carries as `null`: a column the page had
+   * nowhere to read for some of its rows.
+   *
+   * A fact, never a failure. An optional field the page could not read is `null`
+   * in its record (D16) and fails nothing, which is what keeps three ratingless
+   * cards from destroying forty good rows -- and which would otherwise leave the
+   * gap unsaid. `missingFields` cannot carry it: that list is the *required*
+   * fields, and it is the one that fails the read.
+   */
+  blankFields?: string[] | undefined;
+  /** Returned records short of at least one declared field, whether `null` or absent. A stated gap, never a failure. */
+  incompleteRecords?: number | undefined;
+  /** Returned records that yielded no declared field at all: the read found rows and every field read off the wrong element. */
+  emptyRecords?: number | undefined;
   /** Items of the run that a `where` condition left out, so they are not records (C5). */
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
@@ -184,19 +254,33 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   };
   const checkpoint = options.checkpoint;
   if (checkpoint) {
-    progress.beforeFollow = () => checkpoint({
-      records: records.map((record) => ({ ...record })),
-      pagesRead: progress.pagesRead,
-      scrolls: progress.scrolls,
-      missingFields: [...missing].sort(),
-      filtered
-    });
+    progress.beforeFollow = () => {
+      // `itemsSeen` is the whole read's count so far, so the document this control
+      // loads goes on adding to it rather than starting over. Left out where this
+      // read could not know it, which is the one thing an absent count may mean.
+      const seen = itemsSeen();
+      return checkpoint({
+        records: records.map((record) => ({ ...record })),
+        pagesRead: progress.pagesRead,
+        scrolls: progress.scrolls,
+        missingFields: [...missing].sort(),
+        filtered,
+        ...(seen === undefined ? {} : { itemsSeen: seen })
+      });
+    };
   }
   let truncated = false;
   let timedOut = false;
+  // Items reading threw on, and whether the move to the next page did. Both are
+  // absorbed rather than raised: the rows already read are the answer, and an
+  // answer that is too small is worth more than no answer at all.
+  const faultedItems = new Set<Element>();
+  let pageFault = false;
   // "Your item selector names nothing" and "the page holds nothing" are
   // different repairs, and a read of zero records cannot tell them apart (C2).
   let listPresence: ListPresence | undefined;
+  // And neither can it say, of the first, whether it waited for the list at all.
+  let listWait: ListWait | undefined;
   let filtered = resume?.filtered ?? 0;
   // Items the conditions were asked about in this document, and how many of
   // them each condition rejected. A continued read carries its predecessor's
@@ -205,6 +289,22 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let applied = 0;
   let kept = 0;
   const rejectedEach = (request.where ?? []).map(() => 0);
+
+  // Items the selector named, counted once each, whichever page or scroll named
+  // them: a set rather than a running sum, because a `loadMore` or `scroll` read
+  // re-queries the same document and would otherwise count its first items again
+  // on every pass. Counted before the bound and before any condition, so the
+  // number says what the page held rather than what the read kept.
+  //
+  // The set can only hold this document's elements, so a continued read adds
+  // what its predecessor counted. `undefined` is a checkpoint from a page build
+  // that counted nothing: there is no beginning to add to, so the read says
+  // nothing rather than reporting one document's items as the whole read's, and
+  // that absence travels on to the next document in place of a number that would
+  // be missing its start.
+  const namedItems = new Set<Element>();
+  const itemsSeenBefore = resume === undefined ? 0 : resume.itemsSeen;
+  const itemsSeen = (): number | undefined => (itemsSeenBefore === undefined ? undefined : itemsSeenBefore + namedItems.size);
 
   /** The read as it stands, with `filtered-answer.ts` deciding which rows it answers with. */
   const outcome = (ended: { timedOut: boolean }): ListExtractionOutcome => {
@@ -215,6 +315,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       rejectedMissing: rejectedRows?.missing ?? new Set(),
       rejectedTruncated: rejectedRows?.truncated ?? false
     }, truncated);
+    const seen = itemsSeen();
     return {
       records: answer.records,
       pagesRead: progress.pagesRead,
@@ -222,7 +323,12 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       timedOut: ended.timedOut,
       missingFields: answer.missingFields,
       filtered,
+      ...recordGaps(answer.records, fields),
+      ...(seen === undefined ? {} : { itemsSeen: seen }),
+      ...(faultedItems.size === 0 ? {} : { itemFaults: faultedItems.size }),
+      ...(pageFault ? { pageFault: true } : {}),
       ...(listPresence === undefined ? {} : { listPresence }),
+      ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } })
     };
   };
@@ -250,75 +356,108 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     // is one scroll from holding sixteen items holds twelve, and waiting there
     // spends the whole command on a sixteenth that was never going to come.
     const required = requiredItems(request.minItems);
-    listPresence = await awaitListPresent(item, 1, paginate === undefined, progress);
+    listWait = await awaitListPresent(item, 1, paginate === undefined, progress);
+    listPresence = listWait.presence;
     if (paginate === undefined) {
       // `maxItems` bounds records rather than items, so only a read with no
       // condition can tell from the page that it has already seen every item it
       // could keep -- which is how the picker's five-row preview is read
       // without scrolling the page a person is looking at.
       await awaitListComplete(item, rejects ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
-      if (required > 1) listPresence = await awaitListPresent(item, required, false, progress);
+      if (required > 1) {
+        // Two waits on one page, reported as one: the second's answer, and both
+        // their time, so the account's `waitedMs` is what the read actually
+        // spent looking for this list rather than the last leg of it.
+        const again = await awaitListPresent(item, required, false, progress);
+        listWait = { ...again, waitedMs: listWait.waitedMs + again.waitedMs };
+        listPresence = again.presence;
+      }
     }
   }
 
   for (;;) {
     const shown = Array.from(document.querySelectorAll(item));
     // A list no wait saw but the read does -- a later page's, or one drawn between the two -- still appeared.
-    if (listPresence === "never_appeared" && shown.length > 0) listPresence = "appeared";
+    if (listPresence === "never_appeared" && shown.length > 0) {
+      listPresence = "appeared";
+      // The account has to agree with the field taken from it, and what ended
+      // the wait is unchanged by the list turning up after it.
+      if (listWait !== undefined) listWait = { ...listWait, presence: "appeared" };
+    }
     progress.shown = shown;
     progress.pagesRead += 1;
+    for (const element of shown) namedItems.add(element);
     const thisPage: string[] = [];
     for (const element of shown) {
-      const seen = read.get(element);
-      if (seen !== undefined && !contentAware) continue;
-      // A new element past the bound is not read at all; a recycled one is
-      // read first, because only its content says whether it is a new record.
-      if (seen === undefined && records.length >= maxItems) {
-        truncated = true;
-        break;
-      }
-      const itemRead = readRecord(element, fields);
-      const key = keyOf(itemRead);
-      if (seen === key) continue;
-      // An item a condition rejects is not a record: it is remembered as read
-      // so a growing list still knows it has been looked at. It is kept aside
-      // only so a read the conditions emptied has something to answer with,
-      // and a read that kept anything never returns it.
-      if (rejects) {
-        const rejectedBy = rejects(element, itemRead.record);
-        if (seen === undefined) applied += 1;
-        if (rejectedBy.length > 0) {
-          if (seen === undefined) {
-            filtered += 1;
-            // Each index is a position in `where`, which is what `rejectedEach`
-            // was sized from, so the fallback is for the compiler rather than
-            // for a case that happens.
-            for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
-            rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, maxItems);
+      // Reading one item is where the page can fail under the read: a
+      // virtualized list recycles the row a field reader is holding, and a
+      // re-render detaches it. The item is skipped and counted; the rows already
+      // read are still the answer. A row that faulted is remembered so a
+      // re-queried document does not fault on it again and again.
+      if (faultedItems.has(element)) continue;
+      try {
+        const seen = read.get(element);
+        if (seen !== undefined && !contentAware) continue;
+        // A new element past the bound is not read at all; a recycled one is
+        // read first, because only its content says whether it is a new record.
+        if (seen === undefined && records.length >= maxItems) {
+          truncated = true;
+          break;
+        }
+        const itemRead = readRecord(element, fields);
+        const key = keyOf(itemRead);
+        if (seen === key) continue;
+        // An item a condition rejects is not a record: it is remembered as read
+        // so a growing list still knows it has been looked at. It is kept aside
+        // only so a read the conditions emptied has something to answer with,
+        // and a read that kept anything never returns it.
+        if (rejects) {
+          const rejectedBy = rejects(element, itemRead.record);
+          if (seen === undefined) applied += 1;
+          if (rejectedBy.length > 0) {
+            if (seen === undefined) {
+              filtered += 1;
+              // Each index is a position in `where`, which is what `rejectedEach`
+              // was sized from, so the fallback is for the compiler rather than
+              // for a case that happens.
+              for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
+              rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, maxItems);
+            }
+            read.set(element, key);
+            continue;
           }
+          if (seen === undefined) kept += 1;
+        }
+        const content = earlierPages ? contentKey(itemRead.record, fields) : "";
+        if (earlierPages?.has(content)) {
           read.set(element, key);
           continue;
         }
-        if (seen === undefined) kept += 1;
-      }
-      const content = earlierPages ? contentKey(itemRead.record, fields) : "";
-      if (earlierPages?.has(content)) {
+        if (records.length >= maxItems) {
+          truncated = true;
+          break;
+        }
         read.set(element, key);
-        continue;
+        records.push(itemRead.record);
+        thisPage.push(content);
+        for (const name of itemRead.missing) missing.add(name);
+      } catch {
+        faultedItems.add(element);
       }
-      if (records.length >= maxItems) {
-        truncated = true;
-        break;
-      }
-      read.set(element, key);
-      records.push(itemRead.record);
-      thisPage.push(content);
-      for (const name of itemRead.missing) missing.add(name);
     }
     if (pageByPage) for (const content of thisPage) earlierPages?.add(content);
     if (truncated || !paginate) break;
 
-    const advance = await advancePage(paginate, progress);
+    // Moving to the next page can throw for the same reasons: the control was
+    // detached, or the document was replaced while it was being pressed. The read
+    // ends here with the pages it has rather than discarding them, and says so.
+    let advance: Awaited<ReturnType<typeof advancePage>>;
+    try {
+      advance = await advancePage(paginate, progress);
+    } catch {
+      pageFault = true;
+      break;
+    }
     if (advance === "advanced") continue;
     truncated = advance === "truncated";
     timedOut = advance === "timed_out";
@@ -381,6 +520,36 @@ function requiredItems(requested: number | undefined): number {
 function itemBound(requested: number | undefined): number {
   const whole = typeof requested === "number" && !Number.isNaN(requested) ? Math.trunc(requested) : WEB_AUTOMATION_EXTRACT_MAX_ITEMS;
   return Math.min(Math.max(0, whole), WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+}
+
+/**
+ * What the answered records are short of, read off the records themselves rather
+ * than counted through the loop: a declared field is `null` where an optional
+ * read found nothing (D16) and absent where a required one did, so the rows say
+ * this without anything having to be carried alongside them -- a continued read's
+ * resumed rows included.
+ *
+ * All three are facts, never failures. A field the author did not require is not
+ * a shortfall, but a gap nobody states is worse than one nobody minds: the read
+ * that keeps forty rows because three lack a rating has to say that three lack a
+ * rating, or the answer looks complete.
+ */
+function recordGaps(records: readonly ExtractedListRecord[], fields: FieldReaders): { blankFields: string[]; incompleteRecords: number; emptyRecords: number } {
+  const blank = new Set<string>();
+  let incompleteRecords = 0;
+  let emptyRecords = 0;
+  for (const record of records) {
+    let short = 0;
+    for (const [name] of fields) {
+      const value = Object.prototype.hasOwnProperty.call(record, name) ? record[name] : undefined;
+      if (value !== undefined && value !== null) continue;
+      short += 1;
+      if (value === null) blank.add(name);
+    }
+    if (short > 0) incompleteRecords += 1;
+    if (short === fields.length && fields.length > 0) emptyRecords += 1;
+  }
+  return { blankFields: [...blank].sort(), incompleteRecords, emptyRecords };
 }
 
 function readRecord(element: Element, fields: FieldReaders): ItemRead {

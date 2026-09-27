@@ -32,16 +32,27 @@ test("the domain manifest and the output-node definitions give each output one c
     assert.equal(manifestOutputs.length, 1, `${outputId} has one manifest output`);
     assert.equal(nodes.length, 1, `${outputId} has one output node`);
     const safe = SAFE_OUTPUTS.includes(outputId);
+    // **The three approval flags asserted `!safe`, and that assertion was the
+    // bug (t166).** `level` is how sure Core must be of a target match before it
+    // acts, and it still varies. The other three are permission, and none of
+    // them may be decided by the kind of action: Core drops a tool whose
+    // `requiresOperatorApproval` nobody pre-approved, without saying so, and
+    // marks any plan containing a `privileged` node high risk so a repair cannot
+    // apply itself. Both fired on every click, keypress, navigation and scroll.
+    // What an action would cause is declared per action and gated by Core's
+    // action permission gate, which is what still stops a delete or a checkout.
+    // The manifest no longer has a `requiresApproval` field at all, which is why
+    // reading it here is a compile error rather than a comparison: removed, not
+    // defaulted.
+    assert.deepEqual(Object.keys(manifestOutputs[0]!.safety), ["level"], outputId);
     assert.deepEqual({
       level: manifestOutputs[0]!.safety.level,
-      requiresApproval: manifestOutputs[0]!.safety.requiresApproval,
       privileged: nodes[0]!.safety?.privileged,
       requiresOperatorApproval: nodes[0]!.safety?.requiresOperatorApproval
     }, {
       level: safe ? "safe" : "review",
-      requiresApproval: !safe,
-      privileged: !safe,
-      requiresOperatorApproval: !safe
+      privileged: false,
+      requiresOperatorApproval: false
     }, outputId);
   }
 });

@@ -94,3 +94,119 @@ test("the list word and the condition report travel together, since a read can h
   const both = { ...SUMMARY, listPresence: "appeared", conditions: { applied: 30, kept: 0, rejected: [30], unfiltered: true } };
   assert.deepEqual(webAutomationExtractionSummaryValue(both), both);
 });
+
+test("the two counts a zero read is diagnosed by travel when a page sends them, and are absent when it does not", () => {
+  // The four things a stored-nothing read could have been, which six Flows of the
+  // everything-store rung could not be told apart by: the node never ran; the
+  // selector named nothing; it matched rows and every column read empty; the
+  // conditions removed them all. `listPresence` separates the second,
+  // `conditions` the fourth, and these two are what separate the third.
+  const seen = { ...SUMMARY, itemsSeen: 43, emptyRecords: 0 };
+  assert.deepEqual(webAutomationExtractionSummaryValue(seen), seen);
+  // Rows found and every field read off the wrong element: the selector is right
+  // and the fields are not, which `missingFields` alone cannot say -- it reads
+  // the same for one bad row as for forty empty ones.
+  const hollow = { ...SUMMARY, recordCount: 43, itemsSeen: 43, emptyRecords: 43, missingFields: ["name", "price"] };
+  assert.deepEqual(webAutomationExtractionSummaryValue(hollow), hollow);
+  // Absent from a page build that predates them, and the summary still arrives
+  // whole -- the rule `listPresence` was added under.
+  const without = webAutomationExtractionSummaryValue(SUMMARY);
+  assert.deepEqual(without, SUMMARY);
+  assert.equal("itemsSeen" in (without ?? {}), false);
+  assert.equal("emptyRecords" in (without ?? {}), false);
+});
+
+test("a count that is not one drops the whole summary rather than arriving as a number the read did not produce", () => {
+  const rows: unknown[] = ["43", -1, 1.5, null, true, [43], {}, Number.NaN];
+  for (const value of rows) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, itemsSeen: value }), undefined, `itemsSeen: ${JSON.stringify(value)}`);
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, emptyRecords: value }), undefined, `emptyRecords: ${JSON.stringify(value)}`);
+  }
+  // `recordCount` above `itemsSeen` is not malformed: a continued read carries
+  // its predecessor's records and counts only its own document's items, and
+  // dropping the whole account is the one thing a zero read cannot afford.
+  const continued = { ...SUMMARY, recordCount: 20, itemsSeen: 8 };
+  assert.deepEqual(webAutomationExtractionSummaryValue(continued), continued);
+});
+
+test("the wait's account arrives as fields, so a stop reason can be counted rather than read", () => {
+  // t143's day of work, in one field. Six zero-record reads were told apart by
+  // arithmetic on their durations -- 2089, 2576, 2109 and 2082 ms against reads
+  // that succeeded at 255 ms and at 4.6 to 14.3 s -- because the wait's own
+  // constant was 2000 ms and nothing published what a read had waited for. A
+  // scan over a run's bundles can group by `stoppedOn`; it cannot group by a
+  // sentence.
+  const waited = { ...SUMMARY, listPresence: "appeared", listWait: { stoppedOn: "list_present", waitedMs: 4024, waitedFor: 1 } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(waited), waited);
+  // Absent for a read that never waited for a list of its own, exactly as
+  // `listPresence` is, and the summary is the one it always was.
+  const without = webAutomationExtractionSummaryValue(SUMMARY);
+  assert.deepEqual(without, SUMMARY);
+  assert.equal("listWait" in (without ?? {}), false);
+});
+
+test("a wait that gave up on a still page and one that found its list differ by a field, not by a duration", () => {
+  // The two stops that were indistinguishable on the wire, now distinguishable
+  // without knowing a single constant. `page_settled` beside `recordCount: 0` is
+  // the 2026-09-25 regression's signature and the page can no longer produce it,
+  // which is the whole reason it must be recordable: the pair is kept rather than
+  // refused, so a bundle that carries it again names the regression itself.
+  const settled = {
+    ...SUMMARY,
+    recordCount: 0,
+    missingFields: [],
+    itemsSeen: 0,
+    listPresence: "never_appeared",
+    listWait: { stoppedOn: "page_settled", waitedMs: 2023, waitedFor: 1 }
+  };
+  const present = { ...SUMMARY, listPresence: "appeared", listWait: { stoppedOn: "list_present", waitedMs: 255, waitedFor: 1 } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(settled), settled);
+  assert.deepEqual(webAutomationExtractionSummaryValue(present), present);
+  assert.notEqual(
+    webAutomationExtractionSummaryValue(settled)?.listWait?.stoppedOn,
+    webAutomationExtractionSummaryValue(present)?.listWait?.stoppedOn
+  );
+  // And a read whose list turned up after the wait had ended on the settle is a
+  // shape the page can produce, so no pairing of the two fields is refused.
+  const contradictory = { ...SUMMARY, listPresence: "never_appeared", missingFields: [], listWait: { stoppedOn: "list_present", waitedMs: 900, waitedFor: 1 } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(contradictory), contradictory);
+});
+
+test("every one of the four stop words is known, and anything else drops the whole summary", () => {
+  for (const stoppedOn of ["list_present", "page_settled", "window_elapsed", "deadline_passed"]) {
+    const summary = { ...SUMMARY, listWait: { stoppedOn, waitedMs: 10_004, waitedFor: 2 } };
+    assert.deepEqual(webAutomationExtractionSummaryValue(summary), summary, stoppedOn);
+  }
+  // Dropped rather than kept without its account, because absence already means
+  // "this read never waited for a list": an account that quietly went missing
+  // would make a reader counting `stoppedOn` treat a continued read and a
+  // half-understood one as the same thing, which is the ambiguity this field
+  // exists to remove.
+  const refused: unknown[] = [
+    "settled",
+    "PAGE_SETTLED",
+    "",
+    { stoppedOn: "page_settled", waitedMs: -1, waitedFor: 1 },
+    { stoppedOn: "page_settled", waitedMs: 2000.5, waitedFor: 1 },
+    { stoppedOn: "page_settled", waitedMs: 2000 },
+    { waitedMs: 2000, waitedFor: 1 },
+    { stoppedOn: "page_settled", waitedMs: "2000ms", waitedFor: 1 },
+    ["page_settled", 2000, 1],
+    null,
+    2000
+  ];
+  for (const listWait of refused) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, listWait }), undefined, `listWait: ${JSON.stringify(listWait)}`);
+  }
+});
+
+test("the wait's numbers are not second-guessed: a surprising one is a fact about a page, not a malformed report", () => {
+  // No bound either way. The page holds `waitedFor` to at least one and bounds
+  // `waitedMs` by its own render window, and refusing a number outside what this
+  // side happens to know would cost the whole account -- the one thing a zero
+  // read cannot afford -- for a number that is merely surprising.
+  const nothing = { ...SUMMARY, listWait: { stoppedOn: "window_elapsed", waitedMs: 0, waitedFor: 0 } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(nothing), nothing);
+  const long = { ...SUMMARY, listWait: { stoppedOn: "deadline_passed", waitedMs: 600_000, waitedFor: 5000 } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(long), long);
+});

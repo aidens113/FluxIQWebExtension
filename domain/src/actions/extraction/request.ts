@@ -37,7 +37,19 @@ export type WebAutomationExtractFieldSpec = {
   attribute?: string | undefined;
   /** The header text a `column` field reads under. Required by that kind and refused on every other. */
   header?: string | undefined;
-  /** `false` marks the field optional: a record the page cannot read it from carries `null` for it (D16). */
+  /**
+   * `true` marks the field required: a record the page cannot read it from fails
+   * the read's post-condition. Absent, or `false`, the field is optional and such
+   * a record carries `null` for it instead (D16) -- which is what the string
+   * grammar means too, since it has no way to say otherwise.
+   *
+   * Optional is the default, and since 2026-09-26 only because it was the other
+   * way round and cost a read: every string-grammar field asserted `required`, so
+   * three ratingless cards of forty-three failed the whole verb and forty good
+   * rows were stored as nothing. The gap is stated instead of failed
+   * (`apps/extension/src/content/extraction/field-spec.ts` decides it; the read's
+   * summary states it).
+   */
   required?: boolean | undefined;
   handling?: WebAutomationExtractFieldHandling | undefined;
   /** The element the field was picked from, as the one fingerprint normalizer describes it. */
@@ -81,6 +93,16 @@ export type WebAutomationExtractField = string | WebAutomationExtractFieldSpec;
  * any of them. Every phrase written must hold before `not` is applied.
  *
  * An empty condition -- neither `is` nor a comparison -- means `is: "present"`.
+ *
+ * A condition that names no value at all, and so says nothing about one, is a
+ * no-op: `read-request.ts` drops it, names it in the read's `dropped`, and keeps
+ * every row. It is never a refusal of the read, and never a filter that quietly
+ * removes something.
+ *
+ * `field` is resolved against the keys this request reads rather than matched
+ * against them exactly: a key written in another casing, with other separators,
+ * or misspelled inside a word resolves to the column it plainly means, and the
+ * read says that it assumed (`read-request.ts`).
  */
 export type WebAutomationExtractItemCondition = {
   /** A key of this request's `fields`, whose value the condition tests. Exactly one of `field` and `read`. */
@@ -187,6 +209,33 @@ export type WebAutomationExtractRead = {
  * A `frame` inside the request would be a second way to say what the command
  * already says, read by nothing, so `read-request.ts` refuses a request that
  * names one instead of dropping it and reading another document in silence.
+ *
+ * **Two things an instruction often asks for need no parameter, because the read
+ * already does them.** They are written here because a request has no way to say
+ * them and a reader has no way to know they are guaranteed:
+ *
+ * - **Order is the page's order.** Records come back in the order the document
+ *   renders the items, and pages in the order the read followed them
+ *   (`content/extraction/list-reader.ts` pushes each item as it walks
+ *   `querySelectorAll` and appends each page after the last). "Keep the order the
+ *   search results show them in" is therefore satisfied by writing nothing, and
+ *   there is deliberately no way to ask for another order: a request that could
+ *   sort would be a request that could sort *wrongly*, and sorting belongs to a
+ *   node that sorts.
+ * - **A row is read once across pages.** In the modes that move from page to
+ *   page -- `next` and `numbered` -- and in a continued read, an item whose
+ *   record repeats one an earlier page yielded is not read again. So "list each
+ *   one only once even if it turns up on two pages" also needs nothing written.
+ *
+ * What that de-duplication cannot be told is **which column identifies a row**.
+ * The key is the whole record, so two sightings of one product that differ in
+ * any column -- a price that moved, a URL that gained a tracking parameter -- are
+ * two rows. Saying "the same `url` is the same row" would need a request member
+ * and a page that honours it, so it is a gap rather than a subtlety, and it is
+ * named in `docs/working/language-driven-flow-loop-plan/reports/`
+ * `t142-extraction-expresses-the-instruction.md` rather than half-built here.
+ * `loadMore` and `scroll` grow one list rather than moving pages, so they have no
+ * duplicates to drop.
  *
  * What is top-frame-only is the definition lane, not this contract: the picker
  * takes a pick from frame 0 alone, and `background/extraction/confirm.ts`

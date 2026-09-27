@@ -5,7 +5,7 @@
 // absent, and a field the action requires refuses the whole command.
 
 import assert from "node:assert/strict";
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   WEB_AUTOMATION_ACTION_TYPES,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
@@ -95,22 +95,44 @@ assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fie
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }, ["extractList"], "no fields extracts nothing");
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }, ["extractList"], "a field naming no selector would extract a column of nothing");
 refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }, ["extractList"], "no item selector selects no records");
-// A paginate that is present but unusable refuses the whole request rather than
-// quietly reading page one of a request that asked for several.
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }, ["extractList"], "a paginate with no next link");
+// A paginate that is present but unusable leaves, and the read runs on the page
+// shown. It refused the whole request until 2026-09-26, which is not a narrower
+// answer but an extraction that cannot run: `run-muhubegx-9469de5e` authored
+// `{ next: null, maxPages: 5 }` -- plainly "keep reading, I was never shown the
+// control" -- and the old rule's answer to it was no rows at all. An author is
+// still refused by name before the Flow runs
+// (`output-nodes/extract-list/issues.ts`, `web.extract_list.invalid_paginate`).
+assert.deepEqual(
+  mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }).extractList,
+  { item: "li", fields: { title: "h3" } },
+  "a paginate with no next link"
+);
 // The domain's record bound, as the page bound above: a Flow asking for more reads at most this many.
 assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, maxItems: 5_000 } }).extractList?.maxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
 // `minItems` (D4). Absent, the page applies 1, so a list matching nothing fails;
 // 0 is how a Flow says an empty list is an answer, and it must survive the lift.
 assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 0 } }).extractList, { item: "li", fields: { title: "h3" }, minItems: 0 }, "zero is a declaration, not an absent minimum");
 assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 3, maxItems: 3 } }).extractList?.minItems, 3, "a minimum equal to the maximum can be met");
-// Unreadable, it is refused whole rather than dropped: dropped, the page's
-// default of 1 would fail a read the Flow may have allowed to be empty.
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: -1 } }, ["extractList"], "a negative minimum");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: "1" } }, ["extractList"], "a minimum sent as a string is not read as a number");
-// A minimum no page could satisfy.
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 5, maxItems: 3 } }, ["extractList"], "a minimum above the maximum");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 1 } }, ["extractList"], "a minimum above the bound a request naming no maximum is held to");
+// Unreadable, it leaves and the page applies the default of 1. It refused the
+// whole request until 2026-09-26, on the grounds that the default would fail a
+// read the Flow may have allowed to be empty -- but a refused request is a read
+// the page never performs at all, which fails the same Flow harder and tells it
+// less. A malformed value does not get to pick a different default (D4), and an
+// author is still refused by name before the Flow runs
+// (`web.extract_list.invalid_min_items`, `web.extract_list.min_items_exceed_max`).
+const droppedMinimums: Array<[why: string, minItems: JsonValue, maxItems?: JsonValue]> = [
+  ["a negative minimum", -1],
+  ["a minimum sent as a string is not read as a number", "1"],
+  ["a minimum above the maximum", 5, 3],
+  ["a minimum above the bound a request naming no maximum is held to", WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 1]
+];
+for (const [why, minItems, maxItems] of droppedMinimums) {
+  const lifted = mapped("web.dom.extract_list", {
+    extractList: { item: "li", fields: { title: "h3" }, minItems, ...(maxItems === undefined ? {} : { maxItems }) }
+  }).extractList;
+  assert.notEqual(lifted, undefined, why);
+  assert.equal(lifted?.minItems, undefined, why);
+}
 
 // -- `web.dom.extract_list` field specs (C1) ---------------------------------
 // A field is today's string or a spec. Each kind lifts with exactly its own
@@ -169,8 +191,16 @@ const malformedSpecs: Array<[why: string, fields: JsonObject]> = [
 for (const [why, fields] of malformedSpecs) {
   refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields } }, ["extractList"], why);
 }
-refusedWhole("web.dom.extract_list", { extractList: { item: "tr", itemElement: { unrelated: true }, fields: { name: "td.name" } } }, ["extractList"], "an item element with no identity signal");
-refusedWhole("web.dom.extract_list", { extractList: { item: "tr", itemElement: "tr.row", fields: { name: "td.name" } } }, ["extractList"], "an item element that is not an object");
+// An item element that is not an identity leaves rather than refusing the read.
+// It is a hint about which element the selector was generalized from, and a read
+// with no hint matches on the selector alone -- which is what every
+// model-authored request does anyway. Refusing the read over a malformed hint
+// costs every row for nothing.
+for (const [why, itemElement] of [["an item element with no identity signal", { unrelated: true }], ["an item element that is not an object", "tr.row"]] as Array<[string, JsonValue]>) {
+  const lifted = mapped("web.dom.extract_list", { extractList: { item: "tr", itemElement, fields: { name: "td.name" } } }).extractList;
+  assert.notEqual(lifted, undefined, why);
+  assert.equal(lifted?.itemElement, undefined, why);
+}
 
 // -- Record field keys (D16) --------------------------------------------------
 // A key is Core's field id: 1-100 of A-Z a-z 0-9 _ -, never a prototype name. A
@@ -207,7 +237,11 @@ const malformedPagination: Array<[why: string, paginate: JsonObject]> = [
   ["scroll carrying a page bound", { mode: "scroll", maxScrolls: 3, maxPages: 3 }]
 ];
 for (const [why, paginate] of malformedPagination) {
-  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate } }, ["extractList"], why);
+  // Each one leaves rather than refusing the read, for the reason above: the
+  // request still reads, and it reads the page it was already on.
+  const lifted = mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate } }).extractList;
+  assert.notEqual(lifted, undefined, why);
+  assert.equal(lifted?.paginate, undefined, why);
 }
 
 // -- `web.dom.upload`: name, MIME type, bounded base64 ------------------------

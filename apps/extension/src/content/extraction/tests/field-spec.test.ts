@@ -3,6 +3,15 @@
 // is decided before the page is touched -- `exclude` dropping the field (D12)
 // and `encrypt` refused as NOT_IMPLEMENTED.
 //
+// **`required` is the row that changed on 2026-09-26, and the reason is a live
+// measurement.** Every form defaulted to required, so the ordinary thing a model
+// writes -- four bare selectors -- failed the whole read on a page where three
+// cards of forty-three carried no rating, and forty good rows were stored as
+// nothing. A default that turns a wide answer into an empty one is the shape this
+// product does not take: nothing is required unless the author wrote
+// `required: true`, and the read states the gap instead of failing on it
+// (`../field-spec.ts`, `content/actions/extract-list.ts`).
+//
 // Normalizing needs no DOM, so it runs here. Reading the fields from a live
 // page is proven against real fixtures by `e2e/content/tests/extract-list.spec.ts`.
 
@@ -16,12 +25,12 @@ type ExtractField = WebAutomationExtractListRequest["fields"][string];
 /** Stands in for where a field reads; a refusal names the field key, never this. */
 const SELECTOR_SENTINEL = '[data-testid="SYNTHETIC_SELECTOR_SENTINEL"]';
 
-test("a plain selector reads the element's text, and the string form is always required", () => {
-  assert.deepEqual(normalizeExtractField("name", '[data-testid="product-name"]'), { kind: "text", selector: '[data-testid="product-name"]', required: true });
+test("a plain selector reads the element's text, and the string form requires nothing: it has no way to say so", () => {
+  assert.deepEqual(normalizeExtractField("name", '[data-testid="product-name"]'), { kind: "text", selector: '[data-testid="product-name"]', required: false });
 });
 
 test("an empty selector reads the item itself", () => {
-  assert.deepEqual(normalizeExtractField("name", ""), { kind: "text", required: true });
+  assert.deepEqual(normalizeExtractField("name", ""), { kind: "text", required: false });
 });
 
 test("a trailing @attribute reads that attribute instead of the text", () => {
@@ -29,21 +38,21 @@ test("a trailing @attribute reads that attribute instead of the text", () => {
     kind: "attribute",
     selector: '[data-testid="product-link"]',
     attribute: "href",
-    required: true
+    required: false
   });
 });
 
 test("the item's own attribute needs no selector", () => {
-  assert.deepEqual(normalizeExtractField("id", "@data-product-id"), { kind: "attribute", attribute: "data-product-id", required: true });
+  assert.deepEqual(normalizeExtractField("id", "@data-product-id"), { kind: "attribute", attribute: "data-product-id", required: false });
 });
 
 test("an @ that is not an attribute name stays part of the selector", () => {
-  assert.deepEqual(normalizeExtractField("owner", '[data-owner="a@b c"]'), { kind: "text", selector: '[data-owner="a@b c"]', required: true });
+  assert.deepEqual(normalizeExtractField("owner", '[data-owner="a@b c"]'), { kind: "text", selector: '[data-owner="a@b c"]', required: false });
 });
 
 test("column: names the header whose cell the field reads", () => {
-  assert.deepEqual(normalizeExtractField("price", "column:Price"), { kind: "column", header: "Price", required: true });
-  assert.deepEqual(normalizeExtractField("price", "column:  Unit  price "), { kind: "column", header: "Unit price", required: true });
+  assert.deepEqual(normalizeExtractField("price", "column:Price"), { kind: "column", header: "Price", required: false });
+  assert.deepEqual(normalizeExtractField("price", "column:  Unit  price "), { kind: "column", header: "Unit price", required: false });
 });
 
 test("a column field with no header is rejected rather than matching every column", () => {
@@ -52,21 +61,25 @@ test("a column field with no header is rejected rather than matching every colum
 
 test("each spec kind normalizes, its selector trimmed and a blank one reading the item", () => {
   const rows: Array<readonly [spec: ExtractField, expected: unknown]> = [
-    [{ kind: "text", selector: " .name " }, { kind: "text", selector: ".name", required: true }],
-    [{ kind: "attribute", selector: "a", attribute: " href " }, { kind: "attribute", selector: "a", attribute: "href", required: true }],
-    [{ kind: "link", selector: "a" }, { kind: "link", selector: "a", required: true }],
-    [{ kind: "value", selector: "input" }, { kind: "value", selector: "input", required: true }],
-    [{ kind: "column", header: "  Unit  price " }, { kind: "column", header: "Unit price", required: true }],
-    [{ kind: "text", selector: "   " }, { kind: "text", required: true }],
-    [{ kind: "value", handling: "include" }, { kind: "value", required: true }]
+    [{ kind: "text", selector: " .name " }, { kind: "text", selector: ".name", required: false }],
+    [{ kind: "attribute", selector: "a", attribute: " href " }, { kind: "attribute", selector: "a", attribute: "href", required: false }],
+    [{ kind: "link", selector: "a" }, { kind: "link", selector: "a", required: false }],
+    [{ kind: "value", selector: "input" }, { kind: "value", selector: "input", required: false }],
+    [{ kind: "column", header: "  Unit  price " }, { kind: "column", header: "Unit price", required: false }],
+    [{ kind: "text", selector: "   " }, { kind: "text", required: false }],
+    [{ kind: "value", handling: "include" }, { kind: "value", required: false }]
   ];
   for (const [spec, expected] of rows) assert.deepEqual(normalizeExtractField("field", spec), expected, JSON.stringify(spec));
 });
 
-test("required defaults to true for a spec, and only false makes the field optional", () => {
-  assert.equal(normalizeExtractField("field", { kind: "text", selector: ".a" })?.required, true);
+test("only an explicit true requires a field, and it still means exactly what it says", () => {
+  // The capability is untouched; the default is what moved. A spec written
+  // without `required` now means what the same field written as a bare selector
+  // means, which is what keeps the two forms from reading differently.
+  assert.equal(normalizeExtractField("field", { kind: "text", selector: ".a" })?.required, false);
   assert.equal(normalizeExtractField("field", { kind: "text", selector: ".a", required: true })?.required, true);
   assert.equal(normalizeExtractField("field", { kind: "text", selector: ".a", required: false })?.required, false);
+  assert.equal(normalizeExtractField("field", { kind: "column", header: "Price", required: true })?.required, true);
   assert.equal(normalizeExtractField("field", { kind: "column", header: "Price", required: false })?.required, false);
 });
 

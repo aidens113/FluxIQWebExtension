@@ -21,7 +21,7 @@
 // nothing else: it rebuilds the result field by field, so a producer that put
 // page text beside a proposal sends none of it.
 
-import { webAutomationExtractListRequestValue, type WebAutomationExtractListPagination } from "../actions/extraction";
+import { webAutomationExtractListRequestWhole, type WebAutomationExtractListPagination } from "../actions/extraction";
 import type { WebAutomationExtractionProposal, WebAutomationExtractionProposalField } from "./proposal";
 
 /** `web.dom.capture_snapshot`'s request to detect a repeating structure as well. */
@@ -99,10 +99,14 @@ function proposalValue(value: unknown): WebAutomationExtractionProposal | undefi
   if (itemCount === undefined || confidence === undefined) return undefined;
   const named = fields.filter((field): field is ProposedField => field !== undefined);
   if (named.length !== fields.length || new Set(named.map((field) => field.key)).size !== named.length) return undefined;
-  // One request of every field at once. It refuses a malformed spec, a
-  // malformed pagination, and a run whose every field is excluded -- which the
-  // page answers as `sensitive_region` rather than as a proposal.
-  const request = webAutomationExtractListRequestValue({
+  // One request of every field at once, read whole or not at all. It refuses a
+  // malformed spec, a malformed pagination, and a run whose every field is
+  // excluded -- which the page answers as `sensitive_region` rather than as a
+  // proposal. Whole matters here: a dispatch reads a model's malformed pagination
+  // by dropping it, and a detector is not a model -- a proposal that claimed no
+  // pagination because the detector misdescribed one would be a misstatement
+  // nobody can see (`actions/extraction/read-request.ts`).
+  const request = webAutomationExtractListRequestWhole({
     item: proposal.item,
     fields: Object.fromEntries(named.map((field) => [field.key, field.spec])),
     paginate: proposal.pagination

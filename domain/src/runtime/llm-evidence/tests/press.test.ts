@@ -197,15 +197,27 @@ test("a press that declares nothing lasting is still put to Core, and an unreada
   assert.deepEqual(lab.clicked, [`${ROWS} #new-post`]);
 });
 
-test("with no permission check to ask, a declared consequence is refused rather than taken", async () => {
+test("with no permission check to ask, every high-risk declaration is refused", async () => {
   const lab = queueLab();
   const runtime = createWebAutomationLlmEvidenceRuntime(lab.gateway);
   const handles = await handlesByName(runtime);
 
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["send_or_publish"] } });
-
+  // With nobody to ask, what nobody could have allowed is still refused: a
+  // high-risk class has no instruction that could have authorised it and no
+  // request to raise.
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.delete", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["delete"] } });
   assert.equal(refused.resultCode, "web.action.rejected.permission_required");
   assert.deepEqual(lab.clicked, []);
+
+  const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["send_or_publish"] } });
+  assert.equal(sent.resultCode, "web.action.rejected.permission_required");
+  assert.deepEqual(lab.clicked, []);
+
+  // Ordinary creation remains free; retaining send/publish must not restore a
+  // blanket gate on every mutating press.
+  const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("New post")! } }, consequences: ["create_new"] } });
+  assert.equal(created.resultCode, "web.action.succeeded");
+  assert.equal(lab.clicked.length, 1);
 });
 
 // A press that leaves the page looking the same is no longer refused. It was,

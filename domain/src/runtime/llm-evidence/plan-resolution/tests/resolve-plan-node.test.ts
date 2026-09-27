@@ -193,9 +193,11 @@ test("an extraction handle becomes the request the detection kept, with the plan
 
   // Bounds the page would refuse, or clamp, are refused here instead.
   const malformed: Array<[JsonObject, string]> = [
-    [{ handle, minItems: -1 }, "extractList"],
+    // An unreadable `minItems` is dropped by the request reader rather than
+    // refusing the request, so the resolver's own check names the member.
+    [{ handle, minItems: -1 }, "extractList.minItems"],
     [{ handle, maxItems: 5_000 }, "extractList.maxItems"],
-    [{ handle, minItems: 20, maxItems: 10 }, "extractList"],
+    [{ handle, minItems: 20, maxItems: 10 }, "extractList.minItems"],
     [{ handle, fields: {} }, "extractList.fields"],
     [{ handle: 7 }, "extractList.handle"]
   ];

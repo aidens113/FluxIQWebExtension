@@ -32,7 +32,11 @@
 // replaced by the detected one for the same reason.
 //
 // Anything that does not name one detected list is refused with the code that
-// says why and the position it was refused at. Nothing is guessed.
+// says why and the position it was refused at. **The list itself is never
+// guessed** -- a handle addresses one detection or none. A *column* name is,
+// because a column is a name the model has to retype and a detection often
+// names them after the page's own markup (`./column-match.ts`); every such
+// guess is reported in the resolution's `assumed` rather than made silently.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
@@ -42,6 +46,7 @@ import {
 } from "../../../../actions/extraction";
 import type { WebLlmExtractionBinding, WebLlmExtractionHandles, WebLlmExtractionHandleScope } from "../../structure";
 import { isJsonRecord } from "../../untrusted-json";
+import type { WebExtractionColumnAssumption } from "./column-match";
 import { keptWebExtractionColumns, type WebExtractionColumnIssue } from "./columns";
 import { keptWebExtractionConditions } from "./conditions";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanValuePath } from "../handle-tokens";
@@ -52,7 +57,21 @@ export type WebExtractionSlotIssue = WebExtractionColumnIssue | "web.handle.misp
 export type WebExtractionSlotResolution =
   /** The value names no list by handle and holds no handle: a literal request, or not a request at all. */
   | { status: "literal" }
-  | { status: "resolved"; request: JsonObject; frameId: number | undefined }
+  /**
+   * `assumed` is every column name that found its column by something other
+   * than the detected key verbatim: what was written, what it was read as, how,
+   * and with what score (`./column-match.ts`).
+   *
+   * It is what makes a wrong answer traceable to an assumed column rather than
+   * guessed at, and it is the resolver's counterpart to the dispatch reader's
+   * `assumed` (`actions/extraction/read-request.ts`). **No run artifact carries
+   * it yet**, and that hop is not this directory's: `../resolve-plan-node.ts`
+   * would have to put it on its resolved outcome, and FluxIQ Core would have to
+   * project it beside the authored node, as it already projects a corrected
+   * *parameter* name (`flow-bootstrap/plan/name-correction-assumption.ts`). An
+   * assumption is not a fault, so nothing here turns it into a refusal.
+   */
+  | { status: "resolved"; request: JsonObject; frameId: number | undefined; assumed: WebExtractionColumnAssumption[] }
   /** `path` is where inside the value it was refused. */
   | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath };
 
@@ -113,7 +132,8 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (checked === undefined) return refused("web.handle.malformed", []);
   if (checked.minItems !== request.minItems) return refused("web.handle.malformed", ["minItems"]);
   if (checked.maxItems !== request.maxItems) return refused("web.handle.malformed", ["maxItems"]);
-  return { status: "resolved", request, frameId: binding.frameId };
+  const assumed = [...columns.assumed, ...(where !== undefined && where.ok ? where.assumed : [])];
+  return { status: "resolved", request, frameId: binding.frameId, assumed };
 }
 
 /** Every place the value names its list by reference: its own `handle`, its `item`, and each field that carries one. */

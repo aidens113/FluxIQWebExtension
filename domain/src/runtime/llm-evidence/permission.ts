@@ -47,7 +47,7 @@
 // has to guess which of them happened.
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
-import { isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
 
 /**
  * How an action a model declared stands: nothing to ask, asked and allowed,
@@ -86,11 +86,20 @@ export async function webActionPermission(input: {
   if (input.declared === undefined) return { kind: "no_consequence" };
   if (!Array.isArray(input.declared) || input.declared.length > 10 || !input.declared.every(isAutomationStudioActionConsequence)) return { kind: "invalid" };
   const declared: readonly AutomationStudioActionConsequence[] = input.declared;
-  // Nobody to ask, so the whole declaration is what is missing: none of it was
-  // put to anyone. An empty one asks for nothing, so there is nothing to miss,
-  // and neither has a read: nothing it named could outlast it, so refusing it
-  // would be refusing the instruction's own work with nobody able to allow it.
-  if (input.check === undefined) return declared.length && input.effect !== "observe" ? { kind: "refused", missing: declared, requestId: null } : { kind: "no_consequence" };
+  // Nobody to ask, so only what nobody could have allowed is missing -- and
+  // that is the destructive part of the declaration and nothing else. Core's own
+  // no-run check answers exactly this way (`automationStudioActionPermissionDenied`),
+  // and until t166 this line did not: it refused the whole declaration, so an
+  // action that honestly said it would create something new or send what the
+  // instruction said to send was stopped here while the same action under a run
+  // sailed through, because Core does not gate those classes at all
+  // (`action-permissions/destructive.ts`). A read is never refused either:
+  // nothing it named could outlast it.
+  if (input.check === undefined) {
+    const missing = input.effect === "observe" ? [] : automationStudioDestructiveConsequences(declared);
+    if (missing.length) return { kind: "refused", missing, requestId: null };
+    return declared.length ? { kind: "permitted" } : { kind: "no_consequence" };
+  }
   const name = boundedName(input.control.name) || `an unlabelled ${input.control.kind}`;
   const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: boundedVerb(input.verb), effect: input.effect });
   if (verdict.permitted) return { kind: "permitted" };

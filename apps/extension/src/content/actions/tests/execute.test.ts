@@ -167,7 +167,16 @@ test("the escaped rejection carries ACTION_FAILED from the closed set, and stays
   // detached mid-action, a frame torn down by a navigation that landed while
   // the action was running -- and a retry on the settled page is exactly the
   // right response. Reporting UNKNOWN would make every one of them a hard stop.
-  assert.deepEqual(result.failure, webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, { actual: DETACHED }));
+  //
+  // The `actual` is the thrown message *and* the account of what the default
+  // defence absorbed trying to get past it (`action-runtime/recovery/`): this
+  // rejection is a transient fault on a verb that only reads, so the dispatcher
+  // now runs it again twice before reporting, and the record says so. The record
+  // is rebuilt through `webAutomationFailureRecord`, so the code, the category,
+  // the retryable flag and the stage are the table's and not the annotation's.
+  assert.deepEqual(result.failure, webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, {
+    actual: `${DETACHED}; the execution did not recover within its 3 attempts after absorbing action_failed, action_failed, action_failed, waiting 750 ms`
+  }));
   assert.equal(result.failure?.code, "web.action.failed");
   assert.equal(result.failure?.category, "action_failed");
   assert.equal(result.failure?.retryable, true);
@@ -286,4 +295,74 @@ test("awaiting a branch does not change what a caller sees when the verb succeed
     })
   );
   assert.equal(result, built);
+});
+
+/**
+ * The default defence, through the real dispatcher and a real verb.
+ *
+ * The rows above prove the dispatcher answers; these two prove it no longer
+ * answers *too early*. Every verb in this directory resolves its target in the
+ * first millisecond the command arrives, so a page that had not drawn the
+ * element yet failed TARGET_NOT_FOUND instantly and the Flow stopped -- and the
+ * only defence was a wait node the *model* had to remember to author.
+ * `action-runtime/recovery/` makes the wait unconditional; the unit tests beside
+ * that directory cover the policy, and these cover the wiring, which is the part
+ * a reader of `execute.ts` alone cannot check.
+ *
+ * The waiting here is real, not injected, so the first row costs the 250 ms the
+ * first rung of the target ladder is worth. That is the price of exercising the
+ * production path rather than a stub of it.
+ */
+function resolvesOnAttempt(attempt: number): { resolveTarget: () => { element: Element; resolution: undefined }; calls: () => number } {
+  let calls = 0;
+  return {
+    resolveTarget: () => {
+      calls += 1;
+      if (calls < attempt) {
+        throw Object.assign(new Error("nothing matched #save"), {
+          failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
+            expected: "one element matching the target",
+            actual: "nothing matched"
+          })
+        });
+      }
+      return { element: {} as Element, resolution: undefined };
+    },
+    calls: () => calls
+  };
+}
+
+/** A minimal `success`, enough to see that the verb reached its answer and what the account says. */
+function succeeds(action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionResult["validation"]): BrowserActionResult {
+  return { commandId: action.commandId, actionType: action.actionType, status: "succeeded", validation, message, startedAt, finishedAt: startedAt + 1 };
+}
+
+test("a target the page had not drawn yet is waited for, and the verb then reads it", async () => {
+  const target = resolvesOnAttempt(2);
+  const result = await executeContentAction(
+    { commandId: "cmd-extract", actionType: "web.dom.extract", selector: "#save" },
+    dependencies({
+      resolveTarget: target.resolveTarget as unknown as ContentActionDependencies["resolveTarget"],
+      extractElement: () => ({ ok: true, value: "Saved" }) as ReturnType<ContentActionDependencies["extractElement"]>,
+      describeElement: () => ({}) as ReturnType<ContentActionDependencies["describeElement"]>,
+      captureSnapshot: () => ({}) as ReturnType<ContentActionDependencies["captureSnapshot"]>,
+      success: succeeds
+    })
+  );
+  assert.equal(result.status, "succeeded", `the late target still failed: ${result.failure?.code ?? "no record"}`);
+  assert.equal(target.calls(), 2, "the target was not resolved a second time, so the retry is not re-resolving");
+});
+
+test("a target that never appears is still reported as the page's own TARGET_NOT_FOUND, with the account beside it", async () => {
+  const target = resolvesOnAttempt(99);
+  const result = await executeContentAction(
+    // A 400 ms timeout keeps the row cheap and exercises the clip: the budget is
+    // the command's, so the ladder is cut short rather than run to 3.75 s.
+    { commandId: "cmd-extract", actionType: "web.dom.extract", selector: "#save", timeoutMs: 400 },
+    dependencies({ resolveTarget: target.resolveTarget as unknown as ContentActionDependencies["resolveTarget"] })
+  );
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  assert.match(String(result.failure?.actual), /absorbing target_absent/u);
+  assert.ok(target.calls() > 1 && target.calls() <= 5, `attempts were unbounded or absent: ${target.calls()}`);
 });

@@ -23,6 +23,17 @@ export * from "./harness-options";
 // declaration exists to prevent.
 export { WEB_LLM_DENIED_EVIDENCE_KEYS, webLlmEvidenceKey } from "./denied-keys";
 export { WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
+// A name this domain read as something other than what was written, which a
+// call reports on its execution result. Part of the contract rather than of the
+// making of it: whoever carries the result onwards -- Core, and then a run
+// bundle -- has to declare the same five members or the field is dropped at that
+// boundary, which is the whole defect this shape exists to close.
+export {
+  MAX_WEB_LLM_NAME_ASSUMPTIONS,
+  WEB_LLM_NAME_ASSUMPTION_HOWS,
+  type WebLlmNameAssumption,
+  type WebLlmNameAssumptionHow
+} from "./name-assumption";
 export type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
 export type { WebLlmEvidenceDialog, WebLlmEvidenceFrame, WebLlmPageContext } from "./page-evidence";
 export {
