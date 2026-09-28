@@ -1,152 +1,156 @@
 # Automated FluxIQ Web Testing Facility Plan
 
 Status: Active
-Status detail: The implementation is complete in this repository and the primary agent's integration results are recorded below, while live certification of the `existing` and `clone` lanes remains pending only because no external installation credentials, project, or persisted Flow were supplied to any run, and Linux CI execution plus the scheduled three-repeat baseline await CI.
+Status detail: The facility is structurally intact and is the live substrate every MVP lane runs on, and the repository gates pass today (3,928 tests, 0 failures). The 2026-09-28 audit found the document badly stale rather than the code rotted, plus seven open defects: CI has been red on every run since it began firing and would not pass even once configured, the extension e2e suite runs in no automated gate at all, the evidence policy the document states is no longer what the code does, the Phase 8 safeguard enforces nothing at runtime, two lanes launch a browser with no network guard, the Phase 7 gate is unsatisfiable as written, and the `existing` and `clone` lanes have still never run.
 Created: 2026-09-04
-Last updated: 2026-09-10
-Owner: Primary agent under the `Execute Plan With Subagents` workflow, with rotated phase subagents (`phase0_contracts`, `phase3_topology`, `phase4_evidence`, `clone_*`, `phase12_*`, `facility_router_subflow`)
+Last updated: 2026-09-28
+Owner: Senior supervisor agent (the original `Execute Plan With Subagents` mode and its rotated phase subagents are retired; the 2026-09-28 audit was run by six workers whose reports are under `automated-testing-facility-plan/reports/`)
 Scope: Automated Playwright testing facility for the FluxIQ web extension in `F:\!FluxIQWebExtension`: Scenario Lab fixtures, real-extension fixture, isolated/existing/clone/persistent-isolated FluxIQ topologies, evidence bundles, matrix/CI, bounded improvement agents, persisted-Flow execution, and the persistent self-recording demo scripts.
-Paired document: none
-Related: Documentation Sources section at the end of this document (Playwright chrome-extensions, Playwright test-use-options, and Puppeteer chrome-extensions references); no FluxIQ working documents are linked from this document.
+Paired document: none authored, though the document records Core-side changes (Flow representation metadata, the PIN-authorized legacy migration endpoint, Router/Subflow runtime entry) at lines 67-75 of the archived design record and at 455-464 here, and the audit found two open Core defects; a Core-side document is owed if that work continues.
+Related: [repository layout and commands](../architecture/repository-layout.md), [testing facility architecture](../architecture/testing-facility.md), and the Documentation Sources section at the end of this document.
 
 ---
 
 ## Current State
 
-As of the most recent dated entries (2026-09-05 and 2026-09-06), the first
-facility implementation is complete in this repository. Phases 0 through 12
-are tracked in the Execution Log below; every phase is validated, implemented
-and locally validated, or deliberately deferred by a safety gate. The facility
-phases themselves record that no FluxIQ Core files were changed, but the
-2026-09-05 top-level graph compatibility escape audit did drive Core-side
-ownership changes (see **Done** below).
+Audited end to end on 2026-09-28 by six workers, with the repository gates run
+directly. **The facility is sound; the document was stale.** Nothing rotted —
+what the plan describes was built, still stands, and is the substrate every MVP
+lane has run on since. Seven defects are open. Full evidence, with citations,
+is in `automated-testing-facility-plan/reports/` (six reports).
 
-**Done**
+**Verified working (measured, not claimed)**
 
-- Phases 0-4 (contracts, Scenario Lab, real extension fixture, isolated
-  FluxIQ topology, evidence bundle) are validated; live run
-  `run-mtnla9cz-a4da1119` proved Core-issued `web.browser.navigate` and
-  `web.dom.type` reached and asserted the automation page.
-- Phase 5 (ten-scenario corpus, selector, finite run/matrix/inspect/compare
-  CLI, Windows headed lane, Linux Xvfb configuration) is implemented and
-  locally validated; the local three-repeat baseline passed 3/3.
-- Phase 6 bounded-improvement primitives (task/result/review/audit/worktree
-  plan CLI, six role policies, trusted-diff reconciliation, gates) pass 16/16;
-  dispatch remains human-triggered and the package does not invoke agents or
-  mutate worktrees.
-- Phase 7 Core extraction audit returned `defer` (one domain consumer, zero
-  Core consumers, browser/extension-specific fields).
-- Phase 8 real-site safeguards pass 7/7; no target or secret is configured and
-  no real site was contacted.
-- Phase 9 (`existing` target, `.env`/`.env.local` loading, origin/user-scoped
-  cookie cache under `test-runs/.auth`, `lab auth status|clear`,
-  `--fresh-login`, API-only `ExistingFluxIQControlClient`, 30-second bounded
-  requests with single-attempt cancellation, strict final-state predicates,
-  `BrowserContext` network containment, Windows ACL hardening, web-panel
-  verification helper, `fluxiqExecution` manifest provenance) is integrated;
-  full isolated regression `run-mtnpc74q-89d850a9` passed.
-- Phase 10 (`clone` target: strict clone-package contract, facility-wide
-  `test-runs/.clone-cache`, read-only source exporter, isolated destination
-  importer/remapper, failure-safe cleanup, cache-drift reclassification before
-  destination startup) is integrated; the synthetic source-to-destination
-  pipeline test and live isolated regression `run-mtnrj7ws-717a780f` passed.
-- Phase 11 persistent self-recording demo (`pnpm demo:setup-local`,
-  `pnpm demo:record`, `pnpm demo:run`) is live validated in persistent
-  isolation at `test-runs/web-extension-demo`. The 2026-09-06 completion
-  replaced API-seeded graphs with the real **Generate deterministic Subflow**
-  dialog; final recording
-  `client.extension-bbe5ab04-3eca-415f-b64c-d0c54e135ad2.1788718034927` and
-  runtime runs `8db01689-2074-4432-9551-130d301dd1a5` and
-  `e23d811e-208d-4287-9815-780d67ec1548` passed in No LLM mode, each with 37
-  balanced before/after pairs and 74 physical screenshots.
-- Phase 12 `persistent-isolated` target (stable named workspace under
-  `FLUXIQ_TEST_RUNS_DIR/persistent-isolated/<workspace>/`, exclusive operation
-  lock, strict `.identity/credentials.json` store) is live validated by two
-  sequential runs `run-mtnvptuo-800f61c7` and `run-mtnvqwj5-169346f1` on
-  workspace `phase12-live-v2`.
-- The 2026-09-05 top-level graph compatibility escape audit is closed. Core
-  now enforces Flow representation metadata (modern top-level Flows reject
-  public graph writes; runtime enters through the parent Router and selected
-  Subflow), a PIN-authorized legacy migration endpoint exists, edge upserts
-  re-home `flow_id`, Core derives route-decision/Subflow-entry/action-attempt
-  counts from completed detail, and Subflow navigation hydrates the exact graph
-  before opening its Nodes view. The post-fix live `npm run demo:run` passed as
-  runtime run `3e996492-70d3-4d33-b5ff-9de143783637`. Workspace schema is
-  `0.3` (parent Flow, Subflow, graph Flow, and Router identities).
-- Evidence policy is strictly event-only: one physical JPEG immediately before
-  and one immediately after every test-issued state-changing action; timed
-  sampling and deduplication are disabled.
-- Latest recorded gate results: extension workspace `pnpm check`, `pnpm test`,
-  and `pnpm build` pass; test-runner 116/116; Core package check and build
-  pass with 542/542 tests across 88 files; Core Automation Studio service
-  89/89.
+- `pnpm test`: **3,928 tests, 0 failures** across ten packages (test-runner
+  1,470, domain 847, extension 832, scenario-lab 571, test-contracts 145,
+  test-evidence 17, test-matrix 17, agent-orchestrator 16, real-site-policy 7,
+  boundary-audit 6). `tsc --noEmit` clean.
+- Structurally intact: of 285 files the 2026-09-04..09 build touched, 204
+  remain; every "missing" source file became a *directory* under the later
+  decomposition policy, and 71 more were tests relocated into `tests/`.
+  Almost nothing was deleted.
+- Live infrastructure, not scaffolding: **170 commits touched
+  `packages/test-runner` since 2026-09-11**, through 2026-09-27.
+- No stubs, no rot: one unresolved import in 1,525 files (a deliberate fixture
+  at `tests/prerequisites.test.ts:56`); zero TODO/FIXME; zero skipped tests.
+- All four targets exist and are doubly validated (`target-config.ts:4,66`,
+  `commands.ts:278`). The Phase 12 lock is a genuine `O_EXCL` mutex that
+  refuses a live PID and fails closed on a stale one
+  (`workspace-lock.ts:57,78,134`).
+- The toolchain pin never drifted: `@playwright/test` 1.51.1 exact, Chromium
+  134.0.6998.35, unchanged since `5e9d97e7`. All six Phase 2 behaviours still
+  have live specs; the recorded "8/8" is now 12 tests in 5 files.
+- Boundary holds: `test-contracts` is `private: true`, five in-repo consumers,
+  **zero** outside. Hygiene clean; no generated artifact tracked.
+- Phases 6, 7 and 8 pass at exactly their 2026-09 counts (16/16, 6/6, 7/7):
+  those packages never changed, while everything in use grew ~10x.
 
-**Not done**
+**Corrections — claims here that are no longer true**
 
-- Live certification of the `existing` lane: no external installation
-  credentials, project, or persisted Flow were supplied to any run. The runner
-  path is implemented; the document classes this as a certification gap, not
-  an unimplemented runner path.
-- Live clone certification against an external existing FluxIQ installation:
-  no source base URL, credentials, project, or Flow were supplied.
-- Linux Chromium execution and the scheduled three-repeat baseline in CI: the
-  Xvfb/dependency configuration is complete but was not executable on the
-  Windows host.
-- Phase 8 real-site execution: deliberately not run; no reviewed target policy
-  was supplied.
-- Phase 7 Core promotion: deliberately deferred (`defer` verdict).
-- Phase 6 agent dispatch: primitives only; no automatic dispatch or merge.
-- Phase 9 Step 5 additive Core improvements (current-session identity
-  endpoint, registered runtime cancellation, public command correlation,
-  remote capability discovery) were identified but not implemented; on the
-  audited Core revision `/api/auth/session` is absent and cancellation is
-  declared but not registered, so the adapter proves only authenticated
-  project access and reports cancellation as `unsupported`.
-- Synthesized Flow execution is recorded as follow-up scope.
-- No automatic reset/delete command exists for a persistent workspace; removal
-  remains an explicit manual operation.
-- The separate Core web-package type check still reports pre-existing,
-  unrelated dirty-worktree TypeScript errors in Automation Studio UI runtime
-  files.
+- *Scale.* The corpus is **41 scenarios, not ten** (`registry.ts:45-87`);
+  test-runner is **228 files / 1,428 cases, not 116**. No scenario is dead; the
+  selector reads the registry, not a hardcoded list.
+- *Evidence policy.* The event-only claim is wrong three ways:
+  `run-scenario.ts:178` sets `screenshotAdapter = undefined`, so **the Lab
+  runner has taken no screenshots since `de790249` (2026-09-25)**;
+  `effective-evidence-policy.ts:41` omits `deduplicateScreenshots: false`, so
+  **dedup defaults on**; and `sampleFps` is never read by `capture.ts`, so it
+  is unimplemented, not disabled. Event-only survives only on the demo path
+  (`browser-evidence.ts:34-44`). The body still specifies dedup *and* a
+  0.5-1 FPS sampler as the design.
+- *Gate comparability.* Every "`pnpm check` passes" claim predates today's
+  `check`, which was then only `pnpm -r check`. The old claims are not
+  comparable to today's result.
+- *Cited evidence is unreproducible.* All five run ids offered as proof, and
+  the Phase 11 workspace `test-runs/web-extension-demo`, are gone from disk.
+  `test-runs/` is disposable by design, so those claims now rest on this
+  document's assertion alone.
 
-**Next steps**
+**Open defects**
 
-- Supply `FLUXIQ_TEST_BASE_URL`, `FLUXIQ_TEST_USERNAME`,
-  `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_PROJECT_ID`, and
-  `FLUXIQ_TEST_FLOW_ID` (optionally `FLUXIQ_TEST_GATEWAY_URL` and
-  `FLUXIQ_TEST_TOTP`) and run the `existing` and `clone` lanes against a real
-  external installation to close the two live-certification gaps.
-- Run the Linux Xvfb lane and the scheduled three-repeat baseline in CI.
-- Take the additive Core improvements identified in Phase 9 Step 5 through
-  the Core repository's own change process.
-- Real-site probes (Phase 8) remain gated on a reviewed target policy and a
-  stable Phase 5; Core promotion (Phase 7) remains gated on a second consumer.
+1. **CI has been red on every run since it started firing.** Five runs,
+   2026-09-24 to 2026-09-28, each failing in 6-9s at `Verify CI prerequisites`
+   because `FLUXIQ_CORE_REPOSITORY`, `FLUXIQ_CORE_REF` and
+   `FLUXIQ_CORE_TOKEN` were never configured. Every downstream job is skipped,
+   so **no Linux run and no three-repeat baseline has ever executed.** The
+   workflow was written in the facility's first commit and never touched.
+   Setting the three values is a repository-settings action only the owner can
+   take.
+2. **CI would still fail once they are set.** `nightly-full-matrix` checks Core
+   out but never builds it, and nothing asserts Core was built: the staleness
+   guard deliberately passes when `dist` is absent (`stale.mjs:17`, pinned by
+   `stale.test.mjs:26`). A fresh checkout passes all three guards and dies on
+   missing modules — reported as a product failure, not a setup failure.
+3. **The extension e2e suite runs in no automated gate.** `test:e2e` is absent
+   from `check`, `test` and `build`; only CI invokes it
+   (`testing-facility.yml:134,137`), and CI has never run. Its fixture detects
+   a *missing* artifact but never a *stale* one
+   (`extension-context.ts:166-172`), so a hand-run suite can certify an old
+   build.
+4. **The nightly lane's cost was never re-estimated.**
+   `testing-facility.yml:254` runs `lab matrix --all --repeat 3`, sized for ten
+   scenarios and now expanding to 41.
+5. **The Phase 8 safeguard enforces nothing at runtime.**
+   `packages/real-site-policy` has zero runtime consumers;
+   `docs/architecture/testing-facility.md:246` admits it "does not browse or
+   execute probes". Real enforcement is the fail-closed guard at
+   `network-guard.ts:54`, whose gaps are: `chrome-extension:`, `data:`,
+   `about:` and `blob:` pass unconditionally, and Playwright's route layer does
+   not intercept service-worker traffic while `serviceWorkers: 'block'` is
+   never set (`launch-browser.ts:17`) — and the subject is an MV3 extension
+   whose background *is* a service worker. `--host-resolver-rules`
+   (`extension-context.ts:74`) still covers it, but nothing asserts that.
+6. **Two lanes launch a browser with no guard at all.**
+   `demo-workspace/browser-session.ts:51,60,135` and `ui-e2e/topology.ts:323`
+   call `launchPersistentContext` without it, so the `demo:*` and `demo:llm:*`
+   lanes the live campaign drives are uncontained.
+7. **The Phase 7 gate is unsatisfiable as written.** `boundary-audit` requires
+   two *distinct repositories* (`audit.ts:52`, pinned by `audit.test.ts:37`),
+   while `AGENTS.md` forbids Core importing this private package. Close it by
+   design or change the candidate.
 
-**Blockers**
+**Still not done, now confirmed by measurement**
 
-- None recorded that stop implementation. Remaining items are gated on inputs
-  that were never supplied (external credentials/project/Flow, a reviewed
-  real-site policy, a CI Linux runner) or on deliberate policy deferrals.
-- The Phase 12 `Credential recheck required` blocker recorded on 2026-09-04
-  was resolved the same day by the strict persistent identity store.
-- The Phase 9 Step 5 note records that Core edits were blocked because
-  `F:\!FluxIQ` was read-only in that execution; the 2026-09-05 sections record
-  Core changes being made, so treat that block as specific to the 2026-09-04
-  execution rather than the current state.
+- The `existing` and `clone` lanes have never run: of **342 `run.json`
+  manifests**, 330 are `isolated`, 3 `persistent-isolated`, 9 legacy, and
+  **zero** `existing` or `clone`. Unchanged since 2026-09-10.
+- Both Core items remain open. `/api/auth/session` is still absent, and
+  `cancelRuntimeSession` is declared (`endpoints.ts:146`) and implemented
+  (`runtime/service.ts:2865`) but **no handler registers it, so it 404s** —
+  Core's own UI calls it (`run-commands.ts:21`) and hits the same 404. Raise
+  that in Core.
+- Only the Chrome side panel is opened by any e2e test
+  (`extension-context.ts:81`); the Firefox popup build is never loaded, so the
+  `AGENTS.md` side-panel/popup alignment contract has no mechanical
+  enforcement. The Firefox lane also cannot launch here (1.51.1 pins firefox
+  rev 1475; only firefox-1538 is installed).
+- Phase 8 execution and Phase 7 promotion stay deferred; the Phase 6
+  orchestrator is primitives-only and provably cannot dispatch or mutate a
+  worktree (`worktree.ts:90-92` returns git argv it never runs).
+
+**Smaller items for whoever next touches the area**
+
+`existingFlowCancellationReport` (`existing-flow-run.ts:45`) is dead outside
+its test, so the cancellation verdict is computed then discarded; the bounded
+request ceiling drifted to 300s (`http-control/index.ts:35`) and a 401/403
+silently re-logins once (`:176`); `existing-fluxiq-control.ts:659` embeds raw
+control bytes in a regex, so `file` calls the largest source file binary and
+`grep` skips it; `run-lab.mjs` gates read-only `--help` behind the Core
+staleness check; `agent-orchestrator`'s tests sit at package-root `tests/`,
+against the `AGENTS.md` placement rule; and redaction covers neither recorded
+page data nor the browser profile (`run-redaction-scopes.ts:34-36`), with
+credential-syntax findings advisory only.
 
 **Where to look**
 
-- The Execution Log table (first section below) for per-phase status, owners,
-  and notes.
-- `## Implementation Validation (2026-09-04)` for the integrated gate table.
-- `## Final Implementation And Live Validation (2026-09-05)` for the
-  Router/Subflow ownership fix and the latest demo results.
-- The Phase 11 deterministic recording-to-Subflow completion entry
-  (2026-09-06) for the most recent dated checkpoint.
+`reports/` for the six audit reports; `archive/` for the superseded design
+narrative, phase step lists and 2026-09 validation transcripts; the Execution
+Log below for the original per-phase record, which remains accurate for what
+was built in 2026-09.
 
 ---
 
-## Status
+## Status (2026-09-06, superseded by Current State above)
 
 The first facility implementation completed on 2026-09-04 under the `Execute
 Plan With Subagents` workflow. Core promotion and real-site execution remain
@@ -177,489 +181,10 @@ were supplied to this run.
 | 11. Persistent self-recording demo | implemented and live validated in persistent isolation | primary | Both scripts own a copied Core process while retaining `test-runs/web-extension-demo/fluxiq-root/.fluxiq`, browser identities, authentication, project, Flow, recordings, and runtime history. Real headless record and No-LLM playback passes are recorded below. |
 | 12. Persistent isolated topology | implemented and live validated | primary, `phase12_target_cli`, `phase12_allocation_lock`, `phase12_manifest_docs` | Named local topology retains `.fluxiq`, browser profile, generated identity, projects, recordings, and trusted-client state while using fresh processes, ports, session workspaces, and evidence per invocation. Two sequential live runs passed and all workspace gates pass. |
 
-Phase 10 Steps 1 and 4 (`clone_contracts`, 2026-09-04): completed the
-versioned private clone-package contract, sanitized Flow-document boundary,
-explicit dependency policy, deterministic project/Flow/node/edge ID mapping,
-destination remapping, and read-back equivalence attestation primitives. The
-contract rejects unknown package and Flow-root fields, credentials, cookies,
-authorization material, identity/gateway state, schedules, runtime history,
-recordings, published state, and recognizable opaque secrets before
-persistence. Every node definition must be explicitly registered as domain or
-native, or explicitly classified as an external side effect with a named test
-double; unknown and undoubled definitions produce a bounded incompatible
-verdict. Clone execution provenance is strict and sanitized. Contract tests
-pass 19/19 and the integrated test-runner suite passes 89/89 after the parallel
-source-export and destination-import slices were integrated.
-
-Phase 10 Step 5 and destination failure cases from Step 7
-(`clone_destination`, 2026-09-04): a read-only Core audit confirmed that the
-existing public `create-project`, `create-flow`, `save-flow`, and `get-flow`
-HTTP endpoints are the complete destination persistence seam; project/Flow
-mutations enforce the configured authorization PIN and no Core change is
-needed. The runner now creates a uniquely named run-owned destination project,
-imports only a contract-validated compatible clone package, requires explicit
-source-to-destination project and Flow mappings, deterministically remaps graph
-node/edge identities through the shared clone policy, and reads the saved Flow
-back before returning. Both the direct saved/read-back comparison and the
-source-normalized equivalence attestation fail closed on scope escape,
-undeclared changes, incompatible dependencies, import/save errors, or hash
-drift. A bounded Flow ID is derived deterministically from the complete run
-and source identity. The destination control interface exposes only public project/Flow
-methods and never receives the source client or a filesystem path. Focused
-type-checking passes; the six destination importer tests and the public-route
-transport test pass. Whole-workspace validation passed after orchestration
-integration.
-
-Phase 10 synthetic pipeline validation (`clone_destination`, 2026-09-04): an
-independent mocked source and destination integration test now exercises the
-complete export, dependency-classification, package, deterministic-remapping,
-public destination import, read-back, and equivalence sequence. It proves the
-source receives only login/session and Flow/project/dependency/definition read
-operations, the destination receives exactly create-project, create-flow,
-save-flow, and get-flow, all destination project/Flow/node/edge identities are
-distinct and consistently remapped, and both the source canonical hash and
-serialized bytes remain unchanged. The focused pipeline test and runner
-type-check pass; live configured-source certification remains separate.
-
-Phase 10 isolated-startup ownership hardening (`clone_destination`,
-2026-09-04): isolated topology setup is now enclosed by the same failure-safe
-ownership boundary as existing-target setup. Any failure after allocation
-first stops supervised processes and then removes only the exact allocated
-`runRoot`; the removal helper re-derives and verifies the run-ID path before a
-recursive deletion and is shared by explicit run cleanup. A focused failure
-test forces startup to fail before process launch and proves that the failed
-run root is removed while both a sibling run sentinel and an external/source
-sentinel remain byte-identical. The runner type-check and all three focused
-topology ownership tests pass.
-The complete test-runner regression also passes 89/89 after integration with
-the finalized clone dependency metadata.
-
-Phase 10 final integration and local validation (primary and
-`post_crash_hardening`, 2026-09-04): the strict clone contract, facility-wide
-cache, read-only source exporter, isolated destination importer/remapper,
-end-to-end orchestration, sanitized evidence provenance, and failure-safe
-cleanup are complete. The source lane remains read-only on every path,
-including post-run hash verification, and the isolated destination registry is
-reclassified against the cached Flow immediately before import; an
-incompatibility therefore fails before any destination project or Flow
-mutation. Contract tests pass 19/19 and test-runner tests pass 89/89. The
-`pnpm check` gate passes, `pnpm test` passes across all 10 executable workspace
-packages, and `pnpm build` passes. The synthetic source-to-destination clone pipeline
-passes. A fresh live isolated regression, `run-mtnrj7ws-717a780f`, passed and
-`lab inspect` validated all 10 indexed artifacts. Live clone certification
-against an external existing FluxIQ installation remains pending because no
-source base URL, credentials, project, or Flow were supplied. No FluxIQ Core
-files were changed.
-
-Phase 11 implementation note (primary, 2026-09-04): `pnpm demo:record` and
-`pnpm demo:run` now provide a deliberately persistent existing-install smoke
-workflow. The exact local workspace is configured by `FLUXIQ_DEMO_RUN_DIR`,
-must remain below `FLUXIQ_TEST_RUNS_DIR`, is protected with owner-only ACLs,
-and is guarded by an exclusive operation lock. The recording command creates
-or reuses one `web-automation` project, creates the deterministic browser-action
-Flow only if absent, pairs the production extension, records its own
-Playwright-driven interaction with `basic-form`, verifies one new durable Core
-recording, and stores only sanitized IDs and timestamps in `workspace.json`.
-The Flow command requires that state, reconnects the same browser profile,
-executes the persisted Flow through FluxIQ, verifies successful durable node
-attempts and the submitted page, and records the runtime run ID in the same
-file. These scripts intentionally retain the remote project, Flow, recording,
-and run history and do not create ordinary random evidence-run directories.
-Live validation depends on a running configured FluxIQ installation and test
-credentials. Focused test-runner checks pass 92/92, and `pnpm check`,
-`pnpm test`, and `pnpm build` pass across the workspace. With no `.env` or
-`.env.local` present, the recording wrapper was also verified to fail before
-filesystem allocation or external mutation with the exact missing
-`FLUXIQ_TEST_BASE_URL` configuration error.
-
-Phase 11 live validation update (primary, 2026-09-04):
-`pnpm demo:setup-local` created the dedicated local test identity and hardened
-ignored `.env.local` without disclosing its generated password or PIN. The
-repository-local FluxIQ panel was started at `http://127.0.0.1:3000`, with the
-production client gateway listening at `ws://127.0.0.1:4777/client`.
-`pnpm demo:record` then passed against the live panel, reused project
-`34cc76c0-3932-4c00-b5c7-c0a216268259` and Flow
-`flow.web-extension-demo`, persisted recording
-`client.extension-5bdf49b4-158f-49ed-8de3-cdca8c03a704.1788581072665`, and
-wrote `workspace.json` plus `recording.png` to the configured persistent
-`test-runs/web-extension-demo` directory. The live pass exposed and resolved
-three integration details: domain project enumeration must send
-`domainId=web-automation`; domain-scoped Flows must not declare the
-global-only `executionDefaults.authorizedDomainIds` grant; and project binding
-is resolved from a fresh operator Automation Studio context when recording
-starts, rather than being required in the initial pairing-ready status. The
-runner now verifies recording acceptance and stop state explicitly and can
-safely repair only the exact empty configured demo Flow left by an interrupted
-first-time provision. The focused test-runner suite passes 92/92 after these
-corrections. `pnpm demo:run` remains a separate, intentionally user-invoked
-validation of persisted Flow execution.
-
-Phase 11 final live validation update (primary, 2026-09-04): the reusable demo
-workflow now drives the real Automation Studio UI for project/Flow selection,
-No LLM runtime mode, pairing, and Run dispatch, while the production extension
-executes the deterministic DOM actions. Both scripts run headless by default
-and copy the freshly built Chrome extension to a stable workspace-local load
-path on every invocation, preserving the persistent profile identity while
-preventing a stale unpacked build. The panel uses a separate persistent browser
-profile so panel focus cannot steal the extension's automation target.
-
-Evidence policy is now strictly event-only: every test-issued state-changing
-action has one physical JPEG immediately before it and one immediately after
-it; timed sampling and deduplication are disabled. Extension-executed Flow
-actions participate through an acknowledged before/after boundary that pauses
-the action until capture completes. The successful headless `demo:record`
-bundle contained 24 action pairs / 48 physical screenshots with zero missing
-pairs. The successful headless `demo:run` bundle contained 26 action pairs / 52
-physical screenshots, including four Flow actions / eight runtime-boundary
-screenshots, also with zero missing pairs. Live playback run
-`6b7dc744-9b4a-41ab-9421-912d5ccd0ee1` succeeded without LLM intervention.
-The validation exposed and fixed stale active-tab races around evidence focus,
-top-frame reinjection being poisoned by inaccessible child frames, the global
-pairing modal, and Chromium startup blank tabs. Focused runner tests pass
-108/108. Final extension-repository `pnpm check`, `pnpm test`, and `pnpm build`
-gates all pass. The focused FluxIQ Core runtime UI regression passes 6/6; its
-workspace web type check remains blocked by pre-existing duplicate-property and
-runtime transport typing errors in unrelated live-session files.
-
-Repeat live validation (primary, 2026-09-05): after explicitly restarting the
-repository-local panel, two consecutive headless record/playback cycles passed
-against the same persistent workspace, project, Flow, browser profiles, and
-cached authentication. Recording IDs were distinct, demonstrating new durable
-Core recordings without recreating the project or Flow. Runtime runs
-`9b996b58-401f-4f23-9689-d70e2789a9c9` and
-`69ad3100-d502-4aea-9390-07cae2bcb9b6` both succeeded in No LLM mode and each
-verified all four durable web action attempts plus the submitted scenario
-state. Both recording bundles contained 24 complete action pairs / 48 physical
-screenshots. Both playback bundles contained 25 complete action pairs / 50
-physical screenshots, including four extension Flow actions / eight boundary
-screenshots. All four bundle audits reported zero incomplete pairs. The
-test-runner suite also passed 108/108 and the extension smoke test passed before
-the live cycle.
-
-Persistent demo isolation correction (primary, 2026-09-05): the reusable demo
-scripts no longer attach to the repository-root FluxIQ installation. Each
-command now locks `test-runs/web-extension-demo`, registers the web-automation
-domain and test identity in `fluxiq-root/.fluxiq`, starts a copied Core web
-workspace on stable dedicated loopback ports, and removes only the disposable
-`.sessions/<run-id>` Core copy after shutdown. The isolated `.fluxiq`, project,
-Flow, recordings, runtime history, authentication cache, extension identity,
-and browser profiles persist across invocations. The setup command now seeds
-the identity at that same isolated root. Old existing-install browser profiles
-remain preserved under their former names; the isolated lane uses versioned
-persistent profiles to prevent stale trust and UI state from crossing targets.
-
-Live migration exposed three issues and fixed them at their owning boundaries:
-extension status refreshes no longer overwrite an operator's in-progress
-settings draft; the demo setup entrypoint honors an explicit isolated root; and
-the generated Flow is reconciled through Core's public graph-patch seam so its
-canonical document and paged viewport index agree. FluxIQ Core's generic
-Runtime Debug connector now requests full Flow detail when activated and
-prefers an already loaded full Flow over a summary entity. Its focused connector
-test passes 13/13. Final real `pnpm demo:record` and `pnpm demo:run` commands
-passed in separate Core lifecycles against the same project and Flow. Playback
-run `e59ae7c8-63c0-4f49-8e7c-bd5382e4ca5c` succeeded with No LLM intervention
-and all four browser actions. The successful recording evidence has 25 complete
-before/after pairs (50 physical screenshots); playback has 28 complete pairs
-(56 screenshots), with zero failed or missing pairs. The retained `.fluxiq`
-exists, `.sessions` is empty after cleanup, and neither dedicated port remains
-listening. The post-fix extension workspace `pnpm check`, `pnpm test`, and
-`pnpm build` gates pass; the test-runner's final focused regression passes
-111/111, including direct coverage of the public viewport/patch adapter.
-
-Demo layout regression correction (primary, 2026-09-05): live browser
-measurement showed that Core preserved the fixture's distinct `0, 240, ...`
-coordinates, but the 240-pixel interval was narrower than the rendered node
-card. Adjacent cards therefore overlapped after `fitView` and could appear
-stacked. This was a testing-fixture defect, not a Core persistence or coordinate
-mapping defect. The fixture now uses a 360-pixel interval, migrates the retained
-fixture-owned graph through public `move_node` operations, and fails closed on
-unexpected graph membership. Both demo commands now open the actual Nodes view
-and assert pairwise non-overlap for all six rendered DOM rectangles. The
-focused runner suite passes 111/111. A real `demo:record` migrated the existing
-Flow to `0, 360, 720, 1080, 1440, 1800`, recorded a new durable session, and
-passed the visual assertion. A subsequent real `demo:run` passed the same
-assertion and completed No-LLM runtime run
-`bc44c1a3-2fe4-48fc-809c-79d98dcf2eed`.
-
-Phase 11 deterministic recording-to-Subflow completion (primary, 2026-09-06):
-the recording script no longer seeds an executable graph through a control API.
-It drives the production extension to create a durable recording, opens that
-recording through the real Automation Studio hierarchy, and submits the real
-**Generate deterministic Subflow** dialog. Core maps only domain-declared action
-inputs, reuses the Flow Router's configured fallback Subflow, replaces only an
-empty or wholly unedited recording-derived graph, spaces generated nodes at 340
-pixels, and reconciles an already-materialized SQL graph index after canonical
-document replacement. The runner reloads the panel and verifies the rendered
-Subflow has four form actions plus at most one self-contained fixture navigation,
-linear edges, recording provenance, and no pairwise overlap.
-
-The paired playback script now expands/searches the real hierarchy instead of
-assuming Runtime Debug children are already virtualized, selects No LLM mode,
-and dispatches Run from the actual Runtime Debug surface. Live validation found
-that a self-contained recorded start navigation referenced the Scenario Lab's
-per-invocation port. The demo workspace now persists one protected
-`scenario-port.json`, so independent record and playback processes expose the
-fixture at the same address without keeping a server alive. The same isolated
-`fluxiq-root/.fluxiq`, project, Flow, Subflow, Router, recordings, runtime
-history, authentication cache, and browser profiles remain reusable.
-
-Final live `npm run demo:record` produced recording
-`client.extension-bbe5ab04-3eca-415f-b64c-d0c54e135ad2.1788718034927` and
-replaced the generated Subflow through the panel UI. The following
-`npm run demo:run` passed as runtime run
-`8db01689-2074-4432-9551-130d301dd1a5`; it verified the Router decision,
-Subflow entry, every recording-generated action attempt, and the submitted demo
-result. The successful playback evidence contains 37 balanced before/after
-pairs, 74 physical screenshots, no deduplicates, and no error boundary. Focused
-validation passes: test-runner 116/116, domain smoke, extension smoke, and Core
-Automation Studio service 89/89 including canonical/SQL graph replacement.
-A second independent `npm run demo:run` reused the same saved Flow and
-fixture address without recording again and passed as runtime run
-`e23d811e-208d-4287-9815-780d67ec1548`; its evidence also contains 37 balanced
-pairs and 74 physical screenshots.
-### Phase 12: persistent isolated topology
-
-This phase adds `persistent-isolated` as a fourth explicit target. It owns and
-starts a local FluxIQ web process just like ordinary isolation, but separates
-ephemeral execution state from a stable named workspace. The stable workspace
-is rooted below `FLUXIQ_TEST_RUNS_DIR/persistent-isolated/<workspace>/` and
-retains `fluxiq-root/.fluxiq/` plus `browser-profile/`. Each command still gets
-a unique `.sessions/<run-id>/` containing the disposable Core web copy and
-process logs, while its finalized evidence remains at the ordinary
-`FLUXIQ_TEST_RUNS_DIR/<run-id>/` location.
-
-1. Extend CLI and environment target contracts with
-   `--target persistent-isolated`, `--workspace <safe-name>`, and
-   `FLUXIQ_TEST_PERSISTENT_WORKSPACE`. Reject missing, conflicting, path-like,
-   reserved, or traversal-capable workspace names and reject existing-install
-   URL/project/Flow configuration for this target.
-2. Add a persistent allocation that creates the stable FluxIQ root, `.fluxiq`
-   storage, and browser profile idempotently while allocating a unique session
-   root, Core web copy, logs, ports, and controller token per invocation. All
-   resolved paths must remain under the configured runs root.
-3. Acquire an exclusive workspace operation lock before starting processes.
-   Reject a concurrent live owner, safely reclaim a verifiably stale lock, and
-   release it on success, failure, timeout, or signal cleanup. Never delete the
-   retained workspace as an error-recovery shortcut.
-4. Reuse the isolated Core startup, domain host, identity/bootstrap, pairing,
-   recording, runtime action, network containment, and readiness paths. Core
-   receives the stable FluxIQ root/storage paths and per-invocation ports; the
-   browser receives the stable profile. No FluxIQ Core source change is
-   required.
-5. Change final cleanup ownership so ordinary `isolated` and `clone` continue
-   deleting all run-owned destination state, while `persistent-isolated`
-   removes only its `.sessions/<run-id>` directory after copying logs. Its
-   `.fluxiq`, browser profile, projects, recordings, trusted-client state, and
-   run history survive.
-6. Record the sanitized target mode and workspace name in the run manifest and
-   human report without exposing absolute private paths, credentials, cookies,
-   tokens, recorded values, or internal database content.
-7. Add allocation, target parsing, lifecycle, concurrent-lock, stale-lock,
-   failure cleanup, manifest, and two-invocation persistence tests. The second
-   invocation must observe a sentinel or public Core state written by the
-   first while using new ports/session directories and leaving finalized
-   evidence independent.
-8. Document exact commands, layout, ownership, reset semantics, and the
-   distinction from `existing`, disposable `isolated`, `clone`, and the
-   persistent demo scripts. Do not add an automatic reset/delete command in
-   this phase; removal of a persistent workspace remains an explicit manual
-   operation.
-
-Acceptance:
-
-- two sequential invocations with the same workspace name start independent
-  supervised processes and unique execution sessions but resolve the same
-  retained `.fluxiq` and browser-profile directories;
-- stopping, failure, or interruption closes only owned processes and removes
-  only the current `.sessions/<run-id>`, never the stable workspace;
-- a second concurrent invocation of the same workspace fails before Core or
-  browser startup, while a different workspace can run independently;
-- ordinary isolated and clone cleanup behavior is unchanged;
-- target configuration, manifests, logs, and reports contain the workspace
-  name but no secret or private-state payload; and
-- focused tests plus `pnpm check`, `pnpm test`, and `pnpm build` pass, followed
-  by two live sequential runs demonstrating persistence when browser tooling is
-  available.
-
-Phase 12 execution update (primary plus assigned agents, 2026-09-04): target
-and CLI configuration, stable allocation, operation locking, cleanup
-ownership, sanitized manifest provenance, and current-state documentation are
-integrated. The runner accepts `persistent-isolated` with one strict workspace
-name; stable `.fluxiq` and browser-profile paths sit outside unique disposable
-session roots. Live owners are rejected, confirmed stale PID locks are
-reclaimed atomically, malformed locks fail closed, and Windows private paths
-receive verified owner-only ACLs. Persistent startup failures and ordinary
-cleanup remove only the current session. The integrated runner suite passes
-103/103.
-
-The first full headed Chromium run against workspace `phase12-live` passed as
-`run-mtnvh2gt-787ce5f4`. Its processes stopped, finalized evidence was retained,
-and its stable private workspace survived. The second invocation failed before
-process startup with `Credential recheck required`: ordinary isolated bootstrap
-generated a new password/PIN and attempted to replace the persisted identity.
-The workspace itself was preserved. This is now an explicit Phase 12 blocker,
-and a rotated agent owns an owner-protected, strict, atomic persistent identity
-cache so later invocations reuse the same generated test credentials. Live
-two-invocation acceptance remains in progress until that correction is
-integrated and rerun with a fresh validation workspace.
-
-Phase 12 completion update (primary and rotated `phase12_target_cli`,
-2026-09-04): generated persistent test credentials now use a strict 4 KiB
-owner-protected store at `.identity/credentials.json`. Creation is atomic,
-malformed/oversized state fails closed, the generator runs only on first use,
-and later starts verify the retained Core identity instead of attempting
-credential rotation. The facility reuses one named web-automation project and
-the persistent extension helper accepts either a new pairing challenge or an
-already trusted session.
-
-Two fresh sequential headed Chromium runs against the same workspace,
-`phase12-live-v2`, passed: `run-mtnvptuo-800f61c7` and
-`run-mtnvqwj5-169346f1`. Both finalized bundles pass `lab inspect` with 15
-artifacts. They recorded different scenario/web/gateway ports
-(`61420/61421/61422` then `61481/61482/61483`) while retaining the same
-`.fluxiq`, browser profile, private identity, project, recording history, and
-trusted extension state. After both runs the operation lock was absent and the
-`.sessions` directory contained zero execution sessions. The runner suite
-passes 107/107; full `pnpm check`, `pnpm test`, and `pnpm build` pass. No FluxIQ
-Core files were changed.
-
-Phase 9 Steps 2–3 execution note (2026-09-04): `phase3_topology` added the
-typed, mutually exclusive target configuration and `--target`/`--flow` CLI
-plumbing. Isolated mode remains the default; existing mode requires validated
-base URL, project, Flow, test identity, password, and authorization PIN, with
-an optional gateway URL and TOTP. `.env` then `.env.local` are loaded without
-overriding process environment values, local environment files are ignored,
-and the tracked example contains placeholders only. Existing Flow execution
-remains fail-closed until the later control-adapter and Flow steps are
-integrated. The combined test-runner check and all 24 tests pass.
-
-Phase 9 existing-topology ownership (`phase3_topology`): existing mode now
-creates only the disposable run workspace, browser profile, logs, and Scenario
-Lab process. It read-only health-checks and retains the configured external
-Core origin/gateway reference, but never builds, bootstraps, starts, stops,
-resets, or removes the external FluxIQ installation. Until the Flow adapter is
-wired, the finite runner stops explicitly after safe topology attachment
-rather than reporting a site-only pass. Ownership and failure-path cleanup
-tests prove that only the supervised Scenario Lab and run-scoped directory are
-removed; the external server and sentinel state remain live. The combined
-runner check and all 26 tests pass.
-
-Phase 9 Step 4 (`phase4_evidence`): implemented an origin-and-username-scoped
-web-panel session cache under ignored `test-runs/.auth`, with atomic restricted
-writes, expiry/scope/format rejection, validation before reuse, fresh-login and
-one-shot 401/403 relogin behavior, and non-secret status/clear primitives. The
-runner check, all four focused authentication tests, and the integrated runner
-suite (24/24) pass after the parallel target-configuration work was integrated.
-
-Phase 9 Step 9 CLI controls (`phase3_topology`): `lab auth status` and
-`lab auth clear` now operate on only the resolved existing-install origin and
-username and emit no cookie, cache path, password, PIN, TOTP, project, or Flow
-data. Their narrow resolver does not require execution credentials or project
-configuration. `--fresh-login` is accepted by run and matrix, rejected for an
-isolated target, and retained on the typed existing-target configuration for
-the control adapter. The runner check and the integrated suite (46/46) pass,
-including subprocess-level status and clear coverage.
-
-Phase 9 Step 5 Core audit/implementation note (2026-09-04): the read-only audit
-confirmed the production Flow execution, run-detail/action/event, project,
-gateway, pairing, and login routes required by the downstream adapter. Additive
-Core improvements were identified for a current-session identity endpoint,
-registered runtime cancellation, public command correlation, and remote
-capability discovery. Implementation is blocked in this execution because the
-active writable workspace is limited to `F:\!FluxIQWebExtension`; `F:\!FluxIQ`
-is read-only and repository rules require patch-based edits. Phase 9 will use
-the existing authenticated Automation Studio read endpoint for cookie validity,
-fail closed on unsupported contracts, and report that aborting a synchronous
-Flow request does not prove server-side cancellation. No Core file has been
-changed.
-
-Phase 9 Step 12 integration review (2026-09-04): an independent read-only pass
-found two release-blocking false-positive risks (unsupported final-state
-predicates and historical recording/session acceptance) plus bounded-request,
-network-containment, failure-provenance, panel-depth, exact-origin, cleanup, and
-Windows cookie-ACL hardening items. The primary immediately tightened matching
-to the newly paired session and a recording created after the run baseline.
-The remaining findings were assigned as Steps 13-15 and Phase 9 remains in
-progress until they are integrated and revalidated.
-
-Phase 9 Step 13 (`phase3_topology`): replaced the permissive scenario
-final-state oracle with strict, typed evaluation of every predicate in the
-current corpus: `text`, `contains`, `visible`, `exists`, `path`, `enabled`,
-`iframe-count`, and `label-count:<label>`. Unknown predicates, invalid expected
-value types, missing subjects, and mismatches now fail closed, so a candidate
-page is selected only after all declared final-state facts pass. Text evidence
-inside the named same-origin or cross-origin fixture iframe is resolved from
-that iframe rather than from the outer element. The test-runner check and all
-49 tests pass; Scenario Lab remains green at 16/16.
-
-Phase 9 Step 15 (`phase0_contracts`): hardened existing-target configuration,
-browser containment, and the reusable auth cache. The Core base URL must now
-be an exact credential-free HTTP(S) origin with no non-root path, and cleartext
-`ws://` gateway URLs are accepted only for loopback; remote gateways require
-`wss://`. The runner installs request and WebSocket routing at the
-`BrowserContext` before opening runner-created pages, permits only internal
-extension/data/about/blob schemes plus the two exact Scenario Lab origins,
-the exact Core origin, and configured gateway origin, and records sanitized
-blocked destinations before failing the run. Windows cache directories and
-files now use argv-only `whoami.exe`/`icacls.exe` calls with inheritance
-removal, current-SID-only grants, native verification, and explicit ACL
-inspection; inability to prove exclusivity fails closed, while other platforms
-retain `chmod`. The test-runner check and all 60 tests pass, including live
-Windows cache writes plus focused configuration, network-policy, and native
-ACL command tests.
-
-Phase 9 Step 14 (`phase4_evidence`): all authenticated control requests now
-carry a default 30-second bound and accept explicit `AbortSignal`/timeout
-overrides. Existing Flow context selection, start, synchronous run, detail,
-action, and event reads share the caller's bound. A timeout/interruption after
-a run ID exists preserves and rethrows the original failure, makes exactly one
-independently bounded cancellation attempt, and exposes a non-secret report of
-`confirmed`, `unconfirmed`, `unsupported`, or `failed`; the audited 404 is
-reported as unsupported and never as cancellation. Timeout, abort, single-
-attempt cancellation, unsupported-cancel, no-run-ID, and secret-exclusion tests
-pass as part of the integrated runner suite (60/60).
-
-Phase 9 downstream Step 6 (`phase4_evidence`): added the API-only
-`ExistingFluxIQControlClient` with strict, sanitized DTOs for session, project,
-and Flow preflight; stable Flow hashing; gateway discovery; context selection;
-deterministic persisted-Flow start/run/cancel; and run detail/action/event
-reads. Seven focused mocked API tests and the integrated runner suite (33/33)
-pass. The adapter uses `/api/auth/session` when available and rejects an account
-mismatch; on the audited Core revision, where that route is absent, it proves
-only authenticated project access. The cancellation primitive fails closed on
-that revision because Core declares but does not register the endpoint.
-
-Phase 9 primary integration validation (2026-09-04): the integrated workspace
-passes `pnpm check`, `pnpm test`, and `pnpm build`; the test-runner suite passes
-60/60. A new full isolated-topology browser run,
-`run-mtnpc74q-89d850a9`, passed after the network and timeout hardening. Its
-bundle independently passes `lab inspect` with 10 indexed artifacts. The
-existing-target CLI also fails closed before startup when its exact Core origin
-or required credentials/project/Flow configuration are absent. A live external
-Flow was not executed because this session was not provided an external target
-or secrets; this is a certification gap, not an unimplemented runner path.
-
-Phase 9 downstream Step 8 (`phase0_contracts`): added a focused Playwright
-web-panel verification helper that accepts an existing browser context and an
-already-parsed session-cookie value. It injects one exact-origin HttpOnly/Lax
-`fluxiq_session` cookie, opens the exact Automation Studio project/Flow runtime
-URL, and verifies the rendered project shell plus the selected Flow hierarchy
-item. For a requested run it first checks an already-rendered action log, then
-uses the current run-search and run-row controls to select and assert the exact
-run. If the current panel cannot select that run, it returns an explicit
-`limited` outcome instead of claiming success; the audited non-authoritative
-run-detail deep link is not treated as proof. Cookie values are absent from
-results and sanitized errors. The test-runner check and all 39 tests pass.
-
-Phase 9 Step 10 (`phase0_contracts`): extended the private `RunManifest` with
-an optional discriminated `fluxiqExecution` provenance block. Its absence keeps
-older evidence bundles valid. Isolated runs may record only `targetMode`, while
-existing-installation runs must record an exact credential-free HTTP(S) origin,
-project/Flow/runtime identifiers, a lowercase SHA-256 Flow content hash,
-session-identity verification state, and an explicit `verified` or `limited`
-panel-verification outcome. Strict nested unknown-property rejection prevents
-cookies, PINs, credentials, and raw gateway data from being added to this
-contract. The focused TypeScript check and all 14 contract tests pass.
+The per-phase step records that followed this table — the Phase 9 through 12
+contract, clone, demo-workspace and topology detail written as each step
+landed — are archived in
+`automated-testing-facility-plan/archive/phase-step-records-2026-09.md`.
 
 ## Implementation Validation (2026-09-04)
 
@@ -686,81 +211,11 @@ existing-install lane executes an already-persisted Flow without synthesizing
 or overwriting it; live certification of that lane requires the user-supplied
 target configuration described above.
 
-## Executive Decision
+## Design Rationale (archived)
 
-Build the first testing facility in `F:\!FluxIQWebExtension`, using Playwright Test and its bundled Chromium. Each run will:
-
-1. build the current workspace version of the extension;
-2. create a fresh, run-scoped browser profile;
-3. start a deterministic local scenario site and isolated FluxIQ host;
-4. launch Chromium with only the newly built unpacked extension;
-5. pair the extension through a test-only host control seam;
-6. exercise the production gateway, recording, state, and action paths;
-7. assert browser state, gateway traffic, FluxIQ recordings, and runtime results;
-8. retain an event-indexed evidence bundle for review; and
-9. clean up all disposable processes and state.
-
-Prefer Playwright over Puppeteer initially. FluxIQ already uses Playwright Test, its trace/report/artifact lifecycle fits this requirement, and it has a documented Manifest V3 fixture. Keep browser control behind a narrow internal interface so Puppeteer can replace it later if required; do not maintain two drivers from the outset.
-
-The facility is not a FluxIQ global program. Scenario sites, browser launch code, DOM assertions, selectors, and extension controls are web-domain validation infrastructure. Only contracts and services that remain coherent without browsers, DOM, URLs, tabs, extensions, or `web-automation` may be promoted to `F:\!FluxIQ`.
-
-## Goals
-
-- Test the repository build of the extension, never a stale manually loaded copy.
-- Reproduce extension and FluxIQ behavior in isolated, deterministic sessions.
-- Make scenario websites small, inspectable, resettable, and agent-authorable.
-- Cover the path from page events through the extension and gateway into FluxIQ recordings, then back through runtime actions to page state.
-- Support both a disposable isolated Core topology and an explicit attachment to an already-running FluxIQ installation.
-- Execute an existing persisted FluxIQ Flow against the test extension and scenario page, then assert its run, attempts, action results, and final browser state.
-- Reuse a validated authenticated web-panel session across local runs without repeatedly submitting credentials.
-- Produce event-indexed, low-cost visual evidence for human and agent review.
-- Support bounded agents that create scenarios, diagnose defects, propose fixes, and compare candidates without merging automatically.
-- Keep public FluxIQ code strictly domain-neutral.
-- Add real-site probes later without weakening the deterministic release gate.
-
-## Non-goals For The First Facility
-
-- Pixel-perfect coverage of every browser-shell surface.
-- Testing store-installed Chrome or Firefox release packages.
-- Autonomous merging, publishing, deployment, or writes to live websites.
-- Training directly from flaky public-site runs.
-- Full-rate video for every passing run.
-- General-purpose orchestration for unrelated FluxIQ importers.
-- Moving `web.*` actions, web recording events, DOM models, or scenarios into core.
-
-## Audit Findings
-
-### Web-extension repository
-
-The current product boundary is sound:
-
-- `apps/extension` owns the Manifest V3 client, service worker, content scripts, side-panel/popup UI, lightweight local state, gateway connection, and browser actions.
-- `domain` owns the `web-automation` manifest, recording definitions, state reducers, action/input mappings, node definitions, and runtime adapter.
-- The extension uses the generic FluxIQ WebSocket client and canonical recording/state/action messages.
-- Screenshots can already become content-addressed `automation-object://` references inside state visual frames.
-- `pnpm dev` builds the local domain host, performs repo-local setup, and starts the core web application with its client gateway.
-
-The testing gap is substantial:
-
-- The extension test only verifies that five files exist.
-- The domain test is a useful large smoke assertion script, but not a granular test suite.
-- There are no browser E2E specs, fixture sites, extension fixtures, CI workflow, run manifest, or retained triage bundle.
-- Clocks, randomness, timers, WebSocket construction, Chrome APIs, and process startup are mostly hard-wired, limiting deterministic component tests.
-- Extension builds import sources through fixed sibling-repository paths; CI and agent worktrees must validate that topology explicitly.
-- MV3 service-worker suspension and restart are not covered.
-
-### FluxIQ core repository
-
-Core already provides reusable seams:
-
-- domain-neutral runtime commands, capabilities, clients, runs, attempts, and events;
-- a generic client gateway and `MockClientGatewayClient`;
-- immutable recording sessions with state, events, actions, observations, and evidence references;
-- content-addressed object storage and safe visual-frame references;
-- runtime trace/run concepts and deterministic Automation Studio fixtures; and
-- an established web-panel Playwright suite with screenshots, video, traces, fixture verification, and browser/view matrices.
-
-Core's browser suite tests the web panel, not an extension. It targets an already-running server, whereas this facility must own a complete run-scoped topology. Core's project object API currently accepts renderable images rather than WebM; use it for canonical recording screenshots, not arbitrary runner video.
+The executive decision, goals, non-goals for the first facility, and the
+2026-09-04 audit findings for both repositories are archived in
+`automated-testing-facility-plan/archive/design-rationale-and-boundary-audit.md`.
 
 ## Architectural Boundary
 
@@ -814,198 +269,18 @@ Require all of the following before moving facility code into core:
 - defined migration and retention behavior for persisted data; and
 - this facility consumes the public seam rather than a core internal path.
 
-## Proposed Repository Layout
+## Proposed Repository Layout (archived)
 
-```text
-apps/
-  extension/
-    e2e/
-      fixtures/
-        extension-context.ts
-        fluxiq-host.ts
-        scenario-server.ts
-        evidence-recorder.ts
-      specs/
-        install-and-connect.spec.ts
-        recording.spec.ts
-        playback.spec.ts
-        resilience.spec.ts
-      assertions/
-        gateway.ts
-        recording.ts
-        runtime.ts
-      playwright.config.ts
-    src/testing/
-      test-control.ts          # included only in test builds
-  scenario-lab/
-    package.json
-    src/
-      server.ts
-      registry.ts
-      scenarios/
-        forms-basic/
-          scenario.ts
-          site/
-        dynamic-list/
-          scenario.ts
-          site/
-        iframe-checkout/
-          scenario.ts
-          site/
-packages/
-  test-contracts/
-    src/
-      scenario.ts
-      run.ts
-      evidence.ts
-      evaluation.ts
-  test-runner/
-    src/
-      cli.ts
-      coordinator.ts
-      process-supervisor.ts
-      workspace.ts
-      run-writer.ts
-      compare.ts
-test-runs/                    # ignored local output
-```
+The originally proposed directory tree and its notes are archived in
+`automated-testing-facility-plan/archive/design-rationale-and-boundary-audit.md`;
+the layout as built is in [repository layout and commands](../architecture/repository-layout.md).
 
-`packages/test-contracts` stays private and repository-local initially. The scenario lab is an executable fixture app; metadata and expectations live with each fixture. E2E hooks use a separate build/manifest and must be structurally unable to ship in production output.
+## Runner Topology (archived)
 
-## Runner Topology
-
-```text
-run coordinator
-  +-- scenario HTTP server (random loopback port)
-  +-- isolated FluxIQ data root and project
-  +-- FluxIQ web/API process (random loopback port)
-  +-- client gateway (random loopback port)
-  +-- freshly built extension dist/e2e-chromium
-  +-- fresh Chromium persistent profile
-  |     +-- MV3 service worker
-  |     +-- extension side-panel page
-  |     +-- scenario pages and frames
-  +-- evidence collector
-        +-- structured event stream
-        +-- event-triggered PNGs
-        +-- Playwright trace and optional WebM
-        +-- browser/network/process logs
-        +-- run.json, summary.json, report.html
-```
-
-All ports, directories, IDs, seeds, clocks, and versions go into `run.json`. Prefer OS-assigned loopback ports. Parallel runs never share a FluxIQ root, storage directory, browser profile, or scenario state.
-
-### FluxIQ target modes
-
-The runner must expose two explicit, mutually exclusive target modes:
-
-1. `isolated` remains the default. The runner creates a temporary identity,
-   project, Core workspace, data root, gateway, and web process, and owns their
-   cleanup.
-2. `existing` attaches to an already-running FluxIQ web installation. The
-   runner must not copy its workspace, run setup, create an administrator,
-   start or stop its processes, reset its data, or delete its projects, Flows,
-   recordings, or run history. Normal durable records produced by the selected
-   Flow execution are expected and must be identified in the evidence bundle.
-
-The proposed CLI/configuration contract is:
-
-```powershell
-# Values may be placed in an ignored .env file instead.
-$env:FLUXIQ_TEST_TARGET = "existing"
-$env:FLUXIQ_TEST_BASE_URL = "http://127.0.0.1:3000"
-$env:FLUXIQ_TEST_USERNAME = "<test-user>"
-$env:FLUXIQ_TEST_PASSWORD = "<password>"
-$env:FLUXIQ_TEST_PIN = "<authorization-pin>"
-$env:FLUXIQ_TEST_PROJECT_ID = "<existing-project-id>"
-$env:FLUXIQ_TEST_FLOW_ID = "<existing-flow-id>"
-
-pnpm lab run basic-form --target existing --flow $env:FLUXIQ_TEST_FLOW_ID --evidence events
-```
-
-`FLUXIQ_TEST_GATEWAY_URL` may override gateway discovery when the installation
-does not publish the usable client URL. The runner must reject ambiguous mixed
-configuration, such as `--target isolated` with an existing-install base URL.
-It must preflight server reachability, authentication, compatible domain/client
-contracts, project access, Flow existence, gateway availability, and extension
-pairing before changing browser state or starting the Flow. The resolved target
-mode and sanitized origin belong in `run.json`; credentials, cookies, PINs, and
-pairing codes do not.
-
-### Existing persisted Flow execution
-
-In `existing` mode, the scenario manifest may reference a configured existing
-Flow, or the CLI may supply `--flow <id>`. The runner must use supported FluxIQ
-web/API contracts to select the configured project, pair the freshly built test
-extension, start that exact persisted Flow, capture the returned run ID, and
-observe the corresponding run and attempt events until a terminal state.
-
-A Flow test passes only when all of the following agree:
-
-- the requested project and Flow IDs are the ones Core reports as executed;
-- the Flow run reaches the expected terminal status within a bounded timeout;
-- required node attempts and client actions settle successfully;
-- correlation IDs connect the Core run/attempts to gateway commands and
-  extension results;
-- the scenario website reaches the manifest's expected final state; and
-- the evidence bundle records the Core installation fingerprint, Flow revision
-  or content hash, run ID, attempt IDs, extension hash, and sanitized target
-  origin.
-
-The runner must not silently replace the selected Flow with a generated test
-Flow. A later isolated-mode feature may import a fixture Flow explicitly, but
-that is a distinct operation and artifact. Flow execution must use the public
-or supported production web/API seam; implementation must first audit the
-current Core run endpoints and event/status contracts rather than binding to
-private database layout.
-
-### Web-panel API login and reusable session cookies
-
-The lab CLI must load local environment configuration before resolving test
-credentials. Add `.env` and `.env.local` to the repository ignore policy before
-supporting those files, retain a committed non-secret `.env.example`, and give
-process environment variables precedence. At minimum, accept
-`FLUXIQ_TEST_USERNAME`, `FLUXIQ_TEST_PASSWORD`, and `FLUXIQ_TEST_PIN`, retaining
-the existing optional `FLUXIQ_TEST_TOTP`. Startup must fail clearly when an
-existing-install run requires a missing value; secrets must never appear in
-command arguments, logs, reports, manifests, or agent packets.
-
-Authentication uses the same production login API as the FluxIQ web panel. On
-the first run, the control client submits the configured username/password and
-optional TOTP, captures the returned session cookie, validates it through an
-authenticated read-only endpoint, and stores it in a private ignored auth
-cache. The cache key must include the normalized FluxIQ origin and username so
-a cookie is never sent to another installation or account.
-
-Suggested local layout:
-
-```text
-test-runs/.auth/
-  <origin-and-user-hash>.json
-```
-
-The cookie cache is sensitive runtime state, not evidence. Its implementation
-must:
-
-- write atomically with owner-only permissions where the platform supports it;
-- store only the minimum cookie fields and session metadata needed for reuse;
-- never copy cookies into finalized run bundles or process logs;
-- validate the cookie against Core before each run;
-- reject expired, malformed, wrong-origin, wrong-user, or authorization-failed
-  sessions;
-- on `401`/`403`, invalidate the cached entry and perform one fresh API login,
-  then fail rather than loop if reauthentication is unsuccessful;
-- support `--fresh-login` to deliberately bypass and replace the cache and a
-  non-secret `auth status`/`auth clear` operation scoped to one origin/user;
-- keep the PIN outside the cookie cache and require it from environment at the
-  point of privileged Flow/client-action authorization; and
-- inject the validated session into a browser context only for focused web-panel
-  UI tests, with exact origin scoping and no persistent general-purpose browser
-  profile reuse.
-
-Cookie reuse removes repeated login requests; it does not mean reusing the
-scenario browser profile. Every test still receives a fresh extension/browser
-profile so extension isolation remains meaningful.
+The runner topology diagram, the `isolated`/`existing` FluxIQ target-mode
+contract, existing persisted-Flow execution, and the web-panel API login and
+reusable session-cookie design are archived in
+`automated-testing-facility-plan/archive/superseded-design-specifications.md`.
 
 ## Browser Strategy
 
@@ -1112,68 +387,12 @@ Every fixture gets a direct site-level test independent of the extension, separa
 
 Add these only after the deterministic corpus is trusted. Real-site cases are quarantined, allowlisted, rate-limited, read-only by default, and excluded from merge gates. Credentials use an external secret provider. Artifacts are private, redacted, and short-lived. Terms, account impact, and authorization require explicit review before writes.
 
-## Evidence And Human Review
+## Evidence And Human Review (archived)
 
-Use three complementary channels:
-
-1. A structured event log, always retained for failures and used as the artifact index.
-2. Event-driven screenshots immediately before and after important actions, on navigation/checkpoints, and on failure.
-3. A Playwright trace retained on failure and selected diagnostic runs.
-
-Video is optional. Keep low-resolution WebM for failures, scheduled runs, or scenarios marked `reviewRequired`. For ordinary passes, generate a compact contact sheet/timeline from event screenshots. This provides the requested low-FPS/hybrid review without continuous-video storage cost.
-
-### Capture triggers
-
-- scenario/test step start and completion;
-- extension-recorded action received by the gateway;
-- runtime command dispatch and settlement;
-- navigation/history transition;
-- meaningful DOM/state fingerprint change after a quiet window;
-- console/page/network error, disconnect, timeout, or failed assertion;
-- explicit checkpoint; and
-- final state.
-
-Rate-limit triggers, hash frames, and drop exact duplicates while preserving the event with the prior image digest. An optional 0.5-1 FPS sampler runs only during long uninstrumented waits.
-
-### Run bundle
-
-```text
-test-runs/<run-id>/
-  run.json
-  summary.json
-  report.html
-  events.ndjson
-  screenshots/
-  review/
-    contact-sheet.webp
-    timeline.json
-  playwright/
-    trace.zip
-    video.webm
-  logs/
-    runner.log
-    core.log
-    gateway.log
-    browser-console.ndjson
-    network.ndjson
-  snapshots/
-    recording.json
-    runtime-run.json
-```
-
-`run.json` records both repo SHAs and dirty-state flags, lockfile hashes, extension version/hash, browser and OS, seed, scenario revision, ports, process exits, timing, artifact index, redaction state, and verdict. Writes are atomic and SHA-256 indexed.
-
-Never retain credentials, authorization headers, pairing tokens, password values, cookies, or unrestricted response bodies. Redact before durable write. A redaction failure fails closed and excludes the affected visual artifact.
-
-### Retention defaults
-
-- Passing PR: summaries and metrics for 14 days; only named checkpoint screenshots.
-- Failed/flaky PR: full bundle for 30 days.
-- Scheduled certification: full bundle for 90 days.
-- Real-site probe: default 7 days.
-- Golden images: commit only when deterministic, reviewed, and private-data-free.
-
-CI retention is separate from canonical FluxIQ storage. Images intentionally linked to a recording may also use the existing content-addressed object API.
+The three evidence channels, capture triggers, run-bundle layout and retention
+defaults are archived in
+`automated-testing-facility-plan/archive/superseded-design-specifications.md`;
+Current State records where that policy no longer matches the code.
 
 ## Test-control Seams
 
@@ -1186,54 +405,11 @@ CI retention is separate from canonical FluxIQ storage. Images intentionally lin
 
 Do not UI-automate pairing in every correctness test. Give pairing UI one focused spec; repeated UI pairing adds timing noise and obscures fault ownership.
 
-## Agent And Subagent Workflow
+## Agent And Subagent Workflow (archived)
 
-Expose a machine-readable runner before autonomous repair:
-
-```text
-pnpm lab scenario create <id>
-pnpm lab run <id> --seed <n> --evidence failure
-pnpm lab inspect <run-id>
-pnpm lab compare <baseline-run> <candidate-run>
-pnpm lab matrix --changed
-```
-
-### Roles
-
-- Coordinator: selects scenarios, creates isolated worktrees/run roots, assigns bounded tasks, aggregates results, and does not edit product code.
-- Scenario agent: writes only one scenario folder and its expected contract.
-- Diagnosis agent: read-only; returns evidence-linked hypotheses and ownership.
-- Framework repair agent: writes only explicitly scoped `F:\!FluxIQ` paths.
-- Extension/domain repair agent: writes only explicitly scoped paths here.
-- Reviewer agent: compares baseline/candidate evidence and detects weakened tests.
-
-### Dispatch packet
-
-Each task includes its objective, allowed paths, scenario/seed/command, baseline run and failing invariant IDs, bounded artifact index, time/iteration/token/run budgets, prohibited actions, required checks, and a structured response schema.
-
-### Safe improvement loop
-
-1. Reproduce twice with the same seed.
-2. Classify ownership: fixture, facility, extension, domain, or core.
-3. Create one bounded candidate in a disposable worktree.
-4. Run focused checks and the failing scenario.
-5. Run regressions selected from changed capabilities.
-6. Compare baseline and candidate evidence/metrics.
-7. Independently reject expectation weakening, missing evidence, and boundary violations.
-8. Leave a patch/report for human approval; never merge automatically.
-
-One agent writes a worktree at a time. Subagents use disjoint paths. Cross-repo contract changes remain separate commits/reviews even when tested together.
-
-### Promotion gates
-
-- Three consecutive passes on clean profiles.
-- No required capability-matrix regression.
-- `check`, `test`, and `build` pass in each changed repo.
-- Public contract changes also pass compatibility/package validation.
-- No unexpected network destination or leaked secret.
-- Invariant/assertion coverage does not decrease without approval.
-- The evidence bundle is complete and hash-consistent.
-- Reviewer-agent and human approvals are recorded.
+The machine-readable runner surface, agent roles, dispatch packet, safe
+improvement loop and promotion gates are archived in
+`automated-testing-facility-plan/archive/superseded-design-specifications.md`.
 
 ## Failure Taxonomy
 
@@ -1265,423 +441,11 @@ Correctness gates precede scoring. Track expected/observed event recall, unexpec
 
 Do not collapse these into one release score. Aggregate scores may rank candidates only after every safety and correctness invariant passes.
 
-## Implementation Phases
+## Implementation Phases (archived)
 
-### Phase 0: contracts and boundary lock
-
-- Add this repository's `AGENTS.md` with the same public-framework/domain boundary as core.
-- Add private scenario/run/evidence/evaluation contracts and JSON schema validation.
-- Ignore run outputs and browser profiles.
-- Record exact core revision/package compatibility in runs.
-
-Acceptance: invalid scenarios fail before startup; run manifests are readable without Playwright; no core change is required.
-
-### Phase 1: deterministic scenario lab
-
-- Build the server and basic-form, dynamic-list, and navigation fixtures.
-- Add run-token-scoped reset, seed, health, and final-state endpoints.
-- Add direct fixture tests and block external network.
-
-Acceptance: parallel scenarios remain deterministic and reset recreates the declared state.
-
-### Phase 2: real extension fixture
-
-- Add and pin Playwright Test in this workspace.
-- Build a separate E2E Chromium artifact from current source.
-- Launch a fresh persistent profile and discover the worker/extension ID.
-- Add install, injection, extension-page, action, restart, and cleanup specs.
-
-Acceptance: no manual loading; metadata proves the loaded build hash; runs share no browser state.
-
-### Phase 3: isolated FluxIQ topology
-
-- Add process supervision and unique FluxIQ storage.
-- Add authenticated loopback project/pairing bootstrap.
-- Start and health-check Core and gateway.
-- Assert recording and runtime-action round trips.
-
-Acceptance: the basic form persists correct inputs/outputs; production
-client-action commands reach expected page state; cleanup works on every exit
-path. Persisted Flow execution is moved to Phase 9 and is not implied by this
-phase's completed status.
-
-### Phase 4: evidence bundle and review
-
-- Implement event NDJSON, screenshot triggers/deduplication, traces, optional video, contact sheet, and report.
-- Correlate scenario steps, gateway messages, recording entries, command attempts, and images.
-- Add redaction and integrity tests.
-
-Acceptance: `report.html` identifies the failing step and before/after state; every file is indexed/hashed; sensitive fixture values are absent.
-
-### Phase 5: matrix and CI
-
-- Complete all ten deterministic scenarios.
-- Add changed-capability selection and a nightly full matrix.
-- Upload bundles according to retention policy.
-- Add Windows and Linux Chromium lanes with fail-closed prerequisites.
-
-Acceptance: the clean-checkout PR matrix passes; seeded faults yield expected categories/evidence; a three-repeat flake baseline exists.
-
-### Phase 6: bounded improvement agents
-
-- Add task-packet generation, read-only diagnosis, worktree isolation, budgets, comparison, and review gates.
-- Begin human-triggered with no automatic merge.
-- Audit prompt, action summary, patch, validation, and verdict.
-
-Acceptance: scenario agents cannot edit product code; repair agents can fix a seeded fault; weakened expectations and out-of-scope writes are rejected.
-
-### Phase 7: core extraction only after proof
-
-- Identify contracts used by a second domain.
-- Propose the smallest neutral APIs in core.
-- Add docs, migrations, exports, and move both consumers to public seams.
-- Leave browser launch, Playwright, web scenarios, and extension logic here.
-
-Acceptance: core tests have no dependency on this repo; two consumers use the seam; no web vocabulary enters core.
-
-### Phase 8: real-site probes
-
-- Add allowlists, external secrets, rate limits, destructive-action denial, private artifact storage, and operational review.
-- Start with anonymous read-only sites and synthetic accounts.
-- Keep results informational until stable.
-
-### Phase 9: existing installation, reusable authentication, and Flow execution
-
-1. Audit the current FluxIQ web/API contracts for session validation, project
-   selection, Flow lookup/execution, run status, attempts, runtime events, and
-   gateway discovery. Record the compatible Core revision and avoid private
-   persistence access.
-2. Add typed `isolated` and `existing` target configuration. Preserve isolated
-   mode as the default and make attachment an explicit CLI/config choice.
-3. Add `.env`/`.env.local` ignore entries and loading with
-   process-environment precedence, a sanitized `.env.example`, and schema
-   validation for base URL, username, password, PIN, optional TOTP, project ID,
-   Flow ID, and optional gateway URL.
-4. Implement an origin-and-user-scoped cookie jar with atomic private writes,
-   pre-run validation, expiry handling, one-shot reauthentication, cache
-   status/clear commands, and exhaustive log/evidence redaction tests.
-5. Add the existing-install control adapter. It health-checks and fingerprints
-   the installation but never starts, stops, initializes, resets, or deletes
-   it.
-6. Pair the freshly built E2E extension with the existing gateway using the
-   authenticated control session and configured authorization PIN.
-7. Select the configured existing project and Flow, execute it through the
-   supported production API, capture its run ID, wait for terminal run/attempt
-   state, and correlate its client actions with extension and browser evidence.
-8. Add deterministic fixture Flows for compatibility testing while retaining a
-   separate lane that points at a user-supplied existing Flow ID. Never mutate
-   or overwrite the user-supplied Flow.
-9. Add focused web-panel browser tests that reuse the validated cookie to open
-   authenticated project, Flow, run, and recording views and assert their
-   rendered state. Keep one independent login-UI spec; do not repeat UI login
-   in every scenario.
-10. Add CI and local tests for valid reuse, expiry, server-side revocation,
-    wrong origin/account, TOTP-required login, incorrect PIN, unavailable
-    project/Flow, incompatible Core, gateway failure, Flow failure/timeout, and
-    cleanup that leaves the attached installation running.
-
-Acceptance:
-
-- two consecutive commands against the same existing installation authenticate
-  once, validate/reuse the cookie on the second run, and use fresh browser
-  profiles both times;
-- a revoked or expired cookie is removed and replaced through exactly one API
-  login without leaking credentials or cookie material;
-- the selected existing Flow runs through Core and the paired repository build
-  of the extension, its required attempts/actions pass, and the scenario's
-  browser state is asserted;
-- the evidence report links the Flow run and attempts to extension actions and
-  screenshots without containing password, PIN, TOTP, cookie, pairing token, or
-  authorization headers;
-- focused browser assertions prove the authenticated web panel renders the
-  selected Flow, run result, and recording; and
-- after success, failure, timeout, or interruption, the existing FluxIQ server
-  remains running and no pre-existing project, Flow, recording, or run is
-  deleted or rewritten.
-
-### Phase 10: clone an existing Flow into an isolated installation
-
-This phase adds a third explicit target, `clone`. The configured existing
-FluxIQ installation is always the read-only source. The normal run-owned
-isolated Core, project, browser profile, extension, Scenario Lab, recordings,
-and evidence directories are the writable destination. Clone mode must never
-execute, save, publish, migrate, or delete the source Flow.
-
-1. Add a versioned private clone-package contract containing source origin,
-   source project/Flow identity, source content hash, sanitized Flow document,
-   dependency inventory, compatibility decisions, and deterministic ID map.
-   Reject unknown fields, credentials, cookies, authorization data, runtime
-   history, publications, and opaque secret-looking values before persistence.
-2. Extend target configuration and CLI with explicit `clone` mode. Reuse the
-   existing source variables and scoped cookie cache; destination Core remains
-   automatically provisioned and run-owned. `auth status`, `auth clear`, and
-   `--fresh-login` apply to the source session.
-3. Implement a read-only source exporter using only production read APIs:
-   validate the source session, exact project/domain and Flow, fetch the full
-   Flow document, inspect declared Flow dependencies, calculate the canonical
-   content hash, and build the clone package. Assert through mocked transport
-   tests that no source mutation endpoint can be called.
-4. Add a facility-wide clone cache shared across independent runs under the
-   ignored runs root. Scope entries by exact source origin, username, project,
-   and Flow; use a source summary revision/fingerprint to reuse an unchanged
-   sanitized clone package, and atomically replace it after a changed source is
-   re-exported. Apply the same owner-only ACL guarantees as the auth cache,
-   validate the complete package and hash on every read, quarantine corrupt or
-   mismatched entries, bound cache size/age, and expose non-secret
-   status/refresh/clear controls. Never cache credentials, cookies, headers,
-   runtime history, recordings, or unredacted dependency values.
-5. Classify dependencies before destination startup. Permit only registered
-   domain/native node definitions and explicitly remappable Flow-local IDs.
-   Never copy credentials, secrets, schedules, publications, run history,
-   recordings, identity state, gateway state, or external integration state.
-   Replace explicitly supported external side effects with named test doubles;
-   otherwise fail closed with a bounded, sanitized incompatibility report.
-6. Start the ordinary isolated topology and create a uniquely named disposable
-   destination project through Core's public API. Create a destination Flow,
-   deterministically remap project/Flow and other declared local identifiers,
-   save the remapped artifact, read it back, and require a content-equivalence
-   attestation before execution. Never write directly to `.fluxiq` storage.
-7. Pair the freshly built extension with the isolated gateway, seed the
-   scenario site, execute only the imported destination Flow, require its
-   durable actions and final browser state, and persist recording/run evidence.
-   Source and destination identifiers must remain distinguishable throughout.
-8. Add failure-safe ownership and cleanup tests for export rejection, missing
-   dependencies, import/save failure, hash mismatch, Flow timeout, browser
-   failure, and interruption. Cleanup may remove only the isolated destination
-   and run-owned state; it must leave the source installation and cache intact.
-9. Add evidence fields for clone provenance: source origin/project/Flow/hash,
-   clone-package hash, destination project/Flow/hash, dependency verdict,
-   remapping summary, destination runtime run ID, and cleanup outcome. Store no
-   raw source cookie, PIN, TOTP, password, authorization header, secret value,
-   or unrestricted Flow payload in the human report.
-10. Validate with contract/unit/integration tests, the full workspace gates, an
-   isolated synthetic source-to-destination clone test, and finally one live
-   configured source Flow. The live test remains a certification requirement,
-   not something unit mocks may satisfy.
-
-Acceptance:
-
-- clone mode performs only authenticated read calls against the source and the
-  source Flow hash is identical before and after the run;
-- two independent runs may reuse one valid facility-wide cache entry after a
-  lightweight source revision check, while a changed Flow, different source
-  origin/account/project, expired entry, or failed validation forces a safe
-  re-export and atomic cache replacement;
-- the destination uses a fresh isolated Core and new project/Flow identifiers,
-  and a read-back equivalence check proves that remapping changed only declared
-  identity/environment fields;
-- unsupported or secret-bearing dependencies stop the run before importing or
-  executing anything, with no secret material in logs or evidence;
-- the cloned destination Flow drives the fresh repository extension against
-  Scenario Lab, reaches the declared browser state, and produces a new isolated
-  recording plus durable run/action/event evidence; and
-- success, failure, timeout, and interruption remove run-owned destination
-  state while the source installation, Flow, recordings, runs, and configuration
-  remain untouched.
-
-Phase 10 Steps 2-4 source lane (`clone_source`, 2026-09-04): implemented the
-explicit `clone` target using the existing source origin/user/password/TOTP,
-project, and Flow variables; clone source reads do not require an authorization
-PIN. Auth status/clear and fresh-login now scope to either an existing target or
-the clone source. The read-only exporter exposes only login/session/project,
-Flow, dependency-inspection, and node-definition read methods, rejects a
-non-web-automation project, sanitizes the Flow before packaging, and uses the
-production `inspect-flow-dependencies` and `list-native-node-definitions`
-endpoints. Mock transport tests prove that export makes no source mutation or
-runtime-execution request and that credentials, cookies, TOTP values, and raw
-dependency/definition fields do not enter its result.
-
-The facility-wide cache is stored under ignored `test-runs/.clone-cache` and
-is keyed by a SHA-256 digest of the exact source origin, username, project, and
-Flow. A summary revision/fingerprint gates reuse. Every read validates strict
-entry fields, complete clone-package structure, exact scope, canonical package
-hash, age, and size; changed, mismatched, oversize, or malformed entries are
-removed from service and moved into an owner-only quarantine where possible.
-Writes are atomic and use the same verified Windows ACL hardening as auth
-sessions (0600/0700 elsewhere), with seven-day, 5 MiB-entry, and 32-entry
-defaults. `lab clone-cache status|refresh|clear` returns only non-secret scope,
-timestamps, state, and package hash; `refresh` explicitly means invalidate now
-and re-export on the next clone run, so it does not require or print source
-credentials. Focused `pnpm --dir packages/test-runner check` and the
-integrated test-runner suite pass with 89/89 tests, including proof that an
-unchanged summary reuses the cached sanitized Flow without fetching the full
-Flow again while still revalidating dependency and registry policy. A scoped directory lock now serializes
-load/save/status/refresh-clear operations for the same source without blocking
-unrelated cache keys. Concurrent independent-run tests prove that simultaneous
-writers publish exactly one complete, hash-valid winner, readers never observe
-partial JSON, temporary files and locks are removed, Windows ACL hardening is
-preserved, and status/clear results contain no Flow document or secret data.
-
-Phase 10 cache drift follow-up (`clone_source`, 2026-09-04): cache hits now
-reuse only the strict, hash-validated sanitized Flow document. The exporter
-always re-reads the lightweight published-Flow dependency inventory and current
-native/domain node definitions, then reruns compatibility classification before
-destination startup. A registry-drift test removes a previously available
-definition without changing the Flow summary and proves the cached Flow becomes
-incompatible while `get-flow` remains skipped. This prevents a stale compatible
-verdict from surviving registry/capability changes.
-
-### Top-level graph compatibility escape audit (`primary`, 2026-09-05)
-
-Status: implementation in progress.
-
-Execution assignment (2026-09-05): Core service/model/runtime compatibility and
-invariant work is assigned to `core_invariants`; Core Nodes-view scoping and
-restored-tab recovery is assigned to `core_ui_scope`; downstream persistent-demo
-Router/Subflow provisioning, migration, assertions, and tests are assigned to
-`facility_router_subflow`. The primary agent owns cross-repository integration,
-working-document reconciliation, and final automated/live validation.
-After the first Core boundary tests exposed legacy direct-parent assumptions in
-the wider service suite, `core_failure_audit` was assigned to classify each
-remaining failure while `core_invariants` continues the required production and
-fixture migration; the guard will not be weakened to preserve stale tests.
-
-Downstream status (`facility_router_subflow`, 2026-09-05): completed and
-automatically validated; cross-repository live validation is assigned to the
-primary after integration of the two Core slices. The focused type check and
-complete test-runner suite pass 114/114, and the
-extension repository-wide `pnpm check` passes across all ten checked packages.
-
-The persistent demo exposed a real boundary violation rather than a hidden
-browser capability. The facility created a normal top-level Flow through the
-panel, then used Core's public `save-flow` and `apply-graph-patch` endpoints with
-that parent Flow ID. Its fixture builder put the Start, four web actions, End,
-and five edges directly in the parent document. It subsequently opened the
-globally addable Nodes tab while that parent was selected and ran the parent
-from Runtime Debug. The facility did not create a Subflow, obtain a
-`graphFlowId`, or configure a Router.
-
-Read-only inspection of the persistent isolated project proves the resulting
-shape. Project `08672748-82ca-4246-a2c1-1c2646760c42`, Flow
-`flow.b48b9824-8103-4b11-a804-5311a65096c3` has six live `graph_nodes` rows,
-zero live `subflows` rows whose `parent_flow_id` is that Flow, and zero
-`routers` rows for it. Its SQL Flow metadata is an ordinary top-level
-`user`/`visual` Flow with null `parent_flow_id` and null `owning_subflow_id`; it
-is not marked as a legacy artifact or Subflow graph.
-
-This succeeds because three Core seams currently agree on the old single-graph
-model even though the current authoring architecture does not:
-
-1. `AutomationStudioService.saveFlowInternal` validates a Flow document's
-   graph but does not reject nodes/edges on a top-level Flow.
-2. `AutomationStudioService.applyFlowGraphPatch` accepts any canonical Flow ID,
-   imports its graph if necessary, applies the patch, and saves it without
-   checking that the target is a Subflow-owned graph Flow.
-3. `runRuntimeSession` consults routing only when `getFlowRouter` returns a
-   Router. If no Router exists, it executes `runtimeCanonical` directly. No
-   provenance, creation-version, or migration marker restricts that fallback
-   to an actually legacy Flow.
-
-This behavior is also locked in by a current Core service test that creates a
-new canonical Flow, saves Start/constant nodes directly on it, and expects
-`runRuntimeSession` to succeed without Router/Subflow setup. The correction is
-therefore a model migration with compatibility consequences, not merely a
-missing HTTP check.
-
-The web panel exposes the same seam. The Nodes view registry requires merely
-`hasFlow` and describes its scope as "Selected Flow or subflow". Its connected
-view resolves the selected parent Flow ID directly. Consequently the tab picker
-can attach a Nodes editor to a top-level Flow even though the accepted product
-model states that a top-level Flow owns Router/Subflows and a Subflow owns its
-Nodes editor.
-
-Classification:
-
-- **Core invariant bug:** compatibility for existing single-graph Flows is
-  currently an unrestricted representation and execution path, not a bounded
-  legacy migration path. A newly created Flow can therefore bypass both Router
-  and Subflow ownership through public APIs.
-- **Core UI bug:** the Nodes view is addable and bindable for a top-level Flow,
-  contradicting the documented Flow-first hierarchy.
-- **Facility implementation bug:** the deterministic demo deliberately seeds,
-  patches, asserts, and runs the parent graph. It tests the compatibility escape
-  instead of the intended Router-to-Subflow product workflow.
-- **Not an extension privilege bug:** the browser extension did not reach into
-  Core storage or traverse a private graph boundary. Core accepted and executed
-  the malformed modern structure through supported endpoints.
-
-The current persistent demo Flow must be treated as invalid test data under the
-intended architecture. Do not migrate it in place silently: recreate it through
-the real panel workflow, or perform an explicit, evidenced migration that moves
-its graph to a newly created primary Subflow and installs a Router fallback.
-
-Downstream execution revision (`facility_router_subflow`, 2026-09-05): the
-primary approved a narrow deterministic-fixture exception after inspection of
-the Nodes editor gesture surface. Parent Flow creation/reuse, primary Subflow
-creation, Router fallback configuration, opening the Subflow Nodes editor,
-rendered layout validation, pairing, recording, and run dispatch all use the
-real panel UI. The six-node deterministic document and viewport index are
-written through Core's public save/graph-patch seam only against the
-UI-created Subflow `graphFlowId`, never against the parent Flow ID. Reproducing
-six palette additions, inspector edits, five ReactFlow connection gestures,
-and coordinate drags would turn this setup helper into fragile duplication of
-Core's separate graph-editor interaction suite without improving the ownership
-invariant under test. API reads verify every durable identity and relationship.
-
-The retained malformed fixture migrates without an unsafe gap. The runner
-recognizes only the exact fixture-owned direct-parent graph, creates/reuses and
-fully verifies its dedicated Subflow graph, configures and reads back the
-parent Router fallback, and only then clears and upgrades the parent graph.
-An interruption therefore leaves either the original executable fixture or a
-complete routed replacement. Schema `0.2` workspace state remains readable as
-migration input; schema `0.3` adds `subflowId`, `graphFlowId`, and `routerId`.
-Playback runs the parent and fails unless run detail contains the matching
-Router decision, matching Subflow execution entry (including `graphFlowId` and
-route-decision linkage), expected successful action attempts, and final
-Scenario Lab result.
-
-Remediation plan, in dependency order:
-
-1. Define a Core-owned representation invariant that distinguishes top-level
-   orchestration Flows from Subflow graph Flows. Preserve old single-graph
-   artifacts only through an explicit legacy marker/version or a deterministic,
-   idempotent migration to a generated primary Subflow. Creation time alone is
-   not a safe discriminator.
-2. In Core, reject non-empty graph writes to modern top-level Flows in both
-   `save-flow` and `apply-graph-patch`. Permit graph mutations only for a Flow
-   proven to be owned by a Subflow, plus any narrowly marked legacy transition
-   case. Apply the invariant in the service rather than only in HTTP handlers so
-   alternate callers cannot bypass it.
-3. In Core runtime readiness/execution, fail closed when a modern top-level Flow
-   has no executable Router/Subflow path. Legacy single-graph execution must be
-   explicitly marked or migrated and must emit migration/compatibility
-   diagnostics. Never infer legacy status solely because a Router is absent.
-4. In the web panel, make Nodes require a selected Subflow graph, prevent a
-   top-level Flow ID from binding to the Flow editor, and make stale/restored
-   parent-bound Nodes tabs recover to Router or Subflows with a visible reason.
-5. In the facility's first demo script, use the real panel to create/select the
-   parent Flow, create a primary Subflow, open that Subflow's Nodes editor, and
-   build or import the deterministic graph only through the Subflow's
-   `graphFlowId`. Configure the parent Router through the real UI with a route or
-   fallback targeting that Subflow. API reads may discover IDs and verify
-   durable state, but API writes must not replace these UI operations in this
-   product-level test.
-6. In the second demo script, run the parent Flow through Runtime Debug and
-   assert a persisted route decision, a Subflow entry containing the exact
-   `graphFlowId`, the expected action attempts, and final Scenario Lab state.
-   A successful run with zero route decisions or zero Subflow entries must fail.
-7. Rework fixture identity and persistent reuse around parent Flow + Subflow +
-   graph Flow + Router identities. Detect the current direct-parent fixture and
-   require explicit migration/recreation rather than continuing to reseed it.
-8. Add Core regression coverage for modern parent graph save rejection, graph
-   patch rejection, routerless modern runtime rejection, correct routed Subflow
-   execution, explicit legacy compatibility/migration, and Nodes-view scoping.
-   Add facility unit and live-browser coverage proving that both scripts operate
-   the intended hierarchy and cannot pass through the direct-parent fallback.
-
-Validation required before closing this defect:
-
-- a newly created top-level Flow cannot acquire nodes through either public
-  mutation endpoint;
-- the Nodes tab cannot open against a top-level Flow, including restored tabs;
-- an explicitly supported legacy single-graph Flow remains readable and follows
-  the selected migration/compatibility policy;
-- the demo workspace contains one parent, at least one dedicated Subflow graph,
-  and a Router targeting it, with no action nodes on the parent;
-- a live headless run records a Router decision and matching Subflow boundary
-  before the web action attempts; and
-- the recording and playback scripts retain their before/after action evidence
-  requirements after the hierarchy correction.
+The full Phase 0 through Phase 12 step plan is archived in
+`automated-testing-facility-plan/archive/implementation-phases.md`; the
+Execution Log above records what each phase actually delivered.
 
 ## Final Implementation And Live Validation (2026-09-05)
 
@@ -1699,93 +463,10 @@ representation fields across restart. A graph-store defect found during live
 testing was also corrected: edge upserts now re-home `flow_id` consistently
 with node upserts.
 
-The facility's persistent workspace schema is `0.3` and records the parent
-Flow, Subflow, graph Flow, and Router identities. The recording setup uses the
-real web panel for project/Flow/Subflow/Router creation and selection, while
-the documented deterministic-fixture exception seeds only the UI-created
-owned graph through Core's public graph API. Playback uses the real Runtime
-Debug UI with **No LLM intervention**, runs the parent Flow, and verifies the
-durable Router decision, Subflow boundary, action attempts, and Scenario Lab
-result. UI selectors were updated to the current runtime controls.
-
-Live persistent-isolated results:
-
-- `pnpm demo:record`: passed; created recording
-  `client.extension-1737c03f-152d-4299-8fde-08201100eeb3.1788661907053`.
-- `pnpm demo:run`: passed; created runtime run
-  `f977b001-e9c9-4d16-a8e0-adfe5b653a71`.
-- Workspace state is reused at
-  `test-runs/web-extension-demo`; its private FluxIQ root is
-  `test-runs/web-extension-demo/fluxiq-root/.fluxiq`.
-- Read-only database verification found zero parent graph rows, exactly six
-  nodes and five edges on the owned Subflow graph, one active Subflow with the
-  expected ownership triple, and a parent Router whose fallback targets that
-  Subflow.
-- Evidence capture produced exactly one before and one after screenshot for
-  each browser action; no periodic low-FPS capture remains.
-
-Final automated validation:
-
-- Web-extension workspace: `pnpm check`, `pnpm test`, and `pnpm build` passed.
-- Test runner: 116/116 tests passed.
-- FluxIQ Core package: check and build passed; full suite passed 542/542 tests
-  across 88 files.
-- The separate Core web-package check still reports pre-existing unrelated
-  dirty-worktree TypeScript errors in Automation Studio UI runtime files; they
-  are outside this ownership/migration change and do not affect the passing
-  Core package or live scripts.
-
-Follow-up live regression (2026-09-05): an exact `npm run demo:record` run
-reproduced a timeout after the Subflow hierarchy click because the persistent
-panel workspace could retain a stale or inactive view instead of exposing the
-Nodes canvas. The runner now performs a bounded canvas wait, then recovers
-through the real Nodes tab activation/tab-picker UI; persistent failure reports
-only bounded tab and alert labels. After the fix, the exact npm recording
-command passed with recording
-`client.extension-12020cdc-c441-47de-90d5-31dcbe892ddc.1788663676267`, and
-`npm run demo:run` passed without LLM intervention with runtime run
-`b314c621-92eb-4460-8026-5fc721b3b630`. The runner check and all 116 runner
-tests also passed.
-Clean-start regression follow-up (2026-09-05): deleting the persistent run
-folder exposed two additional first-run races. The project button could accept
-a pre-hydration click without opening its dialog, and Core opened a correctly
-identified Subflow Nodes tab before its strict owned graph detail was hydrated,
-leaving the view on its loading placeholder. Windows also allowed temporary
-session paths long enough to trigger a Turbopack source-map path panic. The
-facility now performs one evidenced Create Project retry after a bounded dialog
-wait, uses short private Windows session paths, and bounds its gateway bootstrap
-probe. Core Subflow navigation now hydrates the exact graph before selecting
-and opening its Nodes view.
-
-A never-used `test-runs/web-extension-demo-clean` workspace then passed the
-complete `npm run demo:record` path, including identity, project, Flow, Subflow,
-Router, graph, pairing, and recording creation. The same newly created workspace
-passed `npm run demo:run` without LLM intervention with runtime run
-`8e92eae8-f5a6-479d-8088-cd9e83bb972d`. The runner suite remains 116/116, and
-the focused Core hydration regression passes.
-
-Final run-path audit (2026-09-05): source tracing confirmed that
-`scripts/run-demo-workspace-flow.mjs` delegates only to the panel-driving demo
-runner. The runner selects the real project, parent Flow, and Runtime Debug row,
-chooses **No LLM intervention**, observes the exact
-`POST /api/programs/automation-studio/run-runtime-session` response caused by
-clicking the visible Run control, and uses that response's run ID for all
-subsequent verification. It never calls `runPersistedFlow`; control-client
-requests after the click are read-only verification. This audit exposed a Core
-summary persistence defect: routed detail contained Router and Subflow records,
-but its durable summary retained zero counts. Core now derives route-decision,
-Subflow-entry, and action-attempt counts from the completed detail, and the
-facility fails closed if summary and detail disagree. The focused Core routing
-regression passed, as did all 116 runner tests.
-
-The post-fix live `npm run demo:run` passed as runtime run
-`3e996492-70d3-4d33-b5ff-9de143783637`. Independent read-only database
-verification found status `succeeded`, zero errors, six successful actions,
-one Router decision, one Subflow entry, and six action attempts. The parent Flow
-contained zero nodes and edges; its Router fallback targeted the active owned
-Subflow, whose graph contained exactly six nodes and five edges. This proves the
-tested browser work executed through the real panel-started parent Flow routing
-path rather than through a direct API start or direct parent-graph escape.
+The persistent-isolated workspace schema, the live run ids, the clean-start and
+regression follow-ups, and the final run-path audit that produced this result
+are archived in
+`automated-testing-facility-plan/archive/phase-step-records-2026-09.md`.
 
 ## Initial CI Shape
 
@@ -1827,13 +508,10 @@ Nightly certification runs the full corpus, resilience tests, three-repeat flake
 | Test hooks ship | Separate build/manifest and production bundle inspection. |
 | Core becomes web-specific | Boundary test, second-consumer rule, core API review. |
 
-## Recommended Defaults To Confirm In Phase 0
+## Recommended Defaults To Confirm In Phase 0 (archived)
 
-- GitHub Actions, matching core's current CI.
-- Retention periods from this plan until measured costs exist.
-- Vendor-neutral task/result JSON with the existing Codex workflow initially.
-- Windows first for local path parity; Linux before treating E2E as a release gate.
-- No real-site selection before Phase 5 is stable.
+The five defaults proposed for Phase 0 confirmation are archived in
+`automated-testing-facility-plan/archive/design-rationale-and-boundary-audit.md`.
 
 ## Documentation Sources
 
