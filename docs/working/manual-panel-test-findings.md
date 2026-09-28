@@ -150,6 +150,65 @@ new findings. It is fine to leave unknown fields blank.
 
 ---
 
+### PANEL-004 — The chat window cannot operate the control panel
+
+- Status: Assigned
+- Reported: 2026-09-28, America/Los_Angeles
+- Starting state: authenticated panel, chat window open
+- Expected: a person can fully operate the entire control panel from the chat
+  window — creating, editing and running a Flow, changing a setting, granting
+  or revoking a permission, inspecting a run, rolling a version back
+- Actual: the conversation reaches only a fraction of what the panel exposes;
+  most capabilities exist solely as a control somewhere in the UI
+- Severity: major — this is the product's stated primary interaction model
+- Assigned worker: `chat-operates-panel`
+- Worker report: `manual-panel-test-findings/reports/chat-operates-panel.md`
+- Notes: the fix is a capability registry where a panel capability is declared
+  once and is invocable from both its control and the conversation, so a new
+  capability cannot ship with a button and no conversational path. The build
+  must fail when one does.
+
+### PANEL-005 — Permission gating defaults to asking for everything, and settings will not switch
+
+- Status: Assigned
+- Reported: 2026-09-28, America/Los_Angeles
+- Starting state: fresh panel, default settings
+- Expected: only genuinely high-risk real-world actions ask a person —
+  deleting something, and completing a purchase or moving money. Everything
+  else proceeds. The automation's own work (repair, re-author, rollback,
+  re-run, explore, extract, retry, persist) is never gated.
+- Actual: manual approval is required for effectively everything by default,
+  which is the opposite of the standing rule and was explicitly instructed
+  against; and when the user tried to switch the settings to what he wanted,
+  the change did not take effect
+- Severity: critical — it silently disables the features the MVP exists for,
+  and the escape hatch is itself broken
+- Assigned workers: `permission-defaults` (policy and defaults in Core),
+  `settings-ui-broken` (the settings surface round trip)
+- Worker reports: `manual-panel-test-findings/reports/permission-defaults.md`,
+  `manual-panel-test-findings/reports/settings-ui-broken.md`
+- Notes: this is a repeat of a rule stated more than once. The fix must be
+  mechanically enforced by a test that fails the build when ordinary work is
+  re-gated, not by written guidance.
+
+### PANEL-006 — Control panel UI/UX is clunky and hard to understand
+
+- Status: Assigned
+- Reported: 2026-09-28, America/Los_Angeles
+- Starting state: ordinary use of the control panel
+- Expected: a person can understand and operate the panel without being
+  taught it
+- Actual: "extremely clunky, hard to operate/understand, and overall just
+  terrible"
+- Severity: major — it blocks every other capability from being used
+- Assigned worker: `panel-ux-audit` (investigation), with a fix wave to be
+  dispatched across disjoint file sets from its workstream partition
+- Worker report: `manual-panel-test-findings/reports/panel-ux-audit.md`
+- Notes: the audit covers information architecture, the first five minutes on
+  a fresh project, concrete mechanical clunk, internal vocabulary leaking into
+  labels, and whether the chat window is reachable without hunting. Simple
+  mode is explicitly out of scope until the control panel itself is good.
+
 ## Status Meanings
 
 - **Submitted:** captured but not yet reproduced or classified.
