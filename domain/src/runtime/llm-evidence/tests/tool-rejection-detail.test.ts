@@ -116,9 +116,14 @@ test("each way a handle stops naming one control is a different reason, and the 
   // The page the packet described has been left. The same answer, for the same
   // reason: the page remembered under that location no longer carries the
   // handle, so nothing is left for the resolver to call stale.
+  //
+  // And because it is the same answer, byte for byte, it now says so as well:
+  // `repeatedAnswer` is what the model is told the second time it is handed a
+  // reply it already holds (`../repeated-refusal.ts`). The reason itself is
+  // unchanged -- the count is beside it, not instead of it.
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
   const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'], repeatedAnswer: 2 });
 
   // Not a handle this domain issues at all.
   const malformed = await runtime.executeTool({ ...BASE, callId: "call.malformed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "the schedule button" } }, consequences: [] } });
@@ -194,21 +199,20 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["delete", "send_or_publish", "create_new"] } });
 
-  // Only the high-risk part of the declaration is missing. Ordinary creation
-  // remains free, while both deletion and communicating on the person's behalf
-  // need instruction or grant authority.
+  // Only the high-risk part of the declaration is missing. Since 2026-09-28 that
+  // is deletion and money movement alone; ordinary creation and sending are
+  // free, because the instruction that asked for them is itself the authority.
   assert.equal(codeOf(refused), "permission_required");
-  assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["delete", "send_or_publish"] });
+  assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["delete"] });
   assert.deepEqual(clicks, []);
 
   const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish", "create_new"] } });
-  assert.equal(codeOf(sent), "permission_required");
-  assert.deepEqual(detailOf(sent), { reason: "nobody_to_ask", missing: ["send_or_publish"] });
-  assert.deepEqual(clicks, []);
+  assert.notEqual(codeOf(sent), "permission_required");
+  assert.equal(clicks.length, 1);
 
   const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["create_new"] } });
   assert.notEqual(codeOf(created), "permission_required");
-  assert.equal(clicks.length, 1);
+  assert.equal(clicks.length, 2);
 
   // A declaration Core could not read is not a refusal to ask about: nothing was asked and nothing was pressed.
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["sell_the_company"] } });

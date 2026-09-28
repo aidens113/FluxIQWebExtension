@@ -30,7 +30,7 @@
 // `proposes: false` so a step that did not work cannot reach the Flow.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webActionFailureRejectionCode } from "../action-failure";
+import { webActionFailureRefusal } from "../action-failure";
 import {
   assertActive,
   captureEvidence,
@@ -278,11 +278,15 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // captured to fit inside what this call was allowed, which is what
       // `pageRefusal` is for.
       // A refusal carries the page so the model can act on whatever got in the
-      // way. From nowhere there is no such page, and the code alone is the
-      // whole of what can honestly be said.
+      // way, and the node's own account of what it could not do: a read that
+      // came back short says how short, with the counts it already computed
+      // (`../action-failure/read-shortfall.ts`). From nowhere there is no such
+      // page, and where the Flow has not reached its start location that is the
+      // whole of what can honestly be said, whatever the page then answered.
+      const refused = webActionFailureRefusal(result);
       throw current
-        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, webActionFailureRejectionCode(result), run.request.signal)
-        : new RecoverableToolRejection(webActionFailureRejectionCode(result), webStartLocationRefusal(run.request.startLocation ?? ""));
+        ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
+        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""));
     }
     const after = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
     run.shown(after);

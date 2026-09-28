@@ -4,11 +4,13 @@
 // and shaping the result the background worker receives.
 
 export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
+export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
 export { actionFailure } from "./results";
 
 export type { ActionResultEvidence } from "./results";
+export type { ClickPoint } from "./click-gesture";
 export type { ActionabilityRejectionCode, ActionabilityReport } from "./actionability";
 export type { AssertionOutcome, AssertionTarget } from "./assertion-evaluation";
 export type { CheckableStateOutcome } from "./checkable-state";

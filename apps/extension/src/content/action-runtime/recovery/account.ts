@@ -40,6 +40,17 @@ export type RecoveryAccount = {
   absorbed: readonly RecoveryFault[];
   /** Milliseconds spent deliberately waiting between attempts. */
   waitedMs: number;
+  /**
+   * How many layers standing over the page the loop pressed the way out of.
+   *
+   * A count, never what the dialog said. It is on the account rather than left
+   * implicit in `absorbed` because the two are different facts: `blocking_dialog`
+   * says the page put a dialog in the way, and this says the runtime pressed a
+   * control on the page that no Flow authored. That second fact must be visible
+   * in a debug on its own, since it is the one act the runtime takes without
+   * being told to.
+   */
+  dismissed: number;
   /** Which of the three states the defence ended in. */
   outcome: RecoveryOutcome;
 };
@@ -52,6 +63,7 @@ export const CLEAN_RECOVERY_ACCOUNT: RecoveryAccount = Object.freeze({
   attempts: 1,
   absorbed: Object.freeze([]) as readonly RecoveryFault[],
   waitedMs: 0,
+  dismissed: 0,
   outcome: "clean"
 });
 
@@ -71,5 +83,11 @@ export function recoveryAccountSentence(account: RecoveryAccount): string | unde
   const verdict = account.outcome === "recovered"
     ? `the execution recovered on attempt ${account.attempts}`
     : `the execution did not recover within its ${account.attempts} attempts`;
-  return `${verdict} after absorbing ${faults}, waiting ${account.waitedMs} ms`;
+  return `${verdict} after absorbing ${faults}${dismissalClause(account.dismissed)}, waiting ${account.waitedMs} ms`;
+}
+
+/** What the loop pressed, in a count and a closed phrase, or nothing when it pressed nothing. */
+function dismissalClause(dismissed: number): string {
+  if (dismissed <= 0) return "";
+  return `, closing ${dismissed} ${dismissed === 1 ? "dialog" : "dialogs"} the page had put in the way`;
 }

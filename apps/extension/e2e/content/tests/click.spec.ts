@@ -158,13 +158,20 @@ test.describe("on failure-surfaces", () => {
       failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution" },
       validation: { status: "failed", expected: "a target that can be clicked" }
     });
+    // The text now carries the defence's account too: a covered target is an
+    // obstruction the runtime tries to clear before it reports, so what the verb
+    // observed is the head of the text and what the loop absorbed is a note after
+    // it (`action-runtime/recovery/record.ts`).
     expect(reply.validation).toMatchObject({
-      actual: expect.stringMatching(/^the point \d+,\d+ landed on div\[data-testid="overlay"\], which covers the target$/u)
+      actual: expect.stringMatching(/^the point \d+,\d+ landed on div\[data-testid="overlay"\], which covers the target;/u)
     });
     // The reason the one code no longer spells out, named in the record itself.
     expect(reply.failure).toMatchObject({
-      actual: expect.stringMatching(/^covered: the point \d+,\d+ landed on div\[data-testid="overlay"\], which covers the target$/u)
+      actual: expect.stringMatching(/^covered: the point \d+,\d+ landed on div\[data-testid="overlay"\], which covers the target;/u)
     });
+    // The defence was reached, found nothing it could press, and said so.
+    expect(reply.failure?.actual).toMatch(/after absorbing obstructed_target/u);
+    expect(reply.failure?.actual).not.toMatch(/closing/u);
     // Without the gate this click would have removed the button.
     await expect(page.locator(DETACH_TARGET)).toHaveCount(1);
     expect((await harness.finalState()).state).toMatchObject({ attempts: 0 });
@@ -177,12 +184,16 @@ test.describe("on failure-surfaces", () => {
     expect(reply).toMatchObject({
       status: "failed",
       message: "Action rejected: the element's display is none",
-      validation: { status: "failed", expected: "a target that can be clicked", actual: "the element's display is none" },
+      validation: { status: "failed", expected: "a target that can be clicked" },
       failure: {
         category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
-        expected: "a target that can be clicked", actual: "hidden: the element's display is none"
+        expected: "a target that can be clicked"
       }
     });
+    // A hidden target is waited for and looked at again before it is reported,
+    // so the reason heads the text and the account follows it.
+    expect(reply.validation).toMatchObject({ actual: expect.stringMatching(/^the element's display is none;/u) });
+    expect(reply.failure).toMatchObject({ actual: expect.stringMatching(/^hidden: the element's display is none;/u) });
     expect((await harness.finalState()).state).toMatchObject({ attempts: 0 });
   });
 

@@ -367,7 +367,12 @@ test("a page refusal about the target says which way the handle stopped naming o
   // what the model can act on, and nothing is added to it.
   page = refusing("sensitive_region", { url: LISTING, elements: page.elements! });
   assert.deepEqual(await detect(runtime, { target }), rejection("sensitive_value"));
-  assert.deepEqual(await detect(runtime), rejection("sensitive_value"));
+  // Asking a second time is answered the same, and now says that it is the same
+  // answer. One thing is added to a bare code after all, and it is the one
+  // thing the code cannot say: that the model has already been told this. A
+  // detection refused identically four times in a row is what ended
+  // `run-mulryg6h-ff241a12` (`../../repeated-refusal.ts`).
+  assert.deepEqual(await detect(runtime), rejection("sensitive_value", { reason: "answered_the_same_again", repeatedAnswer: 2 }));
 });
 
 test("a malformed call reaches no page and is told which way it was malformed", async () => {

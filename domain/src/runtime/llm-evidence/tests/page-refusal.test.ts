@@ -189,7 +189,13 @@ test("a failed action's refusal code is read from the client's closed code, neve
     [{ status: "failed", failure: { code: codes.NAVIGATION_UNEXPECTED } }, "page_changed"],
     [{ status: "failed", failure: { code: codes.TIMEOUT } }, "action_timed_out"],
     [{ status: "timed_out" }, "action_timed_out"],
-    [{ status: "failed", failure: { code: codes.OUTPUT_NOT_OBSERVED } }, "action_failed"],
+    // The verb ran and what it exists to produce did not appear: its own code
+    // since 2026-09-28, because it was the largest of the six that used to
+    // arrive as the undifferentiated `action_failed`
+    // (`../action-failure/refusal.ts`).
+    [{ status: "failed", failure: { code: codes.OUTPUT_NOT_OBSERVED } }, "output_not_observed"],
+    // Nothing said why, and nothing is invented: a result with no record at all
+    // and a code outside the closed set are the two that stay bare.
     [{ status: "failed" }, "action_failed"],
     [{ status: "failed", failure: { code: "toString" } }, "action_failed"],
     [{ status: "failed", failure: { code: "__proto__" } }, "action_failed"]

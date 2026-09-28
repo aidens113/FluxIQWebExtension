@@ -167,12 +167,16 @@ test("a hidden select is rejected as hidden, so the reason is the capability's o
   expect(reply).toMatchObject({
     status: "failed",
     message: "Action rejected: the element's display is none",
-    validation: { status: "failed", expected: "a target that can be selected in", actual: "the element's display is none" },
+    validation: { status: "failed", expected: "a target that can be selected in" },
     failure: {
       category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
-      expected: "a target that can be selected in", actual: "hidden: the element's display is none"
+      expected: "a target that can be selected in"
     }
   });
+  // The reason heads both texts; the defence's account follows, because a hidden
+  // target is an obstruction the runtime tries to clear before it reports.
+  expect(reply.validation).toMatchObject({ actual: expect.stringMatching(/^the element's display is none;/u) });
+  expect(reply.failure).toMatchObject({ actual: expect.stringMatching(/^hidden: the element's display is none;/u) });
   await expect(page.locator(PLAN)).toHaveValue(INITIAL_PLAN);
 });
 

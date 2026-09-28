@@ -27,13 +27,15 @@
 // filtered rows in place.
 //
 // The events carry the element's own window as their `view`, so a click inside
-// a child frame is dispatched in that frame rather than in the top one.
+// a child frame is dispatched in that frame rather than in the top one. The
+// gesture itself is `action-runtime/click-gesture.ts`, shared with the defence
+// that presses a blocking dialog's own way out (`action-runtime/interference/`),
+// which needs the same press and cannot import a verb.
 
+import { dispatchClickGesture } from "../action-runtime";
 import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import type { ContentActionDependencies } from "./types";
-
-type Point = { x: number; y: number };
 
 /** A link the click follows: the anchor itself, and the address it names. */
 type NavigatingLink = { anchor: Element; href: string };
@@ -159,60 +161,4 @@ function hitTestValidation(detail: string, accepted: boolean): BrowserActionVali
     expected: "the click lands on the target or something inside it",
     actual: accepted ? detail : `${detail}; the page prevented the click's default action`
   };
-}
-
-/**
- * The event sequence a mouse press produces, in order. Returns whether the
- * click's default action was allowed to run. `beforePress` runs between the
- * hover and the press, which is where a link's in-place watch starts.
- */
-function dispatchClickGesture(element: Element, point: Point, beforePress?: () => void): boolean {
-  const base: PointerEventInit = {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    view: element.ownerDocument.defaultView,
-    clientX: point.x,
-    clientY: point.y,
-    button: 0,
-    pointerId: 1,
-    pointerType: "mouse",
-    isPrimary: true
-  };
-  const hover: PointerEventInit = { ...base, buttons: 0 };
-  // enter and over differ: the enter pair neither bubbles nor can be cancelled.
-  const entering: PointerEventInit = { ...hover, bubbles: false, cancelable: false };
-  const press: PointerEventInit = { ...base, buttons: 1, detail: 1 };
-  const release: PointerEventInit = { ...base, buttons: 0, detail: 1 };
-
-  dispatchPointer(element, "pointerover", hover);
-  dispatchPointer(element, "pointerenter", entering);
-  element.dispatchEvent(new MouseEvent("mouseover", hover));
-  element.dispatchEvent(new MouseEvent("mouseenter", entering));
-  dispatchPointer(element, "pointermove", hover);
-  element.dispatchEvent(new MouseEvent("mousemove", hover));
-  beforePress?.();
-  dispatchPointer(element, "pointerdown", press);
-  // A page that cancels mousedown is suppressing the focus move, as in a
-  // toolbar that keeps the caret in the document, so the focus follows it.
-  if (element.dispatchEvent(new MouseEvent("mousedown", press))) focusForPress(element);
-  dispatchPointer(element, "pointerup", release);
-  element.dispatchEvent(new MouseEvent("mouseup", release));
-  return element.dispatchEvent(new MouseEvent("click", release));
-}
-
-function dispatchPointer(element: Element, type: string, init: PointerEventInit): void {
-  if (typeof PointerEvent !== "function") return;
-  element.dispatchEvent(new PointerEvent(type, init));
-}
-
-/**
- * The focus move a press makes: to the nearest focusable ancestor-or-self, as
- * the browser does. `preventScroll` keeps it from moving the page after the hit
- * test, which would leave the remaining events pointing at a stale position.
- */
-function focusForPress(element: Element): void {
-  const target = element.closest("a[href],button,input,select,textarea,summary,[tabindex],[contenteditable]");
-  const focusable = target as (Element & { focus?: (options?: { preventScroll?: boolean }) => void }) | null;
-  if (focusable && typeof focusable.focus === "function") focusable.focus({ preventScroll: true });
 }

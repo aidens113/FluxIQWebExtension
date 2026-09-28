@@ -15,8 +15,8 @@ import { recordRecovery } from "../record";
 import type { RecoveryAccount } from "../account";
 import type { BrowserActionResult } from "../../../types";
 
-const RECOVERED: RecoveryAccount = { attempts: 2, absorbed: ["target_absent"], waitedMs: 250, outcome: "recovered" };
-const EXHAUSTED: RecoveryAccount = { attempts: 5, absorbed: ["target_absent", "target_absent", "target_absent", "target_absent", "target_absent"], waitedMs: 3_750, outcome: "exhausted" };
+const RECOVERED: RecoveryAccount = { attempts: 2, absorbed: ["target_absent"], waitedMs: 250, dismissed: 0, outcome: "recovered" };
+const EXHAUSTED: RecoveryAccount = { attempts: 5, absorbed: ["target_absent", "target_absent", "target_absent", "target_absent", "target_absent"], waitedMs: 3_750, dismissed: 0, outcome: "exhausted" };
 
 function result(overrides: Partial<BrowserActionResult> = {}): BrowserActionResult {
   return {

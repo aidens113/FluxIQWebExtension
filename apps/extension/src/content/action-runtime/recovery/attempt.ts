@@ -28,9 +28,10 @@
 // attempts in no time at all and still assert what was waited.
 
 import type { BrowserActionCommand, BrowserActionResult } from "../../types";
+import { clearInterference } from "../interference";
 import { CLEAN_RECOVERY_ACCOUNT, type RecoveryAccount, type RecoveryOutcome } from "./account";
 import { recoveryBackoffMs, recoveryBudgetRemainingMs } from "./budget";
-import { recoverableFault, type RecoveryFault } from "./fault";
+import { faultNeedsInterference, recoverableFault, type RecoveryFault } from "./fault";
 
 /** One execution's answer, and the account of what reaching it cost. */
 export type RecoveredExecution = {
@@ -40,6 +41,17 @@ export type RecoveredExecution = {
 
 /** How the loop pauses between attempts. Replaced in tests; never called with a non-positive wait. */
 export type RecoveryPause = (ms: number) => Promise<void>;
+
+/**
+ * What the loop does to the page between attempts, for a fault waiting alone
+ * cannot fix. Answers how many layers it cleared.
+ *
+ * Injected so this file stays free of the DOM and runs whole under `node:test`,
+ * and defaulted rather than demanded so the defence is on for the one caller
+ * without that caller having to remember it -- which is the defect this whole
+ * directory was written against.
+ */
+export type RecoveryIntervention = (fault: RecoveryFault) => number;
 
 /**
  * Runs `attempt` until it answers with something retrying cannot improve, or
@@ -55,16 +67,18 @@ export async function runWithRecovery(
   startedAt: number,
   attempt: () => Promise<BrowserActionResult>,
   pause: RecoveryPause = sleep,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  intervene: RecoveryIntervention = clearInterference
 ): Promise<RecoveredExecution> {
   const absorbed: RecoveryFault[] = [];
   let waitedMs = 0;
   let attempts = 0;
+  let dismissed = 0;
   for (;;) {
     attempts += 1;
     const result = await attempt();
     const fault = recoverableFault(result, action);
-    if (fault === undefined) return { result, account: account(attempts, absorbed, waitedMs) };
+    if (fault === undefined) return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
     const backoffMs = recoveryBackoffMs(fault, absorbed.length, action, startedAt, now());
     if (backoffMs === undefined) {
       // The fault was one this loop absorbs and there was no budget left to
@@ -72,9 +86,15 @@ export async function runWithRecovery(
       // needs to know is that the defence was reached and was not enough, which
       // an account showing no fault at all would hide.
       absorbed.push(fault);
-      return { result, account: account(attempts, absorbed, waitedMs) };
+      return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
     }
     absorbed.push(fault);
+    // Clear first, then wait, then run the verb again. A dialog does not leave
+    // because it was waited at, so a loop that only paused would spend its whole
+    // ladder and report the refusal it started with; and the pause after the
+    // press is what gives the layer time to finish leaving before the target is
+    // hit-tested again.
+    if (faultNeedsInterference(fault)) dismissed += intervene(fault);
     waitedMs += backoffMs;
     await pause(backoffMs);
     // A clipped pause can land exactly on the command deadline, and a real
@@ -82,14 +102,14 @@ export async function runWithRecovery(
     // result is the honest answer; dispatching another verb would start work
     // after the timeout Core gave this command.
     if (recoveryBudgetRemainingMs(action, startedAt, now()) <= 0) {
-      return { result, account: account(attempts, absorbed, waitedMs) };
+      return { result, account: account(attempts, absorbed, waitedMs, dismissed) };
     }
   }
 }
 
-function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs: number): RecoveryAccount {
-  if (absorbed.length === 0) return attempts === 1 ? CLEAN_RECOVERY_ACCOUNT : { attempts, absorbed: [], waitedMs, outcome: "clean" };
-  return { attempts, absorbed: [...absorbed], waitedMs, outcome: outcomeOf(attempts, absorbed.length) };
+function account(attempts: number, absorbed: readonly RecoveryFault[], waitedMs: number, dismissed: number): RecoveryAccount {
+  if (absorbed.length === 0) return attempts === 1 ? CLEAN_RECOVERY_ACCOUNT : { attempts, absorbed: [], waitedMs, dismissed, outcome: "clean" };
+  return { attempts, absorbed: [...absorbed], waitedMs, dismissed, outcome: outcomeOf(attempts, absorbed.length) };
 }
 
 /**

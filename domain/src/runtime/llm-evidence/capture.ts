@@ -12,7 +12,7 @@
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
-import { webActionFailureRejectionCode, type WebFailedActionResult } from "./action-failure";
+import { webActionFailureRefusal, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
@@ -21,7 +21,6 @@ import {
   RecoverableToolRejection,
   WEB_LLM_TOOL_REJECTION_REASONS,
   WEB_LLM_TOOL_RESULT_SCHEMA_VERSION,
-  type WebLlmToolRejectionCode,
   type WebLlmToolRejectionReason
 } from "./tool-rejection";
 import { jsonRecord } from "./untrusted-json";
@@ -350,7 +349,7 @@ export async function actAndCapture(
 ): Promise<WebLlmSnapshotBinding> {
   const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
   assertActive(signal);
-  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRejectionCode(result), signal);
+  if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRefusal(result), signal);
   return await captureEvidence(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
 }
 
@@ -359,23 +358,30 @@ export async function actAndCapture(
  * it now stands: whatever got in the way -- a dialog, a banner -- is on it,
  * with a handle the model can press. Captured on the origin the action started
  * from and within the call's budget; a page that cannot be captured leaves the
- * bare code. Cancellation still ends the call.
+ * refusal without one. Cancellation still ends the call.
+ *
+ * It takes the whole refusal rather than its code, and that is the point of the
+ * signature. Until 2026-09-28 it took a code and wrote `detail: undefined`
+ * beside it, three times over, so every reason this domain computed about a
+ * failed action was dropped one line after being decided
+ * (`./action-failure/read-shortfall.ts` has what that cost). A parameter that
+ * carries both is one a caller cannot half-use.
  */
 export async function pageRefusal(
   gateway: WebLlmEvidenceGateway,
   sessionId: string,
   request: WebLlmEvidenceToolRequest,
   current: WebLlmSnapshotBinding,
-  code: WebLlmToolRejectionCode,
+  refusal: WebActionRefusal,
   signal?: AbortSignal
 ): Promise<RecoverableToolRejection> {
   const budget = request.maxEvidenceBytes === undefined ? undefined : request.maxEvidenceBytes - PAGE_REFUSAL_ENVELOPE_BYTES;
-  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(code, undefined);
+  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(refusal.code, refusal.detail);
   try {
     const page = await captureEvidence(gateway, sessionId, budget === undefined ? request : { ...request, maxEvidenceBytes: budget }, signal, new URL(current.evidence.location).origin);
-    return new RecoverableToolRejection(code, undefined, page);
+    return new RecoverableToolRejection(refusal.code, refusal.detail, page);
   } catch (error) {
     if (signal?.aborted) throw error;
-    return new RecoverableToolRejection(code, undefined);
+    return new RecoverableToolRejection(refusal.code, refusal.detail);
   }
 }

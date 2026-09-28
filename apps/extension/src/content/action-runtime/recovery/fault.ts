@@ -79,7 +79,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../../types";
  * *command* finally reported, and a reader tallying one must not be able to
  * mistake it for the other.
  */
-export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport";
+export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target";
 
 /**
  * Each retryable code's fault word. Total over the retryable half of the closed
@@ -99,6 +99,86 @@ export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailur
   // Core may later mark retryable from arriving here as a fault with no name.
   [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "transport"
 } as const);
+
+/**
+ * The refusal reason words that mean "something was over the target", as
+ * `actionability.ts` writes them. They are a closed machine vocabulary, not
+ * prose: `ActionabilityRejectionCode` has exactly three members, the reason is
+ * written as the leading token of the record's `actual`, and the domain already
+ * reads that same token off the wire to tell an overlay from a disabled control
+ * (`runtime/llm-evidence/action-failure.ts`).
+ *
+ * `disabled`, the third member, is deliberately absent, and it is the row that
+ * makes this a list rather than "every ACTION_REJECTED". `covered` and `hidden`
+ * are only ever produced by the actionability gate, which runs before any verb
+ * touches the page, so a retry cannot repeat an act. `disabled` is produced
+ * there too -- but also by `actions/check.ts` after `setCheckedState` failed, by
+ * `actions/upload.ts` after `setInputFiles` failed, and by `actions/select.ts`
+ * for an option that will be disabled however often it is asked. Absorbing it
+ * would mean retrying a verb that had already dispatched, which is exactly what
+ * the mutation rule above forbids.
+ */
+const OBSTRUCTION_REASONS: readonly string[] = Object.freeze(["covered", "hidden"]);
+
+/**
+ * The faults that are not the failed action repeated unchanged: the page is
+ * different by the time the verb runs again, because the loop cleared what was
+ * over it first.
+ *
+ * **These are not gated on `retryable`, and that is the whole point.** Core's
+ * own recovery ladder learned this first and says it in the same words: its
+ * rungs that "wait for a state or clear an obstruction *and then* attempt" used
+ * to be gated on `retryable`, "which switched the interference rung off for the
+ * one thing it was built for: a dialog over the page reports
+ * `blocked_by_dialog`, which is not retryable, so the rung for dialogs was
+ * disabled by the dialog code" (`runtime/executor/recovery-ladder.ts` in FluxIQ
+ * Core). The flag answers whether repeating the action *unchanged* can work,
+ * and clearing the dialog first is a change to the page, not a repetition.
+ *
+ * **Every verb absorbs them, mutating or not**, because both are decided by the
+ * actionability gate before the verb dispatched anything at all -- the same
+ * reason `target_absent` is the one transient fault a mutating verb absorbs.
+ * `results.ts` calls this shape "an action refused before it ran".
+ */
+const OBSTRUCTION_FAULTS: Readonly<Partial<Record<WebAutomationFailureCode, RecoveryFault>>> = Object.freeze({
+  [WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG]: "blocking_dialog",
+  [WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED]: "obstructed_target"
+} as const);
+
+/** Every fault word an obstruction can be reported as, for the totality check the tests make. */
+export const RECOVERY_OBSTRUCTION_FAULTS: readonly RecoveryFault[] = Object.freeze(["blocking_dialog", "obstructed_target"]);
+
+/**
+ * Whether this fault is one the loop answers by acting on the page before it
+ * retries, rather than by waiting alone.
+ *
+ * Waiting alone does not move a dialog: a promotion that opened over the page
+ * is still there four seconds later, so a defence that only paused would spend
+ * its whole ladder and report the same refusal. These two are the faults whose
+ * retry is worth making only after `interference/clear.ts` has pressed the
+ * layer's own way out.
+ */
+export function faultNeedsInterference(fault: RecoveryFault): boolean {
+  return fault === "blocking_dialog" || fault === "obstructed_target";
+}
+
+/**
+ * The obstruction this result reports, if it reports one.
+ *
+ * BLOCKED_BY_DIALOG needs no reason word: it is produced in one place, from a
+ * `covered` or `hidden` refusal with a dialog standing over the page, so it
+ * already means what the reason words mean. ACTION_REJECTED is the code every
+ * other refusal shares, so its reason word is what separates a layer over the
+ * target from a target that refused on its own account.
+ */
+function obstructionFault(code: WebAutomationFailureCode, result: BrowserActionResult): RecoveryFault | undefined {
+  const fault = OBSTRUCTION_FAULTS[code];
+  if (fault === undefined) return undefined;
+  if (code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return fault;
+  const actual = result.failure?.actual;
+  if (typeof actual !== "string") return undefined;
+  return OBSTRUCTION_REASONS.some((reason) => actual.startsWith(`${reason}:`)) ? fault : undefined;
+}
 
 /**
  * The one fault decided before a verb dispatched anything, so the one a verb
@@ -150,15 +230,22 @@ export function webActionReadsOnly(action: Pick<BrowserActionCommand, "actionTyp
  * The fault this result may be retried on, or `undefined` for a result that is
  * finished -- succeeded, or failed for a reason retrying cannot change.
  *
- * Read off the failure record's code and nothing else. The prose a verb wrote is
- * not consulted: a decision taken from a sentence is a decision that changes
- * when someone improves the wording, and this one decides whether a page gets
- * pressed a second time.
+ * Read off the failure record's code, and -- for ACTION_REJECTED alone -- the
+ * closed reason token that code is written with. No sentence is read: a
+ * decision taken from prose is a decision that changes when someone improves
+ * the wording, and this one decides whether a page gets pressed a second time.
+ * The reason token is not prose. It is one of three members of
+ * `ActionabilityRejectionCode`, written by the gate as the leading `word:` of
+ * the record's `actual`, and it is the only thing that separates a target with
+ * a layer over it from a target that refused on its own account -- a difference
+ * ACTION_REJECTED does not carry, because it is one code for every refusal.
  */
 export function recoverableFault(result: BrowserActionResult, action: Pick<BrowserActionCommand, "actionType" | "extractList">): RecoveryFault | undefined {
   if (result.status === "succeeded") return undefined;
   const code = result.failure?.code;
   if (!isWebAutomationFailureCode(code)) return undefined;
+  const obstruction = obstructionFault(code, result);
+  if (obstruction !== undefined) return obstruction;
   if (!WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code].retryable) return undefined;
   const fault = RECOVERY_FAULT_BY_CODE[code];
   if (fault === undefined) return undefined;

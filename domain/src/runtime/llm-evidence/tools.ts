@@ -87,7 +87,7 @@ import {
   type WebLlmSnapshotBinding
 } from "./sanitize";
 import { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence } from "./target";
-import { webActionFailureRejectionCode } from "./action-failure";
+import { createWebLlmRepeatedRefusals } from "./repeated-refusal";
 import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "./tool-rejection";
 import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
@@ -231,6 +231,10 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   // the ones the model is not shown, so a press's before-and-after comparison
   // and its target binding read the same numbering as the packet.
   const stableHandles = createWebLlmStableTargetHandles();
+  // What this runtime last refused each (project, flow, session, tool) with, so
+  // an answer that repeats says so instead of arriving as a new one
+  // (`./repeated-refusal.ts`).
+  const repeatedRefusals = createWebLlmRepeatedRefusals();
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -303,25 +307,32 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       boundedIdentifier(input.flowId, "flowId");
       boundedIdentifier(input.callId, "callId");
       const sessionId = selectSession(gateway.eligibleSessionIds());
+      // Every way out of this call goes through here, because a refusal is
+      // returned on one path and thrown on another: `node-run/run.ts` catches
+      // its own and answers with it, while a detection and the resolver throw
+      // past to the block below. A repeat that was only noticed on one of the
+      // two would miss whichever half the next build spent itself on.
+      const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution =>
+        repeatedRefusals.answered(`${evidenceScope(input, sessionId)}\u0000${input.toolId}`, answer);
       try {
         if (input.toolId === WEB_LLM_RUN_NODE_TOOL_ID) {
-          return await runWebOutputNode({
+          return answered(await runWebOutputNode({
             gateway,
             sessionId,
             request: input,
             stores: { targets: targetPackets, extractions: extractionHandles },
             restamp: (binding) => retain(stable(input, binding)),
             shown: (binding) => shown(input, sessionId, binding)
-          });
+          }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
-          return await detectRepeatingStructure({
+          return answered(await detectRepeatingStructure({
             gateway,
             sessionId,
             request: input,
             returned: returnedEvidence.get(evidenceScope(input, sessionId)),
             handles: extractionHandles,
-          });
+          }));
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
@@ -331,7 +342,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           // can be pressed next.
           const page = error.page === undefined ? undefined : retain(stable(input, error.page));
           if (page !== undefined) shown(input, sessionId, page);
-          return toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code));
+          return answered(toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code)));
         }
         throw error;
       }

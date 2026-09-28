@@ -38,7 +38,7 @@
 // why nothing here needs to know which verbs those are.
 
 import type { BrowserActionCommand } from "../../types";
-import type { RecoveryFault } from "./fault";
+import { faultNeedsInterference, type RecoveryFault } from "./fault";
 
 /** The pauses between attempts while waiting for a target the page has not drawn. */
 export const RECOVERY_TARGET_BACKOFF_MS: readonly number[] = Object.freeze([250, 500, 1_000, 2_000]);
@@ -46,12 +46,27 @@ export const RECOVERY_TARGET_BACKOFF_MS: readonly number[] = Object.freeze([250,
 /** The pauses between attempts after a transient blip, which either clears at once or will not clear. */
 export const RECOVERY_BLIP_BACKOFF_MS: readonly number[] = Object.freeze([250, 500]);
 
+/**
+ * The pauses between attempts when something was standing over the target and
+ * the loop pressed its way out first.
+ *
+ * Short, because the wait is not for the page to produce anything -- it is for
+ * the dialog that was just dismissed to finish leaving, which is a transition
+ * and not a network round trip. Three rungs rather than two because a page that
+ * opens a consent sheet also opens a newsletter modal, and a page that replaces
+ * a dismissed promotion with the next one is the ordinary case on the sites
+ * this product is measured against; each rung clears one more layer.
+ */
+export const RECOVERY_INTERFERENCE_BACKOFF_MS: readonly number[] = Object.freeze([150, 400, 800]);
+
 /** The whole defence's wall-clock budget, measured from the command's start. */
 export const RECOVERY_BUDGET_MS = 5_000;
 
-/** The ladder a fault is waited on: the page's for a target, the short one for everything else. */
+/** The ladder a fault is waited on: the page's for a target, the dialog's for an obstruction, the short one for everything else. */
 export function recoveryBackoffLadder(fault: RecoveryFault): readonly number[] {
-  return fault === "target_absent" ? RECOVERY_TARGET_BACKOFF_MS : RECOVERY_BLIP_BACKOFF_MS;
+  if (fault === "target_absent") return RECOVERY_TARGET_BACKOFF_MS;
+  if (faultNeedsInterference(fault)) return RECOVERY_INTERFERENCE_BACKOFF_MS;
+  return RECOVERY_BLIP_BACKOFF_MS;
 }
 
 /**

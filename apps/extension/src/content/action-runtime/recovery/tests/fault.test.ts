@@ -16,7 +16,7 @@ import {
   isWebAutomationFailureCode,
   type WebAutomationFailureCode
 } from "@fluxiq-web-extension/domain/client";
-import { RECOVERY_FAULT_BY_CODE, RECOVERY_KNOWN_ACTION_TYPES, recoverableFault, webActionReadsOnly } from "../fault";
+import { RECOVERY_FAULT_BY_CODE, RECOVERY_KNOWN_ACTION_TYPES, RECOVERY_OBSTRUCTION_FAULTS, faultNeedsInterference, recoverableFault, webActionReadsOnly } from "../fault";
 import type { BrowserActionCommand, BrowserActionResult } from "../../../types";
 
 /** The two members of the command the classification reads, and nothing else. */
@@ -24,13 +24,13 @@ function command(actionType: string, extractList?: BrowserActionCommand["extract
   return { actionType, ...(extractList === undefined ? {} : { extractList }) } as Pick<BrowserActionCommand, "actionType" | "extractList">;
 }
 
-function failed(actionType: string, code: WebAutomationFailureCode): BrowserActionResult {
+function failed(actionType: string, code: WebAutomationFailureCode, actual?: string): BrowserActionResult {
   return {
     commandId: "c1",
     actionType,
     status: "failed",
     validation: { status: "failed", expected: "e", actual: "a" },
-    failure: { category: "action_failed", code, retryable: true, stage: "execution" },
+    failure: { category: "action_failed", code, retryable: true, stage: "execution", ...(actual === undefined ? {} : { actual }) },
     startedAt: 0,
     finishedAt: 1
   } as unknown as BrowserActionResult;
@@ -113,6 +113,9 @@ test("a verb that only reads absorbs every transient fault the closed set names"
 test("a deterministic refusal is never retried, on any verb", () => {
   const deterministic = Object.values(WEB_AUTOMATION_FAILURE_CODES)
     .filter(isWebAutomationFailureCode)
+    // The two obstruction codes are not retried either -- they are *cleared* and
+    // then attempted, which is a different move and has its own rows below.
+    .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG && code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED)
     .filter((code) => !WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code].retryable);
   assert.ok(deterministic.includes(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS));
   assert.ok(deterministic.includes(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER));
@@ -151,4 +154,80 @@ test("every action type this build knows is decided one way or the other", () =>
     assert.equal(typeof webActionReadsOnly(command(actionType)), "boolean");
   }
   assert.equal(webActionReadsOnly(command("web.dom.made_up")), false, "an unclassified type must default to changing the page");
+});
+
+// --- A layer standing over the target -------------------------------------
+//
+// The rule these rows hold the loop to: a dialog in the way is an obstacle the
+// runtime clears and attempts past, never a reason to report the step as
+// blocked with the effect not applied. They are the rows that fail if the
+// defence is taken out, because without the classification below the loop never
+// reaches `interference/clear.ts` at all.
+
+test("a dialog over the page is a fault for every verb, although its code is not retryable", () => {
+  // `retryable` asks whether repeating the action *unchanged* can work, and the
+  // answer for a dialog is rightly no. Clearing the dialog first is not a
+  // repetition, which is the distinction Core's own ladder draws for the same
+  // reason (`runtime/executor/recovery-ladder.ts`).
+  assert.equal(WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG].retryable, false);
+  for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
+    assert.equal(
+      recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG), command(actionType)),
+      "blocking_dialog",
+      `${actionType} carried on with a dialog in the way instead of closing it`
+    );
+  }
+});
+
+test("a mutating verb absorbs it too, because the gate refused before anything was dispatched", () => {
+  // The one thing that makes this safe where OUTPUT_NOT_OBSERVED is not: a
+  // covered or hidden target is decided by `checkActionability`, which runs
+  // before the verb touches the page, so no gesture, value, key or file has
+  // happened and a second attempt cannot be a second act.
+  for (const actionType of ["web.dom.click", "web.dom.type", "web.dom.upload", "web.dom.check"]) {
+    assert.equal(webActionReadsOnly(command(actionType)), false);
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG), command(actionType)), "blocking_dialog");
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, "covered: the point 10,20 landed on div.scrim"), command(actionType)), "obstructed_target");
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, "hidden: the element is inert"), command(actionType)), "obstructed_target");
+  }
+});
+
+test("a refusal the target made on its own account is not an obstruction, so a dispatched verb is never repeated", () => {
+  // `disabled` is the row this distinction exists for. The gate produces it
+  // before dispatch, but so do `actions/check.ts` after `setCheckedState` failed
+  // and `actions/upload.ts` after `setInputFiles` failed -- both after the verb
+  // acted. Absorbing the word would retry those.
+  for (const actual of [
+    "disabled: the element is disabled",
+    "not_checkable: the control does not take a checked state",
+    "unsupported_key: F13",
+    "upload_rejected: the input refused the files",
+    // A list read that resolved a field to a sensitive control refuses the whole
+    // read (`extraction/field-reader.ts`). It is a rule about what may be read,
+    // not a layer over the page, and a runtime that retried past it would be
+    // retrying its way to a value it is forbidden to take.
+    "sensitive_value: field value resolved to a sensitive control, so its value is never read",
+    "dialog_override_missing: the page-world dialog override is not installed on this page"
+  ]) {
+    assert.equal(recoverableFault(failed("web.dom.check", WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, actual), command("web.dom.check")), undefined, actual);
+  }
+  // And a rejection carrying no reason at all stays a refusal rather than
+  // becoming an obstruction by default.
+  assert.equal(recoverableFault(failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED), command("web.dom.click")), undefined);
+});
+
+test("a person's challenge is never absorbed, whatever else is", () => {
+  // The one refusal that must keep ending the step: a robot check, a credential
+  // prompt or a payment confirmation is the person's, and a runtime that
+  // retried past one would be answering it.
+  for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED), command(actionType)), undefined);
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED), command(actionType)), undefined);
+  }
+});
+
+test("the obstruction faults are exactly the ones the loop acts on the page for", () => {
+  const acted = (["target_absent", "output_not_observed", "page_changed", "timeout", "action_failed", "transport", "blocking_dialog", "obstructed_target"] as const)
+    .filter((fault) => faultNeedsInterference(fault));
+  assert.deepEqual(acted, [...RECOVERY_OBSTRUCTION_FAULTS]);
 });

@@ -32,7 +32,7 @@
 // made from; one that worked carries a line saying so and nothing else.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webActionFailureRejectionCode } from "../action-failure";
+import { webActionFailureRefusal } from "../action-failure";
 import { assertActive, captureEvidence, toolExecution, toolMetadata, type WebLlmEvidenceToolExecution } from "../capture";
 import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import { present } from "../present";
@@ -195,18 +195,23 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
   if (result.status !== "succeeded") {
-    const failure = webActionFailureRejectionCode(result);
+    const refused = webActionFailureRefusal(result);
+    const failure = refused.code;
     // The one failure a page-level reset explains. A control that is simply not
     // there, on a page the step itself worked on, is what a site that remembers
     // the step looks like -- a consent banner answered once stays answered --
     // and refusing the whole draft for it would push the model to delete the
     // dismissals that round 1 lost. Every other failure is a failure.
     const unreproducible = failure === "target_not_found";
-    // No reason: what came back is the page's own failure code, which is not
-    // one of this domain's reasons and must not be dressed up as one. The
-    // node's id still says which step of the draft it was.
+    // The reason, where this domain has one for what the page answered
+    // (`../action-failure/refusal.ts`), and nothing where it does not: a page
+    // failure with no closed reason behind it must not be dressed up as one.
+    // Until 2026-09-28 no reason was ever said here, and a replay that failed
+    // because its read came back empty was recorded identically to one that
+    // failed because the browser would not script the page. The node's id still
+    // says which step of the draft it was.
     return await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, {
-      resultReason: undefined,
+      resultReason: refused.detail?.reason,
       nodeId: node.definitionId,
       assumed
     });

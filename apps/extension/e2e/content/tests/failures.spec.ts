@@ -65,7 +65,10 @@ test.describe("on failure-surfaces", () => {
     expect(reply.failure).toMatchObject({
       category: "blocked_by_capability_or_policy",
       code: WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED,
-      actual: "hidden: the element's display is none"
+      // The reason still heads the record; the defence's account follows it,
+      // because a hidden target is an obstruction the runtime tries to clear
+      // before it reports (`action-runtime/recovery/record.ts`).
+      actual: expect.stringMatching(/^hidden: the element's display is none;/u)
     });
   });
 

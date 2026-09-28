@@ -211,7 +211,7 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
   const diagnostic = {
     code: "flow_bootstrap.evidence_iteration_limit",
     stage: "provider_output_validation",
-    retryable: false,
+    retryable: true,
     providerInvocation: "attempted",
     providerResponse: "received",
     accounting: { requestId: "evidence.one", estimatedInputTokens: 900, provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 7_000, outputTokens: 700, totalTokens: 7_700, estimatedCostUsd: 0.004 },

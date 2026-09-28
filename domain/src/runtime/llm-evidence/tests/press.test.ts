@@ -209,15 +209,20 @@ test("with no permission check to ask, every high-risk declaration is refused", 
   assert.equal(refused.resultCode, "web.action.rejected.permission_required");
   assert.deepEqual(lab.clicked, []);
 
+  // Sending is no longer one of them, as of 2026-09-28. A run that sends is a
+  // run whose instruction asked for the sending, so a standing gate on every
+  // send asks permission for the request itself. A send nobody asked for is a
+  // disagreement between what the step declared and what the instruction called
+  // for, which the consequence cross-check catches; a gate here cannot tell the
+  // two apart and refused both.
   const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("Send reply")! } }, consequences: ["send_or_publish"] } });
-  assert.equal(sent.resultCode, "web.action.rejected.permission_required");
-  assert.deepEqual(lab.clicked, []);
+  assert.equal(sent.resultCode, "web.action.succeeded");
+  assert.equal(lab.clicked.length, 1);
 
-  // Ordinary creation remains free; retaining send/publish must not restore a
-  // blanket gate on every mutating press.
+  // Ordinary creation remains free; only delete and money movement ask.
   const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handles.get("New post")! } }, consequences: ["create_new"] } });
   assert.equal(created.resultCode, "web.action.succeeded");
-  assert.equal(lab.clicked.length, 1);
+  assert.equal(lab.clicked.length, 2);
 });
 
 // A press that leaves the page looking the same is no longer refused. It was,

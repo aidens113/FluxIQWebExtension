@@ -102,6 +102,19 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  * - `target_not_found`: the control is no longer on the page, or no longer one.
  * - `page_changed`: the page navigated or was replaced while the action ran.
  * - `action_timed_out`: the action did not finish in time.
+ * - `output_not_observed`: the node ran and what it exists to produce did not
+ *   appear -- a read that came back with fewer records than it was asked for,
+ *   a record short of a field it declared, an assertion about the page that did
+ *   not hold. The step is the right shape and its arguments are not, which is a
+ *   different move from every code above it: nothing on the page is in the way,
+ *   so there is nothing to press or close. `detail.reason` says which shortfall
+ *   it was and the counts beside it say how far off it was
+ *   (`action-failure/read-shortfall.ts`).
+ * - `not_permitted_here`: the browser itself refused, because this extension
+ *   may not touch that page -- a host the manifest does not request, a
+ *   `chrome://` or gallery URL, an enterprise policy. No retry of any kind
+ *   clears it and nothing on the page can be dealt with; the only move is to be
+ *   somewhere else.
  * - `action_failed`: the action failed for a reason none of these names.
  * - `page_unreadable`: the page could not be captured at all.
  * - `evidence_budget_exhausted`: what is left of the exploration's evidence
@@ -132,6 +145,8 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "target_not_found",
   "page_changed",
   "action_timed_out",
+  "output_not_observed",
+  "not_permitted_here",
   "action_failed",
   "page_unreadable",
   "evidence_budget_exhausted",
@@ -202,6 +217,49 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   which is the shape of a robot check or a page that has not drawn. Deal with
  *   what is in the way; asking again is answered the same.
  *
+ * What a read came back with, or did not (`output_not_observed`). Each is read
+ * off the extraction's own account of itself, which the page already sends and
+ * this domain used to discard (`action-failure/read-shortfall.ts`):
+ * - `list_never_appeared`: the item selector named nothing on the page, so
+ *   there was never a list to read. Detect the list again and write the handle
+ *   it issues; changing the fields or the conditions cannot help.
+ * - `list_did_not_finish_loading`: the wait for the list ended on something
+ *   other than the list arriving -- the page settling, the render window, the
+ *   command's own deadline -- with nothing read. The list is late or is not on
+ *   this page; go where it is, or act to bring it up.
+ * - `conditions_kept_nothing`: `where` was applied and kept no item at all, so
+ *   the read is empty because of its own conditions rather than the page. Widen
+ *   or drop them, or name a column the detection actually showed.
+ * - `records_have_no_fields`: the rows were found and every returned record is
+ *   empty, so the fields are being read off the wrong element. Re-detect and
+ *   map the columns the detection names.
+ * - `required_fields_missing`: some record lacked a field declared required.
+ *   `missingFields` names them, in the call's own words. Make them optional or
+ *   map them to a column the list has.
+ * - `fewer_records_than_required`: rows were read, just fewer than `minItems`.
+ *   Reach a page with more of them, paginate, or lower the minimum.
+ * - `no_records_read`: the read came back with nothing and none of the above
+ *   says why. The page held nothing here.
+ *
+ * What the client would not run at all:
+ * - `state_not_as_asserted`: an authored claim about the page did not hold.
+ *   The page is in some other state; look at it before asserting again.
+ * - `page_not_scriptable`: the browser refused to run anything on that page.
+ *   Not retryable by anything the model can write.
+ * - `channel_to_page_failed`: the verb was never reached -- the content script
+ *   was not in the frame yet, the port closed, the frame was replaced. Nothing
+ *   is wrong with the call; run it again.
+ * - `parameter_not_readable`: a parameter arrived in a shape the client could
+ *   not read, so the command was refused before it was dispatched. Write the
+ *   node's own parameter shape.
+ *
+ * What this domain already said (`answered_the_same_again`):
+ * - the answer to this call is byte-for-byte the one it was given last time,
+ *   and `repeatedAnswer` says how many times in a row that has now happened.
+ *   Nothing was learned and nothing will be; the move is a different call, not
+ *   this one with a changed argument. `repeated-refusal.ts` has the run that
+ *   measured what repeating costs.
+ *
  * What the page did, or did not (`no_progress`):
  * - `page_unchanged_after_action`: the action ran and the page came back
  *   identical, so nothing was learned. Try something else.
@@ -242,6 +300,18 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "repeating_groups_not_readable",
   "nothing_repeats_on_page",
   "page_is_not_the_content",
+  "list_never_appeared",
+  "list_did_not_finish_loading",
+  "conditions_kept_nothing",
+  "records_have_no_fields",
+  "required_fields_missing",
+  "fewer_records_than_required",
+  "no_records_read",
+  "state_not_as_asserted",
+  "page_not_scriptable",
+  "channel_to_page_failed",
+  "parameter_not_readable",
+  "answered_the_same_again",
   "page_unchanged_after_action",
   "already_at_destination",
   "nothing_changed_while_waiting",
@@ -309,6 +379,37 @@ export type WebLlmToolRejectionDetail = {
   rowsSeen?: number;
   /** How many controls the page offered, before the packet's own bounds cut it (`elementTotal`). */
   controlsSeen?: number;
+  /**
+   * What a read that fell short came back with, and no other refusal carries
+   * (`action-failure/read-shortfall.ts`).
+   *
+   * Every one of these is already a published field of the extraction's own
+   * summary (`actions/extraction/summary.ts`), which admits nothing but counts,
+   * flags, closed words and the call's own declared field keys -- so repeating
+   * one here says how much was read and never what was on the page. The rule
+   * the top of this file draws is unchanged; this is the fourth kind of value
+   * it already allows, applied to a read instead of to a detection.
+   *
+   * Why they are here at all: on `run-mulryg6h-ff241a12` an extraction failed
+   * three times and was reported to the model as the bare word `action_failed`,
+   * with 6,149 bytes of evidence that were byte-identical on all three
+   * attempts, while the page had computed every count below and this domain
+   * discarded it at `capture.ts`. The build spent its remaining twelve
+   * decisions repeating itself and produced no Flow.
+   *
+   * How many records the read returned.
+   */
+  recordsRead?: number;
+  /** How many items the read's own item selector matched, before conditions, duplicates and the item bound. `0` is the selector naming nothing. */
+  itemsSeen?: number;
+  /** How many of the returned records yielded no declared field at all. Equal to `recordsRead` means the fields were read off the wrong element. */
+  emptyRecords?: number;
+  /** The declared field keys some record lacked: the call's own words for its own columns, never a word of the page. */
+  missingFields?: string[];
+  /** Which of four things ended the wait for the list (`actions/extraction/summary.ts` `WebAutomationExtractionWaitStop`). */
+  waitStoppedOn?: string;
+  /** How many times in a row this same answer has now been given, counting from 2 (`repeated-refusal.ts`). */
+  repeatedAnswer?: number;
 };
 
 export type WebLlmToolRejection = {
@@ -405,6 +506,12 @@ export function rejectionDetail(fields: {
   groupsSeen?: number | undefined;
   rowsSeen?: number | undefined;
   controlsSeen?: number | undefined;
+  recordsRead?: number | undefined;
+  itemsSeen?: number | undefined;
+  emptyRecords?: number | undefined;
+  missingFields?: readonly string[] | undefined;
+  waitStoppedOn?: string | undefined;
+  repeatedAnswer?: number | undefined;
 }): WebLlmToolRejectionDetail {
   return present<WebLlmToolRejectionDetail>({
     reason: fields.reason === "parameters_not_resolved" && fields.instead !== undefined
@@ -420,7 +527,16 @@ export function rejectionDetail(fields: {
     // in the counting rather than a fact about the page, and is left out.
     groupsSeen: wholeCount(fields.groupsSeen),
     rowsSeen: wholeCount(fields.rowsSeen),
-    controlsSeen: wholeCount(fields.controlsSeen)
+    controlsSeen: wholeCount(fields.controlsSeen),
+    recordsRead: wholeCount(fields.recordsRead),
+    itemsSeen: wholeCount(fields.itemsSeen),
+    emptyRecords: wholeCount(fields.emptyRecords),
+    // Copied for the same reason `instead` is, and left out when empty: a read
+    // that was short of nothing says so by carrying no list, not by carrying an
+    // empty one.
+    missingFields: fields.missingFields === undefined || fields.missingFields.length === 0 ? undefined : [...fields.missingFields],
+    waitStoppedOn: fields.waitStoppedOn,
+    repeatedAnswer: wholeCount(fields.repeatedAnswer)
   });
 }
 
