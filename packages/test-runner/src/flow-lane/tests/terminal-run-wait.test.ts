@@ -117,3 +117,68 @@ test("a run with a node that would not run still takes the full recovery wait", 
   assert.equal(settled.unsettled, "recovery");
   assert.ok(clock > 5_000 + TERMINAL_DETAIL_POLL_MS, `waited only ${clock}ms`);
 });
+
+// Core's own marker on the recovery, not a fixed guess.
+//
+// Core saves a failed run before its recovery starts and the recovery record
+// only with the recovery's last save. When the recovery threw, no record was
+// ever written, and the wait spent its whole five minutes on one. Core now
+// marks the recovery on the run detail (`metadata.recoveryState`), and the wait
+// follows the marker.
+function markedRun(recoveryState?: Record<string, unknown>, record = false) {
+  return {
+    summaryStatus: "failed",
+    actions: [{ status: "failed", nodeId: "n1", failure: { stage: "dispatch" } }],
+    resultVerification: null,
+    runDetail: { metadata: { ...(recoveryState ? { recoveryState } : {}), ...(record ? { llmGate: { decision: "allowed" } } : {}) } }
+  };
+}
+
+async function waitOn(reads: (clock: number) => ReturnType<typeof markedRun>) {
+  let clock = 0;
+  const settled = await awaitTerminalRunDetail(
+    async () => reads(clock),
+    new Error("unused"),
+    { now: () => clock, sleep: async (ms: number) => { clock += ms; }, timeoutMs: 400_000, awaitRecovery: true, recoveryWaitMs: 300_000, recoveryGraceMs: 5_000 }
+  );
+  return { settled, clock };
+}
+
+test("a recovery Core still marks running is waited for up to Core's grant lease, past the fixed five minutes", async () => {
+  // Core finishes the recovery at 400 s, which the fixed wait would have missed.
+  const { settled, clock } = await waitOn((now) => now < 400_000 ? markedRun({ state: "running", startedAt: 1 }) : markedRun({ state: "ended", startedAt: 1, endedAt: 2 }, true));
+  assert.equal(settled.unsettled, undefined);
+  assert.equal(settled.recoveryState, undefined);
+  assert.ok(clock >= 400_000 && clock < 400_000 + 2 * TERMINAL_DETAIL_POLL_MS, `waited ${clock}ms`);
+});
+
+test("a recovery still running when the lease runs out is returned unsettled and named", async () => {
+  const { settled, clock } = await waitOn(() => markedRun({ state: "running", startedAt: 1 }));
+  assert.equal(settled.unsettled, "recovery");
+  assert.equal(settled.recoveryState, "recovery.still_running");
+  assert.equal(clock, TERMINAL_DETAIL_MAX_WAIT_MS);
+});
+
+test("a recovery Core marked threw or ended with no record stops at once and is named", async () => {
+  for (const [state, code] of [["threw", "recovery.threw"], ["ended", "recovery.ended_without_record"]] as const) {
+    // A read before the marker lands, then the marker.
+    const { settled, clock } = await waitOn((now) => now === 0 ? markedRun() : markedRun({ state, startedAt: 1, endedAt: 2, ...(state === "threw" ? { code: "recovery.threw" } : {}) }));
+    assert.equal(settled.unsettled, "recovery");
+    assert.equal(settled.recoveryState, code);
+    assert.equal(clock, TERMINAL_DETAIL_POLL_MS, `waited ${clock}ms`);
+  }
+});
+
+test("a recovery that wrote its record is done, whatever the marker says", async () => {
+  const { settled, clock } = await waitOn(() => markedRun({ state: "ended", startedAt: 1, endedAt: 2 }, true));
+  assert.equal(settled.unsettled, undefined);
+  assert.equal(settled.recoveryState, undefined);
+  assert.equal(clock, 0);
+});
+
+test("a run with no marker keeps the fixed recovery wait and names nothing", async () => {
+  const { settled, clock } = await waitOn(() => markedRun());
+  assert.equal(settled.unsettled, "recovery");
+  assert.equal(settled.recoveryState, undefined);
+  assert.equal(clock, 300_000);
+});
