@@ -27,6 +27,8 @@ const PROPOSAL_POLL_MS = 1_000;
 /** The shape of a Core or domain identifier, such as `web.recovery.inspect` or `web.action.rejected.no_progress`. */
 const VOCABULARY_ID = /^[a-z][a-z0-9_-]*(?:[.:][a-z0-9_-]+)*$/u;
 const MAX_VOCABULARY_ID_LENGTH = 96;
+/** An error's class or system code (`TypeError`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`): no whitespace, so no sentence. */
+const THROW_CODE = /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/u;
 /**
  * Core's own names for the decisions that called no tool
  * (`AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS`): a refused plan is
@@ -122,7 +124,12 @@ export type CreatedFlowBuildStep = Readonly<{
   answerability?: Readonly<{ recordsRequested: boolean; recordProducerPresent: boolean; recordStorePresent: boolean; issueCode?: "bootstrap.cannot_answer_instruction" }>;
   [field: string]: CreatedFlowBuildStepValue | undefined;
 }>;
-export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
+/**
+ * `incompleteDraft` is Core's note that a build which ran out kept its draft as
+ * an incomplete record the next build continues from: the revision written and
+ * how many proposable steps it holds. Two counts; absent when nothing was kept.
+ */
+export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null; incompleteDraft?: Readonly<{ revision: number; steps: number }> }>;
 
 /**
  * - `outcome`: `proposed` when Core left a pending proposal nothing is waiting
@@ -196,7 +203,13 @@ export type CreatedFlowBuild = Readonly<{
   providerInvocation: "attempted" | "not_attempted" | "unknown";
   accounting: CreatedFlowBuildAccounting | null;
   evidenceLoop: CreatedFlowBuildEvidenceLoop | null;
-  failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[] }> | null;
+  /**
+   * `providerThrow` is what an unnamed provider throw was, beside
+   * `flow_bootstrap.provider_transport_unknown`: the error's and its cause's
+   * class and code, never its message, which stays in the local
+   * `provider-failures.local.json`.
+   */
+  failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[]; providerThrow?: Readonly<{ errorClass?: string; errorCode?: string; causeClass?: string; causeCode?: string }> }> | null;
   recoveredAfterTimeout: boolean;
   durationMs: number;
   instructedConsequences: ReadonlyArray<Readonly<{ consequence: string; quote: string }>> | null;
@@ -422,8 +435,8 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     loopProviderCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null } : null,
-    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}) },
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null, ...(loop.incompleteDraft ? { incompleteDraft: Object.freeze({ revision: loop.incompleteDraft.revision, steps: loop.incompleteDraft.steps }) } : {}) } : null,
+    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}), ...providerThrowCodes(diagnostic.providerThrow) },
     recoveredAfterTimeout: false,
     durationMs,
     instructedConsequences: null,
@@ -434,6 +447,16 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     consequenceCrossCheck: null,
     permissionRequest: diagnostic.permissionRequest ? permissionRequestOf(diagnostic.permissionRequest) : null,
   });
+}
+
+/** The codes of Core's account of an unnamed throw, each held to a code's shape; its message is not published. */
+function providerThrowCodes(thrown: { errorClass?: string; errorCode?: string; causeClass?: string; causeCode?: string } | undefined): { providerThrow?: NonNullable<NonNullable<CreatedFlowBuild["failure"]>["providerThrow"]> } {
+  if (!thrown) return {};
+  const codes = Object.fromEntries((["errorClass", "errorCode", "causeClass", "causeCode"] as const).flatMap((field) => {
+    const value = thrown[field];
+    return typeof value === "string" && THROW_CODE.test(value) ? [[field, value]] : [];
+  }));
+  return Object.keys(codes).length === 0 ? {} : { providerThrow: Object.freeze(codes) };
 }
 
 function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {
