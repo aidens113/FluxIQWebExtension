@@ -133,7 +133,10 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       minItems: undefined,
       // A detection describes a list; which of its items a read wants is the
       // plan's to say, and `plan-resolution/extraction/conditions.ts` writes it there (C5).
-      where: undefined
+      where: undefined,
+      // Likewise which duplicates to drop and what order to return.
+      dedupe: undefined,
+      sort: undefined
     }),
     itemCount: proposal.itemCount
   });
