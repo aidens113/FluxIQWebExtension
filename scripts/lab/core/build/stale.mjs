@@ -11,9 +11,10 @@
  * @returns {{ stale: boolean, behindMs: number, message: string | null }}
  */
 export function coreBuildStaleness(sources, output) {
-  // No sources found, or nothing built yet: neither is staleness, and both are
-  // already reported by the callers that care. Saying "stale" here would send
-  // someone rebuilding a Core that was never the problem.
+  // No sources found, or nothing built yet: neither is staleness. Both are
+  // answered by `coreBuildMissing` (`unbuilt.mjs`), which the Lab asks before
+  // this and which refuses them as setup failures. Saying "stale" here would
+  // mislabel a Core that was never built as one that is merely old.
   if (!sources.newestPath || !output.newestPath) return { stale: false, behindMs: 0, message: null };
   const behindMs = sources.newestMs - output.newestMs;
   if (behindMs <= 0) return { stale: false, behindMs: 0, message: null };

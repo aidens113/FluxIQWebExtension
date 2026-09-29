@@ -16,7 +16,7 @@ import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { withBuildLock } from "./build-lock.mjs";
 import { coreOutputChange, coreRepositoryRoot, DEFAULT_QUIET_MS, DEFAULT_WAIT_TIMEOUT_MS, scanCoreOutput, waitForQuietCoreOutput } from "./core/index.mjs";
-import { coreBuildStaleness } from "./core/index.mjs";
+import { coreBuildMissing, coreBuildStaleness, scanCoreBuildEntries } from "./core/index.mjs";
 import { repositoryBuilds, staleRepositoryBuild } from "./domain-build-staleness.mjs";
 import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { scanCoreSources } from "./core/index.mjs";
@@ -75,6 +75,27 @@ Set FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 to run against it anyway.
   note({ lab: "core-build", state: guard.status, root: guard.scan.root, files: guard.scan.files, newest: iso(guard.scan.newestMs), waitedMs: guard.waitedMs });
   if (guard.status === "timed-out") {
     note({ lab: "core-build", state: "proceeding-anyway", why: `FluxIQ Core's build output was still changing after ${Math.round(timeoutMs / 1000)}s. Running regardless; if this run fails on a missing module under ${guard.scan.root}, that is why.` });
+  }
+
+  // Neither the quiescence guard above nor the staleness guard below can see a
+  // Core that was never built: an absent `dist` is not changing, and it is not
+  // older than its source. A fresh checkout used to pass all three guards and
+  // die inside the run on a missing module, recorded as a product failure.
+  //
+  // Asked after the quiescence wait, so a Core caught mid-rebuild -- a clean
+  // empties `dist` before the build refills it -- is waited out rather than
+  // refused. It has no override, unlike the others: a stale or behind Core
+  // still runs and measures something, while a Core missing its entry points
+  // can only fail on "Cannot find module". The refusal is a setup failure and
+  // is reported as one, before anything runs; `failure: "setup"` says so to a
+  // reader of these lines, and the campaign already reads a `why` followed by a
+  // non-zero exit as a task that never started rather than a product result.
+  const built = coreBuildMissing(await scanCoreBuildEntries(coreRoot));
+  if (!built.built) {
+    note({ lab: "core-build", state: built.state, failure: "setup", root: coreRoot, missing: built.missing, command: built.command, why: built.message });
+    process.stderr.write(`${built.message}
+`);
+    process.exit(1);
   }
 
   // The quiescence guard above asks whether Core is changing under this run. It

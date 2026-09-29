@@ -20,9 +20,9 @@ test("a source newer than the build is stale, and the message names both files",
 });
 
 test("nothing built and nothing found are both reported as not stale", () => {
-  // Saying "stale" for a Core that was never built, or never found, sends
-  // someone rebuilding what was not the problem; both are already reported by
-  // the callers that care about them.
+  // Saying "stale" for a Core that was never built, or never found, mislabels
+  // it; both are refused as setup failures by `coreBuildMissing`
+  // (`unbuilt.test.mjs`), which is a separate question from this one.
   assert.equal(coreBuildStaleness({ newestMs: 5, newestPath: "src/a.ts" }, { newestMs: 0, newestPath: null }).stale, false);
   assert.equal(coreBuildStaleness({ newestMs: 0, newestPath: null }, { newestMs: 5, newestPath: "dist/a.js" }).stale, false);
 });

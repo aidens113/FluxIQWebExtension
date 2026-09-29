@@ -65,6 +65,23 @@ jobs:
       - name: Install locked dependencies
         working-directory: "!FluxIQWebExtension"
         run: pnpm install --frozen-lockfile
+      # FluxIQ Core is checked out beside this repository and linked into it
+      # (`link:` to ../!FluxIQ/packages/* from domain, the extension,
+      # test-contracts and test-runner), but its `dist` is gitignored, so a
+      # fresh checkout has source and no build. Everything after this step --
+      # the selector's test-contracts build, `pnpm check`, the extension bundle,
+      # and every Lab run -- loads Core's COMPILED output, and without it dies on
+      # "Cannot find module", which reads as a product failure rather than a
+      # setup one. The Lab also refuses an unbuilt Core on its own
+      # (scripts/lab/core/build/unbuilt.mjs). Core's own commands, run in Core:
+      # install its locked dependencies, then its root `build` (contracts,
+      # fluxiq, client-gateway-websocket, then the web panel).
+      - name: Install FluxIQ Core dependencies
+        working-directory: "!FluxIQ"
+        run: pnpm install --frozen-lockfile
+      - name: Build FluxIQ Core
+        working-directory: "!FluxIQ"
+        run: pnpm build
       - name: Build and test selector
         working-directory: "!FluxIQWebExtension"
         run: pnpm --dir packages/test-matrix test
@@ -111,6 +128,13 @@ jobs:
       - name: Install locked dependencies
         working-directory: "!FluxIQWebExtension"
         run: pnpm install --frozen-lockfile
+      # Core's compiled output is loaded by this job; see the `select` job.
+      - name: Install FluxIQ Core dependencies
+        working-directory: "!FluxIQ"
+        run: pnpm install --frozen-lockfile
+      - name: Build FluxIQ Core
+        working-directory: "!FluxIQ"
+        run: pnpm build
       - name: Type and contract checks
         working-directory: "!FluxIQWebExtension"
         run: pnpm check
@@ -154,6 +178,13 @@ jobs:
       - name: Install locked dependencies
         working-directory: "!FluxIQWebExtension"
         run: pnpm install --frozen-lockfile
+      # Core's compiled output is loaded by this job; see the `select` job.
+      - name: Install FluxIQ Core dependencies
+        working-directory: "!FluxIQ"
+        run: pnpm install --frozen-lockfile
+      - name: Build FluxIQ Core
+        working-directory: "!FluxIQ"
+        run: pnpm build
       - name: Install bundled Chromium
         working-directory: "!FluxIQWebExtension"
         run: ${{ matrix.browser_install }}
@@ -198,6 +229,13 @@ jobs:
       - name: Install locked dependencies
         working-directory: "!FluxIQWebExtension"
         run: pnpm install --frozen-lockfile
+      # Core's compiled output is loaded by this job; see the `select` job.
+      - name: Install FluxIQ Core dependencies
+        working-directory: "!FluxIQ"
+        run: pnpm install --frozen-lockfile
+      - name: Build FluxIQ Core
+        working-directory: "!FluxIQ"
+        run: pnpm build
       - name: Require facility CLI integration
         working-directory: "!FluxIQWebExtension"
         shell: bash
@@ -242,6 +280,13 @@ jobs:
       - name: Install locked dependencies
         working-directory: "!FluxIQWebExtension"
         run: pnpm install --frozen-lockfile
+      # Core's compiled output is loaded by this job; see the `select` job.
+      - name: Install FluxIQ Core dependencies
+        working-directory: "!FluxIQ"
+        run: pnpm install --frozen-lockfile
+      - name: Build FluxIQ Core
+        working-directory: "!FluxIQ"
+        run: pnpm build
       - name: Require facility CLI integration
         working-directory: "!FluxIQWebExtension"
         shell: bash
@@ -249,8 +294,27 @@ jobs:
       - name: Install bundled Chromium
         working-directory: "!FluxIQWebExtension"
         run: pnpm --filter @fluxiq-web-extension/extension exec playwright install --with-deps chromium
+      # Runtime estimate (2026-09-28), kept at three repeats. `--all` is every
+      # scenario in apps/scenario-lab/src/registry.ts -- 41, not the 10 this job
+      # was sized for -- and the matrix runs them strictly one after another
+      # (packages/test-runner/src/cli.ts awaits each run), so this is 123 runs.
+      # The only COMPLETE deterministic runs on record are the 21 in test-runs/
+      # from 2026-09-13 (basic-form, iframe-checkout, ambiguous-targets,
+      # identity-drift; Windows, one developer machine): 44-108 s each, median
+      # 62 s, mean 68.8 s. 123 runs at those rates: 127 min (median), 141 min
+      # (mean), 221 min (slowest). Add about 2.5 min for the first run of a job,
+      # which primes caches (136-157 s observed, against 12-27 s warm), plus the
+      # setup steps above. Every figure is under GitHub's 360-minute job limit,
+      # so the repeat stays. Two caveats: the other 37 scenarios have no
+      # complete deterministic run on record (the deterministic manifests that
+      # exist for them all stopped at 0 steps), and none of these runs is on
+      # Linux.
+      # The first nightly's own run.json files replace this estimate. The step
+      # timeout below makes a stall end as a named timeout, leaving about an hour
+      # for setup and the evidence upload, which still runs (`if: always()`).
       - name: Run full deterministic corpus three times
         working-directory: "!FluxIQWebExtension"
+        timeout-minutes: 300
         run: xvfb-run --auto-servernum pnpm lab matrix --all --repeat 3 --evidence failure
       - name: Upload certification evidence
         if: always()
