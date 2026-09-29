@@ -69,3 +69,55 @@ precisely.
 3. **Cause 6** is the only new cause that let a wrong Flow through as
    complete.
 4. **Cause 7** needs a closed code per guard before it can be fixed at all.
+
+## Round 2
+
+Worktree fast-forwarded to bf5227dc (cart fix 1fb57cbc, `repeatedAnswer`,
+panel d447ca70), shared Core moved to 8b56084 (the stall guard) and rebuilt.
+Same invocation and limits as round 1. Core `dev` is at d67bdfa (panel API
+routing and a stop handler, not the build loop), so both runs used
+`FLUXIQ_LAB_ALLOW_BEHIND_CORE=1` to stay on 8b56084. Two runs, one at a time.
+
+**Neither passed. One Flow was written, and it ran and returned the wrong
+answer. The other build again wrote nothing.** The cart fix worked. The stall
+guard did not change the outcome.
+
+| Run | Task | Flow written? | Ran? | Right? | Repair | Targeted fix worked? | Next wall | Full debug |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| run-mum06sfc-f1d9403f | everything-store-kettle-to-cart | **Yes**, 9 nodes, `complete` accepted on decision 26 ($0.049) | **Yes**, all nodes succeeded, 2 rows | **No, 0 of 2.** It never added the kettles or saved the phone case, read the starting cart, and bound `quantity` to the line checkbox (`"on"`) and `price` to the quantity (`"1"`) | Verifier refuted correctly, with the right advice. Re-author failed before its first call: `flow_bootstrap.unexpected_error` at `provider_request`, 0 calls | **Yes.** The two-line cart was detected and read (2 of 2 lines). In round 1 every element was refused | Completion accepts a Flow that performs none of the instruction's actions: `!FluxIQ/.../flow-bootstrap/answerability/check.ts:72` | `lane-run-mum06sfc-f1d9403f.md` |
+| run-mum0ke7z-940cbd27 | bigbox-retail-pickup-cart | **No**, `evidence_iteration_limit` after 34 decisions, 507k tokens, $0.056 | No | Not judged | None; nothing was written | **Not enough.** About 17 of 34 decisions still changed nothing. The model tried to finish 4 times against 1 in round 1, which fits the redirect, but the redirect is not recorded, and the build still ran out | The completion profile limit, unnamed, refuses a Flow this task needs: `!FluxIQ/.../llm/harness-options/bootstrap-completion.ts:190-191` against `flow-bootstrap/plan/limits.ts:29` (`maxNodesPerSubflow: 16`; the recorded script needs 20 action nodes) | `lane-run-mum0ke7z-940cbd27.md` |
+
+Setup failures, not results: before the round the shared Core build was 51
+minutes stale and the worktree domain build 12 minutes stale, and I rebuilt
+both (exit 0). Run 1's first attempt (`run-mulzn65t-19be3555`) was killed by a
+whole-machine crash after one event, and its staging directory was removed.
+After each crash I scanned my reports, run directories and recent build outputs
+for NUL bytes and empty files (10,213 files, then 41); none were found.
+
+### Causes after round 2, ranked by runs blocked across both rounds (6 runs)
+
+| Rank | Cause | Runs | Status after round 2 | Where |
+| --- | --- | --- | --- | --- |
+| 1 | Stalled loops (repeats, amendments that change nothing, unusable replies) | 6 of 6, contributing | **Reduced, not solved.** 8b56084 is in, and the model now tries to finish more often. Still about half of bigbox's decisions made no progress | `!FluxIQ/.../runtime/llm/evidence-loop/no-progress.ts`; thresholds `loop-limits/evidence-loop.ts:85,109` |
+| 2 | Completion checks only that records are produced, not the instruction's lasting actions | 2 (round 1 classifieds; **round 2 everything-store**) | **Open, and now the main cause of a wrong Flow.** The cross-check computed `undeclared` both times and fed nothing back | `flow-bootstrap/answerability/check.ts:72`; `flow-bootstrap/adaptation.ts:127-133` |
+| 3 | The completion profile limit is unnamed, and 16 nodes per subflow is below a real cart task | 2 (round 1 crossborder; **round 2 bigbox**, twice in one build) | **Open, promoted.** It ended both builds that got as far as a full draft | `llm/harness-options/bootstrap-completion.ts:190-191`; `flow-bootstrap/plan/evidence-schema.ts:92-104`; `flow-bootstrap/plan/limits.ts:22-32` |
+| 4 | A build that runs out writes nothing | 3 (round 1 bigbox and crossborder; round 2 bigbox) | **Open** | `runtime/llm/evidence-loop.ts:360-375,703` (8b56084) |
+| 5 | Shadow-DOM effects invisible, in the snapshot and **now also in a click's post-condition** | 4 (round 1 job board, classifieds, crossborder; round 2 bigbox) | Snapshot side being fixed. **New:** `in-place-effect.ts` cannot see a shadow-DOM panel opening, so a working "Change store" click is refused `output_not_observed` | `apps/extension/src/content/action-runtime/in-place-effect.ts:38-39,177-180`; `actions/click.ts:117-136` |
+| 6 | The re-author dies with an anonymous `unexpected_error` before its first call | 2 (round 1 classifieds; **round 2 everything-store**) | **Open, reproduced.** Named-phase guards and cost or token limits are ruled out. The grant availability, lease and scope throws in `llm/execution/grants.ts:608-624,641-644,679-695` remain | `flow-bootstrap/generation-failure/phase-failure.ts:87` |
+| 7 | Extraction columns bound to the wrong controls, and the instruction's column name not kept | 1 (round 2 everything-store) | **New** | selectors withheld; fixture `everything-store/pages/cart/main.ts:30,36` |
+| 8 | The draft loses its step to the start location | 2 (round 1 bigbox; round 2 bigbox) | Open | `flow-bootstrap/reachability/check.ts` |
+| - | Two-line cart not a list | 0 in round 2 | **Fixed** (1fb57cbc), confirmed live | - |
+
+### What to do next
+
+1. **Rank 3, then rank 4.** Name the failing limit and size the evidence
+   profile for real tasks, or split long drafts into subflows. Then write the
+   proposable steps when the budget ends. Together they are what stands
+   between bigbox (and crossborder) and a Flow the repair loop can improve.
+2. **Rank 2.** Feed the instruction's unperformed lasting actions back at
+   `complete`. Everything-store now gets as far as a Flow, and this check is
+   what let a Flow that does half the job through.
+3. **Rank 6.** A closed code per guard on the re-author path. It is the only
+   thing stopping the repair from acting on the verifier's correct advice.
+4. **Rank 5, the click half.** Let the in-place watch observe open shadow
+   roots.
