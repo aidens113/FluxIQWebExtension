@@ -211,7 +211,7 @@ new findings. It is fine to leave unknown fields blank.
 
 ### PANEL-007 — The extension UI is a mess and has no simple view
 
-- Status: Assigned
+- Status: Ready for retest
 - Reported: 2026-09-28, America/Los_Angeles
 - Starting state: extension installed, side panel (Chrome/Edge) or popup (Firefox)
 - Expected: a simple default view that shows whether FluxIQ is connected and
@@ -232,7 +232,17 @@ new findings. It is fine to leave unknown fields blank.
   shared protocol, the Core route allowlist, and registering Core's missing
   cancel handler, which returned 404 to Core's own UI as well). Wave 2 is B
   (the simple view) and C (the Advanced view and the Lab journeys).
-- Worker reports: `ext-ws-a.md`, `ext-ws-d.md` (wave 1)
+- Worker reports: `ext-ws-a.md`, `ext-ws-d.md` (wave 1); `ext-ws-b.md`,
+  `ext-ws-c.md` (wave 2)
+- Supervisor verification: all four workstreams integrated on `dev` (d447ca70
+  shell, 65168e1a relays with Core d67bdfa, 1fc6143f Advanced, 93140081 simple
+  view and the entry switch). Extension check exit 0; unit tests 990 passed, 0
+  failed; build exit 0; browser e2e 13 passed, including the panel spec that
+  switches views and checks the new labels. Not yet exercised: a real pairing,
+  a live conversation turn and a real Stop against a running Core, and the
+  Firefox popup at 600px height. Those need a live session.
+- Retest requested: yes -- the side panel in Chrome or Edge, and the Firefox
+  popup
 
 ## Status Meanings
 
