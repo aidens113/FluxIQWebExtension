@@ -40,8 +40,18 @@
  * keep it if a configured secret survives.
  */
 
-/** The longest body this keeps. Core refusal bodies are a few hundred bytes; a provider's are smaller. */
-export const PROVIDER_FAILURE_BODY_MAX_CHARS = 8_000;
+/**
+ * The longest body this keeps.
+ *
+ * A first-call refusal is a few hundred bytes, but a build that failed part way
+ * carries its whole decision trace in `diagnostic.evidenceLoop.steps` -- one
+ * row per decision, with its amendments' refusals -- and 8,000 characters cut
+ * that trace off mid-row, which is how a run's refusal reasons went missing
+ * from the one file allowed to hold them. Core bounds that trace (at most two
+ * rows a decision, every row codes and counts), so 64 KiB holds any build's
+ * with room to spare while still refusing to keep a runaway proxy page.
+ */
+export const PROVIDER_FAILURE_BODY_MAX_CHARS = 65_536;
 
 /** What the run authorized the call to be, so "the request was too large" reads against a limit rather than a guess. */
 export type ProviderFailureRequestBounds = Readonly<{
@@ -75,6 +85,25 @@ export type ProviderFailureProviderDetail = Readonly<{
   toolIds: readonly string[] | null;
   /** DeepSeek's own body. Always `null` until Core reads it; see this file's header. */
   body: string | null;
+  /**
+   * What the call threw, where Core could not name it
+   * (`diagnostic.providerThrow`, beside `flow_bootstrap.provider_transport_unknown`):
+   * the error's and its cause's class and code, and the message Core screened.
+   * `run-mun5e1ie-5aeefbbd` stopped on that code with nothing under it, so a
+   * reset socket and an adapter bug read alike. `null` when Core sent none.
+   */
+  thrown: ProviderFailureThrow | null;
+}>;
+
+/** Core's account of an unnamed throw, each string redacted again on the way in. */
+export type ProviderFailureThrow = Readonly<{
+  errorClass: string | null;
+  errorCode: string | null;
+  causeClass: string | null;
+  causeCode: string | null;
+  message: string | null;
+  /** What Core withheld from its own account, as its codes. */
+  withheld: readonly string[] | null;
 }>;
 
 export type ProviderFailureRecord = Readonly<{
@@ -149,6 +178,7 @@ function providerDetail(body: string, redact: (value: string) => string): Provid
   const diagnostic = asRecord(asRecord(asRecord(parsed(body))?.payload)?.diagnostic);
   const accounting = asRecord(diagnostic?.accounting);
   const loop = asRecord(diagnostic?.evidenceLoop);
+  const thrown = asRecord(diagnostic?.providerThrow);
   return Object.freeze({
     code: safe(diagnostic?.code),
     stage: safe(diagnostic?.stage),
@@ -161,7 +191,25 @@ function providerDetail(body: string, redact: (value: string) => string): Provid
     toolCallCount: asCount(loop?.toolCallCount),
     toolIds: asToolIds(loop?.steps, redact),
     body: safe(accounting?.providerBody),
+    thrown: thrown ? Object.freeze({
+      errorClass: safe(thrown.errorClass),
+      errorCode: safe(thrown.errorCode),
+      causeClass: safe(thrown.causeClass),
+      causeCode: safe(thrown.causeCode),
+      message: safe(thrown.message),
+      withheld: asCodes(thrown.withheld, redact),
+    }) : null,
   });
+}
+
+/** A list of Core's withholding codes, each redacted; `null` when there is none. */
+function asCodes(value: unknown, redact: (value: string) => string): readonly string[] | null {
+  if (!Array.isArray(value)) return null;
+  const codes = value.flatMap((entry) => {
+    const code = typeof entry === "string" ? entry : asRecord(entry)?.code;
+    return typeof code === "string" && code.length > 0 ? [redact(code)] : [];
+  });
+  return codes.length === 0 ? null : Object.freeze(codes);
 }
 
 /**
