@@ -119,23 +119,24 @@ now retains its actionable issue instead of flattening to iteration-limit. The p
 grant-continuation chain is locally validated but remains live-unproven; no current run proves repair
 persistence, provider-free replay, recursive post-replay judgement, or terminal grant revocation.
 
-**The next action** remains provider-free. Core reproduces the 26-decision failure and an 11-decision
-fixture completion, while `step_rows_v1` retains all 7-22 bounded inputs through decision 26; this is
-not provider convergence. Final candidate/privacy/report gates are green, and t170 is merged locally
-into clean Core and downstream `dev` trees. Both real finish gates ran full `pnpm check`; downstream
-task fixtures passed 120/120 under a process-local `GIT_EXEC_PATH` correction for the machine's
-zero-byte internal Git executable. Remote refresh found zero inbound divergence, but the Core-first
-push stopped on expired GitHub authentication, so downstream was not pushed. After re-authentication,
-push Core then downstream. Then freeze integrated identities, dry-run, no-hindsight Stage 1 and its
-13-record oracle, the evidence/debug contract, and the one-Lab machine predicate. Panel management
-requires current-session user authorization before one fresh command-specific authorization. No
-unchanged run 5 or provider call is authorized now.
+**The next action (2026-09-29).** t173 is merged and pushed in both repositories (Core `259a11b`,
+downstream `c6c9f395`), with Core `pnpm check` and `pnpm test` (the two failures were a load timeout
+and a Windows `EPERM` on `rmdir`, both 8/8 on rerun), Core web 1517/1517, and downstream `pnpm check`,
+domain 882/882, extension 1027/1027, scenario-lab 571/571 and test-runner 1490/1491 green. It closes
+round 2's ranks 2 to 8 in code: completion refuses a Flow missing the instruction's lasting acts and
+names the failing size limit; an exhausted build keeps an incomplete draft that a later build resumes;
+the wrap-up refuses tools it did not offer; the draft keeps its start step and a rerun keeps what it
+replaces until it works; the re-author gets the verifier's directive with closed failure codes; extract
+lists dedupe and sort; the click post-condition sees open shadow roots; a checkbox is no longer offered as
+a value column; and the Lab drives the renamed panel with a build token budget that is not a decision cap.
+None of it is live-proven. Next: the live lane, one run at a time, starting with
+`everything-store-kettle-to-cart`, then bigbox, crossborder, job-board and classifieds.
 
-**Blockers:** Flow creation remains unreliable and run 4's later stages remain unmeasured. The
-draft-loss correction is locally integrated but not live-proven; remote delivery waits on GitHub
-re-authentication, and a fresh command-specific authorization plus current-session panel permission
-still precede any provider call. The bounded artifacts publish no terminal grant lifecycle property;
-the repaired task-fixture launch path is operational evidence, not product evidence.
+**Blockers:** the F: drive was moved from another machine, so files hardened there (`.env.local`, the
+Lab's private caches) are locked to that machine's account; the provider key cannot be read until the
+permission reset finishes or `DEEPSEEK_API_KEY` is set in the user environment. The consecutive-pass
+streak remains 0.
+
 ---
 
 ## What This Batch Established
