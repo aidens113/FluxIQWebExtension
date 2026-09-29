@@ -417,13 +417,13 @@ test("a dedupe that is not one, or a sort key naming no column, is refused where
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
   // Dropped, it would dedupe or sort nothing while the model believed it had
-  // asked; refused, the model is told where. Neither key is one the position
-  // quoter spells (`../issue-position.ts`), so it is given by position.
+  // asked; refused, the model is told where, by the key's own name
+  // (`../issue-position.ts`).
   const refusals: Array<[JsonObject, string]> = [
-    [{ handle: extraction, fields: RENAMED, dedupe: 7 }, "extractList.2"],
-    [{ handle: extraction, fields: RENAMED, sort: "newest" }, "extractList.2"],
-    [{ handle: extraction, fields: RENAMED, sort: ["price desc", { field: "price", order: "sideways" }] }, "extractList.2.1"],
-    [{ handle: extraction, fields: RENAMED, sort: ["price desc, newest"] }, "extractList.2"]
+    [{ handle: extraction, fields: RENAMED, dedupe: 7 }, "extractList.dedupe"],
+    [{ handle: extraction, fields: RENAMED, sort: "newest" }, "extractList.sort"],
+    [{ handle: extraction, fields: RENAMED, sort: ["price desc", { field: "price", order: "sideways" }] }, "extractList.sort.1"],
+    [{ handle: extraction, fields: RENAMED, sort: ["price desc, newest"] }, "extractList.sort"]
   ];
   for (const [extractList, position] of refusals) {
     assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
