@@ -54,7 +54,12 @@ const EXPECTED_PAGINATION: Record<CapturedDetectionName, WebLlmStructurePaginati
   "infinite-feed-load-more": "load_more_button"
 };
 
-type FakePage = { url: string; title?: string; elements?: JsonObject[]; structure?: unknown; evidence?: JsonObject; elementTotal?: number };
+/**
+ * `structure` is the page's answer to a detection; `aroundTarget`, when set, is
+ * its answer to a detection that names a selector, so a page can refuse around
+ * a target and still hold a list elsewhere.
+ */
+type FakePage = { url: string; title?: string; elements?: JsonObject[]; structure?: unknown; aroundTarget?: unknown; evidence?: JsonObject; elementTotal?: number };
 
 function fakeGateway(page: () => FakePage, declares = true): { gateway: WebLlmEvidenceGateway; commands: Array<{ actionType: string; parameters: JsonObject }> } {
   const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
@@ -66,8 +71,11 @@ function fakeGateway(page: () => FakePage, declares = true): { gateway: WebLlmEv
     // Written by name rather than spread, as every producer of this contract is.
     if (current.evidence !== undefined) snapshot.evidence = current.evidence;
     if (current.elementTotal !== undefined) snapshot.elementTotal = current.elementTotal;
-    if (command.parameters.detectStructure === undefined || current.structure === undefined) return { status: "succeeded", payload: { snapshot } };
-    return { status: "succeeded", payload: { snapshot, structure: current.structure as JsonValue } };
+    const request = command.parameters.detectStructure;
+    const named = request !== undefined && request !== null && typeof request === "object" && !Array.isArray(request) && "selector" in request;
+    const structure = named && current.aroundTarget !== undefined ? current.aroundTarget : current.structure;
+    if (request === undefined || structure === undefined) return { status: "succeeded", payload: { snapshot } };
+    return { status: "succeeded", payload: { snapshot, structure: structure as JsonValue } };
   };
   const gateway: WebLlmEvidenceGateway = declares
     ? { eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"], executeAction }
@@ -123,8 +131,12 @@ function rejection(code: string, detail?: JsonObject) {
     : { schemaVersion: "web-llm-tool-result.v1", ok: false, code, detail };
   const resultCode = `web.action.rejected.${code}`;
   const reason = detail?.reason;
+  // A repeated refusal also says how many times in a row, as a count Core's
+  // stall guard reads (`../repeated-refusal.ts`), beside the reason.
+  const repeated = detail?.repeatedAnswer;
+  const counted = typeof repeated === "number" ? { repeatedAnswer: repeated } : {};
   return typeof reason === "string"
-    ? { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode, resultReason: reason }
+    ? { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode, resultReason: reason, ...counted }
     : { kind: "llm_evidence_tool_execution", evidence, effectApplied: false, resultCode };
 }
 
@@ -302,11 +314,11 @@ test("each way a page can have no readable list is its own refusal, with the cou
     // The page repeats -- its controls sit in two records -- and the detection
     // would read none of it. Naming one of those rows is the move.
     ["records", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), inRecord("Open", "First listing"), inRecord("Open", "Second listing")] }),
-      { reason: "repeating_groups_not_readable", groupsSeen: 2, rowsSeen: 0, controlsSeen: 4 }],
+      { reason: "repeating_groups_not_readable", instead: ["target.3", "target.4"], groupsSeen: 2, rowsSeen: 0, controlsSeen: 4 }],
     // The same answer from the other repetition signal: one control the page
     // says it drew twelve times.
     ["repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Open", { repeatCount: 12 })] }),
-      { reason: "repeating_groups_not_readable", groupsSeen: 0, rowsSeen: 12, controlsSeen: 4 }],
+      { reason: "repeating_groups_not_readable", instead: ["target.4"], groupsSeen: 0, rowsSeen: 12, controlsSeen: 4 }],
     // A working page with nothing on it that repeats: this is not where the list is.
     ["nothing repeats", refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), control("Help")], elementTotal: 9 }),
       { reason: "nothing_repeats_on_page", groupsSeen: 0, rowsSeen: 0, controlsSeen: 9 }],
@@ -318,7 +330,7 @@ test("each way a page can have no readable list is its own refusal, with the cou
       url: LISTING,
       elements: [control("Search"), control("Filter"), control("Sort"), inRecord("Open", "First listing")],
       evidence: { dialogs: { open: [{ selector: "#consent", role: "dialog", modal: true, native: false, label: "Before you continue" }] } }
-    }), { reason: "page_is_not_the_content", groupsSeen: 1, rowsSeen: 0, controlsSeen: 4 }],
+    }), { reason: "page_is_not_the_content", instead: ["target.4"], groupsSeen: 1, rowsSeen: 0, controlsSeen: 4 }],
     // Something is painted over the controls, which is the same answer for the
     // same reason: what was captured is not the content.
     ["overlay", refusing("no_repeating_run", {
@@ -342,17 +354,23 @@ test("each way a page can have no readable list is its own refusal, with the cou
 test("a page refusal about the target says which way the handle stopped naming one list, and a sensitive run stays a bare code", async () => {
   const card = (name: string): JsonObject => ({ tagName: "a", selector: '[data-testid="card-link"]', accessibleName: name, attributes: { href: "/listings/1", "data-testid": "card-link" } });
   let page: FakePage = refusing("no_repeating_run", { url: LISTING, elements: [control("Search"), control("Filter"), control("Sort"), card("A listing")] });
-  const { gateway } = fakeGateway(() => page);
+  const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.refusals", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const target = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements.find((element) => element.tag === "a")!.target;
 
   // The page looked where the call pointed and found no repeating children
-  // there. That says nothing about the rest of the page, and the model is told
-  // so rather than being told the page has no list.
+  // there, so it was asked again as a whole, and found none there either. The
+  // refusal is then about the page, not the target, and says so.
+  commands.length = 0;
   assert.deepEqual(await detect(runtime, { target }), rejection("no_repeating_structure", {
-    reason: "nothing_repeats_around_target", target, groupsSeen: 0, rowsSeen: 0, controlsSeen: 4
-  }), "no repeating run around the target");
+    reason: "nothing_repeats_on_page", target, groupsSeen: 0, rowsSeen: 0, controlsSeen: 4
+  }), "no repeating run around the target, nor anywhere on the page");
+  assert.deepEqual(commands.map((command) => command.parameters), [
+    {},
+    { detectStructure: { selector: '[data-testid="card-link"]' } },
+    { detectStructure: {} }
+  ], "the page was searched as a whole before anything was refused");
 
   // The selector the handle stands for names nothing in the frame the capture
   // ran in, and the selector it names elements of several runs, are the two
@@ -373,6 +391,39 @@ test("a page refusal about the target says which way the handle stopped naming o
   // detection refused identically four times in a row is what ended
   // `run-mulryg6h-ff241a12` (`../../repeated-refusal.ts`).
   assert.deepEqual(await detect(runtime), rejection("sensitive_value", { reason: "answered_the_same_again", repeatedAnswer: 2 }));
+});
+
+/**
+ * The defect this pins is `run-mulum3x7-18ceeb75`: on the everything store's
+ * cart the model aimed the detection at the heading, the subtotal, the rows and
+ * the buttons in turn, was refused `nothing_repeats_around_target` a dozen
+ * times, and the build ended with no Flow. A target is where the page starts
+ * looking, not a condition of finding anything
+ * (`docs/working/language-driven-flow-loop-plan/reports/cart-extraction.md`).
+ */
+test("a target with no list around it gets the page's list, which names no target, rather than a refusal", async () => {
+  const heading: JsonObject = { tagName: "h1", selector: "main h1", accessibleName: "Shopping Cart" };
+  const page: FakePage = withElements(captured("product-catalog-largest"), [heading]);
+  page.aroundTarget = { ok: false, refused: "no_repeating_run" };
+  const { gateway, commands } = fakeGateway(() => page);
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.outward", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const target = (inspected.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
+
+  commands.length = 0;
+  const found = await detect(runtime, { target });
+  assert.equal(found.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+  const packet = found.evidence as WebLlmRepeatingStructure;
+  assert.equal(packet.target, undefined, "the list was found on the page, not around the target, and the packet does not claim otherwise");
+  assert.equal(packet.itemCount, proposalOf(page.structure as WebAutomationStructureDetection).proposal.itemCount);
+  assert.deepEqual(commands.map((command) => command.parameters), [
+    {},
+    { detectStructure: { selector: "main h1" } },
+    { detectStructure: {} }
+  ]);
+  assertNothingAddressable(packet, page.structure as WebAutomationStructureDetection);
+  const binding = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
+  assert.equal(binding.ok && binding.binding.extractList.item, proposalOf(page.structure as WebAutomationStructureDetection).proposal.item);
 });
 
 test("a malformed call reaches no page and is told which way it was malformed", async () => {

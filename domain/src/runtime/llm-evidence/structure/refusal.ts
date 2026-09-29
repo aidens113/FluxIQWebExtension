@@ -43,6 +43,20 @@
 // extension before a live run could see any of it. Everything below is decided
 // from what this domain already holds: whether the call named a target, and the
 // capture that came back with the detection.
+//
+// **A refusal says where lists are.** A count tells the model the page repeats;
+// it does not tell it where. So a `no_repeating_structure` refusal also names,
+// in `instead`, up to `MAX_LIST_HINTS` target handles from the packet the model
+// was already shown, each one an element sitting in a different repeating
+// record or drawn several times over -- the elements a next detection can be
+// aimed at. A handle is the model's own vocabulary, never a word or a selector
+// of the page, so this adds an address to the refusal and no content.
+//
+// **`nothing_repeats_around_target` is now the rare answer.** A targeted call
+// the page answers with no run around the target is asked again page-wide
+// (`./detect.ts`) before anything is refused, and a refusal after that search
+// is about the page, not about the target, so it takes the page-wide reasons.
+// The target word remains for a caller that could not search the page.
 
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { recoverable, rejectionDetail, type WebLlmToolRejectionReason } from "../tool-rejection";
@@ -58,6 +72,9 @@ const INTERSTITIAL_CONTROLS = 3;
 
 /** Two of anything is a run; one is not (`elements.ts` says the same of `repeats`). */
 const A_RUN = 2;
+
+/** At most this many handles a refusal names as places where the page repeats. */
+const MAX_LIST_HINTS = 3;
 
 /** What the capture says about repetition, in numbers a refusal may carry. */
 type PageCounts = {
@@ -84,6 +101,8 @@ export function webLlmStructureRefusal(input: {
   target: string | undefined;
   /** The capture the detection came back with, which is also the page the model was shown. */
   page: WebLlmSnapshotBinding;
+  /** Whether the page was searched as a whole after the target found nothing (`./detect.ts`). */
+  searchedPage?: boolean;
 }): never {
   const { refused, target, page } = input;
   if (refused === "sensitive_region") recoverable("sensitive_value");
@@ -94,10 +113,11 @@ export function webLlmStructureRefusal(input: {
     recoverable("target_unobserved", rejectionDetail({ reason: "handle_names_several_now", target, instead: undefined, missing: undefined, requestId: undefined }));
   }
   const counts = pageCounts(page);
+  const hints = listHints(page);
   recoverable("no_repeating_structure", rejectionDetail({
-    reason: whyNothingRepeats(page.evidence, counts, target),
+    reason: whyNothingRepeats(page.evidence, counts, input.searchedPage === true ? undefined : target),
     target,
-    instead: undefined,
+    instead: hints.length === 0 ? undefined : hints,
     missing: undefined,
     requestId: undefined,
     groupsSeen: counts.groups,
@@ -140,6 +160,27 @@ function pageIsNotTheContent(evidence: WebLlmPageEvidence, counts: PageCounts): 
   if (evidence.dialogs?.some((dialog) => dialog.modal === true) === true) return true;
   if (evidence.blockedBy !== undefined) return true;
   return counts.controls <= INTERSTITIAL_CONTROLS;
+}
+
+/**
+ * Where the page repeats, as handles the model was shown: the first element of
+ * each distinct record, then any element the page drew several times, in packet
+ * order, at most `MAX_LIST_HINTS`. Empty on a page nothing repeats on.
+ */
+function listHints(page: WebLlmSnapshotBinding): string[] {
+  const hints: string[] = [];
+  const recordsSeen = new Set<string>();
+  for (const element of page.evidence.elements) {
+    if (hints.length >= MAX_LIST_HINTS) break;
+    const record = page.records.get(element.target);
+    if (record !== undefined && !recordsSeen.has(record)) {
+      recordsSeen.add(record);
+      hints.push(element.target);
+    } else if (record === undefined && (element.repeats ?? 0) >= A_RUN) {
+      hints.push(element.target);
+    }
+  }
+  return hints;
 }
 
 /**

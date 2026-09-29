@@ -209,6 +209,31 @@ new findings. It is fine to leave unknown fields blank.
   labels, and whether the chat window is reachable without hunting. Simple
   mode is explicitly out of scope until the control panel itself is good.
 
+### PANEL-007 — The extension UI is a mess and has no simple view
+
+- Status: Assigned
+- Reported: 2026-09-28, America/Los_Angeles
+- Starting state: extension installed, side panel (Chrome/Edge) or popup (Firefox)
+- Expected: a simple default view that shows whether FluxIQ is connected and
+  what it is doing, and lets a person ask it to do something or stop it; the
+  rest behind an Advanced view
+- Actual: one undifferentiated surface built from a 519-line imperative
+  controller and a single stylesheet, duplicated as two pages. The extension
+  cannot run an automation, ask FluxIQ anything, or stop a run, because Core's
+  conversation and cancel endpoints accept only the panel's login cookie and
+  not the pairing token. Command errors are wiped the moment they appear,
+  stale pairing errors persist, the lock dialog shows the wrong title for two
+  of its three refusals, nothing reconnects after a browser restart, and there
+  is no toolbar indicator while recording.
+- Severity: major
+- Audit: `manual-panel-test-findings/reports/ext-ui-audit.md`
+- Plan: four workstreams over disjoint files, in two waves. Wave 1 is A (shared
+  `panel/` shell, state, copy, build, extraction moved) and D (background,
+  shared protocol, the Core route allowlist, and registering Core's missing
+  cancel handler, which returned 404 to Core's own UI as well). Wave 2 is B
+  (the simple view) and C (the Advanced view and the Lab journeys).
+- Worker reports: `ext-ws-a.md`, `ext-ws-d.md` (wave 1)
+
 ## Status Meanings
 
 - **Submitted:** captured but not yet reproduced or classified.

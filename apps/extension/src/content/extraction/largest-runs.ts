@@ -13,17 +13,29 @@
 // menu, a listbox, a tab list, a `<select>` or an `<svg>`, and runs whose first
 // item is not rendered. A site's menu is a list of links, and "the largest
 // list on the page" should not be its mega-menu.
+//
+// A pair of siblings is offered too when it could be two records
+// (`record-pair.ts`); the inference decides whether it is. Pairs sort after
+// every larger run, so they cost nothing on a page whose list is bigger.
+//
+// The scan can be rooted at any element, which is how a detection aimed at an
+// element with no list around it searches outward: the regions enclosing the
+// target, nearest first (`detect-structure.ts`).
 
 import { isRecordItemTag, itemTemplateSignature } from "./infer-list";
+import { isRecordPair } from "./record-pair";
 
 /** What the page's own repeating evidence calls a template rather than a coincidence. */
 const MIN_ITEMS_PER_RUN = 3;
+
+/** The fewest children a container needs to hold a run at all: a pair (`record-pair.ts`). */
+const MIN_CHILDREN = 2;
 
 /** Elements scanned for containers, so a huge page costs a bounded walk. Containers met early are kept either way. */
 const MAX_SCANNED_ELEMENTS = 10_000;
 
 /** How many runs are offered, largest first. Each costs an inference. */
-const MAX_OFFERED_RUNS = 12;
+const MAX_OFFERED_RUNS = 24;
 
 /** Tags whose children are never records. */
 const NON_DATA_CONTAINER_TAGS = new Set(["HEAD", "SCRIPT", "STYLE", "TEMPLATE", "SELECT", "DATALIST", "OPTGROUP", "NOSCRIPT"]);
@@ -44,21 +56,22 @@ const NON_DATA_REGIONS = [
   '[role~="tree"]'
 ].join(",");
 
-/** The first item of each run on the page, largest run first, document order breaking ties. */
-export function largestRunsFirst(): Element[] {
+/** The first item of each run under `root` (the page's body by default), largest run first, document order breaking ties. */
+export function largestRunsFirst(root: Element | null = document.body): Element[] {
   const runs: Array<{ first: Element; size: number }> = [];
   const seen = new Set<Element>();
   let scanned = 0;
-  for (const element of document.body?.querySelectorAll("*") ?? []) {
+  for (const element of root?.querySelectorAll("*") ?? []) {
     scanned += 1;
     if (scanned > MAX_SCANNED_ELEMENTS) break;
     const container = element.parentElement;
     if (!container || seen.has(container)) continue;
     seen.add(container);
-    if (container.childElementCount < MIN_ITEMS_PER_RUN || !holdsData(container)) continue;
+    if (container.childElementCount < MIN_CHILDREN || !holdsData(container)) continue;
     for (const items of templateGroups(container)) {
       const first = items[0];
-      if (first && items.length >= MIN_ITEMS_PER_RUN && first.getClientRects().length > 0) runs.push({ first, size: items.length });
+      const run = items.length >= MIN_ITEMS_PER_RUN || isRecordPair(items);
+      if (first && run && first.getClientRects().length > 0) runs.push({ first, size: items.length });
     }
   }
   // `sort` is stable, so equal runs stay in document order.

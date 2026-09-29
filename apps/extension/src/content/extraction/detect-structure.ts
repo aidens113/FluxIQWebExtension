@@ -35,6 +35,24 @@
 // repeat cache each time, then completed with a Flow that had no extract node
 // at all (`run-mudrimhl-47dee201`). A refusal a caller cannot usefully retry
 // has to be right the first time.
+//
+// **A target is where to start looking, not the only place to look.** Until
+// 2026-09-28 a detection aimed at an element with no run around it refused
+// `no_repeating_run`, so a model had to aim at exactly an element inside a row
+// to find anything. On the everything store's cart the model aimed at the
+// heading, the subtotal, the rows and the buttons for a dozen decisions and was
+// refused every time (`run-mulum3x7-18ceeb75`,
+// `docs/working/language-driven-flow-loop-plan/reports/cart-extraction.md`). Now
+// a target with no list around it searches outward -- the regions enclosing it,
+// nearest first -- and answers with the nearest readable list, which for "what
+// is in my cart" aimed at the cart's heading is the cart's lines.
+//
+// **A record's own controls are not the list.** A run whose items hold at most
+// one value of their own (`content-fields.ts`) -- a line's Delete, Save for
+// later, Compare and Share links; a card's rating stars -- is "thin". Aimed at
+// one, the outward search is tried first and a rich list enclosing it wins; the
+// page-wide search ranks every rich run above every thin one. A thin run is
+// still answered when it is all there is.
 
 import type {
   WebAutomationExtractionProposal,
@@ -42,12 +60,14 @@ import type {
   WebAutomationStructureDetectionRequest
 } from "@fluxiq-web-extension/domain/client";
 import { isWithinSensitiveControl } from "../sensitive-text";
+import { contentFieldCount } from "./content-fields";
 import { isDeclaredFeed } from "./feed-signal";
 import { inferListFromElement } from "./infer-list";
 import { largestRunsFirst } from "./largest-runs";
 import { waitUntil } from "./list-wait";
 
 type Refusal = Extract<WebAutomationStructureDetection, { ok: false }>;
+type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
 
 /**
  * How long a detection waits for a page to draw a list before answering that
@@ -107,6 +127,9 @@ function settled(answer: WebAutomationStructureDetection): boolean {
  * run: the answer is the same whichever match was meant. Matches spread over
  * different runs, or over a run and something outside it, are
  * `ambiguous_target`.
+ *
+ * With no rich run around the target, the search goes outward (see the
+ * header); only a page with no readable list anywhere is `no_repeating_run`.
  */
 function detectAround(selector: string): WebAutomationStructureDetection {
   const elements = queryAll(selector);
@@ -114,9 +137,27 @@ function detectAround(selector: string): WebAutomationStructureDetection {
   if (!first) return refused("target_not_found");
   if (elements.some(isWithinSensitiveControl)) return refused("sensitive_region");
   const proposal = inferListFromElement(first);
-  if (!proposal) return refused("no_repeating_run");
-  if (elements.length > 1 && !allInsideItems(elements, queryAll(proposal.item))) return refused("ambiguous_target");
-  return detected(proposal);
+  if (proposal) {
+    if (elements.length > 1 && !allInsideItems(elements, queryAll(proposal.item))) return refused("ambiguous_target");
+    const answer = detected(proposal);
+    if (!answer.ok || !isThin(proposal)) return answer;
+  }
+  return nearestRichRun(first) ?? (proposal ? detected(proposal) : refused("no_repeating_run"));
+}
+
+/**
+ * The best rich run in the nearest region enclosing `target` that holds one,
+ * or `undefined` when no region up to the page's body does. Inferences are
+ * shared between regions, since a region's runs are its inner region's runs
+ * and more.
+ */
+function nearestRichRun(target: Element): Detected | undefined {
+  const inferred = new Map<Element, WebAutomationExtractionProposal | undefined>();
+  for (let region = target.parentElement; region && region !== document.documentElement; region = region.parentElement) {
+    const best = bestRunUnder(region, inferred).best;
+    if (best && !isThin(best.proposal)) return best;
+  }
+  return undefined;
 }
 
 /** Whether every element is one of the items, or sits inside one. */
@@ -131,17 +172,32 @@ function allInsideItems(elements: readonly Element[], items: readonly Element[])
 }
 
 function detectLargest(): WebAutomationStructureDetection {
-  let best: Extract<WebAutomationStructureDetection, { ok: true }> | undefined;
+  const { best, sensitiveSeen } = bestRunUnder(document.body, new Map());
+  return best ?? refused(sensitiveSeen ? "sensitive_region" : "no_repeating_run");
+}
+
+/**
+ * The best readable run under `root`, by `outranks`, and whether a sensitive
+ * one was passed over. `inferred` memoizes each starting item's inference, so a
+ * caller trying nested regions pays for each run once.
+ */
+function bestRunUnder(
+  root: Element | null,
+  inferred: Map<Element, WebAutomationExtractionProposal | undefined>
+): { best: Detected | undefined; sensitiveSeen: boolean } {
+  let best: Detected | undefined;
   let sensitiveSeen = false;
   const tried = new Set<string>();
-  for (const first of largestRunsFirst()) {
+  for (const first of largestRunsFirst(root)) {
     if (isWithinSensitiveControl(first)) {
       sensitiveSeen = true;
       continue;
     }
-    const proposal = inferListFromElement(first);
+    if (!inferred.has(first)) inferred.set(first, inferListFromElement(first));
+    const proposal = inferred.get(first);
     // The walk outward can land two starting items on one run; it is judged once.
-    if (!proposal || tried.has(proposal.item)) continue;
+    // A run whose items sit outside the region is not the region's.
+    if (!proposal || tried.has(proposal.item) || !withinRegion(proposal, root)) continue;
     tried.add(proposal.item);
     const answer = detected(proposal);
     if (!answer.ok) {
@@ -151,7 +207,24 @@ function detectLargest(): WebAutomationStructureDetection {
     if (isFormNotData(answer.proposal)) continue;
     if (best === undefined || outranks(answer.proposal, best.proposal)) best = answer;
   }
-  return best ?? refused(sensitiveSeen ? "sensitive_region" : "no_repeating_run");
+  return { best, sensitiveSeen };
+}
+
+/** Whether the run's items all sit inside `root`. The inference walks outward, so a run it lands on may enclose the region instead. */
+function withinRegion(proposal: WebAutomationExtractionProposal, root: Element | null): boolean {
+  if (!root) return false;
+  const items = queryAll(proposal.item);
+  return items.length > 0 && items.every((item) => root.contains(item));
+}
+
+/** How many values of their own the run's items hold between them, counting a field only where every item has it. */
+function dataHeld(proposal: WebAutomationExtractionProposal): number {
+  return proposal.itemCount * contentFieldCount(proposal.fields, 1);
+}
+
+/** A run whose items hold at most one value of their own: a record's controls or decorations; see the header. */
+function isThin(proposal: WebAutomationExtractionProposal): boolean {
+  return contentFieldCount(proposal.fields) <= 1;
 }
 
 /**
@@ -164,8 +237,20 @@ function isFormNotData(proposal: WebAutomationExtractionProposal): boolean {
   return proposal.fields.every((field) => field.spec.handling === "exclude" || field.spec.kind === "value");
 }
 
-/** More items first; then more readable fields; then the surer inference. */
+/**
+ * A rich run before a thin one; then the run holding more data -- its items
+ * times the values of their own every item holds; then more items; then more
+ * readable fields; then the surer inference.
+ *
+ * Data before length because length alone picked the wrong list on the
+ * everything store's cart: Saved for later holds three items of a title, a
+ * price and two links, the cart two lines of a dozen values each, and "the
+ * largest list" was the one the instruction did not ask about.
+ */
 function outranks(candidate: WebAutomationExtractionProposal, incumbent: WebAutomationExtractionProposal): boolean {
+  if (isThin(candidate) !== isThin(incumbent)) return isThin(incumbent);
+  const data = dataHeld(candidate) - dataHeld(incumbent);
+  if (data !== 0) return data > 0;
   if (candidate.itemCount !== incumbent.itemCount) return candidate.itemCount > incumbent.itemCount;
   const fields = readableFieldCount(candidate) - readableFieldCount(incumbent);
   if (fields !== 0) return fields > 0;
@@ -173,7 +258,7 @@ function outranks(candidate: WebAutomationExtractionProposal, incumbent: WebAuto
 }
 
 /** The proposal as an answer: refused when nothing in it may be read, with the feed signal beside it otherwise. */
-function detected(proposal: WebAutomationExtractionProposal): WebAutomationStructureDetection {
+function detected(proposal: WebAutomationExtractionProposal): Detected | Refusal {
   const items = queryAll(proposal.item);
   if (readableFieldCount(proposal) === 0 || items.some(isWithinSensitiveControl)) return refused("sensitive_region");
   if (proposal.pagination !== undefined || !isDeclaredFeed(items, queryOne(proposal.container))) return { ok: true, proposal };

@@ -82,6 +82,7 @@ export function createWebLlmRepeatedRefusals(): WebLlmRepeatedRefusals {
       // (`capture.ts`, WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS).
       packet.detail = repeatedRejectionDetail(packet.detail, times);
       answer.resultReason = "answered_the_same_again";
+      answer.repeatedAnswer = times;
       return answer;
     }
   };

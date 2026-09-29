@@ -9,6 +9,13 @@
 // nearest run of at least three items wins, three being what the evidence
 // already calls a template rather than a coincidence.
 //
+// **Two items are a run when they are plainly two records** (`record-pair.ts`):
+// a cart holding two lines is a list, and until the rule existed no element on
+// such a page could be detected at all. Because a pair is the weaker claim, a
+// pair found near the picked element does not end the walk: an enclosing run of
+// three or more is the list the pair sits inside -- a card's two price blocks
+// inside a grid of cards -- and wins.
+//
 // **A table cell is never the record.** A row's four cells are four siblings of
 // one template, so a price cell's own level always looks like a run -- and it is
 // a run of the record's columns, which `infer-fields.ts` proposes as `column`
@@ -33,6 +40,7 @@ import { selectorFor } from "../selector";
 import { detectPagination } from "./detect-pagination";
 import { inferFields } from "./infer-fields";
 import { generalizedItemSelector } from "./item-selector";
+import { isRecordPair } from "./record-pair";
 
 /** What the page's own repeating evidence calls a template rather than a coincidence (`evidence/repeating.ts`). */
 const MIN_ITEMS_PER_RUN = 3;
@@ -50,11 +58,15 @@ export function isRecordItemTag(tagName: string): boolean {
  * repeating run that can be named and read.
  */
 export function inferListFromElement(picked: Element): WebAutomationExtractionProposal | undefined {
+  let pair: WebAutomationExtractionProposal | undefined;
   for (let level: Element | null = picked; level && level !== document.documentElement; level = level.parentElement) {
     const proposal = proposalForLevel(level);
-    if (proposal) return proposal;
+    if (!proposal) continue;
+    if (proposal.itemCount >= MIN_ITEMS_PER_RUN) return proposal;
+    // A pair: kept, and the walk goes on for a run it sits inside.
+    pair ??= proposal;
   }
-  return undefined;
+  return pair;
 }
 
 function proposalForLevel(level: Element): WebAutomationExtractionProposal | undefined {
@@ -62,7 +74,8 @@ function proposalForLevel(level: Element): WebAutomationExtractionProposal | und
   const container = level.parentElement;
   if (!container || container === document.documentElement) return undefined;
   const run = sameTemplateSiblings(level, container);
-  if (run.length < MIN_ITEMS_PER_RUN) return undefined;
+  const pair = run.length < MIN_ITEMS_PER_RUN;
+  if (pair && !isRecordPair(run)) return undefined;
 
   const containerSelector = selectorFor(container);
   const item = generalizedItemSelector(run, containerSelector);
@@ -71,6 +84,7 @@ function proposalForLevel(level: Element): WebAutomationExtractionProposal | und
   if (!first) return undefined;
   const fields = inferFields(first, run);
   if (fields.length === 0) return undefined;
+  if (pair && !isRecordPair(run, fields)) return undefined;
 
   const pagination = detectPagination(run, container);
   return {

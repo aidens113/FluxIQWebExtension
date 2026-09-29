@@ -75,6 +75,15 @@ export type WebLlmEvidenceToolExecution = {
    */
   resultReason?: WebLlmToolRejectionReason;
   /**
+   * How many times in a row this call has now given the same refusal, when it
+   * is two or more (`./repeated-refusal.ts`).
+   *
+   * Core's stall guard reads this as a count and never reads `resultReason`: a
+   * repeat that only changes its own count is otherwise indistinguishable, by
+   * bytes, from a new answer, so the caller has to say so.
+   */
+  repeatedAnswer?: number;
+  /**
    * The catalog id of the node the call named, when this domain resolved one
    * (`./node-run/catalog.ts`).
    *
@@ -221,7 +230,7 @@ type WebLlmEvidenceToolCallFacts = {
  * never before. `tests/name-assumption.test.ts` holds the two together.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "nodeId", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "nodeId", "draft"
 ];
 
 export function toolExecution(
@@ -241,6 +250,9 @@ export function toolExecution(
     // Said by the caller where it holds the reason, and otherwise read back out
     // of the refusal this call is already returning (`refusedReason`).
     resultReason: said?.resultReason ?? refusedReason(evidence),
+    // Written afterwards, by `./repeated-refusal.ts`, onto the one call that
+    // repeats; never known when the call is first built.
+    repeatedAnswer: undefined,
     nodeId: said?.nodeId,
     assumed: said?.assumed,
     draft

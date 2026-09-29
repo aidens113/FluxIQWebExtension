@@ -22,9 +22,22 @@
 // field is a sensitive control is `sensitive_value`. A client that does not
 // declare the capability, or that answers without a detection, is a fault
 // rather than a refusal, because nothing the model does next can change it.
+//
+// **A target is where the page starts looking, not a condition of finding
+// anything.** When the page answers a targeted call with no run around the
+// target, this asks the page once more with no target and answers with the
+// page's list if it has one -- the packet then names no target, so the model
+// can see the list was found on the page rather than around what it named.
+// Only a page with no readable list anywhere is refused. On the everything
+// store's cart the model named the heading, the subtotal, the rows and the
+// buttons in turn and was refused `nothing_repeats_around_target` every time,
+// until the build ran out of decisions with no Flow (`run-mulum3x7-18ceeb75`,
+// `docs/working/language-driven-flow-loop-plan/reports/cart-extraction.md`).
+// The content script now searches outward itself; this is the same rule held
+// on this side of the wire, so it holds for any client.
 
 import type { JsonObject } from "fluxiq/core";
-import { webAutomationStructureDetectionValue } from "../../../extraction";
+import { webAutomationStructureDetectionValue, type WebAutomationStructureDetection } from "../../../extraction";
 import {
   assertActive,
   captureEvidence,
@@ -70,8 +83,48 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
 
   const current = target === undefined ? undefined : await captureEvidence(gateway, sessionId, request, request.signal);
   const element = current === undefined || target === undefined ? undefined : boundTarget(context.returned, current, target);
-  const detectStructure: JsonObject = element === undefined ? {} : { selector: element.selector };
-  const parameters: JsonObject = element?.frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: element.frameId };
+  let { detection, page } = await capturedDetection(context, element?.selector, element?.frameId, current, target);
+  let searchedPage = false;
+  // Nothing around the target: the page is asked once more, as a whole, before
+  // anything is refused (see the header). A page-wide answer names no target.
+  if (!detection.ok && detection.refused === "no_repeating_run" && element !== undefined) {
+    ({ detection, page } = await capturedDetection(context, undefined, element.frameId, current, target));
+    searchedPage = true;
+  }
+  // The page sends one of four words; which of them means what to the model,
+  // and what the capture says about why, is `./refusal.ts`.
+  if (!detection.ok) webLlmStructureRefusal({ refused: detection.refused, target, page, searchedPage });
+
+  const handle = context.handles.reserve();
+  const split = splitDetectedStructure({
+    detection,
+    handle,
+    location: page.evidence.location,
+    target: searchedPage ? undefined : target,
+    frameId: element?.frameId,
+    maxEvidenceBytes: request.maxEvidenceBytes
+  });
+  if (!split) recoverable("sensitive_value");
+  context.handles.retain({ projectId: request.projectId, flowId: request.flowId }, split.binding);
+  return toolExecution(split.packet, false, WEB_LLM_STRUCTURE_RESULT_CODE);
+}
+
+/**
+ * One capture with a detection: around `selector` when there is one, page-wide
+ * otherwise, in the target's frame. Throws a `RecoverableToolRejection` for a
+ * page that could not be captured or that moved away from where the target was
+ * bound, and a plain error for a client that answered without a detection.
+ */
+async function capturedDetection(
+  context: WebLlmStructureDetectionContext,
+  selector: string | undefined,
+  frameId: number | undefined,
+  current: WebLlmSnapshotBinding | undefined,
+  target: string | undefined
+): Promise<{ detection: WebAutomationStructureDetection; page: WebLlmSnapshotBinding }> {
+  const { gateway, sessionId, request } = context;
+  const detectStructure: JsonObject = selector === undefined ? {} : { selector };
+  const parameters: JsonObject = frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: frameId };
   const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
   assertActive(request.signal);
   if (result.status !== "succeeded") recoverable("page_unreadable");
@@ -85,26 +138,10 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   }));
   // A top-frame detection must describe the page the target was bound on; a
   // frame's own document has its own location, and its origin is held above.
-  if (current !== undefined && element?.frameId === undefined && page.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
-
+  if (current !== undefined && frameId === undefined && page.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
   const detection = webAutomationStructureDetectionValue(payload.structure);
   if (detection === undefined) throw new Error("the web client answered the capture without a structure detection");
-  // The page sends one of four words; which of them means what to the model,
-  // and what the capture says about why, is `./refusal.ts`.
-  if (!detection.ok) webLlmStructureRefusal({ refused: detection.refused, target, page });
-
-  const handle = context.handles.reserve();
-  const split = splitDetectedStructure({
-    detection,
-    handle,
-    location: page.evidence.location,
-    target,
-    frameId: element?.frameId,
-    maxEvidenceBytes: request.maxEvidenceBytes
-  });
-  if (!split) recoverable("sensitive_value");
-  context.handles.retain({ projectId: request.projectId, flowId: request.flowId }, split.binding);
-  return toolExecution(split.packet, false, WEB_LLM_STRUCTURE_RESULT_CODE);
+  return { detection, page };
 }
 
 /**
