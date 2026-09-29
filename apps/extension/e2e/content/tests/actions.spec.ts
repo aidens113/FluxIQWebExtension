@@ -172,7 +172,9 @@ test("wait_for_selector: a timeout reports timed_out with Core's timeout categor
   expect(reply).toMatchObject({
     status: "timed_out",
     message: 'Timed out waiting for selector: [data-testid="never"]',
-    validation: { status: "failed", actual: "no element matched before the timeout" },
+    // The recovery account (recovery/account.ts, since 36daa680): the wait spent
+    // its own timeout, so the defence was reached with no budget left to retry.
+    validation: { status: "failed", actual: "no element matched before the timeout; the execution did not recover within its 1 attempt after absorbing timeout, waiting 0 ms" },
     failure: { category: "timeout", code: "web.action.timeout", retryable: true }
   });
 });

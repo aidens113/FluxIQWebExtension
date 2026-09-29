@@ -59,6 +59,8 @@ export type WebAutomationExtractListIssueCode =
   | "web.extract_list.invalid_paginate"
   | "web.extract_list.unknown_paginate_key"
   | "web.extract_list.invalid_where"
+  | "web.extract_list.invalid_dedupe"
+  | "web.extract_list.invalid_sort"
   | "web.extract_list.invalid_max_items"
   | "web.extract_list.invalid_min_items"
   | "web.extract_list.min_items_exceed_max"
@@ -91,6 +93,10 @@ export function webAutomationExtractListIssues(value: unknown): WebAutomationExt
   // reader refuses carries its own code already, so the probe keeps its own
   // rather than reporting one fault twice.
   if (value.where !== undefined && !readable({ ...conditionFields(value.fields), where: value.where })) issues.add("web.extract_list.invalid_where");
+  // `dedupe` and `sort` are read against the request's own fields for the same
+  // reason, since each names its columns by key.
+  if (value.dedupe !== undefined && !readable({ ...conditionFields(value.fields), dedupe: value.dedupe })) issues.add("web.extract_list.invalid_dedupe");
+  if (value.sort !== undefined && !readable({ ...conditionFields(value.fields), sort: value.sort })) issues.add("web.extract_list.invalid_sort");
   addItemBoundIssues(value, issues);
   if (issues.size === 0 && webAutomationExtractListRequestWhole(value) === undefined) issues.add("web.extract_list.unreadable");
   return [...issues];

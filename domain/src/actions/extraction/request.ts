@@ -160,6 +160,47 @@ export type WebAutomationExtractListPagination =
   | { mode: "scroll"; maxScrolls: number }
   | { mode: "numbered"; pages: string; maxPages: number };
 
+/**
+ * Which rows count as the same row, so each is kept once (`dedupe`).
+ *
+ * `by` is the field keys whose values together identify a row, always resolved
+ * by the reader (`./order-request.ts`): an author who wrote only "list each
+ * once" gets the list's link column, or every column when it has none. The
+ * first occurrence in page order is kept, across every page and document the
+ * read covers, after `where`.
+ */
+export type WebAutomationExtractListDedupe = {
+  by: string[];
+};
+
+/** Which way a sort key runs. */
+export type WebAutomationExtractSortOrder = "asc" | "desc";
+
+/**
+ * What a sort key's values are read as. `auto`, which is what an absent `as`
+ * means, reads the column as dates when most of its values state one, as
+ * numbers when most state one, and as text otherwise.
+ */
+export type WebAutomationExtractSortType = "auto" | "number" | "date" | "text";
+
+/**
+ * One key of a `sort`: a field of the request, the direction, and how its values
+ * compare. A row whose value cannot be read as the key's type goes after every
+ * row that can, whichever the direction, and the read says how many did.
+ */
+export type WebAutomationExtractListSortKey = {
+  field: string;
+  order: WebAutomationExtractSortOrder;
+  as?: WebAutomationExtractSortType | undefined;
+};
+
+export const WEB_AUTOMATION_EXTRACT_SORT_ORDERS = ["asc", "desc"] as const satisfies readonly WebAutomationExtractSortOrder[];
+
+export const WEB_AUTOMATION_EXTRACT_SORT_TYPES = ["auto", "number", "date", "text"] as const satisfies readonly WebAutomationExtractSortType[];
+
+/** The most keys one `sort` compares by; a key past it can only break ties among ties. */
+export const WEB_AUTOMATION_EXTRACT_MAX_SORT_KEYS = 4;
+
 /** The pagination modes, in the order the scenario contract lists them. */
 export const WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"] as const satisfies readonly NonNullable<WebAutomationExtractListPagination["mode"]>[];
 
@@ -210,32 +251,27 @@ export type WebAutomationExtractRead = {
  * already says, read by nothing, so `read-request.ts` refuses a request that
  * names one instead of dropping it and reading another document in silence.
  *
- * **Two things an instruction often asks for need no parameter, because the read
- * already does them.** They are written here because a request has no way to say
- * them and a reader has no way to know they are guaranteed:
+ * **Order and uniqueness have defaults, and since 2026-09-28 a request can say
+ * otherwise.**
  *
- * - **Order is the page's order.** Records come back in the order the document
- *   renders the items, and pages in the order the read followed them
- *   (`content/extraction/list-reader.ts` pushes each item as it walks
- *   `querySelectorAll` and appends each page after the last). "Keep the order the
- *   search results show them in" is therefore satisfied by writing nothing, and
- *   there is deliberately no way to ask for another order: a request that could
- *   sort would be a request that could sort *wrongly*, and sorting belongs to a
- *   node that sorts.
+ * - **Order is the page's order** unless `sort` says another. Records come back
+ *   in the order the document renders the items, and pages in the order the read
+ *   followed them (`content/extraction/list-reader.ts`). "Newest first" or
+ *   "cheapest first" is `sort`, which runs over every page read, after `where`.
  * - **A row is read once across pages.** In the modes that move from page to
  *   page -- `next` and `numbered` -- and in a continued read, an item whose
- *   record repeats one an earlier page yielded is not read again. So "list each
- *   one only once even if it turns up on two pages" also needs nothing written.
+ *   record repeats one an earlier page yielded is not read again, field for
+ *   field. `dedupe` says which columns identify a row instead, and then applies
+ *   within a page as well as across pages, in every mode.
  *
- * What that de-duplication cannot be told is **which column identifies a row**.
- * The key is the whole record, so two sightings of one product that differ in
- * any column -- a price that moved, a URL that gained a tracking parameter -- are
- * two rows. Saying "the same `url` is the same row" would need a request member
- * and a page that honours it, so it is a gap rather than a subtlety, and it is
- * named in `docs/working/language-driven-flow-loop-plan/reports/`
- * `t142-extraction-expresses-the-instruction.md` rather than half-built here.
- * `loadMore` and `scroll` grow one list rather than moving pages, so they have no
- * duplicates to drop.
+ * Both were refused here once, as belonging to a node that sorts. Live run
+ * `run-mulwm2dc-0bd95f22` settled it: asked for job-board roles "deduplicated,
+ * newest first", the verifier said to add dedupe and sort and the repair had
+ * nowhere to write either. The standing rule is that an instruction's qualifying
+ * clauses are the extraction node's own parameters. Neither is written inside a
+ * detected list's handle form, whose resolver admits a fixed set of keys: the
+ * node carries `dedupe` and `sort` beside `extractList` and its dispatch folds
+ * them in (`output-nodes/extract-list/dispatch.ts`).
  *
  * What is top-frame-only is the definition lane, not this contract: the picker
  * takes a pick from frame 0 alone, and `background/extraction/confirm.ts`
@@ -278,6 +314,14 @@ export type WebAutomationExtractListRequest = {
    * words they do not want in a column they named is not that.
    */
   where?: WebAutomationExtractItemCondition[] | undefined;
+  /** Keep one row per value of these columns, the first in page order, across every page read. */
+  dedupe?: WebAutomationExtractListDedupe | undefined;
+  /**
+   * The order the rows are answered in, over every page read, by each key in
+   * turn and then by page order. With a sort, `maxItems` keeps the first rows of
+   * the sorted answer rather than the first rows read.
+   */
+  sort?: WebAutomationExtractListSortKey[] | undefined;
 };
 
 /** Upper bound on the pages one `web.dom.extract_list` may follow, mirroring the scenario contract's own. */

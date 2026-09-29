@@ -21,7 +21,9 @@ import {
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
   WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
-  WEB_AUTOMATION_EXTRACT_PAGINATION_MODES
+  WEB_AUTOMATION_EXTRACT_PAGINATION_MODES,
+  WEB_AUTOMATION_EXTRACT_SORT_ORDERS,
+  WEB_AUTOMATION_EXTRACT_SORT_TYPES
 } from "./request";
 
 export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObject): JsonObject {
@@ -101,6 +103,31 @@ export function webAutomationExtractListSchema(elementFingerprintSchema: JsonObj
             not: { type: "boolean", label: "Keep the items this rejects" }
           },
           metadata: { read: fieldSpecSchema }
+        }
+      },
+      // Which rows are one row, and the order they are answered in. Each is read
+      // forgivingly (`./order-request.ts`), so neither is declared tighter than
+      // its canonical shape: a lone column name, `true`, or `"posted desc"` are
+      // all read, as every other forgiving spelling is.
+      dedupe: {
+        type: "object",
+        label: "Keep each row once",
+        description: "`by`: the field keys whose values together identify a row. The first occurrence in page order is kept, across every page read.",
+        properties: { by: { type: "array", label: "Same row when these match", items: { type: "string" } } }
+      },
+      sort: {
+        type: "array",
+        label: "Sort rows",
+        description: "Keys in priority order, each `{field, order: asc|desc, as?: auto|number|date|text}`. A row whose value cannot be read as the key's type goes last.",
+        items: {
+          type: "object",
+          label: "Sort key",
+          required: ["field", "order"],
+          properties: {
+            field: { type: "string", label: "Field key" },
+            order: { type: "string", label: "Order", enum: [...WEB_AUTOMATION_EXTRACT_SORT_ORDERS] },
+            as: { type: "string", label: "Compare as", enum: [...WEB_AUTOMATION_EXTRACT_SORT_TYPES] }
+          }
         }
       },
       maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },

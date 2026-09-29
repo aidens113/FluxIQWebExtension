@@ -58,6 +58,16 @@ const DETACH_TARGET = '[data-testid="detach-target"]';
 
 const NEVER = '[data-testid="never"]';
 
+/**
+ * The recovery account an assertion that timed out carries
+ * (`src/content/action-runtime/recovery/account.ts`, since 36daa680). The
+ * assertion's window is `assert.timeoutMs`, not the command's `timeoutMs`, so
+ * the command names no budget of its own and the loop walks the whole blip
+ * ladder in `budget.ts` -- 250 ms then 500 ms -- before the third timeout ends
+ * it: three attempts, 750 ms waited, well inside the 5 s defence budget.
+ */
+const NEVER_RECOVERED = "; the execution did not recover within its 3 attempts after absorbing timeout, timeout, timeout, waiting 750 ms";
+
 /** Sets `disabled` on a live control, so the rejection path is proven without a fixture that ships one disabled. */
 async function disable(page: Page, selector: string): Promise<void> {
   await page.locator(selector).evaluate((element) => { (element as HTMLInputElement).disabled = true; });
@@ -182,10 +192,10 @@ test("assert: exists and absent judge what the page holds now", async ({ openHar
   expect(missing).toMatchObject({
     status: "timed_out",
     message: "Assertion did not hold within 200 ms: exists.",
-    validation: { status: "failed", actual: `nothing matched "${NEVER}"` },
+    validation: { status: "failed", actual: `nothing matched "${NEVER}"${NEVER_RECOVERED}` },
     failure: {
       category: "timeout", code: "web.action.timeout", retryable: true, stage: "execution",
-      expected: `an element matching "${NEVER}" exists`, actual: `nothing matched "${NEVER}"`
+      expected: `an element matching "${NEVER}" exists`, actual: `nothing matched "${NEVER}"${NEVER_RECOVERED}`
     }
   });
   expect(spent(missing)).toBeGreaterThanOrEqual(200);
@@ -198,7 +208,7 @@ test("assert: a kind is not what decides a timeout -- the same claim mismatches 
   const nothing = await harness.runAction({ commandId: "visible-nothing", actionType: "web.dom.assert", selector: NEVER, assert: { kind: "visible", timeoutMs: 200 } });
   expect(nothing).toMatchObject({
     status: "timed_out",
-    validation: { status: "failed", actual: `nothing matched "${NEVER}"` },
+    validation: { status: "failed", actual: `nothing matched "${NEVER}"${NEVER_RECOVERED}` },
     failure: { category: "timeout", code: "web.action.timeout", retryable: true, stage: "execution" }
   });
   expect(spent(nothing)).toBeGreaterThanOrEqual(200);

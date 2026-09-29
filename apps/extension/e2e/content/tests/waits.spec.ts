@@ -21,6 +21,15 @@ const LATE = '[data-testid="late-action"]';
 const PROCESSING = '[data-testid="processing"]';
 const RESULT = '[data-testid="claim-result"]';
 
+/**
+ * The recovery account a wait that timed out on its own `timeoutMs` carries
+ * (`src/content/action-runtime/recovery/account.ts`, since 36daa680). The wait
+ * spent the command's whole budget, so `budget.ts` refuses the retry and the
+ * loop reports one attempt that absorbed the timeout: the defence was reached
+ * and was not enough, which is what a reader of the record must be able to see.
+ */
+const SPENT_WAIT = "; the execution did not recover within its 1 attempt after absorbing timeout, waiting 0 ms";
+
 /** The validation's `actual`, or a failure naming the reason it was skipped. */
 function actualOf(reply: BrowserActionResult): string {
   if (reply.validation.status === "none") throw new Error(`The reply reported no validation: ${reply.validation.reason}`);
@@ -54,7 +63,7 @@ test("too-slow: a wait shorter than the fixture's delay reports timed_out, not f
   expect(await pending).toMatchObject({
     status: "timed_out",
     message: `Timed out waiting for selector: ${LATE}`,
-    validation: { status: "failed", actual: "no element matched before the timeout" },
+    validation: { status: "failed", actual: `no element matched before the timeout${SPENT_WAIT}` },
     failure: { category: "timeout", code: "web.action.timeout", retryable: true }
   });
   // The target does arrive: the wait was too short, the page was not at fault.
@@ -79,7 +88,7 @@ test("visible: a present but unrendered element does not satisfy visible; a reve
   expect(tooSoon).toMatchObject({
     status: "timed_out",
     message: `Timed out waiting for a visible element: ${selector}`,
-    validation: { status: "failed", actual: "the element was not visible before the timeout" },
+    validation: { status: "failed", actual: `the element was not visible before the timeout${SPENT_WAIT}` },
     failure: { category: "timeout" }
   });
 
@@ -223,7 +232,7 @@ test("wait_for_text: a timeout reports timed_out with the text it never saw", as
   expect(reply).toMatchObject({
     status: "timed_out",
     message: "Timed out waiting for text: Never rendered",
-    validation: { status: "failed", expected: "page text containing Never rendered", actual: "the text did not appear before the timeout" },
+    validation: { status: "failed", expected: "page text containing Never rendered", actual: `the text did not appear before the timeout${SPENT_WAIT}` },
     failure: { category: "timeout", code: "web.action.timeout", retryable: true }
   });
 });

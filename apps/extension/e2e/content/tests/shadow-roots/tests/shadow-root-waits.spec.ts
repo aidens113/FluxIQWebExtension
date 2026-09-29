@@ -94,7 +94,12 @@ test.describe("a wait for a control inside an open shadow root", () => {
   test("job-board: a wait with no recorded host chain still looks only in the document", async ({ openHarness }) => {
     // The scope is the recording's, not a search of every root on the page: a
     // target recorded in the light document is not answered by a widget's copy
-    // of the same selector, exactly as the resolver decides it.
+    // of the same selector. The resolver differs here on purpose: a click with
+    // no host chain widens to open roots when the document has no match, but a
+    // wait has no identity veto, so widening could let a generic selector be
+    // satisfied (or never let `absent` hold) inside a widget. The recovery note
+    // (recovery/account.ts, since 36daa680) records that the defence was
+    // reached with the wait's own timeout already spent.
     const harness = await openHarness("job-board");
     const reply = await harness.runAction({
       commandId: "wait:unscoped",
@@ -104,7 +109,10 @@ test.describe("a wait for a control inside an open shadow root", () => {
     });
     expect(reply).toMatchObject({
       status: "timed_out",
-      validation: { status: "failed", actual: "no element matched before the timeout" },
+      validation: {
+        status: "failed",
+        actual: "no element matched before the timeout; the execution did not recover within its 1 attempt after absorbing timeout, waiting 0 ms"
+      },
       failure: { category: "timeout", code: "web.action.timeout" }
     });
   });
