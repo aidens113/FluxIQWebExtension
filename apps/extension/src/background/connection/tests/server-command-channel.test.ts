@@ -187,6 +187,17 @@ test("a session becoming ready persists it, then publishes browser state before 
   assert.equal(h.activities.at(-1)?.label, "Connected to FluxIQ");
 });
 
+test("a session becoming ready clears the error an earlier failure or pairing wait left", async () => {
+  const h = harness();
+  assert.equal(h.lastError(), "stale error");
+  await h.channel.handleSessionReady(serverMessage({
+    type: "server.session_ready",
+    id: "m-9",
+    payload: { sessionId: "session-1", token: "token-1" }
+  }) as Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>);
+  assert.equal(h.lastError(), undefined);
+});
+
 test("set_active_tab records the tab before asking the browser to activate it", async (t: TestContext) => {
   const h = harness();
   const updates: Array<[number, string[]]> = [];

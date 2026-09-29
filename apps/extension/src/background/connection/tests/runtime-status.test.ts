@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { WEB_AUTOMATION_ACTION_TYPES, WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionType, DomElementDescriptor } from "../../../shared/protocol";
-import { RuntimeStatusTracker, runtimeActionLabel, runtimeConfirmationForActionResult, runtimeResultTarget } from "../runtime-status";
+import { RuntimeStatusTracker, runtimeActionLabel, runtimeConfirmationForActionResult, runtimeResultTarget, runtimeTargetName } from "../runtime-status";
 
 type Confirmation = ReturnType<typeof runtimeConfirmationForActionResult>;
 
@@ -317,4 +317,48 @@ test("the tracker hands back a tab request only for the command that started it"
   tracker.startAction({ commandId: "c-click", actionType: "web.dom.click", selector: "#buy" });
   assert.equal(tracker.tabRequestFor("c-tab"), undefined, "a later action replaces it");
   assert.equal(tracker.tabRequestFor("c-click"), undefined, "an action without a tab request has none");
+});
+
+test("a target name is the element's accessible name, else its label, else its visible text", () => {
+  assert.equal(runtimeTargetName({ tagName: "button", accessibleName: "Add to cart", label: "Cart", visibleText: "Add" }), "Add to cart");
+  assert.equal(runtimeTargetName({ tagName: "button", label: "Checkout", visibleText: "Go" }), "Checkout");
+  assert.equal(runtimeTargetName({ tagName: "a", visibleText: "  Next\n  page  " }), "Next page");
+  assert.equal(runtimeTargetName({ tagName: "span", text: "Filters" }), "Filters");
+  assert.equal(runtimeTargetName({ tagName: "div" }), undefined);
+  assert.equal(runtimeTargetName(undefined), undefined);
+});
+
+test("a target name is never a selector, an XPath, an attribute or a field's contents", () => {
+  const selectorOnly = field({ selector: "#checkout > button:nth-of-type(2)", xpath: "//button[2]", name: "submit", value: "hunter2", id: "buy" });
+  assert.equal(runtimeTargetName(selectorOnly), undefined);
+  for (const tagName of ["input", "INPUT", "textarea", "select"]) {
+    assert.equal(runtimeTargetName({ tagName, visibleText: "4111 1111 1111 1111", text: "secret" }), undefined, tagName);
+    assert.equal(runtimeTargetName({ tagName, label: "Card number", visibleText: "4111 1111 1111 1111" }), "Card number", tagName);
+  }
+  for (const locator of ["//div[@id='x']", "/html/body/div", "xpath=//a", "css=#buy", "li:nth-child(3)", "button[data-id=buy]", "[aria-label]"]) {
+    assert.equal(runtimeTargetName({ tagName: "button", accessibleName: locator }), undefined, locator);
+  }
+  assert.equal(runtimeTargetName({ tagName: "button", accessibleName: "Next >" }), "Next >");
+  assert.equal(runtimeTargetName({ tagName: "button", accessibleName: "U.S. shipping" }), "U.S. shipping");
+});
+
+test("a long target name is cut to 80 characters", () => {
+  const name = runtimeTargetName({ tagName: "a", visibleText: "word ".repeat(40) });
+  assert.equal(name?.length, 80);
+  assert.ok(name?.endsWith("\u2026"));
+});
+
+test("the tracker names the target from the command, then from the element the page resolved", () => {
+  const tracker = new RuntimeStatusTracker();
+  const started = tracker.startAction({ commandId: "c-n", actionType: "web.dom.click", selector: "#buy", element: { tagName: "button", accessibleName: "Buy now", selector: "#buy" } });
+  assert.equal(started.targetName, "Buy now");
+  assert.equal(started.target, "#buy");
+
+  const resolved = tracker.finish(actionResult("web.dom.click", { commandId: "c-n", element: { tagName: "button", selector: "#buy-2", accessibleName: "Buy it now" } }));
+  assert.equal(resolved.targetName, "Buy it now");
+
+  tracker.startAction({ commandId: "c-m", actionType: "web.dom.click", selector: "#go", element: { tagName: "button", accessibleName: "Go" } });
+  assert.equal(tracker.finish(actionResult("web.dom.click", { commandId: "c-m" })).targetName, "Go", "a result with no element keeps its command's name");
+  assert.equal("targetName" in tracker.finish(actionResult("web.dom.click", { commandId: "c-other" })), false, "another command's result does not inherit it");
+  assert.equal("targetName" in tracker.startAction({ commandId: "c-q", actionType: "web.browser.navigate", url: "https://shop.test/" }), false);
 });

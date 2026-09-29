@@ -209,8 +209,13 @@ export class GatewaySession {
     this.deps.emitStatus();
   }
 
+  // Reaching `connected` ends whatever went wrong before it: a failed socket, a
+  // wait for approval, a refused reconnect. An error that outlived the
+  // connection it described would sit under a green "Connected" and read as
+  // current, so it is cleared on every transition into `connected`.
   private setState(state: ConnectionState): void {
     this.connectionState = state;
+    if (state === "connected") this.deps.clearError();
     this.deps.emitStatus();
   }
 

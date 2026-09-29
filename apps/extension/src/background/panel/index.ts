@@ -1,0 +1,12 @@
+export { AutoConnect, shouldAutoConnect, workerDisconnectMemory, type AutoConnectState, type DisconnectMemory } from "./auto-connect";
+export { sessionDisconnectMemory } from "./session-disconnect-memory";
+export { relayConversation } from "./conversation-relay";
+export { fluxIQWebAddress } from "./open-fluxiq";
+export { handlePanelControl, type PanelControlDeps } from "./panel-control";
+export { panelControlDeps } from "./panel-control-deps";
+export type { PanelRelayContext } from "./relay-context";
+export { relayFailure } from "./relay-failure";
+export { stopRun } from "./run-control";
+export { mergeSettings } from "./settings-save";
+export { RUN_BADGE_HOLD_MS, toolbarBadge, type ToolbarBadge } from "./toolbar-badge";
+export { browserToolbarBadge, ToolbarIndicator, type ToolbarBadgeWriter } from "./toolbar-indicator";

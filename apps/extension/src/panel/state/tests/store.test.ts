@@ -73,6 +73,18 @@ test("panelRequest maps a failed reply to a sentence and keeps the raw error as 
   });
 });
 
+test("panelRequest keeps the background's failure code, so a view can tell refused from unreachable", async (t) => {
+  stubChrome(t, { ok: false, code: "refused", httpStatus: 403, error: "This endpoint is not available to a paired client." });
+  const refused = await panelRequest({ type: "fluxiq.panel.sendTurn" });
+  assert.equal(refused.ok, false);
+  if (!refused.ok) assert.equal(refused.code, "refused");
+
+  stubChrome(t, { ok: false, error: "WebSocket connection failed." });
+  const uncoded = await panelRequest({ type: RUNTIME_MESSAGES.connect });
+  assert.equal(uncoded.ok, false);
+  if (!uncoded.ok) assert.equal("code" in uncoded, false);
+});
+
 test("panelRequest flags a message this build does not handle as unsupported", async (t) => {
   stubChrome(t, { ok: false, error: UNKNOWN_MESSAGE_ERROR });
   const result = await panelRequest({ type: "fluxiq.panel.stopRun" });

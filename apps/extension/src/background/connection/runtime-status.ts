@@ -45,6 +45,7 @@ export class RuntimeStatusTracker {
       actionType: action.actionType,
       label: runtimeActionLabel(action.actionType),
       target: runtimeActionTarget(action),
+      ...optionalTargetName(runtimeTargetName(action.element)),
       startedAt: Date.now()
     });
   }
@@ -52,12 +53,17 @@ export class RuntimeStatusTracker {
   finish(result: BrowserActionResult & { tabId?: number; frameId?: number }): RuntimeCommandStatus {
     const failed = result.status !== "succeeded";
     const label = runtimeActionLabel(result.actionType);
+    // The element the page resolved names it best; failing that, the name the
+    // command started with, but only when this result finishes that command.
+    const targetName = runtimeTargetName(result.element)
+      ?? (this.status.commandId === result.commandId ? this.status.targetName : undefined);
     this.status = {
       state: failed ? "failed" : "succeeded",
       commandId: result.commandId,
       actionType: result.actionType,
       label,
       target: runtimeResultTarget(result) ?? this.status.target,
+      ...optionalTargetName(targetName),
       ...(result.tabId !== undefined ? { tabId: result.tabId } : {}),
       ...(result.frameId !== undefined ? { frameId: result.frameId } : {}),
       startedAt: result.startedAt,
@@ -165,6 +171,58 @@ function isSensitiveElementDescriptor(element: DomElementDescriptor): boolean {
     autocomplete: element.attributes?.autocomplete,
     dataSensitive: element.attributes?.["data-sensitive"]
   });
+}
+
+/** The most characters of a human name the panel is given. */
+const TARGET_NAME_MAX_LENGTH = 80;
+
+/** Controls whose own text may be what the person typed or chose, so only their accessible name or label names them. */
+const VALUE_BEARING_TAGS = new Set(["input", "textarea", "select"]);
+
+/** The element signals `runtimeTargetName` reads. Everything else on a descriptor is ignored. */
+type NameableElement = {
+  accessibleName?: string | undefined;
+  label?: string | undefined;
+  visibleText?: string | undefined;
+  text?: string | undefined;
+  tagName?: string | undefined;
+};
+
+/**
+ * What a person would call the element: its accessible name, else its label,
+ * else its visible text. Never a selector, an XPath, an attribute, or a field's
+ * value -- a form control is named only by its accessible name or label,
+ * because its own text can be what was typed into it. Whitespace is collapsed
+ * and the name is cut to 80 characters. Undefined when nothing names it.
+ */
+export function runtimeTargetName(element: NameableElement | undefined): string | undefined {
+  if (!element) return undefined;
+  const valueBearing = VALUE_BEARING_TAGS.has((element.tagName ?? "").toLowerCase());
+  const candidates = valueBearing
+    ? [element.accessibleName, element.label]
+    : [element.accessibleName, element.label, element.visibleText, element.text];
+  for (const candidate of candidates) {
+    const name = humanName(candidate);
+    if (name) return name;
+  }
+  return undefined;
+}
+
+function humanName(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const collapsed = value.replace(/\s+/g, " ").trim();
+  if (!collapsed || looksLikeLocator(collapsed)) return undefined;
+  return collapsed.length > TARGET_NAME_MAX_LENGTH ? `${collapsed.slice(0, TARGET_NAME_MAX_LENGTH - 1).trimEnd()}\u2026` : collapsed;
+}
+
+// A locator that reached a name field by mistake. Narrow on purpose: a real
+// name such as "Next >" or "U.S. shipping" must still pass.
+function looksLikeLocator(value: string): boolean {
+  return /^(\/\/|\/html\b|xpath=|css=)/i.test(value) || /:nth-(child|of-type)\(|\[[\w-]+(=|\])/.test(value);
+}
+
+function optionalTargetName(targetName: string | undefined): { targetName?: string } {
+  return targetName ? { targetName } : {};
 }
 
 function runtimeActionTarget(action: BrowserActionCommand): string | undefined {

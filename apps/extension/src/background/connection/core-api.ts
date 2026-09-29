@@ -1,9 +1,10 @@
 // HTTP calls the extension makes to FluxIQ Core, outside the client-gateway
 // socket: listing recordings, reading the gateway snapshot for project context,
-// and storing a captured screenshot as a state asset.
+// storing a captured screenshot as a state asset, and the program calls the
+// panel's relays make (`background/panel/`).
 
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
-import type { CoreRecordingSummary, CoreRecordingsPage } from "../../shared/protocol";
+import type { CoreRecordingSummary, CoreRecordingsPage, PanelRelayResponse } from "../../shared/protocol";
 import { arrayValue, compactObject, numberValue, objectValue, parseJsonBody, stringValue, timestampValue } from "./value-readers";
 
 export type CoreApiCredentials = {
@@ -100,6 +101,58 @@ export async function uploadStateAsset(
     throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
   }
   return contentRef;
+}
+
+/** How long a program call may take. `append-turn` waits for FluxIQ to read and answer the message, which is a model call. */
+const CORE_PROGRAM_CALL_TIMEOUT_MS = 120_000;
+
+/**
+ * One call to an Automation Studio program endpoint, with the pairing token as
+ * the bearer credential. Core accepts the token only on the endpoints its
+ * program route allowlists for a paired client (`apps/web/src/lib/program-route.ts`
+ * in FluxIQ Core); any other answers 403, which comes back as `refused`.
+ *
+ * A successful answer's payload is returned exactly as Core sent it. The token
+ * is never part of a failure: every sentence here is fixed text or Core's own
+ * `error`, and the login cookie is never sent (`credentials: "omit"`), so the
+ * token is the only credential Core sees.
+ */
+export async function callCoreProgram(
+  credentials: CoreApiCredentials,
+  endpoint: string,
+  payload: Record<string, unknown>
+): Promise<PanelRelayResponse> {
+  if (!credentials.token) return { ok: false, code: "not_paired", error: "This browser is not paired with FluxIQ yet." };
+  let status: number;
+  let bodyText: string;
+  try {
+    const url = new URL(`/api/programs/automation-studio/${encodeURIComponent(endpoint)}`, credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      credentials: "omit",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        authorization: `Bearer ${credentials.token}`
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(CORE_PROGRAM_CALL_TIMEOUT_MS)
+    });
+    status = response.status;
+    bodyText = await response.text();
+  } catch {
+    // No answer, or an answer cut off before its body arrived: either way
+    // FluxIQ said nothing the panel can act on.
+    return { ok: false, code: "unreachable", error: "FluxIQ could not be reached." };
+  }
+  const body = objectValue(parseJsonBody(bodyText));
+  if (status === 401 || status === 403) {
+    return { ok: false, code: "refused", httpStatus: status, error: stringValue(body?.error) ?? "FluxIQ refused this browser's pairing." };
+  }
+  if (status < 200 || status >= 300 || body?.ok !== true) {
+    return { ok: false, code: "failed", httpStatus: status, error: stringValue(body?.error) ?? `FluxIQ answered ${status}.` };
+  }
+  return { ok: true, payload: body.payload ?? null };
 }
 
 function recordingsApiUrl(coreApiUrl: string, page: number, pageSize: number): string {

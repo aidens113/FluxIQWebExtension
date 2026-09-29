@@ -10,6 +10,7 @@ export {
 } from "./browser-state";
 export { ContentAttachment, type ContentAttachmentDeps } from "./content-attachment";
 export {
+  callCoreProgram,
   fetchCoreRecordings,
   fetchProjectIdFromCoreSnapshot,
   uploadStateAsset,

@@ -110,6 +110,9 @@ export class ServerCommandChannel {
       serverUrl: this.deps.settings().gatewayUrl,
       connectedAt: Date.now()
     }));
+    // A ready session answers every earlier error, the "Approve this client in
+    // FluxIQ" a pairing left behind included.
+    this.deps.setLastError(undefined);
     this.deps.gateway.markSessionReady();
     this.deps.onActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
     await this.deps.page.sendBrowserState();

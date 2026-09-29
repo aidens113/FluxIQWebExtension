@@ -7,8 +7,17 @@ import { clearSession, readOrCreateClientId, readQueuedEvents, readSession, read
 import { acceptActionEvidencePort } from "./action-evidence";
 import { handleScriptedNavigationControl } from "./scripted-navigation-control";
 import { clearExtractionTab, handleExtractionControl } from "./extraction";
+import { isControlPage } from "./control-page";
+import { AutoConnect, handlePanelControl, panelControlDeps, sessionDisconnectMemory, ToolbarIndicator } from "./panel";
 
 let connection: FluxIQConnection | undefined;
+const toolbar = new ToolbarIndicator();
+// Reconnects a paired browser on browser start and panel open. It reaches the
+// connection through `getConnection`, so a reset session's replacement is the
+// one connected.
+const autoConnect = new AutoConnect(async () => {
+  await (await getConnection()).connect();
+}, sessionDisconnectMemory());
 
 async function getConnection(): Promise<FluxIQConnection> {
   if (connection) return connection;
@@ -20,7 +29,7 @@ async function getConnection(): Promise<FluxIQConnection> {
   await writeSession(session);
   connection = new FluxIQConnection(settings, session);
   const queued = await readQueuedEvents();
-  connection.subscribe(() => undefined);
+  connection.subscribe((status) => toolbar.update(status));
   if (queued.length) {
     // Queue size is recomputed on the first status request after startup.
   }
@@ -38,7 +47,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   void enableSidePanelFirst();
-  void getConnection();
+  void getConnection().then((manager) => reconnectIfPaired(manager));
 });
 
 void enableSidePanelFirst();
@@ -97,11 +106,19 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   const extraction = await handleExtractionControl(typed, sender, manager);
   if (extraction.handled) return extraction.response;
 
+  const panel = await handlePanelControl(typed, sender, panelControlDeps(manager, () => statusWithQueue(manager)));
+  if (panel.handled) return panel.response;
+
   if (typed.type === RUNTIME_MESSAGES.getStatus) {
+    // A panel asking for status is a panel that just opened: the moment a
+    // paired browser reconnects by itself. Not awaited, so the panel sees the
+    // status now and the connection's progress as it is pushed.
+    if (isControlPage(sender)) void reconnectIfPaired(manager);
     return { ok: true, status: await statusWithQueue(manager) };
   }
 
   if (typed.type === RUNTIME_MESSAGES.connect) {
+    await autoConnect.noteConnectedByPerson();
     const settings = { ...(await readSettings()), ...((typed.settings as Partial<FluxIQSettings> | undefined) ?? {}) };
     await writeSettings(settings);
     manager.updateSettings(await readSettings());
@@ -110,11 +127,13 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   }
 
   if (typed.type === RUNTIME_MESSAGES.disconnect) {
+    await autoConnect.noteDisconnectedByPerson();
     manager.disconnect();
     return { ok: true, status: manager.status() };
   }
 
   if (typed.type === RUNTIME_MESSAGES.resetSession) {
+    await autoConnect.noteDisconnectedByPerson();
     manager.disconnect();
     await clearSession();
     connection = undefined;
@@ -177,6 +196,20 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   }
 
   return { ok: false, error: "Unknown FluxIQ extension message." };
+}
+
+// Never awaited by its callers, so a failure to read the Disconnect memory is
+// reported here rather than left as an unhandled rejection in the worker.
+function reconnectIfPaired(manager: FluxIQConnection): Promise<boolean> {
+  const status = manager.status();
+  return autoConnect.maybeConnect({
+    paired: status.paired,
+    autoReconnect: manager.currentSettings().autoReconnect,
+    connectionState: status.connectionState
+  }).catch((error: unknown) => {
+    console.warn("FluxIQ automatic reconnection was skipped", error instanceof Error ? error.message : error);
+    return false;
+  });
 }
 
 async function statusWithQueue(manager: FluxIQConnection): Promise<ExtensionStatus> {

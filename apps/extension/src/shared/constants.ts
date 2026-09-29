@@ -10,7 +10,9 @@ export const STORAGE_KEYS = {
   settings: "fluxiq.settings",
   session: "fluxiq.session",
   clientId: "fluxiq.clientId",
-  queuedEvents: "fluxiq.queuedEvents"
+  queuedEvents: "fluxiq.queuedEvents",
+  // In `chrome.storage.session`, not `local`: forgotten when the browser closes.
+  disconnectedByPerson: "fluxiq.disconnectedByPerson"
 } as const;
 
 export const RUNTIME_MESSAGES = {
@@ -28,6 +30,14 @@ export const RUNTIME_MESSAGES = {
   executeAction: "fluxiq.executeAction",
   captureSnapshot: "fluxiq.captureSnapshot",
   statusChanged: "fluxiq.statusChanged",
+  // The panel's own requests (background/panel/). Each is accepted only from
+  // the side panel or the popup (`background/control-page.ts`).
+  panelSaveSettings: "fluxiq.panel.saveSettings",
+  panelOpenFluxIQ: "fluxiq.panel.openFluxIQ",
+  panelConversationRead: "fluxiq.panel.conversationRead",
+  panelConversationSend: "fluxiq.panel.conversationSend",
+  panelConversationAnswer: "fluxiq.panel.conversationAnswer",
+  panelStopRun: "fluxiq.panel.stopRun",
   testArmScriptedNavigation: "fluxiq.test.armScriptedNavigation",
   testAwaitScriptedNavigation: "fluxiq.test.awaitScriptedNavigation",
   testCancelScriptedNavigation: "fluxiq.test.cancelScriptedNavigation"

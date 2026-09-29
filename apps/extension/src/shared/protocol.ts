@@ -124,6 +124,13 @@ export type RuntimeCommandStatus = {
   actionType?: BrowserActionType | undefined;
   label?: string | undefined;
   target?: string | undefined;
+  /**
+   * The element's human name -- its accessible name, label or visible text --
+   * for the panel to say "Clicking Add to cart". Never a selector, an XPath, an
+   * attribute or a value typed into a field; absent when the element has no
+   * human name, and for actions that act on no element.
+   */
+  targetName?: string | undefined;
   tabId?: number | undefined;
   frameId?: number | undefined;
   startedAt?: number | undefined;
@@ -139,6 +146,12 @@ export type ExtensionStatus = {
   gatewayUrl: string;
   settings?: FluxIQSettings | undefined;
   clientId: string;
+  /**
+   * A pairing token is stored, so FluxIQ has approved this browser before. Tells
+   * "not set up yet" from "set up, but not connected right now" without the
+   * token itself ever leaving the background worker.
+   */
+  paired: boolean;
   sessionId?: string | undefined;
   projectId?: string | null | undefined;
   activeTabId?: number | undefined;
@@ -155,6 +168,88 @@ export type ExtensionStatus = {
   lastError?: string | undefined;
   lastMessageAt?: number | undefined;
 };
+
+/**
+ * The panel's requests to FluxIQ Core that the background worker relays with
+ * the pairing token (`background/panel/`). Each is the `RUNTIME_MESSAGES.panel*`
+ * message named beside it, plus these fields. A `projectId` left out means the
+ * project this browser's session belongs to (`ExtensionStatus.projectId`).
+ *
+ * The relay adds nothing and keeps nothing: a successful reply carries Core's
+ * payload exactly as Core returned it, and no conversation state lives in the
+ * background worker.
+ */
+export type PanelConversationReadRequest =
+  /**
+   * `list-conversations`. `projectId: null` lists every thread in the projects
+   * this browser can see; left out, it is the session's project when one is
+   * known, and every project when none is.
+   */
+  | { kind: "list"; projectId?: string | null | undefined; status?: "open" | "resolved" | undefined; subjectKind?: string | undefined; subjectId?: string | undefined; limit?: number | undefined }
+  /** `get-conversation`: one thread, from `sinceTurnId` when given. */
+  | { kind: "get"; projectId?: string | undefined; conversationId: string; sinceTurnId?: string | undefined; limit?: number | undefined };
+
+export type PanelConversationSendRequest = {
+  /**
+   * `open` starts a thread and sends nothing (`open-conversation`). Otherwise
+   * `text` is sent: into `conversationId` when given (`append-turn`), or into a
+   * thread opened for it first, whose `conversation` then joins the reply.
+   */
+  kind?: "open" | "append" | undefined;
+  projectId?: string | undefined;
+  conversationId?: string | undefined;
+  text?: string | undefined;
+  /**
+   * The panel capabilities Core may answer with. Left out, an empty list is
+   * sent, so Core still reads the message and answers it in the thread.
+   */
+  capabilities?: unknown[] | undefined;
+  onScreen?: { flowId?: string; subflowId?: string; runId?: string; recordingId?: string } | undefined;
+  subjectKind?: string | undefined;
+  subjectId?: string | undefined;
+  title?: string | undefined;
+};
+
+/** `answer-ask`: the person's answer to a question FluxIQ asked in a thread. */
+export type PanelConversationAnswerRequest = {
+  projectId?: string | undefined;
+  askId: string;
+  kind: string;
+  value?: string | undefined;
+};
+
+/**
+ * `cancel-runtime-session`. With a `runId`, that run; the reply is Core's
+ * `{ runtimeSession }`. Without one, every run of the project that has not
+ * ended; the reply is `{ runtimeSessions }`, one Core answer per run stopped,
+ * and an empty list when nothing was running.
+ */
+export type PanelStopRunRequest = {
+  projectId?: string | undefined;
+  runId?: string | undefined;
+};
+
+/** `panelSaveSettings`: settings to store without connecting. */
+export type PanelSaveSettingsRequest = { settings: Partial<FluxIQSettings> };
+
+/**
+ * Why a panel request did not reach an answer.
+ *
+ * - `forbidden`: the sender is not the side panel or the popup.
+ * - `not_paired`: no pairing token is stored.
+ * - `no_project`: the request needs a project and none is known yet.
+ * - `invalid_request`: a required field is missing.
+ * - `unreachable`: FluxIQ did not answer at the address in settings.
+ * - `refused`: FluxIQ refused the pairing token (401 or 403). An older FluxIQ
+ *   that accepts only its login cookie answers this way.
+ * - `failed`: FluxIQ answered, and its answer was a failure. `error` is Core's own message.
+ */
+export type PanelRelayFailureCode = "forbidden" | "not_paired" | "no_project" | "invalid_request" | "unreachable" | "refused" | "failed";
+
+/** Every panel relay's reply, in the `{ ok: true } & T | { ok: false; error }` envelope the panel already reads. */
+export type PanelRelayResponse<TPayload = unknown> =
+  | { ok: true; payload: TPayload }
+  | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined };
 
 export type BrowserDescriptor = {
   clientKind: "browser_extension";

@@ -27,11 +27,14 @@ export async function panelRequest<T>(message: PanelMessage): Promise<PanelResul
   if (reply === null || typeof reply !== "object") {
     return { ok: false, sentence: EXTENSION_RESTARTED, detail: "The extension's background worker gave no answer." };
   }
-  const typed = reply as { ok?: unknown; error?: unknown };
+  const typed = reply as { ok?: unknown; error?: unknown; code?: unknown };
   if (typed.ok === true) return { ok: true, value: reply as T };
   const raw = typeof typed.error === "string" ? typed.error : undefined;
   if (raw === UNKNOWN_MESSAGE_ERROR) {
     return { ok: false, sentence: "This extension doesn't support that yet.", detail: raw, unsupported: true };
   }
-  return raw === undefined ? { ok: false, sentence: errorSentence("") } : { ok: false, sentence: errorSentence(raw), detail: raw };
+  // The background's own failure code travels with the sentence, so a view can
+  // tell `refused` from `unreachable` without reading words.
+  const code = typeof typed.code === "string" ? { code: typed.code } : {};
+  return raw === undefined ? { ok: false, sentence: errorSentence(""), ...code } : { ok: false, sentence: errorSentence(raw), detail: raw, ...code };
 }

@@ -253,6 +253,7 @@ export class FluxIQConnection {
       gatewayUrl: this.settings.gatewayUrl,
       settings: this.settings,
       clientId: this.session.clientId,
+      paired: this.isPaired(),
       queueSize: gateway.queueSize,
       eventCount: this.recording.eventCount(),
       recentActivities: this.activityLog.recentEntries(),
@@ -367,8 +368,27 @@ export class FluxIQConnection {
     await writeSession(this.session);
   }
 
-  private coreApiCredentials(): CoreApiCredentials {
+  /**
+   * The address and pairing token every call to Core's HTTP API is made with,
+   * the panel's relays included (`background/panel/`). The token stays inside
+   * the background worker: nothing here puts it in a status or a reply.
+   */
+  coreApiCredentials(): CoreApiCredentials {
     return { coreApiUrl: this.settings.coreApiUrl, token: this.session.token };
+  }
+
+  /** A pairing token is stored: FluxIQ approved this browser at some point. */
+  isPaired(): boolean {
+    return Boolean(this.session.token);
+  }
+
+  /** The project this browser's session belongs to, as FluxIQ last said. */
+  projectId(): string | null | undefined {
+    return this.session.projectId;
+  }
+
+  currentSettings(): FluxIQSettings {
+    return this.settings;
   }
 
   private emitStatus(): void {
