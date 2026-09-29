@@ -29,7 +29,8 @@
 // old rule's answer to that was no rows at all.
 //
 // So the parts a read can do without are **dropped and named** instead:
-// `itemElement`, `paginate`, `minItems`, and one condition of `where`. Each
+// `itemElement`, `paginate`, `minItems`, one condition of `where`, `dedupe`,
+// and one key of `sort`. Each
 // drop can only widen the answer -- a read of the page shown, a default
 // minimum, an unnarrowed row set -- and widening is visible to the loop's own
 // judgement while emptiness is not (`content/extraction/filtered-answer.ts`
@@ -65,6 +66,7 @@ import type { WebAutomationElementFingerprint } from "../types";
 import { webAutomationExtractConditionSayingValue } from "./condition-grammar";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { isWebAutomationExtractFieldRead, webAutomationExtractFieldMatch } from "./field-match";
+import { webAutomationExtractListDedupeValue, webAutomationExtractListSortValue } from "./order-request";
 import {
   WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS,
   WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
@@ -113,7 +115,7 @@ export function webAutomationExtractListRequestWhole(value: unknown): WebAutomat
  * was written under. A condition carries its index in the `where` the author
  * wrote, so a caller can name the clause rather than the clause count.
  */
-export type WebAutomationExtractListDroppedPart = "itemElement" | "paginate" | "minItems" | `where.${number}`;
+export type WebAutomationExtractListDroppedPart = "itemElement" | "paginate" | "minItems" | `where.${number}` | "dedupe" | `sort.${number}`;
 
 /**
  * A condition whose column was resolved rather than named: what was written,
@@ -182,6 +184,14 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
   // clause still runs. An empty clause, and a clause every condition left, both
   // say what no clause says: keep every item.
   const conditions = request.where === undefined ? [] : conditionsValue(request.where, fields, dropped, assumed);
+  // Which rows are the same row, and the order the rows are answered in
+  // (`./order-request.ts`). Each is dropped and named when it cannot be read, as
+  // a condition is: without them the read answers with the same rows, in page
+  // order and with repeats, which is wider rather than wrong.
+  const dedupe = request.dedupe === undefined ? undefined : webAutomationExtractListDedupeValue(request.dedupe, fields);
+  if (dedupe?.refused) dropped.push("dedupe");
+  const sort = request.sort === undefined ? undefined : webAutomationExtractListSortValue(request.sort, fields);
+  for (const index of sort?.refused ?? []) dropped.push(`sort.${index}`);
   return {
     request: {
       item,
@@ -190,7 +200,9 @@ export function webAutomationExtractListRequestRead(value: unknown): WebAutomati
       ...(paginate !== undefined ? { paginate } : {}),
       ...(maxItems !== undefined ? { maxItems } : {}),
       ...(minItems !== undefined ? { minItems } : {}),
-      ...(conditions.length > 0 ? { where: conditions } : {})
+      ...(conditions.length > 0 ? { where: conditions } : {}),
+      ...(dedupe?.dedupe !== undefined ? { dedupe: dedupe.dedupe } : {}),
+      ...(sort !== undefined && sort.sort.length > 0 ? { sort: sort.sort } : {})
     },
     dropped,
     assumed

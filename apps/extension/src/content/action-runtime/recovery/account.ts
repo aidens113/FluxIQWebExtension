@@ -82,7 +82,7 @@ export function recoveryAccountSentence(account: RecoveryAccount): string | unde
   const faults = account.absorbed.join(", ");
   const verdict = account.outcome === "recovered"
     ? `the execution recovered on attempt ${account.attempts}`
-    : `the execution did not recover within its ${account.attempts} attempts`;
+    : `the execution did not recover within its ${account.attempts} ${account.attempts === 1 ? "attempt" : "attempts"}`;
   return `${verdict} after absorbing ${faults}${dismissalClause(account.dismissed)}, waiting ${account.waitedMs} ms`;
 }
 

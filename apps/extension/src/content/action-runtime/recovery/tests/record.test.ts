@@ -58,6 +58,13 @@ test("an exhausted failure carries the account on the record Core stores, with t
   assert.equal(parsed?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
 });
 
+test("a verb that spent its own timeout is one attempt, in the singular", () => {
+  // The ordinary case for a wait: the verb used the command's `timeoutMs`, so
+  // `budget.ts` refused the retry and the fault is recorded with no second try.
+  const spent: RecoveryAccount = { attempts: 1, absorbed: ["timeout"], waitedMs: 0, dismissed: 0, outcome: "exhausted" };
+  assert.equal(recoveryAccountSentence(spent), "the execution did not recover within its 1 attempt after absorbing timeout, waiting 0 ms");
+});
+
 test("a record with no `actual` of its own gains the account rather than a stray separator", () => {
   const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
   const annotated = recordRecovery(result({ status: "failed", validation: { status: "none", reason: "not-yet-validated" }, failure }), RECOVERED);
