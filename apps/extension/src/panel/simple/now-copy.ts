@@ -4,7 +4,7 @@
 // recording clock are too.
 //
 // Which row wins when several hold: a recording refusal first (the person has
-// to dismiss it), then recording, a running step, a failed step, a step that
+// to dismiss it), then recording, a paused recording, a running step, a failed step, a step that
 // finished under a minute ago, "Connect first", and otherwise nothing running.
 
 import type { ExtensionStatus } from "../../shared/protocol";
@@ -17,7 +17,7 @@ export const DONE_WINDOW_MS = 60_000;
 const CONNECT_FIRST = "Connect to FluxIQ before recording.";
 
 /** Which row of the table applies. */
-export type NowKind = "block" | "recording" | "running" | "failed" | "done" | "connectFirst" | "idle";
+export type NowKind = "block" | "recording" | "paused" | "running" | "failed" | "done" | "connectFirst" | "idle";
 
 /** The card's words for one status. */
 export type NowCopy = {
@@ -37,6 +37,12 @@ export function nowCopy(status: ExtensionStatus, now: number): NowCopy {
   if (block) return plain("block", block.title, block.message);
   if (status.recordingState === "recording") {
     return { kind: "recording", title: "Recording your steps", detail: recordingDetail(status, now), recordingDot: true, details: false };
+  }
+  // SEAM(t180): pause/resume. The state is in the protocol already; the Pause and
+  // Resume controls, and the messages behind them, are lane t180's. Until they
+  // land this row only names the state, and the card still offers Stop recording.
+  if (status.recordingState === "paused") {
+    return plain("paused", "Recording paused", recordingDetail(status, now));
   }
   const runtime = status.runtime;
   if (runtime?.state === "running") return plain("running", "FluxIQ is working", stepSentence(runtime, "present"));

@@ -2,16 +2,13 @@
 // section 4, "2. 'Right now' card"). The words are `nowCopy`; Stop while a run
 // is going is `createRunStop`; this file puts them on screen.
 //
-// While recording, the card holds "Stop recording" (the Lab's exact name) and,
-// under it, the extraction sheet's entry, "Extract Data From This Page", from
-// `mountExtractionPanel`, unchanged. The sheet is mounted once and stays in the
-// DOM; only its entry button is hidden when nothing is being recorded, so a
-// sheet already open is never torn away mid-pick.
+// While recording, the card holds "Stop recording" (the Lab's exact name). The
+// extraction sheet's entry, "Extract Data From This Page", is in the start card
+// (`start/start-card.ts`), which offers it whether or not a recording runs.
 
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createElement } from "../dom";
-import { mountExtractionPanel } from "../extraction";
 import type { PanelViewContext } from "../shell";
 import { nowCopy } from "./now-copy";
 import { createOpenFluxIQButton } from "./open-fluxiq-button";
@@ -43,7 +40,6 @@ export function createNowCard(context: PanelViewContext, runStop: RunStop): NowC
     attrs: { type: "button" },
     hidden: true
   });
-  const extractionHost = createElement("div", { className: "simple-extraction", attrs: { "data-recording": "false" } });
   const stopButton = createElement("button", { id: "stopRunButton", className: "primary-button danger-fill", text: "Stop", attrs: { type: "button" }, hidden: true });
   const stopNotice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
   const stopOpen = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small" });
@@ -58,13 +54,11 @@ export function createNowCard(context: PanelViewContext, runStop: RunStop): NowC
     createElement("p", { className: "simple-now-detail" }, [detail, " ", detailsLink]),
     okButton,
     stopRecordingButton,
-    extractionHost,
     stopButton,
     stopNotice,
     stopFallback,
     notice
   ]);
-  const extraction = mountExtractionPanel(extractionHost);
 
   detailsLink.addEventListener("click", () => context.navigate({ mode: "advanced", tab: "activity" }));
   okButton.addEventListener("click", () => void send(RUNTIME_MESSAGES.dismissRecordingLock, okButton, (status) => status.recordingBlock === undefined));
@@ -98,11 +92,8 @@ export function createNowCard(context: PanelViewContext, runStop: RunStop): NowC
     recDot.hidden = !copy.recordingDot;
     detailsLink.hidden = !copy.details;
     okButton.hidden = copy.kind !== "block";
-    stopRecordingButton.hidden = !recording;
-
-    const extractable = recording && status.connectionState === "connected" && status.unsupportedPage === undefined;
-    extraction.setAvailable(extractable, status.unsupportedPage ? "This page cannot be recorded." : "Start recording first.");
-    extractionHost.dataset.recording = String(recording);
+    // A paused recording can still be stopped (SEAM(t180): its Resume goes beside this).
+    stopRecordingButton.hidden = !recording && copy.kind !== "paused";
 
     runStop.observe(status, now);
     const stop = runStop.view();

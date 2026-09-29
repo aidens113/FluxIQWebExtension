@@ -144,3 +144,28 @@ test("a row is bounded, so a record cannot be grown one member at a time", () =>
   // 24 members counting the `toolId` its reader writes, so 23 arrive here.
   assert.equal(Object.keys(publishableStepFields(wide)).length, 23);
 });
+
+test("an amendment's refusals travel with their reasons and nodes, as records and as flat codes", () => {
+  const longNode = `web.${"n".repeat(150)}`;
+  assert.deepEqual(publishableStepFields({
+    amended: 1,
+    amendmentsRefused: [{ step: 9, reason: "no_such_step" }, { step: 2, reason: "already_so", nodeId: longNode }],
+    amendmentRefusals: ["9:no_such_step", `2:already_so:${longNode}`],
+  }), {
+    amended: 1,
+    amendmentsRefused: [{ step: 9, reason: "no_such_step" }, { step: 2, reason: "already_so", nodeId: longNode }],
+    amendmentRefusals: ["9:no_such_step", `2:already_so:${longNode}`],
+  });
+});
+
+test("a refusal list holding anything but positions, closed reasons and node ids is refused whole", () => {
+  const refused = (amendmentsRefused: unknown, amendmentRefusals: unknown) => publishableStepFields({ amendmentsRefused, amendmentRefusals });
+  assert.deepEqual(refused([{ step: 1, reason: "made_up" }], ["1:made_up"]), {});
+  assert.deepEqual(refused([{ step: 1, reason: "already_so", note: "Add to cart" }], ["1:already_so:Add to cart"]), {});
+  assert.deepEqual(refused([{ step: 1, reason: "already_so" }, "1:already_so"], ["1:already_so", 1]), {});
+  assert.deepEqual(refused([{ step: 10_000, reason: "already_so" }], ["10000:already_so"]), {});
+  assert.deepEqual(refused([{ step: 1, reason: "already_so", nodeId: "a".repeat(40) }], [`1:already_so:${"a".repeat(40)}`]), {});
+  const many = Array.from({ length: 17 }, (_, index) => ({ step: index + 1, reason: "already_so" }));
+  assert.deepEqual(refused(many, many.map((item) => `${item.step}:already_so`)), {});
+  assert.deepEqual(refused([], []), {});
+});
