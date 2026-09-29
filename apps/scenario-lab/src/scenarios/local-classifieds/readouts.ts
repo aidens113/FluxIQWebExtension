@@ -30,6 +30,21 @@ export function offerReceiptText(offer: SentOffer): string {
   return offer.delivered ? `Offer of ${priceText(offer.amount)} sent to ${seller}` : `Offer of ${priceText(offer.amount)} not delivered`;
 }
 
+/**
+ * What the listing page's action bar says the buyer has sent this listing's
+ * seller: every message and offer the site accepted, the ready-made "Hi, is
+ * this still available?" included. `null` until something has gone. A refused
+ * contact never went, so it is not counted; a held one looked sent, so it is.
+ */
+export function conversationText(state: ClassifiedsState, listingId: string): string | null {
+  const listing = listingById(listingId);
+  if (!listing) return null;
+  const count = (entries: ReadonlyArray<{ listingId: string }>) => entries.filter((entry) => entry.listingId === listingId).length;
+  const parts = [[count(state.messages), "message"], [count(state.offers), "offer"]] as const;
+  const said = parts.filter(([amount]) => amount > 0).map(([amount, noun]) => `${amount} ${noun}${amount === 1 ? "" : "s"}`);
+  return said.length === 0 ? null : `You've sent ${sellerById(listing.seller).name} ${said.join(" and ")}`;
+}
+
 export function savedTotalText(count: number): string {
   return `${count} saved item${count === 1 ? "" : "s"}`;
 }

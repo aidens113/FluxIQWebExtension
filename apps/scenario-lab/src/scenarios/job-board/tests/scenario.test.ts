@@ -4,7 +4,7 @@ import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extens
 import { applicationReference, normaliseApplication, suggestPlaces } from "../ats/index.js";
 import { boardClasses } from "../board/index.js";
 import { POSTINGS, postingById } from "../catalog/index.js";
-import { APPLICATION_RECORD, EXPECTED_ANSWERS, EXPECTED_REFERENCE } from "../candidate.js";
+import { APPLICATION_RECORD, CANDIDATE, EXPECTED_ANSWERS, EXPECTED_REFERENCE } from "../candidate.js";
 import { halvardWeek, remoteRustRecords, shortlistFacts } from "../expectations.js";
 import { JOB_BOARD_LIVE_TASKS } from "../live-tasks.js";
 import { jobBoardScenario as scenario } from "../scenario.js";
@@ -208,6 +208,16 @@ test("an application made exactly as instructed gets the expected reference howe
   assert.equal(reference({ ...base, salary: "£88,000" }), null, "a salary with symbols was accepted");
   assert.equal(reference({ ...base, privacy: false }), null, "the privacy notice was not required");
   assert.deepEqual(APPLICATION_RECORD, { role: "Senior Rust Engineer", company: "Quillmark", reference: EXPECTED_REFERENCE });
+});
+
+test("the apply instructions quote the CV text, because the reference is derived from exactly that text and nothing after it", () => {
+  // The CV is compared character for character, and the instruction's next sentences are about the same person in the
+  // same voice. Unquoted, where the CV ends is a guess, and a CV that takes in the next sentence is a different reference.
+  const swallowed = { ...EXPECTED_ANSWERS, resume: `${EXPECTED_ANSWERS.resume} ${CANDIDATE.firstName} has the right to work in the UK.` };
+  assert.notEqual(applicationReference(swallowed), EXPECTED_REFERENCE);
+  const applying = JOB_BOARD_LIVE_TASKS.filter((task) => task.expectedDatasetId === "extract-application");
+  assert.equal(applying.length, 2);
+  for (const task of applying) assert.ok(task.instruction.includes(`"${CANDIDATE.resume}"`), `${task.id} does not quote the CV text`);
 });
 
 test("a filled honeypot is accepted and thanked, with no reference; a genuine application is given its reference", () => {

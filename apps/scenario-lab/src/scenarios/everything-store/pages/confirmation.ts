@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../../html.js";
 import { STORE_PATHS } from "../catalog/index.js";
 import { confirmationTexts } from "./confirmation-texts.js";
+import { ordersTodayText } from "./orders-today.js";
 import type { PageKit } from "./page-kit.js";
 import { storePage } from "./shell.js";
 
@@ -25,6 +26,7 @@ export function renderConfirmationPage(kit: PageKit, orderId: string | null): st
 <p class="${css.confirmLine}" data-testid="order-payment">${escapeHtml(texts.payment)}</p>
 <p class="${css.confirmLine}" data-testid="order-total">${escapeHtml(texts.total)}</p>
 ${texts.plusTrial === null ? "" : `<p class="${css.confirmLine}" data-testid="plus-trial">${escapeHtml(texts.plusTrial)}</p>`}
+<p class="${css.confirmLine}" data-testid="orders-today">${escapeHtml(ordersTodayText(kit.state.orders.length))}</p>
 <p>Order number: <b>${escapeHtml(order.orderId)}</b></p>
 <p><a href="${STORE_PATHS.home}">Continue shopping</a></p>
 </div>`;

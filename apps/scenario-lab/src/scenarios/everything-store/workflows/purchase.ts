@@ -1,6 +1,6 @@
 import type { ExpectedFact, ScenarioExpected, ScenarioGoal, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { TIDEWELL_KETTLES } from "../catalog/index.js";
-import { confirmationTexts } from "../pages/index.js";
+import { confirmationTexts, ordersTodayText } from "../pages/index.js";
 import { SHARED_STEPS } from "./shared-steps.js";
 
 const FAMILY_CARD = TIDEWELL_KETTLES[0]?.sku ?? "";
@@ -25,7 +25,10 @@ const ORDER = confirmationTexts({
 /**
  * What the confirmation page must say, and must not. The cart still holding
  * its two earlier items is part of the goal: the task says to leave them, and
- * checking out the whole cart, or emptying it first, both break that.
+ * checking out the whole cart, or emptying it first, both break that. So is
+ * the order being the day's only one: a run that bought the kettle twice, or
+ * bought something else before it, ends on a page that otherwise reads exactly
+ * like the right one.
  */
 const ORDER_FACTS: ExpectedFact[] = [
   { id: "order-placed", subject: "order-status", predicate: "text", value: ORDER.status },
@@ -37,6 +40,7 @@ const ORDER_FACTS: ExpectedFact[] = [
   { id: "order-total", subject: "order-total", predicate: "text", value: ORDER.total },
   { id: "no-plus-trial", subject: "plus-trial", predicate: "exists", value: false },
   { id: "cart-left-alone", subject: "cart-count", predicate: "text", value: "2" },
+  { id: "only-one-order", subject: "orders-today", predicate: "text", value: ordersTodayText(1) },
 ];
 
 /**
