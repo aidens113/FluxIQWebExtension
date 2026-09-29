@@ -12,7 +12,7 @@ export type {
   ExtractionSessionState,
   ExtractionSessionView
 } from "./messages";
-export { mountExtractionPanel, type ExtractionPanelHandle } from "./panel";
+export { mountExtractionPanel, type ExtractionPanelHandle, type ExtractionPanelOptions } from "./panel";
 export { buildExtractionPanel, type ExtractionPanelElements } from "./panel-elements";
 export { extractionPreviewColumns, extractionPreviewSelection, retainExtractionPreview } from "./preview";
 export { renderExtractionPreview } from "./preview-table";
