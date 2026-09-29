@@ -1941,7 +1941,10 @@ already-running workers, subscribes and immediately rechecks to close the
 observation race, accepts only `chrome-extension:` workers, and waits at most
 30 seconds before producing bounded counts and connection state. It removes
 its listener and timer on every outcome and never records worker URLs.
-Locale, timezone, viewport, and color scheme are fixed. The fixture hashes the
+Locale, timezone, viewport, and color scheme are fixed. Before launching, the
+fixture refuses an artifact whose build stamp (`build-info.json`) no longer
+matches the source, or that has no stamp, as `environment.stale`; see
+[Release Packaging](release-packaging.md#the-build-stamp). It hashes the
 complete extension artifact, attaches its metadata, closes Chromium, deletes
 the temporary profile, and verifies deletion.
 
@@ -2097,10 +2100,16 @@ to the full corpus. Documentation-only changes select the static gate.
 `.github/workflows/testing-facility.yml` declares:
 
 - prerequisite validation for a pinned sibling Core repository/ref and token;
-- Windows and Linux static `check`, `test`, and `build` jobs;
-- Windows and Linux Chromium smoke jobs when selected;
+- Windows and Linux static `check`, `test`, and `build` jobs, followed by store
+  packaging with read-back verification of the Chrome and Firefox ZIPs;
+- Windows and Linux Chromium smoke jobs on every event: the extension e2e
+  suite always, the scenario-page suite when selected;
 - changed-scenario execution for pull requests; and
-- a nightly three-repeat full corpus with 90-day uploaded evidence.
+- a nightly three-repeat full corpus, split by `nightly-plan` into four shards
+  read from the scenario registry, with 90-day uploaded evidence.
+
+The sizing, the owner-only configuration, and what was checked locally are in
+[Release Packaging](release-packaging.md#ci-gates).
 
 The workflow forces `FLUXIQ_REAL_SITE_ENABLED=0` and uses 30-day browser/failure
 artifact retention outside nightly certification.

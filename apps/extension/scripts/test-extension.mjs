@@ -26,12 +26,12 @@ if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(label)) {
 }
 const outdir = path.join(root, ".test-build-scratch", label);
 
-async function findTestEntries(directory) {
+async function findTestEntries(directory, suffix = ".test.ts") {
   const found = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name);
-    if (entry.isDirectory()) found.push(...await findTestEntries(full));
-    else if (entry.isFile() && entry.name.endsWith(".test.ts") && path.basename(directory) === "tests") found.push(full);
+    if (entry.isDirectory()) found.push(...await findTestEntries(full, suffix));
+    else if (entry.isFile() && entry.name.endsWith(suffix) && path.basename(directory) === "tests") found.push(full);
   }
   return found;
 }
@@ -67,4 +67,11 @@ process.setSourceMapsEnabled(true);
 for (const entry of entryPoints) {
   const bundle = path.join(outdir, path.relative(sourceRoot, entry).replace(/\.ts$/, ".mjs"));
   await import(pathToFileURL(bundle).href);
+}
+
+// The build and release scripts' own tests (scripts/**/tests/*.test.mjs) run in
+// the same node:test run: the build stamp, target verification and store
+// packaging are gates, so they are tested with the rest.
+for (const entry of (await findTestEntries(path.join(root, "scripts"), ".test.mjs")).sort()) {
+  await import(pathToFileURL(entry).href);
 }
