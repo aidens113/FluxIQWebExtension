@@ -5,7 +5,6 @@ export { createPanelStore, panelRequest, type PanelResult, type PanelStore } fro
 export { connectionCopy, errorSentence, stepSentence } from "./copy";
 export {
   mountPanel,
-  placeholderViews,
   type AdvancedTab,
   type PanelRoute,
   type PanelSurface,
@@ -13,3 +12,5 @@ export {
   type PanelViewContext,
   type PanelViews
 } from "./shell";
+export { mountSimpleView } from "./simple";
+export { mountAdvancedView } from "./advanced";

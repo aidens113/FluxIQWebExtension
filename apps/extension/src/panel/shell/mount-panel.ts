@@ -5,7 +5,7 @@
 // header (name, Simple / Advanced switch, Settings gear), the one PanelStore,
 // routing between the two views, and remembering the viewer's last route. It
 // owns no view content: that is `panel/simple` (workstream B) and
-// `panel/advanced` (workstream C), or `placeholderViews` until they land.
+// `panel/advanced` (workstream C).
 //
 //   panel/shell/contracts.ts        the pinned seam types (PanelRoute, PanelView, ...)
 //   panel/shell/mount-panel.ts      this file: store, header, routing, preference
@@ -13,8 +13,6 @@
 //   panel/shell/mode-switch.ts      the "View" radiogroup: Simple | Advanced
 //   panel/shell/mode-preference.ts  fluxiq.ui.mode / fluxiq.ui.advancedTab in storage
 //   panel/shell/view-host.ts        shows the routed view, hides the other
-//   panel/shell/placeholder/        wave-1 views: status card, record, extract; the old
-//                                   settings as Advanced, so the Lab can still set up
 //   panel/state/                    PanelStore, panelRequest, PanelResult
 //   panel/copy/                     connection, step and error sentences
 //   panel/dom/                      createElement

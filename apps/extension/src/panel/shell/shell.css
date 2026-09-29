@@ -1,8 +1,7 @@
 /* The shell: page base, surface sizing, header, and the primitives every view
    shares (buttons, cards, notices, fields). Colours come from
-   panel/theme/tokens.css only. A view's own layout lives in its own stylesheet;
-   the wave-1 placeholder cards are at the end of this file until the simple view
-   replaces them. */
+   panel/theme/tokens.css only. A view's own layout lives in its own stylesheet
+   (panel/simple/simple.css, panel/advanced/advanced.css). */
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -92,29 +91,5 @@ html[data-surface="sidepanel"] .shell { min-height: 100vh; }
 .dot-amber { background: var(--warning); }
 .dot-red { background: var(--danger); }
 
-/* Wave-1 placeholder simple view (panel/shell/placeholder-simple.ts). */
-.simple-view { display: grid; gap: var(--space-3); }
-.status-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-2); }
-.status-row .dot { margin-top: 4px; }
-.status-copy { display: grid; gap: 2px; min-width: 0; }
-.reference-code { border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); padding: 12px; font-size: 28px; font-weight: 850; letter-spacing: 5px; text-align: center; }
-.now-heading { display: flex; align-items: center; gap: var(--space-2); }
-.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
-.now-card .primary-button, .now-card .small-button { justify-self: stretch; }
-.extraction-host[data-available="false"] .extract-button { display: none; }
-
-@media (prefers-reduced-motion: no-preference) {
-  .rec-dot { animation: rec-pulse 1.5s ease-in-out infinite; }
-}
-@keyframes rec-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 
-/* Wave-1 placeholder Advanced view: the old settings controls (placeholder/advanced-view.ts). */
-.advanced-view input[type="url"] { width: 100%; min-height: 36px; border: 1px solid var(--divider); border-radius: 7px; background: var(--surface-muted); color: var(--text); padding: 7px 9px; }
-.toggles { display: grid; gap: 10px; padding: 10px 0; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); font-size: 12px; }
-.toggles label { display: flex; align-items: center; gap: 8px; }
-.diagnostics { display: grid; gap: 6px; margin: 0; }
-.diagnostics div { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 8px; }
-.diagnostics dt { color: var(--muted); font-size: 11px; }
-.diagnostics dd { margin: 0; font-size: 11px; overflow-wrap: anywhere; }
-.danger-button { border-color: var(--danger); background: var(--danger-soft); color: var(--danger-text); }

@@ -42,16 +42,17 @@ test("mounts the shared panel: status card, record control, and a remembered vie
   await expect(view.getByRole("radio", { name: "Advanced" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("region", { name: "Advanced" })).toBeVisible();
   await expect(record).toBeHidden();
-  // Until the Advanced view lands, it carries the settings under the labels the
-  // Lab's session setup fills (packages/test-runner/src/demo-workspace/browser-session.ts).
-  for (const label of ["Gateway URL", "Core API URL", "Auto reconnect", "DOM mutations", "Input values", "Snapshots"]) {
-    await expect(page.getByLabel(label)).toBeVisible();
+  // The gear opens Advanced on its Connection tab, carrying the settings under the
+  // labels the Lab's session setup fills (packages/test-runner/src/demo-workspace/browser-session.ts).
+  for (const label of ["FluxIQ connection address", "FluxIQ web address", "Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots"]) {
+    await expect(page.getByLabel(label, { exact: true })).toBeVisible();
   }
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
 
-  // The choice survives closing and reopening the panel, and Close returns to Simple.
+  // The choice survives closing and reopening the panel, and Simple returns to it.
   await page.reload();
   await expect(page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Advanced" })).toHaveAttribute("aria-checked", "true");
-  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Simple" }).click();
   await expect(page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("button", { name: "Start recording" })).toBeVisible();
   expect(pageErrors).toEqual([]);

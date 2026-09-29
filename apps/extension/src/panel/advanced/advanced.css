@@ -1,5 +1,6 @@
 /* The Advanced view (panel/advanced/). Colours come from panel/theme/tokens.css;
-   buttons, cards, notices, fields and .diagnostics come from panel/shell/shell.css. */
+   buttons, cards, notices and fields come from panel/shell/shell.css; .diagnostics is
+   styled here. */
 
 .advanced-view { gap: var(--space-3); }
 

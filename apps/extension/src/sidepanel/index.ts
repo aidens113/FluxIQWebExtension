@@ -1,7 +1,7 @@
 // The side panel entry (Chrome and Edge): the same panel UI as the popup, from
 // panel/, mounted into the stub page's #app for the side-panel surface.
-import { mountPanel, placeholderViews } from "../panel";
+import { mountAdvancedView, mountPanel, mountSimpleView } from "../panel";
 
 const root = document.getElementById("app");
 if (!root) throw new Error("Missing panel root: #app");
-mountPanel(root, "sidepanel", placeholderViews);
+mountPanel(root, "sidepanel", { simple: mountSimpleView, advanced: mountAdvancedView });

@@ -9,4 +9,3 @@ export {
 } from "./contracts";
 export { mountPanel } from "./mount-panel";
 export { ADVANCED_TAB_KEY, MODE_KEY, readRoutePreference, routeFromStored, writeRoutePreference } from "./mode-preference";
-export { placeholderViews } from "./placeholder";
