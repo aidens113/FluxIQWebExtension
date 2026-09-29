@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -67,6 +68,9 @@ test("a sibling that is a plain directory is refused, although git answers for t
   await withRepository(async ({ trees, git, core }) => {
     const root = path.join(trees, "task-a");
     git("worktree", "add", "--quiet", "-b", "task-a", root, "HEAD");
+    // The enclosing checkout is made here rather than left to whatever
+    // happens to sit above the temporary directory on this machine.
+    execFileSync("git", ["init", "--quiet", trees], { windowsHide: true });
     await mkdir(path.join(trees, "!FluxIQ", "packages"), { recursive: true });
     await assert.rejects(resolveCoreSibling(root, { coreRepositoryRoot: core }), /is not the top of a git checkout/u);
     await rm(path.join(trees, "!FluxIQ"), { recursive: true, force: true });
