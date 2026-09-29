@@ -220,3 +220,64 @@ against committed code.
 - **Behaviour change for other Flows:** every proposed link column's label now
   ends in ` url`, so a model's column keys for links change on the next
   detection. Stored Flows keep their own keys.
+
+## Follow-ups (after commit e7e48db9)
+
+### 1. `paginationStop` reaches Core's run record
+
+The edit is in Core's
+`packages/fluxiq/src/programs/automation-studio/runtime/service/summaries/extraction-summary.ts`.
+`extractionSummaryFromOutputs` now carries `paginationStop`. The member follows
+the rule `listWait.stoppedOn` already uses, because both are sets of ways a read
+can end, and such sets grow:
+- a word from the twelve is copied as sent;
+- a newer word Core does not know is published as `"unknown"`, so the account
+  is kept and nothing the producer sent rides out;
+- a value that is not a string drops the whole summary.
+
+**Exact key lists.** Only this projection and its test name the summary's
+members in Core. I grepped `F:\!FluxIQ\packages` for `listPresence`,
+`stoppedOn`, `emptyRecords` and `itemsSeen`, and the only other hits were built
+`.next` chunks. So there was no other list to teach. The domain's mirror
+(`domain/src/actions/extraction/summary.ts`) already declares the word from the
+first commit, and `evidence-loop-decision.ts:64`'s exact list covers the tool
+result's own keys, not the summary.
+
+The tests are in `summaries/tests/extraction-summary.test.ts`:
+- `paginationStop` reaches `actionAttempts[0].metadata.extraction` on the run
+  detail;
+- all twelve words are kept;
+- an unknown word is renamed `"unknown"` and the producer's text is not
+  republished;
+- a non-string drops the summary.
+
+### 2. The two stale catalog specs
+
+These are `extract-list-catalog.spec.ts:158` and `:177`. The wording they now
+assert is intended, not a regression:
+- **The `never_appeared` sentence** ("the item selector named nothing on the
+  page, so the list never appeared, after waiting Nms for 1 item and stopping on
+  the read's own render window running out -- change the selector...") is the
+  documented design of `readSummary` in `content/actions/extract-list.ts`. A
+  selector that names nothing deliberately pays the whole render window
+  (`extraction/page-render.ts` header).
+- **The recovery sentence on `:158`** ("the execution did not recover within its
+  1 attempts after absorbing output_not_observed, waiting 0 ms") is
+  `recoveryAccountSentence` in `action-runtime/recovery/account.ts`, commit
+  260a4e17. It is appended on purpose whenever a fault was absorbed.
+
+The specs now match these with a pattern. The wait length is a number because
+it is the page's own timing, and `attempts?` tolerates the one wart I found:
+"1 attempts" should be singular. That wording is in `recovery/account.ts`, which
+is outside my ownership, so it is left as it is.
+
+### Follow-up validation (after the last interruption; every file checked with no NULs and not truncated)
+
+- `npx vitest run src/programs/automation-studio/runtime/service/summaries`
+  (Core `packages/fluxiq`): `Test Files 6 passed (6)`, `Tests 46 passed (46)`.
+- `pnpm --filter fluxiq check`: exit 0. An earlier run had exited 2 on errors
+  only in `flow-bootstrap/` and `llm/`, other workers' files that were in
+  flight.
+- `pnpm test:content -- extract-list-catalog --workers=2`: `12 passed`.
+- The extension `tsc -p tsconfig.test.json --noEmit` (src and e2e): exit 0.
+

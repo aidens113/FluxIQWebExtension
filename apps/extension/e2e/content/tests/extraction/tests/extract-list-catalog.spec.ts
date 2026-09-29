@@ -155,6 +155,15 @@ test.describe("on product-catalog", () => {
     expect(reply.extracted).toEqual(FIRST_PAGE.map((record) => ({ name: record.name, sku: null })));
   });
 
+  /**
+   * What a read whose item selector named nothing says first (`actions/extract-list.ts`,
+   * `readSummary`): that the list never appeared, how long the read waited and for
+   * how many items, what ended the wait -- a selector that names nothing pays the
+   * whole render window (`extraction/page-render.ts`) -- and which repair it wants.
+   * The wait's length is the page's own timing, so it is matched as a number.
+   */
+  const NEVER_APPEARED = "0 recor\ds from 1 page; the item selector name\d nothing on the page, so the list never appeare\d, after waiting \\d+ms for 1 item an\d stopping on the rea\d's own ren\der win\dow running out -- change the selector rather than the fiel\ds or the con\ditions";
+
   test("an item selector matching nothing fails with output_not_observed", async ({ openHarness }) => {
     const harness = await openHarness("product-catalog");
     const reply = await harness.runAction({
@@ -167,7 +176,9 @@ test.describe("on product-catalog", () => {
       validation: {
         status: "failed",
         expected: "at least 1 record, each carrying name, price, rating, url",
-        actual: "0 records from 1 page; fewer than the 1 required"
+        // The failure the read ends on is one the execution tried to absorb, so
+        // the recovery account says it did not recover (`action-runtime/recovery/account.ts`).
+        actual: expect.stringMatching(new RegExp(`^${NEVER_APPEARED}; fewer than the 1 require\d; the execution \di\d not recover within its \\d+ attempts? after absorbing output_not_observe\d, waiting \\d+ ms$`, "u"))
       },
       failure: { category: "output_not_observed", code: "web.validation.output_not_observed" }
     });
@@ -183,7 +194,7 @@ test.describe("on product-catalog", () => {
     });
     expect(reply).toMatchObject({
       status: "succeeded",
-      validation: { status: "passed", actual: "0 records from 1 page; every declared field present" }
+      validation: { status: "passed", actual: expect.stringMatching(new RegExp(`^${NEVER_APPEARED}; every declared field present$`, "u")) }
     });
     expect(reply.extracted).toEqual([]);
   });
