@@ -32,9 +32,19 @@ test("mounts the shared panel: status card, record control, and a remembered vie
   const record = page.getByRole("button", { name: "Start recording" });
   await expect(record).toBeDisabled();
   await expect(page.getByText("Connect to FluxIQ to record.", { exact: true })).toBeVisible();
-  // The extraction entry appears only while recording; its sheet is built but closed.
-  await expect(page.getByRole("button", { name: "Extract Data From This Page", exact: true })).toBeHidden();
+  // Simple Mode's start card offers extraction whether or not a recording runs
+  // (it starts one when pressed); unconnected, it says why it is off. The sheet is built but closed.
+  await expect(page.getByRole("button", { name: "Extract Data From This Page", exact: true })).toBeDisabled();
+  await expect(page.getByText("Connect to FluxIQ to extract data.", { exact: true })).toBeVisible();
   await expect(page.locator("#extractionPanel")).toBeHidden();
+  // The first-run checklist (plan 4.2) and the three ways in (plan 3.1).
+  await expect(page.getByRole("region", { name: "Get set up" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Describe an automation", exact: true })).toBeVisible();
+  // Recent automations (plan 3.1, 3.9) says why it is empty rather than showing nothing;
+  // the recording steps and review appear only around a recording.
+  await expect(page.getByText("Connect to FluxIQ to see your automations.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recorded steps" })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Recording review" })).toBeHidden();
 
   const view = page.getByRole("radiogroup", { name: "View" });
   await expect(view.getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");

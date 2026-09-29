@@ -69,3 +69,10 @@ test("recording refused because not connected: Connect first, until connected", 
 test("recording wins over a running step", () => {
   assert.equal(nowCopy(statusWith({ ...connected, recordingState: "recording", runtime: runtime({}) }), NOW).kind, "recording");
 });
+
+test("a paused recording says so, with its clock and step count (SEAM t180: the controls are that lane's)", () => {
+  const copy = nowCopy(statusWith({ ...connected, recordingState: "paused", recordingStartedAt: NOW - 65_000, eventCount: 2 }), NOW);
+  assert.equal(copy.kind, "paused");
+  assert.equal(copy.title, "Recording paused");
+  assert.match(copy.detail, /^01:05 · 2 steps/);
+});
