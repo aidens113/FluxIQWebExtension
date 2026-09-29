@@ -11,7 +11,50 @@ test("loads the current MV3 artifact and its extension page", async ({ extension
   expect(runtimeManifest.name).toBe(metadata.name);
   expect(runtimeManifest.version).toBe(metadata.version);
   await expect(extensionPage).toHaveURL(`chrome-extension://${metadata.id}/sidepanel/index.html`);
-  await expect(extensionPage.getByRole("heading", { name: "FluxIQ Recorder" })).toBeVisible();
+  // The shared panel shell's header (panel/shell/header.ts). Exact, because the
+  // status card's sentences also contain "FluxIQ".
+  await expect(extensionPage.getByRole("heading", { name: "FluxIQ", exact: true })).toBeVisible();
+  await expect(extensionPage.getByRole("radiogroup", { name: "View" })).toBeVisible();
+  await expect(extensionPage.getByRole("button", { name: "Settings" })).toBeVisible();
+});
+
+test("mounts the shared panel: status card, record control, and a remembered view switch", async ({ extensionSession }) => {
+  const page = extensionSession.extensionPage;
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.reload();
+
+  // A fresh profile has never paired, so the status card asks to connect and
+  // the record control says why it is disabled instead of being silently off.
+  await expect(page.getByText("FluxIQ isn't connected", { exact: true })).toBeVisible();
+  await expect(page.getByText("Connect this browser so FluxIQ can work in it.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeEnabled();
+  const record = page.getByRole("button", { name: "Start recording" });
+  await expect(record).toBeDisabled();
+  await expect(page.getByText("Connect to FluxIQ to record.", { exact: true })).toBeVisible();
+  // The extraction entry appears only while recording; its sheet is built but closed.
+  await expect(page.getByRole("button", { name: "Extract Data From This Page", exact: true })).toBeHidden();
+  await expect(page.locator("#extractionPanel")).toBeHidden();
+
+  const view = page.getByRole("radiogroup", { name: "View" });
+  await expect(view.getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(view.getByRole("radio", { name: "Advanced" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("region", { name: "Advanced" })).toBeVisible();
+  await expect(record).toBeHidden();
+  // Until the Advanced view lands, it carries the settings under the labels the
+  // Lab's session setup fills (packages/test-runner/src/demo-workspace/browser-session.ts).
+  for (const label of ["Gateway URL", "Core API URL", "Auto reconnect", "DOM mutations", "Input values", "Snapshots"]) {
+    await expect(page.getByLabel(label)).toBeVisible();
+  }
+
+  // The choice survives closing and reopening the panel, and Close returns to Simple.
+  await page.reload();
+  await expect(page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Advanced" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Start recording" })).toBeVisible();
+  expect(pageErrors).toEqual([]);
 });
 
 test("injects the content script into a loopback scenario page", async ({ extensionSession }) => {

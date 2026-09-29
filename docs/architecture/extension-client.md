@@ -22,10 +22,11 @@ authorization, and long-running work. The extension owns browser presence.
 The extension:
 
 - connects to a local or hosted FluxIQ gateway URL;
-- stores that URL in the side-panel settings drawer;
+- stores that URL in the panel's settings (the Advanced view's Connection tab);
 - displays the server-provided reference code while the user approves pairing
   in the FluxIQ web panel;
-- presents a side-panel-first recorder console in Chrome and Edge;
+- presents one panel UI, mounted by the Chrome/Edge side panel and the Firefox
+  popup alike (see [Panel UI](#panel-ui));
 - tracks local recording timer, event count, queued messages, and recent
   activity summaries;
 - warns when the active page cannot be recorded by content scripts. One rule,
@@ -57,6 +58,37 @@ The top-level `domain/` package owns the FluxIQ-specific web automation
 manifest, accepted recording event definitions, reducers, observation
 extractors, and action interfaces. The extension imports those domain contracts
 but the generic websocket package remains domain-neutral.
+
+## Panel UI
+
+The popup and the side panel are one UI. Both `popup/index.html` and
+`sidepanel/index.html` are the same stub -- a `<div id="app">`, a link to
+`index.css`, and `index.js` -- and each entry calls
+`mountPanel(root, surface, views)` from
+[`panel/`](../../apps/extension/src/panel/index.ts). The surface name only sets
+`data-surface` on the page, which sizes the popup to 380px and lets the side
+panel fill its column; nothing else differs, so a change to the panel lands in
+both browsers at once.
+
+| Directory under `apps/extension/src/panel/` | Owns |
+| --- | --- |
+| `shell/` | `mountPanel`, the header (the name, the Simple / Advanced radiogroup "View", the "Settings" gear), routing between the two views, and the viewer's remembered route (`fluxiq.ui.mode`, `fluxiq.ui.advancedTab` in `chrome.storage.local`). Also the pinned seam types in `contracts.ts` and, until the real views land, `placeholderViews`. |
+| `state/` | The one `PanelStore`: a single `getStatus` on mount plus the `statusChanged` subscription, and `request`, which never throws. Every failure comes back as a `PanelResult` sentence, including a service worker that did not answer. |
+| `copy/` | Every sentence about the connection, a step and an error, as pure functions of the status. The simple view shows no selectors, ids or URLs other than a hostname. |
+| `dom/` | `createElement`. Views build their own DOM through `textContent`; nothing parses HTML. |
+| `theme/tokens.css` | The light and dark colour tokens. Every stylesheet reads colours from them. |
+| `extraction/` | The extraction sheet ([Defining An Extraction](#defining-an-extraction)). `mountExtractionPanel(host)` builds the entry button and the sheet into a host, keeping every `#extraction*` id the Lab drives. |
+| `simple/`, `advanced/` | The two views (workstreams B and C of the UI rebuild). Until they land, both surfaces mount the shell's placeholders (`shell/placeholder/`): a status card with Connect or Cancel and the pairing code, Start/Stop recording, and the extraction entry; and, as Advanced, the old settings drawer's controls under their old labels ("Gateway URL", "Reset Session", "Close", ...), because the Lab's session setup fills them. |
+
+Each view imports its own stylesheet, and the build emits one `index.css` per
+page entry beside its `index.js` (`scripts/build-extension.mjs`, which fails if a
+page's stylesheet is missing). No two views share a markup file, a stylesheet
+or a controller, so they can be changed in parallel.
+
+A failed request's sentence stays in the card that sent it until the viewer acts
+again; a status update never wipes it. Earlier, a refused command's error was
+hidden in the same tick it was shown, because the re-render after every command
+ended by drawing `lastError`, which the background had usually not set.
 
 ## Wire Shape
 
@@ -681,7 +713,7 @@ is the message contract between them:
   the recorder emits;
 - **the worker** ([`background/extraction/`](../../apps/extension/src/background/extraction/index.ts)):
   the session, who may drive it, the confirm path, and the one read;
-- **the panel** ([`popup/extraction/`](../../apps/extension/src/popup/extraction/index.ts)):
+- **the panel** ([`panel/extraction/`](../../apps/extension/src/panel/extraction/index.ts)):
   where columns are renamed, removed or excluded. The Chrome side panel and the
   Firefox popup are the same module, so this is one flow in both browsers.
 

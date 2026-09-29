@@ -79,6 +79,7 @@ async function buildTarget(target, manifestName) {
 async function bundleExtension() {
   await rm(buildDir, { recursive: true, force: true });
   for (const name of Object.keys(extensionEntries)) await bundleExtensionEntry(name, buildDir);
+  await assertPageStylesheets();
 }
 
 /**
@@ -252,13 +253,33 @@ function browserSafeWorkspacePlugin() {
   };
 }
 
+// Only the HTML pages are copied. They are stubs that link `index.css` and
+// `index.js`; the stylesheet is not a source file but esbuild's output, emitted
+// beside `index.js` from the CSS the entry's modules import (panel/theme,
+// panel/shell, panel/extraction, ...), so each view owns its stylesheet.
 async function copyStatic(folder, out) {
   const source = path.join(root, "src", folder);
   const target = path.join(out, folder);
   await mkdir(target, { recursive: true });
   for (const entry of await readdir(source)) {
-    if (entry.endsWith(".html") || entry.endsWith(".css")) {
+    if (entry.endsWith(".html")) {
       await copyFile(path.join(source, entry), path.join(target, entry));
+    }
+  }
+}
+
+// The page entries whose stub HTML links `./index.css`.
+const PAGE_ENTRIES = ["popup", "sidepanel"];
+
+// A page whose bundle emitted no stylesheet would load unstyled and silently;
+// that means an entry stopped importing the panel's CSS, so the build fails.
+async function assertPageStylesheets() {
+  for (const name of PAGE_ENTRIES) {
+    const stylesheet = path.join(buildDir, path.dirname(extensionEntries[name].outfile), "index.css");
+    try {
+      await readFile(stylesheet);
+    } catch {
+      throw new Error(`The ${name} bundle emitted no index.css (${stylesheet}); its page links one. Import the panel's CSS from ${extensionEntries[name].source}.`);
     }
   }
 }

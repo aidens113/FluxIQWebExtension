@@ -29,7 +29,7 @@ import { cancelExtraction, confirmExtraction, readExtractionSession, startExtrac
 import { extractionConfirmPayload } from "./confirm-payload";
 import { extractionFieldRowElement } from "./field-row";
 import type { ExtractionConfirmOutcome, ExtractionPreviewRow, ExtractionSessionRefusal, ExtractionSessionView } from "./messages";
-import { extractionPanelElements, type ExtractionPanelElements } from "./panel-elements";
+import { buildExtractionPanel, type ExtractionPanelElements } from "./panel-elements";
 import { extractionPreviewColumns, extractionPreviewSelection, retainExtractionPreview } from "./preview";
 import { renderExtractionPreview } from "./preview-table";
 import {
@@ -41,8 +41,9 @@ import {
   setExtractionPaginate,
   type ExtractionDraft
 } from "./view-model";
+import "./extraction.css";
 
-/** What `popup/index.ts` holds once the panel is mounted. */
+/** What the view that mounted the panel holds (pinned by the UI audit, section 5). */
 export type ExtractionPanelHandle = {
   /** Enables the entry point. Extraction is recorded into a recording, so it is offered only while one is running. */
   setAvailable(available: boolean, reason?: string): void;
@@ -63,9 +64,13 @@ const REFUSALS = {
   value_form_unsupported: "FluxIQ cannot record a single value yet. Pick an item in a repeating list."
 } satisfies Record<ExtractionSessionRefusal, string>;
 
-/** Wires the extraction panel into the popup document and answers a handle for the entry point. */
-export function mountExtractionPanel(): ExtractionPanelHandle {
-  const els = extractionPanelElements();
+/**
+ * Builds the extraction panel into `host` -- the entry button where the host
+ * sits, the sheet over the whole panel -- wires it, and answers a handle for
+ * the entry point.
+ */
+export function mountExtractionPanel(host: HTMLElement): ExtractionPanelHandle {
+  const els = buildExtractionPanel(host);
   let draft: ExtractionDraft | undefined;
   let rows: ExtractionPreviewRow[] = [];
   let polling: ReturnType<typeof setInterval> | undefined;

@@ -13,7 +13,7 @@ export type {
   ExtractionSessionView
 } from "./messages";
 export { mountExtractionPanel, type ExtractionPanelHandle } from "./panel";
-export { extractionPanelElements, type ExtractionPanelElements } from "./panel-elements";
+export { buildExtractionPanel, type ExtractionPanelElements } from "./panel-elements";
 export { extractionPreviewColumns, extractionPreviewSelection, retainExtractionPreview } from "./preview";
 export { renderExtractionPreview } from "./preview-table";
 export {
