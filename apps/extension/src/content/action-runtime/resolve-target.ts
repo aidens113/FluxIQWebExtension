@@ -113,6 +113,7 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import { findClosestFingerprint, type ElementFingerprint } from "../element-finder";
 import { deepElementFromPoint, resolveShadowScope, type LookupRoot, type ShadowScope } from "../selector";
+import { composedRoots } from "../shadow-dom";
 import {
   candidateFingerprint,
   candidateLabel,
@@ -222,6 +223,39 @@ export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
   // recorded host chain reaches, by every strategy below and by scoring; any
   // other target in the document, as it always was (`selector/shadow/scope.ts`).
   const scope = resolveShadowScope(target?.context?.shadowHosts);
+  const first = resolveIn(action, target, scope);
+  if (first.outcome !== "not_found") return settle(first);
+  // A target that names no host chain and that the document does not hold may
+  // be a control inside an open shadow root, addressed the way the snapshot
+  // addressed it: a selector written within that root, and the name the model
+  // was shown. The handle a model writes carries no host chain -- the packet's
+  // element identity has no field for one -- so without this a button the
+  // snapshot described inside a consent widget could be seen and never pressed
+  // (`run-mulwm2dc-0bd95f22`). Only after the document missed entirely, so a
+  // light-document target resolves exactly as it always did; and every veto,
+  // every count and the ambiguity rule apply in the roots as they do in the
+  // document, so two widgets holding the same control are still refused.
+  if (scope.scoped || !first.misses.length) throw first.error;
+  const roots = composedRoots(document).slice(1);
+  if (!roots.length) throw first.error;
+  const widened = resolveIn(action, target, { scoped: true, roots, description: "the page's open shadow roots" });
+  if (widened.outcome !== "not_found") return settle(widened);
+  const misses = [...first.misses, ...widened.misses];
+  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, first.nearby, first.decided);
+}
+
+/** One pass of the resolution, in one scope. A miss is returned rather than thrown so a wider pass can follow it. */
+type ScopedResolution =
+  | { outcome: "resolved"; target: ResolvedTarget }
+  | { outcome: "ambiguous"; error: TargetResolutionError }
+  | { outcome: "not_found"; error: TargetResolutionError; misses: string[]; nearby: TargetCandidatePool; decided: CandidateSelection | undefined };
+
+function settle(resolution: Exclude<ScopedResolution, { outcome: "not_found" }>): ResolvedTarget {
+  if (resolution.outcome === "ambiguous") throw resolution.error;
+  return resolution.target;
+}
+
+function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefined, scope: ShadowScope): ScopedResolution {
   const misses: string[] = [];
   // Enumerating and scoring the family is the costly half of a resolution, and
   // both a point's answer and the final fallback may need it. Nothing on the
@@ -253,33 +287,33 @@ export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
       // count proves nothing about a twin. Scoring the family does.
       if (target && POSITIONAL_STRATEGIES.has(attempt.strategy)) {
         const { decided } = scoredFamily(target);
-        if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, [...misses, attempt.description]);
+        if (decided?.outcome === "ambiguous") return { outcome: "ambiguous", error: scoredAmbiguous(decided, [...misses, attempt.description]) };
       }
       // And when it accepts, its measurement is what the resolution reports.
       // The veto weighed this element on the way past; carrying the number out
       // is free, where scoring it again here would not be.
-      return { element: only, resolution: exactResolution(attempt, verdict?.measurement) };
+      return { outcome: "resolved", target: { element: only, resolution: exactResolution(attempt, verdict?.measurement) } };
     }
     // Several survived the gate. Scoring is the difference between "these two
     // tied" and "these two tied, and one of them is the recorded control".
     const decided = target ? scoreTargetCandidates(target, describePool(pool)) : undefined;
-    if (decided?.outcome === "resolved") return scoredTarget(decided, pool.length);
-    throw ambiguous(attempt, pool, decided);
+    if (decided?.outcome === "resolved") return { outcome: "resolved", target: scoredTarget(decided, pool.length) };
+    return { outcome: "ambiguous", error: ambiguous(attempt, pool, decided) };
   }
 
   if (!misses.length) {
     const active = document.activeElement;
-    if (active) return { element: active, resolution: { strategy: "active-element", candidateCount: 1 } };
-    throw notFound("No selector, coordinates, or active element was available.", [], NO_POOL);
+    if (active) return { outcome: "resolved", target: { element: active, resolution: { strategy: "active-element", candidateCount: 1 } } };
+    return { outcome: "not_found", error: notFound("No selector, coordinates, or active element was available.", [], NO_POOL), misses, nearby: NO_POOL, decided: undefined };
   }
 
   // Nothing answered exactly. The page may still hold the control under a new
   // name, so the same-family candidates are enumerated once and scored: the
   // enumeration is what a not-found failure reports either way.
   const { nearby, decided } = target ? scoredFamily(target) : NO_FAMILY;
-  if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.candidates.length);
-  if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
-  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided);
+  if (decided?.outcome === "resolved") return { outcome: "resolved", target: scoredTarget(decided, nearby.candidates.length) };
+  if (decided?.outcome === "ambiguous") return { outcome: "ambiguous", error: scoredAmbiguous(decided, misses) };
+  return { outcome: "not_found", error: notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided), misses, nearby, decided };
 }
 
 /** No enumeration was run at all: nothing was looked at, so nothing was cut short. */

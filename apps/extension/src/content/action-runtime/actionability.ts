@@ -5,7 +5,9 @@
 // element into view, the point at its centre must land on the element itself or
 // one of its descendants rather than on an overlay. A refusal names which of
 // the three failed, so the result can report ACTION_REJECTED with a code
-// instead of a generic failure.
+// instead of a generic failure. A `covered` refusal also says what layer the
+// hit landed in and which controls that layer offers, so whoever reads it
+// knows what has to be answered first.
 //
 // The checks run in that order because it is the order in which a reason stops
 // being knowable: an element with no box has no point to hit-test, and a
@@ -22,6 +24,9 @@
 // inside the viewport even after scrolling. In all three there is no point on
 // screen that belongs to it.
 
+import { deepElementFromPoint } from "../selector";
+import { composedClosest, composedContains } from "../shadow-dom";
+import { coveringLayerSentence } from "./interference";
 import { scrollElementIntoView } from "./scroll-element-into-view";
 
 export type ActionabilityRejectionCode = "disabled" | "hidden" | "covered";
@@ -48,13 +53,20 @@ export function checkActionability(element: Element): ActionabilityReport {
   const point = hitPoint(element, view);
   if (!point) return reject("hidden", "no part of the element is inside the viewport, even after scrolling");
 
-  const hit = topmostAt(element.ownerDocument, point);
+  // The hit test descends through open shadow roots, so a control inside a
+  // widget is tested against what is painted inside that widget rather than
+  // against its host, and a covering layer in one is named by its own content.
+  const hit = deepElementFromPoint(point.x, point.y, element.ownerDocument) ?? undefined;
   if (!hit) return reject("covered", `nothing is painted at ${describePoint(point)}`, point);
   if (hit === element) return { actionable: true, point, detail: `the point ${describePoint(point)} landed on the target` };
-  if (isWithin(element, hit)) {
+  if (composedContains(element, hit)) {
     return { actionable: true, point, detail: `the point ${describePoint(point)} landed on ${elementLabel(hit)}, inside the target` };
   }
-  return reject("covered", `the point ${describePoint(point)} landed on ${elementLabel(hit)}, which covers the target`, point);
+  // What covers the target, said so the reader can deal with it: the layer the
+  // hit landed in and the controls on it (`interference/covering-layer.ts`).
+  const layer = coveringLayerSentence(element, point);
+  const covered = `the point ${describePoint(point)} landed on ${elementLabel(hit)}, which covers the target`;
+  return reject("covered", layer ? `${covered}; ${layer}` : covered, point);
 }
 
 function reject(code: ActionabilityRejectionCode, detail: string, point?: Point): ActionabilityReport {
@@ -68,7 +80,8 @@ function reject(code: ActionabilityRejectionCode, detail: string, point?: Point)
  * and for `content-visibility`, which no single computed style reveals.
  */
 function hiddenReason(element: Element, view: Window): string | undefined {
-  if (element.closest("[inert]")) return "the element is inert";
+  // Inertness reaches into a shadow root from its host, so it is asked across the boundary.
+  if (composedClosest(element, "[inert]")) return "the element is inert";
   const style = view.getComputedStyle(element);
   if (style.display === "none") return "the element's display is none";
   if (style.visibility !== "visible") return `the element's visibility is ${style.visibility}`;
@@ -113,29 +126,6 @@ function hitPoint(element: Element, view: Window): Point | undefined {
   const bottom = Math.min(rect.bottom, view.innerHeight);
   if (right <= left || bottom <= top) return undefined;
   return { x: (left + right) / 2, y: (top + bottom) / 2 };
-}
-
-/** The element painted at the point, descending through shadow roots so a custom element reports its own content. */
-function topmostAt(document: Document, point: Point): Element | undefined {
-  let hit = document.elementFromPoint(point.x, point.y) ?? undefined;
-  for (let depth = 0; depth < 16; depth += 1) {
-    const root = hit?.shadowRoot;
-    if (!root) break;
-    const deeper = root.elementFromPoint(point.x, point.y);
-    if (!deeper || deeper === hit) break;
-    hit = deeper;
-  }
-  return hit;
-}
-
-/** Whether `node` is the element or inside it, crossing shadow boundaries, which `Node.contains` does not. */
-function isWithin(ancestor: Element, node: Node | null): boolean {
-  let current: Node | null = node;
-  while (current) {
-    if (current === ancestor) return true;
-    current = current instanceof ShadowRoot ? current.host : current.parentNode;
-  }
-  return false;
 }
 
 /** A short, stable name for an element in a refusal: enough to find it on the page, bounded in length. */

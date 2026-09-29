@@ -23,11 +23,24 @@
 // otherwise has no reason to carry.
 //
 // Both answers are elements of this document, never text off it.
+//
+// Both look through open shadow roots. A consent platform or chat vendor ships
+// its layer as a custom element whose content lives in one, and
+// `document.elementFromPoint` answers with that element's host: the layer's
+// scrim, its declared dialog and its buttons were all invisible here, so a
+// layer drawn that way could be neither classified nor cleared. The hit test
+// descends (`deepElementFromPoint`), and every walk up or down crosses the
+// boundary (`../../shadow-dom`). A closed root still presents only its host.
 
+import { deepElementFromPoint } from "../../selector";
+import { composedClosest, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
 import { hasDismissalControl } from "./way-out";
 
 /** A viewport coordinate, as the actionability gate's hit test reports it. */
 export type Point = { x: number; y: number };
+
+/** How many elements of one overlay are read for a declared dialog inside it. */
+const DIALOG_SCAN_LIMIT = 5_000;
 
 /** A dialog the page declares, open or not; which of them is painted is asked separately. */
 const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog[open]';
@@ -93,7 +106,7 @@ function modalPseudoClassSupported(): boolean {
 
 /** What matches a selector this module wrote and has a box on screen. */
 function painted(selector: string): Element[] {
-  return [...document.querySelectorAll(selector)].filter((element) => element.getClientRects().length > 0);
+  return queryComposed(composedRoots(document), selector).filter((element) => element.getClientRects().length > 0);
 }
 
 /**
@@ -102,23 +115,38 @@ function painted(selector: string): Element[] {
  * -- a scrim -- that holds a declared dialog or its own way out.
  */
 function coveringDialog(point: Point): Element | undefined {
-  const hit = document.elementFromPoint(point.x, point.y);
+  const hit = deepElementFromPoint(point.x, point.y);
   if (!hit) return undefined;
-  const declared = hit.closest(DIALOG_SELECTOR);
+  const declared = composedClosest(hit, DIALOG_SELECTOR);
   if (declared) return declared;
   const overlay = outermostFixed(hit);
   if (!overlay) return undefined;
-  const inner = overlay.querySelector(DIALOG_SELECTOR);
-  if (inner && inner.getClientRects().length > 0) return inner;
+  const inner = declaredDialogWithin(overlay);
+  if (inner) return inner;
   return hasDismissalControl(overlay) ? overlay : undefined;
 }
 
-/** The outermost ancestor-or-self below `<body>` that is fixed to the viewport: an overlay's own root. */
-function outermostFixed(element: Element): Element | undefined {
+/** The first painted dialog the overlay declares anywhere beneath it, shadow roots included. */
+function declaredDialogWithin(overlay: Element): Element | undefined {
+  let read = 0;
+  for (const element of composedDescendants(overlay)) {
+    if (++read > DIALOG_SCAN_LIMIT) return undefined;
+    if (element.matches(DIALOG_SELECTOR) && element.getClientRects().length > 0) return element;
+  }
+  return undefined;
+}
+
+/**
+ * The outermost ancestor-or-self below `<body>` that is fixed to the viewport:
+ * an overlay's own root. The walk continues from a shadow root to its host,
+ * because the fixed element is usually the widget's host and not anything
+ * inside it.
+ */
+export function outermostFixed(element: Element): Element | undefined {
   const view = element.ownerDocument.defaultView;
   if (!view) return undefined;
   let found: Element | undefined;
-  for (let current: Element | null = element; current && current !== element.ownerDocument.body && current !== element.ownerDocument.documentElement; current = current.parentElement) {
+  for (let current: Element | null = element; current && current !== element.ownerDocument.body && current !== element.ownerDocument.documentElement; current = composedParent(current)) {
     const position = view.getComputedStyle(current).position;
     if (position === "fixed" || position === "sticky") found = current;
   }

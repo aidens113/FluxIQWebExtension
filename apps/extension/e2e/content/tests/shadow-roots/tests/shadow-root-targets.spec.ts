@@ -74,14 +74,19 @@ test.describe("a control recorded inside an open shadow root", () => {
     await expect.poll(async () => (await replay.finalState()).state).toMatchObject({ consent: "accepted" });
   });
 
-  test("job-board: without the chain the same command finds nothing, which is the failure lane D measured", async ({ openHarness, page }) => {
+  // Lane D measured this command finding nothing. Since `run-mulwm2dc-0bd95f22`
+  // a target the document does not hold is looked for in the page's open shadow
+  // roots too, under the same veto and ambiguity rule, because a model's handle
+  // carries no host chain at all (`action-runtime/resolve-target.ts`). The
+  // chain still decides where a recorded target may be -- the two rows after
+  // this one -- and without it the recorded name is what finds the control.
+  test("job-board: without the chain the same command is found in the page's open shadow roots, and presses the right control", async ({ openHarness, page }) => {
     const recording = await openHarness("job-board");
     const command = replayCommand(await recordPress(recording, page.getByRole("button", { name: "Accept all" })), "shadow:consent-unscoped");
     const replay = await openHarness("job-board");
     const reply = await replay.runAction(withoutHostChain(command));
-    expect(reply.status).toBe("failed");
-    expect(reply.failure?.code).toBe(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
-    expect((await replay.finalState()).state).toMatchObject({ consent: "pending" });
+    expect(reply, reply.message).toMatchObject({ status: "succeeded", element: { tagName: "button", accessibleName: "Accept all" } });
+    await expect.poll(async () => (await replay.finalState()).state).toMatchObject({ consent: "accepted" });
   });
 
   test("job-board: two identical consent widgets are ambiguous, and neither is pressed", async ({ openHarness, page }) => {

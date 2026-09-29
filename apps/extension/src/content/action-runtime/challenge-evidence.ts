@@ -23,6 +23,14 @@
 // check or a code prompt, and only in its headings and labels. A reCAPTCHA v3
 // badge, which sits on every page of the sites that use it and asks nothing of
 // anyone, is not a robot check.
+//
+// Every read enters the open shadow roots beneath the root. The interference
+// defence now finds a way out inside a widget's shadow root, and it may press
+// one only because this said the widget asks for nothing of the person's -- so
+// a robot check drawn inside a shadow root has to be seen here first, or the
+// defence would close it. A closed root cannot be read, here or anywhere.
+
+import { openRootsWithin } from "../shadow-dom";
 
 export type ChallengeKind = "captcha" | "credential" | "payment";
 
@@ -75,8 +83,10 @@ const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6, [role="heading"], label, legen
 function renderedMatch(root: Element, selector: string): boolean {
   try {
     if (root.matches(selector) && root.getClientRects().length > 0) return true;
-    for (const element of root.querySelectorAll(selector)) {
-      if (element.getClientRects().length > 0) return true;
+    for (const scope of [root, ...openRootsWithin(root)]) {
+      for (const element of scope.querySelectorAll(selector)) {
+        if (element.getClientRects().length > 0) return true;
+      }
     }
   } catch {
     return false;
@@ -86,17 +96,31 @@ function renderedMatch(root: Element, selector: string): boolean {
 
 /** The root's text as a reader sees it, bounded. `innerText` skips what is not rendered; `textContent` is the fallback where there is no layout. */
 function renderedText(root: Element): string {
-  const text = root instanceof HTMLElement && typeof root.innerText === "string" ? root.innerText : root.textContent ?? "";
+  // `innerText` does not read into a shadow root, so each open root's own
+  // top-level elements are read after the root's text.
+  let text = elementText(root);
+  for (const shadow of openRootsWithin(root)) {
+    for (const child of shadow.children) {
+      if (text.length >= TEXT_LIMIT) return text.slice(0, TEXT_LIMIT);
+      text += ` ${elementText(child)}`;
+    }
+  }
   return text.slice(0, TEXT_LIMIT);
+}
+
+function elementText(element: Element): string {
+  return element instanceof HTMLElement && typeof element.innerText === "string" ? element.innerText : element.textContent ?? "";
 }
 
 /** The painted headings and labels under the root, joined and bounded. */
 function headingText(root: Element): string {
   let text = "";
-  for (const element of root.querySelectorAll(HEADING_SELECTOR)) {
-    if (element.getClientRects().length === 0) continue;
-    text += ` ${element.textContent ?? ""}`;
-    if (text.length >= TEXT_LIMIT) break;
+  for (const scope of [root, ...openRootsWithin(root)]) {
+    for (const element of scope.querySelectorAll(HEADING_SELECTOR)) {
+      if (element.getClientRects().length === 0) continue;
+      text += ` ${element.textContent ?? ""}`;
+      if (text.length >= TEXT_LIMIT) return text.slice(0, TEXT_LIMIT);
+    }
   }
   return text.slice(0, TEXT_LIMIT);
 }

@@ -6,7 +6,9 @@
 // least useful elements rather than an arbitrary tail -- and keeps one example
 // of each control a page repeats row after row, ranking the rest of the run
 // after every distinct element (`repeat-exemplars.ts`), so a many-row page's
-// template cannot crowd its own buttons out of the head of the list.
+// template cannot crowd its own buttons out of the head of the list. Every
+// gathering pass enters open shadow roots (`shadow-dom/`), because a widget's
+// controls are on the page a person sees whichever tree they live in.
 //
 // After what was touched come the controls that change what this page shows --
 // its facets, its sort, its pager -- and the controls of whatever is painted
@@ -53,6 +55,7 @@ import {
 } from "./element-traits";
 import { repeatExemplars } from "./repeat-exemplars";
 import { withSelectorMemo } from "./selector";
+import { composedClosest, composedDocumentOrder, composedRoots, queryComposed, shadowHostsOf } from "./shadow-dom";
 import { visualDocumentBounds } from "./visual-bounds";
 import type { DomElementDescriptor, DomSnapshot } from "./types";
 
@@ -143,8 +146,9 @@ const SENSITIVE_CANDIDATE_SELECTOR = "input, textarea, select, [autocomplete], [
  * extension ships for Chromium/Edge and Firefox; a lost selection is a
  * diagnostic inconvenience, a leaked card number is not.
  *
- * Shadow DOM is out of scope, as it is everywhere else in the recorder: a
- * selection inside a closed shadow root is not reachable from here.
+ * Shadow DOM is out of scope here, although the element list enters open
+ * roots: the selection is the document's, and a selection inside a closed
+ * shadow root is not reachable from here at all.
  */
 function capturedSelectionText(): string | undefined {
   const selection = window.getSelection();
@@ -212,7 +216,7 @@ function snapshotElements(): { entries: SnapshotElementEntry[]; counts: Snapshot
       left.follower - right.follower ||
       left.bucket - right.bucket ||
       right.priority - left.priority ||
-      documentOrder(left.element, right.element)
+      composedDocumentOrder(left.element, right.element)
     )
     .slice(0, MAX_SNAPSHOT_CANDIDATES)
     .map(({ element }) => ({ element, descriptor: snapshotDescriptor(element, repeats.counts.get(element)) }));
@@ -251,11 +255,14 @@ function snapshotCandidateElements(): { candidates: Element[]; scanned: number }
   for (const element of observedEventElementQueue) {
     if (element.isConnected) add(element);
   }
-  for (const element of document.querySelectorAll("a[href],button,input:not([type=hidden]),textarea,select,summary,label,[role=button],[role=link],[role=menuitem],[role=checkbox],[role=radio],[role=tab],[role=switch],[contenteditable=true]")) add(element);
-  for (const element of document.querySelectorAll("p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,dt,dd,figcaption")) add(element);
-  for (const element of document.querySelectorAll("img,svg,picture,canvas,video")) add(element);
+  // Open shadow roots are part of the page a person sees: a consent wall's
+  // buttons live in one (`shadow-dom/`). A closed root is described as its host.
+  const roots = composedRoots(document);
+  for (const element of queryComposed(roots, "a[href],button,input:not([type=hidden]),textarea,select,summary,label,[role=button],[role=link],[role=menuitem],[role=checkbox],[role=radio],[role=tab],[role=switch],[contenteditable=true]")) add(element);
+  for (const element of queryComposed(roots, "p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,dt,dd,figcaption")) add(element);
+  for (const element of queryComposed(roots, "img,svg,picture,canvas,video")) add(element);
   let scanned = 0;
-  for (const element of document.querySelectorAll("*")) {
+  for (const element of queryComposed(roots, "*")) {
     scanned += 1;
     if (scanned > MAX_SNAPSHOT_SCAN_ELEMENTS) break;
     if (!hasElementPresentation(element)) continue;
@@ -267,8 +274,10 @@ function snapshotCandidateElements(): { candidates: Element[]; scanned: number }
 
 function shouldIncludeSnapshotElement(element: Element): boolean {
   if (element === document.documentElement || element === document.body) return false;
-  if (element.closest("script, style, noscript, template")) return false;
-  if (element.closest("[hidden], [aria-hidden='true']")) return false;
+  // Asked across shadow boundaries: a control inside a hidden widget's root is
+  // hidden with it, and `closest` alone stops at the root.
+  if (composedClosest(element, "script, style, noscript, template")) return false;
+  if (composedClosest(element, "[hidden], [aria-hidden='true']")) return false;
   const bounds = visualDocumentBounds(element);
   if (!bounds) return false;
   const style = getComputedStyle(element);
@@ -309,7 +318,7 @@ function snapshotElementBucket(element: Element): number {
     // A control of whatever is painted over the page joins them: the page
     // behind a consent banner cannot be clicked until the banner is answered.
     // Only a page control asks, so a sticky header's links stay links.
-    if (control === 2 && isFrontLayer(element)) return 1;
+    if (control === 2 && inFrontLayer(element)) return 1;
     // Only a control is demoted for sitting in the footer. Footer prose is text
     // like any other text and is ranked as text, which it would be anyway.
     return isSiteChrome(element) ? 5 : control;
@@ -332,6 +341,16 @@ function snapshotElementBucket(element: Element): number {
  * whose narrowing controls are all drawn that way the last band is the same as
  * not being described at all.
  */
+/**
+ * Whether the element is part of something painted over the page. A control
+ * inside a shadow root is asked through its hosts as well, because the fixed
+ * layer is usually the custom element itself -- `rf-consent` is `position:
+ * fixed` and its buttons are not -- and `isFrontLayer`'s walk stops at the root.
+ */
+function inFrontLayer(element: Element): boolean {
+  return isFrontLayer(element) || shadowHostsOf(element).some(isFrontLayer);
+}
+
 function controlBucket(element: Element): number | undefined {
   if (isPageControlElement(element)) return 2;
   if (isPrimaryControlElement(element)) return 3;
@@ -377,9 +396,4 @@ function elementPriority(element: Element): number {
   const bounds = visualDocumentBounds(element);
   if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
   return score;
-}
-
-function documentOrder(left: Element, right: Element): number {
-  if (left === right) return 0;
-  return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
 }

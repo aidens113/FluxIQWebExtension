@@ -27,6 +27,7 @@
 // read for text, so the dialog's own outer `<div>` -- whose `textContent` is
 // every word in it -- can never be mistaken for a control.
 
+import { composedDescendants } from "../../shadow-dom";
 import { isDismissalLabel } from "./vocabulary";
 
 /** At most this many elements of one overlay are read for a way out. */
@@ -52,7 +53,10 @@ export function dismissControlIn(overlay: Element): Element | undefined {
 
 function firstDismissal(overlay: Element, pressable: boolean): Element | undefined {
   let scanned = 0;
-  for (const element of overlay.querySelectorAll("*")) {
+  // Into the overlay's open shadow roots too: a widget's close glyph lives in
+  // one as often as not. The bound and the vocabulary are unchanged, so a
+  // consent wall offering only Accept and Reject still has no way out here.
+  for (const element of composedDescendants(overlay)) {
     if (++scanned > DISMISS_SCAN_LIMIT) return undefined;
     if (element.getClientRects().length === 0) continue;
     if (!saysDismissal(element)) continue;
