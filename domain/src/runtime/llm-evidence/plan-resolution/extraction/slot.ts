@@ -24,6 +24,15 @@
 // template, and without it a read of "every product, leaving out sponsored
 // placements" returns every advertisement too.
 //
+// `dedupe` and `sort` say which rows are one row and the order they are
+// answered in, naming columns by the plan's own keys, exactly as a literal
+// request does (`actions/extraction/order-request.ts`). They live inside
+// `extractList` and nowhere else (decided 2026-09-28), so the handle form takes
+// them too: live run `run-mulwm2dc-0bd95f22` asked for roles "deduplicated,
+// newest first" over a detected list and had nowhere to write either. Each
+// resolves to its canonical form, and one the reader would drop is refused at
+// its position rather than dropped, since a model is still there to repair it.
+//
 // `paginate: false` reads only the page shown. Absent or `true`, the detected
 // pagination is read. A pagination the model wrote itself names controls it
 // was never shown, so it can only mean "keep reading": the detected one is read,
@@ -41,6 +50,7 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
+  webAutomationExtractListRequestRead,
   webAutomationExtractListRequestValue,
   type WebAutomationExtractListPagination
 } from "../../../../actions/extraction";
@@ -75,7 +85,7 @@ export type WebExtractionSlotResolution =
   /** `path` is where inside the value it was refused. */
   | { status: "refused"; issue: WebExtractionSlotIssue; path: WebPlanValuePath };
 
-const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "paginate", "minItems", "maxItems"]);
+const LIST_KEYS: ReadonlySet<string> = new Set(["handle", "location", "item", "fields", "columns", "where", "dedupe", "sort", "paginate", "minItems", "maxItems"]);
 const REFERENCE_KEYS: ReadonlySet<string> = new Set(["handle", "location"]);
 
 type Reference = { handle: unknown; location: unknown; path: WebPlanValuePath };
@@ -132,8 +142,39 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (checked === undefined) return refused("web.handle.malformed", []);
   if (checked.minItems !== request.minItems) return refused("web.handle.malformed", ["minItems"]);
   if (checked.maxItems !== request.maxItems) return refused("web.handle.malformed", ["maxItems"]);
+  const order = keptOrder(value, request);
+  if ("issue" in order) return order;
   const assumed = [...columns.assumed, ...(where !== undefined && where.ok ? where.assumed : [])];
   return { status: "resolved", request, frameId: binding.frameId, assumed };
+}
+
+/**
+ * `dedupe` and `sort` as the reader reads them against the columns the plan
+ * keeps, written onto the request in canonical form: a column resolved from the
+ * plan's key, and every forgiving spelling read as the one it means. An off
+ * dedupe and an empty sort leave the request without either. A part the reader
+ * would drop is refused at its position -- `dedupe`, or `sort.N` for the key it
+ * could not read -- because dropped here it would sort or dedupe nothing while
+ * the model believed it had asked.
+ */
+function keptOrder(value: Record<string, unknown>, request: JsonObject): { ok: true } | Refused {
+  if (value.dedupe === undefined && value.sort === undefined) return { ok: true };
+  const probe: JsonObject = { ...request };
+  if (value.dedupe !== undefined) probe.dedupe = value.dedupe as JsonValue;
+  if (value.sort !== undefined) probe.sort = value.sort as JsonValue;
+  const read = webAutomationExtractListRequestRead(probe);
+  if (read.dropped.includes("dedupe")) return refused("web.handle.malformed", ["dedupe"]);
+  const sortKey = read.dropped.find((part) => part.startsWith("sort."));
+  if (sortKey !== undefined) {
+    // The reader's position counts keys after splitting `"a desc, b"`, which is
+    // the written array's position only when no entry held two keys.
+    const index = Number(sortKey.slice(5));
+    const oneKeyEach = Array.isArray(value.sort) && value.sort.every((entry) => typeof entry !== "string" || !/[,;]|\sthen\s/u.test(entry));
+    return refused("web.handle.malformed", oneKeyEach ? ["sort", index] : ["sort"]);
+  }
+  if (read.request?.dedupe !== undefined) request.dedupe = read.request.dedupe as unknown as JsonObject;
+  if (read.request?.sort !== undefined) request.sort = read.request.sort as unknown as JsonValue;
+  return { ok: true };
 }
 
 /** Every place the value names its list by reference: its own `handle`, its `item`, and each field that carries one. */

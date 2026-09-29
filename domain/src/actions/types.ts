@@ -217,6 +217,9 @@ export { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } fr
 export {
   isWebAutomationExtractFieldKey,
   webAutomationExtractConditionHolds,
+  // The number a value states, which a list read's numeric sort reads by the
+  // same rule a `where` bound does (`content/extraction/order-rows.ts`).
+  webAutomationExtractConditionNumber,
   webAutomationExtractListRequestValue,
   webAutomationExtractListTimeoutMs,
   webAutomationRecordedExtraction

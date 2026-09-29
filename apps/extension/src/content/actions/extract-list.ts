@@ -106,7 +106,11 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
     ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {}),
-    ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {})
+    ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {}),
+    // What dedupe and sort took -- the repeats left out and the rows a sort key
+    // could not read -- so a sort over a column the page states as prose is
+    // visible to the verifier rather than looking like page order.
+    ...(outcome.order ? { order: { duplicates: outcome.order.duplicates, unsortable: outcome.order.unsortable } } : {})
   };
 }
 

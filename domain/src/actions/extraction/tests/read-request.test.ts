@@ -128,9 +128,50 @@ test("every clause of an instruction's qualifying conditions reaches one request
     { read: ".sponsored-label", is: "absent" },
     { field: "name", contains: ["ear tip", "charging case"], not: true }
   ]);
-  // Order and once-per-row across pages are the read's own behaviour and need no
-  // parameter, so nothing here says them (`../request.ts`). What the request
-  // still cannot say is *which column* identifies a row: the de-duplication key
-  // is the whole record.
+  // Page order and once-per-row across pages are the read's defaults and need no
+  // parameter, so a request that names neither `dedupe` nor `sort` carries
+  // neither (`../request.ts`).
   assert.deepEqual(Object.keys(request ?? {}).sort(), ["fields", "item", "minItems", "paginate", "where"]);
+});
+
+// `dedupe` and `sort` live inside the request, beside `where`, and nowhere else
+// (decided 2026-09-28). The read keeps them in canonical form, and a part it
+// cannot read is dropped and named exactly as a condition is.
+
+test("a request's dedupe and sort are read inside it, in canonical form, beside where", () => {
+  const read = webAutomationExtractListRequestRead({
+    item: ".job",
+    fields: { title: ".title", company: ".company", posted: ".posted", url: "a@href" },
+    where: [{ field: "title", contains: "rust" }],
+    dedupe: ["title", "company"],
+    sort: "posted desc",
+    maxItems: 20
+  });
+  assert.deepEqual(read.dropped, []);
+  assert.deepEqual(read.request?.dedupe, { by: ["title", "company"] });
+  assert.deepEqual(read.request?.sort, [{ field: "posted", order: "desc" }]);
+  assert.deepEqual(Object.keys(read.request ?? {}).sort(), ["dedupe", "fields", "item", "maxItems", "sort", "where"]);
+});
+
+test("a dedupe or sort key that cannot be read is dropped and named, and the rest of the request still runs", () => {
+  const read = webAutomationExtractListRequestRead({
+    item: ".job",
+    fields: { title: ".title", posted: ".posted" },
+    dedupe: 7,
+    sort: ["posted desc", "newest", "title"]
+  });
+  // `newest` is a direction naming no column, so it sorts by nothing and leaves;
+  // the keys either side of it still sort.
+  assert.deepEqual(read.dropped, ["dedupe", "sort.1"]);
+  assert.equal(read.request?.dedupe, undefined);
+  assert.deepEqual(read.request?.sort, [{ field: "posted", order: "desc" }, { field: "title", order: "asc" }]);
+  // A dispatch runs it; a producer's wire copy, which must be whole, does not.
+  assert.notEqual(webAutomationExtractListRequestValue({ item: ".job", fields: { title: ".title" }, dedupe: 7 }), undefined);
+  assert.equal(webAutomationExtractListRequestWhole({ item: ".job", fields: { title: ".title" }, dedupe: 7 }), undefined);
+});
+
+test("an off dedupe and an empty sort are no dedupe and no sort, not faults", () => {
+  const read = webAutomationExtractListRequestRead({ item: ".job", fields: { title: ".title" }, dedupe: false, sort: [] });
+  assert.deepEqual(read.dropped, []);
+  assert.deepEqual(Object.keys(read.request ?? {}).sort(), ["fields", "item"]);
 });

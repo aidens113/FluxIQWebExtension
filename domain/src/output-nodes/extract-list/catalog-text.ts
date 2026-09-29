@@ -174,14 +174,32 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  * At 696 of 700 there are four characters left. The bound has not moved and the
  * pressure has not gone: two measured clauses have now been fitted by cutting,
  * and the next one has nowhere left to come from but Core's 700.
+ *
+ * **The third measured clause is `dedupe` and `sort`, and it was fitted the
+ * same way on 2026-09-28.** Live run `run-mulwm2dc-0bd95f22` asked the job board
+ * for roles "deduplicated, newest first"; the verifier's advice was to add
+ * dedupe and sort, and the repair had nowhere to write either. Both now live
+ * inside `extractList`, for both branches at once, as pagination does, and the
+ * clause shows the least of each: `true` (each row once, by its link) or a
+ * column, and one key with its direction. The reader takes every other
+ * spelling (`actions/extraction/order-request.ts`). What paid for its 36
+ * characters, none of them a rule:
+ *
+ * - `also` before the comparisons, and `(number)` after the numeric ones, which
+ *   the shown bound `atLeast: 4, lessThan: 50` already says are numbers;
+ * - the spaces around `=` in the link clause;
+ * - "read only the page shown unless asked" became "one page unless asked",
+ *   the same default in the words the clause before it already set up.
+ *
+ * At 698 of 700 there are two characters left.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
   `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false};`,
-  "where is optional: omit it, keep every item, narrow later. All hold; also atMost/greaterThan/equals (number), contains/startsWith/endsWith/matches (text); list = any; not: true inverts.",
-  "link = absolute URL, @href = raw href.",
+  "where is optional: omit it, keep every item, narrow later. All hold; atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts.",
+  "link=absolute URL, @href=raw href.",
   "Or {item: css, fields: {key: css|css@attribute|column:<header>}}.",
-  `paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}: pages to read, not pages present -- read only the page shown unless asked.`,
-  `minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  `paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}: pages to read, not pages present; one page unless asked.`,
+  `dedupe?: true|key, sort?: "key desc"; minItems (default 1, 0 = none), maxItems <=${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
 ].join(" ");
 
 /**
@@ -227,11 +245,25 @@ export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
  * tool's description, which has room for them
  * (`runtime/llm-evidence/tools.ts`). The example is sent whole or not at all and
  * is cut off above 600 bytes, which this is well inside.
+ *
+ * `dedupe` and `sort` are here for the reason `where` is, and since 2026-09-28:
+ * Core sets a key a model writes beside `extractList` at `extractList.<key>`
+ * only when this example declares it (`flow-bootstrap/authoring/matching.ts`),
+ * and the node has no `dedupe` or `sort` of its own, so without them here a
+ * "newest first" written on the step is refused rather than read.
+ *
+ * **They are declared at their off values, deliberately.** The example models
+ * how much to write, and a sort copied from it onto a read that asked for none
+ * is not a wider answer but a different one: with `maxItems`, "the first five
+ * shown" would become "the cheapest five". `false` and `[]` declare the keys,
+ * show where they go and change nothing; the grammar shows what they say.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE: JsonObject = {
   item: "li.product",
   fields: { name: ".name", price: ".price", url: "a@href" },
   where: [{ read: ".sponsored-label", is: "absent" }],
+  dedupe: false,
+  sort: [],
   paginate: { mode: "next", next: "a.next", maxPages: 5 },
   minItems: 1
 };

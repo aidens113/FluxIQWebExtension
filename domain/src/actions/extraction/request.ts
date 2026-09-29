@@ -167,7 +167,10 @@ export type WebAutomationExtractListPagination =
  * by the reader (`./order-request.ts`): an author who wrote only "list each
  * once" gets the list's link column, or every column when it has none. The
  * first occurrence in page order is kept, across every page and document the
- * read covers, after `where`.
+ * read covers, after `where`. Values compare with their layout and case
+ * ignored. A row with none of the `by` values is never a duplicate: it cannot
+ * be identified, and folding every such row into one would drop rows that
+ * differ in everything else.
  */
 export type WebAutomationExtractListDedupe = {
   by: string[];
@@ -179,7 +182,10 @@ export type WebAutomationExtractSortOrder = "asc" | "desc";
 /**
  * What a sort key's values are read as. `auto`, which is what an absent `as`
  * means, reads the column as dates when most of its values state one, as
- * numbers when most state one, and as text otherwise.
+ * numbers when most state one, and as text otherwise. A date is an absolute one
+ * (`2026-09-12`, `12 Sep 2026`, `Sep 12`) or one stated relative to the read
+ * (`3 days ago`, `30+ days ago`, `yesterday`, `just posted`), which is how a
+ * listing usually says when it was posted.
  */
 export type WebAutomationExtractSortType = "auto" | "number" | "date" | "text";
 
@@ -268,10 +274,12 @@ export type WebAutomationExtractRead = {
  * `run-mulwm2dc-0bd95f22` settled it: asked for job-board roles "deduplicated,
  * newest first", the verifier said to add dedupe and sort and the repair had
  * nowhere to write either. The standing rule is that an instruction's qualifying
- * clauses are the extraction node's own parameters. Neither is written inside a
- * detected list's handle form, whose resolver admits a fixed set of keys: the
- * node carries `dedupe` and `sort` beside `extractList` and its dispatch folds
- * them in (`output-nodes/extract-list/dispatch.ts`).
+ * clauses are the extraction's own parameters, so both are written **inside
+ * `extractList`**, beside `where`, and nowhere else: the node has no `dedupe` or
+ * `sort` of its own, and nothing folds one in (decided 2026-09-28, t173). The
+ * page applies them in one order -- `where`, then `dedupe`, then `sort`, then
+ * `maxItems` -- and says how many rows each dropped or could not order
+ * (`content/extraction/order-rows.ts`, `./summary.ts`).
  *
  * What is top-frame-only is the definition lane, not this contract: the picker
  * takes a pick from frame 0 alone, and `background/extraction/confirm.ts`
@@ -314,7 +322,7 @@ export type WebAutomationExtractListRequest = {
    * words they do not want in a column they named is not that.
    */
   where?: WebAutomationExtractItemCondition[] | undefined;
-  /** Keep one row per value of these columns, the first in page order, across every page read. */
+  /** Keep one row per value of these columns, the first in page order, across every page read, after `where` and before `sort` and `maxItems`. */
   dedupe?: WebAutomationExtractListDedupe | undefined;
   /**
    * The order the rows are answered in, over every page read, by each key in

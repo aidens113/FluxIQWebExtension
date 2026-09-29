@@ -98,3 +98,29 @@ test("the two stricter checks refuse what the reader would silently drop", () =>
     assert.notDeepEqual(webAutomationExtractListIssues(value), []);
   }
 });
+
+// `dedupe` and `sort` are the request's own keys (decided 2026-09-28), so a plan
+// writing them inside `extractList` is accepted in every spelling the reader
+// takes, and refused by name only for what the reader would drop.
+
+test("a request's dedupe and sort are accepted in the spellings a model writes", () => {
+  const fields = { title: ".title", company: ".company", posted: ".posted", url: "a@href" };
+  for (const order of [
+    { dedupe: true },
+    { dedupe: "url" },
+    { dedupe: { by: ["title", "company"] } },
+    { dedupe: false, sort: [] },
+    { sort: "posted desc" },
+    { sort: [{ field: "posted", order: "desc", as: "date" }] },
+    { dedupe: ["title", "company"], sort: ["-posted", "title"] }
+  ]) {
+    assert.deepEqual(issuesFor({ item: ".job", fields, ...order }), [], JSON.stringify(order));
+  }
+});
+
+test("a dedupe that is not one, and a sort key naming no column, are refused by name", () => {
+  const fields = { title: ".title", posted: ".posted" };
+  assert.deepEqual(issuesFor({ item: ".job", fields, dedupe: 3 }), ["web.extract_list.invalid_dedupe"]);
+  assert.deepEqual(issuesFor({ item: ".job", fields, sort: "newest" }), ["web.extract_list.invalid_sort"]);
+  assert.deepEqual(issuesFor({ item: ".job", fields, sort: [{ field: "posted", order: "sideways" }] }), ["web.extract_list.invalid_sort"]);
+});

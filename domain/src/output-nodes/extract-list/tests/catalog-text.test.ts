@@ -86,3 +86,24 @@ test("the shape a model copies shows a mark and a bound over a column under the 
   assert.deepEqual(where, [{ read: ".sponsored-label", is: "absent" }]);
   assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "where"), true, "the example declares where, or a model cannot write it beside extractList");
 });
+
+test("the grammar says a list can be deduplicated and sorted, and the example declares both keys without using them", () => {
+  // Live run `run-mulwm2dc-0bd95f22`: asked for roles "deduplicated, newest
+  // first", the verifier said to add dedupe and sort and the repair had nowhere
+  // to write either. Both are `extractList`'s own keys, and the grammar says them
+  // once, for both branches, as it does pagination.
+  const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
+  assert.equal(grammar.includes("dedupe?: true|key"), true, "the grammar does not say dedupe");
+  assert.equal(grammar.includes('sort?: "key desc"'), true, "the grammar does not say sort");
+  assert.equal(grammar.split("dedupe?:").length - 1, 1, "dedupe is said once, for both branches");
+  assert.equal(grammar.indexOf("dedupe?:") < grammar.indexOf("maxItems"), true, "dedupe and sort come before the bound they run ahead of");
+  // Core folds a key written beside `extractList` into it only when the example
+  // declares it (`flow-bootstrap/authoring/matching.ts`), and the node has no
+  // `dedupe` or `sort` of its own. They are declared at their off values: a sort
+  // copied onto a read that asked for none would, under `maxItems`, answer
+  // different rows, not more of them.
+  assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "dedupe"), true);
+  assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "sort"), true);
+  assert.equal(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.dedupe, false);
+  assert.deepEqual(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE.sort, []);
+});

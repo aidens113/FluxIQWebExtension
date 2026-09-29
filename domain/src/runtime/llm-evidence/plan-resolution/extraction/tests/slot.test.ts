@@ -379,3 +379,53 @@ test("once the Flow was shown a detected list, a literal request is refused as a
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5_000 }), { status: "unchanged" });
 });
+
+// `dedupe` and `sort` live inside `extractList` (decided 2026-09-28), so the
+// handle form takes them too. Live run `run-mulwm2dc-0bd95f22` asked for roles
+// "deduplicated, newest first" over a detected list, the verifier said to add
+// both, and the repair had nowhere to write either: this slot refused every key
+// it did not list.
+
+test("a detected list may be deduplicated and sorted by the plan's own column keys, resolved to canonical form", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+
+  // Forgiving spellings in, canonical out: `true` keys on the list's link column,
+  // and a column named by the plan's key sorts by that column.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "price desc", paginate: false } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["url"] }, sort: [{ field: "price", order: "desc" }] })
+  );
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: ["name"], sort: [{ field: "rating", order: "desc", as: "number" }, "name"], paginate: false } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["name"] }, sort: [{ field: "rating", order: "desc", as: "number" }, { field: "name", order: "asc" }] })
+  );
+  // What runs is a request the page reads as resolved, with no issue left in it.
+  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "-price", paginate: false } });
+  const request = resolved.status === "resolved" ? resolved.parameters.extractList : undefined;
+  assert.deepEqual(webAutomationExtractListIssues(request), []);
+  assert.deepEqual(webAutomationExtractListRequestValue(request)?.sort, [{ field: "price", order: "desc" }]);
+
+  // Off is nothing, not a fault.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: false, sort: [], paginate: false } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS })
+  );
+});
+
+test("a dedupe that is not one, or a sort key naming no column, is refused where it was written rather than dropped", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  // Dropped, it would dedupe or sort nothing while the model believed it had
+  // asked; refused, the model is told where. Neither key is one the position
+  // quoter spells (`../issue-position.ts`), so it is given by position.
+  const refusals: Array<[JsonObject, string]> = [
+    [{ handle: extraction, fields: RENAMED, dedupe: 7 }, "extractList.2"],
+    [{ handle: extraction, fields: RENAMED, sort: "newest" }, "extractList.2"],
+    [{ handle: extraction, fields: RENAMED, sort: ["price desc", { field: "price", order: "sideways" }] }, "extractList.2.1"],
+    [{ handle: extraction, fields: RENAMED, sort: ["price desc, newest"] }, "extractList.2"]
+  ];
+  for (const [extractList, position] of refusals) {
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+  }
+});
