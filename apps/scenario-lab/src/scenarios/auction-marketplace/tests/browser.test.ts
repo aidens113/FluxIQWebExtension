@@ -9,7 +9,8 @@ import { KESTREL_AUCTIONS } from "../manifest.js";
 import { MARKET_ROOT } from "../paths.js";
 import { auctionMarketplaceScenario as scenario } from "../scenario.js";
 import type { AuctionMode, AuctionState } from "../types.js";
-import { failingFacts, locate, runScript } from "./browser-support.js";
+import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import { failingFacts, locate, runScript, runStep } from "./browser-support.js";
 
 /**
  * The marketplace in a real browser. Each honest path -- the manifest's own
@@ -370,4 +371,65 @@ test("class names and card ids change with the seed, and the text a person reads
     assert.equal(one.text, two.text);
     assert.ok(one.text?.includes(KESTREL_AUCTIONS[0]!.title));
   } finally { await first.close(); await second.close(); }
+});
+
+/** The extraction workflow's script up to its read, and the read itself. */
+function kestrelChain(): { before: ScenarioStep[]; extract: ScenarioStep } {
+  const { recordingScript } = workflow("kestrel-auctions");
+  const at = recordingScript.findIndex(({ id }) => id === "extract-kestrel-auctions");
+  return { before: recordingScript.slice(0, at), extract: recordingScript[at]! };
+}
+
+/** The gallery card read by what each line holds, as the gallery test above reads it. */
+async function readGallery(page: Page): Promise<Array<Record<string, string>>> {
+  const records: Array<Record<string, string>> = [];
+  for (const item of await page.locator("ul[aria-busy] > li[data-listingid]").all()) {
+    const lines = item.locator(":scope > div > p");
+    const text = async (locator: ReturnType<Page["locator"]>) => ((await locator.first().textContent()) ?? "").replace(/\s+/gu, " ").trim();
+    records.push({
+      title: await text(item.locator(":scope > div > h3 a span:last-child")),
+      price: await text(lines.nth(4).locator("span").nth(0)),
+      bids: await text(lines.nth(3).locator("span").nth(0)),
+      postage: await text(lines.nth(1).locator("span").nth(0)),
+    });
+  }
+  return records;
+}
+
+test("gallery layout, whole chain: the site's own filters and sort, walked in the gallery, then read by line, give exactly the ten owed", { timeout: TEST_TIMEOUT_MS }, async () => {
+  const run = await session("grid-view");
+  try {
+    const { before } = kestrelChain();
+    await runScript(run.page, run.lab.origin, before);
+    const { expected } = resolveScenarioWorkflow(manifest, { workflowId: "kestrel-auctions", variantId: "grid-view" });
+    assert.deepEqual(await readGallery(run.page), expected.extracted![0]!.records);
+    assert.deepEqual(await failingFacts(run.page, expected.finalState ?? []), []);
+    assert.deepEqual(run.errors, []);
+  } finally { await run.close(); }
+});
+
+test("survey, whole chain: declining the survey when it comes, the recorded filters, check and sort read exactly the ten owed", { timeout: TEST_TIMEOUT_MS }, async () => {
+  const run = await session("feedback-survey");
+  try {
+    const { before, extract } = kestrelChain();
+    const survey = run.page.locator(`div[role="dialog"][aria-labelledby="hl-survey-title"]`);
+    let declined = 0;
+    for (const step of [...before, extract]) {
+      if ((step.operation === "click" || step.operation === "type" || step.operation === "extract") && await survey.count() > 0) {
+        await survey.waitFor({ state: "visible", timeout: 5000 });
+        await survey.locator(`span:text-is("No thanks")`).click();
+        await survey.waitFor({ state: "detached", timeout: 5000 });
+        declined += 1;
+      }
+      const records = await runStep(run.page, run.lab.origin, step);
+      if (records) {
+        const { expected } = resolveScenarioWorkflow(manifest, { workflowId: "kestrel-auctions", variantId: "feedback-survey" });
+        assert.deepEqual(records, expected.extracted![0]!.records);
+        assert.deepEqual(await failingFacts(run.page, expected.finalState ?? []), []);
+      }
+    }
+    assert.equal(declined, 1, "the survey came once, on the second results page, and not again once declined");
+    assert.equal((await serverState(run.lab)).surveyDismissed, true);
+    assert.deepEqual(run.errors, []);
+  } finally { await run.close(); }
 });

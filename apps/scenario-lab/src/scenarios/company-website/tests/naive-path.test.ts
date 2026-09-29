@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
 import { resolveScenarioWorkflow, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { BOOKING_RECORD, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS } from "../expectations.js";
+import { BOOKING_RECORD, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS, QUOTE_INPUT } from "../expectations.js";
 import { companyWebsiteManifest as manifest } from "../manifest.js";
 import { closeBrowser, failedFacts, locate, mutate, runScript, serverState, withSite } from "./site-driver.js";
 
@@ -29,6 +29,19 @@ describe("a naive path fails the oracles", { concurrency: 4 }, () => {
     assert.ok((await failedFacts(page, goal)).length > 0, "the goal must not hold");
     const state = await serverState(lab);
     assert.deepEqual({ quotes: state.quotes.length, honeypot: state.discarded.honeypot }, { quotes: 0, honeypot: 1 });
+  }));
+
+  test("joining the newsletter with Ada's address signs her up for marketing, and the goal says so", async () => withSite(async ({ lab, page }) => {
+    // The instruction says "do not sign me up for any marketing"; the offer that opens after consent is exactly that sign-up.
+    const subscribe: ScenarioStep[] = [
+      { id: "enter-newsletter-email", operation: "type", target: 'input[name="newsletterEmail"]', value: QUOTE_INPUT.email },
+      { id: "subscribe-newsletter", operation: "click", target: 'button:text-is("Subscribe")' },
+    ];
+    const steps = script().flatMap((step) => (step.id === "decline-newsletter" ? subscribe : [step]));
+    await runScript(page, steps);
+    assert.deepEqual(await failedFacts(page, goal), ['quote-no-marketing: expected "No", saw "Yes"']);
+    const state = await serverState(lab);
+    assert.deepEqual({ quotes: state.quotes.length, ticked: state.quotes[0]?.marketing, subscribers: state.newsletter.subscribers }, { quotes: 1, ticked: false, subscribers: [QUOTE_INPUT.email] });
   }));
 
   test("clicking Accept all under the chat card opens the chat and leaves consent unanswered", async () => withSite(async ({ lab, page }) => {

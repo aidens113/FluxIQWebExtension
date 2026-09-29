@@ -8,8 +8,10 @@ import { sitePage } from "./shell.js";
 /**
  * Where the quote drawer lands. With the reference of a request the server
  * kept, it confirms it and shows back what was received, as the office's CRM
- * stored it. Without one -- a submission the spam filter dropped, or a stale
- * link -- it is the same polite thank-you with nothing behind it.
+ * stored it -- including whether the contact now receives offers, which the
+ * newsletter offer sets as well as the drawer's box. Without one -- a
+ * submission the spam filter dropped, or a stale link -- it is the same
+ * polite thank-you with nothing behind it.
  */
 export function renderQuoteReceived(state: CompanyWebsiteState, context: RenderContext, reference: string | null): string {
   const c = siteClasses(context.seed);
@@ -19,6 +21,8 @@ export function renderQuoteReceived(state: CompanyWebsiteState, context: RenderC
     return sitePage({ state, context, title: "Thank you", section: null, main });
   }
   const row = (label: string, testId: string, value: string) => `<dt>${escapeHtml(label)}</dt><dd data-testid="${testId}">${escapeHtml(value)}</dd>`;
+  // The CRM keeps one marketing flag per contact: ticking the drawer's box and joining the newsletter with the same address both set it.
+  const offers = request.marketing || state.newsletter.subscribers.includes(request.email);
   const main = `<h1 class="${c.sectionTitle}" style="font-size:2rem">Thanks, ${escapeHtml(request.fullName.split(" ")[0] ?? request.fullName)}. Your request is in.</h1>
 <p class="${c.lead}">Your reference is <strong data-testid="quote-reference">${escapeHtml(request.reference)}</strong>. Someone from the branch nearest you will reply within one working day.</p>
 <h2 class="${c.sectionTitle}">What you sent us</h2>
@@ -29,7 +33,7 @@ ${row("Phone", "quote-phone", request.phone)}
 ${row("Postcode", "quote-postcode", request.postcode)}
 ${row("Service", "quote-service", request.service)}
 ${row("Contact by", "quote-contact", request.contactBy)}
-${row("Offers by email", "quote-marketing", request.marketing ? "Yes" : "No")}
+${row("Offers by email", "quote-marketing", offers ? "Yes" : "No")}
 ${row("About the job", "quote-details", request.details || "Nothing added")}
 </dl>
 <p><a href="${COMPANY.root}">Back to the home page</a></p>`;

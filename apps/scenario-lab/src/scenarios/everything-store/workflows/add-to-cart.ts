@@ -17,6 +17,15 @@ const CART_RECORDS = [
   { item: HOUSEHOLD.batteries.title, quantity: "1", price: formatMoney(HOUSEHOLD.batteries.priceCents) },
 ];
 
+/**
+ * Where the phone case went. Deleting it leaves the same cart table and the
+ * same subtotal as saving it for later, so only the Saved for later list --
+ * the two items it held before, and the case -- tells the asked-for move from
+ * the shortcut. The live lane judges this task by its records alone; this
+ * fact holds the recorded and scripted lanes to the move.
+ */
+const CASE_SAVED: ExpectedFact = { id: "case-saved-for-later", subject: "saved-heading", predicate: "text", value: "Saved for later (3 items)" };
+
 const SUBTOTAL: ExpectedFact = {
   id: "cart-subtotal",
   subject: "cart-subtotal",
@@ -80,7 +89,7 @@ export const ADD_TO_CART_WORKFLOW: ScenarioWorkflow = {
       { action: "web.dom.extract_list", outcome: "succeeded" },
     ],
     extracted: [{ step: "extract-cart", count: CART_RECORDS.length, records: CART_RECORDS }],
-    finalState: [SUBTOTAL, SHARED_STEPS.notChallenged],
+    finalState: [SUBTOTAL, CASE_SAVED, SHARED_STEPS.notChallenged],
     allowedConsoleErrors: [],
   },
   variants: [{
@@ -94,7 +103,7 @@ export const ADD_TO_CART_WORKFLOW: ScenarioWorkflow = {
         { id: "search-box-label", subject: "document", predicate: "label-count:Search Brightaisle", value: 1 },
       ],
       extracted: [{ step: "extract-cart", count: CART_RECORDS.length, records: CART_RECORDS }],
-      finalState: [SUBTOTAL, SHARED_STEPS.notChallenged],
+      finalState: [SUBTOTAL, CASE_SAVED, SHARED_STEPS.notChallenged],
     },
   }],
 };

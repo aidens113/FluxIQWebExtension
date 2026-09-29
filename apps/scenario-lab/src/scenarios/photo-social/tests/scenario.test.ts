@@ -187,11 +187,15 @@ test("a new message comes back as markup the page inserts as it is", () => {
 
 test("the catalog carries the three jobs, the upsell twin and the repair task, each pointing where the manifest says", () => {
   const tasks = LIVE_INSTRUCTION_TASKS.filter(({ scenarioId }) => scenarioId === "photo-social");
-  assert.deepEqual(tasks.map(({ id, judgeBy, expectedDatasetId, variantId }) => ({ id, judgeBy, expectedDatasetId, variantId })), [
-    { id: "photo-social-glaze-collection", judgeBy: "playback-goal", expectedDatasetId: undefined, variantId: undefined },
-    { id: "photo-social-giveaway-entries", judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries", variantId: undefined },
-    { id: "photo-social-giveaway-entries-verified-upsell", judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries", variantId: "verified-upsell" },
-    { id: "photo-social-moon-jar-price", judgeBy: "expected-dataset", expectedDatasetId: "extract-moon-jar-price", variantId: undefined },
+  assert.deepEqual(tasks.map(({ id, judgeBy, expectedDatasetId, variantId, variantArmedAfterBuild }) => ({ id, judgeBy, expectedDatasetId, variantId, variantArmedAfterBuild })), [
+    { id: "photo-social-glaze-collection", judgeBy: "playback-goal", expectedDatasetId: undefined, variantId: undefined, variantArmedAfterBuild: undefined },
+    { id: "photo-social-giveaway-entries", judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries", variantId: undefined, variantArmedAfterBuild: undefined },
+    // The upsell is the existing-Flow entry point: the Flow is built on the site
+    // without it and meets it only when it runs, which is what the variant says
+    // ("a Flow built on the unarmed site meets the upsell at run time"). Armed
+    // for the build as well, the row measured a Flow built around the upsell.
+    { id: "photo-social-giveaway-entries-verified-upsell", judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries", variantId: "verified-upsell", variantArmedAfterBuild: true },
+    { id: "photo-social-moon-jar-price", judgeBy: "expected-dataset", expectedDatasetId: "extract-moon-jar-price", variantId: undefined, variantArmedAfterBuild: undefined },
   ]);
   assert.ok(!/message|dm\b|send/iu.test(tasks[3]!.instruction), "the price task never asks for a message to be sent");
   assert.deepEqual(LIVE_REPAIR_TASKS.filter(({ scenarioId }) => scenarioId === "photo-social").map(({ id, variantId, expect }) => ({ id, variantId, expect })), [
