@@ -163,6 +163,26 @@ test("a column named in the instruction's own words resolves to the detected one
   // it yet, and that hop is named on `WebExtractionSlotResolution`.
 });
 
+test("a list of the instruction's column names keeps each column under the name written, not the detected key it was read as", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+
+  // "Columns item, quantity and price" written as a list: until 2026-09-29 each
+  // guessed column was kept under its detected key, so the rows came back as
+  // `product-name`, `product-price` and `product-rating` and an oracle comparing
+  // by the instruction's names found none of them
+  // (`lane-run-mum06sfc-f1d9403f.md`, cause 2).
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["name", "price", "rating", "url@href"], paginate: false } }),
+    resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name, price: CARD_FIELDS.price, rating: CARD_FIELDS.rating, url: CARD_FIELDS.url } })
+  );
+  // A name that is the detected key, or that could not be a key itself, keeps the detected key.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", ".product-price"], paginate: false } }),
+    resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-price": CARD_FIELDS.price } })
+  );
+});
+
 test("the handle keeps every detected column and the detected pagination unless the plan says otherwise", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);

@@ -22,7 +22,11 @@
 // - `link`: the `href` resolved against the element's base URL, unreadable when
 //   there is none or it resolves to anything but http or https, so a
 //   `javascript:` or `mailto:` target is never returned as a link;
-// - `value`: a form control's live value, unreadable on anything else;
+// - `value`: a form control's live value, unreadable on anything else and on a
+//   control whose value is never the record's (`record-control.ts`): a
+//   checkbox or radio button with no `value` attribute, whose value is the
+//   constant `"on"`, a button-like input, whose value is its caption, and a
+//   file input. Detection never offers those, so a read never returns one;
 // - `column`: the cell under the header in the item's table row, matched by
 //   position among the row's cells, which is what survives a column reorder;
 //   colspan is not modelled. A header no cell matches is unreadable, so the
@@ -39,6 +43,7 @@
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { ExtractFieldReader } from "./field-spec";
+import { recordControlType } from "./record-control";
 import { tightestStatedValue } from "./value-statement";
 
 type ElementFieldReader = Exclude<ExtractFieldReader, { kind: "column" }>;
@@ -98,9 +103,8 @@ function linkTarget(element: Element): string | undefined {
 }
 
 function controlValue(element: Element): string | undefined {
-  return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement
-    ? element.value
-    : undefined;
+  const control = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement;
+  return control && recordControlType(element) !== undefined ? element.value : undefined;
 }
 
 /**

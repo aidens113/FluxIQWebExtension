@@ -8,8 +8,9 @@
 // - `fields` as `{ yourKey: column }`, the documented direction; an entry whose
 //   value names no column but whose key does, and whose value is a key, is the
 //   same map written the other way round and is read so;
-// - `fields` as an array of columns, kept under their detected keys, and
-//   `columns` as another name for `fields`;
+// - `fields` as an array of columns, each kept under the name written when it
+//   is not the detected key and could be a key, and under the detected key
+//   otherwise (`listedKey`), and `columns` as another name for `fields`;
 // - a column as `"detectedKey"`, the key in another case when only one key
 //   matches, `"column:Header"` or a bare header for one table column, and any of
 //   those with `@attr` to read that column element's attribute as the page
@@ -134,16 +135,35 @@ export function keptWebExtractionColumns(fields: unknown, detected: Detected, pa
     // not -- so the branch below is the type's breadth rather than a case.
     const column = written.column;
     if (column === undefined || !column.ok) return column ?? { ok: false, issue: "web.handle.malformed", path };
-    // An array keeps each column under the detected key it was found under; a
-    // map keeps it under the plan's own key, or the value when the plan wrote
-    // the map the other way round.
-    const under = written.ownKey === undefined ? column.key : written.written;
+    // A map keeps each column under the plan's own key, or the value when the
+    // plan wrote the map the other way round. An array keeps it under the name
+    // written when that name found its column by anything but the detected key
+    // and could be a key itself, and under the detected key otherwise.
+    const under = written.ownKey === undefined ? listedKey(column) : written.written;
     if (!isWebAutomationExtractFieldKey(under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     if (Object.hasOwn(kept, under)) return { ok: false, issue: "web.handle.malformed", path: written.at };
     kept[under] = column.field;
     if (column.assumed !== undefined) assumed.push(column.assumed);
   }
   return { ok: true, fields: kept, assumed };
+}
+
+/**
+ * The key a column named in an array is kept under.
+ *
+ * **Until 2026-09-29 it was always the detected key**, so a list of the
+ * instruction's own column names -- `["item", "quantity", "price"]` -- came back
+ * under the page's names for those columns, and an answer compared by the
+ * instruction's names found none of them (`lane-run-mum06sfc-f1d9403f.md`,
+ * cause 2). A name that is not the detected key is the plan saying what it
+ * calls the column, exactly as a map's key is, so it is kept, as written before
+ * any `@attribute`. A name written as the detected key keeps it, and so does
+ * one that could not be a key -- `.product-price`, `column:Price` -- since the
+ * detected key is the nearest well-formed name for what the plan meant.
+ */
+function listedKey(column: Extract<Column, { ok: true }>): string {
+  const written = column.assumed?.written;
+  return written !== undefined && isWebAutomationExtractFieldKey(written) ? written : column.key;
 }
 
 /** Whether a read failed only because nothing answered to the name, which is the one failure another reading may still answer. */

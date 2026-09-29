@@ -14,6 +14,16 @@
 //   gives its live `value`, an element with a test id gives its `text`, and a
 //   remaining leaf with words in it gives its `text`.
 //
+// **A column labelled by its path says what it holds, and until 2026-09-29 it
+// did not.** On the everything store's cart a live build asked for "item,
+// quantity and price" and read `quantity` = `"on"` and `price` = `"1"` on
+// every row (`lane-run-mum06sfc-f1d9403f.md`). The line's select checkbox was
+// its only `value` column, and the quantity and the price were two text
+// columns whose labels were paths through hashed class names. Now a control is
+// labelled by its type (`(number control)`), an unvalued checkbox or radio
+// button is not offered at all (`record-control.ts`), and a text column whose
+// every value is a number or a currency amount says so (`value-shape.ts`).
+//
 // **A value the page draws twice is proposed once, as the page's own tightest
 // statement of it.** The everything store's rating is
 // `<span aria-hidden="true">3.7</span>` beside `<i><span>3.7 out of 5 stars
@@ -82,6 +92,9 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import { testIdFor } from "../describe-element";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
+import { readField } from "./field-reader";
+import { recordControlType } from "./record-control";
+import { valueShape } from "./value-shape";
 import { statedMoreTightly } from "./value-statement";
 
 /**
@@ -103,6 +116,12 @@ export type FieldSource = {
   columnIndex?: number | undefined;
   /** Whether the element the field reads is, or sits inside, a sensitive control. */
   sensitive: boolean;
+  /**
+   * Whether the label is the element's path through the item rather than a
+   * name the page's author wrote (a test id). Only a path label is completed
+   * with what the element holds (`describedLabel`).
+   */
+  pathLabel?: boolean | undefined;
 };
 
 /** The form controls whose live value a record can read. */
@@ -137,6 +156,9 @@ const RESERVED_PARTIAL_FIELDS = 8;
 
 /** How many sources are collected before coverage decides between them. Bounds the walk on a large item. */
 const MAX_CANDIDATE_FIELDS = 64;
+
+/** How many of a run's items a text column's shape is read from (`value-shape.ts`). */
+const MAX_SHAPE_SAMPLES = 24;
 
 /** How many items of a run are walked for sources. Every item still counts toward each source's coverage. */
 const MAX_SCANNED_ITEMS = 12;
@@ -191,10 +213,31 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
     .sort((left, right) => left.position - right.position);
   const taken = new Set<string>();
   return kept.map(({ source, coverage }) => {
-    const key = webAutomationExtractionFieldKey(source.label, taken);
+    const label = describedLabel(source, run);
+    const key = webAutomationExtractionFieldKey(label, taken);
     taken.add(key);
-    return { key, label: source.label, spec: proposedFieldSpec(source, coverage), coverage };
+    return { key, label, spec: proposedFieldSpec(source, coverage), coverage };
   });
+}
+
+/**
+ * A path label completed with the shape of what the column reads, when every
+ * value it reads in the run has one (`value-shape.ts`): `(number)` or
+ * `(currency amount)`.
+ *
+ * A path through hashed class names tells a model nothing about which column
+ * is the price and which the quantity, and the model is shown the label and
+ * nothing else of a column (D3). The shape is one of two fixed words, not a
+ * value, and the values it is read from are dropped here. A label the page's
+ * author wrote, a test id, already says what it is and is left as written. A
+ * sensitive column is never read, so it never has a shape.
+ */
+function describedLabel(source: FieldSource, run: readonly Element[]): string {
+  if (source.kind !== "text" || source.pathLabel !== true || source.sensitive) return source.label;
+  const reader = { kind: "text" as const, ...(source.selector === undefined ? {} : { selector: source.selector }), required: false };
+  const samples = run.slice(0, MAX_SHAPE_SAMPLES).map((item) => readField(item, source.label, reader) ?? "");
+  const shape = valueShape(samples);
+  return shape === undefined ? source.label : `${source.label} (${shape})`;
 }
 
 /**
@@ -304,19 +347,26 @@ function elementSources(item: Element): FieldSource[] {
     const named = selectorWithinItem(item, element);
     if (named === undefined) continue;
     const { selector, label } = named;
+    const pathLabel = named.path;
     const sensitive = isWithinSensitiveControl(element);
     if (tag === "img") {
       sources.push({ kind: "attribute", label: `${label} src`, selector, attribute: "src", sensitive });
       sources.push({ kind: "attribute", label: `${label} alt`, selector, attribute: "alt", sensitive });
     } else if (tag === "a" && element.getAttribute("href") !== null) {
-      if (offersOwnText(item, element)) sources.push({ kind: "text", label, selector, sensitive });
+      if (offersOwnText(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
       sources.push({ kind: "link", label: `${label} ${LINK_LABEL_SUFFIX}`, selector, sensitive });
     } else if (VALUE_TAGS.has(tag)) {
-      sources.push({ kind: "value", label, selector, sensitive });
+      // A control is offered under what kind of control it is, and not at all
+      // when its value is never the record's: an unvalued checkbox reads the
+      // constant "on" (`record-control.ts`). A sensitive one is still offered,
+      // excluded, so a run of nothing but secrets is refused as one (D12).
+      const control = recordControlType(element);
+      if (control !== undefined) sources.push({ kind: "value", label: pathLabel ? `${label} (${control} control)` : label, selector, sensitive, pathLabel });
+      else if (sensitive) sources.push({ kind: "value", label, selector, sensitive, pathLabel });
     } else if (testIdFor(element) !== undefined) {
-      sources.push({ kind: "text", label, selector, sensitive });
+      sources.push({ kind: "text", label, selector, sensitive, pathLabel });
     } else if (isTextLeaf(element) && !statedMoreTightly(item, element)) {
-      sources.push({ kind: "text", label, selector, sensitive });
+      sources.push({ kind: "text", label, selector, sensitive, pathLabel });
     }
   }
   return sources;
@@ -381,6 +431,9 @@ function withinValueControl(item: Element, element: Element): boolean {
  */
 type FieldName = { selector: string; label: string };
 
+/** A field name for an element, and whether its label is the element's path through the item. */
+type ElementName = FieldName & { path: boolean };
+
 /** How deep inside an item a field may sit. Past this the path is longer than it is worth reading. */
 const MAX_PATH_STEPS = 8;
 
@@ -391,11 +444,11 @@ const MAX_PATH_STEPS = 8;
  * uniquely is left out rather than proposed as a field that would read a
  * different element in another item.
  */
-function selectorWithinItem(item: Element, element: Element): FieldName | undefined {
+function selectorWithinItem(item: Element, element: Element): ElementName | undefined {
   const testId = testIdName(element);
-  if (testId && namesOnly(item, testId.selector, element)) return testId;
+  if (testId && namesOnly(item, testId.selector, element)) return { ...testId, path: false };
   const path = pathWithinItem(item, element);
-  if (path && namesOnly(item, path.selector, element)) return path;
+  if (path && namesOnly(item, path.selector, element)) return { ...path, path: true };
   return undefined;
 }
 
