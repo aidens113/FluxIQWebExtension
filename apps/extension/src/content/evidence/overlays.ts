@@ -13,8 +13,16 @@
 // the hit-test named but the outermost ancestor of it that still excludes the
 // target -- the banner rather than the word inside it -- because that is the
 // thing a reader has to deal with.
+//
+// The hit test descends into open shadow roots, and containment and the
+// ancestor walk cross them (`../shadow-dom`). A control inside a widget's root
+// is a snapshot candidate, and asked through `document.elementFromPoint` and
+// `Node.contains` it was answered by its own host and reported as blocked by
+// the widget that holds it: a chat launcher in an empty corner became a
+// blocker, and a consent wall counted its own buttons among what it covered.
 
-import { selectorFor } from "../selector";
+import { deepElementFromPoint, selectorFor } from "../selector";
+import { composedContains, composedParent } from "../shadow-dom";
 import { isInteractableUiElement } from "../element-traits";
 import { accessibleNameFor } from "../identity";
 import { visualViewportBounds } from "../visual-bounds";
@@ -69,9 +77,9 @@ function hitPointFor(element: Element): { x: number; y: number } | undefined {
  * point, which is a layout fact and not an obstruction.
  */
 function blockerAt(candidate: Element, point: { x: number; y: number }): Element | undefined {
-  const hit = document.elementFromPoint(point.x, point.y);
+  const hit = deepElementFromPoint(point.x, point.y);
   if (!hit || hit === candidate) return undefined;
-  if (candidate.contains(hit) || hit.contains(candidate)) return undefined;
+  if (composedContains(candidate, hit) || composedContains(hit, candidate)) return undefined;
   return overlayRoot(hit, candidate);
 }
 
@@ -79,9 +87,9 @@ function blockerAt(candidate: Element, point: { x: number; y: number }): Element
 function overlayRoot(hit: Element, candidate: Element): Element {
   let root = hit;
   for (let depth = 0; depth < MAX_BLOCKER_ANCESTOR_WALK; depth += 1) {
-    const parent: Element | null = root.parentElement;
+    const parent: Element | null = composedParent(root);
     if (!parent || parent === document.documentElement || parent === document.body) break;
-    if (parent.contains(candidate)) break;
+    if (composedContains(parent, candidate)) break;
     root = parent;
   }
   return root;

@@ -117,6 +117,15 @@ export type WebLlmSnapshotBinding = {
    * `stable-handles.ts` keys on both.
    */
   records: Map<string, string>;
+  /**
+   * Opaque handle to the open shadow host chain of an element that sits inside
+   * one (`elements.ts`), for those elements only. The other half of such an
+   * element's address, and like the selector it never leaves the domain: a
+   * handle's identity carries it (`plan-resolution/element-identity.ts`), so a
+   * created Flow's click and wait look for the element in the root it was in.
+   * Optional because a binding built before it existed, or by hand, has none.
+   */
+  shadowHosts?: Map<string, readonly string[]>;
 };
 
 export type WebLlmSanitizeOptions = {
@@ -156,6 +165,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const elements: WebLlmEvidenceElement[] = [];
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
+  const shadowHosts = new Map<string, readonly string[]>();
   // What tells a look-alike apart, kept beside the packet and published only
   // on an element that needs it.
   const cues = new Map<string, WebLlmLookAlikeCues>();
@@ -169,6 +179,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     // The one place a selector is written down, and it is not the packet.
     selectors.set(described.element.target, described.selector);
     if (described.record !== undefined) records.set(described.element.target, described.record);
+    if (described.shadowHosts !== undefined) shadowHosts.set(described.element.target, described.shadowHosts);
     cues.set(described.element.target, present<WebLlmLookAlikeCues>({ within: described.within, dialog: dialogOf(raw), position: described.position }));
   }
 
@@ -210,8 +221,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     repairCandidates: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
-  trimToBudget(evidence, [selectors, records], maxEvidenceBytes, () => tellWebLlmLookAlikesApart(evidence.elements, cues));
-  return { evidence, selectors, records };
+  trimToBudget(evidence, [selectors, records, shadowHosts], maxEvidenceBytes, () => tellWebLlmLookAlikesApart(evidence.elements, cues));
+  return { evidence, selectors, records, shadowHosts };
 }
 
 /** The widest handle a Flow can issue (`stable-handles.ts`). */
@@ -285,7 +296,7 @@ type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading
  * and again after every element leaves, and what is measured is always what
  * is sent.
  */
-function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map<string, string>>, maxEvidenceBytes: number, describe: () => void): void {
+function trimToBudget(evidence: WebLlmPageEvidence, addresses: ReadonlyArray<Map<string, unknown>>, maxEvidenceBytes: number, describe: () => void): void {
   const markBudgetTruncated = (): void => {
     evidence.truncated = true;
     evidence.budgetTruncated = true;

@@ -78,11 +78,12 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       for (const element of binding.evidence.elements) {
         const selector = binding.selectors.get(element.target);
         if (selector === undefined) continue;
-        const address = `${element.frameId ?? 0}\0${selector}`;
+        const target: PageTarget = { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target)), shared: false };
+        const address = addressOf(target);
         uses.set(address, (uses.get(address) ?? 0) + 1);
-        targets.set(element.target, { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector), shared: false });
+        targets.set(element.target, target);
       }
-      for (const target of targets.values()) target.shared = (uses.get(`${target.frameId ?? 0}\0${target.selector}`) ?? 0) > 1;
+      for (const target of targets.values()) target.shared = (uses.get(addressOf(target)) ?? 0) > 1;
       flow.pages.delete(location);
       flow.pages.set(location, targets);
       flow.letGo.delete(location);
@@ -110,7 +111,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       for (const page of flow.pages.values()) {
         const target = page.get(handle);
         if (target === undefined) continue;
-        const address = `${target.frameId ?? 0}\0${target.selector}`;
+        const address = addressOf(target);
         const known = seen.get(address);
         // One page sharing the selector makes the handle not unique wherever
         // else it agrees, and the identity is only what every page said. A new
@@ -129,6 +130,17 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
     },
   };
+}
+
+/**
+ * Where a target is on its page: its frame, the open shadow roots it sits in,
+ * and its selector within the innermost. Two widgets can give their controls
+ * the same selector inside their own roots, and those are two controls, not one
+ * shared selector.
+ */
+function addressOf(target: PageTarget): string {
+  const hosts = target.element.context?.shadowHosts;
+  return `${target.frameId ?? 0}\0${hosts === undefined ? "" : hosts.join("\u001f")}\0${target.selector}`;
 }
 
 /** A resolution whose identity is the caller's own copy, so nothing done to it reaches the store. */

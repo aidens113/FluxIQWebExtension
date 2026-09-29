@@ -48,17 +48,26 @@ export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint, "tagN
   context?: WebPlanElementContext | undefined;
 };
 
-type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "listPosition">;
+type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "listPosition" | "shadowHosts">;
 
 /** Controls whose text is what they hold rather than what they are called. */
 const CONTENT_TAGS: ReadonlySet<string> = new Set(["input", "textarea", "select"]);
 
-/** The identity of one packet element, addressed by the selector its handle was bound to. */
-export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string): WebPlanElementIdentity {
+/**
+ * The identity of one packet element, addressed by the selector its handle was
+ * bound to -- and, for an element inside open shadow roots, by the host chain
+ * the binding kept beside that selector. The chain is the key a recorded node
+ * already carries (`context.shadowHosts`), so a created node's click and its
+ * wait are scoped to the widget's root exactly as a recorded one's are, rather
+ * than finding the element only through the page-side search of every root
+ * that a click falls back on and a wait does not.
+ */
+export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[]): WebPlanElementIdentity {
   const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
   const context = present<WebPlanElementContext>({
     formId: uncut(element.form, WEB_LLM_EVIDENCE_BOUNDS.placement),
-    listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total }
+    listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
+    shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts]
   });
   return present<WebPlanElementIdentity>({
     tagName: element.tag,

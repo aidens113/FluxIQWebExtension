@@ -152,7 +152,13 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
   return binding.evidence.elements.map((element) => {
     const selector = binding.selectors.get(element.target) ?? "";
     const record = binding.records.get(element.target) ?? "";
-    const base = [location, String(element.frameId ?? 0), selector, record].join("\0");
+    // A selector written inside a shadow root is only half an address, and two
+    // widgets can give their controls the same one. The host chain joins the
+    // key only where there is one, so no light-document handle changes.
+    const hosts = binding.shadowHosts?.get(element.target);
+    const parts = [location, String(element.frameId ?? 0), selector, record];
+    if (hosts !== undefined) parts.push(hosts.join("\u001f"));
+    const base = parts.join("\0");
     const occurrence = seen.get(base) ?? 0;
     seen.set(base, occurrence + 1);
     return createHash("sha256").update(`${base}\0${occurrence}`).digest("base64url");
@@ -169,6 +175,7 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
 function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): WebLlmSnapshotBinding {
   const selectors = new Map<string, string>();
   const records = new Map<string, string>();
+  const shadowHosts = new Map<string, readonly string[]>();
   const renamed = new Map<string, string>();
   const elements = binding.evidence.elements.map((element, index) => {
     const target = assigned[index] ?? element.target;
@@ -177,9 +184,11 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (selector !== undefined) selectors.set(target, selector);
     const record = binding.records.get(element.target);
     if (record !== undefined) records.set(target, record);
+    const hosts = binding.shadowHosts?.get(element.target);
+    if (hosts !== undefined) shadowHosts.set(target, hosts);
     return { ...element, target };
   });
   const evidence: WebLlmPageEvidence = { ...binding.evidence, elements };
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;
-  return { evidence, selectors, records };
+  return { evidence, selectors, records, shadowHosts };
 }

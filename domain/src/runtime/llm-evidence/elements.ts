@@ -120,7 +120,14 @@ export type DescribedEvidenceElement = {
   within: string | undefined;
   /** Where the element starts on the page, when the capture measured it. */
   position: { top: number; left: number } | undefined;
+  /** The open shadow hosts around it, outermost first: the other half of its selector's address. Never in the packet. */
+  shadowHosts: readonly string[] | undefined;
 };
+
+/** More hosts than any real widget nests; past it the chain is not trusted. */
+const MAX_SHADOW_HOSTS = 16;
+/** A host selector longer than this is not one the extension wrote. */
+const MAX_HOST_SELECTOR_LENGTH = 512;
 
 /** More rows than a page holds; the bound only stops a hostile number reaching the packet. */
 const MAX_REPEATS = 100_000;
@@ -210,8 +217,18 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     within: recordWords(raw.context),
     // Document coordinates only: a viewport box is in another space, and one
     // look-alike measured in each would be put in the wrong order.
-    position: documentPosition(raw.documentBounds)
+    position: documentPosition(raw.documentBounds),
+    shadowHosts: shadowHostChain(raw.context)
   };
+}
+
+/** The element's open shadow host chain, whole or not at all: half a chain would scope the lookup to the wrong roots. */
+function shadowHostChain(context: unknown): string[] | undefined {
+  if (!isJsonRecord(context) || !Array.isArray(context.shadowHosts)) return undefined;
+  const hosts: unknown[] = context.shadowHosts;
+  if (hosts.length === 0 || hosts.length > MAX_SHADOW_HOSTS) return undefined;
+  const readable = hosts.every((host) => typeof host === "string" && host.trim() !== "" && host.length <= MAX_HOST_SELECTOR_LENGTH);
+  return readable ? hosts as string[] : undefined;
 }
 
 /**

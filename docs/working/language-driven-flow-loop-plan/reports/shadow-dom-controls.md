@@ -247,3 +247,129 @@ closed-wall, a layer over the page with no control to press". The extension API
    it, because that row fails for the pre-existing reason in any case.
 6. **Line endings.** My edits were first written with CRLF endings on Windows
    and have been converted back to LF.
+
+## Follow-ups after commit 89a2c2e0 (supervisor-extended ownership)
+
+### 1. Overlay evidence reported a widget's own controls as blocked -- fixed
+
+- Measured first. New spec
+  `apps/extension/e2e/content/tests/evidence/tests/shadow-overlays.spec.ts`
+  failed 2 of 2 **before** the fix.
+  - A fixed corner widget (`corner-chat`, open root, one button, covering
+    nothing) was reported as a blocker: `blockers` selectors were
+    `["body > corner-chat"]`.
+  - On job-board, `rf-consent`'s `blocked` list held its own three buttons:
+    `["section > div:nth-of-type(2) > button:nth-of-type(1)", ...(2), ...(3),
+    "input[name=\"q\"]", "#text-input-where-..."]`.
+- The fix, in `apps/extension/src/content/evidence/overlays.ts`:
+  - `blockerAt` takes its hit from `deepElementFromPoint`, and tests
+    containment with `composedContains` in both directions.
+  - `overlayRoot` walks `composedParent` and tests with `composedContains`, so
+    a scrim inside the root still reports the host (`body > rf-consent`) as the
+    blocker.
+- After: `pnpm test:content -- e2e/content/tests/evidence/ --workers=2` gave 47
+  passed (the 2 new rows plus every existing evidence row).
+
+### 3. The 7 recovery-note failures were already there -- settled
+
+- `git worktree add --detach F:/fxwork/shadow-baseline 89a2c2e0^` (1fc6143f),
+  then `pnpm install --frozen-lockfile` (exit 0).
+- In it: `pnpm test:content -- actions.spec.ts check-assert.spec.ts
+  waits.spec.ts shadow-roots/tests/shadow-root-waits.spec.ts --workers=2` gave
+  **40 passed, 7 failed**. The 7 failures are exactly the rows seen at HEAD:
+  - `actions.spec` :169;
+  - `check-assert` :169 and :194;
+  - `shadow-root-waits` :94;
+  - `waits.spec` :50, :64 and :220.
+- Each has the same diff: `; the execution did not recover within its N
+  attempts after absorbing timeout...` appended to `actual`. So they predate
+  this work. Their specs were not updated when the recovery note was added.
+- Cleanup:
+  - `git worktree remove` unregistered the worktree but failed to delete the
+    directory ("Invalid argument", the `node_modules` case AGENTS.md
+    describes).
+  - The directory was then deleted with `cmd /c rmdir /s /q`, which does not
+    follow pnpm's junctions, after the worktree's own `esbuild.exe` released
+    its lock.
+  - `git worktree list` no longer shows it, and
+    `Test-Path F:\fxwork\shadow-baseline` gives False.
+
+### 2. The handle identity now carries the host chain -- done
+
+**Where the chain was lost.** The extension writes `context.shadowHosts`
+beside each shadow-DOM element's selector. The domain's sanitizer
+(`elements.ts` `sanitizedEvidenceElement`) kept the selector and the record
+behind the packet but dropped the chain. So `plan-resolution/element-identity.ts`
+could not put it on a created node's `parameters.element`.
+
+**What changed** (`domain/src/runtime/llm-evidence/`):
+- `elements.ts`: `DescribedEvidenceElement.shadowHosts` is read from
+  `raw.context.shadowHosts`, whole or not at all (non-empty strings, at most 16
+  hosts, at most 512 characters each). It never enters the packet.
+- `sanitize.ts`: the binding gains an optional
+  `shadowHosts: Map<handle, hosts>`. It is optional so bindings built by hand
+  or in tests still compile, and it is trimmed with the selectors and records.
+- `stable-handles.ts`: the map is carried through handle renumbering. The host
+  chain joins the handle's address key only where there is one, so no
+  light-document handle changes number.
+- `plan-resolution/element-identity.ts`: `webPlanElementIdentity(element,
+  selector, shadowHosts?)` writes `context.shadowHosts`.
+- `plan-resolution/target-packets.ts`: the page-local address is frame, host
+  chain and selector. Two widgets whose buttons share a within-root selector
+  are two addresses; before, that was `not_unique`.
+
+**The extension counterpart needed no change.** `resolve-target.ts` and
+`recorded-shadow-hosts.ts` (read by `web.dom.wait_for_selector`) already read
+`element.context.shadowHosts`, and `shadow-root-waits.spec.ts` rows :23, :58
+and :77 prove a wait with a chain is answered inside the root. So a created
+Flow's wait on a shadow-DOM control is now scoped exactly, as its click is. The
+exploration press and field entry still send only `{ selector }` and rely on
+the resolver's widening.
+
+**No new key reaches Core.** The chain goes on
+`parameters.element.context.shadowHosts`, the key a recorded node already
+carries (`output-nodes/targets/targets.ts` reads it). The new domain test sends
+a resolved node through Core's `normalizeAutomationStudioElementTarget` and the
+gateway mapping, and the chain arrives on `command.element.context`. It is not
+added to any result.
+
+**Left alone:**
+- `target/override.ts` (the repair target override). It is Core's
+  `AutomationStudioRuntimeTargetOverrideTarget` with a fixed `metadata` field
+  set, so adding the chain there would be a key Core does not know.
+- `action-failure/*` (the other worker's).
+
+**Test.** New
+`domain/src/runtime/llm-evidence/plan-resolution/tests/shadow-host-identity.test.ts`,
+4 rows:
+- a click and a wait resolved from a shadow handle carry
+  `context.shadowHosts: ["body > rf-consent"]` through Core's normalizer to the
+  command, and a light-document identity is unchanged;
+- the model's packet carries no chain, while the binding keeps it;
+- two widgets with the same selector each resolve, while the same selector
+  twice in one root is still `not_unique`;
+- a chain with one empty host is dropped whole.
+
+### Validation after the follow-ups
+
+- `DOMAIN_TEST_BUILD_LABEL=shadow-hosts node scripts/test-domain.mjs`:
+  `# tests 865 # pass 865 # fail 0`. The first run had 1 failure, my own
+  expectation: `visibleText` is omitted where it repeats the name. I fixed the
+  expectation and reran.
+- `pnpm check` (domain): no errors.
+- `node scripts/test-extension.mjs`: `# tests 990 # pass 990 # fail 0`.
+- `pnpm check` (extension): no errors outside `src/panel/` and `extraction/`
+  (other workstreams).
+- `pnpm test:content -- shadow-roots/ evidence/ dialog-refusal dialog-dismissal
+  click actionability/ resolve-target --workers=3`: 113 passed, 1 failed. The
+  failure is `shadow-root-waits` :94, which was already failing at 89a2c2e0^.
+- `node scripts/structure-audit.mjs`: no FAIL in my files. `elements.ts` is at
+  395 lines after I trimmed my comments. The FAILs are
+  `packages/test-runner/src/network-guard.ts` and the stale
+  `docs/working/README.md`, neither mine.
+
+### Still not verified
+
+- No live Lab run of a created Flow waiting on the consent wall.
+- The extension's `sanitize`-side consumers `press.ts` and `enter-field.ts` do
+  not use the chain. They still rely on the page-side widening.
