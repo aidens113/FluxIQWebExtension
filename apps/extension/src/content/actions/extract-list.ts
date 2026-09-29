@@ -105,7 +105,8 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     ...(outcome.emptyRecords === undefined ? {} : { emptyRecords: outcome.emptyRecords }),
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
-    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {})
+    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {}),
+    ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {})
   };
 }
 
@@ -196,7 +197,7 @@ function recordGap(outcome: Outcome): string | undefined {
  * (`run-mug3tnti-9ab80b85`).
  */
 function readSummary(outcome: Outcome): string {
-  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${faultAccount(outcome)}`;
+  const read = `${count(outcome.records.length, "record")} from ${count(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}${faultAccount(outcome)}${pagingAccount(outcome)}`;
   if (outcome.listPresence === "never_appeared") {
     return `${read}; the item selector named nothing on the page, so the list never appeared${waitAccount(outcome.listWait)} -- change the selector rather than the fields or the conditions`;
   }
@@ -229,6 +230,52 @@ function faultAccount(outcome: Outcome): string {
   ];
   return parts.length === 0 ? "" : `, and ${parts.join(", and ")}`;
 }
+
+/**
+ * Why a read that pages stopped paging, in words, so the model reading one
+ * result can act on it without knowing the closed set -- and the same word is
+ * on the summary as `paginationStop` for a scan to group by. Nothing for a read
+ * that did not page, so an unpaginated read's phrase is unchanged.
+ *
+ * **The list ending in the ordinary way is not said.** A pager that ran out, a
+ * disabled last Next, a feed scrolled to its bottom: that is the read doing
+ * what was asked, and the word on the summary is enough. The deadline is not
+ * said either, because a timed-out read already says the time ran out. What is
+ * said is every stop a Flow can do something about.
+ *
+ * `control_absent` on page one is said as what it most often is, a control
+ * selector that names nothing, because a request that asked to page and read
+ * one page with no control in sight is far likelier to be pointing at the wrong
+ * element than at a list of one page.
+ */
+function pagingAccount(outcome: Outcome): string {
+  const stop = outcome.paginationStop;
+  if (stop === undefined) return "";
+  const firstPageMiss = stop === "control_absent" && outcome.pagesRead <= 1;
+  if (!firstPageMiss && (ORDINARY_END.has(stop) || stop === "deadline" || (stop === "page_fault" && outcome.pageFault))) return "";
+  if (firstPageMiss) {
+    return "; paging stopped on the first page because the pagination control named nothing there -- check the control's selector, unless the list has only one page";
+  }
+  return `; paging stopped because ${PAGING_STOPPED[stop]}`;
+}
+
+/** The stops that are the list ending as lists end, which the phrase leaves to the summary's word. */
+const ORDINARY_END: ReadonlySet<NonNullable<Outcome["paginationStop"]>> = new Set(["control_absent", "control_disabled", "no_following_page", "scrolled_to_end"]);
+
+const PAGING_STOPPED: Record<NonNullable<Outcome["paginationStop"]>, string> = {
+  control_absent: "the pagination control was no longer on the page, which is the list ending",
+  control_disabled: "the pagination control was disabled, which is the list ending",
+  no_following_page: "the pager showed no page after the current one, which is the list ending",
+  scrolled_to_end: "scrolling to the bottom brought nothing new, which is the list ending",
+  list_vanished: "the page the control led to showed none of the list and no way on -- a rate limit, a check page or an error, not the list ending",
+  page_limit: "the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on -- raise it to read more",
+  item_limit: "maxItems was reached while the list went on -- raise it to read more",
+  deadline: "the command's timeout ran out",
+  list_unchanged: "the page ignored its pagination control: pressing it, and going to the address it links to, left the list unchanged",
+  page_repeated: "the page the control led to held only records earlier pages already had, so the control leads back rather than on",
+  control_not_clickable: "the pagination control is not an element that can be pressed",
+  page_fault: "the move to the next page failed"
+};
 
 /** What ended the wait for the list, in words, so no reader has to know a constant to read the phrase. */
 const STOPPED_ON: Record<NonNullable<Outcome["listWait"]>["stoppedOn"], string> = {

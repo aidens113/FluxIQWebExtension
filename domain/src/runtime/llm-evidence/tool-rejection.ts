@@ -408,6 +408,13 @@ export type WebLlmToolRejectionDetail = {
   missingFields?: string[];
   /** Which of four things ended the wait for the list (`actions/extraction/summary.ts` `WebAutomationExtractionWaitStop`). */
   waitStoppedOn?: string;
+  /**
+   * Why a read that paged stopped paging (`actions/extraction/summary.ts`
+   * `WebAutomationExtractionPaginationStop`): a read that came back short after
+   * one page of fifty is a different repair when the page ignored its Next than
+   * when the Next selector named nothing.
+   */
+  paginationStop?: string;
   /** How many times in a row this same answer has now been given, counting from 2 (`repeated-refusal.ts`). */
   repeatedAnswer?: number;
 };
@@ -511,6 +518,7 @@ export function rejectionDetail(fields: {
   emptyRecords?: number | undefined;
   missingFields?: readonly string[] | undefined;
   waitStoppedOn?: string | undefined;
+  paginationStop?: string | undefined;
   repeatedAnswer?: number | undefined;
 }): WebLlmToolRejectionDetail {
   return present<WebLlmToolRejectionDetail>({
@@ -536,6 +544,7 @@ export function rejectionDetail(fields: {
     // empty one.
     missingFields: fields.missingFields === undefined || fields.missingFields.length === 0 ? undefined : [...fields.missingFields],
     waitStoppedOn: fields.waitStoppedOn,
+    paginationStop: fields.paginationStop,
     repeatedAnswer: wholeCount(fields.repeatedAnswer)
   });
 }

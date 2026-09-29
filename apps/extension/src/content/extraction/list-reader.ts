@@ -109,7 +109,7 @@ import { filteredListAnswer, type ListExtractionConditionReport } from "./filter
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
-import { advancePage, deadlineFor, type PaginationProgress } from "./pagination";
+import { advancePage, deadlineFor, paginationStopOf, type PaginationProgress, type PaginationStop } from "./pagination";
 
 /** One record: each included field's value, or `null` for an optional field the page could not read. */
 export type ExtractedListRecord = Record<string, string | null>;
@@ -188,6 +188,18 @@ export type ListExtractionOutcome = {
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
   conditions?: ListExtractionConditionReport | undefined;
+  /**
+   * Why a read that pages stopped paging, or absent for a read that did not page.
+   *
+   * `truncated`, `timedOut` and `pageFault` each say one way a read can stop,
+   * and none of them says the ordinary ones: a `next` control that named
+   * nothing, one that was disabled, a page that came back as the page before.
+   * Live run `run-mulwm2dc-0bd95f22` stopped on page one of fifty with all three
+   * false-or-absent and nothing else to go on. Every exit of a paginated read
+   * sets exactly one word (`pagination.ts` for the moves, this file for
+   * `item_limit`, `page_repeated` and `list_vanished`).
+   */
+  paginationStop?: PaginationStop | undefined;
 };
 
 /**
@@ -271,6 +283,12 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
   let truncated = false;
   let timedOut = false;
+  let paginationStop: PaginationStop | undefined;
+  // In the modes that move to another page: the content of every item any
+  // earlier page showed, kept or not, so a page that shows nothing else is known
+  // for the repeat it is. A continued read starts from the records it carried,
+  // which is all its checkpoint holds.
+  const shownOnEarlierPages = pageByPage ? new Set(records.map((record) => contentKey(record, fields))) : undefined;
   // Items reading threw on, and whether the move to the next page did. Both are
   // absorbed rather than raised: the rows already read are the answer, and an
   // answer that is too small is worth more than no answer at all.
@@ -329,13 +347,15 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(pageFault ? { pageFault: true } : {}),
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
-      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } })
+      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } }),
+      ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop })
     };
   };
 
   // A document continuing a read was reached by the control the last one
   // followed, so it is waited on as that control's page would have been.
   if (resume && paginate && await awaitPageRendered(paginate, progress) === "timed_out") {
+    paginationStop = "deadline";
     return outcome({ timedOut: true });
   }
   // The page this read starts on gets the same wait as every page it moves to
@@ -388,6 +408,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     progress.pagesRead += 1;
     for (const element of shown) namedItems.add(element);
     const thisPage: string[] = [];
+    // Every item this page showed that was read, by content, for the repeat check below.
+    const shownThisPage: string[] = [];
     for (const element of shown) {
       // Reading one item is where the page can fail under the read: a
       // virtualized list recycles the row a field reader is holding, and a
@@ -407,6 +429,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         const itemRead = readRecord(element, fields);
         const key = keyOf(itemRead);
         if (seen === key) continue;
+        if (shownOnEarlierPages) shownThisPage.push(contentKey(itemRead.record, fields));
         // An item a condition rejects is not a record: it is remembered as read
         // so a growing list still knows it has been looked at. It is kept aside
         // only so a read the conditions emptied has something to answer with,
@@ -441,12 +464,33 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         records.push(itemRead.record);
         thisPage.push(content);
         for (const name of itemRead.missing) missing.add(name);
-      } catch {
+      } catch (error) {
+        // A refusal is not a fault the page caused: a field that resolved to a
+        // sensitive control refuses the whole read (decision D2), and an
+        // `encrypt` field refuses it until the column is built. Both carry a
+        // failure record, and absorbing them as a skipped item would return the
+        // rows around a secret as a successful read.
+        if (isRefusal(error)) throw error;
         faultedItems.add(element);
       }
     }
     if (pageByPage) for (const content of thisPage) earlierPages?.add(content);
-    if (truncated || !paginate) break;
+    if (truncated || !paginate) {
+      if (truncated && paginate) paginationStop = "item_limit";
+      break;
+    }
+    // A page reached by a control that shows only what earlier pages showed is
+    // not a next page: it is the same one again, which is what a Next that
+    // leads back to its own page loads. Following it again would read it again,
+    // up to the page bound, so the read ends here and says why.
+    if (shownOnEarlierPages) {
+      const repeated = progress.pagesRead > 1 && shownThisPage.length > 0 && shownThisPage.every((content) => shownOnEarlierPages.has(content));
+      for (const content of shownThisPage) shownOnEarlierPages.add(content);
+      if (repeated) {
+        paginationStop = "page_repeated";
+        break;
+      }
+    }
 
     // Moving to the next page can throw for the same reasons: the control was
     // detached, or the document was replaced while it was being pressed. The read
@@ -454,17 +498,28 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     let advance: Awaited<ReturnType<typeof advancePage>>;
     try {
       advance = await advancePage(paginate, progress);
-    } catch {
+    } catch (error) {
       pageFault = true;
+      paginationStop = paginationStopOf(error);
       break;
     }
-    if (advance === "advanced") continue;
-    truncated = advance === "truncated";
-    timedOut = advance === "timed_out";
+    if (advance.outcome === "advanced") continue;
+    truncated = advance.outcome === "truncated";
+    timedOut = advance.outcome === "timed_out";
+    // A page a control led to that showed no item of the list at all, and
+    // nothing to go on with, did not end the list: it lost it -- a rate limit,
+    // a check page, an error. The word says so rather than calling it the end.
+    const lostTheList = progress.pagesRead > 1 && shown.length === 0 && (advance.stop === "control_absent" || advance.stop === "no_following_page");
+    paginationStop = lostTheList ? "list_vanished" : advance.stop;
     break;
   }
 
   return outcome({ timedOut });
+}
+
+/** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */
+function isRefusal(error: unknown): boolean {
+  return error instanceof Error && typeof (error as { failure?: unknown }).failure === "object" && (error as { failure?: unknown }).failure !== null;
 }
 
 /** The rejected rows a read may have to fall back to, kept to the same item bound and the same deduplication as the records. */

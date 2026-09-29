@@ -91,7 +91,10 @@ test("product-catalog: the largest list is the eight cards, with their fields an
   expect(structure.proposal.pagination).toMatchObject({ next: '[data-testid="pagination-next"]' });
   expect(structure.infiniteScroll).toBeUndefined();
   const byKey = new Map(structure.proposal.fields.map((field) => [field.key, field]));
-  expect(byKey.get("product-link")?.spec.kind).toBe("link");
+  // A link's URL column is labelled with its path and "url"; its words would be
+  // a second column, but the heading around it already offers them.
+  expect(structure.proposal.fields.find((field) => field.label === "product-link url")?.spec.kind).toBe("link");
+  expect(structure.proposal.fields.some((field) => field.label === "product-link")).toBe(false);
   expect(byKey.get("product-name")?.spec.kind).toBe("text");
 
   // D3: nothing a card says is in the answer.

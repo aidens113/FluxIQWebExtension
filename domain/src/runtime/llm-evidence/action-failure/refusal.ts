@@ -138,6 +138,7 @@ function readDetail(shortfall: WebActionReadShortfall): WebLlmToolRejectionDetai
     itemsSeen: shortfall.itemsSeen,
     emptyRecords: shortfall.emptyRecords,
     missingFields: shortfall.missingFields,
-    waitStoppedOn: shortfall.waitStoppedOn
+    waitStoppedOn: shortfall.waitStoppedOn,
+    paginationStop: shortfall.paginationStop
   });
 }

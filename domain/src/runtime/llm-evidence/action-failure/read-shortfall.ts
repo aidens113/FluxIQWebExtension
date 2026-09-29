@@ -45,6 +45,8 @@ export type WebActionReadShortfall = {
   emptyRecords: number | undefined;
   missingFields: readonly string[] | undefined;
   waitStoppedOn: string | undefined;
+  /** Why a read that paged stopped paging, in the summary's closed word, or absent for a read that did not page. */
+  paginationStop: string | undefined;
 };
 
 /**
@@ -65,7 +67,8 @@ export function webActionReadShortfall(payload: JsonObject | undefined): WebActi
     itemsSeen: summary.itemsSeen,
     emptyRecords: summary.emptyRecords,
     missingFields: summary.missingFields,
-    waitStoppedOn: summary.listWait?.stoppedOn
+    waitStoppedOn: summary.listWait?.stoppedOn,
+    paginationStop: summary.paginationStop
   };
 }
 

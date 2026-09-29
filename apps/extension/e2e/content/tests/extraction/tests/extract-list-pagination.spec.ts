@@ -51,7 +51,7 @@ test.describe("on infinite-feed", () => {
     });
     expect(reply).toMatchObject({
       status: "succeeded",
-      validation: { status: "passed", actual: "30 records from 3 pages, truncated; every declared field present" },
+      validation: { status: "passed", actual: "30 records from 3 pages, truncated; paging stopped because the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on -- raise it to read more; every declared field present" },
       extraction: { recordCount: 30, pagesRead: 3, truncated: true }
     });
     // Two scrolls loaded two further pages, and the read scrolled no more.
@@ -130,7 +130,7 @@ test.describe("on basic-form", () => {
     });
     expect(stopped).toMatchObject({
       status: "succeeded",
-      validation: { status: "passed", actual: "5 records from 2 pages, truncated; every declared field present" },
+      validation: { status: "passed", actual: "5 records from 2 pages, truncated; paging stopped because the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on -- raise it to read more; every declared field present" },
       extraction: { recordCount: 5, pagesRead: 2, truncated: true }
     });
     expect(stopped.extracted).toEqual(feedItems(5));

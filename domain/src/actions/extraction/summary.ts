@@ -64,7 +64,70 @@ export type WebAutomationExtractionSummary = {
   listWait?: WebAutomationExtractionListWait | undefined;
   /** What `where` did, or absent for a read whose request named no conditions. */
   conditions?: WebAutomationExtractionConditionReport | undefined;
+  /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
+  paginationStop?: WebAutomationExtractionPaginationStop | undefined;
 };
+
+/**
+ * Why a read that pages stopped paging (C2), in one closed word.
+ *
+ * **It exists because a read stopped on page one and nobody could say why.**
+ * Live run `run-mulwm2dc-0bd95f22` asked the job board for `maxPages: 50` with a
+ * `next` control and came back with `pagesRead: 1`, `truncated: false`, and
+ * nothing else. From the bundle the stop was undeterminable: the control could
+ * have named nothing, been disabled, led back to the page it was on, or been
+ * pressed and ignored -- four different repairs, and the debug could only
+ * reconstruct which one from the read's 10.1 s duration against the page's
+ * 10 s change window. (It was the last: the site's consent wall cancels every
+ * click made outside it.)
+ *
+ * The words, by who ends the read:
+ * - the list: `control_absent` (the control the request names is not on the
+ *   page), `control_disabled`, `no_following_page` (a numbered pager shows no
+ *   page after the current one), `scrolled_to_end`, and `list_vanished` (the page
+ *   a control led to showed no item of the list at all, and nothing to go on
+ *   with);
+ * - the request's bounds: `page_limit` (`maxPages` or `maxScrolls`),
+ *   `item_limit` (`maxItems`), and `deadline` (the command's `timeoutMs`);
+ * - the page misbehaving: `list_unchanged` (the control was followed, and then
+ *   followed by its own address, and the list never changed), `page_repeated`
+ *   (the page reached showed only records earlier pages had already yielded, as
+ *   a Next that leads back to the page it is on does), `control_not_clickable`,
+ *   and `page_fault` (the move threw for any other reason).
+ *
+ * `control_absent` on page one is also what a `next` selector that names
+ * nothing looks like; `pagesRead` beside it is what tells that apart from a list
+ * that ended.
+ */
+export type WebAutomationExtractionPaginationStop =
+  | "control_absent"
+  | "control_disabled"
+  | "no_following_page"
+  | "scrolled_to_end"
+  | "list_vanished"
+  | "page_limit"
+  | "item_limit"
+  | "deadline"
+  | "list_unchanged"
+  | "page_repeated"
+  | "control_not_clickable"
+  | "page_fault";
+
+/** Every pagination stop word, which is what `paginationStopValue` admits. */
+const PAGINATION_STOPS: readonly WebAutomationExtractionPaginationStop[] = [
+  "control_absent",
+  "control_disabled",
+  "no_following_page",
+  "scrolled_to_end",
+  "list_vanished",
+  "page_limit",
+  "item_limit",
+  "deadline",
+  "list_unchanged",
+  "page_repeated",
+  "control_not_clickable",
+  "page_fault"
+];
 
 /**
  * Whether the `item` selector ever named an element on the page (C2).
@@ -225,6 +288,11 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   const emptyRecords = countValue(summary.emptyRecords);
   if (summary.itemsSeen !== undefined && itemsSeen === undefined) return undefined;
   if (summary.emptyRecords !== undefined && emptyRecords === undefined) return undefined;
+  // Why paging stopped, held to the rule `listPresence` is: optional, so a page
+  // build that predates it still sends a summary that arrives whole, and a word
+  // outside the set drops the summary rather than arriving half understood.
+  const paginationStop = paginationStopValue(summary.paginationStop);
+  if (summary.paginationStop !== undefined && paginationStop === undefined) return undefined;
   // No cross-check against `recordCount`, unlike `kept > applied` below. A
   // continued read carries its predecessor's records and counts only its own
   // document's items (the rule the condition report already states), so
@@ -241,8 +309,16 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(emptyRecords !== undefined ? { emptyRecords } : {}),
     ...(listPresence !== undefined ? { listPresence } : {}),
     ...(listWait !== undefined ? { listWait } : {}),
-    ...(conditions !== undefined ? { conditions } : {})
+    ...(conditions !== undefined ? { conditions } : {}),
+    ...(paginationStop !== undefined ? { paginationStop } : {})
   };
+}
+
+/** The one word that says why paging stopped, or `undefined` for anything else. */
+function paginationStopValue(value: unknown): WebAutomationExtractionPaginationStop | undefined {
+  return typeof value === "string" && (PAGINATION_STOPS as readonly string[]).includes(value)
+    ? value as WebAutomationExtractionPaginationStop
+    : undefined;
 }
 
 /** The one word that says whether the list was ever there, or `undefined` for anything else. */

@@ -112,7 +112,9 @@ test("product-catalog: a picked product name proposes the eight cards, with a li
   expect(proposal.confidence).toBeLessThanOrEqual(1);
 
   expect(proposal.fields.map((field) => field.spec.kind)).toContain("link");
-  expect(fieldLabelled(proposal, "product-link").spec).toMatchObject({ kind: "link" });
+  expect(fieldLabelled(proposal, "product-link url").spec).toMatchObject({ kind: "link" });
+  // The link sits inside the heading that already offers its words, so it offers no second text column.
+  expect(proposal.fields.some((field) => field.label === "product-link")).toBe(false);
 
   // Next is detected, named explicitly, and asks for the page in front of it.
   // The count used to come from the page's own numbered controls, which made a
@@ -139,7 +141,7 @@ test("product-catalog: a picked product name proposes the eight cards, with a li
   expect(records).toHaveLength(8);
   expect(records.map((record) => record[fieldLabelled(proposal, "product-name").key])).toEqual(names);
   for (const record of records) {
-    expect(String(record[fieldLabelled(proposal, "product-link").key])).toMatch(/^https?:\/\//u);
+    expect(String(record[fieldLabelled(proposal, "product-link url").key])).toMatch(/^https?:\/\//u);
   }
 });
 

@@ -114,6 +114,7 @@ export function repeatedRejectionDetail(detail: WebLlmToolRejectionDetail | unde
     emptyRecords: detail?.emptyRecords,
     missingFields: detail?.missingFields,
     waitStoppedOn: detail?.waitStoppedOn,
+    paginationStop: detail?.paginationStop,
     repeatedAnswer
   });
 }

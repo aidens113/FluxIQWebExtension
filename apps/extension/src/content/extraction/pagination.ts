@@ -51,13 +51,66 @@
 // the last page it read, so a read that finishes leaves the page showing its
 // last page (decision D5).
 
-import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
+//
+// **Every advance that does not advance says why, in one closed word**
+// (`PaginationStop`, the domain's `WebAutomationExtractionPaginationStop`), and
+// so does every throw, through `PaginationFault`. Until 2026-09-28 a read that
+// stopped said only whether a bound cut it short: live run
+// `run-mulwm2dc-0bd95f22` asked for fifty pages, read one, and the bundle could
+// not say whether the control was absent, disabled, leading back to its own
+// page, or pressed and ignored.
+//
+// **And two ways a real pager misbehaves are absorbed rather than ended on**,
+// because the runtime is defensive by default:
+// - **A click the page cancelled.** The job board cancels every click outside
+//   its consent wall while the wall is open -- `click()` included -- so the
+//   read pressed Next, waited ten seconds for a change that could not come, and
+//   ended on page one. A link says where it goes, so when the page cancelled the
+//   click (or the list did not change at all) and the control is a link to
+//   another document, the read goes there by the link's own address. That is
+//   exactly what the click would have done, and it answers nothing on the
+//   page's behalf: no dialog is accepted or dismissed.
+// - **A Next that leads back to the page it is on**, which the same board does
+//   from page two on. Following it reloads the page, and a read that followed
+//   it would read the same page until its bound. When the pager beside it shows
+//   the current page's number and a control numbered one more, the read follows
+//   that instead; when it shows none, the read follows the Next anyway and stops
+//   on `page_repeated` when the page it reaches holds nothing new
+//   (`list-reader.ts`).
+
+import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationExtractionSummary } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../types";
 import { waitUntil, type WaitOutcome } from "./list-wait";
 import { awaitPageRendered } from "./page-render";
 
-/** What one advance did: see the header. */
-export type PageAdvance = "advanced" | "ended" | "truncated" | "timed_out";
+/** Why a read that pages stopped paging: the domain's closed set of words. */
+export type PaginationStop = NonNullable<WebAutomationExtractionSummary["paginationStop"]>;
+
+/** What one advance did: see the header. Everything but `advanced` says why. */
+export type PageAdvance =
+  | { outcome: "advanced" }
+  | { outcome: "ended" | "truncated" | "timed_out"; stop: PaginationStop };
+
+/** A move to the next page that could not be made, and the word that says which way it failed. */
+export class PaginationFault extends Error {
+  readonly stop: PaginationStop;
+
+  constructor(stop: PaginationStop, message: string) {
+    super(message);
+    this.name = "PaginationFault";
+    this.stop = stop;
+  }
+}
+
+/** The stop word for a move that threw: the fault's own, or `page_fault` for anything else. */
+export function paginationStopOf(error: unknown): PaginationStop {
+  return error instanceof PaginationFault ? error.stop : "page_fault";
+}
+
+const ADVANCED: PageAdvance = { outcome: "advanced" };
+const ended = (stop: PaginationStop): PageAdvance => ({ outcome: "ended", stop });
+const TRUNCATED: PageAdvance = { outcome: "truncated", stop: "page_limit" };
+const TIMED_OUT: PageAdvance = { outcome: "timed_out", stop: "deadline" };
 
 /** The read's progress, which the list reader updates before each advance and `advancePage` reads. */
 export type PaginationProgress = {
@@ -84,6 +137,14 @@ type NumberedPagination = Extract<WebAutomationExtractListPagination, { mode: "n
 
 /** How long the list has to change after a control was followed. */
 const LIST_CHANGE_TIMEOUT_MS = 10_000;
+/**
+ * How long a link whose click the page cancelled is given to change the list
+ * before the read goes where the link says. A client-side router cancels a
+ * link's click and draws the next page itself, so a cancelled click is not by
+ * itself an ignored one; a router that has not changed the list in this long
+ * lands on the same page by the link's address anyway.
+ */
+const CANCELLED_LINK_WINDOW_MS = 2_000;
 const LIST_CHANGE_POLL_MS = 25;
 /** How long a scroll waits for an unread item: the window `actions/scroll.ts` gives a lazy feed to grow. */
 const SCROLL_GROWTH_WINDOW_MS = 900;
@@ -128,54 +189,111 @@ export async function advancePage(paginate: WebAutomationExtractListPagination, 
   }
 }
 
+/**
+ * Follows the `next` control. A disabled one is the list ending, as it is for
+ * `loadMore`; one that leads back to this very page is swapped for the pager's
+ * following page where the pager shows one (see the header).
+ */
 async function followNext(paginate: NextPagination, progress: PaginationProgress): Promise<PageAdvance> {
   const next = document.querySelector(paginate.next);
-  if (!next) return "ended";
-  if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
-  const control = clickable(next, paginate.next);
-  if (pastDeadline(progress.deadline)) return "timed_out";
+  if (!next) return ended("control_absent");
+  if (isDisabled(next)) return ended("control_disabled");
+  if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
+  const named = clickable(next, paginate.next);
+  const control = leadsToThisPage(named) ? pagerSuccessor(named) ?? named : named;
+  if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await progress.beforeFollow?.();
   return await afterListChange(paginate, progress, control, `following ${JSON.stringify(paginate.next)} to page ${progress.pagesRead + 1}`);
 }
 
 async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationProgress): Promise<PageAdvance> {
   const found = document.querySelector(paginate.control);
-  if (!found || isDisabled(found)) return "ended";
-  if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
+  if (!found) return ended("control_absent");
+  if (isDisabled(found)) return ended("control_disabled");
+  if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
   const control = clickable(found, paginate.control);
-  if (pastDeadline(progress.deadline)) return "timed_out";
+  if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await progress.beforeFollow?.();
   control.click();
   const outcome = await waitUntil(() => progress.hasUnreadItem() || !control.isConnected, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
   if (outcome === "unchanged") {
-    throw new Error(`No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(paginate.control)} for page ${progress.pagesRead + 1}.`);
+    throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(paginate.control)} for page ${progress.pagesRead + 1}.`);
   }
-  return outcome === "changed" ? "advanced" : "timed_out";
+  return outcome === "changed" ? ADVANCED : TIMED_OUT;
 }
 
 async function scrollForMore(paginate: ScrollPagination, progress: PaginationProgress): Promise<PageAdvance> {
   const bound = paginationBound(paginate);
   const scroller = scrollerOf(progress.shown[0]);
   for (;;) {
-    if (progress.scrolls >= bound) return "truncated";
-    if (pastDeadline(progress.deadline)) return "timed_out";
+    if (progress.scrolls >= bound) return TRUNCATED;
+    if (pastDeadline(progress.deadline)) return TIMED_OUT;
     scrollToBottom(scroller);
     progress.scrolls += 1;
     const outcome = await waitUntil(() => progress.hasUnreadItem(), SCROLL_GROWTH_WINDOW_MS, SCROLL_POLL_MS, progress.deadline);
-    if (outcome === "changed") return "advanced";
-    if (outcome === "timed_out") return "timed_out";
-    if (atBottom(scroller)) return "ended";
+    if (outcome === "changed") return ADVANCED;
+    if (outcome === "timed_out") return TIMED_OUT;
+    if (atBottom(scroller)) return ended("scrolled_to_end");
   }
 }
 
 async function visitNumberedPage(paginate: NumberedPagination, progress: PaginationProgress): Promise<PageAdvance> {
   const following = followingPageControl(Array.from(document.querySelectorAll(paginate.pages)), progress.pagesRead);
-  if (!following) return "ended";
-  if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
+  if (!following) return ended("no_following_page");
+  if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
   const control = clickable(following, paginate.pages);
-  if (pastDeadline(progress.deadline)) return "timed_out";
+  if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await progress.beforeFollow?.();
   return await afterListChange(paginate, progress, control, `choosing page ${progress.pagesRead + 1} from ${JSON.stringify(paginate.pages)}`);
+}
+
+/**
+ * Whether the control is a link whose address is the document already showing:
+ * the same page, with its query in any order, whatever its fragment. A link to
+ * a fragment alone (`href="#"`) is not one, because that is how a page marks a
+ * control its own script handles, and a script-driven Next is a working Next.
+ */
+function leadsToThisPage(control: HTMLElement): boolean {
+  const address = linkAddress(control);
+  return address !== undefined && sameDocument(address, new URL(document.URL));
+}
+
+/**
+ * The control a pager shows for the page after the current one, found beside a
+ * `next` control that leads back to its own page, or `undefined` when the pager
+ * does not say which page is current or shows nothing after it.
+ *
+ * The current page is the number marked `aria-current`, or the one number the
+ * pager shows as something other than a control -- which is how a pager draws
+ * the page you are on (`<b>2</b>` among links). Only numbers are read, and only
+ * to compare them, so no word of the page is carried anywhere.
+ */
+function pagerSuccessor(next: HTMLElement): HTMLElement | undefined {
+  let pager: Element | null = next.parentElement;
+  for (let depth = 0; pager && depth < PAGER_LEVELS; depth += 1, pager = pager.parentElement) {
+    const numbered = Array.from(pager.querySelectorAll("*")).filter((element) => element.children.length === 0 && pageNumber(element) !== undefined);
+    const current = numbered.find((element) => isCurrentPage(element) || isCurrentPage(element.closest(PAGE_CONTROL) ?? element))
+      ?? onlyOne(numbered.filter((element) => !isControl(element)));
+    const number = current === undefined ? undefined : pageNumber(current);
+    if (number === undefined) continue;
+    const following = numbered.map((element) => element.closest(PAGE_CONTROL) ?? element).find((element) => isControl(element) && pageNumber(element) === number + 1);
+    return following instanceof HTMLElement && !isDisabled(following) ? following : undefined;
+  }
+  return undefined;
+}
+
+/** How far out from a `next` control its pager is looked for. */
+const PAGER_LEVELS = 3;
+
+/** What a pager's page controls are. */
+const PAGE_CONTROL = 'a[href],button,[role="link"],[role="button"]';
+
+function isControl(element: Element): boolean {
+  return element.matches(PAGE_CONTROL) || element.closest(PAGE_CONTROL) !== null;
+}
+
+function onlyOne<T>(items: readonly T[]): T | undefined {
+  return items.length === 1 ? items[0] : undefined;
 }
 
 /** The page control that follows the current page, or `undefined` when the list has no further page. */
@@ -203,8 +321,55 @@ function isDisabled(control: Element): boolean {
 }
 
 function clickable(element: Element, selector: string): HTMLElement {
-  if (!(element instanceof HTMLElement)) throw new Error(`The pagination control ${JSON.stringify(selector)} is not a clickable element.`);
+  if (!(element instanceof HTMLElement)) throw new PaginationFault("control_not_clickable", `The pagination control ${JSON.stringify(selector)} is not a clickable element.`);
   return element;
+}
+
+/**
+ * Where the control goes when it is a link to a page: its `href` resolved
+ * against its base, when that is http or https. `undefined` for anything else,
+ * and for a link to a fragment alone, which a page's own script handles.
+ */
+function linkAddress(control: HTMLElement): URL | undefined {
+  const link = control.closest("a[href]");
+  const href = link?.getAttribute("href")?.trim();
+  // An address that does not parse is not a link to a page, which is what
+  // `undefined` means here, so it is asked rather than caught.
+  if (!link || !href || href.startsWith("#") || !URL.canParse(href, link.baseURI)) return undefined;
+  const url = new URL(href, link.baseURI);
+  return url.protocol === "http:" || url.protocol === "https:" ? url : undefined;
+}
+
+/** Whether two addresses load the same document: origin, path and query alike, the query in any order, the fragment ignored. */
+function sameDocument(left: URL, right: URL): boolean {
+  return left.origin === right.origin && left.pathname === right.pathname && sortedQuery(left) === sortedQuery(right);
+}
+
+function sortedQuery(url: URL): string {
+  const params = [...url.searchParams.entries()].sort(([a, x], [b, y]) => (a === b ? (x < y ? -1 : x > y ? 1 : 0) : a < b ? -1 : 1));
+  return new URLSearchParams(params).toString();
+}
+
+/**
+ * Clicks the control and says whether the page cancelled the click.
+ *
+ * The page's own listeners see the click first and may cancel it and stop it
+ * propagating, so the event is caught on its way down, at the window, and read
+ * once `click()` has returned: dispatch is synchronous, so by then every
+ * listener has had its say.
+ */
+function clickNoticingCancel(control: HTMLElement): boolean {
+  let clicked: Event | undefined;
+  const notice = (event: Event): void => {
+    if (clicked === undefined && event.target instanceof Node && (event.target === control || control.contains(event.target))) clicked = event;
+  };
+  window.addEventListener("click", notice, true);
+  try {
+    control.click();
+  } finally {
+    window.removeEventListener("click", notice, true);
+  }
+  return clicked?.defaultPrevented === true;
 }
 
 function pastDeadline(deadline: number | undefined): boolean {
@@ -220,22 +385,41 @@ function pastDeadline(deadline: number | undefined): boolean {
  * page it is loading is the change, however slow the server. It is given one
  * more window, and if it does unload within it, this script and the wait go
  * with it and the worker carries the read into the next document.
+ *
+ * A link to another document that did not change the list -- because the page
+ * cancelled its click, or because nothing happened at all -- is followed by its
+ * own address before the read gives up (see the header). A cancelled click gets
+ * `CANCELLED_LINK_WINDOW_MS` first rather than the whole window, since a page
+ * that cancels a click it is not going to act on is the common case the header
+ * measured, and ten seconds a page is what that cost.
  */
 async function afterListChange(paginate: WebAutomationExtractListPagination, progress: PaginationProgress, control: HTMLElement, action: string): Promise<PageAdvance> {
   const { item, shown, deadline } = progress;
+  const address = linkAddress(control);
+  const elsewhere = address !== undefined && !sameDocument(address, new URL(document.URL)) ? address : undefined;
   const leaving = watchUnload();
   let outcome: WaitOutcome;
+  let byAddress = false;
   try {
-    control.click();
+    const cancelled = clickNoticingCancel(control);
     const changed = (): boolean => listChanged(item, shown) || !control.isConnected;
-    outcome = await waitUntil(changed, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
+    const firstWindow = cancelled && elsewhere !== undefined ? CANCELLED_LINK_WINDOW_MS : LIST_CHANGE_TIMEOUT_MS;
+    outcome = await waitUntil(changed, firstWindow, LIST_CHANGE_POLL_MS, deadline);
+    if (outcome === "unchanged" && elsewhere !== undefined && !leaving.started()) {
+      byAddress = true;
+      window.location.assign(elsewhere.href);
+      outcome = await waitUntil(changed, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
+    }
     if (outcome === "unchanged" && leaving.started()) outcome = await waitUntil(changed, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
   } finally {
     leaving.stop();
   }
-  if (outcome === "unchanged") throw new Error(`The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of ${action}.`);
-  if (outcome === "timed_out") return "timed_out";
-  return await awaitPageRendered(paginate, progress) === "arrived" ? "advanced" : "timed_out";
+  if (outcome === "unchanged") {
+    const also = byAddress ? ", or of going to the address it links to" : "";
+    throw new PaginationFault("list_unchanged", `The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of ${action}${also}.`);
+  }
+  if (outcome === "timed_out") return TIMED_OUT;
+  return await awaitPageRendered(paginate, progress) === "arrived" ? ADVANCED : TIMED_OUT;
 }
 
 /** Notices this document beginning to unload, until stopped. */

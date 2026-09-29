@@ -8,7 +8,9 @@
 //   *about* an item rather than inside it -- `data-ad-id` on a sponsored card,
 //   `data-item-id` on a listing -- read as `attribute` fields off the item;
 // - and each descendant that names itself or carries a value: an `<img>`
-//   gives its `src` and its `alt`, an `<a href>` gives a `link`, a form control
+//   gives its `src` and its `alt`, an `<a href>` gives its words as `text`
+//   under its path and its URL as a `link` under the path and "url"
+//   (`offersOwnText` says why both), a form control
 //   gives its live `value`, an element with a test id gives its `text`, and a
 //   remaining leaf with words in it gives its `text`.
 //
@@ -307,7 +309,8 @@ function elementSources(item: Element): FieldSource[] {
       sources.push({ kind: "attribute", label: `${label} src`, selector, attribute: "src", sensitive });
       sources.push({ kind: "attribute", label: `${label} alt`, selector, attribute: "alt", sensitive });
     } else if (tag === "a" && element.getAttribute("href") !== null) {
-      sources.push({ kind: "link", label, selector, sensitive });
+      if (offersOwnText(item, element)) sources.push({ kind: "text", label, selector, sensitive });
+      sources.push({ kind: "link", label: `${label} ${LINK_LABEL_SUFFIX}`, selector, sensitive });
     } else if (VALUE_TAGS.has(tag)) {
       sources.push({ kind: "value", label, selector, sensitive });
     } else if (testIdFor(element) !== undefined) {
@@ -318,6 +321,50 @@ function elementSources(item: Element): FieldSource[] {
   }
   return sources;
 }
+
+/**
+ * What a link's URL column is labelled after its path, beside the link's text
+ * column, which carries the path alone. The two read the same element, so the
+ * label is the only thing a model choosing columns can tell them apart by.
+ */
+const LINK_LABEL_SUFFIX = "url";
+
+/**
+ * Whether a link's own words are a column of their own.
+ *
+ * **Until 2026-09-28 they never were.** An `<a href>` offered one source, its
+ * URL, and nothing else, so on a listing whose title is `h2 > a` -- most of
+ * them -- the only column that held the title held its address. Live run
+ * `run-mulwm2dc-0bd95f22` mapped `title` to it, stored twelve rows of URLs, and
+ * its verifier said exactly that; the re-author, choosing from the same
+ * columns, could not fix it, because no column held the words.
+ *
+ * A link with no words (an image link) offers none. Nor does one whose words
+ * are all one descendant's that is offered on its own -- `<a><span>Title
+ * </span></a>` already proposes the span -- so the same value is not put in
+ * front of the model twice under two labels -- nor does one inside an element
+ * with a test id that says the same words, as the catalog's
+ * `<h3 data-testid="product-name"><a data-testid="product-link">` does, since the
+ * heading is already offered by its id. Nor does a link that wraps a whole
+ * card: its words are every value on the card run together, which is no column
+ * at all, and each of those values is offered on its own. The words are read
+ * through the one sensitive-text reader, only to decide this, and never carried
+ * anywhere.
+ */
+function offersOwnText(item: Element, link: Element): boolean {
+  const words = collapsed(textOutsideSensitiveControls(link));
+  if (words === "" || statedMoreTightly(item, link)) return false;
+  const leaves = Array.from(link.querySelectorAll("*")).filter(isTextLeaf);
+  if (leaves.length > MAX_LINK_TEXT_LEAVES) return false;
+  if (leaves.some((inner) => collapsed(textOutsideSensitiveControls(inner)) === words)) return false;
+  for (let outer = link.parentElement; outer && outer !== item; outer = outer.parentElement) {
+    if (testIdFor(outer) !== undefined && collapsed(textOutsideSensitiveControls(outer)) === words) return false;
+  }
+  return true;
+}
+
+/** More words-holding elements than this inside a link make it a card rather than a title. */
+const MAX_LINK_TEXT_LEAVES = 2;
 
 /** Whether the element sits inside a form control of this item, whose contents are the control's own. */
 function withinValueControl(item: Element, element: Element): boolean {

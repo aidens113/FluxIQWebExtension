@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../../types";
-import { advancePage, deadlineFor, paginationBound, type PaginationProgress } from "../pagination";
+import { advancePage, deadlineFor, paginationBound, PaginationFault, paginationStopOf, type PaginationProgress } from "../pagination";
 
 /** A requested bound, and what the page holds it to. */
 const BOUNDS: ReadonlyArray<readonly [requested: number, held: number]> = [
@@ -66,4 +66,11 @@ test("a pagination mode the page does not know is refused before the page is tou
   };
   await assert.rejects(advancePage({ mode: "infinite", maxPages: 3 } as never, progress), /does not know pagination mode "infinite"/u);
   await assert.rejects(advancePage({ mode: 7, next: ".next", maxPages: 3 } as never, progress), /does not know a pagination mode that is not a string/u);
+});
+
+test("a move that threw says which way it failed: a pagination fault's own word, and page_fault for anything else", () => {
+  assert.equal(paginationStopOf(new PaginationFault("list_unchanged", "The list did not change.")), "list_unchanged");
+  assert.equal(paginationStopOf(new PaginationFault("control_not_clickable", "Not clickable.")), "control_not_clickable");
+  assert.equal(paginationStopOf(new Error("The node was detached.")), "page_fault");
+  assert.equal(paginationStopOf("not even an error"), "page_fault");
 });
