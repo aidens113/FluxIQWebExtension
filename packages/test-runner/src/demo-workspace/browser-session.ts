@@ -189,7 +189,8 @@ export async function connectExtension(
     gatewayFilled: false,
     apiFilled: false,
     optionsVerified: 0,
-    settingsClosed: false,
+    settingsSaved: false,
+    simpleViewShown: false,
     connectionRequested: false,
     connected: false,
     pairingRequired: false,
@@ -207,31 +208,48 @@ export async function connectExtension(
     await evidence.step("panel", "select-project-context", "Select the Flow as the active FluxIQ recording context", () => control.selectExistingContext(projectId, undefined, {}, flowId));
     facts.contextSelected = true;
 
+    // The gear opens the panel's Advanced view on its Connection tab. The labels
+    // below are that tab's (extension UI audit, section 4): settings are stored by
+    // its explicit Save, not by Connect, and the way back is the header's "Simple".
     await checkpoint("settings-open", "extension");
     await evidence.step("extension", "settings-open", "Open extension settings", () => page.getByRole("button", { name: "Settings" }).click());
     facts.settingsOpened = true;
 
     await checkpoint("settings-gateway", "extension");
-    await evidence.step("extension", "settings-gateway", "Enter the FluxIQ gateway URL", () => page.getByLabel("Gateway URL").fill(gatewayUrl));
+    await evidence.step("extension", "settings-gateway", "Enter the FluxIQ connection address", () => page.getByLabel("FluxIQ connection address", { exact: true }).fill(gatewayUrl));
     facts.gatewayFilled = true;
 
     await checkpoint("settings-api", "extension");
-    await evidence.step("extension", "settings-api", "Enter the FluxIQ Core API URL", () => page.getByLabel("Core API URL").fill(origin));
+    await evidence.step("extension", "settings-api", "Enter the FluxIQ web address", () => page.getByLabel("FluxIQ web address", { exact: true }).fill(origin));
     facts.apiFilled = true;
 
     await checkpoint("settings-options", "extension");
-    for (const label of ["Auto reconnect", "DOM mutations", "Input values", "Snapshots"]) {
-      const checkbox = page.getByLabel(label);
+    for (const label of ["Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots"]) {
+      const checkbox = page.getByLabel(label, { exact: true });
       if (!await checkbox.isChecked()) await evidence.step("extension", "settings-" + label.toLowerCase().replaceAll(" ", "-"), "Enable " + label, () => checkbox.check());
       facts.optionsVerified += 1;
     }
 
-    await checkpoint("settings-close", "extension");
-    await evidence.step("extension", "settings-close", "Close extension settings", () => page.getByRole("button", { name: "Close" }).click());
-    facts.settingsClosed = true;
+    await checkpoint("settings-save", "extension");
+    await evidence.step("extension", "settings-save", "Save extension settings", async () => {
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await page.getByText("Saved.", { exact: true }).waitFor();
+    });
+    facts.settingsSaved = true;
 
+    await checkpoint("view-simple", "extension");
+    await evidence.step("extension", "view-simple", "Return to the simple view", () => page.getByRole("radio", { name: "Simple", exact: true }).click());
+    facts.simpleViewShown = true;
+
+    // Save reconnects by itself when the address changed on a live connection,
+    // and a paired browser may already be dialling on its own, so the button is
+    // pressed only when the connection is idle or failed. Its name follows the
+    // state: "Connect", or "Try again" / "Try now" after a failure.
     await checkpoint("connect-request", "extension");
-    await evidence.step("extension", "extension-connect", "Connect the extension", () => page.getByRole("button", { name: "Connect", exact: true }).click());
+    const before = await extensionStatus(page);
+    if (["disconnected", "error", "reconnecting"].includes(before?.connectionState)) {
+      await evidence.step("extension", "extension-connect", "Connect the extension", () => page.getByRole("button", { name: /^(Connect|Try again|Try now)$/u }).click());
+    }
     facts.connectionRequested = true;
 
     await checkpoint("connection-status", "extension");
