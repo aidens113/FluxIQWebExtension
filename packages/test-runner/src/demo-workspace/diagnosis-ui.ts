@@ -8,7 +8,7 @@ import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js"
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { required } from "./configuration.js";
 import { assertLlmDiagnosisRecordingDerivedFlow } from "./flow-document.js";
-import { waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
+import { RUN_READINESS_CHECK_TEXT, runPanel, selectRunMode, waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
 import type { DemoFlowProfile } from "./provisioning.js";
 import { escapeCssAttribute, escapeRegExp } from "./selectors.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
@@ -47,8 +47,8 @@ export async function waitForInstructionLibraryIdle(page: Page, shell: Locator, 
 export async function ensureLlmDiagnosisInstructionViaUi(page: Page, flowTreeItemId: string, pin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const hierarchySearch = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "llm-instruction-search", "Search the exact Flow hierarchy for Instructions", () => hierarchySearch.fill("Instructions"));
-  const instructionRows = hierarchy.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"][aria-label="Instructions"] .tree-row-main.type-flow-object`);
+  await evidence.step("panel", "llm-instruction-search", "Search the exact Flow hierarchy for Guidance for the assistant", () => hierarchySearch.fill("Guidance for the assistant"));
+  const instructionRows = hierarchy.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"][aria-label="Guidance for the assistant"] .tree-row-main.type-flow-object`);
   await instructionRows.first().waitFor({ state: "visible", timeout: 10_000 });
   if (await instructionRows.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact Flow Instructions hierarchy row is unavailable");
   await evidence.step("panel", "llm-instruction-open", "Open Instructions for the exact prepared Flow", () => instructionRows.click());
@@ -121,11 +121,9 @@ export async function ensureLlmDiagnosisInstructionViaUi(page: Page, flowTreeIte
 
   const save = editor.getByRole("button", { name: "Save Instruction", exact: true });
   if (await save.isEnabled()) {
-    await evidence.step("panel", "llm-instruction-save", "Request the bounded diagnosis instruction save", () => save.click());
-    const dialog = page.getByRole("dialog", { name: "Authorize Instruction Save", exact: true });
-    await evidence.step("panel", "llm-instruction-pin", "Authorize the bounded diagnosis instruction save", () => dialog.getByLabel("Security PIN", { exact: true }).fill(pin), { sensitive: true });
-    await evidence.step("panel", "llm-instruction-authorize", "Save the bounded diagnosis instruction", () => dialog.getByRole("button", { name: "Authorize and Save", exact: true }).click(), { sensitive: true });
-    await dialog.waitFor({ state: "hidden", timeout: 30_000 });
+    // Saving guidance writes directly: the "Authorize Instruction Save" PIN
+    // dialog was removed in Core 68bad85, since Core never PIN-checks it.
+    await evidence.step("panel", "llm-instruction-save", "Save the bounded diagnosis instruction", () => save.click());
     await editor.getByText("All changes saved", { exact: true }).waitFor({ timeout: 30_000 });
   }
 
@@ -213,14 +211,12 @@ export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemI
   }
   const save = workspace.getByRole("button", { name: "Save Settings", exact: true });
   if (await save.isEnabled()) {
-    await evidence.step("panel", "llm-settings-save", "Request the bounded Flow Settings save", () => save.click());
-    const dialog = page.getByRole("dialog", { name: "Authorize Flow Settings Save" });
-    await evidence.step("panel", "llm-settings-pin", "Authorize the bounded Flow Settings save", () => dialog.getByLabel("Security PIN", { exact: true }).fill(pin), { sensitive: true });
-    const response = await evidence.step("panel", "llm-settings-authorize", "Save the bounded Flow Settings", () => (
-      waitForPanelMutationResponse(page, "/api/programs/automation-studio/update-flow-settings", () => dialog.getByRole("button", { name: "Authorize and Save" }).click())
-    ), { sensitive: true });
+    // Save Settings writes directly: the "Authorize Flow Settings Save" PIN
+    // dialog was removed in Core 68bad85, since Core never PIN-checks it.
+    const response = await evidence.step("panel", "llm-settings-save", "Save the bounded Flow Settings", () => (
+      waitForPanelMutationResponse(page, "/api/programs/automation-studio/update-flow-settings", () => save.click())
+    ));
     if (!response.ok()) throw new RunnerFailure("runtime.behavior", "The bounded Flow Settings save was rejected");
-    await dialog.waitFor({ state: "hidden", timeout: 30_000 });
   }
   await workspace.getByText("All Flow settings saved", { exact: true }).waitFor({ timeout: 30_000 });
 }
@@ -228,15 +224,15 @@ export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemI
 export async function runDiagnosisFromPanel(page: Page, flowTreeItemId: string, evidence: BrowserEvidenceRecorder): Promise<{ runId: string; status: string }> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "llm-runtime-search", "Search the exact Flow hierarchy for Runtime Debug", () => search.fill("Runtime Debug"));
-  const runtimeRows = hierarchy.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"][aria-label="Runtime Debug"] .tree-row-main.type-flow-object`);
+  await evidence.step("panel", "llm-runtime-search", "Search the exact Flow hierarchy for Run and test", () => search.fill("Run and test"));
+  const runtimeRows = hierarchy.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"][aria-label="Run and test"] .tree-row-main.type-flow-object`);
   await runtimeRows.first().waitFor({ timeout: 10_000 });
-  if (await runtimeRows.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact Flow Runtime Debug row is unavailable");
-  await evidence.step("panel", "llm-runtime-open", "Open Runtime Debug for the exact prepared Flow", () => runtimeRows.click());
-  const runCommand = page.locator(".automation-runtime-run-command");
+  if (await runtimeRows.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact Flow Run and test row is unavailable");
+  await evidence.step("panel", "llm-runtime-open", "Open Run and test for the exact prepared Flow", () => runtimeRows.click());
+  const runCommand = runPanel(page).locator(".automation-runtime-run-command");
   await runCommand.waitFor({ timeout: 30_000 });
-  await evidence.step("panel", "llm-runtime-search-clear", "Clear the hierarchy search after Runtime Debug opens", () => search.fill(""));
-  await page.getByText("Checking Flow readiness...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
+  await evidence.step("panel", "llm-runtime-search-clear", "Clear the hierarchy search after Run and test opens", () => search.fill(""));
+  await page.getByText(RUN_READINESS_CHECK_TEXT, { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
   const runButton = runCommand.getByRole("button", { name: "Run", exact: true });
   const initialRunEnabled = await runButton.isEnabled({ timeout: 2_000 });
   if (!initialRunEnabled) {
@@ -244,7 +240,7 @@ export async function runDiagnosisFromPanel(page: Page, flowTreeItemId: string, 
     await evidence.diagnostic("panel", "llm-runtime-not-ready", "llm-runtime.readiness", { runEnabled: false, missingActiveInstruction });
     throw new RunnerFailure("runtime.behavior", "The prepared Flow is not ready for an authorized diagnosis-only run");
   }
-  await evidence.step("panel", "llm-runtime-mode", "Select diagnosis_only mode", () => runCommand.getByRole("button", { name: "LLM diagnosis", exact: true }).click());
+  await selectRunMode(page, "LLM diagnosis", evidence, "llm-runtime-mode");
   if (!await runButton.isEnabled({ timeout: 2_000 })) {
     await evidence.diagnostic("panel", "llm-runtime-mode-not-ready", "llm-runtime.mode-readiness", { runEnabled: false, missingActiveInstruction: false });
     throw new RunnerFailure("runtime.behavior", "Diagnosis-only mode did not remain ready to run");

@@ -57,7 +57,7 @@ export async function provisionDemoFlow(control: ExistingFluxIQControlClient, co
     }
     await evidence.step("panel", "project-name", "Enter the demo project name", () => dialog.getByLabel("Project name").fill(config.projectName));
     await evidence.step("panel", "project-description", "Enter the demo project description", () => dialog.getByLabel("Description").fill("Persistent self-recording workspace for the FluxIQ web extension"));
-    await evidence.step("panel", "project-pin", "Authorize demo project creation", () => dialog.getByLabel("Security PIN").fill(config.pin), { sensitive: true });
+    // No PIN: the panel asks for one only on the genuine deletes (Core 68bad85).
     await evidence.step("panel", "project-create-submit", "Create the demo project", () => dialog.getByRole("button", { name: "Create project" }).click(), { sensitive: true });
     await panelPage.locator(".automation-studio-sidebar-heading").getByText(config.projectName, { exact: true }).waitFor();
     const created = (await control.listProjects("web-automation")).filter(item => item.name === config.projectName);
@@ -77,7 +77,6 @@ export async function provisionDemoFlow(control: ExistingFluxIQControlClient, co
     await evidence.step("panel", "flow-create-kind", "Choose a Flow hierarchy item", () => dialog.getByRole("button", { name: /^Flow/u }).click());
     await evidence.step("panel", "flow-create-name", "Enter the demo Flow name", () => dialog.getByLabel("Name").fill(config.flowName));
     await evidence.step("panel", "flow-create-preset", "Choose the deterministic Flow preset", () => dialog.getByLabel("Flow preset").selectOption("deterministic"));
-    await evidence.step("panel", "flow-create-pin", "Authorize demo Flow creation", () => dialog.getByLabel("Security PIN").fill(config.pin), { sensitive: true });
     await evidence.step("panel", "flow-create-submit", "Create the demo Flow", () => dialog.getByRole("button", { name: "Create", exact: true }).click(), { sensitive: true });
     const createdSummary = await waitForNamedFlow(control, project.id, config.flowName);
     summary = createdSummary;
@@ -184,7 +183,6 @@ export async function generateDemoSubflowFromRecording(
   await evidence.step("panel", "recording-generation-dialog", "Open deterministic Subflow generation", () => generateButton.click());
   const dialog = page.getByRole("dialog", { name: "Generate deterministic Subflow" });
   await dialog.getByLabel("Destination Flow").selectOption(state.flowId);
-  await evidence.step("panel", "recording-generation-pin", "Authorize recording-derived Subflow generation", () => dialog.getByLabel("Security PIN").fill(config.pin), { sensitive: true });
   const response = await evidence.step("panel", "recording-generation-submit", "Generate the deterministic Subflow from the recording", () => (
     waitForPanelMutationResponse(page, "/api/programs/automation-studio/review-recording-flow-proposal", () => dialog.getByRole("button", { name: "Generate Subflow", exact: true }).click())
   ), { sensitive: true });

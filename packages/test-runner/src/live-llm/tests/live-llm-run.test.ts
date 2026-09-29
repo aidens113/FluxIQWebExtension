@@ -288,10 +288,14 @@ test("a build that reached no provider fails the run closed, after its evidence 
 });
 
 test("a build over its run budget, over its call count, or run on another model fails the run", async () => {
-  // One request past the run token budget, which for a default build is Core's threshold.
-  const overspend = CORE_THRESHOLD + PER_REQUEST;
+  // One request past the run token budget, which for a build is every
+  // authorized call at the per-request limit, so cost and the stall guard bind
+  // before tokens do (`runTokenBudget` in live-llm-plan.ts).
+  const buildBudget = PER_REQUEST * DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
+  assert.ok(buildBudget > CORE_THRESHOLD, "a build's token budget is no longer held to Core's confirmation threshold");
+  const overspend = buildBudget + PER_REQUEST;
   const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: overspend } });
-  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${overspend} total tokens against its run token budget of ${CORE_THRESHOLD}`, "u").test(error.message));
+  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${overspend} total tokens against its run token budget of ${buildBudget}(?! \\()`, "u").test(error.message));
   const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
   await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
   const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });

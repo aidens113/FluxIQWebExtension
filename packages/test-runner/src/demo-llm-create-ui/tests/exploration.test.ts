@@ -103,7 +103,10 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /getByRole\("menuitem", \{ name: "Open settings", exact: true \}\)/u);
   const exactBranch = uiSource.slice(uiSource.indexOf("if (exactFlowName)"), uiSource.indexOf("} else {", uiSource.indexOf("if (exactFlowName)")));
   assert.doesNotMatch(exactBranch, /search\.fill\("Settings"\)|data-tree-parent-id/u);
-  assert.match(uiSource, /exactVirtualizedHierarchyObject\(page, hierarchy, `\$\{flowTreeItemId\}-runtime-debug`/u);
+  // The job is asked for on the Steps pane (Core 68bad85); the proposal is reviewed under Suggested changes.
+  assert.match(uiSource, /openStepsPane\(page, evidence, "explore-steps"\)/u);
+  assert.match(uiSource, /exactVirtualizedHierarchyObject\(page, hierarchy, `\$\{flowTreeItemId\}-adaptations`/u);
+  assert.doesNotMatch(uiSource, /-runtime-debug`/u);
   assert.match(uiSource, /data-tree-item-id/u);
   assert.match(uiSource, /element\.scrollTop = next/u);
   assert.match(uiSource, /waitForExplorationTerminal/u);
@@ -191,7 +194,10 @@ test("the progress observer is installed before the click and reads only Core's 
   assert.match(panel, /<strong>\{AUTOMATION_LLM_PROGRESS_LABELS\.readyForReview\}\.<\/strong>/u);
   assert.match(model, /readyForReview: "Ready for review"/u);
   assert.match(panel, /<strong>Flow action approval is still required\.<\/strong>/u);
-  assert.match(panel, /aria-label="Build Flow from instructions"/u);
+  // The region's name, which the driver resolves the authoring pane by (renamed in Core 68bad85).
+  assert.match(panel, /aria-label="Tell FluxIQ what to automate"/u);
+  assert.ok(source.includes('section[aria-label="Tell FluxIQ what to automate"]'));
+  assert.ok(!source.includes("Build Flow from instructions"), "the pre-rename region name must not survive in the driver");
 });
 
 test("the refuse path cancels for good: it never reopens or allows, and proves no proposal or Flow change follows", async () => {

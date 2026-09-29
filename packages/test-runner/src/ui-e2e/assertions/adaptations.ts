@@ -122,7 +122,8 @@ export async function reviewAdaptationViaUi(input: AdaptationTarget & {
   const dialog = page.getByRole("dialog", { name: copy.title, exact: true });
   await dialog.waitFor({ state: "visible", timeout: timeoutMs });
   if (action === "reject") await dialog.getByLabel(/^Reason/u).fill(input.reason ?? "Rejected by the UI end-to-end suite");
-  await dialog.getByLabel(/^PIN/u).fill(input.pin);
+  // The review dialog carries no PIN field since Core 68bad85: review actions
+  // apply straight away and only deletes ask for a PIN.
   const responded = page.waitForResponse(response => response.request().method() === "POST" && response.url().includes(REVIEW_ENDPOINT), { timeout: timeoutMs });
   await dialog.getByRole("button", { name: copy.label, exact: true }).click();
   facts.httpOk = (await responded).ok();

@@ -89,7 +89,7 @@ test("live command is real-UI, credential-boundary safe, and provider-secret fre
   assert.ok(lane.indexOf("runDiagnosisFromPanel") < lane.indexOf("restoreDiagnosisScenario"));
   const runtimeStart = lane.indexOf("export async function runDiagnosisFromPanel");
   const runtime = lane.slice(runtimeStart);
-  assert.match(runtime, /Checking Flow readiness[\s\S]*const runButton[\s\S]*initialRunEnabled[\s\S]*missingActiveInstruction[\s\S]*llm-runtime-not-ready/u);
+  assert.match(runtime, /RUN_READINESS_CHECK_TEXT[\s\S]*const runButton[\s\S]*initialRunEnabled[\s\S]*missingActiveInstruction[\s\S]*llm-runtime-not-ready/u);
   assert.ok(runtime.indexOf("initialRunEnabled") < runtime.indexOf('"llm-runtime-run-request"'));
   assert.match(runtime, /llm-runtime-mode-not-ready[\s\S]*Diagnosis-only mode did not remain ready to run/u);
   assert.doesNotMatch(lane, /deepSeekSecretFromDriverEnvironment|ensureDeepSeekKeyViaUi|rawMetadata/u);

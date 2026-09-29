@@ -27,7 +27,7 @@ import { recordExplorationGenerationFailure } from "./exploration-failure-eviden
 import { assertProviderFreeGenerationReadiness } from "./generation-readiness.js";
 import { finite, identifier, integer, record, text } from "./json-shapes.js";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "./limits.js";
-import { exactVirtualizedHierarchyObject, exactVisible } from "./panel-interaction.js";
+import { exactVisible, openStepsPane } from "./panel-interaction.js";
 import { fail } from "./runner-fail.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
@@ -87,24 +87,23 @@ export function explorationProgressOrderIssue(states: readonly ExplorationProgre
 
 async function exploreEvidenceGuidedCreationViaUi(input: ExplorationInput, decision: ExplorationPermissionDecision): Promise<ExplorationOutcome> {
   const { page, projectId, flowId, evidence, control, blankContentHash } = input;
-  let flowTreeItemId = input.flowTreeItemId;
   await page.context().addCookies([{ name: "fluxiq_session", value: control.sessionCookieValue(), url: new URL(page.url()).origin }]);
   await assertProviderFreeGenerationReadiness(page, evidence);
   if ((await control.listFlowAdaptations(projectId, flowId, "proposed")).length !== 0) fail("Exploration checkpoint Flow already has a proposed adaptation");
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "explore-flow-search", "Re-resolve the exact checkpoint Flow before Runtime Debug", () => search.fill(input.flowName));
+  await evidence.step("panel", "explore-flow-search", "Re-resolve the exact checkpoint Flow before its Steps pane", () => search.fill(input.flowName));
   const flows = hierarchy.locator(".automation-tree-item").filter({ has: page.locator(".tree-row-main.type-flow .tree-row-label > strong").getByText(input.flowName, { exact: true }) });
   await exactVisible(flows, "the exact checkpoint Flow hierarchy item");
   const current = flows.first();
   await evidence.step("panel", "explore-flow-open", "Restore the exact checkpoint Flow selection", () => current.locator(".tree-row-main.type-flow").click());
   if (await current.getAttribute("aria-expanded") === "false") await evidence.step("panel", "explore-flow-expand", "Expand the exact checkpoint Flow", () => current.getByRole("button", { name: `Expand ${input.flowName}` }).click());
-  flowTreeItemId = await current.getAttribute("data-tree-item-id") ?? fail("The exact checkpoint Flow hierarchy identity is unavailable");
-  await evidence.step("panel", "explore-runtime-search", "Search the checkpoint Flow for Runtime Debug", () => search.fill("Runtime Debug"));
-  const rows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-runtime-debug`, "the exact exploration Runtime Debug row");
-  await evidence.step("panel", "explore-runtime-open", "Open Runtime Debug for the exploration checkpoint Flow", () => rows.click());
-  await evidence.step("panel", "explore-runtime-search-clear", "Clear hierarchy search", () => search.fill(""));
-  const authoring = page.getByRole("region", { name: "Build Flow from instructions", exact: true });
+  if (!await current.getAttribute("data-tree-item-id")) fail("The exact checkpoint Flow hierarchy identity is unavailable");
+  // The job is asked for on the Steps pane of the selected Flow, not in Run
+  // and test (formerly Runtime Debug): Core 68bad85 moved the region there.
+  await evidence.step("panel", "explore-flow-search-clear", "Clear hierarchy search", () => search.fill(""));
+  await openStepsPane(page, evidence, "explore-steps");
+  const authoring = page.getByRole("region", { name: "Tell FluxIQ what to automate", exact: true });
   await exactVisible(authoring, "the evidence-guided Flow authoring region", 30_000);
   const task = authoring.getByLabel("Website task", { exact: true });
   await evidence.step("panel", "explore-task", "Enter the bounded website task", () => task.fill(input.instruction));
@@ -287,7 +286,7 @@ async function watchExplorationProgress(page: Page): Promise<ExplorationProgress
     scope.__fluxiqExplorationProgress?.observer.disconnect();
     const states: string[] = [];
     const current = (): string | undefined => {
-      const region = document.querySelector('section[aria-label="Build Flow from instructions"]');
+      const region = document.querySelector('section[aria-label="Tell FluxIQ what to automate"]');
       if (!region) return undefined;
       if (region.querySelector('progress[aria-label="Preparing website exploration"]')) return "preparing";
       if (region.querySelector('progress[aria-label="Inspecting live target"]')) return "inspecting";

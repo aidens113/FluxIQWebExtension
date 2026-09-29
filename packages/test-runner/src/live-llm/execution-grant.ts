@@ -83,6 +83,16 @@ export async function issueLiveLlmExecutionGrant(control: LiveLlmGrantControl, i
   // for correspondingly less or Core refuses it outright -- a one-call
   // `verify_result` grant beside a 600,000-token plan was refused with "LLM
   // total token limit is invalid" before this held it down.
+  //
+  // A creation build's own grant asks for the plan's budget, which for
+  // `build_and_adapt` is every authorized call at the per-request limit
+  // (`runTokenBudget` in live-llm-plan.ts): at ~16k input tokens a decision a
+  // 600,000-token grant capped real builds at ~34 decisions, so tokens were a
+  // decision cap. Here the operator's `--llm-max-cost-usd` (per call, and
+  // across the calls as `maxTotalEstimatedCostUsd`), the call count and Core's
+  // stall guard are what stop a build, and the grant confirms the high-token
+  // exposure because the operator's explicit `--live-llm` budget is that
+  // confirmation.
   const maxTotalTokensPerRunAsked = Math.min(plan.maxTotalTokensPerRun, plan.tokenLimits.maxTotalTokens * maxCallsAsked);
   // What the operator's `--llm-permit` allows, on the plan's own grant only. A
   // second grant judges a finished run's result and takes no action, so it

@@ -47,13 +47,35 @@ export async function review(page: Page, evidence: BrowserEvidenceRecorder, pin:
   await evidence.step("panel", step + "-open", `Open ${title}`, () => button.click());
   const dialog = page.getByRole("dialog", { name: title, exact: true });
   await exactVisible(dialog, `the ${title} dialog`);
-  const pinField = dialog.locator('label.field').filter({ hasText: /^PIN(?:\s|$)/u }).locator(":scope > input");
-  await exactVisible(pinField, `the ${title} PIN field`);
-  await evidence.step("panel", step + "-pin", `Authorize ${action}`, () => pinField.fill(pin), { sensitive: true });
+  // The review dialog no longer carries a PIN field: Core applies an approved
+  // change straight away and asks for a PIN only on deletes (Core 68bad85).
+  // `pin` stays in the signature so callers need not change with the panel.
+  void pin;
   const response = await evidence.step("panel", step + "-submit", action, () => waitForEndpoint(page, "review-flow-adaptation", () => dialog.getByRole("button", { name: action, exact: true }).click()), { sensitive: true });
   await dialog.waitFor({ state: "hidden", timeout: 30_000 });
   if (!response.ok()) fail(`${action} Adaptation request failed`);
   return response;
+}
+
+/**
+ * Brings the "Steps" pane to the front, opening it from the panel picker when
+ * no Steps tab is open. For a top-level Flow with no steps yet this pane is
+ * where the panel asks for the job: its "Tell FluxIQ what to automate" region
+ * moved here from Runtime Debug (now "Run and test") in Core 68bad85. A
+ * top-level Flow has no "Steps" hierarchy row -- it has "Choose a path" -- so
+ * the tab, bound to the selected Flow, is the only way in.
+ */
+export async function openStepsPane(page: Page, evidence: BrowserEvidenceRecorder, step: string): Promise<void> {
+  const tab = page.getByRole("tab", { name: "Steps", exact: true });
+  if (await tab.count() === 0) {
+    await evidence.step("panel", step + "-picker", "Open the panel picker", () => page.getByRole("button", { name: "Add tab", exact: true }).first().click());
+    const picker = page.getByRole("dialog", { name: "Open a panel", exact: true });
+    await exactVisible(picker, "the panel picker");
+    await evidence.step("panel", step + "-picker-search", "Find the Steps panel", () => picker.getByRole("searchbox").fill("Steps"));
+    await evidence.step("panel", step + "-picker-select", "Open the Steps panel", () => picker.getByRole("button", { name: /^Steps/u }).first().click());
+  }
+  await exactVisible(tab, "the Steps tab");
+  if (await tab.getAttribute("aria-selected") !== "true") await evidence.step("panel", step + "-activate", "Activate the Steps tab", () => tab.click());
 }
 
 export function slug(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, ""); }

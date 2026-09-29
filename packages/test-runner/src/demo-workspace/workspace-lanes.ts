@@ -84,8 +84,8 @@ export async function runDemoWorkspaceFlow(config: DemoWorkspaceConfiguration): 
       return withDemoBrowser(config, panelCookie, "demo-playback", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
       await openDemoFlowInPanel(panelPage, config, state, evidence);
       await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, state.flowId, scenarioUrl, evidence);
-      // Pairing approval temporarily moves the panel to Connected Clients. Open
-      // the Flow again so a fresh panel profile binds Runtime Debug to the full
+      // Pairing approval temporarily moves the panel to Connected browsers. Open
+      // the Flow again so a fresh panel profile binds Run and test to the full
       // Flow document instead of its summary-only placeholder.
       await openFlowInCurrentProject(panelPage, state.flowName, evidence);
       await openSubflowInCurrentProject(panelPage, DEMO_SUBFLOW_NAME, evidence);

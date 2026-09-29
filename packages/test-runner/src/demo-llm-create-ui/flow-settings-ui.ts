@@ -71,11 +71,9 @@ async function configureCreationLimitsViaUi(page: Page, flowTreeItemId: string, 
   }
   const save = workspace.getByRole("button", { name: "Save Settings", exact: true });
   if (await save.isEnabled()) {
-    await evidence.step("panel", "create-settings-save", "Request saving bounded Flow settings", () => save.click());
-    const dialog = page.getByRole("dialog", { name: "Authorize Flow Settings Save", exact: true });
-    await exactVisible(dialog, "the Flow Settings authorization dialog");
-    await evidence.step("panel", "create-settings-pin", "Authorize bounded Flow Settings", () => dialog.getByLabel("Security PIN", { exact: true }).fill(pin), { sensitive: true });
-    const saveResponse = await evidence.step("panel", "create-settings-authorize", "Save bounded Flow Settings", () => waitForEndpoint(page, "update-flow-settings", () => dialog.getByRole("button", { name: "Authorize and Save", exact: true }).click()), { sensitive: true });
+    // Save Settings writes directly: the "Authorize Flow Settings Save" PIN
+    // dialog was removed in Core 68bad85, since Core never PIN-checks it.
+    const saveResponse = await evidence.step("panel", "create-settings-save", "Save bounded Flow Settings", () => waitForEndpoint(page, "update-flow-settings", () => save.click()));
     if (!saveResponse.ok()) {
       const failure = await readSanitizedSettingsSaveFailure(saveResponse);
       await evidence.diagnostic("panel", "settings-save-rejected", failure.code, {
@@ -90,7 +88,6 @@ async function configureCreationLimitsViaUi(page: Page, flowTreeItemId: string, 
       });
       fail(`Flow Settings save was rejected (${failure.code})`);
     }
-    await dialog.waitFor({ state: "hidden", timeout: 30_000 });
   }
   await workspace.getByText("All Flow settings saved", { exact: true }).waitFor({ timeout: 30_000 });
   for (const [label, value] of fields) if (await root.getByLabel(label, { exact: true }).inputValue() !== value) fail("Saved LLM limits differ from the certified creation profile");

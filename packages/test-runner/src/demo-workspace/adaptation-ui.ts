@@ -8,7 +8,7 @@ import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js"
 import { explorationAdaptationRunIsComplete } from "../demo-llm-exploration-adaptation-wait.js";
 import { isTerminalRuntimeStatus, waitForRoutedRunDetail } from "./control-waits.js";
 import { selectFlowInCurrentProject } from "./panel-navigation.js";
-import { runDemoFlowFromPanel, waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
+import { RUN_READINESS_CHECK_TEXT, runDemoFlowFromPanel, runPanel, selectRunMode, waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
 import { ADAPTING_RUN_TIMEOUT_MS } from "./adapting-run/index.js";
 import type { DemoWorkspaceState } from "./workspace-state.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
@@ -38,10 +38,8 @@ export async function reviewAndApplyAdaptationViaUi(
     await evidence.step("panel", "adaptation-review-approve", "Approve the generated adaptation for application", () => (
       page.getByRole("button", { name: "Approve", exact: true }).click()
     ));
+    // No PIN field: an approved change applies straight away (Core 68bad85).
     const approveDialog = page.getByRole("dialog", { name: "Approve Adaptation", exact: true });
-    await evidence.step("panel", "adaptation-review-approve-pin", "Authorize adaptation approval with the current PIN", () => (
-      approveDialog.getByLabel(/^PIN/u).fill(pin)
-    ), { sensitive: true });
     const approveResponse = await evidence.step("panel", "adaptation-review-approve-submit", "Confirm manual adaptation approval", () => (
       waitForPanelMutationResponse(page, "/api/programs/automation-studio/review-flow-adaptation", () => approveDialog.getByRole("button", { name: "Approve", exact: true }).click())
     ), { sensitive: true });
@@ -55,9 +53,6 @@ export async function reviewAndApplyAdaptationViaUi(
     page.getByRole("button", { name: "Apply Changes", exact: true }).click()
   ));
   const applyDialog = page.getByRole("dialog", { name: "Apply Adaptation", exact: true });
-  await evidence.step("panel", "adaptation-review-apply-pin", "Authorize adaptation application with the current PIN", () => (
-    applyDialog.getByLabel(/^PIN/u).fill(pin)
-  ), { sensitive: true });
   const applyResponse = await evidence.step("panel", "adaptation-review-apply-submit", "Apply the reviewed adaptation", () => (
     waitForPanelMutationResponse(page, "/api/programs/automation-studio/review-flow-adaptation", () => applyDialog.getByRole("button", { name: "Apply Changes", exact: true }).click())
   ), { sensitive: true });
@@ -71,16 +66,16 @@ export async function reviewAndApplyAdaptationViaUi(
 export async function openAdaptationFromPanel(page: Page, flowTreeItemId: string, adaptationId: string, evidence: BrowserEvidenceRecorder): Promise<void> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "adaptation-resume-search", "Search the exact Flow hierarchy for Adaptations", () => search.fill("Adaptations"));
+  await evidence.step("panel", "adaptation-resume-search", "Search the exact Flow hierarchy for Suggested changes", () => search.fill("Suggested changes"));
   const rows = await exactVirtualizedHierarchyObject(
     page,
     hierarchy,
     `${flowTreeItemId}-adaptations`,
-    "the exact Flow Adaptations row",
+    "the exact Flow Suggested changes row",
     ".tree-row-main.type-folder",
   );
-  await evidence.step("panel", "adaptation-resume-open", "Open the exact Flow Adaptations workspace", () => rows.click());
-  await evidence.step("panel", "adaptation-resume-search-clear", "Clear hierarchy search after Adaptations opens", () => search.fill(""));
+  await evidence.step("panel", "adaptation-resume-open", "Open the exact Flow Suggested changes workspace", () => rows.click());
+  await evidence.step("panel", "adaptation-resume-search-clear", "Clear hierarchy search after Suggested changes opens", () => search.fill(""));
   const table = page.getByRole("table", { name: "Adaptations", exact: true });
   await table.waitFor({ state: "visible", timeout: 30_000 });
   await page.getByText("Loading adaptations...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
@@ -93,14 +88,14 @@ export async function openAdaptationFromPanel(page: Page, flowTreeItemId: string
 export async function runAdaptationFromPanel(page: Page, flowTreeItemId: string, evidence: BrowserEvidenceRecorder): Promise<{ runId: string; status: string }> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "adaptation-runtime-search", "Search the exact Flow hierarchy for Runtime Debug", () => search.fill("Runtime Debug"));
-  const runtimeRows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-runtime-debug`, "the exact Flow Runtime Debug row for adaptation");
-  await evidence.step("panel", "adaptation-runtime-open", "Open Runtime Debug for the generated Flow", () => runtimeRows.click());
-  const runCommand = page.locator(".automation-runtime-run-command");
+  await evidence.step("panel", "adaptation-runtime-search", "Search the exact Flow hierarchy for Run and test", () => search.fill("Run and test"));
+  const runtimeRows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-runtime-debug`, "the exact Flow Run and test row for adaptation");
+  await evidence.step("panel", "adaptation-runtime-open", "Open Run and test for the generated Flow", () => runtimeRows.click());
+  const runCommand = runPanel(page).locator(".automation-runtime-run-command");
   await runCommand.waitFor({ timeout: 30_000 });
-  await evidence.step("panel", "adaptation-runtime-search-clear", "Clear hierarchy search after Runtime Debug opens", () => search.fill(""));
-  await page.getByText("Checking Flow readiness...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
-  await evidence.step("panel", "adaptation-runtime-mode", "Select Diagnose and propose adaptation", () => runCommand.getByRole("button", { name: "Diagnose and propose adaptation", exact: true }).click());
+  await evidence.step("panel", "adaptation-runtime-search-clear", "Clear hierarchy search after Run and test opens", () => search.fill(""));
+  await page.getByText(RUN_READINESS_CHECK_TEXT, { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
+  await selectRunMode(page, "Diagnose and propose adaptation", evidence, "adaptation-runtime-mode");
   const runButton = runCommand.getByRole("button", { name: "Run", exact: true });
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && await runButton.isDisabled()) await page.waitForTimeout(100);

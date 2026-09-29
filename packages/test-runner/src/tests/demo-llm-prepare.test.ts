@@ -102,13 +102,13 @@ test("demo:llm:prepare is a provider-free real-UI blank Flow lane", async () => 
   assert.match(module, /preset\.inputValue\(\) !== "blank"[\s\S]*preset\.selectOption\("blank"\)/u);
   assert.match(module, /hierarchyDialogFieldControl\(form, "Name", "input"\)/u);
   assert.match(module, /hierarchyDialogFieldControl\(form, "Location", "select"\)/u);
-  assert.match(module, /hierarchyDialogFieldControl\(form, "Security PIN", "input"\)/u);
+  // Creating a project or a Flow asks for no PIN since Core 68bad85; a lookup of the gone field would time out.
+  assert.doesNotMatch(module, /"Security PIN"/u);
   assert.match(module, /location\.inputValue\(\) !== ""/u);
   assert.doesNotMatch(module, /form\.getByLabel\("(?:Name|Flow preset|Location|Security PIN)"/u);
   assert.match(module, /getByRole\("dialog", \{ name: "Create project" \}\)/u);
   assert.match(module, /getByLabel\("Project name"\)\.fill\(config\.projectName\)/u);
   assert.match(module, /getByLabel\("Description"\)\.fill\("Persistent instruction-only LLM browser automation test workspace"\)/u);
-  assert.match(module, /getByLabel\("Security PIN"\)\.fill\(config\.pin\)/u);
   assert.doesNotMatch(module, /blank-project-name[^\n]*getByLabel\("Project name", \{ exact: true \}\)/u);
   assert.doesNotMatch(module, /blank-project-description[^\n]*getByLabel\("Description", \{ exact: true \}\)/u);
   assert.doesNotMatch(module, /blank-project-pin[^\n]*getByLabel\("Security PIN", \{ exact: true \}\)/u);
@@ -119,7 +119,9 @@ test("demo:llm:prepare is a provider-free real-UI blank Flow lane", async () => 
   assert.match(module, /locator\("\.automation-project-row"\)[\s\S]*locator\("\.automation-project-row-main"\)/u);
   assert.doesNotMatch(module, /\/programs\/automation-studio`,|name: "Automation Studio", exact: true|\.automation-project-card|name: "Open project"/u);
   assert.match(module, /getByLabel\("Instruction", \{ exact: true \}\)/u);
-  assert.match(module, /Authorize Instruction Save[\s\S]*sensitive: true/u);
+  // Saving guidance writes directly (no "Authorize Instruction Save" dialog), and its row is the renamed section.
+  assert.doesNotMatch(module, /dialog", \{ name: "Authorize Instruction Save"|Authorize and Save/u);
+  assert.match(module, /\[aria-label="Guidance for the assistant"\]/u);
   assert.match(module, /listFlowSubflows[\s\S]*getFlowRouter/u);
   assert.match(module, /lastRecordingId/u);
   assert.match(module, new RegExp(BLANK_LLM_INSTRUCTION_BODY.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")));
