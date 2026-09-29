@@ -8,6 +8,26 @@ acts as one browser-side recorder, observer, and action executor client. The
 domain-specific FluxIQ code for web automation lives in the top-level
 `domain/` package.
 
+## For users
+
+FluxIQ uses AI to build and adapt your automation, then reuses what it learns
+so routine runs can execute without repeatedly relying on AI. You need the
+FluxIQ runtime on your computer and this extension in Chrome or Edge (116+) or
+Firefox (128+).
+
+- [Install](docs/user/install.md): the runtime, the extension, updating, and
+  where to find diagnostics.
+- [Quickstart](docs/user/quickstart.md): start FluxIQ, pair your browser, add
+  a DeepSeek key, and build a first automation in about five minutes.
+- [Permissions](docs/user/permissions.md) and
+  [privacy policy](docs/user/privacy-policy.md): what the extension can see,
+  and where that data goes. The short version: it goes only to the runtime you
+  pair it with.
+
+Maintainers releasing a version: see
+[Store listing and submission](docs/user/store-listing.md) and
+[Release packaging](docs/architecture/release-packaging.md).
+
 ## Shape
 
 ```text
@@ -53,10 +73,17 @@ Build output is written to:
 ```text
 apps/extension/dist/chrome
 apps/extension/dist/firefox
+apps/extension/dist/e2e-chromium   test build, loopback hosts only
 ```
 
 Load the matching folder as an unpacked extension in Chrome, Edge, Firefox, or
-another compatible browser.
+another compatible browser. The build checks every target the way a browser
+checks it at install time, and fails if a target would not load. To produce
+the store ZIPs from a build:
+
+```bash
+node apps/extension/scripts/release/package-extension.mjs
+```
 
 ## Default Gateway
 
