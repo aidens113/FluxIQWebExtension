@@ -1,5 +1,7 @@
 export { accountById, accountBySlug, accountCellText, connectedAccounts } from "./accounts.js";
 export { excerptOf, postCellText, relativeText, scheduledCellText, slotText, SCHEDULER_ROOT } from "./format.js";
+export { WEEK_AHEAD_IMPROVEMENT } from "./improvement.js";
+export type { ExistingFlowImprovementTask } from "./improvement.js";
 export { socialSchedulerManifest } from "./manifest.js";
 export { ACCOUNT_OPTIONS, RANGE_OPTIONS, STATUS_OPTIONS } from "./options.js";
 export type { QueueOption } from "./options.js";
