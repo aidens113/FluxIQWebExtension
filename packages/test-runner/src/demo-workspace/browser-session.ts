@@ -4,12 +4,14 @@
 import { randomBytes } from "node:crypto";
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { type BrowserContext, chromium, type Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { BrowserEvidenceRecorder, type BrowserEvidenceSurface } from "../browser-evidence.js";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { withoutProviderSecrets } from "../environment.js";
 import { DemoLlmPreparationPhaseTracker } from "../demo-operation-status.js";
 import { RunnerFailure } from "../failure.js";
+import { launchGuardedPersistentContext, loopbackLanePolicies, panelNetworkPolicy } from "../guarded-browser/index.js";
+import type { DeterministicNetworkGuard } from "../network-guard.js";
 import { executable, processLogPath, ProcessSupervisor } from "../process-supervisor.js";
 import type { DemoWorkspaceConfiguration } from "./configuration.js";
 import { approvePairingInPanel } from "./panel-navigation.js";
@@ -48,7 +50,8 @@ export async function withDemoBrowser<T>(
     const extensionPath = path.join(config.workspaceDirectory, "extension-under-test");
     await rm(extensionPath, { recursive: true, force: true });
     await cp(extensionSourcePath, extensionPath, { recursive: true, force: true });
-    context = await chromium.launchPersistentContext(path.join(config.workspaceDirectory, "browser-profile-isolated"), {
+    const policies = loopbackLanePolicies({ scenarioOrigin, scenarioLabToken: token, fluxiqOrigin: config.origin, gatewayUrl: config.gatewayUrl });
+    const extensionBrowser = await launchGuardedPersistentContext(path.join(config.workspaceDirectory, "browser-profile-isolated"), {
       headless: config.headless,
       channel: "chromium",
       env: withoutProviderSecrets(process.env),
@@ -56,8 +59,9 @@ export async function withDemoBrowser<T>(
       timezoneId: "UTC",
       viewport: { width: 1280, height: 720 },
       args: ["--disable-extensions-except=" + extensionPath, "--load-extension=" + extensionPath, "--no-first-run", "--disable-default-apps"],
-    });
-    panelContext = await chromium.launchPersistentContext(path.join(config.workspaceDirectory, "panel-browser-profile-isolated-v2"), {
+    }, policies.extension);
+    context = extensionBrowser.context;
+    const panelBrowser = await launchGuardedPersistentContext(path.join(config.workspaceDirectory, "panel-browser-profile-isolated-v2"), {
       headless: config.headless,
       channel: "chromium",
       env: withoutProviderSecrets(process.env),
@@ -65,11 +69,16 @@ export async function withDemoBrowser<T>(
       timezoneId: "UTC",
       viewport: { width: 1280, height: 720 },
       args: ["--no-first-run", "--disable-default-apps"],
-    });
+    }, policies.panel);
+    panelContext = panelBrowser.context;
+    const guards = [extensionBrowser.guard, panelBrowser.guard];
     const [cookieName, cookieValue] = panelCookie.split("=", 2);
     if (!cookieName || !cookieValue) throw new RunnerFailure("environment.missing", "FluxIQ panel cookie is malformed");
     await panelContext.addCookies([{ name: cookieName, value: cookieValue, url: config.origin }]);
     const extensionUrl = await extensionControlUrl(context);
+    // The extension's background is a service worker. Prove the guard sees its
+    // traffic before the lane spends anything, rather than finding out after.
+    await assertContained(guards);
     // Persistent profiles may restore tabs from an earlier run. Remove only
     // disposable Scenario Lab tabs so the extension cannot target stale state.
     for (const restoredPage of context.pages()) {
@@ -104,6 +113,7 @@ export async function withDemoBrowser<T>(
       phaseTracker?.set("browser-operation-call");
       const result = await operation({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence });
       phaseTracker?.set("browser-operation-returned");
+      await assertContained(guards);
       phaseTracker?.set("evidence-finalize-call");
       const evidencePath = await evidence.finalize("passed");
       phaseTracker?.set("evidence-finalize-returned");
@@ -132,7 +142,7 @@ export async function withDemoPanelBrowser<T>(
   let context: BrowserContext | undefined;
   let evidence: BrowserEvidenceRecorder | undefined;
   try {
-    context = await chromium.launchPersistentContext(path.join(config.workspaceDirectory, "panel-browser-profile-isolated-v2"), {
+    const panelBrowser = await launchGuardedPersistentContext(path.join(config.workspaceDirectory, "panel-browser-profile-isolated-v2"), {
       headless: config.headless,
       channel: "chromium",
       env: withoutProviderSecrets(process.env),
@@ -140,7 +150,8 @@ export async function withDemoPanelBrowser<T>(
       timezoneId: "UTC",
       viewport: { width: 1280, height: 720 },
       args: ["--no-first-run", "--disable-default-apps"],
-    });
+    }, panelNetworkPolicy(config.origin));
+    context = panelBrowser.context;
     const [cookieName, cookieValue] = panelCookie.split("=", 2);
     if (!cookieName || !cookieValue) throw new RunnerFailure("environment.missing", "FluxIQ panel cookie is malformed");
     await context.addCookies([{ name: cookieName, value: cookieValue, url: config.origin }]);
@@ -157,6 +168,7 @@ export async function withDemoPanelBrowser<T>(
     await panelPage.getByRole("heading", { name: "Programs", exact: true }).waitFor();
     try {
       const result = await operation({ panelPage, evidence });
+      await assertContained([panelBrowser.guard]);
       const evidencePath = await evidence.finalize("passed");
       await writeFile(path.join(config.workspaceDirectory, "latest-evidence.json"), JSON.stringify({ runId: evidence.runId, path: evidencePath }, null, 2) + "\n", "utf8");
       return result;
@@ -286,6 +298,19 @@ export async function connectExtension(
   } catch {
     await evidence.diagnostic(diagnosticSurface, "connect-failed", `connect.${stage}`, facts).catch(() => undefined);
     throw new RunnerFailure("runtime.behavior", "FluxIQ extension connection setup failed");
+  }
+}
+
+/**
+ * Fails the lane when either browser reached a destination outside its
+ * allowlist, or when a service worker's traffic was proven invisible to the
+ * guard. The guard blocks at the wire regardless; this turns a block into a
+ * failed lane instead of a silently degraded one, as a scenario run does.
+ */
+async function assertContained(guards: readonly DeterministicNetworkGuard[]): Promise<void> {
+  for (const guard of guards) {
+    await guard.serviceWorkersProven();
+    guard.assertNoViolations();
   }
 }
 

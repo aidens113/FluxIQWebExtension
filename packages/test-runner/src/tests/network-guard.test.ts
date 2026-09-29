@@ -13,6 +13,8 @@ const policy = {
   fluxiqOrigins: ["https://panel.example.test"],
   gatewayOrigins: ["wss://gateway.example.test"],
 };
+/** A context with no service workers, so the guard has nothing to prove. */
+const NO_SERVICE_WORKERS = { serviceWorkers: () => [], on: () => undefined };
 
 test("allows only internal schemes and exact declared HTTP and WebSocket origins", () => {
   for (const url of [
@@ -37,6 +39,7 @@ test("context-wide guard rejects and records sanitized page and WebSocket destin
   const context = {
     route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; },
     routeWebSocket: async (_pattern: RegExp, handler: typeof websocketHandler) => { websocketHandler = handler; },
+    ...NO_SERVICE_WORKERS,
   } as unknown as BrowserContext;
   const guard = await installDeterministicNetworkGuard(context, policy);
   let aborted = "";
@@ -60,6 +63,7 @@ test("a loopback origin proven to be the Scenario Lab joins the allowlist; unpro
   const context = {
     route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; },
     routeWebSocket: async () => undefined,
+    ...NO_SERVICE_WORKERS,
   } as unknown as BrowserContext;
   const asked: string[] = [];
   const guard = await installDeterministicNetworkGuard(context, {
@@ -83,8 +87,94 @@ test("a loopback origin proven to be the Scenario Lab joins the allowlist; unpro
 
 test("without a proof hook an unlisted loopback port is a violation", async () => {
   let requestHandler!: (route: Route) => Promise<void>;
-  const context = { route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; }, routeWebSocket: async () => undefined } as unknown as BrowserContext;
+  const context = { route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; }, routeWebSocket: async () => undefined, ...NO_SERVICE_WORKERS } as unknown as BrowserContext;
   const guard = await installDeterministicNetworkGuard(context, policy);
   await requestHandler({ request: () => ({ url: () => "http://127.0.0.1:53111/frame", resourceType: () => "document" }), continue: async () => undefined, abort: async () => undefined } as unknown as Route);
   assert.deepEqual(guard.violations(), [{ kind: "request", destination: "http://127.0.0.1:53111/frame", resourceType: "document" }]);
+});
+
+// --- Service workers --------------------------------------------------------
+// Measured 2026-09-28 (Playwright 1.51.1): an extension background's fetch
+// reached the internet while `context.route` saw nothing, unless
+// PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS was set. The guard sets it and
+// then proves, per worker, that its traffic really is routed.
+
+type WorkerBehaviour = "routed" | "unrouted" | "gone";
+
+/** A context whose route handler is captured, with workers present at install and able to attach later. */
+async function contextWithWorkers(initial: Array<{ url: string; behaviour: WorkerBehaviour }>) {
+  let requestHandler!: (route: Route) => Promise<void>;
+  let onWorker: ((worker: unknown) => void) | undefined;
+  const outcomes: string[] = [];
+  const routeFor = (url: string) => ({
+    request: () => ({ url: () => url, resourceType: () => "fetch" }),
+    continue: async () => { outcomes.push(`continue ${url}`); },
+    abort: async () => { outcomes.push(`abort ${url}`); },
+  }) as unknown as Route;
+  const worker = (url: string, behaviour: WorkerBehaviour) => ({
+    url: () => url,
+    evaluate: async (_fn: unknown, arg: { url: string; timeoutMs: number }) => {
+      if (behaviour === "gone") throw new Error("Target page, context or browser has been closed");
+      // A routed worker's fetch reaches the context route; an unrouted one's goes straight to the network.
+      if (behaviour === "routed") await requestHandler(routeFor(arg.url));
+    },
+  });
+  const context = {
+    route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; },
+    routeWebSocket: async () => undefined,
+    serviceWorkers: () => initial.map(item => worker(item.url, item.behaviour)),
+    on: (event: string, handler: (worker: unknown) => void) => { if (event === "serviceworker") onWorker = handler; },
+  } as unknown as BrowserContext;
+  const guard = await installDeterministicNetworkGuard(context, policy);
+  return { guard, outcomes, attach: (url: string, behaviour: WorkerBehaviour) => onWorker?.(worker(url, behaviour)) };
+}
+
+test("loading the guard turns on Playwright's service-worker routing", () => {
+  assert.equal(process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS, "1");
+});
+
+test("a service worker whose traffic reaches the route is proven, and its canary is blocked without a violation", async () => {
+  const { guard, outcomes } = await contextWithWorkers([{ url: "chrome-extension://abcdef/background.js", behaviour: "routed" }]);
+  await guard.serviceWorkersProven();
+  assert.deepEqual(guard.violations(), []);
+  assert.equal(outcomes.length, 1);
+  assert.match(outcomes[0]!, /^abort http:\/\/fluxiq-network-guard-canary\.invalid\/[0-9a-f-]{36}$/u, "the canary is aborted, never continued");
+  assert.doesNotThrow(() => guard.assertNoViolations());
+});
+
+test("a service worker whose traffic bypasses the route is a violation that fails the lane", async () => {
+  const { guard } = await contextWithWorkers([{ url: "chrome-extension://abcdef/background.js?token=hidden", behaviour: "unrouted" }]);
+  await guard.serviceWorkersProven();
+  assert.deepEqual(guard.violations(), [{ kind: "service-worker", destination: "chrome-extension://abcdef" }]);
+  assert.throws(() => guard.assertNoViolations(), (error: unknown) => error instanceof DeterministicNetworkViolationError && /service-worker:chrome-extension:\/\/abcdef/u.test(error.message));
+});
+
+test("a worker that attaches after install is proven too", async () => {
+  const { guard, attach } = await contextWithWorkers([]);
+  attach("chrome-extension://abcdef/background.js", "unrouted");
+  await guard.serviceWorkersProven();
+  assert.deepEqual(guard.violations().map(item => item.kind), ["service-worker"]);
+});
+
+test("a worker that goes away before it can be asked is not a finding", async () => {
+  const { guard } = await contextWithWorkers([{ url: "chrome-extension://abcdef/background.js", behaviour: "gone" }]);
+  await guard.serviceWorkersProven();
+  assert.deepEqual(guard.violations(), []);
+});
+
+test("a canary is recognised only by its exact one-off URL; any other request to the canary host is a violation", async () => {
+  let requestHandler!: (route: Route) => Promise<void>;
+  const context = { route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; }, routeWebSocket: async () => undefined, ...NO_SERVICE_WORKERS } as unknown as BrowserContext;
+  const guard = await installDeterministicNetworkGuard(context, policy);
+  await requestHandler({ request: () => ({ url: () => "http://fluxiq-network-guard-canary.invalid/guessed", resourceType: () => "fetch" }), continue: async () => undefined, abort: async () => undefined } as unknown as Route);
+  assert.deepEqual(guard.violations(), [{ kind: "request", destination: "http://fluxiq-network-guard-canary.invalid/guessed", resourceType: "fetch" }]);
+});
+
+test("each internal scheme passes because it is answered inside the browser; every other non-network scheme is refused", () => {
+  for (const url of ["chrome-extension://any-id/page.html", "data:text/html,<p>x</p>", "about:srcdoc", "blob:http://127.0.0.1:4100/5f1c"]) {
+    assert.equal(isAllowedDeterministicDestination(url, policy), true, url);
+  }
+  for (const url of ["file:///C:/Users/secret.txt", "chrome://version", "ftp://example.test/", "javascript:alert(1)", "filesystem:http://127.0.0.1:4100/temporary/x"]) {
+    assert.equal(isAllowedDeterministicDestination(url, policy), false, url);
+  }
 });

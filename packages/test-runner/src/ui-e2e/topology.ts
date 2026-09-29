@@ -12,13 +12,15 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { access, cp, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { type BrowserContext, chromium, type Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { allocateLoopbackPort, assertLoopbackPortBindable } from "../allocation.js";
 import { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { authenticatedControl, type DemoWorkspaceConfiguration, requireDemoScenarioUrl, resolveDemoWorkspaceConfiguration, type RunningDemoCore, startPersistentDemoCore } from "../demo-workspace/index.js";
 import { withoutProviderSecrets } from "../environment.js";
 import type { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
+import { launchGuardedPersistentContext, loopbackLanePolicies } from "../guarded-browser/index.js";
+import { DeterministicNetworkViolationError, type DeterministicNetworkGuard } from "../network-guard.js";
 import { executable, processLogPath, ProcessSupervisor } from "../process-supervisor.js";
 import { hardenWindowsPrivatePath } from "../windows-acl.js";
 
@@ -92,7 +94,7 @@ export class UiE2eTopology {
   readonly timings: Record<string, number> = {};
   private core: RunningDemoCore | undefined;
   private coreSession: UiE2eCoreSession | undefined;
-  private browsers: { extension: BrowserContext; panel: BrowserContext; pages: UiE2ePages } | undefined;
+  private browsers: { extension: BrowserContext; panel: BrowserContext; pages: UiE2ePages; guards: readonly DeterministicNetworkGuard[] } | undefined;
   private readonly blockedEndpoints: string[] = [];
   private readonly scenarioToken = randomBytes(32).toString("base64url");
   private stopping: Promise<void> | undefined;
@@ -209,15 +211,36 @@ export class UiE2eTopology {
     });
     await evidence.start();
     const began = Date.now();
+    const violationsBefore = this.networkViolationCounts();
     let value: T;
     try {
       value = await operation({ topology: this, evidence });
+      await this.assertContainedSince(violationsBefore);
     } catch (error) {
       const finalizeFailure = await evidence.finalize("failed").then(() => undefined, (cause: unknown) => cause);
       throw withFollowingLine(error, finalizeFailure, "Journey evidence finalization also failed");
     }
     const evidencePath = await evidence.finalize("passed");
     return { value, evidencePath, durationMs: Date.now() - began };
+  }
+
+  private networkViolationCounts(): number[] {
+    return (this.browsers?.guards ?? []).map(guard => guard.violations().length);
+  }
+
+  /**
+   * Fails when either browser reached a destination outside its allowlist, or
+   * a service worker's traffic was proven invisible to the guard, since
+   * `before` was counted. Only new violations are reported, so one journey's
+   * block does not fail every journey after it.
+   */
+  private async assertContainedSince(before: readonly number[]): Promise<void> {
+    const fresh = [];
+    for (const [index, guard] of (this.browsers?.guards ?? []).entries()) {
+      await guard.serviceWorkersProven();
+      fresh.push(...guard.violations().slice(before[index] ?? 0));
+    }
+    if (fresh.length) throw new DeterministicNetworkViolationError(fresh);
   }
 
   /**
@@ -320,7 +343,11 @@ export class UiE2eTopology {
 
   private async startBrowsers(scenarioPath: string): Promise<void> {
     const began = Date.now();
-    const launch = (profile: string, args: string[]) => chromium.launchPersistentContext(path.join(this.root, profile), {
+    // Both browsers are guarded from launch with the demo lanes' allowlists. A
+    // provider journey's model calls are made by Core, never by a browser, so
+    // no provider host is on either list.
+    const policies = loopbackLanePolicies({ scenarioOrigin: this.scenarioOrigin, scenarioLabToken: this.scenarioToken, fluxiqOrigin: this.config.origin, gatewayUrl: this.config.gatewayUrl });
+    const launch = (profile: string, args: string[], policy: typeof policies.extension) => launchGuardedPersistentContext(path.join(this.root, profile), {
       headless: this.config.headless,
       channel: "chromium",
       env: withoutProviderSecrets(process.env),
@@ -328,20 +355,24 @@ export class UiE2eTopology {
       timezoneId: "UTC",
       viewport: { width: 1280, height: 720 },
       args: [...args, "--no-first-run", "--disable-default-apps"],
-    });
+    }, policy);
     const extensionPath = this.config.extensionSourceDirectory;
-    const extension = await launch("browser-profile-isolated", [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`]);
-    let panel: BrowserContext;
+    const extensionBrowser = await launch("browser-profile-isolated", [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`], policies.extension);
+    const extension = extensionBrowser.context;
+    let panelBrowser: Awaited<ReturnType<typeof launch>>;
     try {
-      panel = await launch("panel-browser-profile-isolated-v2", []);
+      panelBrowser = await launch("panel-browser-profile-isolated-v2", [], policies.panel);
     } catch (error) {
       const closeFailure = await extension.close().then(() => undefined, (cause: unknown) => cause);
       throw withFollowingLine(error, closeFailure, "Extension browser close also failed");
     }
+    const panel = panelBrowser.context;
     const pages = { extension: await extension.newPage(), panel: await panel.newPage(), scenario: await extension.newPage() };
-    this.browsers = { extension, panel, pages };
+    this.browsers = { extension, panel, pages, guards: [extensionBrowser.guard, panelBrowser.guard] };
     await panel.addCookies([panelCookie(this.session.panelCookie, this.config.origin)]);
     if (this.lane === "provider-free") {
+      // Registered after the guard, so these run first (Playwright tries the
+      // newest route first) and every attempt is still counted here.
       for (const endpoint of PROVIDER_ENDPOINTS) {
         await panel.route(`**/api/programs/automation-studio/${endpoint}`, route => {
           this.blockedEndpoints.push(endpoint);
@@ -350,6 +381,9 @@ export class UiE2eTopology {
       }
     }
     const worker = extension.serviceWorkers()[0] ?? await extension.waitForEvent("serviceworker", { timeout: 15_000 });
+    // The extension's background is a service worker: prove the guard sees
+    // its traffic before any journey runs.
+    await this.assertContainedSince([0, 0]);
     await pages.extension.goto(`chrome-extension://${new URL(worker.url()).hostname}/sidepanel/index.html`);
     await pages.panel.goto(this.config.origin, { waitUntil: "domcontentloaded" });
     await pages.panel.getByRole("heading", { name: "Programs", exact: true }).waitFor();

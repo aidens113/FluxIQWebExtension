@@ -76,7 +76,8 @@ is in `automated-testing-facility-plan/reports/` (six reports).
    workflow was written in the facility's first commit and never touched.
    Setting the three values is a repository-settings action only the owner can
    take.
-2. **CI would still fail once they are set.** `nightly-full-matrix` checks Core
+2. **CI would still fail once they are set** (**fixed 2026-09-28**: the Lab
+   refuses an unbuilt Core as a setup failure, and CI builds Core). `nightly-full-matrix` checks Core
    out but never builds it, and nothing asserts Core was built: the staleness
    guard deliberately passes when `dist` is absent (`stale.mjs:17`, pinned by
    `stale.test.mjs:26`). A fresh checkout passes all three guards and dies on
@@ -96,14 +97,16 @@ is in `automated-testing-facility-plan/reports/` (six reports).
    execute probes". Real enforcement is the fail-closed guard at
    `network-guard.ts:54`, whose gaps are: `chrome-extension:`, `data:`,
    `about:` and `blob:` pass unconditionally, and Playwright's route layer does
-   not intercept service-worker traffic while `serviceWorkers: 'block'` is
-   never set (`launch-browser.ts:17`) — and the subject is an MV3 extension
-   whose background *is* a service worker. `--host-resolver-rules`
-   (`extension-context.ts:74`) still covers it, but nothing asserts that.
-6. **Two lanes launch a browser with no guard at all.**
-   `demo-workspace/browser-session.ts:51,60,135` and `ui-e2e/topology.ts:323`
-   call `launchPersistentContext` without it, so the `demo:*` and `demo:llm:*`
-   lanes the live campaign drives are uncontained.
+   not intercept service-worker traffic — and the subject is an MV3 extension
+   whose background *is* a service worker. That hole was real: the extension
+   background fetched `example.com` (200) unseen. An earlier line here said
+   `--host-resolver-rules` covered it; it covers no test-runner lane. **Fixed
+   2026-09-28:** service-worker traffic is routed, with a per-lane canary that
+   fails the lane if routing stops. A service worker's WebSocket to an unlisted
+   loopback port still cannot be blocked in Playwright 1.51.1.
+6. **Two lanes launched a browser with no guard at all** (`demo:*`,
+   `demo:llm:*`, ui-e2e). **Fixed 2026-09-28:** one guarded launcher, and a
+   structural test fails the build on any unguarded launch.
 7. **The Phase 7 gate is unsatisfiable as written.** `boundary-audit` requires
    two *distinct repositories* (`audit.ts:52`, pinned by `audit.test.ts:37`),
    while `AGENTS.md` forbids Core importing this private package. Close it by

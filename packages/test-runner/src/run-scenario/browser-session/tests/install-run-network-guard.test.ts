@@ -8,6 +8,8 @@ import { installRunNetworkGuard } from "../install-run-network-guard.js";
 const SCENARIO = "http://127.0.0.1:4100";
 const FLUXIQ = "http://127.0.0.1:4200";
 const GATEWAY = "ws://127.0.0.1:4300";
+/** A context with no service workers, so the guard has nothing to prove. */
+const NO_SERVICE_WORKERS = { serviceWorkers: () => [], on: () => undefined };
 
 function topology(overrides: Partial<RunningTopology> = {}): RunningTopology {
   return { scenarioOrigin: SCENARIO, fluxiqOrigin: FLUXIQ, allocation: { controllerToken: "token.controller" }, ...overrides } as unknown as RunningTopology;
@@ -19,6 +21,7 @@ async function guardFor(active: RunningTopology) {
   const context = {
     route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; },
     routeWebSocket: async (_pattern: RegExp, handler: typeof websocketHandler) => { websocketHandler = handler; },
+    ...NO_SERVICE_WORKERS,
   } as unknown as BrowserContext;
   const guard = await installRunNetworkGuard(context, active, scenarioNetworkOrigins(active.scenarioOrigin));
   const outcomes: string[] = [];

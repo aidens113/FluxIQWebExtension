@@ -1,6 +1,7 @@
 import { chromium, type BrowserContext } from "@playwright/test";
 import type { RunningTopology } from "../../coordinator.js";
 import { withoutProviderSecrets } from "../../environment.js";
+import { networkContainmentArgs } from "../../guarded-browser/index.js";
 
 /**
  * The headed Chromium a scenario run drives, with the built extension loaded.
@@ -12,8 +13,13 @@ import { withoutProviderSecrets } from "../../environment.js";
  * what is under test, and `withoutProviderSecrets` keeps the provider
  * credential out of the browser process's environment -- the browser never
  * needs it, and a leaked one would reach the pages the run visits.
+ *
+ * `networkContainmentArgs` is the browser-level half of containment, scoped to
+ * the hosts of the run's own origins; the
+ * caller installs the route-level guard (`installRunNetworkGuard`) before it
+ * opens any page, which `guarded-browser/tests/launch-containment.test.ts` pins.
  */
 export async function launchBrowser(topology: RunningTopology, extensionPath: string): Promise<{ context: BrowserContext; browserVersion: string }> {
-  const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless: false, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps"] });
+  const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless: false, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps", ...networkContainmentArgs([topology.scenarioOrigin, topology.fluxiqOrigin, topology.gatewayUrl])] });
   return { context, browserVersion: context.browser()?.version() ?? "chromium" };
 }
