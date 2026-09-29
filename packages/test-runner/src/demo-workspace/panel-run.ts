@@ -1,6 +1,6 @@
 // Running a Flow from the panel and waiting on what the run produces: the
 // dispatch responses, the rendered layout, and the scenario page's own result.
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { RunnerFailure } from "../failure.js";
 import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js";
@@ -13,14 +13,14 @@ export async function runDemoFlowFromPanel(page: Page, state: DemoWorkspaceState
   const flowTreeItemId = `flow-${stableHierarchyNodeId(state.flowId)}`;
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "runtime-search", "Search the selected Flow hierarchy for Runtime Debug", () => search.fill("Runtime Debug"));
-  const runtimeRow = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-runtime-debug`, "the exact Flow Runtime Debug row");
-  await evidence.step("panel", "runtime-open", "Open Runtime Debug for the selected demo Flow", () => runtimeRow.click());
-  const runCommand = page.locator(".automation-runtime-run-command");
+  await evidence.step("panel", "runtime-search", "Search the selected Flow hierarchy for Run and test", () => search.fill("Run and test"));
+  const runtimeRow = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-runtime-debug`, "the exact Flow Run and test row");
+  await evidence.step("panel", "runtime-open", "Open Run and test for the selected demo Flow", () => runtimeRow.click());
+  const runCommand = runPanel(page).locator(".automation-runtime-run-command");
   await runCommand.waitFor();
   await evidence.step("panel", "runtime-search-clear", "Clear the project hierarchy search", () => search.fill(""));
-  await page.getByText("Checking Flow readiness...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
-  await evidence.step("panel", "runtime-no-llm", "Select No LLM intervention mode", () => runCommand.getByRole("button", { name: "No LLM intervention", exact: true }).click());
+  await page.getByText(RUN_READINESS_CHECK_TEXT, { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
+  await selectRunMode(page, "No LLM intervention", evidence, "runtime-no-llm");
   const runButton = runCommand.getByRole("button", { name: "Run", exact: true });
   const readyDeadline = Date.now() + 30_000;
   while (Date.now() < readyDeadline && await runButton.isDisabled()) await page.waitForTimeout(100);
@@ -43,6 +43,32 @@ export async function runDemoFlowFromPanel(page: Page, state: DemoWorkspaceState
     actionAttemptCount: body?.payload?.runSummary?.actionAttemptCount ?? 0,
   };
   return { runId, status, diagnostic };
+}
+
+/**
+ * The "Run and test" view's own run panel. The Steps pane's authoring region
+ * shares its `automation-runtime-run-panel` and `-run-command` classes, so the
+ * run panel is told apart from it, and only the visible one is taken.
+ */
+export function runPanel(page: Page): Locator {
+  return page.locator("section.automation-runtime-run-panel:not(.automation-flow-authoring-panel):visible");
+}
+
+/** What the run panel shows while it checks the Flow (was "Checking Flow readiness..." before Core 68bad85). */
+export const RUN_READINESS_CHECK_TEXT = "Checking whether this is ready to run...";
+
+/**
+ * Chooses how the next run runs. Since Core 68bad85 the mode buttons sit in a
+ * collapsed "Advanced" disclosure under the run command, so it is opened first
+ * when it is closed; the buttons keep their labels.
+ */
+export async function selectRunMode(page: Page, mode: string, evidence: BrowserEvidenceRecorder, step: string): Promise<void> {
+  const advanced = runPanel(page).locator("details.automation-runtime-advanced-mode");
+  await advanced.waitFor({ timeout: 30_000 });
+  if (!await advanced.evaluate(element => (element as HTMLDetailsElement).open)) {
+    await evidence.step("panel", step + "-advanced", "Open the Advanced run options", () => advanced.locator(":scope > summary").click());
+  }
+  await evidence.step("panel", step, `Select ${mode} mode`, () => advanced.getByRole("button", { name: mode, exact: true }).click());
 }
 
 export async function assertDemoFlowRenderedLayout(page: Page, evidence: BrowserEvidenceRecorder, expectedNodeCounts: readonly number[] = [4, 5]): Promise<void> {

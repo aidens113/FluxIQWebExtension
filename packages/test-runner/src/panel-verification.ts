@@ -119,7 +119,8 @@ export async function verifyAuthenticatedFluxIQPanel(input: VerifyFluxIQPanelInp
 async function ensureProjectHierarchyVisible(page: Page, timeoutMs: number): Promise<void> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   if (!await hierarchy.isVisible().catch(() => false)) {
-    const expand = page.getByRole("button", { name: "Expand sidebar" });
+    // The collapse control's wording since Core 68bad85 (`AutomationCollapseToggle`).
+    const expand = page.getByRole("button", { name: "Show the sidebar", exact: true });
     if (await expand.isVisible().catch(() => false)) await expand.click();
   }
   await hierarchy.waitFor({ state: "visible", timeout: timeoutMs });

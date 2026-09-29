@@ -19,6 +19,10 @@ export type { ListWait, ListWaitStop } from "./page-render";
 // emptied answers with the rows they rejected rather than with none.
 export type { ListExtractionConditionReport } from "./filtered-answer";
 
+// What a read's `dedupe` and `sort` did: the rows left out as repeats, and the
+// rows a sort key could not read, which go last.
+export type { ListExtractionOrderReport } from "./order-rows";
+
 export { inferListFromElement } from "./infer-list";
 
 // And without a pick: the domain's authoring runtime asks `capture_snapshot`

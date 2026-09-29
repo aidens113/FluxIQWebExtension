@@ -16,6 +16,7 @@ test("uses argv-only native Windows tools and verifies an exclusive current-user
   assert.deepEqual(calls.map(item => [path.win32.basename(item.file), item.args]), [
     ["whoami.exe", ["/user", "/fo", "csv", "/nh"]],
     ["icacls.exe", [target, "/inheritance:r", "/grant:r", "*S-1-5-21-1-2-3-1001:F"]],
+    ["icacls.exe", [target]],
     ["icacls.exe", [target, "/verify"]],
     ["icacls.exe", [target]],
   ]);
@@ -33,6 +34,24 @@ test("directory grants inheritable access and ACL verification fails closed on a
   };
   await assert.rejects(hardenWindowsPrivatePath(target, "directory", { platform: "win32", systemRoot: "C:\\Windows", exec: execute }), /exclusive current-user access/);
   assert.ok(mutableCalls.some(call => call.includes("*S-1-5-21-1-2-3-1001:(OI)(CI)F")));
+});
+
+test("explicit entries a new path was born with are removed by name, then the ACL is verified", async () => {
+  const target = path.resolve("test-runs", ".auth");
+  const calls: string[][] = [];
+  let removed = false;
+  const execute: NativeExec = async (file, args) => {
+    calls.push([path.win32.basename(file), ...args]);
+    if (file.endsWith("whoami.exe")) return { stdout: '"MACHINE\\runner","S-1-5-21-1-2-3-1001"', stderr: "" };
+    if (args[1] === "/remove") removed = true;
+    if (args.length === 1) {
+      const strays = removed ? "" : "\r\n  NT AUTHORITY\\SYSTEM:(OI)(CI)(F)\r\n  BUILTIN\\Administrators:(OI)(CI)(F)";
+      return { stdout: `${target} MACHINE\\runner:(OI)(CI)(F)${strays}\r\n`, stderr: "" };
+    }
+    return { stdout: "ok", stderr: "" };
+  };
+  await hardenWindowsPrivatePath(target, "directory", { platform: "win32", systemRoot: "C:\\Windows", exec: execute });
+  assert.ok(calls.some(call => call.join("|") === ["icacls.exe", target, "/remove", "NT AUTHORITY\\SYSTEM", "BUILTIN\\Administrators"].join("|")));
 });
 
 test("is a no-op outside Windows and fails closed when native identity lookup fails", async () => {

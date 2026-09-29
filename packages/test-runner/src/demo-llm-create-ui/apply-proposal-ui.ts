@@ -40,9 +40,9 @@ export async function approveApplyExistingEvidenceGuidedCreationViaUi(input: App
 
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "exploration-apply-adaptations-search", "Search the exact checkpoint Flow for Adaptations", () => search.fill("Adaptations"));
-  const rows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-adaptations`, "the exact checkpoint Flow Adaptations row", ".tree-row-main.type-folder");
-  await evidence.step("panel", "exploration-apply-adaptations-open", "Open Adaptations for the exact checkpoint Flow", () => rows.click());
+  await evidence.step("panel", "exploration-apply-adaptations-search", "Search the exact checkpoint Flow for Suggested changes", () => search.fill("Suggested changes"));
+  const rows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-adaptations`, "the exact checkpoint Flow Suggested changes row", ".tree-row-main.type-folder");
+  await evidence.step("panel", "exploration-apply-adaptations-open", "Open Suggested changes for the exact checkpoint Flow", () => rows.click());
   await evidence.step("panel", "exploration-apply-runtime-search-clear", "Clear hierarchy search", () => search.fill(""));
   const adaptations = page.locator('[role="table"][aria-label="Adaptations"]:visible');
   await exactVisible(adaptations, "the checkpoint Flow Adaptations table", 30_000);

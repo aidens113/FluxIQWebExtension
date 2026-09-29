@@ -10,6 +10,7 @@
 // page text ride on a field nothing redacts.
 
 import { isWebAutomationExtractFieldKey } from "./field-key";
+import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
 
 export type WebAutomationExtractionSummary = {
   /** Records returned, across every page read. */
@@ -66,6 +67,8 @@ export type WebAutomationExtractionSummary = {
   conditions?: WebAutomationExtractionConditionReport | undefined;
   /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;
+  /** What `dedupe` and `sort` did, or absent for a read whose request named neither. */
+  order?: WebAutomationExtractionOrderReport | undefined;
 };
 
 /**
@@ -293,6 +296,10 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // outside the set drops the summary rather than arriving half understood.
   const paginationStop = paginationStopValue(summary.paginationStop);
   if (summary.paginationStop !== undefined && paginationStop === undefined) return undefined;
+  // What dedupe and sort did, held to the same rule: optional, so a page build
+  // that predates them still sends a summary that arrives whole.
+  const order = summary.order === undefined ? undefined : webAutomationExtractionOrderReportValue(summary.order);
+  if (summary.order !== undefined && order === undefined) return undefined;
   // No cross-check against `recordCount`, unlike `kept > applied` below. A
   // continued read carries its predecessor's records and counts only its own
   // document's items (the rule the condition report already states), so
@@ -310,7 +317,8 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(listPresence !== undefined ? { listPresence } : {}),
     ...(listWait !== undefined ? { listWait } : {}),
     ...(conditions !== undefined ? { conditions } : {}),
-    ...(paginationStop !== undefined ? { paginationStop } : {})
+    ...(paginationStop !== undefined ? { paginationStop } : {}),
+    ...(order !== undefined ? { order } : {})
   };
 }
 

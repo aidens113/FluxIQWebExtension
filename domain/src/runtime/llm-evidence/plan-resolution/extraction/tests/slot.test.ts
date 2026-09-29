@@ -163,6 +163,26 @@ test("a column named in the instruction's own words resolves to the detected one
   // it yet, and that hop is named on `WebExtractionSlotResolution`.
 });
 
+test("a list of the instruction's column names keeps each column under the name written, not the detected key it was read as", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+
+  // "Columns item, quantity and price" written as a list: until 2026-09-29 each
+  // guessed column was kept under its detected key, so the rows came back as
+  // `product-name`, `product-price` and `product-rating` and an oracle comparing
+  // by the instruction's names found none of them
+  // (`lane-run-mum06sfc-f1d9403f.md`, cause 2).
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["name", "price", "rating", "url@href"], paginate: false } }),
+    resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name, price: CARD_FIELDS.price, rating: CARD_FIELDS.rating, url: CARD_FIELDS.url } })
+  );
+  // A name that is the detected key, or that could not be a key itself, keeps the detected key.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", ".product-price"], paginate: false } }),
+    resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-price": CARD_FIELDS.price } })
+  );
+});
+
 test("the handle keeps every detected column and the detected pagination unless the plan says otherwise", async () => {
   const runtime = runtimeOver(CATALOG);
   const { extraction } = await detect(runtime);
@@ -378,4 +398,54 @@ test("once the Flow was shown a detected list, a literal request is refused as a
   // Another Flow was shown nothing, and a node without a request is not a guess.
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
   assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5_000 }), { status: "unchanged" });
+});
+
+// `dedupe` and `sort` live inside `extractList` (decided 2026-09-28), so the
+// handle form takes them too. Live run `run-mulwm2dc-0bd95f22` asked for roles
+// "deduplicated, newest first" over a detected list, the verifier said to add
+// both, and the repair had nowhere to write either: this slot refused every key
+// it did not list.
+
+test("a detected list may be deduplicated and sorted by the plan's own column keys, resolved to canonical form", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+
+  // Forgiving spellings in, canonical out: `true` keys on the list's link column,
+  // and a column named by the plan's key sorts by that column.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "price desc", paginate: false } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["url"] }, sort: [{ field: "price", order: "desc" }] })
+  );
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: ["name"], sort: [{ field: "rating", order: "desc", as: "number" }, "name"], paginate: false } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS, dedupe: { by: ["name"] }, sort: [{ field: "rating", order: "desc", as: "number" }, { field: "name", order: "asc" }] })
+  );
+  // What runs is a request the page reads as resolved, with no issue left in it.
+  const resolved = await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: true, sort: "-price", paginate: false } });
+  const request = resolved.status === "resolved" ? resolved.parameters.extractList : undefined;
+  assert.deepEqual(webAutomationExtractListIssues(request), []);
+  assert.deepEqual(webAutomationExtractListRequestValue(request)?.sort, [{ field: "price", order: "desc" }]);
+
+  // Off is nothing, not a fault.
+  assert.deepEqual(
+    await resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: RENAMED, dedupe: false, sort: [], paginate: false } }),
+    resolvedList({ item: CARD, fields: CARD_FIELDS })
+  );
+});
+
+test("a dedupe that is not one, or a sort key naming no column, is refused where it was written rather than dropped", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  // Dropped, it would dedupe or sort nothing while the model believed it had
+  // asked; refused, the model is told where, by the key's own name
+  // (`../issue-position.ts`).
+  const refusals: Array<[JsonObject, string]> = [
+    [{ handle: extraction, fields: RENAMED, dedupe: 7 }, "extractList.dedupe"],
+    [{ handle: extraction, fields: RENAMED, sort: "newest" }, "extractList.sort"],
+    [{ handle: extraction, fields: RENAMED, sort: ["price desc", { field: "price", order: "sideways" }] }, "extractList.sort.1"],
+    [{ handle: extraction, fields: RENAMED, sort: ["price desc, newest"] }, "extractList.sort"]
+  ];
+  for (const [extractList, position] of refusals) {
+    assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+  }
 });

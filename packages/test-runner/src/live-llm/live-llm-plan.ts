@@ -3,7 +3,9 @@
 // grant in its own, and its bounds are narrower. This is the one place the two
 // are reconciled, and it refuses rather than silently widening: every effective
 // limit below is at or inside the profile's own, so a cap the operator typed
-// can only ever bind harder, never less.
+// can only ever bind harder, never less. A creation build with no typed run
+// token budget defaults to every authorized call at the per-request limit, so
+// the operator's cost cap binds first (`runTokenBudget`).
 
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
@@ -77,9 +79,12 @@ export type LiveLlmPlan = {
    * The tokens the whole run may use, sent to Core as the grant's
    * `maxTotalTokensPerRun`: the operator's `--llm-max-run-tokens`, held to what
    * the authorized calls could use, or without one Core's own default -- the
-   * smaller of that and Core's confirmation threshold. Always sent, so the
-   * post-run check judges the number Core was asked for rather than a guess at
-   * the one it chose.
+   * smaller of that and Core's confirmation threshold. A creation build
+   * (`build_and_adapt`) without a typed budget is the exception: it defaults to
+   * every authorized call at the per-request limit, so `--llm-max-cost-usd`, the call count and
+   * Core's stall guard bind before tokens do (see `runTokenBudget`). Always
+   * sent, so the post-run check judges the number Core was asked for rather
+   * than a guess at the one it chose.
    */
   maxTotalTokensPerRun: number;
   timeoutMs: number;
@@ -145,7 +150,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   if (tokenLimits.maxInputTokens + tokenLimits.maxOutputTokens > tokenLimits.maxTotalTokens) {
     throw refusal("--llm-max-input-tokens plus --llm-max-output-tokens exceeds --llm-max-total-tokens");
   }
-  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls);
+  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls, purpose === "build_and_adapt");
   if (!Number.isSafeInteger(budget.timeoutMs) || budget.timeoutMs < 1) throw refusal(`--llm-timeout-ms ${budget.timeoutMs} must be a positive integer`);
   if (!Number.isFinite(budget.maxEstimatedCostUsd) || budget.maxEstimatedCostUsd <= 0) {
     throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive limit at or below ${CORE_MAX_COST_USD}`);
@@ -196,10 +201,30 @@ type RunTokenBudget = { tokens: number; source: string };
  * The run's token budget and where it came from. It only ever moves down: a
  * typed budget above what the authorized calls could use is held to that, and
  * one that cannot cover a single request is refused rather than raised.
+ *
+ * A creation build is the one exception, and it is deliberate. A build decides
+ * once per call, and each decision re-sends the page and the draft: about 16k
+ * input tokens a decision on a real store, so the 600,000-token budget the
+ * campaigns typed ran out after about 34 decisions -- four beyond one cart
+ * task's 30 recorded steps, with nothing left to inspect, explore or correct
+ * (lane-summary round 1, rank 3). The token budget was acting as a decision
+ * cap nobody chose. What is meant to stop a build is what it spends
+ * (`--llm-max-cost-usd`, which stays exactly the operator's), the calls it was
+ * authorized, and Core's stall guard when it stops making progress. So a
+ * creation grant asks for every authorized call at the per-request limit --
+ * the most Core issues -- unless the operator typed `--llm-max-run-tokens`,
+ * which binds as it does everywhere else. Nothing is widened past the operator's own numbers: the
+ * per-request limit and the call count are both theirs.
  */
-function runTokenBudget(declared: number | undefined, perCall: number, calls: number): RunTokenBudget {
+function runTokenBudget(declared: number | undefined, perCall: number, calls: number, creation: boolean): RunTokenBudget {
   const exposure = perCall * calls;
   const exposureText = `--llm-max-total-tokens ${perCall} x ${calls} authorized call(s) = ${exposure}`;
+  if (declared !== undefined && (!Number.isSafeInteger(declared) || declared < perCall)) {
+    throw refusal(`--llm-max-run-tokens ${declared} must be a whole number of at least --llm-max-total-tokens ${perCall}`);
+  }
+  if (creation && declared === undefined) {
+    return { tokens: exposure, source: `a creation build's default: ${exposureText}, so --llm-max-cost-usd and the stall guard bind before tokens` };
+  }
   if (declared === undefined) {
     // Core's formula, exactly. The outer `max` cannot bind here, since a
     // request is at most one per-request ceiling, but a copy that differs is a
@@ -208,9 +233,6 @@ function runTokenBudget(declared: number | undefined, perCall: number, calls: nu
       tokens: Math.max(perCall, Math.min(exposure, CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD)),
       source: `Core's default: the smaller of ${exposureText} and ${CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD}`,
     };
-  }
-  if (!Number.isSafeInteger(declared) || declared < perCall) {
-    throw refusal(`--llm-max-run-tokens ${declared} must be a whole number of at least --llm-max-total-tokens ${perCall}`);
   }
   if (declared > exposure) return { tokens: exposure, source: `--llm-max-run-tokens ${declared}, held to ${exposureText}` };
   return { tokens: declared, source: `--llm-max-run-tokens ${declared}` };

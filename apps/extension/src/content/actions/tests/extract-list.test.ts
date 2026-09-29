@@ -707,3 +707,30 @@ test("a read that threw before it had anything is still a failure, because there
   await extractListAction(COMMAND, deps, 1);
   assert.equal(calls[0]?.builder, "failure");
 });
+
+test("a read that deduplicated or sorted carries what that took onto the wire, and one that did neither carries nothing", async () => {
+  // A sort over a column the page states as prose, which read no row, would
+  // answer in page order and look sorted; `unsortable` equal to `recordCount`
+  // is how the verifier can tell (`run-mulwm2dc-0bd95f22` asked for "newest first").
+  const outcome: ListExtractionOutcome = {
+    records: [{ name: "Lamp", price: "$49.00", sku: "1" }, { name: "Mug", price: "$9.00", sku: "2" }],
+    pagesRead: 1,
+    truncated: false,
+    timedOut: false,
+    missingFields: [],
+    filtered: 0,
+    order: { duplicates: 3, unsortable: 2 }
+  };
+  const { deps, calls } = dependencies(outcome);
+  await extractListAction({ ...COMMAND, extractList: { ...REQUEST, dedupe: { by: ["name"] }, sort: [{ field: "price", order: "asc" }] } }, deps, 1);
+  const [call] = calls;
+  assert.equal(call?.builder, "success");
+  if (call?.builder !== "success") return;
+  assert.deepEqual(call.evidence?.extraction?.order, { duplicates: 3, unsortable: 2 });
+  assert.deepEqual((wireSummary(call.validation, call.evidence) as { order?: unknown } | undefined)?.order, { duplicates: 3, unsortable: 2 });
+
+  const plain = dependencies({ ...outcome, order: undefined });
+  await extractListAction(COMMAND, plain.deps, 1);
+  const [unordered] = plain.calls;
+  assert.equal(unordered?.builder === "success" && "order" in (unordered.evidence?.extraction ?? {}), false);
+});

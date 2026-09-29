@@ -99,6 +99,15 @@
 // outcome says `timedOut` with the records and pages it did read (decision D5).
 // Without a `timeoutMs` the read is bounded by the mode's bound and the wait
 // for each page.
+//
+// **`dedupe` and `sort` come between `where` and `maxItems`** (`order-rows.ts`).
+// A kept row that repeats an earlier one under the request's `dedupe` columns
+// is left out as it is read, so it never takes a place under the bound, and is
+// counted. A request that sorts reads every row up to the domain's record bound
+// rather than stopping at `maxItems`, because "the five newest" has to see
+// every row before it can say which five; the answer is sorted and only then
+// cut, and `truncated` says it was. `order` reports both counts, including the
+// rows a sort key could not read, which go last.
 
 import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS } from "@fluxiq-web-extension/domain/client";
 import type { ExtractionCheckpoint } from "../../shared/extraction-continuation";
@@ -108,6 +117,7 @@ import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
+import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
 import { advancePage, deadlineFor, paginationStopOf, type PaginationProgress, type PaginationStop } from "./pagination";
 
@@ -200,6 +210,8 @@ export type ListExtractionOutcome = {
    * `item_limit`, `page_repeated` and `list_vanished`).
    */
   paginationStop?: PaginationStop | undefined;
+  /** What `dedupe` and `sort` did, in counts alone, or absent for a request that named neither. */
+  order?: ListExtractionOrderReport | undefined;
 };
 
 /**
@@ -229,10 +241,19 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   const rejects = itemFilterFor(request);
   const paginate = request.paginate;
   const maxItems = itemBound(request.maxItems);
+  // `dedupe` and `sort`, over the columns the read reads. A sort is over every
+  // row read, so `maxItems` bounds its answer, and the read itself is bounded
+  // only by the domain's record bound.
+  const order = listRowOrderFor(request, fields.map(([name]) => name));
+  const readBound = order?.sorts ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems;
   const contentAware = paginate?.mode === "scroll";
   const resume = options.resume;
 
   const records: ExtractedListRecord[] = resume ? resume.records.map((record) => ({ ...record })) : [];
+  // Every dedupe identity a kept row already has, the carried rows' included,
+  // and how many kept rows this document left out for repeating one.
+  const identities = new Set<string>(order === undefined ? [] : records.flatMap((record) => order.identity(record) ?? []));
+  let duplicates = 0;
   const missing = new Set<string>(resume?.missingFields ?? []);
   // The rows the conditions rejected, kept only so a read the conditions emptied
   // has something to answer with. They are bounded and deduplicated exactly as
@@ -333,22 +354,28 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       rejectedMissing: rejectedRows?.missing ?? new Set(),
       rejectedTruncated: rejectedRows?.truncated ?? false
     }, truncated);
+    // Then dedupe, sort and the bound, over whichever rows the answer is. For
+    // kept rows the dedupe is already done and finds nothing more; for the rows
+    // a read the conditions emptied falls back to, it is the whole of it.
+    const ordered = order?.apply(answer.records, maxItems);
+    const answered = ordered?.rows ?? answer.records;
     const seen = itemsSeen();
     return {
-      records: answer.records,
+      records: answered,
       pagesRead: progress.pagesRead,
-      truncated: answer.truncated,
+      truncated: answer.truncated || (ordered?.cut ?? false),
       timedOut: ended.timedOut,
       missingFields: answer.missingFields,
       filtered,
-      ...recordGaps(answer.records, fields),
+      ...recordGaps(answered, fields),
       ...(seen === undefined ? {} : { itemsSeen: seen }),
       ...(faultedItems.size === 0 ? {} : { itemFaults: faultedItems.size }),
       ...(pageFault ? { pageFault: true } : {}),
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } }),
-      ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop })
+      ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
+      ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } })
     };
   };
 
@@ -383,7 +410,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // condition can tell from the page that it has already seen every item it
       // could keep -- which is how the picker's five-row preview is read
       // without scrolling the page a person is looking at.
-      await awaitListComplete(item, rejects ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
+      // Nor can a read that dedupes or sorts: a duplicate takes no place under
+      // the bound, and a sort has to see every row.
+      await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
       if (required > 1) {
         // Two waits on one page, reported as one: the second's answer, and both
         // their time, so the account's `waitedMs` is what the read actually
@@ -422,7 +451,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         if (seen !== undefined && !contentAware) continue;
         // A new element past the bound is not read at all; a recycled one is
         // read first, because only its content says whether it is a new record.
-        if (seen === undefined && records.length >= maxItems) {
+        if (seen === undefined && records.length >= readBound) {
           truncated = true;
           break;
         }
@@ -444,7 +473,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
               // was sized from, so the fallback is for the compiler rather than
               // for a case that happens.
               for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
-              rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, maxItems);
+              rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, order ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems);
             }
             read.set(element, key);
             continue;
@@ -456,11 +485,19 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
           read.set(element, key);
           continue;
         }
-        if (records.length >= maxItems) {
+        // After `where`, before the bound: a repeat of a kept row is not a row.
+        const identity = order?.identity(itemRead.record);
+        if (identity !== undefined && identities.has(identity)) {
+          duplicates += 1;
+          read.set(element, key);
+          continue;
+        }
+        if (records.length >= readBound) {
           truncated = true;
           break;
         }
         read.set(element, key);
+        if (identity !== undefined) identities.add(identity);
         records.push(itemRead.record);
         thisPage.push(content);
         for (const name of itemRead.missing) missing.add(name);

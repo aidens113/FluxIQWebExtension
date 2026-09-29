@@ -195,3 +195,120 @@ test("a read that counted items and then handed the count on leaves it absent wh
     page.restore();
   }
 });
+
+// And T1 coverage of `dedupe` and `sort` inside the read (`../order-rows.ts`):
+// the order is `where`, then dedupe, then sort, then `maxItems`, and the read
+// says what the middle two took. The page is the same stand-in as above, its
+// items carrying several attributes; a continued read is used so the reader goes
+// straight to the rows rather than through the first page's waits, which need a
+// real document.
+
+/** One item of a fake list whose attributes are `data-<key>` for each key given. */
+function fakeRow(values: Record<string, string>): Element {
+  return { getAttribute: (name: string) => (name.startsWith("data-") ? values[name.slice(5)] ?? null : null), parentElement: null } as unknown as Element;
+}
+
+/** Stands the rows up under `.row`, as `fakeList` does, for the length of one test. */
+function fakeRows(rows: Array<Record<string, string>>): { restore(): void } {
+  const saved = {
+    document: (globalThis as Record<string, unknown>).document,
+    element: (globalThis as Record<string, unknown>).HTMLElement,
+    input: (globalThis as Record<string, unknown>).HTMLInputElement
+  };
+  const shown = rows.map(fakeRow);
+  (globalThis as Record<string, unknown>).HTMLElement = class {};
+  (globalThis as Record<string, unknown>).HTMLInputElement = class {};
+  (globalThis as Record<string, unknown>).document = {
+    readyState: "complete",
+    querySelectorAll: (selector: string) => (selector === ".row" ? shown : []),
+    querySelector: () => null
+  };
+  return {
+    restore: () => {
+      (globalThis as Record<string, unknown>).document = saved.document;
+      (globalThis as Record<string, unknown>).HTMLElement = saved.element;
+      (globalThis as Record<string, unknown>).HTMLInputElement = saved.input;
+    }
+  };
+}
+
+const attribute = (name: string) => ({ kind: "attribute" as const, attribute: `data-${name}` });
+
+/** The job-board read of `run-mulwm2dc-0bd95f22`, in small: roles, not sponsored, each once, newest first. */
+const JOBS: WebAutomationExtractListRequest = {
+  item: ".row",
+  fields: { title: attribute("title"), posted: attribute("posted"), url: attribute("url") },
+  where: [{ read: attribute("sponsored"), is: "absent" }],
+  paginate: { mode: "next", next: ".next", maxPages: 5 }
+};
+
+const START: ExtractionCheckpoint = { records: [], pagesRead: 0, scrolls: 0, missingFields: [], itemsSeen: 0 };
+
+test("where, then dedupe, then sort, then maxItems: the newest distinct roles, and what each step took", async () => {
+  const page = fakeRows([
+    { title: "Sponsored", posted: "1 hour ago", url: "/ad", sponsored: "yes" },
+    { title: "A", posted: "3 days ago", url: "/a" },
+    { title: "B", posted: "1 day ago", url: "/b" },
+    // A repeat of /a, newer than everything: kept, it would be the first row.
+    { title: "A again", posted: "2 hours ago", url: "/a" },
+    { title: "C", posted: "5 days ago", url: "/c" },
+    { title: "D", posted: "recently", url: "/d" }
+  ]);
+  try {
+    const outcome = await extractList(
+      { ...JOBS, dedupe: { by: ["url"] }, sort: [{ field: "posted", order: "desc" }], maxItems: 2 },
+      { resume: START }
+    );
+    // The sponsored row is left out by `where`, the repeat by `dedupe`, and the
+    // two newest of the four distinct roles are the answer -- not the first two read.
+    assert.deepEqual(outcome.records.map((record) => record.title), ["B", "A"]);
+    assert.equal(outcome.filtered, 1);
+    assert.deepEqual(outcome.order, { duplicates: 1, unsortable: 1 });
+    assert.equal(outcome.truncated, true, "two of four rows were answered, so the answer is cut");
+    assert.equal(outcome.itemsSeen, 6);
+  } finally {
+    page.restore();
+  }
+});
+
+test("without a sort, a duplicate takes no place under maxItems and the read goes on to the next distinct row", async () => {
+  const page = fakeRows([
+    { title: "A", posted: "", url: "/a" },
+    { title: "A again", posted: "", url: "/a" },
+    { title: "B", posted: "", url: "/b" },
+    { title: "C", posted: "", url: "/c" }
+  ]);
+  try {
+    const outcome = await extractList({ ...JOBS, where: undefined, dedupe: { by: ["url"] }, maxItems: 2 }, { resume: START });
+    assert.deepEqual(outcome.records.map((record) => record.title), ["A", "B"]);
+    assert.deepEqual(outcome.order, { duplicates: 1, unsortable: 0 });
+    assert.equal(outcome.truncated, true);
+  } finally {
+    page.restore();
+  }
+});
+
+test("a dedupe reaches the rows a continued read carried, so a later document never repeats them", async () => {
+  const page = fakeRows([{ title: "A later", posted: "", url: "/a" }, { title: "C", posted: "", url: "/c" }]);
+  try {
+    const outcome = await extractList(
+      { ...JOBS, where: undefined, dedupe: { by: ["url"] } },
+      { resume: { ...START, records: [{ title: "A", posted: "", url: "/a" }, { title: "B", posted: "", url: "/b" }], pagesRead: 1, itemsSeen: 2 } }
+    );
+    assert.deepEqual(outcome.records.map((record) => record.title), ["A", "B", "C"]);
+    assert.deepEqual(outcome.order, { duplicates: 1, unsortable: 0 });
+  } finally {
+    page.restore();
+  }
+});
+
+test("a read that names neither dedupe nor sort carries no order report and answers in page order", async () => {
+  const page = fakeRows([{ title: "Z", posted: "", url: "/z" }, { title: "A", posted: "", url: "/z" }]);
+  try {
+    const outcome = await extractList({ ...JOBS, where: undefined }, { resume: START });
+    assert.deepEqual(outcome.records.map((record) => record.title), ["Z", "A"]);
+    assert.equal("order" in outcome, false);
+  } finally {
+    page.restore();
+  }
+});

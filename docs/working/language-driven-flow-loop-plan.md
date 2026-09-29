@@ -705,6 +705,13 @@ debug and partitioned so neither touches the other's files:
 - Follow-up: Run 4 remains latest and the streak remains 0; complete final candidate review/integration and all frozen no-hindsight gates before any fresh command-specific authorization.
 
 
+### 2026-09-28 to 2026-09-29 — t173: the crash-landed work audited, finished and gated
+- Agent: supervisor with t173-B, C, EF, G, I, J, K7, K8, and the audits [gate-baseline-0928](./language-driven-flow-loop-plan/reports/gate-baseline-0928.md) and [inflight-audit-0928](./language-driven-flow-loop-plan/reports/inflight-audit-0928.md)
+- Changed: task/t173-audit-close in both repositories. Downstream: domain compiles again (packet.ts dedupe/sort); dedupe and sort applied end to end ([t173-ef](./language-driven-flow-loop-plan/reports/t173-ef-dedupe-sort.md)); in-place effect sees open shadow roots ([report](./language-driven-flow-loop-plan/reports/in-place-effect-shadow.md)); Lab selectors synced to the renamed panel and a creation build's default token budget no longer caps its decisions, while a typed `--llm-max-run-tokens` still binds ([report](./manual-panel-test-findings/reports/lab-selector-sync.md)). Core: incomplete-draft record for an exhausted build and wrap-up refusing unoffered tools ([t173-c](./language-driven-flow-loop-plan/reports/t173-c-incomplete-draft.md)); stale tests and the structure audit ([t173-b](./language-driven-flow-loop-plan/reports/t173-b-core-tests.md)); every chat capability through Core's real handlers ([t173-i](./manual-panel-test-findings/reports/t173-i-capability-contracts.md)).
+- Why: the 2026-09-28 crash committed seven workers' partial work ungated; both dev heads failed their gates, and ranks 2-6 of the round-2 causes were open or partial.
+- Validation: supervisor observed downstream `pnpm check` EXIT=0; domain test 881/881; extension test 1017/1017; test-runner live-llm 97/97; Core focused deepseek-bootstrap-exploration + exploration-reduction 36/36. Core full gates and scenario-lab pending.
+- Outcome: In progress. Next: K7 (column binding), K8 (start step), Core full gates, Core rebuild, then live lane runs.
+
 ## Open Questions
 
 - Which complex scenario goes first? `everything-store` is the known multi-step

@@ -65,8 +65,8 @@ export async function requireFlowOwnedSubflowsFolder(page: Page, flowName: strin
     if (originalTypeFilter !== "folder") {
       await evidence.step("panel", "subflow-folder-type-filter", "Filter the real project hierarchy to folders", () => typeFilter!.selectOption("folder"));
     }
-    if (originalSearch !== "Subflows") {
-      await evidence.step("panel", "subflow-folder-search", "Search the real project hierarchy for Subflows folders", () => search!.fill("Subflows"));
+    if (originalSearch !== "Reusable parts") {
+      await evidence.step("panel", "subflow-folder-search", "Search the real project hierarchy for Reusable parts folders", () => search!.fill("Reusable parts"));
     }
     const matchStatus = hierarchy.locator(".automation-tree-filter-row small");
     await matchStatus.waitFor({ timeout: 10_000 });
@@ -76,7 +76,7 @@ export async function requireFlowOwnedSubflowsFolder(page: Page, flowName: strin
     stage = "subflows-render";
     const parentScopedItems = page.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"]`);
     const exactSubflowsItems = parentScopedItems.filter({
-      has: page.locator(".tree-row-main.type-folder .tree-row-label > strong").getByText("Subflows", { exact: true }),
+      has: page.locator(".tree-row-main.type-folder .tree-row-label > strong").getByText("Reusable parts", { exact: true }),
     });
     const subflowsFolder = exactSubflowsItems.first();
     await subflowsFolder.waitFor({ timeout: 1_000 }).catch(() => undefined);
@@ -97,10 +97,10 @@ export async function requireFlowOwnedSubflowsFolder(page: Page, flowName: strin
     parentScopedCount = await parentScopedItems.count();
     exactSubflowsCount = await exactSubflowsItems.count();
     stage = "subflows-identity";
-    if (exactSubflowsCount !== 1 || await subflowsFolder.getAttribute("aria-label") !== "Subflows") {
+    if (exactSubflowsCount !== 1 || await subflowsFolder.getAttribute("aria-label") !== "Reusable parts") {
       throw new RunnerFailure("runtime.behavior", "FluxIQ panel Flow-owned Subflows hierarchy identity is ambiguous");
     }
-    const addAction = subflowsFolder.getByRole("button", { name: "Add inside Subflows", exact: true });
+    const addAction = subflowsFolder.getByRole("button", { name: "Add inside Reusable parts", exact: true });
     addActionCount = await addAction.count();
     stage = "add-action";
     if (addActionCount !== 1) throw new RunnerFailure("runtime.behavior", "FluxIQ panel Flow-owned Subflows add action is unavailable");
@@ -123,22 +123,22 @@ export async function requireFlowOwnedSubflowsFolder(page: Page, flowName: strin
 
 export async function createDemoSubflowInPanel(page: Page, flowName: string, pin: string, evidence: BrowserEvidenceRecorder, subflowName: string = DEMO_SUBFLOW_NAME): Promise<void> {
   const subflows = await requireFlowOwnedSubflowsFolder(page, flowName, evidence);
-  const dialog = page.getByRole("dialog", { name: "Add to Subflows" });
-  const form = page.getByRole("dialog", { name: "Create Subflow" });
+  const dialog = page.getByRole("dialog", { name: "Add to Reusable parts" });
+  const form = page.getByRole("dialog", { name: "Create Reusable part" });
   let stage = "open";
   let modalDismissAttempted = false;
   let dialogClosed = false;
   let hierarchyAvailable = false;
   let filtersRestored = false;
   try {
-    await evidence.step("panel", "subflow-create-open", "Open the real panel Subflow creation dialog", () => subflows.folder.getByRole("button", { name: "Add inside Subflows", exact: true }).click());
+    await evidence.step("panel", "subflow-create-open", "Open the real panel Subflow creation dialog", () => subflows.folder.getByRole("button", { name: "Add inside Reusable parts", exact: true }).click());
     await dialog.waitFor({ timeout: 10_000 });
     stage = "kind";
-    await evidence.step("panel", "subflow-create-kind", "Choose an executable Subflow", () => dialog.getByRole("button", { name: /^Subflow/u }).click());
+    await evidence.step("panel", "subflow-create-kind", "Choose an executable Subflow", () => dialog.getByRole("button", { name: /^Reusable part/u }).click());
     stage = "form";
     await form.waitFor({ timeout: 10_000 });
     await evidence.step("panel", "subflow-create-name", "Name the primary browser automation Subflow", () => form.getByLabel("Name").fill(subflowName));
-    await evidence.step("panel", "subflow-create-pin", "Authorize Subflow creation", () => form.getByLabel("Security PIN").fill(pin), { sensitive: true });
+    // Creating a reusable part is authoring: its PIN field went in Core 68bad85.
     stage = "submit";
     await evidence.step("panel", "subflow-create-submit", "Create the primary Subflow", () => form.getByRole("button", { name: "Create", exact: true }).click(), { sensitive: true });
     await form.waitFor({ state: "hidden", timeout: 30_000 });
@@ -181,13 +181,13 @@ export async function ensureNodesEditorVisible(page: Page, evidence: BrowserEvid
   await canvas.waitFor({ timeout: 3_000 }).catch(() => undefined);
   if (await canvas.isVisible().catch(() => false)) return canvas;
 
-  let nodesTab = page.getByRole("tab", { name: /^Nodes(?::|$)/u }).first();
+  let nodesTab = page.getByRole("tab", { name: /^Steps(?::|$)/u }).first();
   if (!await nodesTab.count()) {
-    await evidence.step("panel", stepPrefix + "-add-tab", "Open the panel tab picker for Nodes", () => page.getByRole("button", { name: "Add tab" }).first().click());
+    await evidence.step("panel", stepPrefix + "-add-tab", "Open the panel picker for Steps", () => page.getByRole("button", { name: "Add tab" }).first().click());
     const picker = page.locator(".automation-window-adder-panel:visible");
-    await evidence.step("panel", stepPrefix + "-search-tab", "Search the tab picker for Nodes", () => picker.getByRole("searchbox").fill("nodes"));
-    await evidence.step("panel", stepPrefix + "-select-tab", "Select the Nodes view", () => picker.getByRole("button", { name: /^Nodes/u }).click());
-    nodesTab = page.getByRole("tab", { name: /^Nodes(?::|$)/u }).first();
+    await evidence.step("panel", stepPrefix + "-search-tab", "Search the panel picker for Steps", () => picker.getByRole("searchbox").fill("Steps"));
+    await evidence.step("panel", stepPrefix + "-select-tab", "Select the Steps view", () => picker.getByRole("button", { name: /^Steps/u }).click());
+    nodesTab = page.getByRole("tab", { name: /^Steps(?::|$)/u }).first();
     await nodesTab.waitFor({ timeout: 10_000 });
   }
   if (await nodesTab.getAttribute("aria-selected") !== "true") {
@@ -204,13 +204,13 @@ export async function ensureNodesEditorVisible(page: Page, evidence: BrowserEvid
 }
 
 export async function ensureRouterEditorVisible(page: Page, flowName: string, evidence: BrowserEvidenceRecorder): Promise<void> {
-  let routerTab = page.getByRole("tab", { name: `Router: ${flowName}`, exact: true });
+  let routerTab = page.getByRole("tab", { name: `Choose a path: ${flowName}`, exact: true });
   if (!await routerTab.count()) {
-    await evidence.step("panel", "router-add-tab", "Open the panel tab picker for Router", () => page.getByRole("button", { name: "Add tab" }).first().click());
+    await evidence.step("panel", "router-add-tab", "Open the panel picker for Choose a path", () => page.getByRole("button", { name: "Add tab" }).first().click());
     const picker = page.locator(".automation-window-adder-panel:visible");
-    await evidence.step("panel", "router-search-tab", "Search the tab picker for Router", () => picker.getByRole("searchbox").fill("router"));
-    await evidence.step("panel", "router-select-tab", "Select the Router view", () => picker.getByRole("button", { name: /^Router/u }).click());
-    routerTab = page.getByRole("tab", { name: `Router: ${flowName}`, exact: true });
+    await evidence.step("panel", "router-search-tab", "Search the panel picker for Choose a path", () => picker.getByRole("searchbox").fill("Choose a path"));
+    await evidence.step("panel", "router-select-tab", "Select the Choose a path view", () => picker.getByRole("button", { name: /^Choose a path/u }).click());
+    routerTab = page.getByRole("tab", { name: `Choose a path: ${flowName}`, exact: true });
     await routerTab.waitFor({ timeout: 10_000 });
   }
   if (await routerTab.getAttribute("aria-selected") !== "true") {
@@ -236,9 +236,8 @@ export async function configureDemoRouterFallbackInPanel(page: Page, flowName: s
     await combobox.click();
     await dialog.getByRole("option", { name: new RegExp("^" + escapeRegExp(subflowName)) }).click();
   });
-  await evidence.step("panel", "router-fallback-save", "Request saving the Router fallback", () => dialog.getByRole("button", { name: "Save Fallback" }).click());
-  const auth = page.getByRole("dialog", { name: "Authorize Router Change" });
-  await evidence.step("panel", "router-fallback-pin", "Authorize the Router fallback", () => auth.getByLabel("Security PIN").fill(pin), { sensitive: true });
-  await evidence.step("panel", "router-fallback-authorize", "Persist the Router fallback", () => auth.getByRole("button", { name: "Authorize and save" }).click(), { sensitive: true });
-  await auth.waitFor({ state: "hidden", timeout: 30_000 });
+  // Save Fallback persists directly and closes the dialog: only deleting a
+  // route group still asks for a PIN since Core 68bad85.
+  await evidence.step("panel", "router-fallback-save", "Persist the Router fallback", () => dialog.getByRole("button", { name: "Save Fallback" }).click());
+  await dialog.waitFor({ state: "hidden", timeout: 30_000 });
 }

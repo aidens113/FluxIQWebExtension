@@ -4,10 +4,15 @@
 // build (`channel: "chromium"`) because the default headless shell crashes on
 // launch on the development machine.
 //
-// `workers` is pinned to 4, the count the harness is run at on that machine, so
-// the bare `pnpm exec playwright test -c e2e/playwright.content.config.ts` is
-// the correct invocation. A `--workers` flag still overrides it: pass
-// `--workers=2` when the machine is under load.
+// `workers` is pinned to 4, the count the harness is run at on that machine. A
+// `--workers` flag still overrides it: pass `--workers=2` when the machine is
+// under load.
+//
+// Run it through `pnpm --filter @fluxiq-web-extension/extension test:content`
+// (`scripts/test-content.mjs`), not a bare `playwright test`. The script turns
+// off Node's own TypeScript stripping, which on Node 22.18 and later runs
+// before Playwright's transform and cannot load the domain runtime that
+// `item-conditions.spec.ts` and `list-completeness.spec.ts` import.
 
 import { defineConfig } from "@playwright/test";
 

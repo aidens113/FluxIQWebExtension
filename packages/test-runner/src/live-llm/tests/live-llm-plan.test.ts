@@ -112,7 +112,7 @@ test("repair plans the iterating explore_and_adapt grant, and adapt stays the na
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });
 
-test("create-flow plans the web panel's iterating build_and_adapt grant, with the operator's call count and Core's default run budget", () => {
+test("create-flow plans the web panel's iterating build_and_adapt grant, with the operator's call count and every call's tokens", () => {
   // The whole per-request triple comes from the shared budget. Overriding the
   // output and total limits alone left the input limit at the default, and
   // input plus output may not exceed the total, so the profile was refused.
@@ -121,11 +121,27 @@ test("create-flow plans the web panel's iterating build_and_adapt grant, with th
   assert.equal(byDefault.task, "create-flow");
   // Core's own iterating default, not a one-call build.
   assert.equal(byDefault.maxCalls, DEFAULT_CALLS);
-  // Twenty-six full requests is far past Core's threshold, so the default run
-  // budget is the threshold itself.
-  assert.equal(byDefault.maxTotalTokensPerRun, CORE_THRESHOLD);
-  assert.equal(byDefault.highTokenConfirmation.required, false);
+  // A build's token budget is every authorized call at the per-request limit,
+  // so the cost cap and the stall guard bind before tokens do; past Core's
+  // threshold, so the explicit --live-llm budget confirms it.
+  assert.equal(byDefault.maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
+  assert.equal(byDefault.highTokenConfirmation.required, true);
+  assert.match(byDefault.highTokenConfirmation.reason, /a creation build's default: .*--llm-max-cost-usd and the stall guard bind before tokens/u);
   assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
+  // The campaigns' 600,000 at ~16k input tokens a decision capped real builds
+  // at ~34 decisions, so an untyped build budget outlasts every decision ...
+  const campaign = planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48 }));
+  assert.equal(campaign.maxTotalTokensPerRun, PER_REQUEST * 48);
+  assert.ok(Math.floor(campaign.maxTotalTokensPerRun / 16_000) >= 48, "tokens must outlast every authorized decision");
+  // ... but a budget the operator typed is theirs, and binds a build as it binds everything else,
+  assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: 600_000 })).maxTotalTokensPerRun, 600_000);
+  // ... while the operator's cost cap stays exactly theirs,
+  const cheap = planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.01 }));
+  assert.equal(cheap.maxEstimatedCostUsd, 0.01);
+  assert.equal(cheap.maxTotalEstimatedCostUsd, 0.48);
+  // ... a typed budget is still validated, and every other purpose still honours it.
+  assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), /--llm-max-run-tokens .* must be a whole number of at least/u);
+  assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: 600_000 })).maxTotalTokensPerRun, 600_000);
   // A build grant is never one a Flow run carries: the Flow lane's type has no room for it.
   const runPurposes: ReadonlyArray<PersistedFlowLlmExecution["purpose"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
   assert.equal((runPurposes as readonly string[]).includes(byDefault.purpose), false);

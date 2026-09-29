@@ -17,7 +17,6 @@ export async function openProjectInPanel(page: Page, origin: string, projectName
   const current = page.locator(".automation-studio-sidebar-heading").getByText(projectName, { exact: true });
   if (await current.isVisible().catch(() => false)) return;
   await openAutomationStudio(page, origin, evidence);
-  await page.getByText("Loading projects...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
   const search = page.getByLabel("Search projects");
   await evidence.step("panel", "project-search", "Search for the demo project", () => search.fill(projectName));
   const row = page.locator(".automation-project-row").filter({ hasText: projectName }).first();
@@ -25,7 +24,6 @@ export async function openProjectInPanel(page: Page, origin: string, projectName
     const retry = page.getByRole("button", { name: /^(?:Retry|Refresh)$/u });
     if (!await retry.isVisible().catch(() => false)) throw new RunnerFailure("runtime.behavior", "The demo project is unavailable in the project list");
     await evidence.step("panel", "project-list-retry", "Retry loading the project list", () => retry.click());
-    await page.getByText("Loading projects...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
     await evidence.step("panel", "project-search-retry", "Search the reloaded project list", () => search.fill(projectName));
     await row.waitFor({ state: "visible", timeout: 10_000 });
   }
@@ -102,7 +100,7 @@ export async function openFlowInCurrentProject(page: Page, flowName: string, evi
     }
 
     stage = "router-search";
-    await evidence.step("panel", "flow-router-search", "Search the real project hierarchy for Router rows", () => search.fill("Router"));
+    await evidence.step("panel", "flow-router-search", "Search the real project hierarchy for Choose a path rows", () => search.fill("Choose a path"));
     routerSearchApplied = true;
 
     stage = "router-child";
@@ -113,7 +111,7 @@ export async function openFlowInCurrentProject(page: Page, flowName: string, evi
     if (routerChildCount !== 1) throw new RunnerFailure("runtime.behavior", "FluxIQ panel Flow Router hierarchy identity is ambiguous");
 
     stage = "router-view";
-    const routerTab = page.getByRole("tab", { name: `Router: ${flowName}`, exact: true });
+    const routerTab = page.getByRole("tab", { name: `Choose a path: ${flowName}`, exact: true });
     await evidence.step("panel", "flow-router-activate", "Activate the exact Flow-owned Router while the hierarchy is filtered", () => routerTreeItem.locator(".tree-row-main.type-flow-object").click());
     routerActivationRequested = true;
     const previewDeadline = Date.now() + 1_500;
@@ -168,18 +166,18 @@ export async function openDemoFlowInPanel(page: Page, config: DemoWorkspaceConfi
 }
 
 export async function openConnectedClients(page: Page, evidence: BrowserEvidenceRecorder): Promise<void> {
-  const tab = page.getByRole("tab", { name: /Connected Clients/u });
-  if (await tab.count()) { await evidence.step("panel", "clients-tab-open", "Open Connected Clients", () => tab.click()); return; }
+  const tab = page.getByRole("tab", { name: /Connected browsers/u });
+  if (await tab.count()) { await evidence.step("panel", "clients-tab-open", "Open Connected browsers", () => tab.click()); return; }
   await evidence.step("panel", "clients-add-tab", "Open the panel tab picker", () => page.getByRole("button", { name: "Add tab" }).first().click());
   const picker = page.locator(".automation-window-adder-panel:visible");
-  await evidence.step("panel", "clients-tab-search", "Search for Connected Clients", () => picker.getByRole("searchbox").fill("connected"));
-  await evidence.step("panel", "clients-tab-select", "Select Connected Clients", () => picker.getByRole("button", { name: /^Connected Clients/u }).click());
-  const selectedTab = page.getByRole("tab", { name: /Connected Clients/u });
+  await evidence.step("panel", "clients-tab-search", "Search for Connected browsers", () => picker.getByRole("searchbox").fill("connected"));
+  await evidence.step("panel", "clients-tab-select", "Select Connected browsers", () => picker.getByRole("button", { name: /^Connected browsers/u }).click());
+  const selectedTab = page.getByRole("tab", { name: /Connected browsers/u });
   await selectedTab.waitFor();
   if (await selectedTab.getAttribute("aria-selected") !== "true") {
-    await evidence.step("panel", "clients-tab-activate", "Activate the Connected Clients tab", () => selectedTab.click());
+    await evidence.step("panel", "clients-tab-activate", "Activate the Connected browsers tab", () => selectedTab.click());
   }
-  await page.getByRole("strong").filter({ hasText: "Connected Clients" }).waitFor();
+  await page.getByRole("strong").filter({ hasText: "Connected browsers" }).waitFor();
 }
 
 export async function approvePairingInPanel(page: Page, referenceCode: string, evidence: BrowserEvidenceRecorder): Promise<void> {
@@ -199,7 +197,7 @@ export async function approvePairingInPanel(page: Page, referenceCode: string, e
   const approve = approvalPanel.locator("span").filter({ hasText: referenceCode }).getByRole("button", { name: "Approve" }).first();
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline && !await approve.isVisible().catch(() => false)) {
-    await evidence.step("panel", "pairing-refresh", "Refresh Connected Clients pairing requests", () => page.getByRole("button", { name: "Refresh" }).click());
+    await evidence.step("panel", "pairing-refresh", "Refresh Connected browsers pairing requests", () => page.getByRole("button", { name: "Refresh" }).click());
     await page.waitForTimeout(200);
   }
   if (!await approve.isVisible().catch(() => false)) throw new RunnerFailure("gateway.pairing", "Pairing request did not appear in the FluxIQ panel");

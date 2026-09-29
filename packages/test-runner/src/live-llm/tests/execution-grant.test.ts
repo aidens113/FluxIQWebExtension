@@ -121,6 +121,38 @@ test("a run token budget above Core's threshold is issued with the confirmation,
   assert.equal(grant.highTokenConfirmationSent, true);
 });
 
+test("a creation grant asks for every authorized call's tokens, so cost and the stall guard bind before tokens", async () => {
+  // The campaigns' numbers, without a typed run budget: 48 calls and a $0.25
+  // per-call cap. At ~16k input tokens a decision the 600,000 the campaigns
+  // typed let a build make ~34 decisions; by default the grant must not be
+  // where a build stops. (A typed budget still binds: live-llm-plan.test.ts.)
+  const core = fakeCore();
+  const grant = await issueLiveLlmExecutionGrant(core.control, { ...target, plan: plan("create-flow", { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.25 }) });
+  const [preflight, issue] = core.calls;
+  assert.equal(preflight?.payload.purpose, "build_and_adapt");
+  assert.equal(preflight?.payload.maxTotalTokensPerRun, PER_REQUEST * 48);
+  assert.equal(issue?.payload.maxTotalTokensPerRun, PER_REQUEST * 48);
+  assert.ok((issue?.payload.maxTotalTokensPerRun as number) / 16_000 >= 48, "every authorized decision fits the token budget");
+  // Above Core's threshold, so the issue call carries the operator's confirmation.
+  assert.equal(issue?.payload.highTokenConfirmation, true);
+  assert.equal(grant.highTokenConfirmationSent, true);
+  // The operator's cost cap is what the grant carries, per call and in total.
+  assert.equal(issue?.payload.maxEstimatedCostUsd, 0.25);
+  assert.equal(issue?.payload.maxTotalEstimatedCostUsd, 2);
+  assert.equal(grant.maxEstimatedCostUsd, 0.25);
+  assert.equal(grant.maxTotalEstimatedCostUsd, 2);
+  // A smaller typed cost cap stays authoritative.
+  const cheapCore = fakeCore();
+  const cheap = await issueLiveLlmExecutionGrant(cheapCore.control, { ...target, plan: plan("create-flow", { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.01 }) });
+  assert.equal(cheapCore.calls[1]?.payload.maxEstimatedCostUsd, 0.01);
+  assert.equal(cheap.maxTotalEstimatedCostUsd, 0.48);
+  // The result judge beside it still asks for one call's tokens and no confirmation.
+  const judgeCore = fakeCore();
+  const judge = await issueLiveLlmExecutionGrant(judgeCore.control, { ...target, plan: plan("create-flow", { maxCallsPerRun: 48 }), override: { purpose: "verify_result", maxCalls: 1 } });
+  assert.equal(judgeCore.calls[1]?.payload.maxTotalTokensPerRun, PER_REQUEST);
+  assert.equal(judge.highTokenConfirmationSent, false);
+});
+
 test("a diagnosis grant asks for exactly one call whatever cap was typed", async () => {
   const core = fakeCore();
   const grant = await issueLiveLlmExecutionGrant(core.control, { ...target, plan: plan("diagnose", { maxCallsPerRun: 26 }) });

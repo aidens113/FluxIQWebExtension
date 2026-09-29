@@ -11,8 +11,9 @@
 // - **The address moved.** Read by polling `location.href`, because a history
 //   API move mutates nothing; a router that pushes only after its fetch lands
 //   is caught as well as one that pushes at once.
-// - **The content changed.** The page's rendered text (`body.innerText`, which
-//   is what a reader sees: text in a hidden panel is not in it) differs from
+// - **The content changed.** The page's rendered text (`body.innerText` and
+//   the rendered text of every open shadow root, `composed-rendered-text.ts`:
+//   what a reader sees, so text in a hidden panel is not in it) differs from
 //   what it was when the press began, *and* since the press the page's
 //   structure moved somewhere other than the link: an element added or
 //   removed, an attribute changed on an element outside the link, or the link's
@@ -31,17 +32,39 @@
 // the hover events and just before the press, so what hovering alone does is
 // not counted as the click's effect.
 //
+// **Open shadow roots are part of the page.** A web component that opens its
+// panel inside its own root (bigbox's store picker, `run-mum0ke7z-940cbd27`)
+// mutates nothing in the document tree, and an observer's `subtree` stops at
+// every shadow boundary. So each open root beneath the document is observed as
+// well: those there when the watch starts, those carried in by an element added
+// since, and -- walked for again at the first check, every `ROOT_RESCAN_MS` and
+// at the deadline -- those attached to an element already in place, which
+// `attachShadow` and a late custom-element upgrade do without any mutation to
+// observe. A root that appeared since the press, outside the link, is structure
+// that moved. "Inside the link" crosses shadow boundaries too, so a ripple drawn
+// inside the link's own component still counts for nothing.
+//
 // Not caught, in the direction that matters: a page that is already changing
-// on its own in both ways -- a live feed, or a ticking clock beside a
-// script-driven animation -- can make a dead link read as answered, since this
-// has no view of the page before the click. In the other direction, an effect
-// with no text (a lightbox of one image), one inside a shadow root, and one in
-// another tab or window are not seen, and such a click still fails as it did.
+// on its own in both ways -- a live feed, a ticking clock beside a
+// script-driven animation, or components upgrading late and drawing text -- can
+// make a dead link read as answered, since this has no view of the page before
+// the click. In the other direction, an effect with no text (a lightbox of one
+// image), one inside a closed shadow root, and one in another tab or window
+// are not seen, and such a click still fails as it did.
+
+import { composedContains, composedRoots, openRootsWithin } from "../shadow-dom";
+import { composedRenderedText } from "./composed-rendered-text";
 
 /** How often the address is read, and the most often the rendered text is. */
 const CHECK_INTERVAL_MS = 100;
 
+/** How often the page is walked again for open shadow roots attached without a mutation. */
+const ROOT_RESCAN_MS = 500;
+
 const ELEMENT_NODE = 1;
+
+/** What is observed in the document and in every open root. */
+const OBSERVED: MutationObserverInit = { childList: true, subtree: true, attributes: true, characterData: true };
 
 /** The answer a script-handled link click was seen to give, and how long after the press. */
 export type InPlaceEffect =
@@ -59,12 +82,14 @@ export type InPlaceEffectWatch = {
   stop(): void;
 };
 
-/** Starts watching `link`'s document for an in-place answer to a click on it. */
+/** Starts watching `link`'s document, open shadow roots included, for an in-place answer to a click on it. */
 export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
   const document = link.ownerDocument;
   const startedAt = Date.now();
   const address = document.location?.href;
-  const text = renderedText(document);
+  /** Every open shadow root observed; the rendered text is read across all of them. */
+  const roots = new Set<ShadowRoot>(openRoots(document));
+  const text = composedRenderedText(document, roots);
   const linkAttributes = attributeSignature(link);
   /** Sticky: the page's structure moved outside the link at some point since the press. */
   let structureMoved = false;
@@ -72,19 +97,34 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
   let linkTouched = false;
   /** Anything changed since the rendered text was last read. */
   let dirty = false;
+  /** When the page was last walked for open roots; `undefined` until the first check. */
+  let lastRescan: number | undefined;
 
+  const observer = new MutationObserver((records) => note(records));
+  /** Observes a root found since the press. One outside the link is structure that moved. */
+  const adopt = (root: ShadowRoot): void => {
+    if (roots.has(root)) return;
+    roots.add(root);
+    observer.observe(root, OBSERVED);
+    dirty = true;
+    if (!composedContains(link, root.host)) structureMoved = true;
+  };
   const note = (records: readonly MutationRecord[]): void => {
     for (const record of records) {
       dirty = true;
       const where = structuralChange(record, link);
       if (where === "page") structureMoved = true;
       else if (where === "link") linkTouched = true;
+      if (record.type !== "childList") continue;
+      // An element added since the press may carry open roots of its own: a
+      // component inserted already upgraded, or a subtree holding several.
+      for (const node of record.addedNodes) {
+        if (node.nodeType === ELEMENT_NODE) openRootsWithin(node as Element).forEach(adopt);
+      }
     }
   };
-  const observer = new MutationObserver(note);
-  if (document.documentElement) {
-    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
-  }
+  if (document.documentElement) observer.observe(document.documentElement, OBSERVED);
+  for (const root of roots) observer.observe(root, OBSERVED);
   let stopped = false;
   const stop = (): void => {
     if (stopped) return;
@@ -92,13 +132,20 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
     observer.disconnect();
   };
 
-  const check = (): InPlaceEffect | undefined => {
+  const check = (final: boolean): InPlaceEffect | undefined => {
     const afterMs = Date.now() - startedAt;
     const now = document.location?.href;
     if (address !== undefined && now !== undefined && now !== address) return { kind: "address", url: now, afterMs };
     // Records the observer has not delivered yet: the handler's own synchronous
     // changes are still queued when `settle` makes its first check.
     note(observer.takeRecords());
+    // A root attached to an element already in place leaves no record, so the
+    // page is walked for one now and then.
+    const at = Date.now();
+    if (final || lastRescan === undefined || at - lastRescan >= ROOT_RESCAN_MS) {
+      lastRescan = at;
+      openRoots(document).forEach(adopt);
+    }
     if (linkTouched) {
       linkTouched = false;
       if (attributeSignature(link) !== linkAttributes) structureMoved = true;
@@ -107,13 +154,13 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
     // last read, so a quiet page, or one only a clock moves, costs no layout.
     if (!structureMoved || !dirty) return undefined;
     dirty = false;
-    return renderedText(document) !== text ? { kind: "content", afterMs } : undefined;
+    return composedRenderedText(document, roots) !== text ? { kind: "content", afterMs } : undefined;
   };
 
   return {
     stop,
     settle(timeoutMs) {
-      const immediate = check();
+      const immediate = check(timeoutMs <= 0);
       if (immediate !== undefined || timeoutMs <= 0) {
         stop();
         return Promise.resolve(immediate);
@@ -126,30 +173,35 @@ export function watchInPlaceEffect(link: Element): InPlaceEffectWatch {
           resolve(effect);
         };
         const poll = setInterval(() => {
-          const effect = check();
+          const effect = check(false);
           if (effect !== undefined) finish(effect);
         }, CHECK_INTERVAL_MS);
         // One last look at the deadline, so an effect landing inside the final
         // interval is not reported as none.
-        const deadline = setTimeout(() => finish(check()), timeoutMs);
+        const deadline = setTimeout(() => finish(check(true)), timeoutMs);
       });
     }
   };
+}
+
+/** The open shadow roots beneath the document, nested ones included, within `composedRoots`' bounds. */
+function openRoots(document: Document): ShadowRoot[] {
+  return composedRoots(document).filter((root): root is ShadowRoot => root !== document);
 }
 
 /**
  * Where a mutation moved the page's structure: `page` for an element added or
  * removed, or an attribute changed, outside the link; `link` for an attribute
  * of the link itself, which counts only if it lasts; nothing for a change
- * inside the link or for text rewriting itself, which is how a clock or a
- * counter moves.
+ * inside the link -- its own shadow tree included -- or for text rewriting
+ * itself, which is how a clock or a counter moves.
  */
 function structuralChange(record: MutationRecord, link: Element): "page" | "link" | undefined {
   if (record.type === "attributes") {
     if (record.target === link) return "link";
-    return link.contains(record.target) ? undefined : "page";
+    return composedContains(link, record.target) ? undefined : "page";
   }
-  if (record.type !== "childList" || link.contains(record.target)) return undefined;
+  if (record.type !== "childList" || composedContains(link, record.target)) return undefined;
   const elementMoved = [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === ELEMENT_NODE);
   return elementMoved ? "page" : undefined;
 }
@@ -171,10 +223,4 @@ function attributeSignature(element: Element): string {
     }
   }
   return entries.sort().join("\n");
-}
-
-/** What a reader of the page sees as text; an empty string where the document has no body. */
-function renderedText(document: Document): string {
-  const body = document.body as (HTMLElement & { innerText?: string }) | null;
-  return typeof body?.innerText === "string" ? body.innerText : "";
 }

@@ -1,6 +1,6 @@
 // The one paid Flow bootstrap call, driven end to end through the panel: sync
 // the authenticated session, pass the provider-free readiness gate, open
-// Runtime Debug, build once, then approve and apply the proposal with the real
+// the Steps pane's "Tell FluxIQ what to automate" region, build once, then approve and apply the proposal with the real
 // review dialogs. The Flow is re-read before approval, so a build that mutated
 // anything ahead of explicit human approval fails here.
 
@@ -14,7 +14,7 @@ import { readSanitizedGenerationFailure } from "./generation-failure.js";
 import { assertProviderFreeGenerationReadiness } from "./generation-readiness.js";
 import { finite, identifier, integer, record, text } from "./json-shapes.js";
 import { FIRST_LIVE_CREATION_LIMITS } from "./limits.js";
-import { exactVirtualizedHierarchyObject, exactVisible, review, waitForEndpoint } from "./panel-interaction.js";
+import { exactVirtualizedHierarchyObject, exactVisible, openStepsPane, review, waitForEndpoint } from "./panel-interaction.js";
 import { fail } from "./runner-fail.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
@@ -40,16 +40,16 @@ export async function buildApproveApplyCreationViaUi(input: BuildApproveApplyCre
 
 async function buildApproveApplyCreationAfterReadiness(input: BuildApproveApplyCreationInput): Promise<BuildApproveApplyCreationResult> {
   const { page, flowTreeItemId, projectId, flowId, pin, evidence, control, blankContentHash } = input;
+  // The Steps pane follows the selected Flow, and Settings may have been the
+  // last thing opened, so the exact Flow row is selected again first.
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
-  const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "create-runtime-search", "Search this Flow for Runtime Debug", () => search.fill("Runtime Debug"));
-  const rows = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-runtime-debug`, "the exact Flow Runtime Debug row");
-  await evidence.step("panel", "create-runtime-open", "Open Runtime Debug for this Flow", () => rows.click());
-  await evidence.step("panel", "create-runtime-search-clear", "Clear hierarchy search", () => search.fill(""));
-  const authoring = page.getByRole("region", { name: "Build Flow from instructions", exact: true });
-  await exactVisible(authoring, "the provider-ready Build Flow from instructions region", 30_000);
-  const build = authoring.getByRole("button", { name: "Build Flow from instructions", exact: true });
-  await exactVisible(build, "the unambiguous Build Flow from instructions action");
+  const flowRow = await exactVirtualizedHierarchyObject(page, hierarchy, flowTreeItemId, "the exact Flow row", ".tree-row-main.type-flow");
+  await evidence.step("panel", "create-flow-select", "Select this Flow before its Steps pane", () => flowRow.click());
+  await openStepsPane(page, evidence, "create-steps");
+  const authoring = page.getByRole("region", { name: "Tell FluxIQ what to automate", exact: true });
+  await exactVisible(authoring, "the provider-ready Tell FluxIQ what to automate region", 30_000);
+  const build = authoring.getByRole("button", { name: "Build proposal from active instructions", exact: true });
+  await exactVisible(build, "the unambiguous Build proposal from active instructions action");
   const started = Date.now();
   const response = await evidence.step("panel", "create-build", "Build with the authenticated session using exactly one bounded Flow bootstrap call", () => waitForEndpoint(page, "generate-flow-bootstrap-adaptation", () => build.click()));
   const latencyMs = Date.now() - started;
@@ -71,6 +71,14 @@ async function buildApproveApplyCreationAfterReadiness(input: BuildApproveApplyC
     fail(`Bounded Flow bootstrap generation failed (${failure.code})`);
   }
   const adaptation = parseGeneration(await response.json(), true, projectId, flowId, latencyMs);
+  // The Steps pane does not open the proposal for review, as Runtime Debug
+  // did, so the Flow's "Suggested changes" section is opened here. Its view
+  // label changed; its table is still named "Adaptations".
+  const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
+  await evidence.step("panel", "create-adaptations-search", "Search this Flow for Suggested changes", () => search.fill("Suggested changes"));
+  const suggested = await exactVirtualizedHierarchyObject(page, hierarchy, `${flowTreeItemId}-adaptations`, "the exact Flow Suggested changes row", ".tree-row-main.type-folder");
+  await evidence.step("panel", "create-adaptations-open", "Open Suggested changes for this Flow", () => suggested.click());
+  await evidence.step("panel", "create-adaptations-search-clear", "Clear hierarchy search", () => search.fill(""));
   await exactVisible(page.getByRole("table", { name: "Adaptations", exact: true }), "the generated Flow's Adaptations table", 30_000);
   const proposal = page.getByText(adaptation.adaptationId, { exact: true });
   await exactVisible(proposal, "the exact generated Flow bootstrap proposal", 30_000);

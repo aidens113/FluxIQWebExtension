@@ -210,3 +210,21 @@ test("the wait's numbers are not second-guessed: a surprising one is a fact abou
   const long = { ...SUMMARY, listWait: { stoppedOn: "deadline_passed", waitedMs: 600_000, waitedFor: 5000 } };
   assert.deepEqual(webAutomationExtractionSummaryValue(long), long);
 });
+
+// What `dedupe` and `sort` did (`WebAutomationExtractionOrderReport`), held to
+// every other part's rule: optional, copied count by count, and a malformed one
+// drops the whole summary rather than arriving beside it.
+
+test("a read that deduped or sorted carries what that took, and one that did neither carries nothing", () => {
+  const ordered = { ...SUMMARY, order: { duplicates: 3, unsortable: 1 } };
+  assert.deepEqual(webAutomationExtractionSummaryValue(ordered), ordered);
+  assert.equal("order" in (webAutomationExtractionSummaryValue(SUMMARY) ?? {}), false);
+});
+
+test("an order report that is not two counts drops the whole summary", () => {
+  for (const order of [{ duplicates: 1 }, { duplicates: -1, unsortable: 0 }, { duplicates: 0, unsortable: "2" }, [0, 0], null]) {
+    assert.equal(webAutomationExtractionSummaryValue({ ...SUMMARY, order }), undefined, JSON.stringify(order));
+  }
+  // Unknown keys inside it are left behind, as they are everywhere else here.
+  assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, order: { duplicates: 0, unsortable: 0, page: "text" } })?.order, { duplicates: 0, unsortable: 0 });
+});

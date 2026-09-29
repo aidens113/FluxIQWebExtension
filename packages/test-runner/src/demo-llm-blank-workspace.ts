@@ -88,7 +88,8 @@ export async function prepareBlankLlmFlowViaUi(input: {
     await dialog.waitFor({ state: "visible", timeout: 30_000 });
     await evidence.step("panel", "blank-project-name", "Enter the instruction-only project name", () => dialog.getByLabel("Project name").fill(config.projectName));
     await evidence.step("panel", "blank-project-description", "Describe the instruction-only testing workspace", () => dialog.getByLabel("Description").fill("Persistent instruction-only LLM browser automation test workspace"));
-    await evidence.step("panel", "blank-project-pin", "Authorize instruction-only project creation", () => dialog.getByLabel("Security PIN").fill(config.pin), { sensitive: true });
+    // Creating a project is authoring, not a privileged act: Core's panel asks
+    // for a PIN only on the three genuine deletes (Core 68bad85).
     await evidence.step("panel", "blank-project-create-submit", "Create the instruction-only project", () => dialog.getByRole("button", { name: "Create project", exact: true }).click(), { sensitive: true });
     const created = (await control.listProjects("web-automation")).filter(item => item.name === config.projectName);
     if (created.length !== 1) throw new RunnerFailure("environment.missing", "Panel project creation did not produce one web-automation project");
@@ -114,11 +115,9 @@ export async function prepareBlankLlmFlowViaUi(input: {
     const name = await hierarchyDialogFieldControl(form, "Name", "input");
     const preset = await hierarchyDialogFieldControl(form, "Flow preset", "select");
     const location = await hierarchyDialogFieldControl(form, "Location", "select");
-    const pin = await hierarchyDialogFieldControl(form, "Security PIN", "input");
     await evidence.step("panel", "blank-flow-create-name", "Name the instruction-only blank Flow", () => name.fill(flowName));
     if (await preset.inputValue() !== "blank") await evidence.step("panel", "blank-flow-create-preset", "Choose the blank visual Flow preset", () => preset.selectOption("blank"));
     if (await location.inputValue() !== "") throw new RunnerFailure("runtime.behavior", "Blank top-level Flow creation opened outside the Flow root");
-    await evidence.step("panel", "blank-flow-create-pin", "Authorize blank Flow creation", () => pin.fill(config.pin), { sensitive: true });
     await evidence.step("panel", "blank-flow-create-submit", "Create the blank Flow", () => form.getByRole("button", { name: "Create", exact: true }).click(), { sensitive: true });
     summary = await waitForNamedFlow(control, project.id, flowName);
     if (!await hierarchyRow(page, flowName).isVisible().catch(() => false)) {
@@ -182,8 +181,8 @@ function recordingIds(response: unknown): Set<string> {
 async function ensureInstruction(page: Page, flowTreeItemId: string, pin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const hierarchySearch = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
-  await evidence.step("panel", "blank-instruction-search", "Search the blank Flow hierarchy for Instructions", () => hierarchySearch.fill("Instructions"));
-  const rows = hierarchy.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"][aria-label="Instructions"] .tree-row-main.type-flow-object`);
+  await evidence.step("panel", "blank-instruction-search", "Search the blank Flow hierarchy for Guidance for the assistant", () => hierarchySearch.fill("Guidance for the assistant"));
+  const rows = hierarchy.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"][aria-label="Guidance for the assistant"] .tree-row-main.type-flow-object`);
   await rows.first().waitFor({ state: "visible", timeout: 10_000 });
   if (await rows.count() !== 1) throw new RunnerFailure("runtime.behavior", "The exact blank Flow Instructions row is unavailable");
   await evidence.step("panel", "blank-instruction-open", "Open Instructions for the blank Flow", () => rows.click());
@@ -222,11 +221,9 @@ async function ensureInstruction(page: Page, flowTreeItemId: string, pin: string
   if (await active.getAttribute("aria-pressed") !== "true") await evidence.step("panel", "blank-instruction-active", "Activate instruction-only guidance", () => active.click());
   const save = editor.getByRole("button", { name: "Save Instruction", exact: true });
   if (await save.isEnabled()) {
-    await evidence.step("panel", "blank-instruction-save", "Request saving instruction-only guidance", () => save.click());
-    const dialog = page.getByRole("dialog", { name: "Authorize Instruction Save", exact: true });
-    await evidence.step("panel", "blank-instruction-pin", "Authorize instruction-only guidance", () => dialog.getByLabel("Security PIN", { exact: true }).fill(pin), { sensitive: true });
-    await evidence.step("panel", "blank-instruction-authorize", "Save instruction-only guidance", () => dialog.getByRole("button", { name: "Authorize and Save", exact: true }).click(), { sensitive: true });
-    await dialog.waitFor({ state: "hidden", timeout: 30_000 });
+    // Saving guidance writes directly: the "Authorize Instruction Save" PIN
+    // dialog was removed in Core 68bad85, since Core never PIN-checks it.
+    await evidence.step("panel", "blank-instruction-save", "Save instruction-only guidance", () => save.click());
     await editor.getByText("All changes saved", { exact: true }).waitFor({ timeout: 30_000 });
   }
   if (await title.inputValue() !== BLANK_LLM_INSTRUCTION_TITLE || await body.inputValue() !== BLANK_LLM_INSTRUCTION_BODY || await scope.inputValue() !== "flow" || await required.getAttribute("aria-pressed") !== "true" || await active.getAttribute("aria-pressed") !== "true") {
