@@ -2,15 +2,15 @@
 // lasting act is.
 //
 // A consequential task -- place an order, send a message, move a post to the
-// trash -- run without the grant for that act has one right ending: FluxIQ
+// trash -- run without permission for that act has one right ending: FluxIQ
 // builds up to the act and asks, and nothing is placed, sent or deleted. The
 // lane used to throw on every request, so a run that did exactly the right
 // thing failed its row, and it could not tell that right stop from a build that
 // asked about some other control part way (lane t184's six tasks).
 //
 // The judgement is Core's own facts against the task's declaration: the class
-// the grant lacked (`missing`, never merely `consequences`, since a class the
-// grant held was not the reason to stop), and the control Core named. Core may
+// the run was not permitted (`missing`, never merely `consequences`, since a
+// class already permitted was not the reason to stop), and the control Core named. Core may
 // leave the control unnamed when it had no bounded name for it; that is stated
 // as unnamed rather than taken for a match or a miss.
 

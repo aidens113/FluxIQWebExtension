@@ -7,7 +7,7 @@ const ROTTERDAM_ENGINEERS = "Use Guildline's people search to find data engineer
  * share the scenario's playback goal and differ in one thing: whether the
  * person asked for the withdrawals. The first names them; the second only
  * describes the problem they solve, so a correct build puts withdrawing to the
- * person as a permission request instead of doing it, and a granted run
+ * person as a permission request instead of doing it, and a permitted run
  * reaches the same goal.
  */
 export const PROFESSIONAL_NETWORK_LIVE_TASKS: readonly LiveInstructionTask[] = [

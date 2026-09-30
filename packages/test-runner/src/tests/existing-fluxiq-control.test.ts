@@ -265,7 +265,7 @@ test("starts and runs the exact persisted Flow with deterministic non-adaptive c
   assert.equal(serialized.includes(credentials.totp), false);
 });
 
-test("forwards every live purpose, explore_and_adapt included, as Core's run intent", async (t) => {
+test("forwards every live intent, explore_and_adapt included, as Core's run intent, with no grant and only the consequences permitted", async (t) => {
   const bodies: Array<Record<string, unknown>> = [];
   const client = await mockedClient(t, async (url, init) => {
     if (endpoint(url) !== "run-runtime-session") throw new Error(`unexpected ${url.pathname}`);
@@ -273,16 +273,20 @@ test("forwards every live purpose, explore_and_adapt included, as Core's run int
     return json({ ok: true, payload: { runtimeSession: session, runSummary: summary } });
   });
   // Typed through the lane's own execution shape, so the client's parameter can
-  // never again be narrower than the purposes the lane hands it.
-  const purposes: Array<PersistedFlowLlmExecution["purpose"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
-  for (const purpose of purposes) {
-    await client.runPersistedFlow({ projectId: "project.web", flowId: "flow.main", llmExecution: { grantId: "grant.one", purpose } });
+  // never again be narrower than the intents the lane hands it.
+  const intents: Array<PersistedFlowLlmExecution["intent"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
+  for (const intent of intents) {
+    await client.runPersistedFlow({ projectId: "project.web", flowId: "flow.main", llmExecution: { intent, permittedConsequences: [] } });
   }
-  assert.deepEqual(bodies.map(body => body.runIntent), purposes);
+  assert.deepEqual(bodies.map(body => body.runIntent), intents);
   for (const body of bodies) {
     assert.equal(body.adaptiveMode, "manual_approval");
-    assert.equal(body.llmExecutionGrantId, "grant.one");
+    assert.equal("llmExecutionGrantId" in body, false);
+    // An empty permit sends nothing: absent permits none.
+    assert.equal("permittedConsequences" in body, false);
   }
+  await client.runPersistedFlow({ projectId: "project.web", flowId: "flow.main", llmExecution: { intent: "explore_and_adapt", permittedConsequences: ["move_money"] } });
+  assert.deepEqual(bodies.at(-1)?.permittedConsequences, ["move_money"]);
 });
 
 test("holds an evidence-guided creation's provider calls to Core's backstop, not a small fixed count", async (t) => {
@@ -348,7 +352,7 @@ test("a Flow build answers with Core's whole envelope, so a refusal's diagnostic
     requests.push({ path: url.pathname, body: JSON.parse(String(init.body)) });
     return answer;
   });
-  const input = { projectId: "project.web", flowId: "flow.blank", llmExecutionGrantId: "llm-grant:build", evidenceGuided: true as const };
+  const input = { projectId: "project.web", flowId: "flow.blank", evidenceGuided: true as const, permittedConsequences: ["send_or_publish" as const] };
   assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 200, ok: true, payload: { adaptation: { adaptationId: "adaptation.new", status: "proposed" } } });
   answer = json({ ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.evidence_iteration_limit).", payload: { diagnostic } }, 400);
   assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 400, ok: false, payload: { diagnostic } });

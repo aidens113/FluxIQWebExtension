@@ -13,13 +13,10 @@ export const FIRST_LIVE_CREATION_LIMITS = Object.freeze({
   maxTotalTokens: 5000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0,
 });
 // Building a Flow by exploring a website iterates, so, like the panel's
-// `WEBSITE_EXPLORATION_LIMITS`, this profile names no call count and no grant
-// uses: Core picks the number, as a far-away backstop. What bounds the run is
-// Core's whole-run token budget for such a request (`maxTotalTokensPerRun`:
-// 12,000 per call times Core's default of 26 calls, held to 100,000), the total
-// estimated cost, the evidence loop's no-progress checks, and the grant's run
-// lease once claimed (Core's `AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`).
-// The panel issues the grant with the claim window as its TTL.
+// `WEBSITE_EXPLORATION_LIMITS`, this profile names no call count: Core picks
+// the number, as a far-away backstop. What bounds the run is the Flow's spend
+// ceiling, the evidence loop's no-progress checks, and the run's deadline. A
+// model call needs no grant, so nothing is issued or claimed first.
 export const EVIDENCE_GUIDED_CREATION_LIMITS = Object.freeze({
   // Live: published as the provider budget an exploration actually runs under.
   // It carried 8,000 in / 12,000 per request and a 100,000 run budget, which is
@@ -30,7 +27,7 @@ export const EVIDENCE_GUIDED_CREATION_LIMITS = Object.freeze({
   maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
   maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
   maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
-  grantClaimWindowSeconds: 60, runLeaseSeconds: 600,
+  runDeadlineSeconds: 600,
   maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0,
 });
 // The Flow Settings an exploration Flow is given.
@@ -44,12 +41,10 @@ export const EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS = Object.freeze({
   maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25,
   maxEstimatedCostUsd: 0.25, providerRetries: 0,
 });
-/** Ten full requests, derived for the reason live-llm-plan.ts records: a literal here overrides Core rather than mirroring it. */
-export const LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10;
-// Mirrors the panel's `WEBSITE_EXPLORATION_COMMAND_TIMEOUT_MS`: the grant may be
-// claimed at the end of its claim window, then runs its whole lease, and the
-// answer still has to come back.
-export const EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS = (EVIDENCE_GUIDED_CREATION_LIMITS.grantClaimWindowSeconds + EVIDENCE_GUIDED_CREATION_LIMITS.runLeaseSeconds) * 1_000 + 15_000;
+// Mirrors the panel's `WEBSITE_EXPLORATION_COMMAND_TIMEOUT_MS`: the run's whole
+// deadline, and the answer still has to come back. The extra 75 seconds match
+// the panel's own number, so this wait is never shorter than the panel's.
+export const EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS = EVIDENCE_GUIDED_CREATION_LIMITS.runDeadlineSeconds * 1_000 + 75_000;
 
 export type CreationSettingsLimits = typeof FIRST_LIVE_CREATION_LIMITS | typeof EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS;
 

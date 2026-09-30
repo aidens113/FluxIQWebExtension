@@ -138,7 +138,7 @@ test("presses a row's menu and a row's link, under a test id full of the word or
 
 // The controls the old rule refused on its own judgement of how they look. None
 // is refused on that now. What the model declares its own press does is asked
-// of Core, which answers from the person's instruction and grant: without that
+// of Core, which answers from the person's instruction and permission: without that
 // authority the press is not made and Core's request goes to the person; with
 // it, the press is made. A press that declares nothing lasting asks nothing.
 const PERMISSION_CASES = [

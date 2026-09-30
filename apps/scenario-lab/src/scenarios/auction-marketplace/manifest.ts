@@ -135,7 +135,7 @@ const watchExpected = {
  * in the camera's model, two different auctions with the same title.
  *
  * Three workflows, three kinds of job. The manifest's own script places a bid
- * -- consequential, so a run with no grant must stop and ask the person first.
+ * -- consequential, so a run not permitted to move money must stop and ask the person first.
  * `watch-endings` changes the account: it watches three auctions and reads the
  * watchlist back. `kestrel-auctions` reads: every genuine Kestrel 35 auction
  * under £150, once each, soonest first. Its two variants are the existing-Flow

@@ -39,7 +39,7 @@ export type LiveInstructionTask = {
   variantArmedAfterBuild?: true;
   /**
    * For a consequential task, where its lasting act is: the consequence class
-   * and the control's label as the page shows it. Run without the grant for
+   * and the control's label as the page shows it. Run without permission for
    * that class, the right ending is the build stopping to ask a person there,
    * and the created-Flow lane scores that stop as the pass
    * (`packages/test-runner/src/flow-lane/creation/permission-point.ts`).

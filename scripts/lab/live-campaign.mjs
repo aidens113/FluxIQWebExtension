@@ -19,9 +19,11 @@
 //
 // Everything after `--` is handed to every task's Lab run unchanged, except the
 // options the campaign sets itself (`CAMPAIGN_OWNED_OPTIONS`). That is how a
-// campaign permits consequences: `--llm-permit` puts the named classes into
-// each run's execution grant, so a job that has to schedule, send or change
-// something does it instead of stopping to ask. Absent, a grant permits none.
+// campaign permits consequences: `--llm-permit` sends the named classes with
+// each run's build and Flow run as `permittedConsequences`, so a job that has
+// to schedule, send or change something does it instead of stopping to ask.
+// Absent, a run permits none. It is consequence permission only: a model call
+// needs no grant.
 //
 // Each run is spawned as `node scripts/lab/run-lab.mjs` with the same
 // arguments, never in parallel and with npm_config_workspace_concurrency=1. The

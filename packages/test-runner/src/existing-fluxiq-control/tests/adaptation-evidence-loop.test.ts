@@ -39,7 +39,7 @@ test("an extra-call count with no total to belong to is refused, because nothing
   assert.throws(() => adaptationEvidenceLoop(loop({ additionalProviderCallCount: 1 }), "detail"), /exceeded its bounded contract/u);
 });
 
-test("a total past the run's own call ceiling is refused: one grant paid for all of them", () => {
+test("a total past the run's own call ceiling is refused: one run's budget paid for all of them", () => {
   assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 60, decisionCount: 60, iterationCount: 61, traceStepCount: 61, additionalProviderCallCount: 40, totalProviderCallCount: 100 }), "detail"), /exceeded its bounded contract/u);
 });
 

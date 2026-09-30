@@ -1,6 +1,6 @@
 // What the bounded exploration actually did on one live run.
 //
-// A repair run under an `explore_and_adapt` grant is allowed to look at the
+// A repair run with the `explore_and_adapt` intent is allowed to look at the
 // live page before it proposes anything, and until now nothing in a Lab bundle
 // said whether it did. The provider-call lines say a call was made with task
 // kind `evidence_tool_decision`; they do not say what the loop asked for, what

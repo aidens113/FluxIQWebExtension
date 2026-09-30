@@ -36,7 +36,7 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
   const observedCalls = liveLlm?.observed?.calls;
   const providerCalls = typeof observedCalls === "number" ? observedCalls + (liveLlm?.repair?.observed?.calls ?? 0) : evaluation?.llm?.calls ?? null;
   const repairing = task.kind === "repair";
-  // What `--replays` did, for either kind: a creation task's Flow runs under a repair grant too.
+  // What `--replays` did, for either kind: a creation task's Flow runs with the model taking part too.
   const repairLane = replaySummary(bundle.repairLane);
   // Which recovery answered for each node of the Flow this run executed. Read
   // beside `providerCalls` below, the two are the adversarial measurement: the

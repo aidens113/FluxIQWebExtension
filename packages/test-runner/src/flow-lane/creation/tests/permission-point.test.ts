@@ -1,4 +1,4 @@
-// A consequential task run without the grant for its act passes by stopping to
+// A consequential task run without permission for its act passes by stopping to
 // ask at its declared permission point, and only there. The six tasks lane
 // t184 found with a permission point are pinned here by their declarations, so
 // each is judged against a request Core could send for it.
@@ -20,7 +20,7 @@ const DECLARED: ReadonlyArray<readonly [string, NonNullable<LiveInstructionTask[
   ["company-website-book-service", { consequence: "move_money", control: "Confirm and pay £30.00" }],
 ];
 
-/** What Core asks when a build reaches a control whose class the grant lacks. */
+/** What Core asks when a build reaches a control whose class the run was not permitted. */
 function asked(consequence: string, controlName: string | null, missing: readonly string[] = [consequence]): CreatedFlowPermissionRequest {
   return { actionKind: "exploration_step", verb: "press", controlName, controlKind: "button", consequences: [consequence], missing, instructed: [] };
 }
@@ -33,7 +33,7 @@ for (const [taskId, point] of DECLARED) {
     assert.equal(judgeCreatedFlowPermissionStop(task, asked(point.consequence, `  ${point.control.toUpperCase()} `)).verdict, "at_declared_point");
     // Asking about another control part way through the task is not the stop the task declares.
     assert.deepEqual(judgeCreatedFlowPermissionStop(task, asked(point.consequence, "Accept all cookies")), { verdict: "elsewhere", reason: "control_differs" });
-    // Asking for a class the grant already held was not stopping for this act.
+    // Asking for a class other than the act's was not stopping for this act.
     assert.deepEqual(judgeCreatedFlowPermissionStop(task, asked(point.consequence, point.control, ["create_new"])), { verdict: "elsewhere", reason: "class_not_missing" });
     // Core may leave the control unnamed; that is said, not taken for a match.
     assert.deepEqual(judgeCreatedFlowPermissionStop(task, asked(point.consequence, null)), { verdict: "at_declared_point", consequence: point.consequence, control: "unnamed" });

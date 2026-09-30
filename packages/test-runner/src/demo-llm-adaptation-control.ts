@@ -150,13 +150,13 @@ function requireTargetShape(adaptation: ExistingFlowAdaptation, scope: ExistingT
 }
 
 /**
- * Whether an adapting source run spent a provider call count its grant could
+ * Whether an adapting source run spent a provider call count its run could
  * have produced. An adaptation iterates for as many calls as it needs, and a
  * call spent gathering evidence between the diagnosis and the patch leaves no
  * intervention behind, so the count is not a fixed number. It is at least one
  * call per recorded intervention, each being a model output, and at most what
- * the grant authorized. The panel sends Core no call count for an adapting run,
- * so Core authorizes its default, which the Lab's drift test
+ * the run's ceiling allowed. The panel sends Core no call count for an adapting
+ * run, so Core applies its default, which the Lab's drift test
  * (`live-llm/tests/live-llm-plan.test.ts`) holds equal to
  * `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun`, the adaptation profile's ceiling too.
  *
@@ -165,7 +165,7 @@ function requireTargetShape(adaptation: ExistingFlowAdaptation, scope: ExistingT
  * Lab's default rather than importing the certificate's profile: that import
  * would close a module cycle. Only the length of `interventions` is read.
  */
-export function adaptationCallCountWithinGrant(run: Readonly<{ providerCallCount?: number; interventions?: readonly unknown[] }>): boolean {
+export function adaptationCallCountWithinCeiling(run: Readonly<{ providerCallCount?: number; interventions?: readonly unknown[] }>): boolean {
   const calls = run.providerCallCount;
   return typeof calls === "number" && Number.isSafeInteger(calls)
     && calls >= Math.max(1, run.interventions?.length ?? 0)
@@ -180,7 +180,7 @@ function requireSourceRun(run: ExistingRunDetail, scope: ExistingTargetAdaptatio
     || interventions.length !== 2
     || interventions[0]?.kind !== "diagnosis"
     || interventions[1]?.kind !== "runtime_patch"
-    || !adaptationCallCountWithinGrant(run)) {
+    || !adaptationCallCountWithinCeiling(run)) {
     fail("The target adaptation source run does not match the bounded diagnosis-and-patch contract");
   }
 }

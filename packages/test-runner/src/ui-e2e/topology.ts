@@ -28,7 +28,13 @@ import { hardenWindowsPrivatePath } from "../windows-acl.js";
 export const UI_E2E_EXCLUDED_PORTS: ReadonlySet<number> = new Set([3000, 4711, 3300, 4877]);
 
 /** The panel endpoints a provider-free journey must never reach. */
-const PROVIDER_ENDPOINTS = ["generate-flow-bootstrap-adaptation", "preflight-llm-execution", "issue-llm-execution-grant"] as const;
+const PROVIDER_ENDPOINTS = ["generate-flow-bootstrap-adaptation"] as const;
+/**
+ * The run request a provider-free journey may send only without a `runIntent`.
+ * A run the model takes part in is one `run-runtime-session` carrying a
+ * `runIntent`, and that request is the one refused.
+ */
+const RUN_ENDPOINT = "run-runtime-session";
 const RUN_ID = /^[a-z0-9][a-z0-9-]{0,39}$/u;
 const JOURNEY_ID = /^[a-z0-9][a-z0-9-]{0,47}$/u;
 /** How long a stopped Core's ports may take to be released before the restart fails. */
@@ -380,6 +386,11 @@ export class UiE2eTopology {
           return route.abort("blockedbyclient");
         });
       }
+      await panel.route(`**/api/programs/automation-studio/${RUN_ENDPOINT}`, route => {
+        if (!requestsModelRun(route.request().postData())) return route.fallback();
+        this.blockedEndpoints.push(`${RUN_ENDPOINT}:runIntent`);
+        return route.abort("blockedbyclient");
+      });
     }
     const worker = extension.serviceWorkers()[0] ?? await extension.waitForEvent("serviceworker", { timeout: 15_000 });
     // The extension's background is a service worker: prove the guard sees
@@ -431,4 +442,16 @@ function withFollowingLine(error: unknown, following: unknown, label: string): u
   if (!(error instanceof Error)) return new Error(`${String(error)}\n${line}`, { cause: error });
   error.message = `${error.message}\n${line}`;
   return error;
+}
+
+/** Whether a `run-runtime-session` body asks for a run the model takes part in. */
+function requestsModelRun(body: string | null): boolean {
+  if (!body) return false;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return typeof parsed === "object" && parsed !== null && typeof (parsed as { runIntent?: unknown }).runIntent === "string";
+  } catch {
+    // A body that cannot be read cannot be shown to be provider-free.
+    return true;
+  }
 }
