@@ -341,6 +341,97 @@ export async function captureEvidence(
 }
 
 /**
+ * How long, and how often, the page an action left is asked for again while it
+ * cannot be read.
+ *
+ * The window is measured from the first look after the action, and a look is
+ * only started inside it: one already sent runs to its own end, which in the
+ * extension includes the tab's readiness wait (`apps/extension/src/runtime/
+ * automation-tab.ts`, `waitForTabReady`). So in practice the second look is
+ * already the new document, and the window only bounds a page that never
+ * becomes readable.
+ */
+export type WebLlmAfterActionTiming = {
+  windowMs: number;
+  retryMs: number;
+  now: () => number;
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
+};
+
+const AFTER_ACTION_TIMING: WebLlmAfterActionTiming = { windowMs: 5_000, retryMs: 250, now: () => Date.now(), sleep: pause };
+
+/**
+ * The page an action left, once there is one to read: `undefined` when none
+ * could be read inside the window.
+ *
+ * An action can start a navigation of the page it acted on -- a "Set as my
+ * store" button that saves and then reloads, a form that submits, a link. The
+ * old document is then torn down under the look that follows, and that look
+ * comes back `page_unreadable`: the channel to the old document closed, or the
+ * new one had nothing listening yet (the bigbox store switch of
+ * `run-muncqlr0-3348202b` does exactly this). That is not the action failing --
+ * it already succeeded, and acting again would act twice -- and not the page
+ * being unreadable either: it is the page being *between* documents. So the
+ * look is taken again until the new document answers, bounded by the window,
+ * and cancellation ends the wait at once.
+ *
+ * Only `page_unreadable` is waited out. Every other refusal a look can raise
+ * is about the page that did answer, and is raised as it was.
+ */
+export async function captureAfterAction(
+  gateway: WebLlmEvidenceGateway,
+  sessionId: string,
+  request: WebLlmEvidenceToolRequest,
+  signal?: AbortSignal,
+  expectedOrigin?: string,
+  timing: WebLlmAfterActionTiming = AFTER_ACTION_TIMING
+): Promise<WebLlmSnapshotBinding | undefined> {
+  const startedAt = timing.now();
+  for (;;) {
+    const page = await readablePage(gateway, sessionId, request, signal, expectedOrigin);
+    if (page !== undefined) return page;
+    if (timing.now() - startedAt + timing.retryMs >= timing.windowMs) return undefined;
+    await timing.sleep(timing.retryMs, signal);
+    assertActive(signal);
+  }
+}
+
+/** One look, or `undefined` when the page could not be read at all. */
+async function readablePage(
+  gateway: WebLlmEvidenceGateway,
+  sessionId: string,
+  request: WebLlmEvidenceToolRequest,
+  signal: AbortSignal | undefined,
+  expectedOrigin: string | undefined
+): Promise<WebLlmSnapshotBinding | undefined> {
+  try {
+    return await captureEvidence(gateway, sessionId, request, signal, expectedOrigin);
+  } catch (error) {
+    if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
+    throw error;
+  }
+}
+
+/** A wait that cancellation ends at once, with the cancellation's own reason. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("web evidence operation was cancelled"));
+      return;
+    }
+    const cancel = (): void => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error("web evidence operation was cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", cancel, { once: true });
+  });
+}
+
+/**
  * Do one thing to the page, then look again from where it left us.
  *
  * The recapture asserts where it landed. By default that is the origin the
@@ -348,6 +439,11 @@ export async function captureEvidence(
  * that is deliberately moving -- a scoped navigation whose policy allowed
  * another place -- passes the destination instead, so the assertion still holds
  * and still means something rather than being waived.
+ *
+ * The recapture waits out a page that is between documents
+ * (`captureAfterAction`), because a press that reloads the page is a press
+ * that worked. A page still unreadable once the window has passed is refused
+ * `page_unreadable`, as it always was: this path returns a page or refuses.
  */
 export async function actAndCapture(
   gateway: WebLlmEvidenceGateway,
@@ -362,7 +458,8 @@ export async function actAndCapture(
   const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
   assertActive(signal);
   if (result.status !== "succeeded") throw await pageRefusal(gateway, sessionId, request, current, webActionFailureRefusal(result), signal);
-  return await captureEvidence(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
+  const after = await captureAfterAction(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
+  return after ?? recoverable("page_unreadable");
 }
 
 /**
