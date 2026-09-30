@@ -146,7 +146,9 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in t
 
 **Next, in order.**
 1. Watch the lanes: commit each `Ready to commit` after re-running its validation; commit the conflicted merges once staged.
-2. Check the first admitted live run's `lab-slots/spend-ledger.jsonl` lines (the guards' ledger is not yet proven live).
+2. Done: the guards' ledger is proven on a real run. D's `run-muog33va-96469cb2` (social-feed confirm-requests) wrote a
+   `start` line at admission (18:34:38Z) and a `finish` line with `exitCode 1`, `verdict failed`,
+   `totalEstimatedCostUsd 0.061491408`, `balanceFailure null` (18:38:06Z).
 3. Integration round 3: C, t191, t192, t196, t197 (t198 after the user's review), then A, B and D as their fixes validate.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
