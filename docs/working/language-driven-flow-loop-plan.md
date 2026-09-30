@@ -45,8 +45,12 @@ and its own `fxwork/<id>` tree:
   Never `mkdir` or `rm` a build slot by hand. One test file or directory at `--maxWorkers=2 --minWorkers=1` needs none.
 - **A live-run failure is a product or Lab defect, never machine load** (user, 2026-09-29): trace the failing step and
   its regression. The pre-pairing failures were the Lab's network guard crashing the extension's service worker.
-- Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
-  validation, and the supervisor commits and continues it.
+- **Iterate on your own branch; integrate in rounds** (user, 2026-09-29): every live lane fixes in its own worktree and
+  re-tests at once, never waiting for a commit, and keeps a "Fix log" (files, the exposing run, validation, status) at
+  the top of its report. Every 60-90 minutes the supervisor calls "Integration round N": each lane finishes its run
+  in flight and replies `Round N: ready`; the supervisor commits every lane, merges all branches into dev, checks it,
+  merges dev back into every lane, and resumes them. Leads coordinate shared causes through each other's fix logs.
+  Only the supervisor commits, merges, branches or makes worktrees.
 
 **The instruction that opened this document, 2026-09-24, and it is binding.**
 Live tests only. A full debug of every live run. Complex scenarios only. Full
