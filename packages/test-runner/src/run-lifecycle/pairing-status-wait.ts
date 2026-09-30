@@ -96,7 +96,26 @@ export function pairingStatusWaitFailureDetails(error: unknown): Readonly<Record
     timeoutMs: details.timeoutMs,
     waitedMs: details.waitedMs,
     lastStatus: details.lastStatus,
+    ...firstConnect(details),
+    ...connectFailure(details),
   };
+}
+
+const CONNECT_FAILURES = new Set<unknown>(["open_timeout", "open_failed", "closed_before_open", null]);
+
+/** The pre-approval wait's named connect failure (`pair-extension.ts`): one closed code, or `null` when none was named. */
+function connectFailure(details: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  if (details.pairingStage !== "pre-approval" || !CONNECT_FAILURES.has(details.connectFailure)) return {};
+  return { connectFailure: details.connectFailure };
+}
+
+/** The pre-approval wait says whether the first connect answered; passed on only when both fields are well-formed and agree. */
+function firstConnect(details: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const answered = details.firstConnectAnswered;
+  const ms = details.firstConnectMs;
+  if (details.pairingStage !== "pre-approval" || typeof answered !== "boolean") return {};
+  if (answered ? !(finiteNumber(ms) && ms >= 0) : ms !== null) return {};
+  return { firstConnectAnswered: answered, firstConnectMs: ms };
 }
 
 function safeStatus(status: Status | undefined, now: number): Readonly<Record<string, unknown>> {

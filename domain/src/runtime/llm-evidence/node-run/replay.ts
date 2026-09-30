@@ -32,6 +32,7 @@
 // made from; one that worked carries a line saying so and nothing else.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webActionFailureRefusal } from "../action-failure";
 import { assertActive, captureEvidence, toolExecution, toolMetadata, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
 import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
@@ -202,8 +203,12 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // there, on a page the step itself worked on, is what a site that remembers
     // the step looks like -- a consent banner answered once stays answered --
     // and refusing the whole draft for it would push the model to delete the
-    // dismissals that round 1 lost. Every other failure is a failure.
-    const unreproducible = failure === "target_not_found";
+    // dismissals that round 1 lost. Every other failure is a failure --
+    // including a target that is now ambiguous, which the refusal word folds
+    // into `target_not_found` (`../action-failure/refusal.ts`) but which is a
+    // control that is there and cannot be told apart, not one that is gone. So
+    // this reads the client's own code, not the merged word.
+    const unreproducible = result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND;
     // The reason, where this domain has one for what the page answered
     // (`../action-failure/refusal.ts`), and nothing where it does not: a page
     // failure with no closed reason behind it must not be dressed up as one.

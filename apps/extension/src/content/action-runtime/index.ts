@@ -4,6 +4,7 @@
 // and shaping the result the background worker receives.
 
 export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
+export { challengeIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";

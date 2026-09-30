@@ -62,10 +62,10 @@ import { automationFailureFromActionResult, createRunManifest, flowActionTimings
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
-import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
+import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots } from "./run-scenario/index.js";
+import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -138,7 +138,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // satisfy fails the run before anything is written (`run-scenario/resolve-run-secrets.ts`).
   const { declaredSecrets, secrets, redactionLiterals } = resolveRunSecrets({ scenario, workflow, environment, target, recordedFlowLane: options.flow === true, createdFlowLane: creation !== undefined, ...(live ? { live } : {}) });
   let redaction: RunRedactionAttestation | undefined;
-  const providerFailures = runProviderFailureLog({ secrets, live }); // The run's second tier of evidence: what a refused provider call said, kept locally and never published (`provider-failure/`).
+  const providerFailures = runProviderFailureLog({ secrets, live }); const startTrace = new ExtensionStartTrace({ secrets }); const uiReview = new UiReviewRecorder({ runsDirectory: options.runsDirectory, runId, secrets }); // Screenshots and the overlay's state, for <runId>.ui-review.local.json (`run-scenario/ui-review/`). The run's second tier of evidence: what a refused provider call said, kept locally and never published (`provider-failure/`).
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
   setFacilityStage("bundle.initialize");
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
@@ -257,12 +257,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       await bundle.writeStructured("snapshots/clone-import.json", { projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, contentHash: cloneState.destination.contentHash, clonePackageHash: cloneState.clonePackageHash, attested: cloneState.destination.attested });
     }
     const launched = await launchBrowser(topology, extensionPath);
-    ({ context, browserVersion } = launched);
+    ({ context, browserVersion } = launched); await startTrace.attach(context); // The extension start, timestamped, for extension-start.local.json.
     const scenarioOrigins = new Set(scenarioNetworkOrigins(topology.scenarioOrigin));
     const isScenarioUrl = (url: string) => { try { return scenarioOrigins.has(new URL(url).origin); } catch { return false; } };
     networkGuard = await installRunNetworkGuard(context, topology, [...scenarioOrigins]);
     const consoleWatch = consoleErrors = new ConsoleErrorWatch(context, isScenarioUrl);
-    const extensionControl = extensionPage = await extensionControlPage(context);
+    const extensionControl = extensionPage = await extensionControlPage(context); startTrace.observePage(extensionControl, "control");
     browserVersion = await browserVersionFromCdp(context, extensionPage);
     // The existing and clone lanes replay a pre-existing Flow, so their variant
     // is armed before the page opens. The two Flow lanes must not arm here: each
@@ -271,7 +271,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (workflow.variant && !flowLane) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
-    await page.bringToFront();
+    await page.bringToFront(); uiReview.attach({ context, scenarioPage: page, controlPage: extensionControl });
     // The extension panel beside the fixture, for whoever watches a headed run. It never fails the run; the mode that ran is kept in the bundle.
     await bundle.writeStructured("snapshots/live-panel.json", await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) }));
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
@@ -302,7 +302,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // (`apps/extension/src/runtime/navigation-target.ts`), so it drives the last tab the worker drove -- or opens
         // one -- and an exploration can therefore end somewhere other than here. A Flow left one fixture tab open
         // would start on a page it never reached, which is the thing this whole rule exists to stop.
-        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL);
+        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL); if (moment !== "build") uiReview.phase("flow-run");
       },
       recordEvidence: async (evidence: E) => {
         // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:
@@ -328,8 +328,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       checkGoal: () => findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow).then(found => { scenarioPage = found; return true; }, () => false),
       bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live repair was applied and replayed"), details }),
     });
-    const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
-    if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
+    const paired = topology.control ? await pairExtension(extensionPage, topology, startTrace) : undefined;
+    if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin); uiReview.phase("start");
     const stepCapture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
     if (target.mode === "existing") {
       if (!paired || !existingControl || !existingPreflight) throw new RunnerFailure("gateway.pairing", "Existing FluxIQ extension pairing did not produce an executable session");
@@ -371,7 +371,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
-      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
+      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
@@ -471,7 +471,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         const recordingId = outcome.newRecordingIds[0];
         const { projectId, authorizationPin } = topology; if (!projectId || !authorizationPin) throw new RunnerFailure("environment.missing", "The Flow lane needs an authenticated isolated Core with an authorization PIN");
         if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
-        await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
+        await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
         // Settled however the lane ends: an overspend or an unreached provider fails a finished run, and a failed lane still leaves its provider calls itemized.
         const lane = await runLaneWithLiveLlmSettlement({ live, control, projectId, bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }) }, async flowRunIdentified => await runFlowLane({
           control, projectId, authorizationPin, recordingId,
@@ -496,7 +496,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
-    await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed"));
+    await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed")); await uiReview.finish("end");
     verdict = "passed";
   } catch (error) {
     failureCategory = classifyRunnerFailure(error);
@@ -506,15 +506,15 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     }
     // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis. So now are a `runtime.behavior` failure's, which is the class the created-Flow lane actually raises -- a build that proposed nothing, a build that asked for a permission, a Flow with no extract node -- and whose details were dropped here while a recording's were kept. One of them does carry page data (`assertExtraction`'s record mismatch publishes the expected and the observed record), so the gate is the disclosure rule `snapshots/extraction-mismatches.json` already publishes observed values by: a scenario that declares a replay secret has one on its page by construction, and its details are withheld.
     // So is what the Flow reported when the lane got that far: Core's category and closed-set code, and nothing else of the record.
-    const flowReported = flowObservation?.automationFailureReported;
+    const flowReported = flowObservation?.automationFailureReported, extensionStartDetails = extensionStartFailureDetails(error);
     const finalizationWaitDetails = finalizedRecordingWaitFailureDetails(error);
     const pairingWaitDetails = pairingStatusWaitFailureDetails(error);
     const httpTransportDetails = httpTransportFailureDetails(error);
     const topologyReadinessDetails = topologyReadinessFailureDetails(error);
-    const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
+    const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
     // No picture is taken (see `screenshotAdapter` above), so the failure is
     // published as the event alone.
-    await capture.trigger(failureEvent).catch(() => undefined);
+    await capture.trigger(failureEvent).catch(() => undefined); await uiReview.finish("failure");
   } finally {
     setFacilityStage("scenario.cleanup");
     stepRunner?.dispose();
@@ -539,7 +539,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
-    try { await context?.close(); }
+    await uiReview.close(); try { await context?.close(); }
     catch (error) {
       const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
       const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "browser", error);
@@ -673,20 +673,19 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);
     bundle.registerEvidencePolicy(evidence.capture);
     const finalized = await bundle.finalize({ verdict, metrics });
-    await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
+    await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); await writeExtensionStartSidecar({ runDirectory: finalized.path, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
     return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}) };
   } finally {
     if (topology && !topologyStateRemoved) await removeRunOwnedTopologyState(topology).catch(() => undefined);
   }
 }
 
-async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = await awaitExtensionWorker(context); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }
 type PairedExtensionStatus = Record<string, unknown> & { connectionState: "connected"; sessionId: string };
-async function pairExtension(page: Page, topology: RunningTopology): Promise<PairedExtensionStatus> {
+async function pairExtension(page: Page, topology: RunningTopology, trace: ExtensionStartTrace): Promise<PairedExtensionStatus> {
   return pairExtensionWithColdEpochRecovery({
-    connect: async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } })).status,
+    connect: () => trace.timed("connect", async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } })).status, status => ({ connectionState: typeof status?.connectionState === "string" ? status.connectionState : "unreported", lastError: typeof status?.lastError === "string" ? status.lastError : null })),
     readStatus: () => extensionStatus(page),
-    approvePairing: referenceCode => topology.control!.approvePairing(referenceCode),
+    approvePairing: referenceCode => trace.timed("approve", () => topology.control!.approvePairing(referenceCode)),
   });
 }
 /** The facts `finalStateFacts` chooses: the final state, then a positive primary run's playback-goal facts. */

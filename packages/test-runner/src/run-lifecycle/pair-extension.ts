@@ -32,6 +32,9 @@ const COLD_RECONNECT_LIMIT = 2;
 const COLD_RECONNECT_BACKOFF_MS = 100;
 const PAIRING_REFERENCE_CODE = /^\d{6}$/u;
 const CONNECTION_STATES = new Set(["disconnected", "connecting", "pairing", "connected", "reconnecting", "error"]);
+// The extension names a socket that never opened in its `lastError` (`gateway-session.ts`, from Core's
+// `FluxIQClientGatewayOpenError`). Only the code is read out of it; the sentence itself is never published.
+const NAMED_CONNECT_FAILURE = /((open_timeout|open_failed|closed_before_open))/u;
 
 /** Pairs one extension, recovering only when a status proves its in-memory gateway epoch is cold. */
 export async function pairExtensionWithColdEpochRecovery(
@@ -50,11 +53,16 @@ export async function pairExtensionWithColdEpochRecovery(
   const deadline = startedAt + timeoutMs;
   let lastStatus: PairingStatus | undefined;
   let reconnectAttempts = 0;
+  // Whether the first connect answered at all, and when: run 11 timed out with
+  // an `unreported` status that could not tell "never answered" from "answered
+  // with nothing". Only the first connect is timed; cold reconnects are not.
+  let firstConnectMs: number | null = null;
 
   try {
     // The connect acknowledgement is observation zero; do not create a gap by
     // discarding it and asking a potentially new service-worker epoch again.
-    lastStatus = record(await beforeDeadline(safeTransport(dependencies.connect, "pre-approval"), deadline, now, setTimer, clearTimer));
+    const firstConnect = safeTransport(dependencies.connect, "pre-approval").then(value => { firstConnectMs = Math.max(0, now() - startedAt); return value; });
+    lastStatus = record(await beforeDeadline(firstConnect, deadline, now, setTimer, clearTimer));
     while (!readyForApproval(lastStatus)) {
       if (exactColdStatus(lastStatus) && reconnectAttempts < reconnectLimit) {
         const backoff = reconnectBackoffMs * 2 ** reconnectAttempts;
@@ -67,7 +75,7 @@ export async function pairExtensionWithColdEpochRecovery(
       lastStatus = record(await beforeDeadline(safeTransport(dependencies.readStatus, "pre-approval"), deadline, now, setTimer, clearTimer));
     }
   } catch (error) {
-    if (error instanceof PairingDeadlineExpired) throw timeoutFailure(startedAt, timeoutMs, lastStatus, now());
+    if (error instanceof PairingDeadlineExpired) throw timeoutFailure(startedAt, timeoutMs, lastStatus, now(), firstConnectMs);
     throw error;
   }
 
@@ -139,15 +147,23 @@ async function beforeDeadline<T>(
   }
 }
 
-function timeoutFailure(startedAt: number, timeoutMs: number, status: PairingStatus | undefined, finishedAt: number): RunnerFailure {
+function timeoutFailure(startedAt: number, timeoutMs: number, status: PairingStatus | undefined, finishedAt: number, firstConnectMs: number | null): RunnerFailure {
   return new RunnerFailure("gateway.connection", "Timed out waiting for extension pairing state during pre-approval", {
     details: {
       pairingStage: "pre-approval",
       timeoutMs,
       waitedMs: finishedAt - startedAt,
       lastStatus: safeStatus(status, finishedAt),
+      firstConnectAnswered: firstConnectMs !== null,
+      firstConnectMs,
+      connectFailure: namedConnectFailure(status),
     },
   });
+}
+
+/** The closed code of a connect that never opened, when the extension named one; otherwise `null`. */
+function namedConnectFailure(status: PairingStatus | undefined): string | null {
+  return typeof status?.lastError === "string" ? NAMED_CONNECT_FAILURE.exec(status.lastError)?.[1] ?? null : null;
 }
 
 function safeStatus(status: PairingStatus | undefined, now: number): Readonly<Record<string, unknown>> {

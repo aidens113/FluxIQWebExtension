@@ -191,6 +191,44 @@ test("a hanging transport is bounded, its timer is cleaned, and a late rejection
   await new Promise(resolve => setImmediate(resolve));
 });
 
+test("a first connect that never answers is reported as unanswered, with no time", async () => {
+  const pending = deferred<Status>();
+  const h = harness({ connect: [pending.promise] });
+  await Promise.resolve();
+  h.expire();
+  await assert.rejects(h.operation, (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.details?.firstConnectAnswered, false);
+    assert.equal(error.details?.firstConnectMs, null);
+    return true;
+  });
+  pending.resolve(pairing);
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+test("a first connect that answers late but empty is reported as answered, with its time", async () => {
+  const h = harness({ connect: [{}], statuses: Array.from({ length: 200 }, () => ({})), connectElapsedMs: 4_200 });
+  await assert.rejects(h.operation, (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.details?.pairingStage, "pre-approval");
+    assert.equal((error.details?.lastStatus as Record<string, unknown>).connectionState, "unreported");
+    assert.equal(error.details?.firstConnectAnswered, true);
+    assert.equal(error.details?.firstConnectMs, 4_200);
+    return true;
+  });
+});
+
+test("a connect whose socket never opened is reported by its closed code, never by its sentence", async () => {
+  const failed = { connectionState: "error", queueSize: 0, lastError: "FluxIQ did not open the connection within 10 s (open_timeout)." };
+  const h = harness({ connect: [failed], statuses: Array.from({ length: 200 }, () => failed) });
+  await assert.rejects(h.operation, (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.details?.connectFailure, "open_timeout");
+    assert.ok(!JSON.stringify(error.details).includes("did not open"), "the extension's sentence stays out of the details");
+    return true;
+  });
+});
+
 test("approval failures keep precedence and do not enter the post-approval wait", async () => {
   const primary = new RunnerFailure("gateway.pairing", "fixed approval failure");
   const h = harness({ approvalError: primary });
