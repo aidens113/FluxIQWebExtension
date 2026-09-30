@@ -1,9 +1,9 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Rung 1 remains active with a zero-pass streak and run 4 remains the latest accepted failed product measurement. Its measured draft-input loss is corrected inside the unchanged reservation; provider-free gates, corrected-order output freshness, final candidate review, and local Core/downstream integration are green. Remote delivery is blocked by expired GitHub authentication, and a fresh no-hindsight authorization remains; no provider call is authorized.
+Status detail: Pass streak 0. Six lanes run under leads after the 2026-09-29 restart; the live lane (t174) holds the one live slot and is blocked on an unrecognised throw after a tool call.
 Created: 2026-09-24
-Last updated: 2026-09-27
+Last updated: 2026-09-29
 Owner: Senior supervisor agent
 Scope: Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running several complex, multi-node live scenarios in parallel lanes, debugging every run end to end, fixing every cause it exposes, and re-running that same scenario until it works. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop.
 Paired document: none
@@ -144,23 +144,10 @@ now retains its actionable issue instead of flattening to iteration-limit. The p
 grant-continuation chain is locally validated but remains live-unproven; no current run proves repair
 persistence, provider-free replay, recursive post-replay judgement, or terminal grant revocation.
 
-**The next action (2026-09-29).** t173 is merged and pushed in both repositories (Core `259a11b`,
-downstream `c6c9f395`), with Core `pnpm check` and `pnpm test` (the two failures were a load timeout
-and a Windows `EPERM` on `rmdir`, both 8/8 on rerun), Core web 1517/1517, and downstream `pnpm check`,
-domain 882/882, extension 1027/1027, scenario-lab 571/571 and test-runner 1490/1491 green. It closes
-round 2's ranks 2 to 8 in code: completion refuses a Flow missing the instruction's lasting acts and
-names the failing size limit; an exhausted build keeps an incomplete draft that a later build resumes;
-the wrap-up refuses tools it did not offer; the draft keeps its start step and a rerun keeps what it
-replaces until it works; the re-author gets the verifier's directive with closed failure codes; extract
-lists dedupe and sort; the click post-condition sees open shadow roots; a checkbox is no longer offered as
-a value column; and the Lab drives the renamed panel with a build token budget that is not a decision cap.
-None of it is live-proven. Next: the live lane, one run at a time, starting with
-`everything-store-kettle-to-cart`, then bigbox, crossborder, job-board and classifieds.
-
-**Blockers:** the F: drive was moved from another machine, so files hardened there (`.env.local`, the
-Lab's private caches) are locked to that machine's account; the provider key cannot be read until the
-permission reset finishes or `DEEPSEEK_API_KEY` is set in the user environment. The consecutive-pass
-streak remains 0.
+**Since t173 (merged 2026-09-29, not live-proven).** The t174 lane's live runs 1-10
+(`reports/t174-live-lane.md` in `fxwork/t174`) reached the provider, so the old key blocker is gone.
+The blocking cause now is an unrecognised throw right after a tool call (runs 6, 7 and 10). The
+consecutive-pass streak remains 0.
 
 ---
 
@@ -750,7 +737,15 @@ debug and partitioned so neither touches the other's files:
 - Pending integration: t176 (repair→persist→zero-provider replay chain; 3 downstream conflicts) and t182's Core half (service.ts 1 line over its 4558 ratchet) are with worker integrate-0930; state in `reports/integrate-0930.md`.
 - In progress, resume from each report: t174 live lane (`fxwork/t174`, uncommitted file-level merges of dev plus fixes: grant-refusal naming, Lab long request to 675 s, side-panel crash re-open, throw stage, summary truncation, ambiguous-target replay; runs 1-10 in `reports/t174-live-lane.md`); t185 live activity overlay + extension chat (`fxwork/t185`, `docs/working/live-activity-chat-plan.md`); t186 remove LLM call grants (`fxwork/t186`, B1/C/W/D/E done, B2 test fixes and t176 follow-ups remain); t187 Lab startup speed (`fxwork/t187`); t188 remove every 16-node cap, default 100 per Subflow configurable in UI (report `reports/t188-node-limits.md`, worktree not yet created); t189 decision context — why the model repeats itself (report `reports/t189-decision-context.md`, worktree not yet created).
 - Binding rules now in force (memory and AGENTS.md): one live run at a time in `lab-slots/slot-1`, headed; Lab/browser runs only on the ten realistic scenarios; no heavy builds/tests from other lanes while slot-1 exists; no LLM call grants; all agents Opus 5.5 with per-task effort (`lead`, `lead-xhigh`, `worker-low`, `worker`, `worker-high`).
+- Validation: not validated; a state checkpoint written before a restart, and nothing ran.
 - Outcome: Paused for restart. Pass streak 0.
+
+### 2026-09-29 — After the restart: t182 Core merged, lanes re-dispatched with leads
+- Agent: supervisor. Pagefile fix confirmed: commit limit 28,604 MB, 21,278 MB free, slots empty.
+- Changed: Core dev `af385f7` (Merge task t182) pushed with downstream `6cdc9abb`; worktrees t188 and t189 created (Core-paired); t174, t185 and t186 work in progress committed on their task branches and dev merged in (conflicts left to each lane's lead); leads dispatched for t187, t188 and t189.
+- Validation: in the t182 Core tree, `node scripts/structure-audit.mjs` -> `structure-audit: passed (197 warning(s), 355 baselined).`; `npx tsc -p tsconfig.json --noEmit` (packages/fluxiq) -> exit 0; vitest `service/indexes/tests/without-recording.test.ts` -> 2 passed; vitest `runtime/tests/service-recordings` -> 7 files, 42 passed; Core `pnpm task finish t182` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, merged. First `pnpm task finish t176` (downstream) -> `structure-audit: 3 violation(s)`, all this document's (Current State 153 lines, a ledger entry without validation, stale index); fixed here.
+- Build time measured today: `pnpm task start --worktree --core` 151 s and 156 s; Core `pnpm check` 110 s (fluxiq tsc 39 s, structure audit 43 s). Given to t187.
+- Outcome: In progress. Pass streak 0.
 
 ## Open Questions
 
