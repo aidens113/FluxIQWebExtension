@@ -31,6 +31,7 @@ import {
 // goes through it rather than importing the domain twice. The import is
 // type-only, so nothing in `content/` reaches the background or panel bundles.
 import type { PageEvidence } from "../content/evidence";
+import { RUNTIME_MESSAGES } from "./constants";
 
 export {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
@@ -240,16 +241,156 @@ export type PanelSaveSettingsRequest = { settings: Partial<FluxIQSettings> };
  * - `no_project`: the request needs a project and none is known yet.
  * - `invalid_request`: a required field is missing.
  * - `unreachable`: FluxIQ did not answer at the address in settings.
+ * - `timed_out`: FluxIQ took the whole call's time limit without answering. It
+ *   may still be working -- a conversation turn waits on a model -- so the
+ *   request is not known to have failed, and repeating it could do it twice.
  * - `refused`: FluxIQ refused the pairing token (401 or 403). An older FluxIQ
  *   that accepts only its login cookie answers this way.
  * - `failed`: FluxIQ answered, and its answer was a failure. `error` is Core's own message.
  */
-export type PanelRelayFailureCode = "forbidden" | "not_paired" | "no_project" | "invalid_request" | "unreachable" | "refused" | "failed";
+export type PanelRelayFailureCode = "forbidden" | "not_paired" | "no_project" | "invalid_request" | "unreachable" | "timed_out" | "refused" | "failed";
 
 /** Every panel relay's reply, in the `{ ok: true } & T | { ok: false; error }` envelope the panel already reads. */
 export type PanelRelayResponse<TPayload = unknown> =
   | { ok: true; payload: TPayload }
   | { ok: false; error: string; code: PanelRelayFailureCode; httpStatus?: number | undefined };
+
+/**
+ * Simple Mode's panel requests, by their short names; the strings live in
+ * `RUNTIME_MESSAGES` (`shared/constants.ts`), which `panel/simple/relay/messages.ts`
+ * re-exports under the same short names. Each is relayed by the background worker
+ * (`background/simple-panel/`) to the Core endpoint named beside it, with the
+ * pairing token, and answers the `PanelRelayResponse` envelope carrying Core's
+ * payload as Core returned it. Accepted only from the side panel or the popup.
+ * A `projectId` left out means the project this browser's session belongs to.
+ *
+ * Core accepts the token on these endpoints only with a narrowed request
+ * (`apps/web/src/lib/program-route.ts` in FluxIQ Core): a run names a saved
+ * Flow and never an inline document, an LLM grant, an LLM intent or external
+ * side effects; a proposal is generated directly, never LLM-assisted; the
+ * AI-key snapshot answers each key's kind, provider and enabled flag only.
+ */
+export const SIMPLE_PANEL_MESSAGES = {
+  /** `list-flow-summaries`, then `list-flow-runs` (`sort: "updated"`, `direction: "desc"`). Answers `{ flows, runs }`. */
+  listAutomations: RUNTIME_MESSAGES.panelListAutomations,
+  /** `run-runtime-session` with `{ projectId, flowId }` and nothing else. */
+  runAutomation: RUNTIME_MESSAGES.panelRunAutomation,
+  /** `get-flow-run-detail` (`compact: true`), then `list-flow-adaptations` for the run's Flow. Answers `{ runDetail, adaptations }`. */
+  runDetail: RUNTIME_MESSAGES.panelRunDetail,
+  /** `export-run-dataset` with `{ runId, datasetId, format }`. */
+  exportDataset: RUNTIME_MESSAGES.panelExportDataset,
+  /** `secret-keys` `snapshot`. Answers `{ keys }`, each key's `kind`, `provider` and `enabled` only. */
+  modelReadiness: RUNTIME_MESSAGES.panelModelReadiness,
+  /** `generate-recording-proposal` (`mode: "direct"`) for the recording this browser stopped last. */
+  generateFromRecording: RUNTIME_MESSAGES.panelGenerateFromRecording,
+  /** `run-runtime-session` for the proposal's Flow, as `runAutomation`. */
+  testGeneratedAutomation: RUNTIME_MESSAGES.panelTestGeneratedAutomation,
+  /** `review-recording-flow-proposal` with `decision: "approved"`. */
+  saveGeneratedAutomation: RUNTIME_MESSAGES.panelSaveGeneratedAutomation,
+  /**
+   * Removes one step of the recording in progress, by the `ActivityEntry.id`
+   * the recording log gave it: from the offline queue when it has not been
+   * sent, otherwise through Core's `remove-recording-entry`.
+   */
+  removeRecordingStep: RUNTIME_MESSAGES.panelRemoveRecordingStep
+} as const;
+
+export type SimplePanelMessageType = (typeof SIMPLE_PANEL_MESSAGES)[keyof typeof SIMPLE_PANEL_MESSAGES];
+
+/** The fields Simple Mode's requests carry beside `type`. Every field is optional on the wire and checked by the relay. */
+export type SimplePanelRequest = {
+  projectId?: string | undefined;
+  flowId?: string | undefined;
+  runId?: string | undefined;
+  datasetId?: string | undefined;
+  format?: string | undefined;
+  proposalId?: string | undefined;
+  entryId?: string | undefined;
+};
+
+/**
+ * The panel's "Report Problem" request: `{ type: PANEL_REPORT_PROBLEM_MESSAGE }`,
+ * accepted only from the side panel or the popup. The background answers
+ * `{ ok: true, report: ProblemReport }`; it never fails for want of FluxIQ,
+ * because a report is most wanted when FluxIQ cannot be reached, and says in
+ * `recentRuns` why Core's part is missing instead.
+ */
+export const PANEL_REPORT_PROBLEM_MESSAGE = RUNTIME_MESSAGES.panelReportProblem;
+
+/**
+ * A diagnostic bundle a person can attach to a problem report, assembled by the
+ * background worker (`background/diagnostics/`). It is built by allowlist:
+ * versions, connection health, ids, states, and recent failures whose text has
+ * been through `redactDiagnosticText`. It never holds the pairing token, the
+ * pairing code, cookies, a page address beyond its origin, page text, recorded
+ * events, typed values, or activity detail; `withheld` names those so a reader
+ * knows they are absent by design rather than lost.
+ */
+export type ProblemReport = {
+  schema: "fluxiq.problem-report/1";
+  createdAt: string;
+  extension: {
+    version: string;
+    browser: string;
+    browserVersion?: string | undefined;
+    platform: string;
+    language: string;
+  };
+  connection: {
+    state: ConnectionState;
+    paired: boolean;
+    autoReconnect: boolean;
+    /** Scheme, host and port of the gateway address; no path or query. */
+    gatewayOrigin: string;
+    coreOrigin: string;
+    queueSize: number;
+    lastMessageAt?: number | undefined;
+    lastError?: string | undefined;
+  };
+  session: {
+    clientId: string;
+    sessionId?: string | undefined;
+    projectId?: string | null | undefined;
+  };
+  recording: {
+    state: RecordingState;
+    eventCount: number;
+    startedAt?: number | undefined;
+  };
+  runtime: {
+    state: RuntimeCommandStatus["state"];
+    commandId?: string | undefined;
+    actionType?: BrowserActionType | undefined;
+    startedAt?: number | undefined;
+    finishedAt?: number | undefined;
+    error?: string | undefined;
+  };
+  /** Activity kinds and tones only: an activity's label and detail can quote the page. */
+  recentActivity: Array<{ at: number; kind: string; tone: NonNullable<ActivityEntry["tone"]> }>;
+  recentProblems: ProblemLogEntry[];
+  recentRuns: { available: true; runs: ProblemReportRun[] } | { available: false; reason: string };
+  withheld: string[];
+};
+
+/** One failure the background worker noted, its text already redacted. */
+export type ProblemLogEntry = {
+  at: number;
+  source: "connection" | "action" | "saved-state" | "message" | "reconnect";
+  message: string;
+  commandId?: string | undefined;
+  runId?: string | undefined;
+};
+
+/** A recent FluxIQ run as `list-runtime-sessions` summarises it, by allowlist. */
+export type ProblemReportRun = {
+  runId: string;
+  status: string;
+  targetKind?: string | undefined;
+  flowId?: string | undefined;
+  startedAt?: number | undefined;
+  finishedAt?: number | undefined;
+  attemptCount?: number | undefined;
+};
 
 export type BrowserDescriptor = {
   clientKind: "browser_extension";
