@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FluxIQ Web Automation Client",
-  "description": "Browser recorder and action client for FluxIQ.",
+  "description": "Record, run and repair browser automations with FluxIQ. Connects only to the FluxIQ runtime you run and pair.",
   "version": "0.1.0",
   "action": {
     "default_title": "FluxIQ",
@@ -12,6 +12,7 @@
     "type": "module"
   },
   "permissions": [
+    "alarms",
     "activeTab",
     "downloads",
     "scripting",
@@ -40,7 +41,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "fluxiq-web-automation@example.local",
-      "strict_min_version": "109.0"
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": ["websiteContent", "websiteActivity", "browsingActivity"]
+      }
     }
   },
   "icons": {

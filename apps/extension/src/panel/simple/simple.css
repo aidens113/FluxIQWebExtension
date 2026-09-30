@@ -1,9 +1,9 @@
 /* The simple view (panel/simple). Colours come from panel/theme/tokens.css;
    the shared primitives (.card, .card-title, .card-line, .card-actions,
    .notice, .dot, .primary-button, .small-button) from panel/shell/shell.css.
-   Everything here is sized so the four cards fit the Firefox popup's 600px
-   height with no page scroll; only the conversation's turns scroll, inside
-   their own card (audit section 4, principle 5). */
+   The cards are compact so the primary ones fit the Firefox popup's 600px
+   height; the conversation's turns scroll inside their own card, and the
+   recent-automations list below them scrolls with the page. */
 
 .simple-view { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .simple-view .card { gap: 6px; padding: 10px var(--space-3); }
@@ -47,8 +47,6 @@
 .simple-now .rec-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
 .simple-now > .primary-button, .simple-now > .small-button { justify-self: stretch; }
 .simple-now > .small-button { justify-self: end; }
-.simple-extraction[data-recording="false"] .extract-button { display: none; }
-.simple-extraction .extract-button { width: 100%; }
 .simple-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 
 /* 3. Conversation. */
@@ -86,10 +84,21 @@ html[data-surface="sidepanel"] .turns { max-height: 40vh; }
 .composer-box:focus-visible, .turn-answer:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .conversation-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 
-/* 4. Manual actions. */
-.simple-manual .primary-button { width: 100%; }
+/* 4. The start card: describe it, show FluxIQ how (manual actions), extract data. */
+.simple-option { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--divider); }
+.simple-start > .card-title + .simple-option { padding-top: 0; border-top: 0; }
+.simple-option-title { font-size: 12px; font-weight: 750; }
+.simple-option .primary-button, .simple-option .small-button, .simple-extraction .extract-button { width: 100%; }
 
 @media (prefers-reduced-motion: no-preference) {
   .simple-now .rec-dot { animation: simple-rec-pulse 1.5s ease-in-out infinite; }
 }
 @keyframes simple-rec-pulse { 50% { opacity: .35; } }
+
+/* The first-run checklist (start/setup-card.ts). */
+.setup-steps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.setup-step { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: var(--space-2); align-items: start; font-size: 12px; }
+.setup-copy { display: grid; gap: 2px; min-width: 0; }
+.setup-mark { border-radius: 999px; padding: 1px 6px; background: var(--surface-muted); color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
+.setup-step[data-state="done"] .setup-mark { color: var(--success); }
+.setup-step[data-state="todo"] .setup-mark { color: var(--text); }

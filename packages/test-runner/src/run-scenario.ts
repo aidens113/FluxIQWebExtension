@@ -53,7 +53,7 @@ import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
 import { createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
-import { attestRunRedaction, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
+import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
@@ -65,7 +65,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openScenarioStart, persistedFlowRunContext, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots } from "./run-scenario/index.js";
+import { activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -568,6 +568,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", failure.message), details: { failureCategory: failure.category, recordingDiscards: secondRead.discards, ...(superseded ? { supersededFailureCategory: superseded } : {}) } }).catch(() => undefined);
       }
     }
+    // Core's decision records, copied while Core still answers: the run root, and Core's
+    // store with it, is deleted below for a clone and after `finalize` for every isolated
+    // run. Written into staging before the redaction attestation, which scans it with the
+    // rest. An existing target is a person's own Core and outlives the run, so it is not read.
+    if (topology?.control && topology.projectId && target.mode !== "existing") {
+      const decisionTrace = await readDecisionTrace(topology.control, topology.projectId).catch((error: unknown) => ({ unreadable: error instanceof RunnerFailure ? error.category : "read_failed" }));
+      await bundle.writeStructured("snapshots/decision-trace.json", decisionTrace).catch(/* best-effort: a diagnostic copy may not fail a run whose verdict is already decided */ () => undefined);
+    }
     try { await topology?.close(); }
     catch (error) {
       const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
@@ -592,7 +600,13 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         verdict = "failed";
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", message), details: { failureCategory: "security.redaction", ...details } }).catch(() => undefined);
       };
-      try { redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined }) }); }
+      try {
+        // Every target's browser profile is the run allocation's own (never a user's), closed above; a persistent-isolated one outlives the run and is bounded like its workspace.
+        const writtenSince = target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined;
+        const profileDir = topology?.allocation.browserProfileDir;
+        const extensionStorage = profileDir === undefined ? undefined : { profileDir, dirs: await chromiumExtensionStorageDirs(profileDir), writtenSince };
+        redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: writtenSince, extensionStorage }) });
+      }
       catch (error) { await failRedaction(`Redaction attestation could not run: ${redactionLiterals.reduce((text, literal) => text.replaceAll(literal, "[redacted]"), error instanceof Error ? error.message : String(error))}`, {}); }
       if (redaction?.status === "failed") await failRedaction(`Redaction attestation found ${redaction.findingCount} file(s) holding a declared literal or left unread`, { findings: redaction.findings });
       if (redaction) await bundle.writeStructured("snapshots/redaction-attestation.json", redaction).catch(() => undefined);

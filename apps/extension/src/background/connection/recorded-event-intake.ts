@@ -29,6 +29,7 @@ import {
 } from "./recorded-event";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
 import type { ScriptedNavigationIntent } from "./scripted-navigation/index";
+import type { RecordedStepRef } from "../recorded-steps";
 import { objectValue, stringValue } from "./value-readers";
 
 export type RecordedEventIntakeDeps = {
@@ -43,6 +44,10 @@ export type RecordedEventIntakeDeps = {
   readonly attachment: ContentAttachment;
   readonly sendToTab: <TResponse = unknown>(tabId: number, message: unknown, frameId?: number) => Promise<TResponse>;
   readonly onActivity: (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => void;
+  // An executable step's activity, with the recording event it is sent as, so
+  // the panel can later remove that step by the activity id it was shown under
+  // (`FluxIQConnection.removeRecordedStep`).
+  readonly onRecordedStep: (kind: string, label: string, detail: string | undefined, step: RecordedStepRef) => void;
   // Re-entry through the facade, so an event this module derives from another
   // one still takes the public intake path rather than short-cutting to itself.
   readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number, admittedNavigation?: boolean) => Promise<void>;
@@ -182,7 +187,10 @@ export class RecordedEventIntake {
     }
     if (executable) {
       this.deps.recording.noteEvent();
-      this.deps.onActivity(payload.kind, activityLabel(payload), activityDetail(payload));
+      const recordingId = this.deps.recording.recordingId();
+      const eventId = gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId).eventId;
+      if (recordingId && eventId) this.deps.onRecordedStep(payload.kind, activityLabel(payload), activityDetail(payload), { recordingId, eventId });
+      else this.deps.onActivity(payload.kind, activityLabel(payload), activityDetail(payload));
       // The content script sees only its own frame, so the snapshot it attaches
       // describes one document however many the page has. The event goes out
       // with the merged tab snapshot the state beside it is projected from --

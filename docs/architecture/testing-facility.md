@@ -1669,10 +1669,17 @@ the Lab's on-disk proof that the recorder withheld what
   databases. On `persistent-isolated`, whose workspace outlives the run, only
   files whose modification or creation time is at or after the run's start,
   less two seconds, are scanned, together with every link or entry the walk
-  could not judge; a SQLite store this run wrote to is scanned whole. The
-  browser profile is not scanned, because the extension's LevelDB storage is
-  binary. The existing target's FluxIQ is remote, so a scenario declaring
-  secrets is left unattested there.
+  could not judge; a SQLite store this run wrote to is scanned whole. And
+  `extension-storage`, the extension's own storage in the Chromium profile the
+  run launched: `Default/Local Extension Settings/<id>` and
+  `Default/Sync Extension Settings/<id>` (`chrome.storage`, which holds the
+  offline event queue, the session and extraction sessions) and
+  `Default/IndexedDB/chrome-extension_<id>_*`
+  (`chromium-extension-storage-dirs.ts`), bounded by `writtenSince` on
+  `persistent-isolated`. It is never taken from a person's own profile. Not
+  covered: the panel's `Default/Local Storage/leveldb`, which is shared with web
+  origins, and Firefox, which has no Lab lane. The existing target's FluxIQ is
+  remote, so a scenario declaring secrets is left unattested there.
 - **Text files** are searched for each literal. The scanner's credential-syntax
   categories (`credential-field`, `credential-assignment`,
   `authorization-material`) are recorded as advisories and do not fail the run.
@@ -1686,6 +1693,14 @@ the Lab's on-disk proof that the recorder withheld what
   (`sqlite-store-reader/`). A store the scan cannot read in full, a database
   over a ceiling, and a `-wal` or `-journal` holding bytes with no database
   beside it are each an `unscanned-store` finding.
+- **LevelDB stores** (`*.log`, `*.ldb`, `MANIFEST-*`, `CURRENT`, `LOG*` under
+  `extension-storage`) are never skipped as binary. Each file is searched byte
+  for byte for the literal in UTF-8 and UTF-16LE, write-ahead log records are
+  reassembled across blocks, and table blocks are Snappy-decoded before the
+  search (`leveldb-store/`). This is best effort: a table the decoder cannot
+  read is counted in the scope summary's `undecodedLevelDbFiles` and recorded,
+  not failed, and a file the scan cannot read at all is an `unscanned-store`
+  finding. Other files in those directories get the text scan.
 - **Other binaries**, files with a known binary extension such as images,
   video, archives, fonts and executables, are skipped and counted.
 - **Limits** are `SECRET_LEAK_ATTESTATION_RUN_LIMITS`: 10,000 files, 8 MiB per
@@ -1966,7 +1981,10 @@ already-running workers, subscribes and immediately rechecks to close the
 observation race, accepts only `chrome-extension:` workers, and waits at most
 30 seconds before producing bounded counts and connection state. It removes
 its listener and timer on every outcome and never records worker URLs.
-Locale, timezone, viewport, and color scheme are fixed. The fixture hashes the
+Locale, timezone, viewport, and color scheme are fixed. Before launching, the
+fixture refuses an artifact whose build stamp (`build-info.json`) no longer
+matches the source, or that has no stamp, as `environment.stale`; see
+[Release Packaging](release-packaging.md#the-build-stamp). It hashes the
 complete extension artifact, attaches its metadata, closes Chromium, deletes
 the temporary profile, and verifies deletion.
 
@@ -2122,10 +2140,16 @@ to the full corpus. Documentation-only changes select the static gate.
 `.github/workflows/testing-facility.yml` declares:
 
 - prerequisite validation for a pinned sibling Core repository/ref and token;
-- Windows and Linux static `check`, `test`, and `build` jobs;
-- Windows and Linux Chromium smoke jobs when selected;
+- Windows and Linux static `check`, `test`, and `build` jobs, followed by store
+  packaging with read-back verification of the Chrome and Firefox ZIPs;
+- Windows and Linux Chromium smoke jobs on every event: the extension e2e
+  suite always, the scenario-page suite when selected;
 - changed-scenario execution for pull requests; and
-- a nightly three-repeat full corpus with 90-day uploaded evidence.
+- a nightly three-repeat full corpus, split by `nightly-plan` into four shards
+  read from the scenario registry, with 90-day uploaded evidence.
+
+The sizing, the owner-only configuration, and what was checked locally are in
+[Release Packaging](release-packaging.md#ci-gates).
 
 The workflow forces `FLUXIQ_REAL_SITE_ENABLED=0` and uses 30-day browser/failure
 artifact retention outside nightly certification.

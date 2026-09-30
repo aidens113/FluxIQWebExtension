@@ -1,5 +1,6 @@
 // The manual actions row: "Start recording", for doing a job yourself (UI
-// audit, section 4, "4. Manual actions row"). When it cannot be pressed, the
+// audit, section 4, "4. Manual actions row"), shown in the start card as
+// "Show FluxIQ how" (plan 3.1, 4.2). When it cannot be pressed, the
 // line under it says why (`recordControl`). A request that fails is said here
 // and stays until recording starts or the person presses again.
 
@@ -24,7 +25,13 @@ export function createManualActions(context: PanelViewContext): ManualActions {
   const recordButton = createElement("button", { id: "recordButton", className: "primary-button", text: "Start recording", attrs: { type: "button" } });
   const reason = createElement("p", { className: "card-line", hidden: true });
   const notice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
-  const element = createElement("section", { className: "card simple-manual", attrs: { "aria-label": "Do it yourself" } }, [recordButton, reason, notice]);
+  const element = createElement("div", { className: "simple-option simple-manual", attrs: { role: "group", "aria-label": "Show FluxIQ how" } }, [
+    createElement("p", { className: "simple-option-title", text: "Show FluxIQ how" }),
+    createElement("p", { className: "card-line", text: "Do the job once while FluxIQ records it." }),
+    recordButton,
+    reason,
+    notice
+  ]);
   let latest: ExtensionStatus | undefined;
   let sending = false;
 

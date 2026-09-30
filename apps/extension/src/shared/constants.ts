@@ -38,6 +38,19 @@ export const RUNTIME_MESSAGES = {
   panelConversationSend: "fluxiq.panel.conversationSend",
   panelConversationAnswer: "fluxiq.panel.conversationAnswer",
   panelStopRun: "fluxiq.panel.stopRun",
+  // "Report Problem": a redacted diagnostic bundle (`background/diagnostics/`).
+  panelReportProblem: "fluxiq.panel.reportProblem",
+  // Simple Mode's relays (`background/simple-panel/`); `SIMPLE_PANEL_MESSAGES`
+  // in `protocol.ts` names the same strings by their short names.
+  panelListAutomations: "fluxiq.panel.listAutomations",
+  panelRunAutomation: "fluxiq.panel.runAutomation",
+  panelRunDetail: "fluxiq.panel.runDetail",
+  panelExportDataset: "fluxiq.panel.exportDataset",
+  panelModelReadiness: "fluxiq.panel.modelReadiness",
+  panelGenerateFromRecording: "fluxiq.panel.generateFromRecording",
+  panelTestGeneratedAutomation: "fluxiq.panel.testGeneratedAutomation",
+  panelSaveGeneratedAutomation: "fluxiq.panel.saveGeneratedAutomation",
+  panelRemoveRecordingStep: "fluxiq.panel.removeRecordingStep",
   testArmScriptedNavigation: "fluxiq.test.armScriptedNavigation",
   testAwaitScriptedNavigation: "fluxiq.test.awaitScriptedNavigation",
   testCancelScriptedNavigation: "fluxiq.test.cancelScriptedNavigation"
