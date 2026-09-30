@@ -47,7 +47,6 @@ import {
   toolMetadata,
   withCallStates,
   withPersonNeeded,
-  type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
@@ -55,7 +54,7 @@ import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } fro
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNode, type WebPlanHandleStores } from "../plan-resolution";
+import { resolveWebPlanNode } from "../plan-resolution";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { withoutWebLlmDeniedKeys } from "../denied-keys";
@@ -64,9 +63,9 @@ import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmTo
 import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
-import type { WebNodeArrivals } from "./arrival";
+import type { WebNodeRun } from "./context";
 import { webNodeReadResult } from "./read-result";
-import { webUnshownAddressRefusal, type WebNodeShownAddresses } from "./shown-addresses";
+import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 
@@ -182,25 +181,6 @@ type WebNodeCallRecord = {
    * (`personDraft`).
    */
   standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement };
-};
-
-export type WebNodeRun = {
-  gateway: WebLlmEvidenceGateway;
-  sessionId: string;
-  request: WebLlmEvidenceToolRequest;
-  stores: WebPlanHandleStores;
-  /** Renumber a capture's handles so they keep naming what they named. */
-  restamp: (binding: WebLlmSnapshotBinding) => WebLlmSnapshotBinding;
-  /** Remember a packet the model has now been shown. */
-  shown: (binding: WebLlmSnapshotBinding) => void;
-  /**
-   * Whether this build has reached its start location, held by the runtime for
-   * the life of the process (`./arrival.ts`). Read only for a build told a
-   * start location.
-   */
-  arrivals: WebNodeArrivals;
-  /** Where this build has been shown it can go, which is where it may navigate (`./shown-addresses.ts`). */
-  addresses: WebNodeShownAddresses;
 };
 
 /** Run the node a call named, and answer with what it did. */
