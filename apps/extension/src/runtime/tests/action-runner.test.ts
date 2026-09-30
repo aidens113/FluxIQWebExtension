@@ -158,6 +158,12 @@ function installChromeStub(
           callback?.({ ok: true, active: true, version: CONTENT_SCRIPT_VERSION });
           return;
         }
+        // A click's landing is asked whether it is a robot check
+        // (`click-landing.ts`); the landed page here is an ordinary one.
+        if ((message as { type?: string }).type === "fluxiq.pageChallenge") {
+          callback?.({ challenge: null });
+          return;
+        }
         calls.sent.push({ tabId, message: message as Record<string, unknown>, frameId });
         calls.timeline.push("send");
         if (landing !== undefined) {

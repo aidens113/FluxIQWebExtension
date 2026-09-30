@@ -4,7 +4,7 @@
 // and shaping the result the background worker receives.
 
 export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
-export { challengeIn } from "./challenge-evidence";
+export { challengeIn, robotCheckIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
@@ -22,4 +22,5 @@ export type { InPlaceEffect, InPlaceEffectWatch } from "./in-place-effect";
 export type { KeyboardCapability, KeyPressOutcome } from "./keyboard";
 export type { RateLimitNotice, RateLimitWatch } from "./rate-limit-notice";
 export type { ResolvedTarget } from "./resolve-target";
+export type { RobotCheckSighting, RobotCheckWatch } from "./robot-check";
 export type { WaitConditionOutcome, WaitConditionRequest } from "./wait-conditions";

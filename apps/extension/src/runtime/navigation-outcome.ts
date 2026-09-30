@@ -105,10 +105,20 @@ export type NavigationMovement = {
  * Whether driving the tab moved it. The record comes from
  * `automation-tab.ts`'s `updateTabUrl`, or is absent when the navigation
  * never drove anything.
+ *
+ * A drive held back because the tab already showed the address behind a robot
+ * check is not a no-op: FluxIQ declined to reload a check on purpose, and the
+ * navigation is judged by the check instead -- waited out, or handed to the
+ * person (`action-runner.ts`). Only once the check has gone does this judgement
+ * run, and then the tab is on the page asked for, which is all a navigation
+ * means.
  */
 export function judgeTabMovement(drive: TabDriveRecord | undefined): NavigationMovement {
   if (!drive) return { moved: true, known: false, detail: "nothing drove the tab, so what it did could not be read" };
   if (drive.opened) return { moved: true, known: true, detail: "the browser opened a tab for this navigation" };
+  if (drive.heldForCheck === true) {
+    return { moved: true, known: true, detail: "the tab was already at that address behind a robot check, so it was not loaded again" };
+  }
   if (drive.urlBefore !== undefined && drive.urlAfter !== undefined && drive.urlBefore !== drive.urlAfter) {
     return { moved: true, known: true, detail: `the tab moved from ${drive.urlBefore}` };
   }

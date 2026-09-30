@@ -95,7 +95,11 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  *   answer or close it first.
  * - `needs_person`: what stands in the way is for a person alone to answer --
  *   a robot check, a sign-in, a second-factor code, a payment confirmation --
- *   or a value only the person can supply. Do not try to get past it.
+ *   or a value only the person can supply. Do not try to get past it. A robot
+ *   check (`USER_INTERVENTION_REQUIRED`) never reaches the model at all: the
+ *   call is marked `personNeeded` (`RecoverableToolRejection.personNeeded`),
+ *   and Core asks the person to clear it and press Continue instead
+ *   (`AS/runtime/parking/person-needed-ask.ts`).
  * - `target_covered`: something that is not a modal -- a banner, an overlay --
  *   lies over the control.
  * - `target_not_actionable`: the control is there but disabled or hidden.
@@ -446,11 +450,19 @@ export type WebLlmToolRejection = {
 };
 
 export class RecoverableToolRejection extends Error {
-  /** `page` is set only for a refusal the page caused, and only when the page could be captured. */
+  /**
+   * `page` is set only for a refusal the page caused, and only when the page could be captured.
+   *
+   * `personNeeded` is set only when the page answered `USER_INTERVENTION_REQUIRED`:
+   * a robot check stood in the way and nothing was done about it. Such a refusal
+   * is not for the model -- the call's result says `personNeeded` and Core puts
+   * the check to the person (`./node-run/run.ts`).
+   */
   constructor(
     readonly code: WebLlmToolRejectionCode,
     readonly detail?: WebLlmToolRejectionDetail,
-    readonly page?: WebLlmSnapshotBinding
+    readonly page?: WebLlmSnapshotBinding,
+    readonly personNeeded?: true
   ) {
     super(code);
   }

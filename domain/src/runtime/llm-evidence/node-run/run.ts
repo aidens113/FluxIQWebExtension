@@ -30,6 +30,11 @@
 // so whatever got in the way has a handle the model can act on next, and
 // carrying the record of the step under the node's own name with
 // `proposes: false` so a step that did not work cannot reach the Flow.
+//
+// **Except a robot check, which is not the model's.** A call that meets one
+// (`USER_INTERVENTION_REQUIRED`) is marked `personNeeded`, and its draft
+// statement is the step as it stands once the person has cleared the check
+// (`personDraft`): Core asks the person and never shows the model the refusal.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webActionFailureRefusal } from "../action-failure";
@@ -41,6 +46,7 @@ import {
   toolExecution,
   toolMetadata,
   withCallStates,
+  withPersonNeeded,
   type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
@@ -149,6 +155,18 @@ type WebNodeCallRecord = {
    * call left.
    */
   acted?: true;
+  /**
+   * The step as a succeeded call of this node would have stated it, written
+   * just before its command goes out: what the model may be shown (`input`),
+   * what the Flow keeps (`ranWith`), and what a replay needs (`replay`).
+   *
+   * Read only when the command met a robot check (`personNeeded`). Core then
+   * asks the person, and on Continue the call stands with this statement --
+   * the navigation or press did happen, and the person cleared what stood
+   * behind it -- so it is the same statement a success would have made
+   * (`personDraft`).
+   */
+  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement };
 };
 
 export type WebNodeRun = {
@@ -317,6 +335,13 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
     }
+    // What this step is, should it meet a robot check: the statement a success
+    // would make, less what only the page it left can say.
+    record.standing = {
+      input: safeCall(value, written),
+      ranWith: nodeCall(value, flowParameters(written, ran)),
+      replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: undefined, reads: false })
+    };
     record.acted = true;
     const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
     assertActive(run.request.signal);
@@ -334,8 +359,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       const refused = webActionFailureRefusal(result);
       throw current
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
-        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""));
+        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded);
     }
+    // The command worked. Should the look after it meet a robot check, the step
+    // stands with what it read, as a success's statement would say.
+    record.standing.replay = webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: result.payload as JsonValue | undefined, reads: node.proposes });
     // The move that goes there has now gone there: from here on the page is an
     // ordinary page (`./arrival.ts`).
     if (run.request.startLocation !== undefined && webMovesThePage(node)) run.arrivals.arrive(buildOf(run));
@@ -442,7 +470,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // refused (`../tool-rejection.ts`).
       const page = error.page ? run.restamp(error.page) : undefined;
       if (page) run.shown(page);
-      return refusal(page, error.code, error.detail, run.request.maxEvidenceBytes, record);
+      const refused = refusal(page, error.code, error.detail, run.request.maxEvidenceBytes, record);
+      // A robot check is the person's. The refusal is kept as the run's record
+      // says it, and Core puts the check to the person rather than to the model.
+      return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
     }
     throw error;
   }
@@ -511,6 +542,32 @@ function refusal(
     // resolved, so nothing was guessed at.
     assumed: record.assumed
   }), record.found, left);
+}
+
+/**
+ * The step as it stands once the person has cleared the robot check it met.
+ *
+ * A call whose command went out -- a navigation that landed on a check, a press
+ * behind which one appeared -- did what it was asked, and the check was what
+ * stood behind it: it stands as the step a success would have stated, proposing
+ * whatever the node proposes, with the location a replay starts from. A call
+ * that met the check before anything went out -- a look, or the read an action
+ * takes before acting -- changed nothing, so it stands as a look and proposes
+ * nothing; the model, shown the page fresh, makes its call again.
+ */
+function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
+  const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
+  if (!record.acted || record.standing === undefined) {
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined });
+  }
+  return present<WebNodeDraftStatement>({
+    actionId: record.actionId,
+    effect: record.effect,
+    input,
+    ranWith: record.standing.ranWith,
+    proposes: record.proposes,
+    replay: record.standing.replay
+  });
 }
 
 /**

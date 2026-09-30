@@ -120,11 +120,16 @@ export function navigationUnexpectedFailure(expected: string, actual: string): F
  * refusal's reason does. The landed address is not quoted -- a challenge
  * redirect often carries a return path -- and the result's own `url` says where
  * the tab is.
+ *
+ * `seen` says what stands on the page, after that word: a check only a person
+ * can answer, or a self-clearing one that was waited out and did not clear
+ * (`landed-check-wait.ts`), and for a click, that the click itself was made.
+ * The code is the same either way, because either way the person is next.
  */
-export function navigationChallengeFailure(expected: string): FailureRecord {
+export function navigationChallengeFailure(expected: string, seen = "the page the browser landed on is a robot check, which only a person can answer"): FailureRecord {
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
     expected,
-    actual: "captcha: the page the browser landed on is a robot check, which only a person can answer"
+    actual: `captcha: ${seen}`
   });
 }
 

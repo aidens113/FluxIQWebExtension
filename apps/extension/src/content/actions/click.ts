@@ -18,6 +18,12 @@
 // Core runs the node again after that wait (`action-runtime/rate-limit-notice.ts`).
 // Until 2026-09-30 such a press passed on its hit test, and a Flow confirming
 // four friend requests on social-network-feed read the refused fourth as done.
+// Or unless the page answers the press with a robot check drawn in place
+// (`action-runtime/robot-check/`): one only a person can answer, or one that
+// says it clears by itself and has not within the wait, fails
+// USER_INTERVENTION_REQUIRED with the press recorded as made; one that clears
+// by itself is waited out, untouched, and the press passes. Nothing is waited
+// for unless such a check appears.
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -39,7 +45,7 @@
 // which needs the same press and cannot import a verb.
 
 import { dispatchClickGesture } from "../action-runtime";
-import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch, RateLimitWatch } from "../action-runtime";
+import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch, RateLimitWatch, RobotCheckSighting, RobotCheckWatch } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import type { ContentActionDependencies } from "./types";
 
@@ -66,6 +72,17 @@ const IN_PLACE_WINDOW_MS = 5_000;
  */
 const RATE_LIMIT_WINDOW_MS = 500;
 
+/**
+ * How long a robot check a press puts up is followed while it says it is
+ * checking by itself, before it is handed to the person
+ * (`action-runtime/robot-check/robot-check-watch.ts`). Paid only by a press
+ * that actually put such a check up.
+ */
+const ROBOT_CHECK_WAIT_MS = 15_000;
+
+/** Kept back from the command's own timeout, so a result still reaches Core in time. */
+const ROBOT_CHECK_REPLY_MARGIN_MS = 1_000;
+
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const evidence = (): ActionResultEvidence => ({
@@ -85,15 +102,26 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
     // over the page is never taken for this press's answer.
     // Assigned inside the gesture's callback, which control flow cannot see.
     let notice = undefined as RateLimitWatch | undefined;
+    let check = undefined as RobotCheckWatch | undefined;
     try {
       const accepted = dispatchClickGesture(element, report.point, () => {
         notice = deps.watchRateLimitNotice(element);
+        check = deps.watchRobotCheck(element);
       });
-      const refused = notice ? await notice.settle(rateLimitWindowMs(action)) : undefined;
+      // Both watches read the same window and end on the same signals, so an
+      // ordinary press waits no longer than the rate-limit watch alone; only a
+      // robot check the press puts up is followed past it.
+      const windowMs = rateLimitWindowMs(action);
+      const [refused, sighting] = await Promise.all([
+        notice ? notice.settle(windowMs) : undefined,
+        check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt)) : undefined
+      ]);
       if (refused) return deps.rateLimited(action, startedAt, refused, evidence());
-      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, accepted), evidence());
+      if (sighting && sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, sighting, evidence());
+      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, accepted, sighting), evidence());
     } finally {
       notice?.stop();
+      check?.stop();
     }
   }
 
@@ -192,10 +220,26 @@ function windowWithin(action: BrowserActionCommand, windowMs: number): number {
  * but is not a failure -- handling a click in script and preventing the default
  * is ordinary, and what the click then did is the next action's business.
  */
-function hitTestValidation(detail: string, accepted: boolean): BrowserActionValidation {
+function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotCheckSighting): BrowserActionValidation {
+  const prevented = accepted ? "" : "; the page prevented the click's default action";
+  const waited = cleared
+    ? `; ${cleared.afterMs} ms after the press the page put up a robot check that cleared by itself ${cleared.waitedMs} ms later, untouched`
+    : "";
   return {
     status: "passed",
     expected: "the click lands on the target or something inside it",
-    actual: accepted ? detail : `${detail}; the page prevented the click's default action`
+    actual: `${detail}${prevented}${waited}`
   };
+}
+
+/**
+ * How long a robot check a press puts up may be followed while it says it is
+ * clearing by itself: ROBOT_CHECK_WAIT_MS, held within what is left of the
+ * command's own timeout less a margin for the reply, so the wait never
+ * outlives the command.
+ */
+function robotCheckWaitMs(action: BrowserActionCommand, startedAt: number): number {
+  const timeoutMs = action.timeoutMs;
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return ROBOT_CHECK_WAIT_MS;
+  return Math.max(0, Math.min(ROBOT_CHECK_WAIT_MS, timeoutMs - (Date.now() - startedAt) - ROBOT_CHECK_REPLY_MARGIN_MS));
 }

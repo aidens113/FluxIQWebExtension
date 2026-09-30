@@ -21,6 +21,8 @@ import type {
   RateLimitNotice,
   RateLimitWatch,
   ResolvedTarget,
+  RobotCheckSighting,
+  RobotCheckWatch,
   WaitConditionOutcome,
   WaitConditionRequest
 } from "../action-runtime";
@@ -94,6 +96,12 @@ export type ContentActionDependencies = {
    * hover and the press; `settle` reads the answer.
    */
   watchRateLimitNotice(pressed: Element): RateLimitWatch;
+  /**
+   * Starts watching, from just before a press on `pressed`, for a robot check
+   * the press puts up on the page, and follows one that says it clears by
+   * itself. Made between the hover and the press; `settle` reads the answer.
+   */
+  watchRobotCheck(pressed: Element): RobotCheckWatch;
 
   /** Succeeds, or fails with `output_not_observed` when the validation did not hold. */
   success(
@@ -118,6 +126,16 @@ export type ContentActionDependencies = {
     action: BrowserActionCommand,
     startedAt: number,
     notice: RateLimitNotice,
+    evidence?: ActionResultEvidence
+  ): BrowserActionResult;
+  /**
+   * A press the page answered with a robot check a person must answer:
+   * USER_INTERVENTION_REQUIRED, saying the press itself was made.
+   */
+  needsPerson(
+    action: BrowserActionCommand,
+    startedAt: number,
+    sighting: RobotCheckSighting,
     evidence?: ActionResultEvidence
   ): BrowserActionResult;
   /** Ran out of time: status `timed_out`, never flattened to `failed`. */

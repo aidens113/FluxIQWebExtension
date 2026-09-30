@@ -58,6 +58,7 @@ import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } 
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
+import { PERSON_HAND_OFFS_SNAPSHOT, startLabPerson, type LabPerson } from "./person-simulation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
@@ -153,6 +154,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let browserVersion = "unavailable";
   let verdict: "passed" | "failed" = "failed";
   let stoppedToAsk = false;
+  // The Lab playing the person at a check only a person may pass (`person-simulation/`): started before a Flow lane builds or runs, finished in cleanup.
+  let labPerson: LabPerson | undefined;
   let failureCategory: RunnerFailureCategory | undefined;
   let failureMessage: string | undefined;
   let facilityFailure: RunEvaluation["facilityFailure"] = null;
@@ -363,6 +366,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
+      labPerson = await startLabPerson({ control, projectId: createdProjectId, context: context!, scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, task: creation.task.personCheck, write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }) });
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
@@ -464,6 +468,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
         // Settled however the lane ends: an overspend or an unreached provider fails a finished run, and a failed lane still leaves its provider calls itemized.
+        labPerson = await startLabPerson({ control, projectId, context: context!, scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }) });
         const lane = await runLaneWithLiveLlmSettlement({ live, control, projectId, bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }) }, async flowRunIdentified => await runFlowLane({
           control, projectId, authorizationPin, recordingId,
           scenario, workflow: flowWorkflow, facilityRunId: runId, flowRunIdentified, ...(repair ? { repairExpectation: repair } : {}),
@@ -530,6 +535,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
+    // Before the browser closes: a hand-off in progress needs its tab, and the record is written into the bundle still being staged.
+    await labPerson?.finish();
     await uiReview.close(); try { await context?.close(); }
     catch (error) {
       const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;

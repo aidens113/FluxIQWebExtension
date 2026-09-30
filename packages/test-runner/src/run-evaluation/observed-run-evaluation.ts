@@ -3,6 +3,8 @@ import type { RunLaneObservation } from "../flow-lane/index.js";
 import { declaredFailureOutcome } from "./declared-failure-verdict.js";
 import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
 import type { FlowLaneEvidence } from "./flow-lane-evidence-sizes.js";
+import type { PersonHandOffEvidence } from "./person-hand-off-evidence.js";
+import { personHandOffInvariant } from "./person-hand-off-invariant.js";
 import type { RunOutcome } from "./run-outcome.js";
 
 /** Which run an evaluation describes, and the failure it was planned to expect. */
@@ -57,6 +59,13 @@ export type ObservedRun = {
    * whose Flow was created and ran, the only run that has adaptations to measure.
    */
   adaptation?: RunAdaptationMeasurements;
+  /**
+   * The Lab's record of each time FluxIQ handed a check to a person, read by
+   * both Flow-lane producers from the bundle's `snapshots/person-hand-offs.json`
+   * (`personHandOffEvidence`). Absent, or `absent`, no hand-off invariant is
+   * added: the Lab never played the person on this run.
+   */
+  personHandOffs?: PersonHandOffEvidence;
 };
 
 /**
@@ -95,7 +104,11 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     facilityFailure: input.facilityFailure,
     outcome,
   });
-  const judged = withEvidenceBudget(declared, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
+  // The hand-off judgement sits on the declaration too: a run that reported
+  // the failure it declared and asked a person where no check stood is still
+  // wrong (`person-hand-off-invariant.ts`).
+  const handedOff = withInvariant(declared, input.personHandOffs ? personHandOffInvariant(input.personHandOffs) : undefined, "runtime.behavior");
+  const judged = withEvidenceBudget(handedOff, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
   const evaluation: RunEvaluation = {
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     runId: outcome.runId,
@@ -163,9 +176,18 @@ function adaptationMeasurements(input: ObservedRun): RunAdaptationMeasurements {
  * the runner already failed, or could not judge, keeps its verdict and category
  * and still records the breach.
  */
-function withEvidenceBudget(outcome: RunOutcome, budget: InvariantResult | undefined): Pick<RunOutcome, "verdict" | "failureCategory" | "invariants"> {
-  if (budget === undefined) return outcome;
-  const invariants = [...outcome.invariants, budget];
-  if (budget.passed || outcome.verdict !== "passed") return { ...outcome, invariants };
-  return { verdict: "failed", failureCategory: "performance.budget", invariants };
+function withEvidenceBudget(outcome: Pick<RunOutcome, "verdict" | "failureCategory" | "invariants">, budget: InvariantResult | undefined): Pick<RunOutcome, "verdict" | "failureCategory" | "invariants"> {
+  return withInvariant(outcome, budget, "performance.budget");
+}
+
+/**
+ * The judgement with one more invariant on it. A failed one fails a run the
+ * runner passed, as `category`; a run the runner already failed, or could not
+ * judge, keeps its verdict and category and still records the invariant.
+ */
+function withInvariant(outcome: Pick<RunOutcome, "verdict" | "failureCategory" | "invariants">, added: InvariantResult | undefined, category: NonNullable<RunOutcome["failureCategory"]>): Pick<RunOutcome, "verdict" | "failureCategory" | "invariants"> {
+  if (added === undefined) return outcome;
+  const invariants = [...outcome.invariants, added];
+  if (added.passed || outcome.verdict !== "passed") return { ...outcome, invariants };
+  return { verdict: "failed", failureCategory: category, invariants };
 }

@@ -52,6 +52,7 @@ import {
   toolMetadata,
   type WebLlmEvidenceGateway,
   withCallStates,
+  withPersonNeeded,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "./capture";
@@ -366,11 +367,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           // can be pressed next.
           const page = error.page === undefined ? undefined : retain(stable(input, error.page));
           if (page !== undefined) shown(input, sessionId, page);
-          return answered(withCallStates(
+          const refused = withCallStates(
             toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code)),
             observed ?? page,
             page ?? observed
-          ));
+          );
+          // A detection that met a robot check only looked, so it proposes
+          // nothing: Core asks the person, and the model then looks afresh.
+          return answered(error.personNeeded ? withPersonNeeded(refused, undefined) : refused);
         }
         throw error;
       }
@@ -408,11 +412,15 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // The digest is the one every capture carries (`./snapshot-state-digest.ts`),
       // so what this answers and what a call reports on `stateDigests` for the
       // same page are one value by construction.
-      if (input.startLocation === undefined) return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
+      //
+      // A page behind a robot check is not a state anyone can read either, and
+      // it is the person's to clear (`./capture.ts`), so it answers "nothing"
+      // rather than failing the step it was asked about.
       try {
         return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
       } catch (error) {
-        if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
+        if (error instanceof RecoverableToolRejection && error.personNeeded) return undefined;
+        if (input.startLocation !== undefined && error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
         throw error;
       }
     },
