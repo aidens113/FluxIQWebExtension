@@ -24,7 +24,7 @@ and its own `fxwork/<id>` tree:
 | t186 remove call grants | merged | Core `91262bd`, downstream `bfb7f8eb`; t174 drops its grant work at its next merge |
 | t187 build and Lab startup speed | `lead` | why builds are slow, and cutting them (Lab prelude, `task start`/`finish`, `pnpm check`/`build`) |
 | t188 node limits | merged | Core `c961f4a`, downstream `37379fe3` |
-| t189 decision context | `lead-xhigh` | why the model repeats itself, and the context fix |
+| t189 decision context | merged | Core `f0dbbd6`, downstream `ca07baae`; repeats now shown to the model; live effect unproven |
 | t185 live activity + chat | merged | Core `a28815c`, downstream `6818da22`; first browser proof is t174's next run |
 | t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
@@ -757,6 +757,8 @@ debug and partitioned so neither touches the other's files:
 - Merged and pushed in both repositories, each through `pnpm task finish` whose `pnpm check` printed `"passed":true` on both sides: t185 (live activity overlay, extension chat, Lab live panel; supervisor re-run Core api + client-gateway 126/126 on a verbose re-run), t186 (no model call needs a grant; supervisor: session-key-provider + repair-replay-chain 5/5, runtime-patches 3/3, grant symbols left only in absence assertions), t190 (instructed acts name their act, one act per object, arrival step, navigating actions report applied; supervisor: instructed-acts + reachability 77/77, domain 900/900).
 - The user found `$0.001` as a cost ceiling. It was only the `runtime-patches.test.ts` fixture, which the grant's $0.25 used to override; the fixture now uses the product's $0.25 (the lane had used $0.15). Every product default is $0.25.
 - The user rejected machine load as the cause of the extension-start failures. The priority governor was stopped, and the lane is root-causing the start as a product defect: probe `t174-w7`, ten headed starts, which is the Chromium window the user sees opening and closing.
+- t189 merged and pushed (every decision gets a durable history of what it tried and what Core answered; repeats are grouped and named; `evidence-loop.ts` split 800 to 668 lines). Supervisor: decision-context + decision-handlers + draft-shown 8 files, 61 passed; on the merged tree Core `pnpm check` exit 0 and vitest `runtime/llm` 68 files, 651 passed; both `pnpm task finish t189` -> `"passed":true`.
+- The extension-start cause found by probe `t174-w7` (a Lab defect): the network guard's canary, run inside the extension's service worker as it starts, stops the first `fluxiq.connect` from being answered. The unchanged Lab gave 1 of 10 clean starts, the guard off 3 of 3, and the canary gated until the extension is ready 5 of 5. The fix and the merge of dev into t174 are next.
 - Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
 - Outcome: In progress. Pass streak 0.
 
