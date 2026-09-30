@@ -300,3 +300,68 @@ test("a detail carrying the resolver's codes is sharpened once, and sharpening i
     { reason: "node_not_runnable_here", target: "web.output.dom-teleport", instead: ["web.handle.unknown"] }
   );
 });
+
+/**
+ * The wrong node on the right handle, as the model receives it.
+ *
+ * Live (`run-munnq7vz-98c3481c`), a store chooser's "Set as my store" button
+ * was handed to `web.output.dom-select` five times in one build, each refused
+ * `handle_wrong_kind_of_control` with nothing saying which node did act on a
+ * button, and the build ended without the act. The refusal now carries the
+ * node beside the handle, so the next call is the same call with that node.
+ */
+test("a node given a control it cannot act on is told which node can, with the same handle", async () => {
+  const STORES: Page = {
+    url: "https://bigbox.example.test/stores",
+    elements: [
+      { tagName: "button", selector: "#store-7 button", accessibleName: "Set as my store", attributes: { type: "button" } },
+      { tagName: "select", selector: "#band", accessibleName: "Price band" },
+      { tagName: "x-store-card", selector: "x-store-card", accessibleName: "Store" }
+    ]
+  };
+  const { gateway, clicks } = labWith(standingPage(STORES));
+  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
+  await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+
+  const chosen = await runtime.executeTool({ ...BASE, callId: "call.choose", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "target.1" }, value: "Millbrook" }, consequences: [] } });
+  assert.equal(codeOf(chosen), "target_unobserved");
+  assert.deepEqual(detailOf(chosen), {
+    reason: "handle_wrong_kind_of_control",
+    target: "target.1",
+    useNode: "web.output.dom-click",
+    instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click", "web.handle.wrong_control:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}']
+  });
+  // Nothing of the page rides on it: the node is this domain's own id.
+  assert.equal(JSON.stringify(detailOf(chosen)).includes("Set as my store"), false);
+
+  // Entering text into the same button names the same node.
+  const typed = await runtime.executeTool({ ...BASE, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-type", parameters: { target: { handle: "target.1" }, text: "Millbrook" }, consequences: [] } });
+  assert.equal(detailOf(typed)?.useNode, "web.output.dom-click");
+
+  // A control whose kind says nothing names no node, rather than one the model would be refused by again.
+  const unknown = await runtime.executeTool({ ...BASE, callId: "call.unknown", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "target.3" }, value: "x" }, consequences: [] } });
+  assert.equal(detailOf(unknown)?.reason, "handle_wrong_kind_of_control");
+  assert.equal(detailOf(unknown)?.useNode, undefined);
+
+  // The named node, with the same handle, is the call that works.
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  assert.equal(codeOf(pressed) === "target_unobserved", false, JSON.stringify(pressed));
+  assert.deepEqual(clicks, ["#store-7 button"]);
+});
+
+test("a node is named only beside the wrong-control reason, and only from a code the resolver can refuse with", () => {
+  // Every fitting-node code the resolver publishes names a node here.
+  const fitting = WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => code.startsWith("web.handle.expected.node."));
+  assert.equal(fitting.length > 0, true);
+  for (const code of fitting) {
+    const detail = rejectionDetail({ reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.wrong_control", code] });
+    assert.equal(detail.useNode, code.slice("web.handle.expected.node.".length), code);
+  }
+  // Beside any other reason, the same code names nothing.
+  assert.equal(rejectionDetail({ reason: "parameters_not_resolved", instead: ["web.handle.unknown", "web.handle.expected.node.web.output.dom-click"] }).useNode, undefined);
+  // A string shaped like one that the resolver never issues names nothing.
+  assert.equal(rejectionDetail({ reason: "parameters_not_resolved", instead: ["web.handle.wrong_control", "web.handle.expected.node.Set as my store"] }).useNode, undefined);
+  // A repeat keeps it, because it is read again from the codes the repeat carries.
+  const first = rejectionDetail({ reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click"] });
+  assert.deepEqual(rejectionDetail({ reason: first.reason, target: first.target, instead: first.instead }), first);
+});

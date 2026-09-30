@@ -84,6 +84,9 @@ async function resolve(runtime: WebAutomationLlmEvidenceRuntime, nodeDefinitionI
 
 const EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
 const TARGET_HINT = "web.handle.expected.selector.handle_location";
+/** The node that fits a control a refused node could not act on, as a refusal names it. */
+const USE_CLICK = "web.handle.expected.node.web.output.dom-click";
+const USE_SELECT = "web.handle.expected.node.web.output.dom-select";
 
 function refusedWith(...issueCodes: string[]) {
   return { status: "refused", issueCodes };
@@ -337,7 +340,9 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
     "web.handle.extraction_required",
     "web.handle.wrong_control",
     EXTRACTION_HINT,
-    TARGET_HINT
+    TARGET_HINT,
+    USE_CLICK,
+    USE_SELECT
   ]);
 });
 
@@ -350,15 +355,54 @@ test("a handle naming a control this step cannot act on refuses the node here, n
   const chooser: JsonObject = { tagName: "select", selector: "#band", accessibleName: "Price band" };
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [submit, chooser] }));
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.1" }, value: "5" }), refusedAt("web.handle.wrong_control", "selector"));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.1" }, value: "5" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
   assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "5" }), {
     status: "resolved",
     parameters: { selector: "#band", value: "5", element: { tagName: "select", accessibleName: "Price band", selector: "#band" } }
   });
   // Entering text into something that can never hold any is refused the same way.
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector"));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
   // A click names no kind of control, so nothing here constrains it.
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+});
+
+test("a refusal for the wrong control names the node that acts on it, and only when the control's kind says which", async () => {
+  // Live, a store chooser's "Set as my store" button was handed to the choice
+  // node five times in one build and never pressed (`run-munnq7vz-98c3481c`):
+  // the refusal said the node did not fit and nothing said which one did. The
+  // handle was right, so the refusal names the node, and the same handle
+  // resolves on it.
+  const setStore: JsonObject = { tagName: "button", selector: "#store-7 button", visibleText: "Set as my store", attributes: { type: "button" } };
+  const chooser: JsonObject = { tagName: "select", selector: "#band", accessibleName: "Price band" };
+  const listOption: JsonObject = { tagName: "li", role: "option", selector: "#store-list li", accessibleName: "Millbrook" };
+  const nativeOption: JsonObject = { tagName: "option", selector: "#band option", visibleText: "Under 5" };
+  const unknown: JsonObject = { tagName: "x-store-card", selector: "x-store-card", accessibleName: "Store" };
+  const checkbox: JsonObject = { tagName: "input", inputType: "checkbox", selector: "#pickup", accessibleName: "Pickup", attributes: { type: "checkbox" } };
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [setStore, chooser, listOption, nativeOption, unknown, checkbox] }));
+  await inspect(runtime);
+
+  // The choice node on a button: dom-click, at the slot the handle was written in.
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { target: { handle: "target.1" }, value: "Millbrook" }), refusedAt("web.handle.wrong_control", "target", USE_CLICK));
+  // And the call it names, with the same handle, is one the resolver makes real.
+  const pressed = await resolve(runtime, CLICK_NODE, { target: { handle: "target.1" } });
+  assert.equal(pressed.status, "resolved", JSON.stringify(pressed));
+  // The choice node on a select still resolves: nothing is named where nothing was refused.
+  assert.equal((await resolve(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "5" })).status, "resolved");
+  // A text-entry node on a button names dom-click; on a select, dom-select.
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_SELECT));
+  // A role says it is pressed, whatever element carries it; so does an input type.
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.3" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.6" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  // A native option is chosen through its select, a different handle, so it
+  // names nothing; neither does an element whose tag says nothing here knows.
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.4" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector"));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.5" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector"));
+  // Through Core's Run Output node the payload is refused the same way, at its own position.
+  assert.deepEqual(
+    await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.select", parameters: { target: { handle: "target.1" }, value: "x" } }),
+    refusedWith("web.handle.wrong_control", USE_CLICK, "web.handle.wrong_control:parameters.target")
+  );
 });
 
 test("a selector the page gave to several controls is refused rather than acted on at the first of them", async () => {

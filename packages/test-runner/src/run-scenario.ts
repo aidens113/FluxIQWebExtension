@@ -65,7 +65,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder } from "./run-scenario/index.js";
+import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -160,23 +160,12 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let panelVerification: FluxIQPanelVerificationOutcome | undefined;
   let stepRunner: ScenarioStepRunner | undefined;
   let consoleErrors: ConsoleErrorWatch | undefined;
-  // **This facility takes no screenshots.** Removed on the user's instruction,
-  // 2026-09-25, after measurement showed what they cost and what they were
-  // worth: four Playwright captures per run, each waiting out the 30_000 ms
-  // default and each returning nothing, which was 120 s of a 437 s run. They
-  // could never succeed — the Lab drives a headed Chromium, which does not
-  // composite a tab that is not in front, and the created-Flow lane blanks its
-  // own tab before the build and again before playback while FluxIQ drives a
-  // tab of its own — so every capture after the first photographed an
-  // abandoned background `about:blank`.
-  //
-  // The capture controller keeps its place and its events; only the picture is
-  // gone, so a `runtime.dispatch`, a `runtime.settle` and an `error` are still
-  // published, each recording that no visual was available. Nothing else in the
-  // bundle changes, and a run that wants pictures again wants a capture of the
-  // tab the Flow actually drove, which is a different thing from this one.
-  const screenshotAdapter = undefined;
+  // Pictures of what the person watching sees -- page, extension panel and overlay in one frame -- taken without moving focus and bounded to 4 s,
+  // at the run's own moments and every 15 s while it works (`run-scenario/window-capture/`). Playwright captures, removed 2026-09-25, cost 30 s
+  // each and photographed a background `about:blank`; this photographs the run's own window, found by its profile directory.
+  const screenshotAdapter = createRunScreenshotAdapter({ session: () => (context && topology ? { context, profileDir: topology.allocation.browserProfileDir, scenarioOrigin: topology.scenarioOrigin } : undefined), log: line => process.stderr.write(`${line}\n`) });
   const capture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
+  const periodicCapture = new PeriodicCapture({ policy: evidence.capture, trigger: (summary, details) => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "checkpoint", summary), details }) });
   let recordingBaseline: Set<string> | undefined;
   let recordedEvents: Record<string, number> | undefined;
   // The extension's count of the executable actions it recorded, read before Stop and compared with Core's.
@@ -258,6 +247,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     }
     const launched = await launchBrowser(topology, extensionPath);
     ({ context, browserVersion } = launched); await startTrace.attach(context); // The extension start, timestamped, for extension-start.local.json.
+    periodicCapture.start();
     const scenarioOrigins = new Set(scenarioNetworkOrigins(topology.scenarioOrigin));
     const isScenarioUrl = (url: string) => { try { return scenarioOrigins.has(new URL(url).origin); } catch { return false; } };
     networkGuard = await installRunNetworkGuard(context, topology, [...scenarioOrigins]);
@@ -512,11 +502,11 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const httpTransportDetails = httpTransportFailureDetails(error);
     const topologyReadinessDetails = topologyReadinessFailureDetails(error);
     const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
-    // No picture is taken (see `screenshotAdapter` above), so the failure is
-    // published as the event alone.
+    // The picture is taken at the failure, before cleanup changes what is on screen.
     await capture.trigger(failureEvent).catch(() => undefined); await uiReview.finish("failure");
   } finally {
     setFacilityStage("scenario.cleanup");
+    await periodicCapture.stop({ finalCapture: verdict !== "passed" }); // A passed run's `final` event already pictured its end.
     stepRunner?.dispose();
     consoleErrors?.dispose();
     if (recordingStarted && extensionPage) await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" }).catch(() => undefined);

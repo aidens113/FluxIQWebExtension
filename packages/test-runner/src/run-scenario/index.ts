@@ -18,6 +18,7 @@ export * from "./core-round-trip/index.js";
 export * from "./decision-trace/index.js";
 export * from "./persisted-flow-target/index.js";
 export * from "./workflow/index.js";
+export * from "./window-capture/index.js";
 export { configuredCredentials, type ConfiguredCredentials } from "./configured-credentials.js";
 export { evidenceEvent, type EvidenceEventTrigger } from "./evidence-event.js";
 export * from "./extension-start-trace/index.js";

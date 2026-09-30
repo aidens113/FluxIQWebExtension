@@ -105,7 +105,17 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   // The extraction node's `extractList` as `{ handle, fields?, paginate? }`, as its description spells out.
   "web.handle.expected.extract_list.handle_fields_paginate",
   // An element node's `selector` as `{ handle, location? }`.
-  "web.handle.expected.selector.handle_location"
+  "web.handle.expected.selector.handle_location",
+  // Beside `web.handle.wrong_control`: the node that does act on the control
+  // the handle names, so the same call can be made again with that node and
+  // the same handle. Live, a store chooser's "Set as my store" button was
+  // handed to the choice node five times and never to a press
+  // (`run-munnq7vz-98c3481c`), because the refusal said only that the node did
+  // not fit. The handle was right; the node was wrong. Named only where the
+  // element's own tag, role or input type says which node fits
+  // (`fittingNodeCode`), and never otherwise.
+  "web.handle.expected.node.web.output.dom-click",
+  "web.handle.expected.node.web.output.dom-select"
 ] as const;
 
 export type WebPlanHandleIssueCode = (typeof WEB_PLAN_HANDLE_ISSUE_CODES)[number];
@@ -268,10 +278,45 @@ function actsOnTheWrongControl(nodeDefinitionId: string, identity: JsonObject | 
   return TEXT_ENTRY_NODE_IDS.has(nodeDefinitionId) && NEVER_EDITABLE_TAGS.has(tagName);
 }
 
+/** Controls a press acts on by what they are. */
+const PRESSABLE_TAGS: ReadonlySet<string> = new Set(["button", "a", "summary"]);
+/** Roles a page gives a control that is pressed, whatever element carries them. */
+const PRESSABLE_ROLES: ReadonlySet<string> = new Set(["button", "option", "menuitem", "tab", "radio", "checkbox", "link"]);
+/** Input types that are pressed rather than typed into. */
+const PRESSABLE_INPUT_TYPES: ReadonlySet<string> = new Set(["button", "submit", "reset", "image", "checkbox", "radio"]);
+
+/**
+ * The node that acts on the element a refused handle names, as the code a
+ * refusal carries it in, or nothing when the identity does not say.
+ *
+ * Read only from the identity the handle already resolved to -- its tag, its
+ * role and its input type, each a closed word for a kind of control rather
+ * than anything the page wrote in it -- so what goes back is a node id and
+ * never page text. A native `<option>` is chosen through its `<select>`, whose
+ * handle is a different one, so it names nothing rather than a press; an
+ * element nothing here recognises names nothing either, because naming a node
+ * the model would then be refused by again is worse than naming none.
+ */
+function fittingNodeCode(identity: JsonObject | undefined): WebPlanHandleIssueCode | undefined {
+  const tagName = lowerCase(identity?.tagName);
+  if (tagName === undefined || tagName === "option") return undefined;
+  if (tagName === "select") return "web.handle.expected.node.web.output.dom-select";
+  const role = lowerCase(identity?.role);
+  const inputType = lowerCase(identity?.inputType);
+  const pressable = PRESSABLE_TAGS.has(tagName)
+    || (role !== undefined && PRESSABLE_ROLES.has(role))
+    || (tagName === "input" && inputType !== undefined && PRESSABLE_INPUT_TYPES.has(inputType));
+  return pressable ? "web.handle.expected.node.web.output.dom-click" : undefined;
+}
+
+function lowerCase(value: JsonValue | undefined): string | undefined {
+  return typeof value === "string" ? value.toLowerCase() : undefined;
+}
+
 type Scope = { projectId: string; flowId: string };
 type Resolved = { value: JsonValue; frameId: number | undefined; element: JsonObject | undefined };
-/** One reason a node was refused, the kind of handle it is about, and where. */
-type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath };
+/** One reason a node was refused, the kind of handle it is about, where, and the node that fits the control instead when one does. */
+type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath; fits?: WebPlanHandleIssueCode | undefined };
 type NodeOutcome =
   | { status: "unchanged" }
   | { status: "resolved"; parameters: JsonObject; assumed: WebLlmNameAssumptionSaid[] }
@@ -397,7 +442,7 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
   if (disagreeing) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [disagreeing.slot] }] };
   const firstNamed = named[0];
   if (firstNamed && actsOnTheWrongControl(nodeDefinitionId, element?.element)) {
-    return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot] }] };
+    return { status: "refused", refusals: [{ code: "web.handle.wrong_control", kind: "target", path: [firstNamed.slot], fits: fittingNodeCode(element?.element) }] };
   }
 
   const frameId = handleFrame([...replaced.values()]);
@@ -432,7 +477,7 @@ function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanH
     for (const found of webPlanHandlesIn(value)) refusals.push({ code: "web.handle.misplaced", kind: found.kind, path: [key, ...found.path] });
   }
   if (inner?.status === "refused") {
-    for (const entry of inner.refusals) refusals.push({ code: entry.code, kind: entry.kind, path: ["parameters", ...entry.path] });
+    for (const entry of inner.refusals) refusals.push({ code: entry.code, kind: entry.kind, path: ["parameters", ...entry.path], fits: entry.fits });
   }
   if (refusals.length > 0) return { status: "refused", refusals };
   if (inner?.status !== "resolved") return { status: "unchanged" };
@@ -480,11 +525,12 @@ function declaredFrame(value: unknown): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
-/** A refusal's codes: its reasons in a fixed order, where each kind of handle it is about is accepted, then each reason's position. */
+/** A refusal's codes: its reasons in a fixed order, where each kind of handle it is about is accepted and which node fits its control, then each reason's position. */
 function refusal(parameters: JsonObject, refusals: Refusal[]): Extract<WebPlanNodeResolution, { status: "refused" }> {
   const codes = new Set<WebPlanHandleIssueCode>(refusals.map((entry) => entry.code));
   for (const entry of refusals) {
     if (entry.kind !== undefined && PLACEMENT_REASONS.has(entry.code)) codes.add(EXPECTED_PLACEMENT[entry.kind]);
+    if (entry.fits !== undefined) codes.add(entry.fits);
   }
   const reasons = WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => codes.has(code));
   const positions = [...new Set(refusals.map((entry) => webPlanPositionCode(entry.code, parameters, entry.path) as WebPlanHandleIssue))];
