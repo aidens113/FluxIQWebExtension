@@ -37,6 +37,19 @@ export type LiveInstructionTask = {
    * when its run repairs the drift, so it is the "created and repaired" row.
    */
   variantArmedAfterBuild?: true;
+  /**
+   * For a consequential task, where its lasting act is: the consequence class
+   * and the control's label as the page shows it. Run without the grant for
+   * that class, the right ending is the build stopping to ask a person there,
+   * and the created-Flow lane scores that stop as the pass
+   * (`packages/test-runner/src/flow-lane/creation/permission-point.ts`).
+   */
+  permissionPoint?: {
+    consequence: "move_money" | "delete" | "send_or_publish" | "modify_existing" | "create_new";
+    control: string;
+    /** The instruction says to ask before the act, so the stop is the only right ending, whatever the run was permitted. */
+    askFirst?: true;
+  };
 };
 
 const PRODUCT_COLUMNS = "with columns name, price, rating and url";

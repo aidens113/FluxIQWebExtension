@@ -24,5 +24,5 @@ export const PHOTO_SOCIAL_LIVE_TASKS: readonly LiveInstructionTask[] = [
   { id: "photo-social-glaze-collection", scenarioId: "photo-social", kind: "form", instruction: GLAZE_IDEAS, judgeBy: "playback-goal" },
   { id: "photo-social-giveaway-entries", scenarioId: "photo-social", kind: "navigate-and-extract", instruction: GIVEAWAY_ENTRIES, judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries" },
   { id: "photo-social-giveaway-entries-verified-upsell", scenarioId: "photo-social", variantId: "verified-upsell", kind: "navigate-and-extract", instruction: GIVEAWAY_ENTRIES, judgeBy: "expected-dataset", expectedDatasetId: "extract-giveaway-entries" },
-  { id: "photo-social-moon-jar-price", scenarioId: "photo-social", kind: "navigate-and-extract", instruction: MOON_JAR_PRICE, judgeBy: "expected-dataset", expectedDatasetId: "extract-moon-jar-price" },
+  { id: "photo-social-moon-jar-price", scenarioId: "photo-social", kind: "navigate-and-extract", instruction: MOON_JAR_PRICE, judgeBy: "expected-dataset", expectedDatasetId: "extract-moon-jar-price", permissionPoint: { consequence: "send_or_publish", control: "Send" } },
 ];
