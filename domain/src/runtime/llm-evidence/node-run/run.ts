@@ -20,7 +20,9 @@
 // **A build may begin nowhere.** When Core says where the Flow starts
 // (`AS/runtime/flow-bootstrap/start-location.ts`), nothing was opened for this
 // build: the capture every call makes first comes back refused, and the only
-// call that gets past that is the move that goes there. `./start-location.ts`
+// call that gets past that is the move that goes there. The same holds when
+// the tab is already on a page, because arrival is remembered per build
+// (`./arrival.ts`) rather than read off the tab. `./start-location.ts`
 // holds the whole of that rule and why it is a rule at all.
 //
 // **A failure is a result, never an exception.** Every refusal this module can
@@ -33,6 +35,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webActionFailureRefusal } from "../action-failure";
 import {
   assertActive,
+  captureAfterAction,
   captureEvidence,
   pageRefusal,
   toolExecution,
@@ -54,6 +57,7 @@ import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmTo
 import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
+import type { WebNodeArrivals } from "./arrival";
 import { webNodeReadResult } from "./read-result";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
@@ -95,6 +99,12 @@ export type WebNodeOutcome = {
   status: string;
   /** Whether the page looked different afterwards. Absent where it was not compared. */
   pageChanged?: boolean;
+  /**
+   * The node ran and the page it left could not be read, however long it was
+   * waited for (`../capture.ts`, `captureAfterAction`). The packet then has no
+   * page in it, and the next call's own look is where the page is read again.
+   */
+  pageUnreadable?: true;
   /** The control it acted on, in the words the model was shown. */
   control?: string;
   /** What a reading node read, bounded (`./read-result.ts`). */
@@ -137,6 +147,12 @@ export type WebNodeRun = {
   restamp: (binding: WebLlmSnapshotBinding) => WebLlmSnapshotBinding;
   /** Remember a packet the model has now been shown. */
   shown: (binding: WebLlmSnapshotBinding) => void;
+  /**
+   * Whether this build has reached its start location, held by the runtime for
+   * the life of the process (`./arrival.ts`). Read only for a build told a
+   * start location.
+   */
+  arrivals: WebNodeArrivals;
 };
 
 /** Run the node a call named, and answer with what it did. */
@@ -147,7 +163,22 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // the same permission gate, and it is answered in Core's closed replay
   // vocabulary rather than this domain's, because Core reads the answer.
   const replaying = webNodeReplayCall(value);
-  if (replaying) return await replayWebOutputNode(run, replaying);
+  if (replaying) {
+    const replayed = await replayWebOutputNode(run, replaying);
+    // A replayed navigation that ran is the Flow's own first step reaching its
+    // page, which is arrival as much as the original call was. This is what
+    // keeps a resumed build -- a new process, nothing remembered -- from being
+    // refused after its saved draft has been replayed from the start. A reset
+    // is not: it is this domain's move, not a step of the Flow.
+    if (replaying === "step" && replayed.effectApplied && run.request.startLocation !== undefined) {
+      const replayedNode = webRunnableNode(value.node);
+      if (replayedNode && webMovesThePage(replayedNode)) run.arrivals.arrive(buildOf(run));
+    }
+    return replayed;
+  }
+  // The build's opening call starts it not there, whatever the tab shows
+  // (`./arrival.ts`). A build told no start location is not touched.
+  if (run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
   const node = webRunnableNode(value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
@@ -175,7 +206,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       if (!looked) return notThereYet(run, record);
       run.shown(looked);
       return toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, control: undefined, read: undefined, inFlow: false })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -288,8 +319,22 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
         : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""));
     }
-    const after = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
-    run.shown(after);
+    // The move that goes there has now gone there: from here on the page is an
+    // ordinary page (`./arrival.ts`).
+    if (run.request.startLocation !== undefined && webMovesThePage(node)) run.arrivals.arrive(buildOf(run));
+    // The page the node left, once there is one. A node that starts a
+    // navigation of the page it acted on -- a button that saves and reloads
+    // (bigbox's "Set as my store", `run-muncqlr0-3348202b`), a form that
+    // submits -- can leave the look after it between two documents. That
+    // look's `page_unreadable` used to be raised as this call's refusal, so a
+    // step that had worked came back `effectApplied: false` and could never be
+    // a step of the Flow. It is now waited out until the new document answers
+    // (`../capture.ts`, `captureAfterAction`); a page still unreadable once
+    // that window has passed is reported without a packet, and the node is
+    // still reported as having run, because it did.
+    const settled = await captureAfterAction(run.gateway, run.sessionId, run.request, run.request.signal);
+    const after = settled === undefined ? undefined : run.restamp(settled);
+    if (after) run.shown(after);
     const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
     // What the node read, for a node that reads. Never for the look itself:
     // its payload is the raw snapshot, which is the page before any of this
@@ -297,8 +342,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // is. Returning it would be the one path by which a page's own markup
     // reached a decision.
     const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4))) : undefined;
-    // Arriving from nowhere changed the page by definition: there was none.
-    const changed = current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
+    // Arriving from nowhere changed the page by definition: there was none. A
+    // page that could not be read was not compared, so it is not said.
+    const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
     // The page, with what the node did to it written on the same packet rather
     // than around it. One shape, the one every other packet has: a handle is
     // read out of `elements` wherever it is read, and a consumer that knew
@@ -310,12 +356,14 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Said, never inferred: a press that left the page looking the same may
       // still have been the right step, and a model that is told so can decide.
       pageChanged: changed,
+      pageUnreadable: after === undefined ? true : undefined,
       control: control.name,
       read,
       inFlow: node.proposes
     });
     return toolExecution(
-      bounded(nodeEvidence(after.evidence, outcome), budget, after.evidence, outcome),
+      // No page, no packet: the outcome alone, which says why.
+      after === undefined ? outcome as unknown as JsonValue : bounded(nodeEvidence(after.evidence, outcome), budget, after.evidence, outcome),
       // The node ran and the command succeeded, so this step worked -- which is
       // what the draft reads it as. Whether the page then looked different is a
       // separate fact, reported as `pageChanged`: a press that applies a filter
@@ -358,7 +406,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // replay resets to, and for a Flow that starts by going somewhere that
         // step found no page at all -- so what it records is where it was sent,
         // which is what a reset has to put the page back to (`./replay.ts`).
-        replay: webNodeReplayStatement({ location: current?.evidence.location ?? run.request.startLocation ?? after.evidence.location, payload: result.payload as JsonValue | undefined, reads: node.proposes })
+        replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, after), payload: result.payload as JsonValue | undefined, reads: node.proposes })
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under
@@ -379,6 +427,19 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     throw error;
   }
+}
+
+/**
+ * Where a step found the page: the page it acted on, or for a step from nowhere
+ * where it was sent, or failing both where it arrived.
+ *
+ * Never empty in practice -- a call with no page before it is one a start
+ * location was given for (`currentPage`) -- and the empty string is only what
+ * the type needs for the case that cannot occur: `./replay.ts` reads it as a
+ * location it will not return to, which is the safe reading.
+ */
+function foundAt(current: WebLlmSnapshotBinding | undefined, startLocation: string | undefined, after: WebLlmSnapshotBinding | undefined): string {
+  return current?.evidence.location ?? startLocation ?? after?.evidence.location ?? "";
 }
 
 /** A refusal as the call's result: the code, why, and the page as it now stands. */
@@ -438,7 +499,7 @@ function bounded(evidence: JsonValue, budget: number, page: WebLlmPageEvidence, 
   if (serializedBytes(evidence) <= budget) return evidence;
   return nodeEvidence(page, present<WebNodeOutcome>({
     ok: outcome.ok, node: outcome.node, status: outcome.status,
-    pageChanged: undefined, control: undefined, read: undefined, inFlow: outcome.inFlow
+    pageChanged: undefined, pageUnreadable: outcome.pageUnreadable, control: undefined, read: undefined, inFlow: outcome.inFlow
   }));
 }
 
@@ -599,6 +660,14 @@ function crossOrigin(node: WebRunnableNode, parameters: JsonObject, location: st
  * `page_unreadable`. That is not a fault to report, it is the situation, and
  * `undefined` is how this module says so.
  *
+ * **The rule also holds when the page is already open.** Until a navigation
+ * node has succeeded in this build (`./arrival.ts`) the answer is `undefined`
+ * even when the capture read a page: on `run-muncqlr0-3348202b` the tab already
+ * stood on the start location, the first look read it, no step ever reached
+ * it, and the Flow was refused `bootstrap.cannot_reach_start_location`. The
+ * capture is still taken, so the calls made are the same whichever tab the
+ * build was handed, and what it read is discarded unseen.
+ *
  * A build that was told no start location is unchanged in every respect: the
  * refusal is raised as it always was, because there is nowhere to send the
  * model and "the page could not be read" is then the whole truth.
@@ -606,12 +675,19 @@ function crossOrigin(node: WebRunnableNode, parameters: JsonObject, location: st
 async function currentPage(run: WebNodeRun, request: WebLlmEvidenceToolRequest): Promise<WebLlmSnapshotBinding | undefined> {
   const capture = async () => run.restamp(await captureEvidence(run.gateway, run.sessionId, request, run.request.signal));
   if (run.request.startLocation === undefined) return await capture();
+  let page: WebLlmSnapshotBinding;
   try {
-    return await capture();
+    page = await capture();
   } catch (error) {
     if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
     throw error;
   }
+  return run.arrivals.arrived(buildOf(run)) ? page : undefined;
+}
+
+/** The build this call belongs to, as the arrival memory keys it. */
+function buildOf(run: WebNodeRun): { projectId: string; flowId: string; sessionId: string } {
+  return { projectId: run.request.projectId, flowId: run.request.flowId, sessionId: run.sessionId };
 }
 
 /** The refusal for a call made before the Flow has reached where it starts. */
