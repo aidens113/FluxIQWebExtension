@@ -191,7 +191,8 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   });
   const evidence: WebLlmPageEvidence = { ...binding.evidence, elements };
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;
-  // The digest is of the page, and renumbering does not touch the page
-  // (`state-digest.ts` leaves `target` out), so it travels as it was taken.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: binding.stateDigest });
+  // The digest and the route state are of the page, and renumbering does not
+  // touch the page (`state-digest.ts` leaves `target` out, and the route state
+  // reads no handle), so both travel as they were taken.
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: binding.stateDigest, routeState: binding.routeState });
 }

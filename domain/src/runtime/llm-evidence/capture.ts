@@ -16,7 +16,7 @@ import { webActionFailureRefusal, type WebActionRefusal, type WebFailedActionRes
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
-import { webLlmSnapshotStateDigest } from "./snapshot-state-digest";
+import { webLlmSnapshotStates } from "./snapshot-states";
 import {
   recoverable,
   RecoverableToolRejection,
@@ -125,7 +125,7 @@ export type WebLlmEvidenceToolExecution = {
   /**
    * The state the call found and the state it left, as `captureStateDigest`
    * would have digested them, taken from the captures the call itself made
-   * (`withCallStates`, `./snapshot-state-digest.ts`).
+   * (`withCallStates`, `./snapshot-states.ts`).
    *
    * Core used to ask for these around every call, and each answer was a page
    * capture of its own: three for a look, four and the action for an action.
@@ -136,6 +136,22 @@ export type WebLlmEvidenceToolExecution = {
    * reads that side as unobserved.
    */
   stateDigests?: { before?: string; after?: string };
+  /**
+   * The route state of the page the call left, exactly as the host's
+   * `observeRouteState` would read it from the same page (`../host-runtime.ts`,
+   * `../route-state/project.ts`), taken from the capture the call itself made
+   * (`withCallStates`, `./snapshot-states.ts`).
+   *
+   * Core's build routing records the route state each exploration step left,
+   * and asked `observeRouteState` for it -- a whole page capture -- at build
+   * start and before most decisions
+   * (`AS/runtime/route-state.ts`). Reporting it here lets Core capture only
+   * where no call left one. Always the page the call *left*: an action's read
+   * before acting is never it. A call that left no page it read -- refused
+   * before anything was read, a page unreadable after acting, a detection in a
+   * frame -- carries the key absent.
+   */
+  routeState?: JsonObject;
   /**
    * What this one call did, for the draft Core is accruing.
    *
@@ -245,7 +261,7 @@ type WebLlmEvidenceToolCallFacts = {
  * never before. `tests/name-assumption.test.ts` holds the two together.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "nodeId", "stateDigests", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "nodeId", "stateDigests", "routeState", "draft"
 ];
 
 export function toolExecution(
@@ -272,6 +288,7 @@ export function toolExecution(
     assumed: said?.assumed,
     // Written afterwards, by `withCallStates`, from the captures the call made.
     stateDigests: undefined,
+    routeState: undefined,
     draft
   }));
 }
@@ -286,6 +303,10 @@ export function toolExecution(
  * action's read before acting -- and `left` the page as the call left it. A
  * side with no capture, or whose capture was too large to digest, is left
  * unsaid; with neither, the key is absent.
+ *
+ * The route state is of `left` alone, because it is what Core's routing
+ * records as the state a step left; with no `left`, or one too large to read,
+ * `routeState` is absent.
  */
 export function withCallStates(
   execution: WebLlmEvidenceToolExecution,
@@ -294,6 +315,7 @@ export function withCallStates(
 ): WebLlmEvidenceToolExecution {
   const digests = present<NonNullable<WebLlmEvidenceToolExecution["stateDigests"]>>({ before: found?.stateDigest, after: left?.stateDigest });
   if (digests.before !== undefined || digests.after !== undefined) execution.stateDigests = digests;
+  if (left?.routeState !== undefined) execution.routeState = left.routeState;
   return execution;
 }
 
@@ -376,15 +398,18 @@ export async function captureEvidence(
     // target at all -- neither a handle nor a "the target is gone".
     failedAction: undefined,
   }));
-  // Digested now, before any caller writes on the packet, and at the bound
-  // `captureStateDigest` uses rather than this call's, so a call's own capture
-  // answers for the state it saw (`./snapshot-state-digest.ts`).
+  // Digested and projected now, before any caller writes on the packet, and at
+  // the bound `captureStateDigest` and `observeRouteState` use rather than this
+  // call's, so a call's own capture answers for the state it saw
+  // (`./snapshot-states.ts`).
+  const states = webLlmSnapshotStates(payload.snapshot, bounded, request.maxEvidenceBytes);
   return present<WebLlmSnapshotBinding>({
     evidence: bounded.evidence,
     selectors: bounded.selectors,
     records: bounded.records,
     shadowHosts: bounded.shadowHosts,
-    stateDigest: webLlmSnapshotStateDigest(payload.snapshot, bounded, request.maxEvidenceBytes)
+    stateDigest: states.stateDigest,
+    routeState: states.routeState
   });
 }
 

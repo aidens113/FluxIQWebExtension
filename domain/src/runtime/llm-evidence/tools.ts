@@ -405,7 +405,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // every such build, before the Flow had done anything wrong
       // (`AS/runtime/llm/evidence-loop.ts`: a hook that throws fails the step).
       //
-      // The digest is the one every capture carries (`./snapshot-state-digest.ts`),
+      // The digest is the one every capture carries (`./snapshot-states.ts`),
       // so what this answers and what a call reports on `stateDigests` for the
       // same page are one value by construction.
       if (input.startLocation === undefined) return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
