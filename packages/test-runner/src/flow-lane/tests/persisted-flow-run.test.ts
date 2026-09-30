@@ -192,6 +192,36 @@ test("the run's failure is the one that decided it, and a fault the ladder recov
   assert.deepEqual(outcome.failure, channel);
   assert.deepEqual(outcome.recoveredFailures, [missed]);
 
+  // `run-munxkfy9-81c5beb5` (crossborder spain-hubs): the filter click landed
+  // on the robot check, Core asked, the Lab person pressed the box and answered
+  // Continue, and the run went on down `success` to 13 of 13 records. The node
+  // has one attempt and it failed -- but a person cleared it, so its failure is
+  // absorbed, never the run's. A Stop, or nobody answering, still decides it.
+  const check = { category: "user_intervention_required", code: "web.intervention.required", retryable: false };
+  const clearedAsk = { kind: "choice", status: "answered", route: "success", personNeeded: true };
+  const clearedRun = control(
+    { runPersistedFlow: async () => ({ session: { runId: "run.one", status: "succeeded" } }) },
+    {
+      summary: { runId: "run.one", status: "succeeded" },
+      actionAttempts: [
+        attempt({ attemptId: "a0", nodeId: "node.filter", order: 0, status: "failed", failure: check, metadata: { ask: clearedAsk } }),
+        attempt({ attemptId: "a1", nodeId: "node.extract", order: 1, status: "succeeded" }),
+      ],
+    },
+  );
+  const cleared = await executeRecordedFlowRun(clearedRun.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.equal(cleared.failure, null, "a check a person cleared did not decide the run");
+  assert.deepEqual(cleared.recoveredFailures, [check]);
+  assert.equal(cleared.actions[0]?.clearedByPerson, true);
+  for (const ask of [{ ...clearedAsk, route: "failed" }, { ...clearedAsk, status: "expired", route: "failed" }, { kind: "choice", status: "answered", route: "success" }]) {
+    const run = control(
+      { runPersistedFlow: async () => ({ session: { runId: "run.one", status: "failed" } }) },
+      { summary: { runId: "run.one", status: "failed" }, actionAttempts: [attempt({ attemptId: "a0", nodeId: "node.filter", order: 0, status: "failed", failure: check, metadata: { ask } })] },
+    );
+    const stoppedAtCheck = await executeRecordedFlowRun(run.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+    assert.deepEqual(stoppedAtCheck.failure, check, `ask ${JSON.stringify(ask)} is not a person clearing the check`);
+  }
+
   // A run that met no fault states none of either kind.
   const clean = await executeRecordedFlowRun(control().client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
   assert.equal(clean.failure, null);

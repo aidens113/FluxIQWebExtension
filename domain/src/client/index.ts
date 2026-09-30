@@ -2,6 +2,7 @@ export * from "../constants";
 export * from "../actions/types";
 export * from "../actions/schemas";
 export * from "../actions/capabilities";
+export * from "../actions/check-wait";
 export * from "../extraction";
 export * from "../io/input-model";
 export * from "../output-nodes";

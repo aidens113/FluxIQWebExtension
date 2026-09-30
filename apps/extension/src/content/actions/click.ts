@@ -44,6 +44,7 @@
 // that presses a blocking dialog's own way out (`action-runtime/interference/`),
 // which needs the same press and cannot import a verb.
 
+import { WEB_AUTOMATION_CHECK_WAIT_MS, webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
 import { dispatchClickGesture } from "../action-runtime";
 import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch, RateLimitWatch, RobotCheckSighting, RobotCheckWatch } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
@@ -78,7 +79,7 @@ const RATE_LIMIT_WINDOW_MS = 500;
  * (`action-runtime/robot-check/robot-check-watch.ts`). Paid only by a press
  * that actually put such a check up.
  */
-const ROBOT_CHECK_WAIT_MS = 15_000;
+const ROBOT_CHECK_WAIT_MS = WEB_AUTOMATION_CHECK_WAIT_MS;
 
 /** Kept back from the command's own timeout, so a result still reaches Core in time. */
 const ROBOT_CHECK_REPLY_MARGIN_MS = 1_000;
@@ -209,8 +210,9 @@ function rateLimitWindowMs(action: BrowserActionCommand): number {
 }
 
 function windowWithin(action: BrowserActionCommand, windowMs: number): number {
-  const timeoutMs = action.timeoutMs;
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return windowMs;
+  // The timeout before any check allowance: that room is the check wait's alone.
+  const timeoutMs = webAutomationBaseTimeoutMs(action);
+  if (timeoutMs === undefined) return windowMs;
   return Math.min(Math.floor(timeoutMs), windowMs);
 }
 

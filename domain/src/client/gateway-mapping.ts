@@ -189,6 +189,7 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     key: stringValue(parameters.key),
     url: stringValue(parameters.url),
     timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs),
+    checkWaitMs: numberValue(parameters.checkWaitMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
     element: commandElementFingerprint(target, parameters),

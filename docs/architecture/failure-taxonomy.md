@@ -271,7 +271,21 @@ check on this page, then press Continue", with the choices Continue and Stop.
   `user_intervention_required` category, and raised no ask of its own, gets the
   person-needed ask as its ask effect. Continue goes down `success`, and the
   next node reads the page fresh. Stop or a timeout goes down `failed`, with a
-  clear person-needed ending.
+  clear person-needed ending. A run that still fails in that category is never
+  handed to a repair model: the recovery gate reads it as `manual_intervention`.
+- **Repairing a failed run.** A check met while the recovery explores the page
+  is handled as in a build, through the same Core wrapper
+  (`runtime/parking/person-needed-tool-calls.ts`). Every recovery option marks
+  such a call `personNeeded` (`domain/src/runtime/llm-evidence/harness-options/execute.ts`),
+  and Core asks the person through the run's thread, at stage `recovery`,
+  instead of showing the repair model the check. On Continue the exploration
+  goes on from a fresh look, and only that look is kept for the patch. Stop, a
+  timeout, no thread, or more than three asks end the exploration
+  `user_intervention_required`, with `endedBy` set to the person-needed code
+  (`person_needed.stopped`, `.timed_out`, `.no_thread`, `.cancelled` or
+  `.asks_exhausted`). The recovery then makes no re-plan and no patch call, and
+  records the patch as skipped: `llm.runtime_patch_person_needed` at rung
+  `exploration`.
 
 `AUTH_REQUIRED` shares the model-facing `needs_person` refusal and not this
 parking: a sign-in is not something a Continue press clears.

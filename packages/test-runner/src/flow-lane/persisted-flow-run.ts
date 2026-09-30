@@ -126,6 +126,14 @@ export type PersistedFlowAction = {
   hostTargetResolution?: PersistedHostTargetResolution;
   failure: AutomationStudioFailureRecord | null;
   /**
+   * True when this attempt failed on something only a person can get past --
+   * a robot check -- and a person cleared it: Core asked (`metadata.ask`,
+   * `personNeeded`), the person answered, and the run went on down `success`.
+   * Such an attempt does not end its node, so its failure is a recovered one,
+   * never the run's (`node-recovery.ts`). Absent otherwise.
+   */
+  clearedByPerson?: true;
+  /**
    * Rows the attempt captured, from Core's `metadata.recordCount` (K5). Core
    * replaces a stored attempt's captured rows with a `$dataset` marker holding
    * this count, so it is the only thing an attempt says about an extraction —
@@ -635,6 +643,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     ...(finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(finishedAt - startedAt)) }),
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
+    ...(clearedByPerson(attempt) ? { clearedByPerson: true as const } : {}),
     ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
     ...(extraction ? { extraction } : {}),
     ...(comparisonStatus ? { comparisonStatus } : {}),
@@ -656,6 +665,16 @@ const COMPARISON_STATUS_NAME = /^[a-z]+(?:_[a-z]+)*$/u;
  * shape is what keeps a value that is not a name, which could carry page text,
  * out of the bundle.
  */
+/**
+ * Whether Core's `metadata.ask` says a person cleared this attempt: the
+ * person-needed question, answered, and the run sent on down `success`. Closed
+ * words only; the question and the answer are never in the record.
+ */
+function clearedByPerson(attempt: Record<string, unknown>): boolean {
+  const ask = optionalRecord(optionalRecord(attempt.metadata)?.ask);
+  return ask?.personNeeded === true && ask.status === "answered" && ask.route === "success";
+}
+
 function comparisonStatusOf(attempt: Record<string, unknown>): string | undefined {
   const status = attempt.comparisonStatus;
   return typeof status === "string" && status.length <= 64 && COMPARISON_STATUS_NAME.test(status) ? status : undefined;

@@ -97,6 +97,21 @@ assert.deepEqual(webAutomationActionFromGatewayCommand({
   actionType: "web.dom.scroll",
   options: { x: 0, y: 640 }
 });
+// A recorded click's check allowance crosses the wire as a declared field beside its timeout.
+assert.deepEqual(webAutomationActionFromGatewayCommand({
+  commandId: "command.click",
+  actionType: "web.dom.click",
+  target: { selector: "#go" },
+  timeoutMs: 20_000,
+  parameters: { checkWaitMs: 15_000 }
+}), {
+  commandId: "command.click",
+  actionType: "web.dom.click",
+  selector: "#go",
+  timeoutMs: 20_000,
+  checkWaitMs: 15_000,
+  options: { checkWaitMs: 15_000 }
+});
 const rejected = webAutomationActionFromGatewayCommand({ commandId: "command.hover", actionType: "web.dom.hover", target: { selector: "#menu" } });
 assert.deepEqual(rejected, {
   commandId: "command.hover",

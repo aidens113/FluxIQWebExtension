@@ -21,6 +21,7 @@
 // The time is also held within the command's own `timeoutMs`, less a margin
 // for the reply to reach Core, so a wait never outlives the command it serves.
 
+import { WEB_AUTOMATION_CHECK_WAIT_MS } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../shared/protocol";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
 
@@ -53,7 +54,7 @@ export type LandedCheckProbe = {
 };
 
 /** The longest a self-clearing check is waited out before it is handed to the person. */
-export const SELF_CLEARING_WAIT_MS = 15_000;
+export const SELF_CLEARING_WAIT_MS = WEB_AUTOMATION_CHECK_WAIT_MS;
 
 /** How often the page is asked again while a check stands. */
 const POLL_INTERVAL_MS = 500;
@@ -101,7 +102,11 @@ export async function settleLandedReading(
   return { reading: checkWait.outcome === "cleared" ? { kind: "no_robot_check" } : first, checkWait };
 }
 
-/** How long a command started at `startedAt` may spend waiting out a check: SELF_CLEARING_WAIT_MS, held within its own timeout. */
+/**
+ * How long a command started at `startedAt` may spend waiting out a check:
+ * SELF_CLEARING_WAIT_MS, held within its whole timeout -- the check allowance
+ * (`checkWaitMs`) included, which is what the domain adds it for.
+ */
 export function checkWaitBudgetMs(action: BrowserActionCommand, startedAt: number, now: number = Date.now()): number {
   const timeoutMs = action.timeoutMs;
   if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return SELF_CLEARING_WAIT_MS;
