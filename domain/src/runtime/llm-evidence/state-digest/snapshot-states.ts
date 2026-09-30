@@ -48,11 +48,11 @@
 // fit a refusal -- because they are of the page, not of what a call said about
 // it.
 
-import { webAutomationRouteState } from "../route-state";
-import { present } from "./present";
-import { sanitizeWebLlmSnapshot, type WebLlmPageEvidence, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
+import { webAutomationRouteState } from "../../route-state";
+import { present } from "../present";
+import { sanitizeWebLlmSnapshot, type WebLlmPageEvidence, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmStateDigest } from "./state-digest";
-import { RecoverableToolRejection } from "./tool-rejection";
+import { RecoverableToolRejection } from "../tool-rejection";
 
 /**
  * The digest and the route state of the page `snapshot` is a capture of, equal

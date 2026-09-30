@@ -16,7 +16,7 @@ import { webActionFailureRefusal, webActionNeedsPerson, type WebActionRefusal, t
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
-import { webLlmSnapshotStates } from "./snapshot-states";
+import { webLlmSnapshotStates } from "./state-digest";
 import {
   recoverable,
   RecoverableToolRejection,
@@ -137,7 +137,7 @@ export type WebLlmEvidenceToolExecution = {
   /**
    * The state the call found and the state it left, as `captureStateDigest`
    * would have digested them, taken from the captures the call itself made
-   * (`withCallStates`, `./snapshot-states.ts`).
+   * (`withCallStates`, `./state-digest/snapshot-states.ts`).
    *
    * Core used to ask for these around every call, and each answer was a page
    * capture of its own: three for a look, four and the action for an action.
@@ -152,7 +152,7 @@ export type WebLlmEvidenceToolExecution = {
    * The route state of the page the call left, exactly as the host's
    * `observeRouteState` would read it from the same page (`../host-runtime.ts`,
    * `../route-state/project.ts`), taken from the capture the call itself made
-   * (`withCallStates`, `./snapshot-states.ts`).
+   * (`withCallStates`, `./state-digest/snapshot-states.ts`).
    *
    * Core's build routing records the route state each exploration step left,
    * and asked `observeRouteState` for it -- a whole page capture -- at build
@@ -438,7 +438,7 @@ export async function captureEvidence(
   // Digested and projected now, before any caller writes on the packet, and at
   // the bound `captureStateDigest` and `observeRouteState` use rather than this
   // call's, so a call's own capture answers for the state it saw
-  // (`./snapshot-states.ts`).
+  // (`./state-digest/snapshot-states.ts`).
   const states = webLlmSnapshotStates(payload.snapshot, bounded, request.maxEvidenceBytes);
   return present<WebLlmSnapshotBinding>({
     evidence: bounded.evidence,

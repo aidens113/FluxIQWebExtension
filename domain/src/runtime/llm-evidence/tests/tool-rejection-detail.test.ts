@@ -235,7 +235,7 @@ test("no refusal carries a word of the page, whatever it refused", async () => {
 
   // Everything a refusal says, which is everything on it but `routeState`.
   // That member is not the refusal speaking: it is the host's route state of
-  // the page the call left (`../snapshot-states.ts`), the very value Core's
+  // the page the call left (`../state-digest/snapshot-states.ts`), the very value Core's
   // build routing used to fetch with a capture of its own
   // (`observeRouteState`), and it is the page's words by construction -- the
   // title and the control names a Router tests. It is held to its own

@@ -130,7 +130,7 @@ export type WebLlmSnapshotBinding = {
   /**
    * The page's state digest, taken from the capture this binding was sanitized
    * from, at the bound `captureStateDigest` digests at rather than this
-   * packet's own (`snapshot-states.ts`). It is how a call reports the
+   * packet's own (`state-digest/snapshot-states.ts`). It is how a call reports the
    * state it found and left without another capture. Like the maps it never
    * leaves the domain inside a packet; it leaves only on the call's
    * `stateDigests`. Absent on a binding no capture produced -- a failure packet,
@@ -139,7 +139,7 @@ export type WebLlmSnapshotBinding = {
   stateDigest?: string;
   /**
    * The page's route state, exactly as the host's `observeRouteState` would
-   * read it from the same capture (`snapshot-states.ts`), taken at the same
+   * read it from the same capture (`state-digest/snapshot-states.ts`), taken at the same
    * moment and bound as `stateDigest` and absent in the same cases. It leaves
    * only on the call's `routeState`, and only for the page the call left.
    */

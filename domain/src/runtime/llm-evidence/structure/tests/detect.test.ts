@@ -106,7 +106,7 @@ let callCount = 0;
 /**
  * One detection, without the states it saw. Those are a digest and a route
  * state of each fixture page, held to their own contracts in
- * `../../tests/call-state-digests.test.ts` and
+ * `../../state-digest/tests/call-state-digests.test.ts` and
  * `../../tests/call-route-states.test.ts`; restating them for every fixture
  * here would test nothing about detection.
  */

@@ -16,8 +16,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { createWebAutomationHostRuntime } from "../../host-runtime";
-import { webAutomationRouteState } from "../../route-state";
+import { createWebAutomationHostRuntime } from "../../../host-runtime";
+import { webAutomationRouteState } from "../../../route-state";
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
@@ -26,9 +26,9 @@ import {
   type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmPageEvidence
-} from "..";
-import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../capture";
-import { CAPTURED_DETECTIONS } from "../structure/tests/captured-detections";
+} from "../..";
+import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
+import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const SNAPSHOT = "web.output.dom-capture_snapshot";

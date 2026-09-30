@@ -50,7 +50,7 @@ import {
 import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
-import { webLlmSnapshotStates } from "../snapshot-states";
+import { webLlmSnapshotStates } from "../state-digest";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { webActionNeedsPerson } from "../action-failure";
 import { recoverable, RecoverableToolRejection, rejectionDetail } from "../tool-rejection";

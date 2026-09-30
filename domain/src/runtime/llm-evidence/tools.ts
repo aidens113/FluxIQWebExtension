@@ -177,7 +177,7 @@ export type WebAutomationLlmEvidenceRuntime = {
    * It is the one thing Core's exploration reducer cannot work out for itself:
    * Core's own digest is of the evidence a step returned, which is what the step
    * said rather than what the page was. This takes a fresh sanitized capture and
-   * hashes a projection of it (`state-digest.ts`), which is why it widens
+   * hashes a projection of it (`state-digest/state-digest.ts`), which is why it widens
    * nothing -- the input is the same packet the model would have been shown, and
    * what leaves is a hash of less of it.
    */
@@ -412,7 +412,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // every such build, before the Flow had done anything wrong
       // (`AS/runtime/llm/evidence-loop.ts`: a hook that throws fails the step).
       //
-      // The digest is the one every capture carries (`./snapshot-states.ts`),
+      // The digest is the one every capture carries (`./state-digest/snapshot-states.ts`),
       // so what this answers and what a call reports on `stateDigests` for the
       // same page are one value by construction.
       //
