@@ -53,7 +53,7 @@ export type ExtractionPanelHandle = {
  * What the host may add to the panel's own behaviour.
  *
  * `prepare` runs when the entry is pressed, before the pick starts. Extraction
- * is recorded into a recording, so Simple Mode's "Extract data" entry uses it to
+ * is recorded into a recording, so the panel's entry (`panel/recording`) uses it to
  * start one when none is running -- the extraction then compiles into the
  * recording's Flow like any other step, instead of bypassing it (plan 3.7).
  * A `prepare` that throws stops the pick, and its message is shown in the sheet.

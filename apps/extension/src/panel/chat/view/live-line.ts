@@ -39,6 +39,8 @@ export function createLiveLine(): LiveLine {
       const hidden = model === null;
       if (element.hidden !== hidden) element.hidden = hidden;
       if (model === null) return;
+      const state = model.waiting ? "waiting" : "working";
+      if (element.getAttribute("data-state") !== state) element.setAttribute("data-state", state);
       setText(headline, model.headline);
       setText(step, model.step);
       setText(detail, model.detail);

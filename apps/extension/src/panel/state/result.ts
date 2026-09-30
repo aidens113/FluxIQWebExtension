@@ -3,7 +3,7 @@
  * "Contracts pinned by this spec").
  *
  * `value` is the background's reply object for a request that succeeded.
- * `sentence` is what a person reads; `detail` keeps the raw text for Advanced.
+ * `sentence` is what a person reads; `detail` keeps the raw text, shown as a tooltip.
  * `unsupported` means the background answered "Unknown FluxIQ extension
  * message.": this extension build does not handle the message yet, so a view
  * shows its fallback instead of an error.

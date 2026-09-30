@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AskControlsContext, CoreTurn } from "../../../simple/conversation";
+import type { AskControlsContext, CoreTurn } from "../../conversation";
 import { buildChatStream, buildChatThread } from "../../stream";
 import { activityEvent, eventTime } from "../../tests/activity-fixture";
 import { fake, withFakeDocument } from "../../tests/fake-dom";
@@ -18,7 +18,7 @@ function turn(turnId: string, author: string, text = turnId): CoreTurn {
   return { turnId, author, text, ask: null, attachment: false };
 }
 
-const LIVE = { headline: "Building your Flow", detail: "Reading the page", step: "" };
+const LIVE = { headline: "Building your Flow", detail: "Reading the page", step: "", waiting: false };
 
 test("the person's turn is a bubble; FluxIQ's is formatted text with its work folded above", async () => {
   await withFakeDocument(() => {
@@ -36,7 +36,8 @@ test("the person's turn is a bubble; FluxIQ's is formatted text with its work fo
     assert.equal(answer!.getAttribute("data-author"), "fluxiq");
     assert.deepEqual(answer!.byClass("chat-answer")[0]!.children.map((node) => node.tagName), ["P", "UL"]);
     assert.equal(answer!.byClass("chat-work-label")[0]!.textContent, "Worked for 1s · 1 step");
-    assert.equal(answer!.byClass("chat-step-ref")[0]!.textContent, "web.dom.extract");
+    assert.equal(answer!.byClass("chat-step-title")[0]!.textContent, "Read the page");
+    assert.equal(answer!.byClass("chat-step-ref").length, 0, "no tool id is shown");
     assert.equal(live!.hidden, true, "no live line when nothing is working");
   });
 });
