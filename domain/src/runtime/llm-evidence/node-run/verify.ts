@@ -1,0 +1,189 @@
+// Checking a step whose effect lasts, without taking it.
+//
+// A dry run never clears site data or logs the person out, never repeats a
+// lasting effect, and checks a changing step rather than running it again
+// (decision D1, 2026-09-30). Core decides which steps those are -- a step that
+// changes something and declares any consequence but none
+// (`AS/runtime/flow-draft/verify-only.ts`) -- and sends them
+// `replay: "verify"` instead of `replay: "step"`, with where the step found the
+// page. Live run `run-muntufao-7b7bc04a` is why: two dry-run replays of one
+// save-for-later press moved both of a person's cart lines to the saved list.
+//
+// **What is checked.** Exactly what a replay would need before it pressed:
+//
+//   1. the step names a node this domain can run, with parameters;
+//   2. those parameters resolve, by the same resolution a replay uses, so the
+//      target is the one the Flow would act on;
+//   3. the target is on the page and visible, then enabled -- each asked of
+//      the page through `web.dom.assert`, which reads and never acts.
+//
+// Nothing that acts is dispatched, so the person's permission for the step's
+// declared classes is not asked again: the gate is asked for a check with no
+// consequence, because every call a replay makes goes through it. The act
+// itself stays gated where it always was.
+//
+// **What each answer means.**
+//
+//   verified        -- the step could run now. Its effect was withheld.
+//   present         -- the target is not on the page, and the page is the one
+//                      the step acted on (its recorded location, origin and
+//                      path). That is what an effect already in place looks
+//                      like: the line was saved while exploring and its save
+//                      control is gone; the store was chosen and its card now
+//                      says "Your store" (t193-wH, `run-munri5gr-94d7f8a0`).
+//                      It passes.
+//   unreproducible  -- the target is not on the page, and the page is not the
+//                      one the step acted on, or where it is could not be read.
+//                      The steps before it no longer reach it (run 18,
+//                      `run-munpwa5r-e7aefe04`: an add-to-cart replayed on the
+//                      search results because the steps that reach the product
+//                      page were withdrawn). It blocks.
+//   failed          -- the target is there and hidden or disabled, the page
+//                      would not answer the check, or the step does not
+//                      resolve. The Flow would not run it either.
+//
+// The same page by location is not proof: two states can share a path, and a
+// step whose dialog never opened would read as present. It is the evidence this
+// domain has without acting, it separates run 18's case from run 21's, and it
+// is asked only of steps the dry run must not repeat anyway.
+//
+// Visible and enabled is not the whole of "actionable": a control covered by
+// a layer passes both. A replay would have found that by pressing, and this
+// does not press; playback still does.
+
+import type { JsonObject } from "fluxiq/core";
+import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
+import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
+import { assertActive, toolMetadata, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
+import { webActionPermission } from "../permission";
+import { resolveWebPlanNode } from "../plan-resolution";
+import { webLlmHandleRejectionReason } from "../tool-rejection";
+import { isJsonRecord } from "../untrusted-json";
+import { webRunnableNode } from "./catalog";
+import {
+  WEB_NODE_REPLAY_RESULT_CODES,
+  webNodeReplayAnswer,
+  webNodeReplayAnswerOnPage,
+  webNodeReplayAnswerWithPage,
+  webNodeReplayPage,
+  webNodeReplayPermissionReason,
+  type WebNodeReplayFacts
+} from "./replay-answer";
+import type { WebNodeRun } from "./run";
+
+/** The read-only command every check goes out as. */
+const CHECK_ACTION = "web.dom.assert";
+
+/** The parameters that name an element, as the action schemas spell them (`actions/schemas.ts`). */
+const TARGET_KEYS = ["selector", "element", "visualTarget"] as const;
+
+/**
+ * How long each check waits. The first gives a page just put back time to
+ * settle, the same window an authored assertion gets; the second is asked of
+ * an element already found, so it only waits out a control that enables late.
+ */
+const CHECKS = [
+  { kind: "visible", timeoutMs: 5_000, fails: "hidden" },
+  { kind: "enabled", timeoutMs: 1_000, fails: "disabled" }
+] as const;
+
+/** Check one step could run now, or that its effect is already in place, and run nothing that acts. */
+export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
+  const value = run.request.value;
+  const node = webRunnableNode(value.node);
+  const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
+  if (!node) return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the step names nothing this domain can run", false, { resultReason: "node_not_runnable_here", nodeId: undefined, assumed: undefined });
+  if (!parameters) return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the step carries no parameters to check", false, { resultReason: undefined, nodeId: node.definitionId, assumed: undefined });
+  const permission = await webActionPermission({ check: run.request.permission, declared: [], control: { name: undefined, kind: "step" }, verb: "check", effect: "observe" });
+  if (permission.kind === "refused" || permission.kind === "invalid") {
+    return webNodeReplayAnswer(WEB_NODE_REPLAY_RESULT_CODES.failed, "the check was not permitted", false, { resultReason: webNodeReplayPermissionReason(permission), nodeId: node.definitionId, assumed: undefined });
+  }
+  // `gatedByCaller`: resolving is not acting, and the gate was asked above.
+  const { resolution: resolved, assumed } = await resolveWebPlanNode(
+    { projectId: run.request.projectId, flowId: run.request.flowId, nodeDefinitionId: node.definitionId, parameters, gatedByCaller: true },
+    run.stores
+  );
+  if (resolved.status === "refused") {
+    return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, "the step's parameters could not be resolved", false, {
+      resultReason: webLlmHandleRejectionReason(resolved.issueCodes),
+      nodeId: node.definitionId,
+      assumed
+    });
+  }
+  const target = targetOf(resolved.status === "resolved" ? resolved.parameters : parameters);
+  const facts = (resultReason: WebNodeReplayFacts["resultReason"]): WebNodeReplayFacts => ({ resultReason, nodeId: node.definitionId, assumed });
+  // A step that names no element -- a navigation, a key, a tab -- has nothing
+  // on the page to check. That its parameters resolve is all a check can say.
+  if (!target) return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step names no element; its parameters resolve, and it was not run", facts(undefined));
+  for (const check of CHECKS) {
+    const result = await run.gateway.executeAction(run.sessionId, {
+      actionType: CHECK_ACTION,
+      parameters: { ...target, assert: { kind: check.kind, timeoutMs: check.timeoutMs } },
+      metadata: toolMetadata(run.request)
+    });
+    assertActive(run.request.signal);
+    if (result.status === "succeeded") continue;
+    const code = result.failure?.code;
+    if (webActionNeedsPerson(result)) {
+      const answered = await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, "the step's target could not be checked: the page needs a person", false, facts(undefined));
+      return withPersonNeeded(answered, undefined);
+    }
+    // Nothing matched within the window: a wait in vain, which is how the
+    // assertion reports a subject that never appeared.
+    if (result.status === "timed_out" || code === WEB_AUTOMATION_FAILURE_CODES.TIMEOUT || code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND) {
+      return await missing(run, facts("handle_no_longer_on_page"));
+    }
+    // The target was found and judged: it is there and not as a press needs it.
+    if (code === WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH) {
+      return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, `the step's target is on the page and ${check.fails}; it was not run`, false, facts("state_not_as_asserted"), check.fails);
+    }
+    const refused = webActionFailureRefusal(result);
+    return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, `the step's target could not be checked (${refused.code})`, false, facts(refused.detail?.reason));
+  }
+  return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step's target is on the page, visible and enabled; it was not run", facts(undefined));
+}
+
+/**
+ * A target that is not on the page: `present` when the page is the one the
+ * step acted on, `unreproducible` otherwise (see the header). Either way the
+ * answer carries the page, which is what a reader has to judge it from.
+ */
+async function missing(run: WebNodeRun, about: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution> {
+  const page = await webNodeReplayPage(run);
+  const actedOn = actedOnLocation(run.request.value);
+  if (page && actedOn !== undefined && page.evidence.location === actedOn) {
+    return webNodeReplayAnswerOnPage(run, page, {
+      code: WEB_NODE_REPLAY_RESULT_CODES.present,
+      said: "the step's target is gone from the page it acted on, which is how its effect already in place looks; it was not run",
+      acted: false,
+      ok: true,
+      about: { ...about, resultReason: undefined },
+      found: "missing"
+    });
+  }
+  return webNodeReplayAnswerOnPage(run, page, {
+    code: WEB_NODE_REPLAY_RESULT_CODES.unreproducible,
+    said: "the step's target is not on the page, and this is not the page it acted on; it was not run",
+    acted: false,
+    about,
+    found: "missing"
+  });
+}
+
+/** Where the step found the page, as this domain wrote it on the step (`./replay.ts`), and Core sent it back. */
+function actedOnLocation(value: JsonObject): string | undefined {
+  const from = isJsonRecord(value.from) ? value.from : undefined;
+  return typeof from?.location === "string" && from.location ? from.location : undefined;
+}
+
+/** A step that passed its check: `ok`, and nothing done to the page. */
+function passed(code: string, said: string, about: WebNodeReplayFacts): WebLlmEvidenceToolExecution {
+  return webNodeReplayAnswer(code, said, true, about, false);
+}
+
+/** The keys of the step's resolved parameters that name its element, or nothing when it names none. */
+function targetOf(parameters: JsonObject): JsonObject | undefined {
+  const target: JsonObject = {};
+  for (const key of TARGET_KEYS) if (parameters[key] !== undefined) target[key] = parameters[key]!;
+  return Object.keys(target).length ? target : undefined;
+}
