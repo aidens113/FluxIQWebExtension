@@ -37,6 +37,8 @@ and its own `fxwork/<id>` tree:
   only while `lab-slots/slot-1` is absent, and releases only its own. Never `mkdir` or `rm` a build slot by hand
   (a hand-written `rm` deleted another lane's claim on 2026-09-29). One test file, or one test directory at
   `--maxWorkers=2 --minWorkers=1` / `--test-concurrency=2`, needs no slot.
+- **While slot-1 is held**, `build-slots/priority-governor.ps1` (started by the supervisor) lowers every other lane's
+  build and test process to BelowNormal; live runs 11 and 12 died pairing at 100% CPU. Benchmarks pause.
 - Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
   validation, and the supervisor commits and continues it.
 
@@ -751,6 +753,8 @@ debug and partitioned so neither touches the other's files:
 - dev (with t176) merged into t185 (both clean) and t174 downstream (`b1a82a21`: seven hand-applied dev files taken from dev, one import kept from both; test-runner `tsc --noEmit` exit 0).
 - t188 (a Flow's size is one setting, 100 nodes per Subflow by default, changed in Flow Settings) merged and pushed in both repositories. Supervisor check in the t188 Core tree: vitest flow-size end-to-end + `flow-bootstrap/plan` + `model/flow-size` -> `12 passed (12)`, `121 passed (121)`. Downstream `pnpm task finish t188` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, `37379fe3`; Core `pnpm task finish t188` -> the same, `c961f4a`. Lead's run: affected Core suites 1191 tests passed, web settings 59 passed. Not exercised in a browser or live.
 - The live slot sat idle for over an hour after the restart (the live lane was briefed to finish full validation first, and t187's bench held a build slot); the user noticed. Corrected: the first live run since the restart claimed slot-1 at 19:30:58 (`crossborder-marketplace-hub-to-cart`), Chromium up at 19:35:43, 4 min 45 s of Lab prelude builds. Benchmarks pause while slot-1 is held.
+- Live runs 11 (`run-munhpy2m-036e9572`) and 12 (`run-muni3pdr-80225d3f`) died before pairing, with 0 provider calls: the first `fluxiq.connect` went unanswered for 15 s, then `ERR_ABORTED` loading the side panel after 11 s, at 100% CPU from other lanes' tests. The extension start has failed in 6 of 9 launches. A CPU priority governor now runs during live runs. t174's throw fix (`befca2f`: `draft-shown.ts` rejected t175's `did_not_work` rows; supervisor re-run 2 files / 24 tests passed) and source-mapped Lab frames (`259b0df2`) are committed, and dev with t188 is merged into both t174 trees; the fix is not yet live-proven.
+- Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
 - Outcome: In progress. Pass streak 0.
 
 ## Open Questions
