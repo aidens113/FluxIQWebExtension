@@ -144,3 +144,62 @@ Ready to commit.
   - Adding both config files to the step's inputs is a small follow-up in `scripts/build-cache/workspace/resolve-step.mjs`. I did not take it, because it is outside this brief.
 - **The rule counts some imports a bundler drops.** It follows a value binding that is used only as a type, which is the conservative choice. No such case fails today.
 - **Two Lab messages point elsewhere.** The Lab's own staleness refusal (`run-lab.mjs`) still says `pnpm --filter fluxiq build`, and its unbuilt refusal says `pnpm build`. The new gate names all three libraries. I left the Lab wording unchanged.
+
+## Follow-up: the cached `extension:check` reruns on structure-audit changes
+
+The coordinator asked for the cache gap named above to be closed.
+
+**Outcome:** Done. Ready to commit, all downstream:
+- `scripts/build-cache/workspace/resolve-step.mjs`
+- `scripts/build-cache/steps.mjs`
+- `scripts/build-cache/tests/structure-audit-inputs.test.mjs`
+- `docs/architecture/repository-layout.md`
+- this report
+
+**Validation:**
+- `node --test "scripts/build-cache/tests/*.test.mjs"`: 53 pass, 0 fail.
+- The cache decision for the real `extension:check` changes to `build` after a one-line edit to either repository's `config.mjs`, and returns to `reuse` once the edit is reverted.
+
+### What changed and why
+
+- **A new step flag.** A registry step may set `structureAudit: true`. Its fingerprint then also hashes:
+  - `scripts/structure-audit/` in this repository, labelled `scripts/structure-audit`;
+  - `scripts/structure-audit/` in every Core the step links, labelled `core:scripts/structure-audit`.
+- **Tests are left out.** Both `tests/` and `rules/tests/` are excluded, so editing a rule's test does not rerun the step.
+- **`extension:check` is marked.** Its drift check (`browser-entries.mjs`) reads both repositories' `config.mjs`.
+- **Nothing else needed the flag:**
+  - No other downstream cached step reads the audit. The downstream audit itself runs uncached in `pnpm check`.
+  - Core's `structure-audit:check` already fingerprints the whole repository (`inputs: "repository"`).
+  - Core's build cache is a separate implementation, not a mirror of this one, so I left it unchanged.
+
+### Commands run and observed results
+
+**The new test**
+- `node --test scripts/build-cache/tests/structure-audit-inputs.test.mjs`: 5 pass. It covers:
+  - an edit to this repository's config, which reruns the step with reason `scripts/structure-audit`;
+  - an edit to the linked Core's config, which reruns it with reason `core:scripts/structure-audit`;
+  - an edit to a rule file, which reruns it, while an edit to a rule's test is reused;
+  - an unmarked step, which ignores the audit;
+  - the registry, which marks `extension:check`.
+- The same test against the committed, unfixed `resolve-step.mjs` (from `git show HEAD:`): 3 fail, 2 pass. The failures are exactly the three rerun cases. I restored the fixed file afterwards.
+
+**Build-cache suite**
+- `node --test "scripts/build-cache/tests/*.test.mjs"`: 53 pass, 0 fail. This includes the registry's no-absolute-path label check.
+
+**Real tree**
+- `heavy.sh ... pnpm --filter @fluxiq-web-extension/extension check`: `"build" ... "inputs changed: core:scripts/structure-audit, scripts/build-cache, scripts/structure-audit"`, exit 0, 59 s.
+- Then `decideStep("extension:check")` gave, in order:
+  - `reuse`;
+  - after appending a comment to Core's `config.mjs`: `build` ("inputs changed: core:scripts/structure-audit");
+  - after restoring it: `reuse`;
+  - after appending a comment to the downstream `config.mjs`: `build` ("inputs changed: scripts/structure-audit");
+  - after restoring it: `reuse`.
+- `git status` in both trees shows only the intended files.
+
+**Audit**
+- `node scripts/structure-audit.mjs`: passed.
+
+### Not verified
+
+- Full `pnpm check` was not rerun after this follow-up. Only the build-cache suite, the audit, the docs-links rule and the extension check ran.
+- `pnpm build-cache:prove` was not run. The change only adds roots, so coverage can only grow.

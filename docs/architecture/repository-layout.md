@@ -441,7 +441,10 @@ A step is reused only when all of these hold (`decide-step.mjs`):
   environment variables the registry names, and the output locations. The
   inputs are the package directory (minus what it generates), every transitive
   workspace dependency whole with its outputs, the linked Core packages, the
-  repository and Core lockfiles and root configs, and the cache's own sources;
+  repository and Core lockfiles and root configs, and the cache's own sources.
+  A step marked `structureAudit` (`extension:check`, whose drift check reads
+  both repositories' `browserBundles` entries) also hashes
+  `scripts/structure-audit/` minus its tests, here and in the linked Core;
 - every required output file exists;
 - the outputs' digest equals the one stamped.
 

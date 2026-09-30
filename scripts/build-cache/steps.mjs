@@ -145,6 +145,10 @@ export const STEPS = Object.freeze({
     // scenario lab's sources and test-contracts by relative path.
     reads: ["apps/scenario-lab", "packages/test-contracts"],
     bundles: true,
+    // check-extension.mjs holds the browser-imports rule's entry lists in this
+    // repository's and Core's scripts/structure-audit/config.mjs to the bundle
+    // (browser-entries.mjs), so either changing alone reruns the check.
+    structureAudit: true,
     // check-extension.mjs imports build-extension.mjs, which refuses a build
     // root outside the repository at import time, so the raw value can decide
     // whether the check passes.
