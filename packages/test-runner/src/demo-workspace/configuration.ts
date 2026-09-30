@@ -88,7 +88,9 @@ export function resolveDemoWorkspaceConfiguration(repositoryRoot: string, env: N
     projectName: env.FLUXIQ_DEMO_PROJECT_NAME?.trim() || "FluxIQ Web Extension Test",
     flowId: safeId(env.FLUXIQ_DEMO_FLOW_ID?.trim() || "flow.web-extension-demo", "FLUXIQ_DEMO_FLOW_ID"),
     flowName: env.FLUXIQ_DEMO_FLOW_NAME?.trim() || "Web Extension Demo Flow",
-    headless: optionalBoolean(env.FLUXIQ_DEMO_HEADLESS, "FLUXIQ_DEMO_HEADLESS", true),
+    // Headed by default: the Lab runs no headless browser (user rule, 2026-09-29).
+    // FLUXIQ_DEMO_HEADLESS=true remains an explicit opt-in.
+    headless: optionalBoolean(env.FLUXIQ_DEMO_HEADLESS, "FLUXIQ_DEMO_HEADLESS", false),
   };
 }
 

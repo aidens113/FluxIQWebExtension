@@ -15,6 +15,7 @@ import type { DeterministicNetworkGuard } from "../network-guard.js";
 import { executable, processLogPath, ProcessSupervisor } from "../process-supervisor.js";
 import type { DemoWorkspaceConfiguration } from "./configuration.js";
 import { approvePairingInPanel } from "./panel-navigation.js";
+import { openResponsiveExtensionPage } from "./extension-readiness.js";
 import { requireDemoScenarioUrl, startPersistentScenarioLabWithRecovery, waitForUrl } from "./scenario-lab.js";
 
 export async function withDemoBrowser<T>(
@@ -75,7 +76,6 @@ export async function withDemoBrowser<T>(
     const [cookieName, cookieValue] = panelCookie.split("=", 2);
     if (!cookieName || !cookieValue) throw new RunnerFailure("environment.missing", "FluxIQ panel cookie is malformed");
     await panelContext.addCookies([{ name: cookieName, value: cookieValue, url: config.origin }]);
-    const extensionUrl = await extensionControlUrl(context);
     // The extension's background is a service worker. Prove the guard sees its
     // traffic before the lane spends anything, rather than finding out after.
     await assertContained(guards);
@@ -99,7 +99,9 @@ export async function withDemoBrowser<T>(
     await evidence.start();
     phaseTracker?.set("browser-ready");
     try {
-      await evidence.step("extension", "open-extension-controls", "Open the extension recorder controls", () => extensionPage.goto(extensionUrl).then(() => undefined));
+      // Opened only once its background answers: a control page whose service
+      // worker never woke fails every later step with nothing to show why.
+      await evidence.step("extension", "open-extension-controls", "Open the extension recorder controls", () => openResponsiveExtensionPage(extensionBrowser.context, extensionPage, extensionPath).then(() => undefined));
       await installRuntimeActionEvidence(extensionPage, evidence);
       await evidence.step("panel", "open-panel", "Open the FluxIQ web panel", () => panelPage.goto(config.origin, { waitUntil: "domcontentloaded" }).then(() => undefined));
       await panelPage.getByRole("heading", { name: "Programs", exact: true }).waitFor();
@@ -297,7 +299,7 @@ export async function connectExtension(
     await checkpoint("complete", "extension");
   } catch {
     await evidence.diagnostic(diagnosticSurface, "connect-failed", `connect.${stage}`, facts).catch(() => undefined);
-    throw new RunnerFailure("runtime.behavior", "FluxIQ extension connection setup failed");
+    throw new RunnerFailure("runtime.behavior", "FluxIQ extension connection setup failed", { details: { reasonCode: `connect.${stage}` } });
   }
 }
 

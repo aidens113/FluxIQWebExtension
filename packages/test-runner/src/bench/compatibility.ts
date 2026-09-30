@@ -84,10 +84,11 @@ async function hashDirectory(root: string): Promise<string> {
 }
 
 async function installedBrowserVersion(): Promise<string> {
-  // Extension runs use launchPersistentContext with the full Chromium build.
-  // `chromium.launch({ headless: true })` may select Playwright's separate
-  // headless-shell binary, so launching it would fingerprint the wrong browser.
-  const browser = await chromium.launch({ headless: true, executablePath: chromium.executablePath() });
+  // Extension runs use launchPersistentContext with the full Chromium build,
+  // launched headed like every Lab browser (no headless browsers, user rule
+  // 2026-09-29). The explicit executable path keeps Playwright from choosing its
+  // separate headless-shell binary, which would fingerprint the wrong browser.
+  const browser = await chromium.launch({ headless: false, executablePath: chromium.executablePath() });
   try { return browser.version(); }
   finally { await browser.close(); }
 }

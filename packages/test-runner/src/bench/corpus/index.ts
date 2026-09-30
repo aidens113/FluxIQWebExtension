@@ -3,3 +3,4 @@ export * from "./bench-corpus.js";
 export * from "./find-bench-corpus.js";
 export * from "./smoke.js";
 export * from "./week1.js";
+export * from "./week2.js";

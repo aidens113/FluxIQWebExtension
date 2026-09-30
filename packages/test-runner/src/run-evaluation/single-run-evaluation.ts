@@ -1,5 +1,6 @@
 import type { LlmUsage, RunEvaluation, RunManifest } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import { flowLaneAdaptationMeasurements } from "./adaptation/index.js";
 import { flowLaneEvidenceSizes } from "./flow-lane-evidence-sizes.js";
 import { evaluateObservedRun } from "./observed-run-evaluation.js";
 import { runOutcome } from "./run-outcome.js";
@@ -59,12 +60,17 @@ export type SingleRunInput = {
  * bench row record the same packets. A recording-lane run contributes none, as
  * on the bench.
  *
+ * Its Week 2 adaptation measurements come from the same bundle's
+ * `snapshots/adaptation.json` (`flowLaneAdaptationMeasurements`), which the
+ * bench's Flow lane reads too.
+ *
  * A standalone run defaults to `repeatIndex: 0`; a campaign supplies the exact
  * repeat identity from its receipt. It scores against the resolved workflow's
  * own `expected.failure`, which the lane already carries on its observation.
  */
 export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
-  const evidence = input.observation.lane === "flow" && input.bundlePath !== undefined ? flowLaneEvidenceSizes(input.bundlePath) : undefined;
+  const flowBundle = input.observation.lane === "flow" ? input.bundlePath : undefined;
+  const evidence = flowBundle !== undefined ? flowLaneEvidenceSizes(flowBundle) : undefined;
   return evaluateObservedRun({
     facilityFailure: input.facilityFailure,
     identity: {
@@ -86,6 +92,7 @@ export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
     observation: input.observation,
     ...(evidence ? { evidence } : {}),
     ...(input.llm ? { llm: input.llm } : {}),
+    ...(flowBundle !== undefined ? { adaptation: flowLaneAdaptationMeasurements(flowBundle) } : {}),
   });
 }
 
