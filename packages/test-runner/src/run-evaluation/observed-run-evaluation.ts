@@ -1,11 +1,13 @@
 import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type LlmUsage, type RunAdaptationMeasurements, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import type { FlowLanePermissionStop } from "../lane-rules/index.js";
 import { declaredFailureOutcome } from "./declared-failure-verdict.js";
 import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
 import type { FlowLaneEvidence } from "./flow-lane-evidence-sizes.js";
 import type { PersonHandOffEvidence } from "./person-hand-off-evidence.js";
+import { permissionStopInvariant } from "./permission-stop/index.js";
 import { personHandOffInvariant } from "./person-hand-off-invariant.js";
-import type { RunOutcome } from "./run-outcome.js";
+import { RUNNER_VERDICT_INVARIANT, type RunOutcome } from "./run-outcome.js";
 
 /** Which run an evaluation describes, and the failure it was planned to expect. */
 export type RunEvaluationIdentity = {
@@ -66,6 +68,14 @@ export type ObservedRun = {
    * added: the Lab never played the person on this run.
    */
   personHandOffs?: PersonHandOffEvidence;
+  /**
+   * The created-Flow build stopped to ask the person at the task's declared
+   * permission point, with the consequence and control it stopped at. Present,
+   * the evaluation carries a failed `stopped-for-permission` invariant and can
+   * never pass: no Flow was built, so nothing did the task
+   * (`permission-stop/permission-stop-invariant.ts`).
+   */
+  permissionStop?: FlowLanePermissionStop;
 };
 
 /**
@@ -108,7 +118,10 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   // the failure it declared and asked a person where no check stood is still
   // wrong (`person-hand-off-invariant.ts`).
   const handedOff = withInvariant(declared, input.personHandOffs ? personHandOffInvariant(input.personHandOffs) : undefined, "runtime.behavior");
-  const judged = withEvidenceBudget(handedOff, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
+  // A permission stop sits on top of the declaration as well: a declared
+  // failure never turns a build that stopped to ask into a pass.
+  const stopped = withInvariant(handedOff, input.permissionStop ? permissionStopInvariant(input.permissionStop, outcome.invariants.find((invariant) => invariant.id === RUNNER_VERDICT_INVARIANT)?.evidenceSequences) : undefined, "runtime.behavior");
+  const judged = withEvidenceBudget(stopped, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
   const evaluation: RunEvaluation = {
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     runId: outcome.runId,

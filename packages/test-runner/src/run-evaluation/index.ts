@@ -5,6 +5,7 @@ export * from "./declared-failure-verdict.js";
 export * from "./evidence-budget-invariant.js";
 export * from "./flow-lane-evidence-sizes.js";
 export * from "./observed-run-evaluation.js";
+export * from "./permission-stop/index.js";
 export * from "./person-hand-off-evidence.js";
 export * from "./person-hand-off-invariant.js";
 export * from "./run-outcome.js";
