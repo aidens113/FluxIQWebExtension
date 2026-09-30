@@ -223,10 +223,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
       properties: { url: { type: "string", label: "URL" }, newTab: { type: "boolean", label: "Open in a new tab" } }
     }
   },
-  // The second sentence is lane t195's: bigbox swallows the first Add to cart
-  // after each page load, and three builds reloaded and pressed once, forty
-  // times over (runs run-munuxns5-833f4313, run-munvz5x0-84fa6177).
-  { actionType: "web.dom.click", label: "Click", description: "Click a DOM element. If nothing happens, click it again before leaving the page: some pages ignore the first click after loading, and reloading resets that.", parameterSchema: selectorSchema },
+  { actionType: "web.dom.click", label: "Click", description: "Click a DOM element.", parameterSchema: selectorSchema },
   {
     actionType: "web.dom.type",
     label: "Type Text",
