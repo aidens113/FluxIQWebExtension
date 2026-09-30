@@ -1,5 +1,34 @@
 # t193 live lane B: self-repair
 
+**State at hand-back (2026-09-30 ~20:15 UTC, session 2).** Lab runs are stopped (supervisor, by the user's order); none
+is in flight and `lab-slots/slot-2/owner` is cleared. No lane task has passed (every streak 0). Lane spend over 33
+runs: **$2.68**, of which **$1.92 (runs 10-32) was spent by the unattended keeper loop** with nobody debugging; its
+189 later launches failed on the empty balance and spent nothing. Every one of the 33 runs has its debug file. Session 2
+made one run (33) and two validated Core fix sets (C2; C3/C6/C9/K7), both waiting to be committed (Fix log).
+
+## Top causes for the audit
+
+Recurring causes across runs 1-33, most runs first. "Stops at" is the stage the runs ended at (2 exploration, 4 replay,
+5 answer, 6 judgement and repair). Run numbers are this report's; each has `debugs/<run-id>.md`.
+
+| # | Cause | Runs | Stops at | Status / owner |
+| --- | --- | --- | --- | --- |
+| 1 | **A click that reloads the page loses its own answer and is dropped from the Flow.** "Set as my store" switches the store and calls `location.reload()`; the click answers `web.action.rejected.action_failed`, a refused step carries `replay: undefined` (domain `node-run/run.ts:357-375, 541-551`), so the store switch (and in some runs the search submit or a product click) never enters the Flow. Playback then starts at Carden Falls and meets a chip recorded as Millbrook, or a product page it never reached. | 8, 9 (switch amended out), 10, 11, 14, 15, 17-25, 27-32; refuted for no store step: 12, 16, 26, 27, 31 | 2 (no Flow) or 6 | **Not fixed. Recorded first by t174 (run 6), routed by t174 to t175/t189, which are not live: no live owner.** Proposed fix: wJ P1 (`reports/t193-wJ-armed-target-resolution.md`) |
+| 2 | **Mid-build dry runs from a reset, replaying the draft from its first step, from the build's own state** (store already switched, cart already changed): `core.replay.unreproducible`/`failed` refusals block completions and mutate the site. | every run that reached a completion (1-33) | 2, or hides cause 1 until playback | owned by t196 |
+| 3 | **The draft is a transcript of the steps taken**, not an authored Flow: failed attempts amended to `optional` and kept, repeated presses kept (the composer twice in run 33); the instructed-acts check then refuses `step_is_optional`/`step_claimed_twice`. | 3, 12, 14, 16, 20, 22, 26-29, 31, 33 | 2 | owned by t196 |
+| 4 | **Caps on what the model is shown**: page packets `truncated: true` at 6,000 bytes (every run), a 40-element packet that folded three stores into one (run 3, F), the recovery context's 8,000-byte budget dropping `failed_target` and `recovery_candidates` (12 runs), a 4,000-byte draft budget (run 33 at 3,800). | all; the recovery context in 8, 10, 11, 15, 17-19, 21, 23-25, 30, 32 | 2 and 6 | owned by t200 (t193's C5 raise was reverted) |
+| 5 | **A failed step the patch ladder cannot fix was never re-authored**: the re-author route took only a completed run refuted `does_not_answer_request`, so a target the redesign or a mis-built step made unfindable ended the run. | 8, 10, 11, 15, 17-19, 21, 23-25, 30, 32 (13) | 6 | **Fixed locally (C2, wL), not live** |
+| 6 | **Instructed-act refusals loop until the budget**: `step_only_arrives`, `step_is_optional`, `no_step_named`, `step_claimed_twice`, `step_changed_nothing` (run 33: the post claimed with a refused press). | 3, 20, 22, 26-29, 33 | 2 | t174 (instructed acts); fed by causes 1 and 3 |
+| 7 | **Repeats without progress**: the model repeats an answered request or makes unchanged amendments until `evidence_repeat_without_progress`. | 1, 3, 4, 7, 22, 28 | 2 | recorded (cause C); build loop, t174 / t189's area; not fixed here |
+| 8 | **Patch-ladder defects**: all five patch kinds offered (C3), "deterministic possible, no patch" ends the ladder (C6), a diagnosis billed with no failed attempt (C9), a misleading "failed diagnosis" record (K7); a malformed patch reply is not retried. | C3: 8, 12, 18, 26; C6: 15; C9: 13; K7: every ladder run; retry: 18 | 6 | **C3, C6, C9, K7 fixed locally (wM), not live**; the retry is not fixed (t193) |
+| 9 | **The re-author (refuted route) builds nothing or spends the purse**: 14-31 refused completions, `target_unobserved`. | 5, 6, 12, 16, 26, 27 | 6 | t194 (re-author), t174 (instructed acts) |
+| 10 | **The result is never judged, so no repair starts**: `unverified` counts as success (run 9); the result check refused its own summary before sending (run 31). | 9, 31 | 5 | t194 (the judge) |
+| 11 | **The first Add to cart after a page load is swallowed**: the press "succeeds" and nothing is added. | 6, 8, 9 | 5-6 | t195 (F17/F19/F20) |
+| 12 | **A publish the instruction asks for cannot proceed in the Lab**: the build asks (`send_or_publish`, correct by rule), waits 121.7 s for a person nobody plays, and ends `permission_required` with no Flow; no repair can trigger. | 33 | 2 | supervisor decision: launch with `--llm-permit send_or_publish`, or the Lab answers the ask as the person |
+| 13 | **`unmatched` reported as `TARGET_AMBIGUOUS`**: one uncorroborated leader (0.36 against -0.12) is called a tie (`resolve-target.ts:347`). | 11, 15, 18, 19, 25 | 6 | t193, not fixed (label only; after t174's N1) |
+| 14 | **The Lab cannot tell "never worked" from "broke on the redesign"**: no provider-free baseline replay before arming, and the redesigned Add to cart resolves by name at 0.643 without any repair (9 runs), contrary to the variant manifest's "only a repair can pass". | 8-32 | - | Lab design; supervisor decision (proposal in wK C1 and wJ) |
+| 15 | **UI (old build, before t191 round 2)**: Simple/Advanced toggle; split panel with "Get set up" above the chat; "To do: Add an AI model key" while a keyed build runs; raw wording ("Using core.run_node", `create_new`, node ids); repair shown as "Running your Flow" with a step count past the Flow; "Run finished" with a green tick for a failed goal (run 9); "Flow ready" after a permission stop (run 33); an unanswered Yes/No left on screen. | every run | - | t191 (round 2 merged into this tree after run 33; not re-checked live) |
+
 ## Fix log
 
 | Fix | Files | Exposed by | Validation | Status |
@@ -14,6 +43,18 @@
 | C3: one purse per repair. The re-author build, its retry and the patch-ladder fallback share one $0.25, lowered by the Flow's setting. A part with nothing left calls no model and names cost. | Core `recovery/refuted-result/{purse.ts (new), index.ts, reauthor.ts}`, `service/runtime-adaptation/refuted-result-port.ts`, `recovery/annotation/{annotate.ts, run-budget.ts}`, `service.ts` (6 lines edited in place), tests `service/runtime-adaptation/tests/refuted-result-port.test.ts`, `recovery/annotation/tests/{annotate.test.ts, annotate-harness.ts, run-budget.test.ts}`, `tests/refuted-result/tests/repair-purse-chain.test.ts` (new) (worker t193-wR) | wF's open question 2 | wR: 9 fail before; 655/655 over recovery, runtime-adaptation, refuted-result and result-verification; tsc 0; audit; build 0 | validated locally; not yet live |
 | C4: **a regression from C1, found live and fixed by the lead.** Each recovery call reserved an even share of the purse (`$0.25 ÷ 64 = $0.0039`), and the ledger counts a call that reports more than it reserved as a budget breach (`llm/run-budget.ts:217-220`). The repair's plan-stage diagnosis cost $0.0044 in run 5 and $0.0041 in run 6, so each run recorded one breach and the Lab failed it `performance.budget`. A call now reserves its own worst case: the per-request token limits at the resolved model's peak rates, $0.024 on deepseek-flash, never less than the even share, and capped by the resolver's per-call cost and the purse. The purse still stops the run: admission refuses a call whose reservation would pass it. | Core `recovery/annotation/run-budget.ts` (`worstCaseCallCostUsd`, `model` input), `recovery/annotation/annotate.ts` (passes `provider.metadata.model`), `recovery/annotation/tests/run-budget.test.ts` (3 new, 1 updated) | `run-munutuvf-6a1c548a`, `run-munv9eqy-1827b928` | run-budget 17/17; with the old share, 4 fail (the 3 new ones and the 64-call fit). Broader suites: see round 2 validation | validated locally; live pending |
 | H: a control recorded inside a card is replayed only within that card, so an absent row reads as absent (`unreproducible`), not as another row's identical control (`failed`/ambiguous). A control whose name carries changing state (the chip naming the current store) is found by its stable name. | domain `runtime/llm-evidence/plan-resolution/element-identity.ts`; extension `content/action-runtime/resolve-target.ts`, `content/identity/{stable-name.ts (new), index.ts}`; tests `plan-resolution/tests/record-identity.test.ts`, `action-runtime/tests/{store-chooser-replay.test.ts, store-chooser-page.ts}`, `identity/tests/stable-name.test.ts` (worker t193-wH) | `run-munri5gr-94d7f8a0` (dry-run steps 7 and 8) | wH: each fix undone fails its rows; domain 942/942; extension 1352/1352; audit; domain and extension `check` 0 | validated locally; live pending |
+| C2 (session 2, 2026-09-30 afternoon): **a step that fails on a changed site, and that the patch ladder cannot repair, is re-authored, applied and re-run.** The failure entry point (`result-verification/run-outcome.ts`, which returned any non-succeeded run as it was) now asks a new port: when the run failed at a `target_not_found`/`target_ambiguous` step, the ladder reached a model and executed no patch, and nothing asks the person or hit a cost bound, the Flow is re-authored (`mode: extend`, evidence-guided) with a brief naming the failed node, its failure and its recorded target ("re-find this step on the site as it is now; keep every other step"), then approved, applied and re-run like a refuted result. One purse: the ladder's spend is charged first. Once per run. | Core `runtime/`: new `recovery/refuted-result/{step-failure-decision.ts, step-failure-brief.ts}`, new `service/runtime-adaptation/{reauthor-build.ts, step-failure-port.ts, result-repair-ports.ts}`; edited `recovery/refuted-result/index.ts`, `service/runtime-adaptation/{index.ts, refuted-result-port.ts}` (shares the build helper, behaviour unchanged), `result-verification/run-outcome.ts`, `service.ts` (2 lines, line-neutral); tests `service/runtime-adaptation/tests/step-failure-port.test.ts`, `tests/refuted-result/tests/failed-step-reauthor.test.ts` (worker t193-wL, report `t193-wL-reauthor-failed-step.md`) | wK's C2: 13 runs (8, 10, 11, 15, 17-19, 21, 23-25, 30, 32) | wL: the integration file failed 4/5 before the run-outcome hook; 17/17 new, 30/30 with the refuted-port tests. Lead: session 2 validation below | validated locally; live pending |
+| C3, C6, C9, K7 (session 2): the patch call is told only the plan's allowed kinds, and the output schema offers only those (C3); a diagnosis of "deterministic recovery possible, no patch needed" after the deterministic rungs failed asks for the patch instead of ending `diagnosis_asked_for_none` (C6); a ladder with no failed attempt calls no model and ends `llm.runtime_patch_no_failed_attempt` at rung diagnosis (C9); the ladder selecting its model rung is recorded as informational `recovery.ladder_model_rung_selected`, not as a failed diagnosis (K7) | Core `runtime/`: `recovery/annotation/annotate.ts`, `recovery/plan.ts`, `recovery/diagnosis-chain.ts` (one skip code), `llm/harness/runtime-patch-schema.ts`, `llm/deepseek/output-schema.ts`, `service/summaries/conversions.ts`; tests `recovery/tests/plan.test.ts`, `service/summaries/tests/conversions.test.ts`, new `llm/deepseek/tests/output-schema.test.ts`, new `recovery/annotation/tests/ladder-fixes.test.ts` (worker t193-wM, report `t193-wM-ladder-fixes.md`) | wK's C3 (runs 8, 12, 18, 26), C6 (run 15), C9 (run 13), K7 (every ladder run) | wM: 9 failed / 36 passed on the old source, 45/45 with the fixes (before the C5 revert). Lead: session 2 validation below | validated locally; live pending. Not done: `llm/deepseek/system-prompt.ts` still gives the target-override instructions when that kind is not allowed |
+| C5 **reverted by the lead** (session 2): wM had scaled the recovery context's byte budget with the call's input allowance (8,000 up to 16,000 bytes). That is a cap on what the model is shown, which the supervisor assigned to t200 on 2026-09-30, so the hunk and its test were removed | - | wK's C5 (12 runs lost `failed_target` and `recovery_candidates`) | - | reverted; owned by t200 |
+
+**Session 2 validation, run by the lead on the t193 trees (2026-09-30 ~20:00 UTC, after dev's merge `3c7ddf64`):**
+- Core vitest over `runtime/{recovery, service/runtime-adaptation, result-verification, tests/refuted-result, llm/harness, llm/deepseek, service/summaries}` with C2, C3, C5, C6, C9 and K7 in: 938/939. The one failure was `tests/refuted-result/tests/reauthor-service.test.ts` "reaches the re-author ... on a diagnosis_only run" timing out at its own 60 s while all four build slots were busy; that file alone: 7/7 (the case took 35.5 s).
+- After the C5 revert: `npx vitest run` over `runtime/{recovery, llm/deepseek, llm/harness, service/summaries, service/runtime-adaptation}` and `tests/refuted-result/tests/failed-step-reauthor.test.ts` -> 71 files, 787/787; `npx tsc --noEmit -p tsconfig.json` (packages/fluxiq) -> exit 0; Core `node scripts/structure-audit.mjs` -> "passed (199 warning(s), 354 baselined)", "1 baseline entries can be lowered".
+- Not run: a Core build (a live run was using Core's dist; Lab runs are now stopped), the full fluxiq suite, and any live run with these fixes.
+
+**Ready to commit (Core, `fxwork/t193/!FluxIQ`, branch `task/t193-live-self-repair`):** every file in `git status` there is t193's: C2 (`recovery/refuted-result/{index.ts, step-failure-decision.ts, step-failure-brief.ts}`, `service/runtime-adaptation/{index.ts, refuted-result-port.ts, reauthor-build.ts, step-failure-port.ts, result-repair-ports.ts, tests/step-failure-port.test.ts}`, `result-verification/run-outcome.ts`, `service.ts`, `tests/refuted-result/tests/failed-step-reauthor.test.ts`) and C3/C6/C9/K7 (`recovery/annotation/{annotate.ts, tests/ladder-fixes.test.ts}`, `recovery/{plan.ts, diagnosis-chain.ts, tests/plan.test.ts}`, `llm/harness/runtime-patch-schema.ts`, `llm/deepseek/{output-schema.ts, tests/output-schema.test.ts}`, `service/summaries/{conversions.ts, tests/conversions.test.ts}`), all under `packages/fluxiq/src/programs/automation-studio/runtime/`; validation: `npx vitest run <the suites above>` -> 71 files, 787/787; `npx tsc --noEmit -p tsconfig.json` -> exit 0; `node scripts/structure-audit.mjs` -> passed (199 warnings, 354 baselined).
+
+**Ready to commit (downstream, `fxwork/t193/!FluxIQWebExtension`):** the supervisor already committed the debugs for runs 3-33 and the wI-wM reports as `a10a2719`. Still uncommitted, docs only: this report, and 9 of the run 10-32 debugs regenerated after that commit (Stage 3 nodes in step order, list positions with their totals); validation: a file test over the 33 spending run ids -> "debug files: 33/33".
 
 **Round 2 validation, run by the lead on the t193 tree with C1-C4 and H in place (2026-09-30 ~09:50 UTC):**
 - Downstream domain suite (label t193-lead): 942/942.
@@ -72,8 +113,19 @@ diagnoses, explores, repairs, validates, persists the repair, then replays deter
 zero provider calls. A task passes only on the finished repaired run; it is left after two passes
 in a row.
 
-Launcher: `scratchpad/live-run-b.sh` (t174's `live-run.sh` with slot-2, `FLUXIQ_LAB_INSTANCE=t193-slot-2`
-and this tree). Core built first (`contracts`, `fluxiq`, `client-gateway-websocket`): rc 0.
+Launcher (session 1): `scratchpad/live-run-b.sh` (t174's `live-run.sh` with slot-2, `FLUXIQ_LAB_INSTANCE=t193-slot-2`
+and this tree), driven by the keeper loops `t193/loop.sh` and `loop2.sh`. **Those loops ran runs 10-32 with nobody
+debugging and then fired 189 instant balance failures; they are disabled (`*.disabled`, plus a `t193/STOP` file) and
+must never be recreated.**
+
+Launcher (session 2, 2026-09-30 afternoon): `scratchpad/t193/live-run-b.sh` in the session-2 scratchpad, one run per
+launch, no loop, no relaunch. It refuses when `lab-slots/STOP-balance` exists, writes `lab-slots/slot-2/owner`
+("t193 <scenario> <task> <UTC>") and clears it on exit. The run command, from this tree:
+
+    FLUXIQ_LAB_INSTANCE=t193-slot-2 FLUXIQ_BUILD_PROGRESS_TRACE=1 FLUXIQ_LAB_KEEP_RUN_STATE=1 node scripts/lab/run-lab.mjs run <scenario> --live-llm --llm-profile production --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow --instruction-task <task> --llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 64 --llm-max-cost-usd 0.25 --evidence events --replays 2
+
+Headed is fixed in the Lab; the stale-build override is not used (Core is built first). **Lab runs are stopped by the
+supervisor (user's order, 2026-09-30 ~19:30 UTC): no live or provider-free run starts from this lane.**
 
 ## Task order and streaks
 
@@ -210,11 +262,49 @@ post; Create poll turns the text into a poll question (pending box says Poll).
 | 4 | `run-munri5gr-94d7f8a0` | same, merged dev after round 1 | 2 (34 decisions, $0.064) | This time the model set Millbrook (F is live) and added both items. The completion's dry runs replayed step 7 `unreproducible` (the chip's recorded name held the old store) and step 8 `failed` (another store's identical button). Step 18 (a dialog close) was also `failed`. The model then made 8 unchanged amendments → `evidence_repeat_without_progress` (cause H). The dry run also re-added the items to the real cart. | H (wH) | suites green; live pending |
 | 5 | `run-munutuvf-6a1c548a` | same, + C1/C2 | **6: built, ran, judged, repair attempted** | A 9-node Flow ran on the armed variant and failed `target_not_found` at node 9 (`+ Add`). The repair ran 5 calls ($0.011); its patch was skipped `llm.runtime_patch_goal_unachievable` at the exploration rung, and the judgement refuted the result. The Lab then failed the run `performance.budget` on one Core breach (C4). The Flow has no store-switch node, so the build was accepted without act 1. | C4 (lead) | run-budget 17/17 |
 | 6 | `run-munv9eqy-1827b928` | same | 6 | The same as run 5: a repair breach (C4), 48 build calls, $0.089 | C4 | - |
-| 7 | `run-munw16g4-81e2d1a8` | same, partial wH/wR | 2 (43 decisions) | `evidence_repeat_without_progress` | - | debug pending |
-| 8 | `run-munwdydi-cd5fe4b9` | same, wR in | 6 | Built (50 calls, $0.093); the Flow failed `target_not_found`; the repair made 8 calls ($0.014, 0 breaches) and did not repair it | - | debug pending |
-| 9 | `run-munwmt25-5e9f0f8c` | same, wH in | 4-5 | Built (28 calls, $0.054). The Flow **succeeded** on the armed variant, but the scenario's goal did not hold; the result check was `unverified`, so no repair was triggered | - | debug pending |
+| 7 | `run-munw16g4-81e2d1a8` | same, partial wH/wR | 2 (43 decisions) | `evidence_repeat_without_progress`: d3 amended 7 times unchanged (H); dry-run steps 3 and 10 unreproducible (H2); a robot check during a dry run. $0.0835 | - | debug written (wI) |
+| 8 | `run-munwdydi-cd5fe4b9` | same, wR in | 6 | Built (50 calls, $0.093); no "Set as my store" (amended out, I1); s11 Add to cart ran on `/cart` after s10 navigated there, `target_not_found`; the repair's patch was an invented kind (C3), and nothing was re-authored (C2) | C2, C3 (session 2) | debug written (wI) |
+| 9 | `run-munwmt25-5e9f0f8c` | same, wH in | 5 | Built (28 calls, $0.054). The Flow **succeeded** on the armed variant but has no towel step; the goal did not hold; the result check was `unverified`, which counts as success, so no repair was triggered (t194) | - | debug written (wI) |
 
-Between runs 6 and 7, the lane's keeper loop made about 60 immediate relaunches. Each was refused in under 10 s by the Lab's stale-Core guard while a worker's `service.ts` edit waited for its rebuild. Keeper v2 (`scratchpad/t193/loop2.sh`) now rebuilds Core itself on that refusal and waits 60 s after any short run.
+Corrections from wI's debugs: run 3 had 8 refused completions and repeats at decisions 5, 7-12 and 6 later (not "6-13"); run 4 had 6 unchanged amendments (not 8) and dry-run step 3 was also unreproducible; run 6 is not "the same as run 5": its Flow kept a store pick, ran every node, and was refuted by the check.
+
+Runs 10-32 were started by the unattended keeper loop (session 1), not by an agent; nobody debugged them then. Their debugs were written in session 2 from the artifacts and from the cross-run analyses `reports/t193-wJ-armed-target-resolution.md` and `reports/t193-wK-repair-ladder.md`. All: bigbox pickup-cart redesigned, the tree with C1-C4 and H.
+
+| # | Run | Cost | Stage reached | Causes (debug file has the detail) | Fix |
+| --- | --- | --- | --- | --- | --- |
+| 10 | `run-muny76m9-bab4e6ba` | $0.0862 | 6 | s4 rail button recorded as "Added" (post-press label); ladder `goal_unachievable`; store switch dropped | C2 |
+| 11 | `run-munymcpf-93148576` | $0.0638 | 6 | store switch dropped (reload); chip recorded post-switch, `target_ambiguous` 0.36 vs -0.12; override refused `target_unanchored` | C2; reload drop unowned |
+| 12 | `run-munyt4jo-dc4e704a` | $0.0825 | 6 | refuted: no store step, "+ Add" by list position; re-author built nothing; patch of an invented kind | C3; re-author t194 |
+| 13 | `run-munyzo8z-3af91549` | $0.0996 | 4-6 | loop s15-s17 pressed Add to cart 158 times, 3 steps never ran; a diagnosis billed with no failed attempt | C9; loop t195 |
+| 14 | `run-munzfk33-d85ec7a9` | $0.1276 | 2 | no Flow: 4 clicks dropped (`action_failed`), dry runs refused to the 64-decision limit | t196 (dry runs); reload drop unowned |
+| 15 | `run-munzl2eh-f187a7ef` | $0.0697 | 6 | chip post-switch, ambiguous; diagnosis "deterministic possible, no patch" ended the ladder | C6, C2 |
+| 16 | `run-munzpdlu-4a6d83c3` | $0.0567 | 6 | refuted: store not switched, wrong adds; re-author ended `target_unobserved`; ladder `goal_unachievable` | C2; re-author t194 |
+| 17 | `run-munzutb0-8373bf59` | $0.0972 | 6 | chip span recorded post-switch, not found; override refused `target_indistinguishable` | C2 |
+| 18 | `run-muo00owc-84c87cbc` | $0.0777 | 6 | chip post-switch, ambiguous; patch reply malformed, no retry | C2; retry not fixed |
+| 19 | `run-muo06beo-bcce5ab7` | $0.0957 | 6 | chip post-switch with the flyout open, ambiguous; ladder `goal_unachievable` | C2 |
+| 20 | `run-muo0dyu5-e2da3029` | $0.1168 | 2 | no Flow: store switch dropped, a1 `step_only_arrives` refused 8 times, 64-decision limit | t174 (acts); reload drop unowned |
+| 21 | `run-muo0ks69-b23d295e` | $0.0757 | 6 | towel swatch clicked on the napkins page (wrong product via "Options"); `goal_unachievable` | C2 |
+| 22 | `run-muo0r9fk-b1168952` | $0.0820 | 2 | no Flow: acts `no_step_named`/`step_is_optional`, unchanged amendments to `repeat_without_progress` | t196 (transcript), t174 |
+| 23 | `run-muo0wf2q-50776ea1` | $0.0950 | 6 | chip span post-switch; override refused `target_indistinguishable` | C2 |
+| 24 | `run-muo12lnk-9c841755` | $0.0647 | 6 | search typed, never submitted (submit click dropped); swatch on the napkins page; override refused `target_unanchored` | C2 |
+| 25 | `run-muo18781-1b1bf7c8` | $0.0876 | 6 | chip post-switch, ambiguous (twice); override refused `target_unanchored` | C2 |
+| 26 | `run-muo1dxrj-871073c0` | $0.0805 | 6 | refuted: clicked a Loftwell product; re-author 14 refused completions; patch of a disallowed kind | C3; re-author t194 |
+| 27 | `run-muo1la5v-d4eeb7e1` | $0.0605 | 6 | refuted: no store step; re-author 31 refused completions spent the $0.25 purse; the Lab snapshot misses `resultReauthor` | purse by design; capture gap open |
+| 28 | `run-muo1w558-dfbcd14a` | $0.0748 | 2 | no Flow: every act `step_is_optional`, `repeat_without_progress` | t196, t174 |
+| 29 | `run-muo20xvx-122a2f4e` | $0.0980 | 2 | no Flow: a1 `step_is_optional` refused 6 times, `evidence_unusable_decision` | t196, t174 |
+| 30 | `run-muo2690x-442c6f50` | $0.0624 | 6 | chip span post-switch; override refused `target_indistinguishable` | C2 |
+| 31 | `run-muo2b224-aa7f6336` | $0.0825 | 5 | all 16 actions ran, goal failed (store not switched); the result check refused its own summary before sending, so no repair was entered | t194 (judge) |
+| 32 | `run-muo2gyob-a3877079` | $0.0815 | 6 | towel swatch clicked on the napkins page with no navigation between; `goal_unachievable` | C2 |
+
+After run 32 the balance ran out: the loop's next 189 launches (12:17-17:22 UTC) each failed in about 36 s on `Insufficient Balance` and spent nothing. One line each is in the appendix at the end of this report.
+
+Session 2 (2026-09-30 afternoon, one run per launch, started by the lead):
+
+| # | Run | Task | Cost | Stage reached | Causes | Fixes |
+| --- | --- | --- | --- | --- | --- | --- |
+| 33 | `run-muogfred-d3510100` | social-network-feed group-post regrouped (first run of this task) | $0.0279 | 2 | The model posted from the home feed composer ("What's on your mind, Maya?") instead of the Riverside Allotment Society group; the Post press asked permission (`send_or_publish`), waited 121.7 s for a person nobody plays, and the build ended `permission_required` with no Flow, so nothing ran and no repair could trigger. Draft kept the composer press twice (t196); dry runs from a reset (t196); packets at budget (t200) | Launch publish tasks with `--llm-permit send_or_publish` or have the Lab answer the ask (supervisor); not re-run: Lab runs stopped |
+
+Between runs 6 and 7, the lane's keeper loop made about 60 immediate relaunches, each refused in under 10 s by the Lab's stale-Core guard. That keeper is disabled.
 
 ## Causes found, with owners
 
@@ -228,6 +318,8 @@ Between runs 6 and 7, the lane's keeper loop made about 60 immediate relaunches.
 | F | The store chooser's three identical "Set as my store" buttons were folded into one example: the first store's. The other two ranked past the packet's 40 elements, and the example carried no card words. The model therefore saw one button for three stores and set the first one twice. (The shadow root and the scroll window were not the cause.) | extension `content/repeat-exemplars.ts` (folding); domain `runtime/llm-evidence/look-alikes.ts` (`within` blocked by list position; a lone example had no `within`) | t193 (first recorded here) | fixed (wE), live pending |
 | F2 | The press result carries only `control: "Set as my store"` and `pageChanged: true`, so nothing told the model the chip now named another store. wE recommends adding the pressed control's row words and the handles whose names changed. | domain press result (`runtime/llm-evidence/press.ts`) | t193 | recommendation, not fixed |
 | C | The model repeats an answered request many times in a row: ten in run 1, seven in run 3 (decisions 6-13), each answered `already_answered` with the repeat count and `pageUnchanged`. The loop's words are right, and deepseek-flash repeats anyway. | Core `llm/evidence-loop/answered-request.ts` and the no-progress guard | t189's area (decision history) / lane A | recorded, not fixed here |
+| I1 | **For t174 (instructed-act gap).** Run 5's accepted 9-node Flow has no store-switch node: navigate, type and click Search twice, click "+ Add", navigate twice, click "+ Add" (item 2 of 5). Act 1, "switch my pickup store to Millbrook Crossing Supercenter", was accepted as satisfied without a step that performs it. | Core `flow-bootstrap/instructed-acts/check.ts` | t174 (supervisor ruling, round 2) | recorded, not fixed here |
+| H2 | The dry run replays on a site the build already changed: the store is already switched, and it re-adds cart items. Supervisor ruling: never clear site data; a mutating step is verified (its target actionable, or its effect already present), not re-executed. | Core `flow-draft/dry-run.ts` | t196 (supervisor ruling, round 2) | routed |
 | E | Refuted: wD read `draft.instructionBytes` falling from 1,052 to 154 as the person's instruction being truncated. It is the draft's own guidance, which has three lengths by design (`llm/evidence-loop/draft-shown.ts:64-73`). | - | - | not a cause |
 
 ## UI evidence for t191
@@ -242,3 +334,213 @@ whole-window captures of the page and the side panel):
 - `00003`, `00005`, `00006`, `00008`: "FluxIQ is working" in the panel, and **no on-page status overlay** is
   visible on the site in any capture.
 - The status line itself read well: "Clicking 'Loftwell Ultra Strong Paper Towels, 6 Double Rolls'".
+
+From runs 4-5, after t191 round 1 (`run-munri5gr-94d7f8a0/screenshots/00007`, `00008`; `run-munutuvf-6a1c548a/screenshots/00018`, `00019`):
+- Better: the on-page overlay now shows at bottom left ("Building your Flow", "Running your Flow · Step 7 of 9"), and the panel has a chat area with a composer ("Ask FluxIQ to do something...").
+- Raw internal names in status text: "Using core.run_node" through the whole build (every dry run too), and "Running step 7 of 9: node.bootstrap.460d691a999aac51.main.s7" in both the panel and the overlay.
+- The step count runs past the total: the panel and the overlay read "Step 11" / "Running step 11" for a 9-node Flow once the repair's exploration steps begin.
+- The setup card still says "To do: Add an AI model key" while a keyed build and run are under way.
+- During the Flow run the chat asks "... this run's 107 actions said it would cause that; 89 of them said they would cause nothing lasting. Apply it as it stands? Yes / No". It is unclear what is being applied, and no one answers it in a Lab run.
+
+From run 33 (`run-muogfred-d3510100/screenshots/00003`, `00008`, `00013`, `00018`; the old UI, before t191 round 2 reached this tree):
+- The Simple/Advanced toggle and the split panel ("Get set up" card above the chat) are still there, and "To do: Add an AI model key" shows while a keyed build runs.
+- The permission ask is put clearly ("... click "Post" (button), which would send or publish something that others will receive or see ... Allow / Don't allow", `00008`), but after 2 minutes "FluxIQ stopped waiting for an answer." (`00013`) gives no next step.
+- "The instruction asks for create_new, and none of this run's 40 actions said it would cause that ... Apply it as it stands? Yes / No" (`00018`): raw `create_new`, and unclear what is applied.
+- The header reads "Flow ready" (`00018`) for a build that stopped to ask and saved no Flow.
+- "Using core.run_node" in the panel and in the overlay pill (`00008`, `00013`). The overlay pill is visible bottom left while working and covers the left rail's lower entries.
+
+## Appendix: launches that failed only on the empty balance
+
+The session-1 keeper loop launched these after run 32, from 12:17 to 17:22 UTC on 2026-09-30. Each failed in about
+36 s on the provider's "Insufficient Balance" before any Flow existed, and spent nothing (`snapshots/live-llm.json`
+cost 0; the text is in each run's `provider-failures.local.json`). One line each, no debug.
+
+- `run-muo2mibg-18d9422f` 12:17:57Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo2r0vb-5562203c` 12:21:28Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo2t2q4-a674a848` 12:23:04Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo2v55s-fe2b26d6` 12:24:40Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo2x6v9-75822620` 12:26:16Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo2z7z0-ab9b2e28` 12:27:50Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo31afb-202e2bf0` 12:29:27Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo33d1r-3c2873ad` 12:31:04Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo35ev0-67e7e80c` 12:32:39Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo37gmq-a149ccf0` 12:34:15Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo39ixs-a28bcf1d` 12:35:51Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3bkiz-c8edf777` 12:37:27Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3dn03-f6085b66` 12:39:03Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3fppk-c2cca50e` 12:40:40Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3hrqk-46954208` 12:42:16Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3ju79-7e0efdec` 12:43:52Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3lwen-2c3770ce` 12:45:29Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3nycw-582a301e` 12:47:04Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3pznq-7c21ad74` 12:48:39Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3s2ax-fd352c33` 12:50:16Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3u507-45553964` 12:51:53Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3w70r-c4ed997f` 12:53:29Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo3y8qy-b0f57f5f` 12:55:04Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo40b1f-8b4178d9` 12:56:41Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo42cg3-c0fed46a` 12:58:16Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo44erh-bf3304e0` 12:59:52Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo46hg1-c344cbff` 13:01:29Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo48k8o-0935e906` 13:03:06Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4an7l-16a79585` 13:04:43Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4cql1-bea72053` 13:06:21Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4es8n-4ef6c794` 13:07:56Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4guxq-5309aab2` 13:09:33Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4ixd1-0e1271a0` 13:11:09Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4kz3k-544ae6c0` 13:12:45Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4n146-9370e249` 13:14:21Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4p39c-d41cdd92` 13:15:57Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4r4yc-1561d0ae` 13:17:33Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4t6t3-1cc66e57` 13:19:08Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4v8wx-4cbaeb98` 13:20:44Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4xb5k-33a012dd` 13:22:20Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo4zcqd-fa2777a5` 13:23:56Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo51ewj-0f1aea90` 13:25:32Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo53hg8-5f8ba684` 13:27:09Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo55iyj-c34626e7` 13:28:44Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo57m6f-00e773c5` 13:30:21Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo59phc-0a6ac473` 13:31:59Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5bs1t-737575ec` 13:33:36Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5dsvh-533a0c89` 13:35:10Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5fv1b-930c949f` 13:36:46Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5hwsq-9181847d` 13:38:22Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5jz22-b141c619` 13:39:58Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5m1yb-181e43f8` 13:41:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5o3kh-2306fbc2` 13:43:10Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5q5sk-ed3b1703` 13:44:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5s8b6-a2532797` 13:46:23Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5ube2-3b684f5b` 13:48:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5wcb5-69a61f47` 13:49:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo5year-764be2b6` 13:51:11Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo60gtw-999487d0` 13:52:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo62iyl-711a2d6c` 13:54:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo64la4-f23d4c37` 13:56:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo66mxt-059851c7` 13:57:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo68ovy-733d7f73` 13:59:11Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6aq68-a5ffa2a6` 14:00:46Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6cs3b-79b30f92` 14:02:22Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6euup-3ceb9864` 14:03:59Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6gw0i-e2f17abb` 14:05:34Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6iy4l-c743e657` 14:07:10Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6l0g8-4531e125` 14:08:46Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6n2e3-902f5dfc` 14:10:22Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6p4xf-c832e640` 14:11:58Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6r7lu-9dab5aa1` 14:13:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6t8zz-97441824` 14:15:10Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6vb2t-cc0792b1` 14:16:46Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6xea1-b341d704` 14:18:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo6zek0-3d490d4f` 14:19:57Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo71gp3-6888ac70` 14:21:34Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo73jrc-42cfeb9d` 14:23:11Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo75lz3-26a293e9` 14:24:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo77ofu-d9f1327b` 14:26:23Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo79qma-8ca6bffb` 14:28:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7bsg6-7f1d6323` 14:29:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7dtuh-54e0f14e` 14:31:10Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7fwnk-d9c1ad07` 14:32:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7hzgm-e1716a26` 14:34:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7k0js-dd80bc85` 14:35:59Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7m28g-9d100060` 14:37:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7o4uc-d7c78b46` 14:39:11Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7q4tn-f7d8d8d5` 14:40:45Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7s7bp-ece4c402` 14:42:21Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7ua80-c255b842` 14:43:58Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7wd9n-66b69a5c` 14:45:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo7yfsh-f0fa8d24` 14:47:12Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo80hz9-ce5535ca` 14:48:48Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo82k7f-e0de425c` 14:50:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo84luj-ae1f408e` 14:52:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo86oin-c9903337` 14:53:37Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo88q32-77998fad` 14:55:12Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8aruc-a2e917bf` 14:56:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8ctnn-392e8284` 14:58:23Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8ewif-507079c6` 15:00:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8gxf7-7fbb3a81` 15:01:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8izg1-51e26b3f` 15:03:11Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8l2d5-ff25d345` 15:04:48Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8n4rm-c8ff4e48` 15:06:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8p704-a00f68da` 15:08:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8r8t6-d8a77d44` 15:09:36Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8tast-d9489ae6` 15:11:12Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8vcfu-8fc549d6` 15:12:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8xf8w-744f8077` 15:14:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo8zh8r-7e8db985` 15:16:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo91jdn-9e4b02ec` 15:17:36Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo93li6-e8dc2789` 15:19:12Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo95o1l-5331779c` 15:20:49Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo97p5e-86945407` 15:22:24Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo99rxv-467c5cba` 15:24:01Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9bv40-c12bb78e` 15:25:38Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9dxa9-d6ea92d6` 15:27:14Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9fzof-5b7bd02d` 15:28:51Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9i1z9-4f930756` 15:30:27Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9k3io-ce1531e0` 15:32:02Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9m5ol-6bbf1a51` 15:33:38Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9o7s6-e705da0d` 15:35:14Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9q9zr-cc2d43d7` 15:36:50Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9sbrp-a31cad00` 15:38:26Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9udrf-21562dfb` 15:40:02Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9wfyg-c1bf537f` 15:41:38Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muo9yhvf-f8aeb89c` 15:43:14Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoa0kt4-ccb96414` 15:44:51Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoa2ozb-4387be0d` 15:46:30Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoa4rse-0734220d` 15:48:07Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoa6unn-cbd7a1fc` 15:49:44Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoa8xol-9cf74bf0` 15:51:21Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoaayjc-2c567f0d` 15:52:55Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoad0m8-a4cd0b60` 15:54:31Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoaf3tl-890046cf` 15:56:09Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoah558-20979a00` 15:57:44Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoaj7lu-857e74dc` 15:59:20Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoala1h-b42cc0e0` 16:00:57Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoancvm-7ee3aa8e` 16:02:34Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoapfm3-51c91e28` 16:04:11Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoarj86-9e1f2a87` 16:05:49Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoatmc2-1a7bd511` 16:07:26Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoavph8-3ceaa6ca` 16:09:03Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoaxsu1-b8021a2d` 16:10:41Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoazugh-3d330103` 16:12:17Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muob1wps-df25a811` 16:13:53Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muob3z8c-e5acc1cd` 16:15:29Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muob61ai-661e0062` 16:17:05Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muob83ni-01750b37` 16:18:42Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoba6s9-59f3a1c0` 16:20:19Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobc91e-aabe177f` 16:21:55Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobebhc-e482914e` 16:23:32Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobgd86-2eff3851` 16:25:07Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobiek3-889682c5` 16:26:42Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobkgeo-3a7af065` 16:28:18Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobmih5-aecdf0bd` 16:29:54Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobomir-c284f854` 16:31:33Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobqntc-0191d934` 16:33:08Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobsppj-c1810994` 16:34:43Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoburk6-6ae53fa3` 16:36:19Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobwtjl-86b7b56a` 16:37:55Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muobyv7u-6da23414` 16:39:30Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoc0vuz-b1dfd40f` 16:41:05Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoc2wec-b91c6b33` 16:42:39Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoc4wkw-bb728026` 16:44:12Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoc6y0q-cb9361a4` 16:45:47Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoc8z7t-0d75090d` 16:47:22Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocb0k1-2e6117aa` 16:48:57Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocd2ia-41568f8b` 16:50:33Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocf4jt-0d225e88` 16:52:09Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoch4w4-0d7185c4` 16:53:43Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocj8bt-2b7044bd` 16:55:21Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoclbb4-de987abe` 16:56:58Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocncw8-b6ca3914` 16:58:33Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocpfzo-2cda6dea` 17:00:10Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocrhxq-d117465e` 17:01:46Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoctght-b4063af7` 17:03:18Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocvhf6-b3291f25` 17:04:52Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muocxinl-11cb8e36` 17:06:27Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoczib0-4a102e96` 17:08:00Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muod1jgk-dcd2cea8` 17:09:35Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muod3kf7-3f8ef388` 17:11:09Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muod5khu-456210c6` 17:12:43Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muod7m8c-30a56719` 17:14:18Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muod9nzi-32fa17fb` 17:15:54Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muodbp1i-b71cbc05` 17:17:29Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muoddrhi-1c1e890e` 17:19:05Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
+- `run-muodhtho-f3024fb0` 17:22:14Z: Insufficient Balance (provider HTTP 402, `flow_bootstrap.provider_http_error`), $0, no Flow
