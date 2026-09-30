@@ -11,6 +11,7 @@ import test from "node:test";
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../../types";
 import { advancePage, BROWSER_PAGE_HOST, deadlineFor, MAX_PAGE_RETRIES, pageRefusalOf, paginationBound, PaginationFault, paginationStopOf, refusedPageWaitMs, type PaginationProgress } from "../pagination";
+import { nthPagerLink, STORE_ITEM, storePage } from "./store-pager";
 
 /** A requested bound, and what the page holds it to. */
 const BOUNDS: ReadonlyArray<readonly [requested: number, held: number]> = [
@@ -110,4 +111,87 @@ test("a retry the read's time cannot cover, or one whose reload would lose the r
   assert.equal(refusedPageWaitMs("rate_limited", none, 10_500, true), 8_500);
   assert.equal(refusedPageWaitMs("rate_limited", none, 10_499, true), undefined);
   assert.equal(refusedPageWaitMs("rate_limited", none, undefined, false), undefined);
+});
+
+// And the page half of a `next` read: which control it follows, on a pager
+// shaped like the everything store's (`store-pager.ts`), where Previous is a
+// link on every page but the first and so the position of Next moves. Live run
+// `run-munv53gt-a0e6f545` authored `a:nth-of-type(6)` -- Next on pages three
+// and four -- and played it back from page one, where it names nothing: one
+// page read, `control_absent`, while the page showed Next. Re-authored as
+// `a:nth-of-type(4)`, the read names Next on page one and "5" on page two.
+
+/** A page advance from the store's page `page` with `next` authored, and where it led. */
+async function advanceFrom(page: number, next: string, options: { pager?: "drawn" | "late" | "none"; drawAfterMs?: number } = {}): Promise<{ advance: Awaited<ReturnType<typeof advancePage>>; followed: number[]; tookMs: number }> {
+  const shown = storePage(page, { pager: options.pager ?? "drawn" });
+  const first = shown.cards[0];
+  try {
+    const progress: PaginationProgress = {
+      item: STORE_ITEM,
+      shown: shown.cards as unknown as Element[],
+      pagesRead: 1,
+      scrolls: 0,
+      deadline: Date.now() + 20_000,
+      hasUnreadItem: () => first?.isConnected === false
+    };
+    if (options.drawAfterMs !== undefined) setTimeout(shown.drawPager, options.drawAfterMs);
+    const startedAt = Date.now();
+    const advance = await advancePage({ next, maxPages: 10 }, progress);
+    return { advance, followed: shown.followed, tookMs: Date.now() - startedAt };
+  } finally {
+    shown.restore();
+  }
+}
+
+test("the fake pager places Next where the store's does: fourth link on page one, fifth on page two, sixth on pages three and four", () => {
+  const nextAt = (page: number, position: number): string | null => {
+    const shown = storePage(page);
+    try {
+      return document.querySelector(nthPagerLink(position))?.getAttribute("aria-label") ?? null;
+    } finally {
+      shown.restore();
+    }
+  };
+  assert.equal(nextAt(1, 4), "Go to next page, page 2");
+  assert.equal(nextAt(1, 6), null, "the selector authored on page three names nothing on page one");
+  assert.equal(nextAt(2, 4), "Go to page 5", "the selector authored on page one names a page number on page two");
+  assert.equal(nextAt(3, 6), "Go to next page, page 4");
+  assert.equal(nextAt(5, 4), "Go to page 3");
+});
+
+test("page one of a list whose authored next names nothing there follows the pager's own Next, not control_absent", async () => {
+  const { advance, followed } = await advanceFrom(1, nthPagerLink(6));
+  assert.deepEqual(advance, { outcome: "advanced" });
+  assert.deepEqual(followed, [2]);
+});
+
+test("an authored next that names Next on this page is followed as authored", async () => {
+  const { advance, followed } = await advanceFrom(3, nthPagerLink(6));
+  assert.deepEqual(advance, { outcome: "advanced" });
+  assert.deepEqual(followed, [4]);
+});
+
+test("an authored next that drifted onto a page number follows Next instead, and page two's Next that leads back is swapped for page three", async () => {
+  const { advance, followed } = await advanceFrom(2, nthPagerLink(4));
+  assert.deepEqual(advance, { outcome: "advanced" });
+  assert.deepEqual(followed, [3], "not page five, which the positional selector names on page two");
+});
+
+test("on the last page an authored next that drifted onto a page number ends on the pager's disabled Next rather than going back", async () => {
+  const { advance, followed } = await advanceFrom(5, nthPagerLink(4));
+  assert.deepEqual(advance, { outcome: "ended", stop: "control_disabled" });
+  assert.deepEqual(followed, []);
+});
+
+test("a page that draws its pager after its items is waited for, and its Next followed", async () => {
+  const { advance, followed } = await advanceFrom(1, nthPagerLink(4), { pager: "late", drawAfterMs: 300 });
+  assert.deepEqual(advance, { outcome: "advanced" });
+  assert.deepEqual(followed, [2]);
+});
+
+test("a page that shows items and never a pager ends on control_absent after a bounded wait", async () => {
+  const { advance, followed, tookMs } = await advanceFrom(1, nthPagerLink(4), { pager: "none" });
+  assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
+  assert.deepEqual(followed, []);
+  assert.ok(tookMs >= 900 && tookMs < 3_000, `waited ${tookMs} ms`);
 });

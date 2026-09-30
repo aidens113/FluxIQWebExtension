@@ -1,8 +1,8 @@
-import { RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_READ_BOUNDS, RUN_EXTRACTION_WAIT_STOP, type RunExtractionConditionReport, type RunExtractionListWait, type RunExtractionRead } from "./read.js";
+import { RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_PAGINATION_STOP, RUN_EXTRACTION_READ_BOUNDS, RUN_EXTRACTION_WAIT_STOP, type RunExtractionConditionReport, type RunExtractionListWait, type RunExtractionRead } from "./read.js";
 import { add, array, enumeration, finite, keys, object, result, uniqueStrings, type JsonObject } from "../runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "../validation.js";
 
-const readKeys = ["recordCount", "pagesRead", "truncated", "fieldNames", "missingFields", "itemsSeen", "emptyRecords", "listPresence", "listWait", "conditions"] as const satisfies readonly (keyof RunExtractionRead)[];
+const readKeys = ["recordCount", "pagesRead", "truncated", "fieldNames", "missingFields", "itemsSeen", "emptyRecords", "listPresence", "listWait", "conditions", "paginationStop"] as const satisfies readonly (keyof RunExtractionRead)[];
 const conditionKeys = ["applied", "kept", "rejected", "unfiltered"] as const satisfies readonly (keyof RunExtractionConditionReport)[];
 const waitKeys = ["stoppedOn", "waitedMs", "waitedFor"] as const satisfies readonly (keyof RunExtractionListWait)[];
 
@@ -74,6 +74,9 @@ export function validateRunExtractionRead(input: unknown): ValidationResult<RunE
     if (value.listPresence !== undefined) enumeration(value.listPresence, RUN_EXTRACTION_LIST_PRESENCE, "$.listPresence", issues);
     if (value.listWait !== undefined) checkListWait(value.listWait, "$.listWait", issues);
     if (value.conditions !== undefined) checkConditions(value.conditions, "$.conditions", issues);
+    // Absent for a read that did not page; one word from the set otherwise,
+    // `unknown` included, which the reader resolves a newer word to.
+    if (value.paginationStop !== undefined) enumeration(value.paginationStop, RUN_EXTRACTION_PAGINATION_STOP, "$.paginationStop", issues);
   }
   return result<RunExtractionRead>(input, issues);
 }

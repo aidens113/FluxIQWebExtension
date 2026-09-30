@@ -50,7 +50,7 @@
 // count into a string, so a malformed member still drops the read -- which is
 // also what keeps the *absence* of `listWait` meaning one thing, namely that the
 // read waited for no list of its own.
-import { isRunExtractionFieldKey, validateRunExtractionRead, RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_READ_BOUNDS, type RunExtractionConditionReport, type RunExtractionListPresence, type RunExtractionListWait, type RunExtractionRead, type RunExtractionWaitStop } from "@fluxiq-web-extension/test-contracts";
+import { isRunExtractionFieldKey, validateRunExtractionRead, RUN_EXTRACTION_LIST_PRESENCE, RUN_EXTRACTION_PAGINATION_STOP, RUN_EXTRACTION_READ_BOUNDS, type RunExtractionConditionReport, type RunExtractionListPresence, type RunExtractionListWait, type RunExtractionPaginationStop, type RunExtractionRead, type RunExtractionWaitStop } from "@fluxiq-web-extension/test-contracts";
 
 /** The four mechanisms a producer can name; a fifth becomes `"unknown"` rather than costing the read. */
 const KNOWN_WAIT_STOPS: readonly RunExtractionWaitStop[] = ["list_present", "page_settled", "window_elapsed", "deadline_passed"];
@@ -73,7 +73,7 @@ const KNOWN_WAIT_STOPS: readonly RunExtractionWaitStop[] = ["list_present", "pag
 export function extractionReadOf(attempt: Record<string, unknown>): RunExtractionRead | undefined {
   const summary = optionalRecord(optionalRecord(attempt.metadata)?.extraction);
   if (!summary) return undefined;
-  const { recordCount, pagesRead, truncated, fieldNames, missingFields, itemsSeen, emptyRecords, listPresence, listWait, conditions } = summary;
+  const { recordCount, pagesRead, truncated, fieldNames, missingFields, itemsSeen, emptyRecords, listPresence, listWait, conditions, paginationStop } = summary;
   if (!isCount(recordCount) || !isCount(pagesRead) || typeof truncated !== "boolean") return undefined;
   const declared = fieldKeys(fieldNames);
   const missing = fieldKeys(missingFields);
@@ -91,6 +91,12 @@ export function extractionReadOf(attempt: Record<string, unknown>): RunExtractio
   if (listWait !== undefined && wait === undefined) return undefined;
   const report = conditions === undefined ? undefined : conditionReportOf(conditions);
   if (conditions !== undefined && report === undefined) return undefined;
+  // How a paginated read ended, resolved as `stoppedOn` is: a word this reader
+  // does not know is `unknown`, and a member that is not a word drops the read.
+  // Until 2026-09-30 it was not carried at all, so a read that stopped on a
+  // rate-limit page read, in the bundle, like one that finished
+  // (`run-munnhi5q-4867dabe`).
+  if (paginationStop !== undefined && typeof paginationStop !== "string") return undefined;
   const read: RunExtractionRead = {
     recordCount,
     pagesRead,
@@ -102,6 +108,7 @@ export function extractionReadOf(attempt: Record<string, unknown>): RunExtractio
     ...(isListPresence(listPresence) ? { listPresence } : {}),
     ...(wait ? { listWait: wait } : {}),
     ...(report ? { conditions: report } : {}),
+    ...(typeof paginationStop === "string" ? { paginationStop: paginationStopOf(paginationStop) } : {}),
   };
   // The published contract's own check, run on the way in rather than asserted
   // in a test alone: a member this reader rebuilt wrongly is then absent from
@@ -129,6 +136,11 @@ function listWaitOf(value: unknown): RunExtractionListWait | undefined {
 /** The mechanism the producer named, or `"unknown"` for one this reader has not been told about. */
 function waitStopOf(value: string): RunExtractionWaitStop {
   return (KNOWN_WAIT_STOPS as readonly string[]).includes(value) ? value as RunExtractionWaitStop : "unknown";
+}
+
+/** The word the producer named for how paging stopped, or `"unknown"` for one this reader has not been told about. */
+function paginationStopOf(value: string): RunExtractionPaginationStop {
+  return (RUN_EXTRACTION_PAGINATION_STOP as readonly string[]).includes(value) ? value as RunExtractionPaginationStop : "unknown";
 }
 
 /** What the read's `where` did, in counts alone; `undefined` for a report that is not well formed. */

@@ -20,6 +20,8 @@ import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExp
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
+import { readLiveLlmReauthor, type LiveLlmReauthorRecord } from "./reauthor-record.js";
+import { liveLlmRunSpend, type LiveLlmRunSpend } from "./run-spend.js";
 import type { ProviderFailureRequestBounds } from "../provider-failure/index.js";
 
 /** What the run needs from whichever Core it is driving, kept structural so this module imports no topology. */
@@ -130,6 +132,8 @@ export class LiveLlmRun {
   private exploration: LiveLlmExplorationRecord | undefined;
   /** What Core's result verification did on the settled run; `undefined` before that. */
   private verification: LiveLlmVerificationRecord | undefined;
+  /** What the settled run's re-author spent, from Core's record of it; `undefined` before that. */
+  private reauthor: LiveLlmReauthorRecord | undefined;
   /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
   private buildRecord: CreatedFlowBuild | undefined;
   /** Whether a created Flow's playback was readied for the model, and what that run spent; `undefined` before it settled. */
@@ -212,12 +216,23 @@ export class LiveLlmRun {
   }
 
   /**
-   * What the evaluation records: every provider call this run paid for, the
-   * build's and a created Flow's repair alike. `calls` stays 0 until the run
-   * has settled.
+   * What the evaluation records: every provider call this run paid for -- the
+   * build's, the Flow run's own, Core's result check and any re-author
+   * (`run-spend.ts`). `calls` stays 0 until the run has settled.
    */
   get usage(): LlmUsage {
-    return { mode: "live", profileId: this.plan.profileId, calls: (this.observed?.calls ?? 0) + (this.repairObserved?.calls ?? 0) };
+    return { mode: "live", profileId: this.plan.profileId, calls: this.spend().calls };
+  }
+
+  /**
+   * Every call the run made, by phase. A created Flow's `observed` is its
+   * build, and its playback is the run phase; any other run's `observed` is
+   * the run itself. The phases are each budgeted where they settle; this only
+   * adds them up.
+   */
+  private spend(repairObserved: LiveLlmObservedUsage | undefined = this.repairObserved): LiveLlmRunSpend {
+    const created = this.buildRecord !== undefined;
+    return liveLlmRunSpend({ build: created ? this.observed : undefined, runtime: created ? repairObserved : this.observed, judge: this.verification, reauthor: this.reauthor });
   }
 
   /**
@@ -334,7 +349,7 @@ export class LiveLlmRun {
     // Read before the snapshot is written, and never allowed to fail the
     // settlement: it says what exploring did, not whether the run was legal.
     await this.readRunRecords(control, input);
-    await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {}, this.declaredCalls);
+    await this.settleObserved(liveLlmObservedUsage(detail), bundle, publish, {}, this.declaredCalls, true);
   }
 
   /**
@@ -347,7 +362,7 @@ export class LiveLlmRun {
     this.buildRecord = build;
     // Deliberately no declaration: a build that reached no provider proposed
     // no Flow, so "the runtime absorbed it" can never be what happened here.
-    await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build }, null);
+    await this.settleObserved(liveLlmBuildUsage(build), bundle, publish, { build }, null, false);
     const { provider, model } = build.accounting ?? {};
     if ((provider != null && provider !== this.plan.provider) || (model != null && model !== this.plan.model)) {
       throw new RunnerFailure("runtime.behavior", `Core's Flow build ran on ${provider ?? "an unreported provider"}/${model ?? "an unreported model"}, not the authorized ${this.plan.provider}/${this.plan.model}`);
@@ -384,10 +399,10 @@ export class LiveLlmRun {
       observed: observed ?? null,
       ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
     };
-    await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair });
+    await this.writeSnapshot(bundle, this.observed ?? null, { ...(this.buildRecord ? { build: this.buildRecord } : {}), repair }, observed);
     if (!observed) return;
     this.repairObserved = observed;
-    await publish({ repair: usageSummary(observed) });
+    await publish({ repair: usageSummary(observed), runTotal: spendSummary(this.spend()) });
     assertLiveLlmBudgetHeld(plan, observed);
   }
 
@@ -439,7 +454,7 @@ export class LiveLlmRun {
     }
     this.observed = observed;
     await this.writeSnapshot(bundle, observed, { settlement: "lane_failed" });
-    await publish({ ...usageSummary(observed), settledAfterLaneFailure: true });
+    await publish({ ...usageSummary(observed), runTotal: spendSummary(this.spend()), settledAfterLaneFailure: true });
     try {
       assertLiveLlmBudgetHeld(this.plan, observed);
     } catch (breach) {
@@ -462,18 +477,30 @@ export class LiveLlmRun {
     };
     this.exploration = await readLiveLlmExploration(once, scope);
     this.verification = await readLiveLlmVerification(once, scope);
+    this.reauthor = await readLiveLlmReauthor(once, scope);
   }
 
-  private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>, declared: DeclaredProviderCalls | null): Promise<void> {
+  private async settleObserved(observed: LiveLlmObservedUsage, bundle: LiveLlmRunBundle, publish: LiveLlmPublish, extra: Record<string, unknown>, declared: DeclaredProviderCalls | null, withRunTotal: boolean): Promise<void> {
     this.observed = observed;
     await this.writeSnapshot(bundle, observed, extra);
-    await publish({ ...usageSummary(observed), ...(declared ? { declaredProviderCalls: declared.count } : {}) });
+    await publish({ ...usageSummary(observed), ...(withRunTotal ? { runTotal: spendSummary(this.spend()) } : {}), ...(declared ? { declaredProviderCalls: declared.count } : {}) });
     assertLiveLlmBudgetHeld(this.plan, observed);
     assertProviderCallsAsDeclared(this.plan, observed, declared);
   }
 
-  /** `snapshots/live-llm.json`: what was authorized, what the run permitted, and what it spent, or `null` where that could not be read. */
-  private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>): Promise<void> {
+  /**
+   * `snapshots/live-llm.json`: what was authorized, what the run permitted, and
+   * what it spent, or `null` where that could not be read.
+   *
+   * `observed.calls` and `observed.totalEstimatedCostUsd` are the whole run's
+   * (`run-spend.ts`), because they are the figures every reader of this file
+   * takes as what the run cost -- the machine's spend ledger among them. The
+   * rest of `observed` is still the phase it was settled from, `observed.phases`
+   * and `runSpend` break the total down, and `build`, `repair` and
+   * `verification` keep each phase's own record as before.
+   */
+  private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>, repairObserved?: LiveLlmObservedUsage): Promise<void> {
+    const spend = this.spend(repairObserved ?? this.repairObserved);
     await bundle.writeStructured("snapshots/live-llm.json", {
       schemaVersion: "0.1",
       profileId: this.plan.profileId,
@@ -500,7 +527,13 @@ export class LiveLlmRun {
       // than inferred from the zero beside it. `null` for the ordinary run,
       // which is held to reaching a provider (`declared-provider-calls.ts`).
       expectedProviderCalls: this.declaredCalls,
-      observed,
+      observed: observed ? { ...observed, calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, phases: spend.phases } : null,
+      // Every call the run made, by phase, written even when the phase this
+      // snapshot settled from could not be read.
+      runSpend: spend,
+      // What the run's re-author spent, from Core's record of the run. `null`
+      // before a settlement read one.
+      reauthor: this.reauthor ?? null,
       // What the bounded exploration did on this run, from Core's own recovery
       // trace: counts, its outcome and the code that ended it. `null` before a
       // settlement read one; `source` says whether Core published one at all,
@@ -572,6 +605,11 @@ function amount(value: unknown): number | null {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+/** The whole run's calls and cost, for the settle event. */
+function spendSummary(spend: LiveLlmRunSpend): Record<string, unknown> {
+  return { calls: spend.calls, totalEstimatedCostUsd: spend.totalEstimatedCostUsd, ...(spend.uncountedPhases.length > 0 ? { uncountedPhases: spend.uncountedPhases } : {}) };
 }
 
 /** What a settlement publishes on the run's event stream: counts and a total, never a call. */

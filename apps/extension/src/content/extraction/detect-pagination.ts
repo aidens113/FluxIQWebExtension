@@ -128,3 +128,124 @@ function numberedControls(controls: readonly Element[]): Element[] {
 function isNumberLabelled(control: Element): boolean {
   return /^\d+$/u.test(textOutsideSensitiveControls(control).trim());
 }
+
+// ## Which control a `next` read follows on the page it is on
+//
+// A proposal's `next` is `selectorFor` the control it saw, and where that
+// control carries no id or test id the selector is a position:
+// `nav > a:nth-of-type(6)`. A position holds only while the pager keeps it, and
+// a pager that shows a different set of links on every page does not. The
+// everything store's Previous is a link from page two on and plain text on page
+// one, and the numbers it shows move with the page, so its Next is the fourth
+// link on page one, the fifth on page two and the sixth on pages three and four.
+// Live run `run-munv53gt-a0e6f545` authored its read while the store showed page
+// three or four, got `a:nth-of-type(6)`, and played it back from page one, where
+// that names nothing: one page read, stopped on `control_absent` -- the word for
+// a list that ended -- while the page showed Next. Re-authored as
+// `a:nth-of-type(4)`, the same read names Next on page one and "5" on page two.
+//
+// So the authored selector is where the read starts, not the last word, the way
+// a click target is re-resolved when its selector drifts. It is followed as it
+// is when it names a control that could be the way forward. When it names
+// nothing, or names what is plainly another page's control -- a page number,
+// the current page, Previous, First, Last -- the pager around it and around the
+// list is asked for its own way forward: the control labelled Next or carrying
+// `rel="next"`, a disabled one included, so a last page still ends on
+// `control_disabled`; or, where the pager labels none, the numbered control
+// after the one marked `aria-current`. Labels are read here only to recognize a
+// control, as in detection (decision D3); none leaves the page.
+
+/** How a `next` read found the control it follows: the authored selector, the pager's Next label, or the page number after the current one. */
+export type NextControlSource = "selector" | "label" | "number";
+
+/** The control a `next` read follows on this page, and how it was found. */
+export type NextControlChoice = { control: Element; by: NextControlSource };
+
+/**
+ * What a pager's controls are when a read looks for its way forward: detection's
+ * controls, and an element marked disabled, since a pager draws its last page's
+ * Next as disabled text and that is the list ending rather than no pager at all.
+ */
+const PAGER_CONTROL_SELECTOR = `${CONTROL_SELECTOR},[aria-disabled="true"]`;
+
+/**
+ * A label that is the pager's Next and nothing else. Stricter than detection's
+ * `NEXT_LABEL`, because a control found this way replaces the one the author
+ * chose: "Next page", "Go to next page, page 2", "Next" and "Next ›" are a
+ * pager's; "Next day delivery" and "Next slide" are not.
+ */
+const PAGER_NEXT_LABEL = /\bnext\s+page\b|^next\b[^\p{L}\p{N}]*$/u;
+
+/** A label that plainly names another page: a number, the current or a numbered page, Previous, First, Last or Back. */
+const OTHER_PAGE_LABEL = /^(?:(?:go\s+to\s+)?(?:current\s+)?page,?\s+(?:page\s+)?)?\d+$|\bprev(?:ious)?\b|\bfirst\b|\blast\b|\bback\b/u;
+
+/**
+ * The control a `next` read follows on this page, or `undefined` when neither
+ * the authored control nor the pager offers a way forward. `named` is what the
+ * authored selector names here (`null` for nothing) and `run` the items the
+ * page shows; see the header above for the order it is decided in.
+ */
+export function nextControlOnPage(named: Element | null, run: readonly Element[]): NextControlChoice | undefined {
+  if (named && !namesAnotherPage(named)) return { control: named, by: "selector" };
+  const outsideRun = (element: Element): boolean => !run.some((item) => item === element || item.contains(element));
+  // Around the authored control first, which is where its pager is when it
+  // names one, then around the list, which is where it is when it names nothing.
+  for (const start of [named?.parentElement ?? null, run[0]?.parentElement ?? null]) {
+    let level: Element | null = start;
+    for (let depth = 0; level && depth < MAX_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
+      const controls = Array.from(level.querySelectorAll(PAGER_CONTROL_SELECTOR)).filter(outsideRun);
+      const labelled = controls.find(isPagerNext);
+      if (labelled) return { control: labelled, by: "label" };
+      const following = numberedAfterCurrent(level, controls, outsideRun);
+      if (following) return { control: following, by: "number" };
+    }
+  }
+  return undefined;
+}
+
+function labelOf(control: Element): string {
+  return (control.getAttribute("aria-label") ?? textOutsideSensitiveControls(control)).replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+function isPagerNext(control: Element): boolean {
+  const rel = control.getAttribute("rel");
+  if (rel !== null && rel.trim().toLowerCase().split(/\s+/u).includes("next")) return true;
+  return PAGER_NEXT_LABEL.test(labelOf(control));
+}
+
+/**
+ * Whether the authored control is plainly not the way forward: it is marked as
+ * the current page, or its label or text is a page number, Previous, First,
+ * Last or Back. A control labelled next never is, and one whose label says
+ * nothing a pager says -- an icon, a script's own button -- is the author's
+ * choice and is followed.
+ */
+function namesAnotherPage(control: Element): boolean {
+  if (kindOf(control) === "next") return false;
+  if (isMarkedCurrent(control)) return true;
+  return OTHER_PAGE_LABEL.test(labelOf(control)) || isNumberLabelled(control);
+}
+
+function isMarkedCurrent(element: Element): boolean {
+  const current = element.getAttribute("aria-current");
+  return current !== null && current !== "false";
+}
+
+/** The number an element shows as its whole text, or `undefined` for anything else. */
+function shownNumber(element: Element): number | undefined {
+  const text = textOutsideSensitiveControls(element).trim();
+  return /^\d+$/u.test(text) ? Number(text) : undefined;
+}
+
+/**
+ * The enabled control numbered one more than the page marked `aria-current` at
+ * this level, or `undefined` when nothing there is marked or nothing follows it.
+ * Only a marked page counts: a number merely drawn as text could be anything a
+ * page shows beside its list.
+ */
+function numberedAfterCurrent(level: Element, controls: readonly Element[], outsideRun: (element: Element) => boolean): Element | undefined {
+  const current = Array.from(level.querySelectorAll("[aria-current]")).find((element) => outsideRun(element) && isMarkedCurrent(element) && shownNumber(element) !== undefined);
+  const number = current === undefined ? undefined : shownNumber(current);
+  if (number === undefined) return undefined;
+  return controls.find((control) => shownNumber(control) === number + 1 && control.getAttribute("aria-disabled") !== "true");
+}

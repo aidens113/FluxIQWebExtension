@@ -15,7 +15,13 @@
 //   than a proposal's -- though the domain's own parse drops the name again,
 //   because a parsed request is copied exactly and adding a field it was not
 //   sent would break that. Either way: follow the `next` control until
-//   it is absent. After a click the list must become a different list -- its
+//   it is absent. The control is the authored selector's unless that names
+//   nothing here or another page's control, which a positional selector does
+//   on a pager whose links change from page to page; then it is the pager's
+//   own Next (`detect-pagination.ts`, `nextControlOnPage`; run
+//   `run-munv53gt-a0e6f545` stopped on page one for want of this). A page
+//   that shows items and no way forward is watched for one briefly before the
+//   list counts as ended. After a click the list must become a different list -- its
 //   first item detached or replaced, or its length changed -- within ten
 //   seconds, or the page ignored its own control and the read fails. The old
 //   page staying on screen while the new one loads reads as "not yet changed",
@@ -81,7 +87,9 @@
 //   (`list-reader.ts`).
 
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationExtractionSummary } from "@fluxiq-web-extension/domain/client";
+import type { PageLoadPaceAnswer, PageLoadPaceMessage } from "../../shared/protocol";
 import type { WebAutomationExtractListPagination } from "../types";
+import { nextControlOnPage, type NextControlChoice } from "./detect-pagination";
 import { waitUntil, type WaitOutcome } from "./list-wait";
 import { offeredLoadRetry } from "./load-retry";
 import { awaitPageRendered } from "./page-render";
@@ -198,13 +206,8 @@ export type RefusedPageHost = {
 /** What the server's answer makes of a document a page advance reached: refused as too fast, refused as unavailable, or unexplained. */
 export type PageRefusal = "rate_limited" | "unavailable" | "unexplained";
 
-/**
- * The stop word for a read that met a 429 it could not wait out. `list_vanished`
- * until the domain's closed set (`WebAutomationExtractionPaginationStop`)
- * admits `rate_limited`, because a word outside that set drops the read's
- * whole summary; the outcome's `refusedStatus` says it was a 429 meanwhile.
- */
-export const RATE_LIMITED_STOP: PaginationStop = "list_vanished";
+/** The stop word for a read that met a 429 it could not wait out; the outcome's `refusedStatus` says which status. */
+export const RATE_LIMITED_STOP: PaginationStop = "rate_limited";
 
 /** Reloads one read may make of refused pages, across every document it reads. */
 export const MAX_PAGE_RETRIES = 2;
@@ -228,19 +231,86 @@ const RETRY_READ_ALLOWANCE_MS = 2_000;
 /** How long a reload is given to take this document away before the read accepts that it did not. */
 const RELOAD_WINDOW_MS = 10_000;
 
-/** The browser's own: the navigation entry's status, a timer, and `location.reload()`. */
+/**
+ * The browser's own: the navigation entry's status, a timer, and
+ * `location.reload()`. A refused status is also told to the worker's page-load
+ * pace, once per document, so the site's later loads slow down; the reload
+ * waits its turn on that pace (see below).
+ */
 export const BROWSER_PAGE_HOST: RefusedPageHost = {
   status() {
     const entry = globalThis.performance?.getEntriesByType?.("navigation")[0] as { responseStatus?: unknown } | undefined;
     // 0 is what the entry says of a response it will not describe, which is no status at all.
-    return typeof entry?.responseStatus === "number" && entry.responseStatus > 0 ? entry.responseStatus : undefined;
+    const status = typeof entry?.responseStatus === "number" && entry.responseStatus > 0 ? entry.responseStatus : undefined;
+    if (status !== undefined && pageRefusalOf(status) !== undefined) tellPaceRefused(status);
+    return status;
   },
   pause: (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
   async reload() {
+    await awaitPageLoadTurn(undefined);
     window.location.reload();
     await BROWSER_PAGE_HOST.pause(RELOAD_WINDOW_MS);
   }
 };
+
+// **The loads a read makes on a site wait their turn on the worker's pace**
+// (`background/page-pace/`). Live run `run-muntc23v-7fcc4110` re-ran a
+// five-page read about ten times back to back, and the everything store's
+// limiter answered a 429 and then flagged the session, because no document can
+// know how recently the reads before it loaded the same site. Before it follows
+// a `next` or numbered control, and before it reloads a refused page, the page
+// asks the worker how long to wait, waits it -- never past the read's deadline,
+// which then ends the read as any deadline does -- and loads. The worker keys
+// the booking by the origin it sees the message come from; the page sends no
+// address and no text. A page with no pace behind it (a read the worker did not
+// send, the content harness) is answered with no wait, or not at all, and loads
+// as it always did.
+
+/** The most one answer can hold a load, whatever the worker says: its longest spacing plus its wait after a refusal, with room to spare. */
+const MAX_PACE_WAIT_MS = 30_000;
+
+/**
+ * Asks the worker's pace for the turn of the next page load on this site and
+ * waits for it, stopping at `deadline`. Answers how long it waited.
+ */
+export async function awaitPageLoadTurn(deadline: number | undefined, pause: (ms: number) => Promise<void> = BROWSER_PAGE_HOST.pause): Promise<number> {
+  const asked = await askPace({ type: "fluxiq.pageLoad.pace", kind: "load" });
+  const waitMs = Math.min(asked, MAX_PACE_WAIT_MS, deadline === undefined ? Number.POSITIVE_INFINITY : Math.max(0, deadline - Date.now()));
+  if (waitMs > 0) await pause(waitMs);
+  return waitMs;
+}
+
+/** Whether this document's refusal has been told to the pace: a status belongs to its document, so once is all it can say. */
+let refusalTold = false;
+
+function tellPaceRefused(status: number): void {
+  if (refusalTold) return;
+  refusalTold = true;
+  void askPace({ type: "fluxiq.pageLoad.pace", kind: "refused", status });
+}
+
+/**
+ * Sends `message` to the worker and answers the wait its reply asks for, in
+ * milliseconds. 0 where no pace answers -- no worker listening, or one whose
+ * reply is not a pace's, which is what a page with no pace behind it gets. Any
+ * other failure to send is reported and also means no wait, because pacing is a
+ * courtesy to the site that must never be what fails a read.
+ */
+async function askPace(message: PageLoadPaceMessage): Promise<number> {
+  const runtime = (globalThis as { chrome?: { runtime?: { sendMessage?: (message: unknown) => Promise<unknown> } } }).chrome?.runtime;
+  if (typeof runtime?.sendMessage !== "function") return 0;
+  let reply: unknown;
+  try {
+    reply = await runtime.sendMessage(message);
+  } catch (error) {
+    if (!/Receiving end does not exist|Could not establish connection/iu.test(error instanceof Error ? error.message : "")) {
+      console.warn("FluxIQ could not reach its page-load pace; loading without it.", error);
+    }
+    return 0;
+  }
+  const answer = reply as Partial<PageLoadPaceAnswer> | undefined;
+  return answer?.ok === true && typeof answer.waitMs === "number" && Number.isFinite(answer.waitMs) ? Math.max(0, answer.waitMs) : 0;
+}
 
 /** What a status says of the document: refused (429, 503), unexplained where no status is known, or `undefined` for a page served. */
 export function pageRefusalOf(status: number | undefined): PageRefusal | undefined {
@@ -287,20 +357,54 @@ export async function advancePage(paginate: WebAutomationExtractListPagination, 
 }
 
 /**
- * Follows the `next` control. A disabled one is the list ending, as it is for
- * `loadMore`; one that leads back to this very page is swapped for the pager's
- * following page where the pager shows one (see the header).
+ * Follows the `next` control: the authored selector's, or the pager's own Next
+ * where that selector names nothing or another page's control
+ * (`detect-pagination.ts`, `nextControlOnPage`). A disabled one is the list
+ * ending, as it is for `loadMore`; one that leads back to this very page is
+ * swapped for the pager's following page where the pager shows one (see the
+ * header).
  */
 async function followNext(paginate: NextPagination, progress: PaginationProgress): Promise<PageAdvance> {
-  const next = document.querySelector(paginate.next);
-  if (!next) return ended("control_absent");
+  const found = await awaitNextControl(paginate.next, progress);
+  if (found === "timed_out") return TIMED_OUT;
+  if (!found) return ended("control_absent");
+  const next = found.control;
   if (isDisabled(next)) return ended("control_disabled");
   if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
   const named = clickable(next, paginate.next);
   const control = leadsToThisPage(named) ? pagerSuccessor(named) ?? named : named;
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
+  await awaitPageLoadTurn(progress.deadline);
+  if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await progress.beforeFollow?.();
   return await afterListChange(paginate, progress, control, `following ${JSON.stringify(paginate.next)} to page ${progress.pagesRead + 1}`);
+}
+
+/**
+ * How long a page that shows its items and no way forward is watched for one
+ * before the read calls the list ended. A page that draws its pager with, or
+ * after, results it loads late has not ended its list when the first item
+ * appears -- which is all a paged read waits for (`list-reader.ts`) -- and a
+ * page that has ended it pays this once, on its last page. A list the read
+ * found no container for has no pager to wait for, and does not wait.
+ */
+const PAGER_WAIT_MS = 1_000;
+const PAGER_POLL_MS = 50;
+
+/**
+ * The control a `next` read follows on this page, waiting up to
+ * `PAGER_WAIT_MS` for one to appear; `"timed_out"` when the command's deadline
+ * passed first.
+ */
+async function awaitNextControl(selector: string, progress: PaginationProgress): Promise<NextControlChoice | "timed_out" | undefined> {
+  const look = (): NextControlChoice | undefined => nextControlOnPage(document.querySelector(selector), progress.shown);
+  const seen: { choice: NextControlChoice | undefined } = { choice: look() };
+  if (seen.choice !== undefined || !progress.shown[0]?.parentElement) return seen.choice;
+  const outcome = await waitUntil(() => {
+    seen.choice = look();
+    return seen.choice !== undefined;
+  }, PAGER_WAIT_MS, PAGER_POLL_MS, progress.deadline);
+  return outcome === "timed_out" ? "timed_out" : seen.choice;
 }
 
 async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationProgress): Promise<PageAdvance> {
@@ -360,6 +464,8 @@ async function visitNumberedPage(paginate: NumberedPagination, progress: Paginat
   if (!following) return ended("no_following_page");
   if (progress.pagesRead >= paginationBound(paginate)) return TRUNCATED;
   const control = clickable(following, paginate.pages);
+  if (pastDeadline(progress.deadline)) return TIMED_OUT;
+  await awaitPageLoadTurn(progress.deadline);
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await progress.beforeFollow?.();
   return await afterListChange(paginate, progress, control, `choosing page ${progress.pagesRead + 1} from ${JSON.stringify(paginate.pages)}`);

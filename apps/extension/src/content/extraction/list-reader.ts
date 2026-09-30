@@ -17,9 +17,10 @@
 // revealing the end of the list and seeing what that brings, because a page
 // that loads its last results on scroll is stable, unfinished and
 // indistinguishable from a finished one until something scrolls. Only then is
-// the request's own `minItems` asked for. A read that pages asks only the
-// first, for its first item: it reaches the rest of the list by its own
-// mechanism.
+// the request's own `minItems` asked for. A read that pages asks the first for
+// its first item; a `next` or numbered read then reveals every page it reads,
+// the first included, before reading it, and a scroll or load-more read
+// reaches the rest of its list by its own mechanism.
 //
 // An item already read is not read again, so a page that appends its next
 // items rather than replacing them yields each item once. In `scroll` mode an
@@ -119,8 +120,9 @@ import { readField } from "./field-reader";
 import { normalizeExtractField, type ExtractFieldReader } from "./field-spec";
 import { filteredListAnswer, type ListExtractionConditionReport } from "./filtered-answer";
 import { itemFilterFor } from "./item-filter";
-import { awaitListComplete } from "./list-wait";
+import { awaitListComplete, awaitPageComplete } from "./list-wait";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
+import { rejectedSamplesFor } from "./rejected-samples";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
 import {
   advancePage,
@@ -219,6 +221,8 @@ export type ListExtractionOutcome = {
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
   conditions?: ListExtractionConditionReport | undefined;
+  /** Up to three rows each condition rejected, one list per condition, only for a read asked for them (`rejected-samples.ts`). */
+  rejectedSamples?: ExtractedListRecord[][] | undefined;
   /**
    * Why a read that pages stopped paging, or absent for a read that did not page.
    *
@@ -252,6 +256,8 @@ export type ListExtractionOptions = {
   checkpoint?: ((progress: ExtractionCheckpoint) => Promise<void>) | undefined;
   /** How the document says how it was served, and is waited on and reloaded: the browser's own unless a test stands it in. */
   pageHost?: RefusedPageHost | undefined;
+  /** Keep a few rows each condition rejected, for the exploring model's own node run only (`rejected-samples.ts`). */
+  sampleRejected?: boolean | undefined;
 };
 
 type FieldReaders = ReadonlyArray<readonly [name: string, reader: ExtractFieldReader]>;
@@ -331,13 +337,16 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         missingFields: [...missing].sort(),
         filtered,
         ...(seen === undefined ? {} : { itemsSeen: seen }),
-        ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach] } }),
+        ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], seen: [...seenEach] } }),
+        ...(samples === undefined ? {} : { rejectedSamples: samples.rows() }),
         ...(spent.retries + spent.rateLimits === 0 ? {} : { refusals: { ...spent } })
       });
     };
   }
   let truncated = false;
   let timedOut = false;
+  // Whether the deadline cut a reveal short, so the page read was not all of its page (`list-wait.ts`).
+  let revealCutShort = false;
   let paginationStop: PaginationStop | undefined;
   // In the modes that move to another page: the content of every item any
   // earlier page showed, kept or not, so a page that shows nothing else is known
@@ -368,6 +377,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let applied = carried.applied;
   let kept = carried.kept;
   const rejectedEach = [...carried.rejected];
+  const seenEach = [...carried.seen]; // what each condition's own read found (`item-filter.ts`), carried like the counts
+  // A few of the rows each condition rejected, carried across documents like the counts.
+  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples);
 
   // Items the selector named, counted once each, whichever page or scroll named
   // them: a set rather than a running sum, because a `loadMore` or `scroll` read
@@ -413,7 +425,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(pageFault ? { pageFault: true } : {}),
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
-      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } }),
+      ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered, seen: [...seenEach] } }),
+      ...(samples === undefined ? {} : { rejectedSamples: samples.rows() }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
@@ -466,14 +479,15 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     // Three waits, in this order, and the order is the point. First the list is
     // there and has stopped arriving on its own -- a paginated read waits only
     // for its first item, since the rest may legitimately be on a later page
-    // and `pagination.ts` waits for each of those. Then, for a read of one
-    // page, the end of the list is revealed until nothing more comes
-    // (`list-wait.ts`): the results a page loads only once its bottom is
-    // scrolled to are the rest of this page, not another one, and no live Flow
-    // has ever carried a scroll node before its extraction. Only then is the
-    // request's own minimum waited for, because before the reveal a page that
-    // is one scroll from holding sixteen items holds twelve, and waiting there
-    // spends the whole command on a sixteenth that was never going to come.
+    // and `pagination.ts` waits for each of those. Then the end of the list is
+    // revealed until nothing more comes (`list-wait.ts`) -- here for a read of
+    // one page, and at the top of the loop for each page a `next` or numbered
+    // read reads: the results a page loads only once its bottom is scrolled
+    // to are the rest of this page, not another one, and no live Flow has ever
+    // carried a scroll node before its extraction. Only then is the request's
+    // own minimum waited for, because before the reveal a page one scroll from
+    // holding sixteen items holds twelve, and waiting there spends the whole
+    // command on a sixteenth that was never going to come.
     const required = requiredItems(request.minItems);
     listWait = await awaitListPresent(item, 1, paginate === undefined, progress);
     listPresence = listWait.presence;
@@ -484,7 +498,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       // without scrolling the page a person is looking at.
       // Nor can a read that dedupes or sorts: a duplicate takes no place under
       // the bound, and a sort has to see every row.
-      await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline);
+      revealCutShort = await awaitListComplete(item, rejects || order ? Number.MAX_SAFE_INTEGER : maxItems, progress.deadline) === "timed_out";
       if (required > 1) {
         // Two waits on one page, reported as one: the second's answer, and both
         // their time, so the account's `waitedMs` is what the read actually
@@ -497,6 +511,12 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   }
 
   for (;;) {
+    // Each page of a `next` or numbered read, reached however it was, is the
+    // whole of its page before it is read, bounded as the read of one page is.
+    if (pageByPage) {
+      const want = { everything: rejects !== undefined || order !== undefined, records: readBound - records.length, taken: (element: Element) => read.has(element) };
+      revealCutShort = await awaitPageComplete(item, want, progress.deadline) === "timed_out";
+    }
     const shown = Array.from(document.querySelectorAll(item));
     // A list no wait saw but the read does -- a later page's, or one drawn between the two -- still appeared.
     if (listPresence === "never_appeared" && shown.length > 0) {
@@ -536,7 +556,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         // only so a read the conditions emptied has something to answer with,
         // and a read that kept anything never returns it.
         if (rejects) {
-          const rejectedBy = rejects(element, itemRead.record);
+          const rejectedBy = rejects(element, itemRead.record, seenEach);
           if (seen === undefined) applied += 1;
           if (rejectedBy.length > 0) {
             if (seen === undefined) {
@@ -545,6 +565,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
               // was sized from, so the fallback is for the compiler rather than
               // for a case that happens.
               for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
+              samples?.note(rejectedBy, itemRead.record);
               rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, order ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems);
             }
             read.set(element, key);
@@ -584,6 +605,13 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       }
     }
     if (pageByPage) for (const content of thisPage) earlierPages?.add(content);
+    // A page the deadline stopped revealing was read in part, so the read ends
+    // there as out of time rather than calling that part the page.
+    if (revealCutShort && !truncated) {
+      timedOut = true;
+      if (paginate) paginationStop = "deadline";
+      break;
+    }
     if (truncated || !paginate) {
       if (truncated && paginate) paginationStop = "item_limit";
       break;
@@ -644,12 +672,13 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
  * this request's `where` -- one rejection count per condition is the only shape
  * a positional count can be added to, and the same request always has it.
  */
-function carriedConditionCounts(resume: ExtractionCheckpoint | undefined, conditions: number): { applied: number; kept: number; rejected: number[] } {
+function carriedConditionCounts(resume: ExtractionCheckpoint | undefined, conditions: number): { applied: number; kept: number; rejected: number[]; seen: (string | null)[] } {
   const carried = resume?.conditions;
+  const none = (): (string | null)[] => Array.from({ length: conditions }, () => null);
   if (carried === undefined || carried.rejected.length !== conditions) {
-    return { applied: 0, kept: 0, rejected: Array.from({ length: conditions }, () => 0) };
+    return { applied: 0, kept: 0, rejected: Array.from({ length: conditions }, () => 0), seen: none() };
   }
-  return { applied: carried.applied, kept: carried.kept, rejected: [...carried.rejected] };
+  return { applied: carried.applied, kept: carried.kept, rejected: [...carried.rejected], seen: carried.seen?.length === conditions ? [...carried.seen] : none() };
 }
 
 /** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */

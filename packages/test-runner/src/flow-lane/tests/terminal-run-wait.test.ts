@@ -231,3 +231,41 @@ test("a run with no marker keeps the fixed recovery wait and names nothing", asy
   assert.equal(settled.recoveryState, undefined);
   assert.equal(clock, 300_000);
 });
+
+// A repaired re-run that failed is finished: no recovery follows it.
+//
+// `run-munw7ffn-fe1cecd2`: the re-authored Flow's re-run failed, its detail
+// carried `repairedRerun: { status: "failed" }` and no recovery record, and the
+// wait spent 306 s on a record Core never writes after a repair re-run.
+function repairedRerun(status: string, repairPhase?: string) {
+  return {
+    summaryStatus: "failed",
+    actions: [{ status: "failed", nodeId: "n1", failure: { stage: "dispatch" } }],
+    resultVerification: "refuted",
+    runDetail: { metadata: { repairedRerun: { attempted: true, status, attemptCount: 3 }, ...(repairPhase ? { resultRepair: { phase: repairPhase } } : {}) } }
+  };
+}
+
+test("a failed repaired re-run is settled at once, with no recovery record", async () => {
+  let clock = 0;
+  const settled = await awaitTerminalRunDetail(
+    async () => repairedRerun("failed"),
+    new Error("unused"),
+    { now: () => clock, sleep: async (ms: number) => { clock += ms; }, timeoutMs: 400_000, awaitVerdict: true, awaitRecovery: true, recoveryWaitMs: 300_000, recoveryGraceMs: 5_000 }
+  );
+  assert.equal(settled.unsettled, undefined);
+  assert.equal(settled.recoveryState, undefined);
+  assert.equal(clock, 0);
+});
+
+test("a repaired re-run whose status is not terminal, or whose repair is still re-running, is still waited for", async () => {
+  let clock = 0;
+  const wait = { now: () => clock, sleep: async (ms: number) => { clock += ms; }, timeoutMs: 100_000, awaitVerdict: true, awaitRecovery: true, recoveryWaitMs: 300_000, recoveryGraceMs: 5_000 };
+  const running = await awaitTerminalRunDetail(async () => repairedRerun("running"), new Error("unused"), wait);
+  assert.equal(running.unsettled, "recovery");
+  assert.ok(clock > 0);
+  clock = 0;
+  const rerunning = await awaitTerminalRunDetail(async () => repairedRerun("failed", "rerunning"), new Error("unused"), wait);
+  assert.equal(rerunning.unsettled, "repair");
+  assert.equal(clock, 100_000);
+});

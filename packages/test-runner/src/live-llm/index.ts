@@ -11,5 +11,7 @@ export { runLaneWithLiveLlmSettlement, type LiveLlmLaneSettlement } from "./lane
 export { planLiveLlmExecution, type LiveLlmPlan, type LiveLlmPurpose } from "./live-llm-plan.js";
 export { beginLiveLlmRun, LiveLlmRun, type LiveLlmRunBundle, type LiveLlmRunCredentials } from "./live-llm-run.js";
 export { liveLlmObservedUsage, type LiveLlmObservedCall, type LiveLlmObservedUsage } from "./observed-usage.js";
+export { readLiveLlmReauthor, type LiveLlmReauthorAttempt, type LiveLlmReauthorCallsSource, type LiveLlmReauthorRecord } from "./reauthor-record.js";
+export { liveLlmRunSpend, type LiveLlmJudgeCalls, type LiveLlmRunSpend, type LiveLlmSpendPhase } from "./run-spend.js";
 export { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
 export { ensureLiveLlmSecretKey, LAB_LIVE_LLM_KEY_NAME, type LiveLlmSecretKeyControl, type LiveLlmSecretKeyReference } from "./secret-key.js";

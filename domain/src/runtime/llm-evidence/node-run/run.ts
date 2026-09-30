@@ -65,7 +65,7 @@ import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSP
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
 import type { WebNodeRun } from "./context";
 import { webObservedControl } from "./observed-control";
-import { webNodeReadResult } from "./read-result";
+import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
@@ -351,7 +351,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: undefined, reads: false })
     };
     record.acted = true;
-    const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
+    // A list read also asks for a few of the rows its conditions turned down,
+    // on this command only: the Flow keeps `ran` (`./rejected-rows.ts`).
+    const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: webNodeDispatchParameters(node, ran), metadata: toolMetadata(run.request) });
     assertActive(run.request.signal);
     if (result.status !== "succeeded") {
       // The node's own failure, under the node's own name. The page comes with
@@ -393,8 +395,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // its payload is the raw snapshot, which is the page before any of this
     // domain's sanitizing, and the packet beside it already says what the page
     // is. Returning it would be the one path by which a page's own markup
-    // reached a decision.
-    const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4))) : undefined;
+    // reached a decision. A list read's rejected-row samples are shown here and
+    // taken out of what is `recorded` for the replay.
+    const { read: shownRead, recorded } = webNodeReadWithRejectedRows(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4)));
+    const read = node.proposes ? shownRead : undefined;
     run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
@@ -463,7 +467,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // replay resets to, and for a Flow that starts by going somewhere that
         // step found no page at all -- so what it records is where it was sent,
         // which is what a reset has to put the page back to (`./replay.ts`).
-        replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, after), payload: result.payload as JsonValue | undefined, reads: node.proposes })
+        replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, after), payload: recorded, reads: node.proposes })
       }),
       // The node ran and nothing was refused, so neither of the refusal fields
       // is said: the draft statement above already names the node under

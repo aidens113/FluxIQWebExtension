@@ -1,6 +1,7 @@
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApiFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
+import { paceNavigation, withPagePace, withPaceNote, type OriginPace } from "../background/page-pace";
 import {
   navigationChallengeFailure,
   navigationUnexpectedFailure,
@@ -43,6 +44,14 @@ export type BrowserActionRunRequest = {
   unsupportedPageReason?: string;
   /** The origins of FluxIQ's own pages, which a navigation never takes over (`navigation-target.ts`). */
   ownOrigins?: readonly string[];
+  /**
+   * The page-load pace a navigation and a paginated list read consult before
+   * each page they load (`background/page-pace/`). Absent, nothing is paced:
+   * the connection's commands carry the worker's one pace
+   * (`command-router.ts`), and a caller that sends none -- a unit test, the
+   * extraction preview -- loads as it always did.
+   */
+  pace?: OriginPace | undefined;
   attachTabForRecording(tabId: number): Promise<void>;
 };
 
@@ -77,6 +86,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
 
   const startedAt = Date.now();
   const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
+  // Booked and waited out before the tab is driven, since driving it is the load.
+  const navigationPace = isNavigation && action.url && request.pace ? await paceNavigation(request.pace, action.url) : undefined;
   // The resolution drives the tab when the action is a navigation, and reports
   // what that drive did: the only evidence there is that the navigation was
   // any work at all.
@@ -103,12 +114,13 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     // landing is judged: what the navigation reached is the page behind it.
     const { reading, checkWait } = await settleLandedReading(firstReading, tabId, LANDED_TAB_ACCESS, checkWaitBudgetMs(action, startedAt));
     const landing = { landed: await readTabUrl(tabId), title: await readTabTitle(tabId), loadFailed, reading, checkWait, drive };
-    return withTarget(navigationResult(action, startedAt, action.url, landing), tabId, frameId);
+    const result = navigationResult(action, startedAt, action.url, landing);
+    return withTarget(navigationPace ? withPaceNote(result, navigationPace) : result, tabId, frameId);
   }
 
   if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
-  const run = await runActionInFrame(action, startedAt, tabId, frameId);
+  const run = await runActionInFrame(action, startedAt, tabId, frameId, request.pace);
   if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
     await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
   }
@@ -341,7 +353,8 @@ async function runActionInFrame(
   action: BrowserActionCommand,
   startedAt: number,
   tabId: number,
-  recordedFrameId: number | undefined
+  recordedFrameId: number | undefined,
+  pace: OriginPace | undefined
 ): Promise<BrowserActionRunResult> {
   const urlPath = frameUrlPathForAction(action);
   const choice = urlPath === undefined
@@ -363,7 +376,7 @@ async function runActionInFrame(
     }
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
-  const send = () => sendAction(action, tabId, message, targetFrameId);
+  const send = () => sendAction(action, tabId, message, targetFrameId, pace);
   return withTarget(await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS), tabId, targetFrameId);
 }
 
@@ -399,16 +412,21 @@ const RESENT_ACROSS_NAVIGATION: ReadonlySet<string> = new Set(["web.dom.assert",
  * A paginated `web.dom.extract_list` presses controls and reads, so it is
  * neither case: it is carried into each document its pagination loads by
  * `extract-list-continuation.ts`, which re-sends it only from a checkpoint the
- * page took before pressing anything.
+ * page took before pressing anything. With a pace, every page it loads is
+ * booked on it first, and the result says what the pace held.
  */
 async function sendAction(
   action: BrowserActionCommand,
   tabId: number,
   message: Record<string, unknown>,
-  frameId: number
+  frameId: number,
+  pace: OriginPace | undefined
 ): Promise<BrowserActionResult> {
   if (action.actionType === "web.dom.extract_list" && action.extractList?.paginate !== undefined) {
-    return await sendExtractListAcrossDocuments(action, tabId, message, frameId, { send: sendToTab, makeReady: ensureContentScript });
+    const read = () => sendExtractListAcrossDocuments(action, tabId, message, frameId, { send: sendToTab, makeReady: ensureContentScript });
+    if (pace === undefined) return await read();
+    const { value, tally } = await withPagePace(pace, tabId, frameId, read);
+    return withPaceNote(value, tally);
   }
   try {
     return await sendToTab<BrowserActionResult>(tabId, message, frameId);

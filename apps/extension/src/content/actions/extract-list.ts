@@ -36,6 +36,13 @@
 // that resolved to a sensitive control is one such throw, and it carries its
 // own ACTION_REJECTED record; an `encrypt` field, which the page does not read
 // until the Encrypt column is built, is another, carrying NOT_IMPLEMENTED.
+//
+// **A command that carries `rejectedSamples: true` beside `extractList` also
+// gets a few of the rows each `where` condition rejected**, on the summary's
+// `rejectedSamples`. Only the exploring model's own node run sends it, so the
+// model that wrote a condition can see which rows it turned down
+// (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`); a Flow played
+// back never does, and its summary carries no rows.
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation, WebAutomationExtractListRequest } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -43,11 +50,15 @@ import type { ContentActionDependencies } from "./types";
 type Outcome = Awaited<ReturnType<ContentActionDependencies["extractList"]>>;
 type ExtractionSummary = NonNullable<BrowserActionResult["extraction"]>;
 
+/** The command parameter that asks for rejected-row samples, spelled as the summary member that carries them. */
+const REJECTED_SAMPLES = "rejectedSamples" satisfies keyof ExtractionSummary;
+
 export async function extractListAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const request = action.extractList;
   if (!request) return deps.failure(action, new Error("web.dom.extract_list needs extractList parameters."), startedAt);
   try {
-    const outcome = await deps.extractList(request, { timeoutMs: action.timeoutMs });
+    const sampleRejected = action.options?.[REJECTED_SAMPLES] === true;
+    const outcome = await deps.extractList(request, { timeoutMs: action.timeoutMs, ...(sampleRejected ? { sampleRejected } : {}) });
     const minItems = minimumItems(request.minItems);
     const fieldNames = includedFieldNames(request);
     const expected = `at least ${count(minItems, "record")}, each carrying ${fieldNames.join(", ")}`;
@@ -79,7 +90,7 @@ function includedFieldNames(request: WebAutomationExtractListRequest): string[] 
 
 /**
  * The read's account of itself: counts, a flag and declared field keys, and
- * nothing read off the page.
+ * nothing read off the page but each condition's bounded `seen` value.
  *
  * `itemsSeen` and `emptyRecords` are the two counts a zero read is diagnosed by,
  * and they are sent only when the page counted them, because the domain's copy
@@ -105,7 +116,10 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     ...(outcome.emptyRecords === undefined ? {} : { emptyRecords: outcome.emptyRecords }),
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
-    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {}),
+    // `seen` is the one page value here, one per condition and cut to 60 characters (`extraction/item-filter.ts`).
+    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected], ...(outcome.conditions.seen ? { seen: [...outcome.conditions.seen] } : {}) } } : {}),
+    // Only beside the counts they illustrate, and only for a read asked for them.
+    ...(outcome.conditions && outcome.rejectedSamples ? { rejectedSamples: outcome.rejectedSamples.map((rows) => rows.map((row) => ({ ...row }))) } : {}),
     ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {}),
     // What dedupe and sort took -- the repeats left out and the rows a sort key
     // could not read -- so a sort over a column the page states as prose is

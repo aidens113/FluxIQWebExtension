@@ -367,7 +367,7 @@ export function pendingWork(
   // and verdict already: either rule alone would call it finished.
   if ((wait.awaitVerdict || wait.awaitRecovery) && resultRepairInFlight(detail.runDetail)) return "repair";
   if (wait.awaitVerdict && detail.summaryStatus === "succeeded" && detail.resultVerification === null) return "verdict";
-  if (wait.awaitRecovery && detail.summaryStatus === "failed" && !recoveryRecordWritten(detail.runDetail)) return "recovery";
+  if (wait.awaitRecovery && detail.summaryStatus === "failed" && !recoveryRecordWritten(detail.runDetail) && !repairedRerunFinished(detail.runDetail)) return "recovery";
   return undefined;
 }
 
@@ -402,6 +402,23 @@ function recoveryCouldBeRunning(detail: TerminalRunCandidate): boolean {
 function resultRepairInFlight(runDetail: Readonly<Record<string, unknown>>): boolean {
   const phase = plainRecord(plainRecord(runDetail.metadata)?.resultRepair)?.phase;
   return phase === "reauthoring" || phase === "rerunning";
+}
+
+/**
+ * Whether this failure is the finished re-run of a repaired Flow
+ * (`metadata.repairedRerun.status` terminal, Core
+ * `runtime-adaptation/repair-rerun.ts`).
+ *
+ * No recovery follows it: a repaired run is not repaired again, so Core writes
+ * no recovery record for it. Read as a recovery still to come, the re-run's
+ * failure on `run-munw7ffn-fe1cecd2` held the Lab for 306 s waiting for one.
+ */
+function repairedRerunFinished(runDetail: Readonly<Record<string, unknown>>): boolean {
+  return terminalRunStatus(stringOrUndefined(plainRecord(plainRecord(runDetail.metadata)?.repairedRerun)?.status));
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 /** Whether Core's recovery wrote its record: the gate that decided it, or the trace of its stages. */

@@ -1,4 +1,5 @@
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
+import { SESSION_PAGE_LOAD_PACE } from "../background/page-pace";
 import { browserActionFailure, runBrowserActionCommand } from "./action-runner";
 import { runSnapshotCapture } from "./snapshot-runner";
 
@@ -22,6 +23,10 @@ export class ExtensionRuntimeCommandRouter {
   async executeAction(action: BrowserActionCommand): Promise<void> {
     const request: Parameters<typeof runBrowserActionCommand>[0] = {
       action,
+      // Every command FluxIQ sends shares the worker's one page-load pace, so
+      // the pages one read, navigation or dry run loads on a site are spaced
+      // from the last one's (`background/page-pace/`).
+      pace: SESSION_PAGE_LOAD_PACE,
       attachTabForRecording: (targetTabId) => this.options.attachTabForRecording(targetTabId)
     };
     const activeTabId = this.options.activeTabId();

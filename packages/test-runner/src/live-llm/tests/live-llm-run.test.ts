@@ -302,7 +302,7 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   assert.equal(snapshot.repair.runId, "run-1");
   assert.equal(snapshot.repair.observed.calls, 3);
   assert.equal(snapshot.repair.observed.observedCalls.length, 3);
-  assert.deepEqual(published.at(-1), { repair: { calls: 3, interventions: 3, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true } } });
+  assert.deepEqual(published.at(-1), { repair: { calls: 3, interventions: 3, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true } }, runTotal: { calls: 8, totalEstimatedCostUsd: 0.023 } });
   assert.equal(run.usage.calls, 5 + 3, "the evaluation counts every call the run paid for");
   assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
 });
@@ -443,4 +443,108 @@ test("a repair over its run budget fails the run, after its spend is written", a
   );
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.equal(snapshot.repair.observed.calls, 27, "the overspend is on record before the run fails");
+});
+
+/**
+ * `run-munw7ffn-fe1cecd2`, as Core recorded it: a 22-call build, a playback
+ * whose answer was judged wrong twice, and a 36-call re-author. The Lab's
+ * `observed.totalEstimatedCostUsd` -- the figure the machine's spend ledger
+ * records -- was the build's $0.0418 alone, and `llm.calls` was 24, although
+ * the run made 60 calls for about $0.0861.
+ */
+const JUDGE_1 = "llm.loop_verification.ebec2a7a-d161-4541-8176-8172589d34db";
+const JUDGE_2 = "llm.loop_verification.6cc3d182-9071-4703-a26e-b025de3b3b8a";
+const reauthoredBuild: CreatedFlowBuild = {
+  ...proposedBuild,
+  providerCalls: 22,
+  loopProviderCalls: 21,
+  accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 310_347, outputTokens: 5_531, totalTokens: 315_878, estimatedCostUsd: 0.04178802 },
+};
+/** The playback's parsed detail: no accounting and no per-call lines, so it is read from its interventions, the two checks among them. */
+const { llmAccounting: _noAccounting, ...detailWithoutAccounting } = detail;
+const reauthoredPlayback: ExistingRunDetail = {
+  ...detailWithoutAccounting,
+  interventions: [
+    { interventionId: "i-judge-1", kind: "diagnosis", requestId: JUDGE_1, provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 2_991, outputTokens: 511, totalTokens: 3_502, estimatedCostUsd: 0.001247076 },
+    { interventionId: "i-judge-2", kind: "diagnosis", requestId: JUDGE_2, provider: "deepseek", model: DEFAULT_LLM_MODEL, validationOk: true, inputTokens: 2_991, outputTokens: 428, totalTokens: 3_419, estimatedCostUsd: 0.000582996 },
+    { interventionId: "i-ladder", kind: "diagnosis", validationOk: false, validationCodes: ["recovery.ladder_diagnosis_unanswered"] },
+  ],
+};
+function reauthoredRawDetail(attempts: unknown[]) {
+  return {
+    runDetail: {
+      summary: { runId: "run-1", projectId: "project-1", flowId: "flow-1", status: "failed" },
+      metadata: {
+        resultVerification: { status: "refuted", basis: "model", code: "core.result.does_not_answer_request", verdicts: ["does_not_answer", "does_not_answer"], calls: 2 },
+        resultReauthor: { routed: true, applied: true, attempts },
+      },
+      interventions: [
+        { interventionId: "i-judge-1", kind: "diagnosis", tokenUsage: { inputTokens: 2_991, outputTokens: 511, totalTokens: 3_502, estimatedCostUsd: 0.001247076 }, validation: { ok: true }, metadata: { requestId: JUDGE_1, source: "verifyAutomationStudioRunResult", verificationCheck: 1 } },
+        { interventionId: "i-judge-2", kind: "diagnosis", tokenUsage: { inputTokens: 2_991, outputTokens: 428, totalTokens: 3_419, estimatedCostUsd: 0.000582996 }, validation: { ok: true }, metadata: { requestId: JUDGE_2, source: "verifyAutomationStudioRunResult", verificationCheck: 2 } },
+      ],
+    },
+  };
+}
+const REAUTHOR_ID = "adaptation.bootstrap.2b83be32-6264-481a-baec-e18bf3dc3922";
+const appliedReauthor = { attempt: 1, routed: true, adaptationId: REAUTHOR_ID, applied: true, durationMs: 173_400, accounting: { requestId: "evidence.aa628a38", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 441_137, outputTokens: 10_071, totalTokens: 451_208, estimatedCostUsd: 0.042481212 } };
+const reauthorAdaptation = () => ({ adaptation: { evidenceLoop: { providerCallCount: 35, additionalProviderCallCount: 1, totalProviderCallCount: 36 } } });
+
+async function settleReauthoredRun(attempts: unknown[], adaptation: () => unknown = reauthorAdaptation) {
+  const { core, run, written, published, settle } = await settleBuildOnce(reauthoredBuild, { maxCallsPerRun: 48 });
+  await settle();
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const reads: Array<{ endpoint: string; payload: Record<string, unknown> }> = [];
+  const control = {
+    getRunDetail: async () => reauthoredPlayback,
+    automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+      reads.push({ endpoint, payload });
+      if (endpoint === "get-flow-run-detail") return reauthoredRawDetail(attempts);
+      if (endpoint === "get-flow-adaptation") return adaptation();
+      throw new Error(`unexpected endpoint ${endpoint}`);
+    },
+  };
+  await run.settleRepair(control, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
+  const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
+  return { run, snapshot, published, reads };
+}
+
+test("a run that re-authored reports every call it made -- build, checks and re-author -- in the total the spend ledger reads", async () => {
+  const { run, snapshot, published, reads } = await settleReauthoredRun([appliedReauthor]);
+  // The ledger's figure (`scripts/lab/live-guards/run-outcomes.mjs`) is the whole run's.
+  assert.equal(snapshot.observed.totalEstimatedCostUsd, 0.086099304);
+  assert.equal(snapshot.observed.calls, 60);
+  assert.equal(run.usage.calls, 60, "the evaluation's llm.calls counts the re-author too");
+  // Each phase stays readable on its own; the two checks are counted once, as the judge's.
+  assert.deepEqual(snapshot.runSpend.phases, {
+    build: { calls: 22, estimatedCostUsd: 0.04178802 },
+    runtime: { calls: 0, estimatedCostUsd: 0 },
+    judge: { calls: 2, estimatedCostUsd: 0.001830072 },
+    reauthor: { calls: 36, estimatedCostUsd: 0.042481212 },
+  });
+  assert.deepEqual(snapshot.observed.phases, snapshot.runSpend.phases);
+  assert.deepEqual(snapshot.reauthor.attempts, [{ attempt: 1, adaptationId: REAUTHOR_ID, calls: 36, callsFrom: "adaptation", inputTokens: 441_137, outputTokens: 10_071, estimatedCostUsd: 0.042481212 }]);
+  // The per-phase records a campaign sums are left as they were.
+  assert.equal(snapshot.observed.accounting.estimatedCostUsd, 0.04178802, "the build's own accounting is not rewritten");
+  assert.equal(snapshot.repair.observed.calls, 2);
+  assert.deepEqual(published.at(-1), { repair: { calls: 2, interventions: 3, totalEstimatedCostUsd: 0.001247076 + 0.000582996, llmGate: { invoked: true } }, runTotal: { calls: 60, totalEstimatedCostUsd: 0.086099304 } });
+  // The succeeded attempt's count is read from its adaptation, on the run's own Flow.
+  assert.deepEqual(reads.filter(read => read.endpoint === "get-flow-adaptation").map(read => read.payload), [{ projectId: "project-1", flowId: "flow-1", adaptationId: REAUTHOR_ID }]);
+});
+
+test("a re-author's retries are counted too, and an attempt whose calls cannot be read still adds its cost and says so", async () => {
+  const failedRetry = { attempt: 2, routed: true, code: "flow_bootstrap.evidence_unusable_decision", accounting: { inputTokens: 40_000, outputTokens: 900, estimatedCostUsd: 0.004 }, evidenceLoop: { decisionCount: 4, totalProviderCallCount: 5 } };
+  const counted = await settleReauthoredRun([appliedReauthor, failedRetry]);
+  assert.equal(counted.snapshot.runSpend.phases.reauthor.calls, 36 + 5);
+  assert.deepEqual(counted.snapshot.reauthor.attempts.map((attempt: { callsFrom: string }) => attempt.callsFrom), ["adaptation", "loop"]);
+  assert.equal(counted.snapshot.observed.calls, 22 + 2 + 41);
+  assert.equal(counted.snapshot.observed.totalEstimatedCostUsd, 0.090099304);
+  // The retry's count came from its own loop, so only the applied attempt was read from an adaptation.
+  assert.equal(counted.reads.filter(read => read.endpoint === "get-flow-adaptation").length, 1);
+
+  const unreadable = await settleReauthoredRun([appliedReauthor], () => { throw new Error("gone"); });
+  assert.equal(unreadable.snapshot.reauthor.attempts[0].calls, null);
+  assert.equal(unreadable.snapshot.reauthor.attempts[0].callsFrom, "adaptation_unreadable");
+  assert.equal(unreadable.snapshot.observed.totalEstimatedCostUsd, 0.086099304, "its cost is Core's accounting and still counted");
+  assert.deepEqual(unreadable.snapshot.runSpend.uncountedPhases, ["reauthor"]);
+  assert.deepEqual(unreadable.published.at(-1)?.runTotal, { calls: 24, totalEstimatedCostUsd: 0.086099304, uncountedPhases: ["reauthor"] });
 });

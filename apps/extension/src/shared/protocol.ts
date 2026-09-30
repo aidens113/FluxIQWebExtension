@@ -323,6 +323,25 @@ export type SimplePanelRequest = {
 export const PANEL_REPORT_PROBLEM_MESSAGE = RUNTIME_MESSAGES.panelReportProblem;
 
 /**
+ * A page telling the worker's page-load pace (`background/page-pace/`) about
+ * a load on the site it is on. `load`: the page is about to load the next page
+ * of a list, or reload a refused one, and asks how long to wait first; the
+ * worker books the load and answers `PageLoadPaceAnswer`. `refused`: the
+ * document the page is on was served with `status` (429 or 503), which slows
+ * every later load on the site. The page sends nothing else -- no address, no
+ * text; the worker takes the origin from the sender. A page with no pace behind
+ * it (a read the worker did not send) gets no such answer and does not wait.
+ */
+export const PAGE_LOAD_PACE_MESSAGE = "fluxiq.pageLoad.pace";
+
+export type PageLoadPaceMessage =
+  | { type: typeof PAGE_LOAD_PACE_MESSAGE; kind: "load" }
+  | { type: typeof PAGE_LOAD_PACE_MESSAGE; kind: "refused"; status: number };
+
+/** The worker's answer to a `load`: how long the page waits before loading, 0 for at once. */
+export type PageLoadPaceAnswer = { ok: true; waitMs: number };
+
+/**
  * A diagnostic bundle a person can attach to a problem report, assembled by the
  * background worker (`background/diagnostics/`). It is built by allowlist:
  * versions, connection health, ids, states, and recent failures whose text has
