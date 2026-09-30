@@ -16,11 +16,13 @@
 // the point is page-side evidence that never leaves the frame on a result, and
 // the loop sees only the result. So instead of the one point that was blocked,
 // the viewport is probed at a few fixed places -- its centre, the middle of
-// each edge -- and whatever dialog-like layer sits at each is collected. A
-// centred modal is found at the centre, a consent bar at the bottom edge, a
-// promotion strip at the top. Seven hit tests cost nothing and need no
-// plumbing through a wire contract that would have to carry a coordinate it
-// otherwise has no reason to carry.
+// each edge, and its four corners (`probe-points.ts`) -- and whatever
+// dialog-like layer sits at each is collected. A centred modal is found at the
+// centre, a consent bar at the bottom edge, a promotion strip at the top, a
+// support card in a corner. Eleven hit tests cost nothing and need no plumbing
+// through a wire contract that would have to carry a coordinate it otherwise
+// has no reason to carry; a caller that does hold the blocked point passes it,
+// and it is probed first.
 //
 // Both answers are elements of this document, never text off it.
 //
@@ -35,6 +37,7 @@
 import { isExtensionUiNode } from "../../picker-host";
 import { deepElementFromPoint } from "../../selector";
 import { composedClosest, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
+import { probePoints } from "./probe-points";
 import { hasDismissalControl } from "./way-out";
 
 /** A viewport coordinate, as the actionability gate's hit test reports it. */
@@ -45,17 +48,6 @@ const DIALOG_SCAN_LIMIT = 5_000;
 
 /** A dialog the page declares, open or not; which of them is painted is asked separately. */
 const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog[open]';
-
-/** Where the viewport is probed when no blocked point is known: its centre, then the middle of each edge. */
-const PROBE_FRACTIONS: ReadonlyArray<readonly [number, number]> = Object.freeze([
-  [0.5, 0.5],
-  [0.5, 0.08],
-  [0.5, 0.92],
-  [0.08, 0.5],
-  [0.92, 0.5],
-  [0.5, 0.25],
-  [0.5, 0.75]
-]);
 
 /**
  * The dialogs that explain a refusal of this target: every painted modal, and
@@ -69,21 +61,19 @@ export function overlaysAt(blockedAt?: Point): Element[] {
 
 /**
  * Every dialog-like layer the page is painting over itself, found without being
- * told where the blocked target was.
+ * told where the blocked target was -- or, when `blockedAt` is given, at that
+ * point as well.
  *
  * Order matters: a painted modal comes first, because a modal is over
  * everything by contract and closing it is what unblocks the page. The probed
- * layers follow in probe order, deduplicated.
+ * layers follow in probe order (`probe-points.ts`), deduplicated.
  */
-export function overlaysOverPage(): Element[] {
+export function overlaysOverPage(blockedAt?: Point): Element[] {
   const found = renderedModals();
   const view = typeof window === "undefined" ? undefined : window;
   if (!view) return found;
-  const width = view.innerWidth;
-  const height = view.innerHeight;
-  if (!(width > 0) || !(height > 0)) return found;
-  for (const [fx, fy] of PROBE_FRACTIONS) {
-    const layer = coveringDialog({ x: Math.floor(width * fx), y: Math.floor(height * fy) });
+  for (const point of probePoints(view.innerWidth, view.innerHeight, blockedAt)) {
+    const layer = coveringDialog(point);
     if (layer && !found.includes(layer)) found.push(layer);
   }
   return found;

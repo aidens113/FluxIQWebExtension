@@ -160,6 +160,9 @@ test("every consequential task declares its permission point, as a closed class 
     "photo-social-moon-jar-price": { consequence: "send_or_publish", control: "Send" },
     "social-network-feed-move-open-day": { consequence: "delete", control: "Move" },
     "company-website-book-service": { consequence: "move_money", control: "Confirm and pay £30.00" },
+    // A withdrawal is a deletion, asked about even when the instruction names it (t195, 2026-09-30).
+    "professional-network-withdraw-stale-requests": { consequence: "delete", control: "Withdraw" },
+    "professional-network-invitation-allowance": { consequence: "delete", control: "Withdraw" },
   });
 });
 

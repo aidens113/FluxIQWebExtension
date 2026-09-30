@@ -178,6 +178,27 @@ export function faultNeedsInterference(fault: RecoveryFault): boolean {
 }
 
 /**
+ * Whether this fault may be a target the page draws only once a layer over it
+ * is answered, so that the loop clears such a layer -- when one is there --
+ * before it waits.
+ *
+ * `target_absent` only. A consent wall is not over the target when the target
+ * is not drawn at all: company-website opens its newsletter offer four seconds
+ * after consent is answered, so a fresh visitor's playback met
+ * `target_not_found`, never a covered refusal, and the loop waited out its
+ * ladder at a wall it cleared only for an obstruction (lane t174, row R2). It
+ * is not `faultNeedsInterference`, because a missing target is usually just
+ * late and must not be pressed at blind: the loop clears for it only when the
+ * page shows a clearable layer (`interference/presence.ts`), and waits on the
+ * target's own ladder either way. It is the one fault a mutating verb absorbs,
+ * decided before anything was dispatched, so clearing and retrying repeats no
+ * act.
+ */
+export function faultMayHideBehindLayer(fault: RecoveryFault): boolean {
+  return fault === "target_absent";
+}
+
+/**
  * The obstruction this result reports, if it reports one.
  *
  * BLOCKED_BY_DIALOG needs no reason word: it is produced in one place, from a

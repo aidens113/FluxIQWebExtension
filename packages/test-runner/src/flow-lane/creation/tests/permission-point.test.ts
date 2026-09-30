@@ -1,6 +1,6 @@
 // A consequential task run without permission for its act passes by stopping to
-// ask at its declared permission point, and only there. The six tasks lane
-// t184 found with a permission point are pinned here by their declarations, so
+// ask at its declared permission point, and only there. The tasks with a permission point (lane t184's six, and
+// t195's two withdrawal tasks) are pinned here by their declarations, so
 // each is judged against a request Core could send for it.
 
 import assert from "node:assert/strict";
@@ -18,6 +18,9 @@ const DECLARED: ReadonlyArray<readonly [string, NonNullable<LiveInstructionTask[
   ["photo-social-moon-jar-price", { consequence: "send_or_publish", control: "Send" }],
   ["social-network-feed-move-open-day", { consequence: "delete", control: "Move" }],
   ["company-website-book-service", { consequence: "move_money", control: "Confirm and pay £30.00" }],
+  // Both withdrawal tasks since 2026-09-30: a withdrawal is a deletion, asked about even when the instruction names it.
+  ["professional-network-withdraw-stale-requests", { consequence: "delete", control: "Withdraw" }],
+  ["professional-network-invitation-allowance", { consequence: "delete", control: "Withdraw" }],
 ];
 
 /** What Core asks when a build reaches a control whose class the run was not permitted. */

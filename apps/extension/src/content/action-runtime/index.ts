@@ -7,6 +7,7 @@ export { captureSnapshotForResponse } from "./capture-snapshot-for-response";
 export { challengeIn, robotCheckIn } from "./challenge-evidence";
 export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
+export { pressAgain } from "./ignored-press";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
 export { actionFailure } from "./results";
 
@@ -18,6 +19,7 @@ export type { CheckableStateOutcome } from "./checkable-state";
 export type { DialogControl, ObservedDialog } from "./dialog-control";
 export type { ExtractedElementValue } from "./extract";
 export type { FileInputOutcome } from "./file-input";
+export type { IgnoredPressAnswer, IgnoredPressWatch, PressSignal } from "./ignored-press";
 export type { InPlaceEffect, InPlaceEffectWatch } from "./in-place-effect";
 export type { KeyboardCapability, KeyPressOutcome } from "./keyboard";
 export type { RateLimitNotice, RateLimitWatch } from "./rate-limit-notice";

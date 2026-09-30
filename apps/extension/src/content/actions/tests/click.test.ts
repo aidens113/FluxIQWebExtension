@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
-import type { InPlaceEffect, InPlaceEffectWatch, RateLimitNotice, RobotCheckSighting } from "../../action-runtime";
+import type { InPlaceEffect, InPlaceEffectWatch, PressSignal, RateLimitNotice, RobotCheckSighting } from "../../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../types";
 import { clickAction } from "../click";
 import type { ContentActionDependencies } from "../types";
@@ -99,18 +99,23 @@ function fakeWatch(effect: InPlaceEffect | undefined, events: string[]): { make:
 
 type NoticeRecord = { made: number; settledWith: number[]; stopped: number; refusedWith: RateLimitNotice[] };
 
-/** A rate-limit watch that reports `notice` when settled, and records how the verb used it. */
-function fakeNoticeWatch(notice: RateLimitNotice | undefined, events: string[]): { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord } {
+/** A rate-limit watch that reports `notice` when settled (`later` for a press made once more), and records how the verb used it. */
+function fakeNoticeWatch(
+  notice: RateLimitNotice | undefined,
+  events: string[],
+  later?: RateLimitNotice
+): { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord } {
   const record: NoticeRecord = { made: 0, settledWith: [], stopped: 0, refusedWith: [] };
   return {
     record,
     make: () => {
       events.push("notice-watch");
       record.made += 1;
+      const answer = record.made === 1 ? notice : later;
       return {
         settle: async (windowMs) => {
           record.settledWith.push(windowMs);
-          return notice;
+          return answer;
         },
         stop: () => {
           record.stopped += 1;
@@ -143,21 +148,53 @@ function fakeCheckWatch(sighting: RobotCheckSighting | undefined, events: string
   };
 }
 
+type IgnoredRecord = { made: number; settledWith: number[]; stopped: number };
+
+/** An ignored-press watch that reports `seen` when settled, and records how the verb used it. */
+function fakeIgnoredWatch(seen: PressSignal[], events: string[]): { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord } {
+  const record: IgnoredRecord = { made: 0, settledWith: [], stopped: 0 };
+  return {
+    record,
+    make: () => {
+      events.push("ignored-watch");
+      record.made += 1;
+      return {
+        settle: async (windowMs) => {
+          record.settledWith.push(windowMs);
+          return { seen: [...seen], afterMs: seen.length > 0 ? 4 : windowMs };
+        },
+        stop: () => {
+          record.stopped += 1;
+        }
+      };
+    }
+  };
+}
+
 /** The dependencies the click verb reads, with a result builder that keeps only the verdict. Anything else it reaches for throws. */
 function dependencies(
   element: Element,
   watchInPlaceEffect: ContentActionDependencies["watchInPlaceEffect"],
   notices: { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord },
-  checks: { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord }
+  checks: { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord },
+  ignored: { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord },
+  pressableAgain: boolean
 ): ContentActionDependencies {
+  let judged = 0;
   const provided: Partial<ContentActionDependencies> = {
     resolveTarget: () => ({ element, resolution: {} as ReturnType<ContentActionDependencies["resolveTarget"]>["resolution"] }),
-    checkActionability: () => ({ actionable: true, point: { x: 10, y: 20 }, detail: "the point 10,20 landed on the target" }),
+    checkActionability: () => {
+      judged += 1;
+      return judged === 1 || pressableAgain
+        ? { actionable: true, point: { x: 10, y: 20 }, detail: "the point 10,20 landed on the target" }
+        : { actionable: false, code: "covered", detail: "the point 10,20 landed on a scrim" };
+    },
     describeElement: () => ({}) as ReturnType<ContentActionDependencies["describeElement"]>,
     captureSnapshot: () => ({}) as ReturnType<ContentActionDependencies["captureSnapshot"]>,
     watchInPlaceEffect,
     watchRateLimitNotice: notices.make,
     watchRobotCheck: checks.make,
+    watchIgnoredPress: ignored.make,
     needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: RobotCheckSighting): BrowserActionResult => {
       checks.record.handedOver.push(sighting);
       return {
@@ -208,16 +245,37 @@ async function click(
   action: BrowserActionCommand = CLICK,
   notice?: RateLimitNotice,
   sighting?: RobotCheckSighting,
-  startedAt = 1_000
+  startedAt = 1_000,
+  pressing: PressOptions = {}
 ) {
   installMouseEvent(t);
   const page = fakePage(behaviour);
   const watch = fakeWatch(effect, page.events);
-  const notices = fakeNoticeWatch(notice, page.events);
+  const notices = fakeNoticeWatch(notice, page.events, pressing.secondNotice);
   const checks = fakeCheckWatch(sighting, page.events);
-  const result = await clickAction(action, dependencies(page.element, watch.make, notices, checks), startedAt);
-  return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record };
+  // A page that answers the press unless a row says it ignored it, so every
+  // row written before the extra press existed keeps its meaning.
+  const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events);
+  const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true);
+  const result = await clickAction(action, deps, startedAt);
+  return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record };
 }
+
+/** What the page did about the first press, for the rows about pressing once more. */
+type PressOptions = {
+  /** The signs the ignored-press watch saw; `[]` is a press the page ignored. */
+  seen?: PressSignal[];
+  /** Whether the control can still be pressed when it is judged again; true unless a row says otherwise. */
+  pressableAgain?: boolean;
+  /** The rate-limit notice the press made once more is answered with. */
+  secondNotice?: RateLimitNotice;
+};
+
+/** The events of one press, from the hover to the click, with the watches a first press on a button starts. */
+const FIRST_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "ignored-watch", "mousedown", "mouseup", "click"];
+/** A press made once more: the same gesture and the rate-limit and robot-check watches, but no ignored-press watch. */
+const SECOND_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "mousedown", "mouseup", "click"];
+const IGNORED: PressOptions = { seen: [] };
 
 test("a link the page cancelled and then answered by changing its content passes, and says so", async (t) => {
   const { result, watch } = await click(t, { link: true, prevent: true }, { kind: "content", afterMs: 202 });
@@ -309,9 +367,9 @@ test("a button with no such notice still passes on its hit test, after the rate-
   assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [] });
 });
 
-test("the rate-limit and robot-check watches start between the hover and the press, so what was already there is never the press's answer", async (t) => {
+test("the rate-limit, robot-check and ignored-press watches start between the hover and the press, so what was already there is never the press's answer", async (t) => {
   const { events } = await click(t, { link: false, prevent: false }, undefined);
-  assert.deepEqual(events, ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "mousedown", "mouseup", "click"]);
+  assert.deepEqual(events, FIRST_PRESS);
 });
 
 test("a command's own timeout shortens the rate-limit window, and never lengthens it", async (t) => {
@@ -373,4 +431,83 @@ test("a command's own timeout holds the wait on a robot check within what is lef
 test("a link is never watched for a robot check: where it lands is the worker's to judge", async (t) => {
   const { checks } = await click(t, { link: true, prevent: false }, undefined);
   assert.equal(checks.made, 0);
+});
+
+// A press the page ignored outright (bigbox-retail: `vr.wake()` swallows the
+// first add-to-cart press after every load and does nothing). The build pressed
+// once after each reload, thirty times, and never added anything. What the
+// watch reads is `ignored-press/tests/page-press-listener.test.ts`'s; these rows
+// are the verb's decision on it. Take the extra press out of `clickAction` and
+// every row that expects a second press goes red; make it press whatever the
+// watch saw and the request row does.
+
+test("a button the page ignored outright is pressed once more at the same point, and the result says so", async (t) => {
+  const { result, events, ignored, notices, checks } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, IGNORED);
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
+  assert.deepEqual(result.validation, {
+    status: "passed",
+    expected: "the click lands on the target or something inside it",
+    actual: "the point 10,20 landed on the target; the page ignored the first press, so it was pressed once more"
+  });
+  assert.deepEqual(ignored, { made: 1, settledWith: [800], stopped: 1 });
+  assert.equal(notices.made, 2, "the press made once more is watched for a refusal like any other");
+  assert.equal(notices.stopped, 2);
+  assert.equal(checks.made, 2);
+});
+
+test("a press that sent a request is never pressed again, even when nothing on the page changed", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: ["request"] });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, FIRST_PRESS);
+  assert.doesNotMatch(result.validation.status === "passed" ? result.validation.actual : "", /pressed once more/u);
+});
+
+test("a press answered by any sign at all -- a change, a navigation, a focus move -- is pressed once only", async (t) => {
+  for (const signal of ["change", "navigation", "focus"] as PressSignal[]) {
+    const { events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: [signal] });
+    assert.deepEqual(events, FIRST_PRESS, signal);
+  }
+});
+
+test("an ignored press whose control can no longer be pressed -- now covered, disabled or gone -- is not pressed again", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: [], pressableAgain: false });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, FIRST_PRESS);
+});
+
+test("a first press refused for going too fast is reported as refused and never pressed again", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, { afterMs: 3, retryAfterMs: 12_500 }, undefined, 1_000, IGNORED);
+  assert.equal(result.failure?.code, "web.action.rate_limited");
+  assert.deepEqual(events, FIRST_PRESS);
+});
+
+test("a first press that put up a robot check which cleared is not pressed again: the check was its answer", async (t) => {
+  const cleared: RobotCheckSighting = { outcome: "cleared", afterMs: 4, waitedMs: 2_600 };
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, cleared, 1_000, IGNORED);
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, FIRST_PRESS);
+});
+
+test("the press made once more is refused as rate limited when the page answers it so", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, {
+    seen: [],
+    secondNotice: { afterMs: 2, retryAfterMs: 8_500 }
+  });
+  assert.equal(result.failure?.code, "web.action.rate_limited");
+  assert.equal(result.failure?.retryAfterMs, 8_500);
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
+});
+
+test("a command's own timeout shortens the ignored-press window, and never lengthens it", async (t) => {
+  const shorter = await click(t, { link: false, prevent: false }, undefined, { ...CLICK, timeoutMs: 300 });
+  assert.deepEqual(shorter.ignored.settledWith, [300]);
+  const longer = await click(t, { link: false, prevent: false }, undefined, { ...CLICK, timeoutMs: 60_000 });
+  assert.deepEqual(longer.ignored.settledWith, [800]);
+});
+
+test("a link is never watched for an ignored press, and never pressed twice: its own post-condition decides it", async (t) => {
+  const { ignored, events } = await click(t, { link: true, prevent: true }, undefined, CLICK, undefined, undefined, 1_000, IGNORED);
+  assert.equal(ignored.made, 0);
+  assert.equal(events.filter((event) => event === "click").length, 1);
 });
