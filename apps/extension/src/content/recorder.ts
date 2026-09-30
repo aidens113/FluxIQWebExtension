@@ -16,7 +16,7 @@ import { captureSettings } from "./capture-settings";
 import { compactObject } from "./compact-object";
 import { captureSnapshot } from "./dom-snapshot";
 import { describeElement, readElementValue } from "./describe-element";
-import { isPickerHostNode } from "./picker-host";
+import { isExtensionUiNode } from "./picker-host";
 import { shouldAttachStateSnapshot } from "./snapshots";
 import type { RecordingEventKind, RecordingEventPayload } from "./types";
 
@@ -129,28 +129,29 @@ function flushPendingMutation(): void {
 /**
  * Counts what the page changed, and not what the extension did to it.
  *
- * The picker's overlay is a node the extension adds to the page and takes away
- * again while recording is on. Counted, it would put a `dom.mutation` in the
- * recording that no page behaviour produced, and a replay built from that
- * recording would wait for a change that never comes. So a record whose target
- * is inside the overlay is skipped whole, and the overlay host itself is not
- * counted as an added or removed node (`picker-host.ts`).
+ * The picker's overlay, like the activity overlay, is a node the extension
+ * adds to the page and takes away again while recording is on. Counted, it
+ * would put a `dom.mutation` in the recording that no page behaviour produced,
+ * and a replay built from that recording would wait for a change that never
+ * comes. So a record whose target is inside an overlay is skipped whole, and
+ * the overlay host itself is not counted as an added or removed node
+ * (`picker-host.ts`, `isExtensionUiNode`).
  */
 function tallyMutations(mutations: readonly MutationRecord[]): void {
   for (const mutation of mutations) {
-    if (isPickerHostNode(mutation.target)) continue;
-    pendingMutation.added += countOutsidePicker(mutation.addedNodes);
-    pendingMutation.removed += countOutsidePicker(mutation.removedNodes);
+    if (isExtensionUiNode(mutation.target)) continue;
+    pendingMutation.added += countOutsideExtensionUi(mutation.addedNodes);
+    pendingMutation.removed += countOutsideExtensionUi(mutation.removedNodes);
     if (mutation.type === "attributes") pendingMutation.attributes += 1;
     if (mutation.type === "characterData") pendingMutation.text += 1;
   }
 }
 
 /** How many of `nodes` are the page's own. */
-function countOutsidePicker(nodes: ArrayLike<Node> & Iterable<Node>): number {
+function countOutsideExtensionUi(nodes: ArrayLike<Node> & Iterable<Node>): number {
   let count = 0;
   for (const node of nodes) {
-    if (!isPickerHostNode(node)) count += 1;
+    if (!isExtensionUiNode(node)) count += 1;
   }
   return count;
 }

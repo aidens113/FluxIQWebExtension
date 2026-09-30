@@ -210,6 +210,73 @@ Current server message groups:
 - `server.error`
 - `server.ping`
 - `server.ack`
+- `server.activity`, only to a session that declared the `fluxiq.activity`
+  capability
+
+### Live Activity
+
+`server.activity` carries a `ClientGatewayActivity`: what FluxIQ is doing now
+in one unit of work (a build or a run), as a phase, Core's one-line status
+sentence, an optional step count, and an optional detail row for the chat.
+Every value comes from a real Core event. Core sends it only to ready sessions
+that declared `{ id: "fluxiq.activity", kind: "custom" }`, which the extension
+always declares (`domain/src/runtime/capabilities.ts`). The capability names no
+action type, input or output, so it makes nothing executable. Core sends it
+straight to the socket, bypassing the session's outbound queue, and drops it
+when the socket is closed, so it is never replayed.
+
+It is a status display, not a command. `ServerCommandChannel` hands the payload
+to `ActivityRelay` (`background/activity/`) and does nothing else: no runtime
+status opens, no reply is sent, and the connection's error is untouched. The
+relay:
+
+- drops a malformed event and any event whose `sequence` is not greater than
+  the last kept one, so a late event never overwrites a newer status. A new
+  gateway session resets that mark, because Core counts per process;
+- keeps `current` and the last `ACTIVITY_RECENT_LIMIT` (60) events in memory
+  only, so a worker restart forgets them. The conversation thread stays the
+  durable record;
+- broadcasts `{ type: "fluxiq.activity.changed", state }` to the extension's
+  pages on every kept event and every overlay change;
+- sends `{ type: "fluxiq.activity.overlay", activity, overlay, topFrameOnly:
+  true }` to the top frame of the tab the automation drives, through
+  `ensureContentScript` then `sendToTab`. Sends go one at a time, and events
+  that arrive during a send collapse into one send of the latest state. Nothing
+  is sent to a page the extension cannot automate;
+- re-sends the current state when that tab's top frame reports `contentReady`,
+  because a navigation replaced the document the overlay was drawn in.
+
+Every delivery is best-effort: a closed panel, a page that refuses the content
+script, or a tab that closed mid-send is absorbed.
+
+The overlay preference (`expanded` by default, `collapsed` or `hidden`) is
+kept in `chrome.storage.local` under `fluxiq.activity.overlay`. The panel reads
+the state with `fluxiq.panel.activityRead` and sets the preference with
+`fluxiq.panel.activityOverlay` (`{ overlay }`). Both answer `{ ok: true,
+state }`, and both are accepted only from the side panel or the popup
+(`background/panel/panel-control.ts`), so the page under test cannot change
+what is drawn on it. An unknown preference is refused as `invalid_request`.
+
+**The on-page overlay** (`content/activity-overlay/`) draws the latest event
+in the top frame of that tab: a `<fluxiq-activity-overlay>` host on
+`document.documentElement`, fixed bottom-right, with a closed shadow root
+styled through the CSSOM and no `innerHTML`. `expanded` shows the phase, Core's
+sentence, "Step N of M" (just "Step N" when N passes M) and the latest detail
+title; `collapsed` is a pill; `hidden` removes the host. The overlay never
+takes input: every element is `pointer-events: none`, `inert` and
+`aria-hidden`, so hit-testing and the automation's own clicks reach the page.
+Its `data-fluxiq-activity` marker keeps it out of the recorder, DOM snapshots,
+evidence blockers and the interference checks. A `final` event fades after
+6 s; that fade is the only timer and it changes nothing but the display.
+
+**The panel's chat** (`panel/chat/`) replaces Simple Mode's conversation card.
+Its header shows the current phase, Core's sentence, the step, a live/offline
+dot and the overlay control. Its stream interleaves Core's thread turns (timed
+by Core's own `createdAt`) with activity rows. An event with a `detail` becomes
+a row, a tool that started and then finished stays one row, and a row expands
+to its text, ref and status. The composer sends typed instructions through
+`panelConversationSend`. The thread is re-read 300 ms after an event that names
+a conversation or ends the work. The 4 s poll stays as the fallback.
 
 ## Action Surface
 
@@ -844,9 +911,10 @@ it out of the page's way
   policy blocks an inline `style` attribute and a `<style>` element alike, and
   nothing uses `innerHTML`, which a page requiring Trusted Types makes throw;
 - **it is not a page change.** The host carries `data-fluxiq-picker`, which
-  `isPickerHostNode`
+  `isExtensionUiNode`
   ([`content/picker-host.ts`](../../apps/extension/src/content/picker-host.ts))
-  tests for and the recorder's mutation counter skips — the host arriving and
+  tests for, together with the activity overlay's `data-fluxiq-activity`, and
+  the recorder's mutation counter skips — the host arriving and
   leaving, and anything the overlay does inside itself.
 
 ### What Crosses The Channel

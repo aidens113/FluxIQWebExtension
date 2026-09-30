@@ -26,15 +26,19 @@ and its own `fxwork/<id>` tree:
 | t188 node limits | `lead` | no 16-node cap; 100 nodes per Subflow by default, set in the UI |
 | t189 decision context | `lead-xhigh` | why the model repeats itself, and the context fix |
 | t185 live activity + chat | `lead` | the on-page overlay and the extension chat |
+| t190 instructed acts | `lead` | bigbox run 6 causes 1 (domain half), 3, 4, 5: reachability/, instructed-acts/, click across a reload |
 
 **Machine rules for every lane (binding).**
 - **Lab slots** (`C:/Users/osrs_/FluxStuff/lab-slots/`): `slot-1` is the only live run, held by t174. `slot-2` is one
   provider-free run on the ten scenarios, and only while free RAM is above 4 GB. Claim with `mkdir`, release with `rmdir`.
-- **Build slots** (`C:/Users/osrs_/FluxStuff/build-slots/b1`, `b2`): claim one with `mkdir`, writing an `owner` file
-  (lane, command, ISO time), before any heavy command: `pnpm check`, `pnpm build`, `pnpm test`, a package's whole
-  suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`. Release right after, on failure too. `b2` only
-  while `lab-slots/slot-1` is absent. One test file, or one test directory at `--maxWorkers=2` /
-  `--test-concurrency=2`, needs no slot. A slot whose owner file is over 90 minutes old may be removed.
+- **Build slots** (`b1`, `b2`): run every heavy command (`pnpm check`, `pnpm build`, `pnpm test`, a package's whole
+  suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`) through
+  `bash C:/Users/osrs_/FluxStuff/build-slots/heavy.sh "<lane> <what>" <command...>`. It waits for a slot, uses `b2`
+  only while `lab-slots/slot-1` is absent, and releases only its own. Never `mkdir` or `rm` a build slot by hand
+  (a hand-written `rm` deleted another lane's claim on 2026-09-29). One test file, or one test directory at
+  `--maxWorkers=2 --minWorkers=1` / `--test-concurrency=2`, needs no slot.
+- **While slot-1 is held**, `build-slots/priority-governor.ps1` (started by the supervisor) lowers every other lane's
+  build and test process to BelowNormal; live runs 11 and 12 died pairing at 100% CPU. Benchmarks pause.
 - Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
   validation, and the supervisor commits and continues it.
 
@@ -744,7 +748,13 @@ debug and partitioned so neither touches the other's files:
 - Agent: supervisor. Pagefile fix confirmed: commit limit 28,604 MB, 21,278 MB free, slots empty.
 - Changed: Core dev `af385f7` (Merge task t182) pushed with downstream `6cdc9abb`; worktrees t188 and t189 created (Core-paired); t174, t185 and t186 work in progress committed on their task branches and dev merged in (conflicts left to each lane's lead); leads dispatched for t187, t188 and t189.
 - Validation: in the t182 Core tree, `node scripts/structure-audit.mjs` -> `structure-audit: passed (197 warning(s), 355 baselined).`; `npx tsc -p tsconfig.json --noEmit` (packages/fluxiq) -> exit 0; vitest `service/indexes/tests/without-recording.test.ts` -> 2 passed; vitest `runtime/tests/service-recordings` -> 7 files, 42 passed; Core `pnpm task finish t182` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, merged. First `pnpm task finish t176` (downstream) -> `structure-audit: 3 violation(s)`, all this document's (Current State 153 lines, a ledger entry without validation, stale index); fixed here.
-- Build time measured today: `pnpm task start --worktree --core` 151 s and 156 s; Core `pnpm check` 110 s (fluxiq tsc 39 s, structure audit 43 s). Given to t187.
+- Build time measured today: `pnpm task start --worktree --core` 151 s and 156 s; Core `pnpm check` 110 s (fluxiq tsc 39 s, structure audit 43 s against 8 s downstream). Given to t187.
+- t176 (a refuted answer is repaired, persisted and replayed with no provider call) merged in both repositories and pushed: downstream `pnpm task finish t176` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, 118 s, `02d95259`; Core `pnpm task finish t176` -> the same, 79 s, `528f52d`. Not live-proven.
+- dev (with t176) merged into t185 (both clean) and t174 downstream (`b1a82a21`: seven hand-applied dev files taken from dev, one import kept from both; test-runner `tsc --noEmit` exit 0).
+- t188 (a Flow's size is one setting, 100 nodes per Subflow by default, changed in Flow Settings) merged and pushed in both repositories. Supervisor check in the t188 Core tree: vitest flow-size end-to-end + `flow-bootstrap/plan` + `model/flow-size` -> `12 passed (12)`, `121 passed (121)`. Downstream `pnpm task finish t188` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, `37379fe3`; Core `pnpm task finish t188` -> the same, `c961f4a`. Lead's run: affected Core suites 1191 tests passed, web settings 59 passed. Not exercised in a browser or live.
+- The live slot sat idle for over an hour after the restart (the live lane was briefed to finish full validation first, and t187's bench held a build slot); the user noticed. Corrected: the first live run since the restart claimed slot-1 at 19:30:58 (`crossborder-marketplace-hub-to-cart`), Chromium up at 19:35:43, 4 min 45 s of Lab prelude builds. Benchmarks pause while slot-1 is held.
+- Live runs 11 (`run-munhpy2m-036e9572`) and 12 (`run-muni3pdr-80225d3f`) died before pairing, with 0 provider calls: the first `fluxiq.connect` went unanswered for 15 s, then `ERR_ABORTED` loading the side panel after 11 s, at 100% CPU from other lanes' tests. The extension start has failed in 6 of 9 launches. A CPU priority governor now runs during live runs. t174's throw fix (`befca2f`: `draft-shown.ts` rejected t175's `did_not_work` rows; supervisor re-run 2 files / 24 tests passed) and source-mapped Lab frames (`259b0df2`) are committed, and dev with t188 is merged into both t174 trees; the fix is not yet live-proven.
+- Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
 - Outcome: In progress. Pass streak 0.
 
 ## Open Questions

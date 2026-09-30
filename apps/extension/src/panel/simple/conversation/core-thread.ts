@@ -33,6 +33,8 @@ export type CoreTurn = {
   ask: CoreAsk | null;
   /** Something FluxIQ attached, which only FluxIQ itself can show. */
   attachment: boolean;
+  /** When Core wrote it, in ms since the epoch, on Core's clock: the clock its live activity is stamped with. */
+  createdAt?: number;
 };
 
 /** A page of a thread, as `get-conversation` answers it. */
@@ -71,7 +73,8 @@ function parseTurn(value: unknown): CoreTurn | undefined {
     author: record.author,
     text: record.text,
     ask: parseAsk(record.ask),
-    attachment: asRecord(record.attachment) !== undefined
+    attachment: asRecord(record.attachment) !== undefined,
+    ...(typeof record.createdAt === "number" && Number.isFinite(record.createdAt) ? { createdAt: record.createdAt } : {})
   };
 }
 
