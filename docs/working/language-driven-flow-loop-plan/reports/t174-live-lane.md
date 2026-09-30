@@ -74,3 +74,58 @@ Both trees also carry **dev content applied as working-tree three-way merges, no
 1. After the restart: `pnpm --filter fluxiq build` in Core, then the domain and extension builds downstream, and a dry-run. Re-run `run-mune0xh1`'s scenario (`crossborder-marketplace-hub-to-cart`) holding slot-1, launched with `live-run.sh`: it sets `FLUXIQ_LAB_ALLOW_STALE_BUILD=1`, `FLUXIQ_LAB_INSTANCE=t174-slot-1` and `FLUXIQ_BUILD_PROGRESS_TRACE=1`. The launcher is in the lane's scratchpad; its command line is the brief's template with those three variables set.
 2. **Blocking cause to fix first:** the build ends on an unrecognised `Error` right after a tool call (runs 6, 7 and 10; bigbox and crossborder). Make `thrown-issue-codes.ts` find the frame under Next's bundle (match `fluxiq` / `.next/server/chunks` paths and keep the module name), or log the throw's class and first frame through the progress trace. Then fix the throw at its owning line. Candidates, all after `executeTool` returns in `llm/evidence-loop.ts`: `draftRecord`, `automationStudioLlmEvidenceRerunReplaced`, `recordRow`, `noProgress`, or an ended loop's `keeper.exhausted` (`flow-bootstrap/incomplete-draft/keeper.ts`, where `kept()` runs outside its `try`).
 3. Then the completion-refusal causes: `invalid_subflows` (crossborder), `instructed_act_missing` after a reloading click loses the kept step (bigbox; t189 and t175 own it), and everything-store kettle's refused completions (codes now traced).
+
+## Core `git merge dev` resolved (2026-09-29, before the commit)
+
+Core `task/t174-live-lane` at `e8d3bfc`, merging dev `af385f7` (t182, t180, t178, t175, t183, t177). Four conflicts, resolved and staged with `git add` only:
+- `apps/web/.../conversation/capabilities/catalog/running.ts`: dev's import line (a superset: adds t180's `getRuntimeRunControl`, `pauseRuntimeSession`, `resumeRuntimeSession`, `RuntimeRunControlAnswer`). The merged file is byte-identical to dev's, which already carried the lane's `get-flow-metadata-detail` change.
+- `runtime/llm/harness/run.ts`: the lane's `grantRefusalReason` metadata line kept beside dev's `providerThrow`.
+- `runtime/llm/provider-contract.ts`: the lane's `grant-refusal/` import and `grantRefusalReason` field kept (dropped when t186 lands). Also repaired six em dashes the lane's commit had turned into mojibake (`â€”`) in this file's doc comments; no other file in `259a11b..e8d3bfc` has it.
+- `runtime/llm/harness-options/tests/bootstrap-completion.test.ts`: the lane's side. Its restored-step refusal uses an unregistered node, because the lane bounds an over-long draft summary instead of refusing it, so dev's long-summary trigger no longer refuses; the lane's summary-bounding test kept.
+
+Of the 93 files both sides changed, 82 merged identical to both sides, 8 identical to the lane's side (dev's hunks were already hand-applied), `running.ts` identical to dev's, and `provider-contract.ts` and `runtime/service.ts` are true merges; `service.ts` was read hunk by hunk (lane: grant-code table moved to `FLOW_BOOTSTRAP_EXECUTION_GRANT_CODES`, stage after first decision, `error` passed on; dev: t180 run control, t182 recording-entry removal and index pruning).
+
+Validation: `npx tsc --noEmit -p tsconfig.json` in Core `packages/fluxiq`, build slot b1: rc=0, no output, 42 s. `npx vitest run --minWorkers=1 --maxWorkers=2 .../harness-options/tests/bootstrap-completion.test.ts .../harness/tests/run.test.ts`: 2 files, 35/35 passed. Not run: apps/web tsc, full Core vitest.
+
+## Fix 2: the unrecognised throw after a tool call (runs 6, 7, 10), found and fixed (Core)
+
+**Cause.** `llm/evidence-loop/draft-shown.ts` measures the draft entry each decision is shown, and fails closed on a packed entry it does not recognise: `throw new Error("Cannot measure malformed or unknown packed draft shape")`. Its row check accepted only the three dispositions a step *keeps* (`kept`, `dropped`, `exploratory`). Dev's t175 (`98133e7`, "A build stops repeating amendments that change nothing") made the draft *show* a step whose effect did not apply as `did_not_work` (`flow-draft/entry.ts`, `shownDisposition`). So the first time a draft that holds a refused press outgrows the full object entry (4,000 bytes on the live profile) and is packed as `step_rows_v1`, the measurement throws. The call is at `llm/evidence-loop.ts:562`, inside the pre-decision `try` whose catch rethrows under `propagateDecisionErrors: true` (`service.ts:1580`). The build then ends as a bare `Error`, with no frame, before `decide start` for the next iteration. That matches run 10 exactly: `tool end ... c18 ... target_unobserved` at 00:52:48.948, then nothing until the failure at 49.091. Runs 6 and 7 have the same signature: a bare `Error` about 50 ms after a tool call, late in a long draft that held refused presses. Every test step had `effectApplied: true`, so no test ever built a packed entry holding a `did_not_work` row. Located by reading the path between `tool end` and `decide start`: the only explicit `throw new Error` there is this one, and the run's `thrown.Error` rules out a runtime `TypeError`. Then reproduced. The bundled chunk in `.tmp/core-web-build/.../chunks/ssr/...facbe425._.js` carries the same minified check (`"kept"===a[5]||"dropped"===a[5]||"exploratory"===a[5]`, `function qO(){throw Error("Cannot measure malformed...")}`).
+
+**Fix.** The reader accepts every shown disposition (`SHOWN_DISPOSITIONS`, including `did_not_work`), and still fails closed on anything else. `flow-draft/entry.ts` belongs to t189 and was not touched.
+
+**Tests (fail with the fix reverted, pass with it).**
+- `llm/evidence-loop/tests/draft-shown.test.ts`: the producer builds a packed entry through every shown disposition and draft state; plus a fail-closed case for an unknown disposition. 16/16.
+- `llm/tests/evidence-loop-draft-shown.test.ts`: a loop whose draft holds refused presses and is packed goes on deciding and completes. 8/8.
+- With the old reader, both new cases fail: `Cannot measure malformed or unknown packed draft shape`, and `result.ok` is false.
+
+**Frames under Next's bundle (Lab).** The frame code was missing because `next start` runs minified chunks. Turbopack writes a `.map` beside each chunk with `turbopack:///[project]/...` sources. The Lab's Core server now runs with `NODE_OPTIONS` plus `--enable-source-maps` (`packages/test-runner/src/core-web-build/server-process.ts`; test `core-web-build/tests/server-process.test.ts`), so `thrown.at:` and every stack in `core.log` name the source line. Checked with an esbuild bundle remapped to turbopack-style sources: without the flag, the frame is `chunk.js:1:58` and no code is produced; with it, the frame is `at malformed (turbopack:///[project]/.../automation-studio/runtime/llm/draft-shown.ts:6:9)` and `thrown-issue-codes.ts`'s pattern yields `runtime/llm/draft-shown.ts:6`. Not yet seen in a live `next start`.
+
+**Structure.** Core audit failed after the dev merge: `service.ts` was 4,536 lines against the lane's lowered baseline of 4,535. Dev's t180/t182 added one net line; dev's own baseline is 4,558. Fixed by deleting the doubled blank line the lane's grant-table removal had left at `service.ts:333`. Core `node scripts/structure-audit.mjs`: passed. Downstream audit: passed.
+
+## Validation after Fix 2 (2026-09-30)
+
+Worker t174-w5 (`reports/t174-w5-validation.md`) ran every command under build slot b1:
+- Core `pnpm --filter fluxiq build`: exit 0.
+- Domain `pnpm --filter @fluxiq-web-extension/domain test`: 884/884.
+- Downstream `pnpm check`: exit 0.
+- Downstream `pnpm build`: exit 0.
+- `server-process.test.js`: 2/2.
+- Core full `npx vitest run`: exit 1, 65 of 4,458 failed in 32 files, 874 s. Both slots were busy at the time. The failures fall into three groups:
+  - **accounting.test.ts (4) and catalog.test.ts (1): this lane's change, now fixed.** Each diagnostic now carries `issueCodes: ["thrown.Error", "thrown.at:<file>:<line>"]` from `thrown-issue-codes.ts`, which is the intended behaviour: a test double's throw is named by its test-file line, and the plan refusal by `runtime.service.ts:<line>`. The expectations were updated with `expect.stringMatching` on the frame. Re-run alone with `--minWorkers=1 --maxWorkers=2`: 17/17. Both files' other failures pass when run alone, so they were load timeouts.
+  - **deepseek-bootstrap-exploration.test.ts (4 real): caused by this lane's run-4 change (b), not fixed.** Re-run alone, the same 4 fail. With `maxCalls` 20, 26 and 8, the loop gets 3 fewer decisions: 17 against 20, 23 against 26, and so the creations that needed those decisions fail. That is exactly the `reserved = 1 + providerRetryCount` subtraction in `loop-limits/flow-bootstrap-evidence-loop.ts`. The reservation is grant-driven: it sizes the loop to what the grant will allow. It runs against the no-grants rule, it reserves retries that only happen on a fault, and t186 removes grants anyway. The correct action is to revert it: restore `loop-limits/flow-bootstrap-evidence-loop.ts`, `loop-limits/tests/flow-bootstrap-evidence-loop.test.ts`, `llm/evidence-loop/tests/stall-guard.test.ts` and `llm/resolver-contract.ts` to `259a11b`. Dev never touched these files, and their current content is committed in `e8d3bfc`. **The permission classifier denied that restore twice ("Irreversible Local Destruction"), so it is left for the supervisor or user.** Until then, those 4 tests fail and live builds keep 45 decisions instead of 48.
+  - **About 50 timeouts** (15/30/60 s, plus EBUSY/ENOTEMPTY on SQLite temp files) under load. Not re-run: the supervisor said not to re-run the full suite under load.
+- Debug files for runs 7-10 by worker t174-w4 (`reports/t174-w4-debugs-7-10.md`): `debugs/run-{munda7ub-d9214e3b, mundl2j0-df8e4a32, mundupr5-f1cde5aa, mune0xh1-2470406a}.md`. The worker corrected the gap after run 7's tool call to 27 ms, not about 50. Open, and not in this lane: the Lab counts 0 calls for run 7 and 1 for run 10, although a throw came after 22 and 17 decisions.
+
+## Runs 11 and 12 (2026-09-30), the first on the Fix 2 builds
+
+| # | Run | Task | Stage reached | Causes | Fix | Validation |
+| --- | --- | --- | --- | --- | --- | --- |
+| 11 | `run-munhpy2m-036e9572` | crossborder-marketplace-hub-to-cart | none (facility) | The first `fluxiq.connect` got no answer in 15 s (`connectionState: unreported`, so `lastStatus` was never set), after a 175 s run-up the bundle cannot time. CPU was at 100% with another lane's `pnpm test` in b1 (debug: `debugs/run-munhpy2m-036e9572.md`). | Launcher now keeps the full Lab log | - |
+| 12 | `run-muni3pdr-80225d3f` | same | none (facility) | 11 s in, `page.goto` of `sidepanel/index.html` gave `net::ERR_ABORTED` ("frame was detached"); the opener retries only renderer crashes (debug: `debugs/run-muni3pdr-80225d3f.md`). | Not yet | - |
+
+The extension's start has now failed in 6 of 9 launches (runs 3, 5, 8, 9, 11 and 12). No provider call was spent in any of them. This is now the blocking cause, ahead of the build's own. Two findings to act on next:
+- (a) Reproduce the extension start with no provider (Playwright, this extension build) and time the worker, the control page and the first connect.
+- (b) `waitForOpen` in Core `packages/client-gateway-websocket/src/transport.ts:151` has no deadline, so an unopened socket leaves `fluxiq.connect` unanswered forever. This is a product defect in its own right.
+Candidate causes: the t182 background changes, new in runs 11 and 12, or renderer instability under the other lanes' load.
+
+Core `npx tsc --noEmit -p tsconfig.json` after the accounting/catalog test edits (heavy.sh, b1): rc=0, no output.
