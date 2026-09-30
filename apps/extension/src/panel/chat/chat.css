@@ -206,6 +206,8 @@
 .chat-live-step { color: var(--muted); font-size: 12px; }
 .chat-live-detail { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .chat-live .chat-work-slot { margin-left: 19px; }
+.chat-live[data-state="waiting"] .chat-live-dot { background: var(--warning); }
+.chat-live[data-state="waiting"] .chat-live-detail { color: var(--text); }
 
 /* Empty: an invitation, centred, with example prompts that fill the composer. */
 .chat-empty { display: grid; flex: 1 1 auto; align-content: center; justify-items: center; gap: 8px; padding: 24px 4px; text-align: center; }
@@ -332,8 +334,8 @@
 .chat-setting-option:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .chat-live-dot { animation: chat-breathe 1.6s ease-in-out infinite; }
-  .chat-live-headline {
+  .chat-live[data-state="working"] .chat-live-dot { animation: chat-breathe 1.6s ease-in-out infinite; }
+  .chat-live[data-state="working"] .chat-live-headline {
     background: linear-gradient(90deg, var(--text) 0%, var(--text) 40%, var(--muted) 50%, var(--text) 60%, var(--text) 100%);
     background-size: 250% 100%;
     background-clip: text;

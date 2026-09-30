@@ -48,9 +48,29 @@ test("the live line keeps every node across 50 updates and hides between units o
 });
 
 test("the live line says a message is on its way before the first activity, and nothing when idle", () => {
-  assert.deepEqual(liveLineModel(null, true), { headline: "Sending your message", detail: "", step: "" });
+  assert.deepEqual(liveLineModel(null, true), { headline: "Sending your message", detail: "", step: "", waiting: false });
   assert.equal(liveLineModel(null, false), null);
   assert.equal(liveLineModel(display(1, { working: false, outcome: "failed" }), false), null);
+});
+
+test("while the work waits for the person, the live line stays up and says what Core asked of them", async () => {
+  // Core's person-needed ask at a robot check (t197): phase `waiting_permission`,
+  // the ask's text as the paced display's detail. The line is no longer
+  // working, so it neither pulses nor shimmers, and it is marked waiting.
+  const ask = "FluxIQ needs you: complete the check on this page, then press Continue.";
+  const waiting = display(9, { phase: "waiting_permission", headline: "Waiting for you", detail: ask, step: null, working: false, outcome: "waiting" });
+  assert.deepEqual(liveLineModel(waiting, false), { headline: "Waiting for you", detail: ask, step: "", waiting: true });
+  assert.deepEqual(liveLineModel({ ...waiting, headline: " ", detail: null }, false), { headline: "Waiting for you", detail: "", step: "", waiting: true });
+  await withFakeDocument(() => {
+    const line = createLiveLine();
+    line.update(liveLineModel(display(1), false));
+    assert.equal(line.element.getAttribute("data-state"), "working");
+    line.update(liveLineModel(waiting, false));
+    const root = fake(line.element);
+    assert.equal(root.hidden, false);
+    assert.equal(line.element.getAttribute("data-state"), "waiting");
+    assert.equal(root.byClass("chat-live-detail")[0]!.textContent, ask);
+  });
 });
 
 test("a fold keeps its steps' elements while steps arrive; only a step that changed is rebuilt", async () => {

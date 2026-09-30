@@ -18,7 +18,7 @@ function turn(turnId: string, author: string, text = turnId): CoreTurn {
   return { turnId, author, text, ask: null, attachment: false };
 }
 
-const LIVE = { headline: "Building your Flow", detail: "Reading the page", step: "" };
+const LIVE = { headline: "Building your Flow", detail: "Reading the page", step: "", waiting: false };
 
 test("the person's turn is a bubble; FluxIQ's is formatted text with its work folded above", async () => {
   await withFakeDocument(() => {

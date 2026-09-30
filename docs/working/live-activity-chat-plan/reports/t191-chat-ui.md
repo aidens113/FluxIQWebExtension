@@ -24,6 +24,29 @@
   - human wording instead of tool ids ("Using core.run_node");
   - screenshots of every state, including the Core panel's chat.
 
+- **Round 2, reconciled with dev (2026-09-30, lead, after the shutdown).** The round-2 workers' reports
+  (`t191-shell.md`, `t191-chat-2.md`, `t191-wording.md`, `t191-core-wording.md`, `t191-thread-load.md`,
+  `t191-overlay-2.md`) record the work in the WIP commits (downstream 47ba62dc, Core f9252172): the modes and split
+  are gone, the chat fills the panel, Chat and Automations tabs, the gear, getting-started, human wording in Core and
+  the extension, quiet read retries, and overlay placement and legibility.
+  - Merge conflicts, both sides kept:
+    - `pacer.test.ts` and `overlay-view.test.ts`: both sides' new tests kept. Dev's overlay test read `view.settled`,
+      which round 2 renamed `fades` (inverse sense), so it now asserts `fades === false`. Dev's pacer test expected the
+      headline "Waiting for you"; round 2's headline for Core's waiting state is "Waiting for you: answer in the
+      FluxIQ panel", which stays, because Continue and Stop are pressed in the panel.
+    - `panel/chat/header/header-model.ts` and its test: deleted on our side (the chat has no header). Dev's intent,
+      show what Core asked while the work waits for the person, moved to the chat's live line:
+      `view/live-line-model.ts` now stays up with `waiting: true` when the display's outcome is `waiting`, and
+      `live-line.ts` marks `data-state="waiting"` (amber dot, no pulse or shimmer, in `chat.css`). Tested in
+      `chat/tests/in-place-updates.test.ts`.
+  - Core's `dist` in `fxwork/t191/!FluxIQ` was stale against the merged contracts (`FluxIQClientGatewayOpenError`,
+    `effect`, `retryAfterMs`); rebuilt with `node scripts/build-cache/cli.mjs contracts:build fluxiq:build
+    client-gateway-websocket:build` -> exit 0.
+  - Ready to commit: the four resolved conflict paths (staged), `apps/extension/src/panel/chat/{chat.css,
+    view/live-line-model.ts, view/live-line.ts, tests/in-place-updates.test.ts, view/tests/thread-view.test.ts}`;
+    validation: `heavy.sh "t191 ext check+test+build"` (label t191-r2) -> `check=0 test=0 build=0`,
+    `# tests 1480 # pass 1480 # fail 0`, chrome, firefox and e2e-chromium each "verified 22 files".
+
 ## The user's verdict on t185, after watching live runs (2026-09-29)
 
 1. The extension's UI is "not at all like chatgpt styled chat area".

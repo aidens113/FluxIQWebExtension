@@ -105,5 +105,5 @@ test("a build waiting at a robot check shows Core's ask as its sentence, under '
   assert.equal(view?.headline, "Waiting for you");
   assert.equal(view?.detail, ask, "the whole ask fits the line: nothing is cut");
   assert.equal(view?.mark, "attention");
-  assert.equal(view?.settled, false, "waiting for the person does not fade");
+  assert.equal(view?.fades, false, "waiting for the person does not fade");
 });

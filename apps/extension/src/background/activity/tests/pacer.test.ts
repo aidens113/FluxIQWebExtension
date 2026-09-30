@@ -249,5 +249,5 @@ test("Core's person-needed ask at a robot check shows at once, whole, as the wai
   h.pacer.accept(event({ phase: "waiting_permission", label: ask }));
   const shown = h.shown.at(-1);
   assert.equal(shown?.at, 1_100, "inside the detail interval, and still shown at once");
-  assert.deepEqual([shown?.display.headline, shown?.display.detail, shown?.display.outcome, shown?.display.working], ["Waiting for you", ask, "waiting", false]);
+  assert.deepEqual([shown?.display.headline, shown?.display.detail, shown?.display.outcome, shown?.display.working], ["Waiting for you: answer in the FluxIQ panel", ask, "waiting", false], "Continue and Stop are pressed in the panel");
 });
