@@ -254,3 +254,18 @@ test("an answer names the ask and its kind, and keeps a value only when it is te
 test("any other message is not the relay's", async () => {
   assert.equal(await relayConversation({ type: RUNTIME_MESSAGES.panelStopRun }, context().value), undefined);
 });
+
+test("a browser just paired, with no project stored, sends once the project is resolved from Core, and is refused only when none is", async () => {
+  const c = context({ "open-conversation": { ok: true, payload: { conversation: { conversationId: "conversation-1" } } } });
+  let asked = 0;
+  const resolved: PanelRelayContext = { ...c.value, projectId: async () => { asked += 1; return "project-core"; } };
+  await relayConversation({ type: send, text: "What can you do?" }, resolved);
+  assert.equal(asked, 1);
+  assert.deepEqual(c.calls.map((call) => [call.endpoint, call.payload.projectId]), [["open-conversation", "project-core"], ["append-turn", "project-core"]]);
+
+  const none = context();
+  const refused = await relayConversation({ type: send, text: "What can you do?" }, { ...none.value, projectId: async () => undefined });
+  assert.equal(refused?.ok, false);
+  assert.equal((refused as { code?: string }).code, "no_project");
+  assert.deepEqual(none.calls, []);
+});
