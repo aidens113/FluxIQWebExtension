@@ -26,6 +26,7 @@ and its own `fxwork/<id>` tree:
 | t188 node limits | merged | Core `c961f4a`, downstream `37379fe3` |
 | t189 decision context | merged | Core `f0dbbd6`, downstream `ca07baae`; repeats now shown to the model; live effect unproven |
 | t185 live activity + chat | merged | Core `a28815c`, downstream `6818da22`; first browser proof is t174's next run |
+| t191 chat UI + overlay | `lead` (t185's) | user verdict: chat not ChatGPT-like, overlay not visible on the site, status flickers; screenshot-driven fix |
 | t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
 **Machine rules for every lane (binding).**
@@ -382,6 +383,16 @@ Each stage below asks: **what was supposed to happen, what actually happened,
 and where is the evidence.** A stage whose evidence does not exist is a Phase 0
 finding — record it as a gap and fix the instrumentation, because an
 unanswerable stage means the next run cannot be debugged either.
+
+**Every debug also reviews the UI (user, 2026-09-29, binding).** Screenshot the
+page and the extension at the start, mid-build, while the Flow runs, at the end,
+and at any failure. Look at the screenshots and judge them: the extension chat
+must look and behave like ChatGPT's chat area (a clean message stream, clear
+user and assistant turns, a composer at the bottom); the on-page status overlay
+must be visible on the site whenever FluxIQ is working, side panel open or not;
+status text must be stable, never flickering, and polished. A UI defect is
+recorded with its screenshot and fixed in the same loop as a functional one. A
+run that works behind a bad UI has not passed.
 
 **Stage 1 — the instruction.** What was the person's instruction, exactly? What
 would a correct Flow have to do to satisfy it? Write that chain down *before*
