@@ -53,6 +53,47 @@ export type ExtractionCheckpoint = {
    * worse than either (`content/extraction/list-reader.ts`).
    */
   itemsSeen?: number | undefined;
+  /**
+   * What the request's `where` conditions did so far, across every document
+   * read: items asked about, items every condition held of, and one rejection
+   * count per condition, positionally (C5).
+   *
+   * It travels for the reason `itemsSeen` does, and its absence was measured.
+   * Live run `run-munnhi5q-4867dabe` read five pages, the last a document with
+   * no card on it (the store rate-limits a fast sweep), and reported
+   * `conditions: {applied: 0, kept: 0, rejected: [0, 0]}` for a read whose two
+   * conditions had run on every card of the pages before: the counts restarted
+   * at each document, so the read answered with its last document's, and a
+   * read that filtered looked like one whose filters did nothing.
+   *
+   * Absent in a checkpoint from a read that named no conditions, or from a page
+   * build that did not carry them.
+   */
+  conditions?: ExtractionCheckpointConditions | undefined;
+  /**
+   * What the read has spent on pages the server refused: the reloads it made,
+   * and the refusals as too fast (429) it met, an unexplained empty page
+   * counted as one (`content/extraction/pagination.ts`).
+   *
+   * It travels because a reload is itself a new document: a read that forgot
+   * its retries at every document would reload a refusing page for ever, and
+   * one that forgot its refusals could be what makes a limiter flag the
+   * session. Absent for a read that met no refused page.
+   */
+  refusals?: ExtractionCheckpointRefusals | undefined;
+};
+
+/** A checkpoint's refused-page counts. */
+export type ExtractionCheckpointRefusals = {
+  retries: number;
+  rateLimits: number;
+};
+
+/** The condition counts a checkpoint carries: the report's counts without `unfiltered`, which only the read's answer can decide. */
+export type ExtractionCheckpointConditions = {
+  applied: number;
+  kept: number;
+  rejected: number[];
 };
 
 /**
@@ -81,7 +122,7 @@ export type ExtractionCheckpointMessage = {
  */
 export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen } = value as Record<string, unknown>;
+  const { records, pagesRead, scrolls, missingFields, filtered, itemsSeen, conditions, refusals } = value as Record<string, unknown>;
   if (!Array.isArray(records) || !records.every(isRecord)) return undefined;
   if (!isCount(pagesRead) || !isCount(scrolls)) return undefined;
   if (!Array.isArray(missingFields) || !missingFields.every((name) => typeof name === "string")) return undefined;
@@ -92,14 +133,39 @@ export function readExtractionCheckpoint(value: unknown): ExtractionCheckpoint |
   // items. Refusing rather than dropping the member is what keeps an absent count
   // meaning one thing: not counted, never counted wrongly.
   if (itemsSeen !== undefined && !isCount(itemsSeen)) return undefined;
+  // And again: sent but unreadable is refused, never read as no conditions.
+  const conditionCounts = conditions === undefined ? undefined : conditionCountsValue(conditions);
+  if (conditions !== undefined && conditionCounts === undefined) return undefined;
+  // The same rule once more: a read that forgot its retries could reload a
+  // refusing page for ever, so unreadable counts refuse rather than reset.
+  const refusalCounts = refusals === undefined ? undefined : refusalCountsValue(refusals);
+  if (refusals !== undefined && refusalCounts === undefined) return undefined;
   return {
     records: records.map((record) => ({ ...record })),
     pagesRead,
     scrolls,
     missingFields: [...missingFields],
     ...(filtered === undefined ? {} : { filtered }),
-    ...(itemsSeen === undefined ? {} : { itemsSeen })
+    ...(itemsSeen === undefined ? {} : { itemsSeen }),
+    ...(conditionCounts === undefined ? {} : { conditions: conditionCounts }),
+    ...(refusalCounts === undefined ? {} : { refusals: refusalCounts })
   };
+}
+
+/** A checkpoint's refused-page counts, copied, or `undefined` when either is not a count. */
+function refusalCountsValue(value: unknown): ExtractionCheckpointRefusals | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const { retries, rateLimits } = value as Record<string, unknown>;
+  return isCount(retries) && isCount(rateLimits) ? { retries, rateLimits } : undefined;
+}
+
+/** A checkpoint's condition counts, copied, or `undefined` when any member is not a count. */
+function conditionCountsValue(value: unknown): ExtractionCheckpointConditions | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const { applied, kept, rejected } = value as Record<string, unknown>;
+  if (!isCount(applied) || !isCount(kept) || kept > applied) return undefined;
+  if (!Array.isArray(rejected) || !rejected.every(isCount)) return undefined;
+  return { applied, kept, rejected: [...rejected] };
 }
 
 function isRecord(value: unknown): value is ExtractionCheckpointRecord {

@@ -50,7 +50,7 @@ import {
 import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
-import { webLlmSnapshotStateDigest } from "../snapshot-state-digest";
+import { webLlmSnapshotStates } from "../state-digest";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { webActionNeedsPerson } from "../action-failure";
 import { recoverable, RecoverableToolRejection, rejectionDetail } from "../tool-rejection";
@@ -153,14 +153,17 @@ async function capturedDetection(
     expectedOrigin,
     failedAction: undefined
   }));
-  // Digested only where the capture is of the page: a frame's detection
-  // describes the frame's own document (`observed` above).
+  // Digested and projected only where the capture is of the page: a frame's
+  // detection describes the frame's own document (`observed` above), which is
+  // neither the page's state nor the route state `observeRouteState` reads.
+  const states = frameId === undefined ? webLlmSnapshotStates(payload.snapshot, sanitized, undefined) : undefined;
   const page = present<WebLlmSnapshotBinding>({
     evidence: sanitized.evidence,
     selectors: sanitized.selectors,
     records: sanitized.records,
     shadowHosts: sanitized.shadowHosts,
-    stateDigest: frameId === undefined ? webLlmSnapshotStateDigest(payload.snapshot, sanitized, undefined) : undefined
+    stateDigest: states?.stateDigest,
+    routeState: states?.routeState
   });
   // A top-frame detection must describe the page the target was bound on; a
   // frame's own document has its own location, and its origin is held above.

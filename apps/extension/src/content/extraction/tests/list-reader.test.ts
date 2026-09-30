@@ -312,3 +312,88 @@ test("a read that names neither dedupe nor sort carries no order report and answ
     page.restore();
   }
 });
+
+// And the condition report across a document boundary. Live run
+// `run-munnhi5q-4867dabe` read the everything store's results with two `where`
+// conditions, ended on a document with no card on it (a rate-limit page), and
+// reported `conditions: {applied: 0, kept: 0, rejected: [0, 0]}`: the counts
+// restarted at each document, so the read answered with its last document's and
+// a read that had filtered four pages looked like one whose filters did nothing.
+
+/** What the four documents before the rate-limit page handed over: 56 cards asked about, 28 kept, the first condition rejecting 20 and the second 8. */
+const FILTERED_SO_FAR: ExtractionCheckpoint = {
+  ...START,
+  records: Array.from({ length: 28 }, (_, index) => ({ title: `T${index}`, posted: "", url: `/t${index}` })),
+  pagesRead: 4,
+  itemsSeen: 56,
+  filtered: 28,
+  conditions: { applied: 56, kept: 28, rejected: [20, 8] }
+};
+
+/** JOBS with a second condition, so the report has two positions as the live read did. */
+const TWO_CONDITIONS: WebAutomationExtractListRequest = {
+  ...JOBS,
+  where: [{ read: attribute("sponsored"), is: "absent" }, { field: "title", contains: ["ear tips", "charging case"], not: true }]
+};
+
+test("a continued read reports what its conditions did across the whole read, not only in its own document", async () => {
+  const page = fakeRows([
+    { title: "Earbuds", posted: "", url: "/e" },
+    { title: "Sponsored earbuds", posted: "", url: "/ad", sponsored: "yes" },
+    { title: "Foam ear tips", posted: "", url: "/tips" }
+  ]);
+  try {
+    const outcome = await extractList(TWO_CONDITIONS, { resume: FILTERED_SO_FAR });
+    assert.deepEqual(outcome.conditions, { applied: 59, kept: 29, rejected: [21, 9], unfiltered: false });
+    assert.equal(outcome.filtered, 30);
+    assert.equal(outcome.records.length, 29);
+  } finally {
+    page.restore();
+  }
+});
+
+test("a read that ends on a page with none of the list keeps the counts it was handed, rather than reporting conditions that applied to nothing", async () => {
+  // The rate-limit page: no item, no control. The read ends on it (here on its
+  // deadline, which is the quickest way a stand-in page can end it), and what
+  // its conditions did is still what they did on the four pages before it.
+  const page = fakeRows([]);
+  try {
+    const outcome = await extractList(TWO_CONDITIONS, { resume: FILTERED_SO_FAR, timeoutMs: 100 });
+    assert.equal(outcome.records.length, 28);
+    assert.deepEqual(outcome.conditions, { applied: 56, kept: 28, rejected: [20, 8], unfiltered: false });
+    assert.notDeepEqual(outcome.conditions?.rejected, [0, 0]);
+  } finally {
+    page.restore();
+  }
+});
+
+test("the checkpoint a filtering read hands on carries its condition counts, its predecessor's included", async () => {
+  const taken: ExtractionCheckpoint[] = [];
+  const page = fakeList(["E", "F"], { selector: ".more", onClick: () => page.add("G") });
+  try {
+    const outcome = await extractList(
+      { ...READ, where: [{ field: "name", equals: "F", not: true }], paginate: { mode: "loadMore", control: ".more", maxPages: 3 } },
+      {
+        resume: { records: [{ name: "A" }], pagesRead: 1, scrolls: 0, missingFields: [], itemsSeen: 2, filtered: 1, conditions: { applied: 2, kept: 1, rejected: [1] } },
+        checkpoint: async (progress) => { taken.push(progress); }
+      }
+    );
+    assert.equal(taken.length, 1);
+    assert.deepEqual(taken[0]?.conditions, { applied: 4, kept: 2, rejected: [2] }, "two handed over plus E kept and F rejected");
+    assert.deepEqual(outcome.conditions, { applied: 5, kept: 3, rejected: [2], unfiltered: false });
+  } finally {
+    page.restore();
+  }
+});
+
+test("counts that do not fit the request's conditions are not added to, and a read that began here starts from zero", async () => {
+  const page = fakeRows([{ title: "Earbuds", posted: "", url: "/e" }]);
+  try {
+    const misfit = await extractList(TWO_CONDITIONS, { resume: { ...START, conditions: { applied: 9, kept: 9, rejected: [0] } } });
+    assert.deepEqual(misfit.conditions, { applied: 1, kept: 1, rejected: [0, 0], unfiltered: false });
+    const fresh = await extractList(TWO_CONDITIONS, { resume: START });
+    assert.deepEqual(fresh.conditions, { applied: 1, kept: 1, rejected: [0, 0], unfiltered: false });
+  } finally {
+    page.restore();
+  }
+});

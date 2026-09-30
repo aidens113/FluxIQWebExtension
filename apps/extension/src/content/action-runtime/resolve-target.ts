@@ -41,6 +41,33 @@
 // again before Level 2 ranks anything. It fails closed: a candidate in no
 // record at all, when the recording named one, disagrees.
 //
+// The gate also stands in front of a strategy's *count*. A strategy that
+// matched several elements used to have them all counted, and a count above one
+// is TARGET_AMBIGUOUS -- so a card that had left the page read as a tie among
+// the cards still on it. Live run `run-munri5gr-94d7f8a0` is the case: the
+// bigbox store chooser's cards each hold an identical "Set as my store", the
+// step recorded Millbrook's, and a dry run met the chooser with Millbrook
+// already chosen, its card holding "Your store" and no button. The recorded
+// position missed, the fingerprint's text matched the three other stores'
+// buttons, and the step failed as ambiguous among controls it had no business
+// pressing. Only the matches in the recorded record are counted now, and a
+// strategy whose matches are all in other records is a miss: the card is gone,
+// the target is not found, and a replay says `unreproducible` rather than
+// `failed`.
+//
+// One refusal is read a second way. A control whose name *is* its state -- the
+// same chooser's chip names the chosen store -- disagrees with a recording made
+// before the state changed on every signal that could corroborate it, so the
+// veto refused the chip that was plainly there and the step went unreproducible
+// after the recovery ladder. When the veto refuses an exact strategy's one
+// answer by its score, `identity/stable-name.ts` reads the recording by the
+// part of the name that does not change -- a whole text run replaced, the rest
+// kept -- and the answer is acted on only if that reading passes the veto's own
+// two rules *and* it is the one visible control of the recorded family, in the
+// recorded scope, that reads that way. A different button under the same
+// selector has no such reading, and two that share it are refused, not chosen
+// between.
+//
 // A point is checked once more. `coordinates` and `visual-target` land on one
 // element by construction, so a page holding that element's identical twin
 // never shows in their count: on `ambiguous-targets` `no-context` the recorded
@@ -120,6 +147,8 @@ import {
   candidateLabel,
   collectTargetCandidates,
   scoreTargetCandidates,
+  stableNameReading,
+  vetoCandidate,
   vetoExactMatch,
   type CandidateSelection,
   type TargetCandidate,
@@ -269,7 +298,16 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       misses.push(attempt.description);
       continue;
     }
-    const pool = gatedPool(attempt.matches, target);
+    // Several matches are counted only where the recording's record is: the
+    // others are other rows' copies of the control, not candidates for it. A
+    // lone match is left to the veto below, which refuses one in another record
+    // and says so.
+    const inRecord = attempt.matches.length > 1 ? inRecordedRecord(attempt.matches, target) : attempt.matches;
+    if (!inRecord.length) {
+      misses.push(`${attempt.description} (${attempt.matches.length} matched, each in another record)`);
+      continue;
+    }
+    const pool = gatedPool(inRecord, target);
     const only = pool.length === 1 ? pool[0] : undefined;
     if (only) {
       // One answer, unweighed until now. `identity/veto.ts` scores it against
@@ -280,9 +318,16 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       // is how a page that moved the control into another slot is recovered
       // instead of merely not clicked.
       const verdict = target ? vetoExactMatch(target, only) : undefined;
-      if (verdict?.refusedBecause) {
-        misses.push(`${attempt.description} (${verdict.summary})`);
-        continue;
+      let measurement = verdict?.measurement;
+      if (target && verdict?.refusedBecause) {
+        // Refused by its score, it may still be the recorded control with its
+        // state changed; refused by its record, it is not, at any reading.
+        const steady = verdict.refusedBecause === "other-record" ? undefined : stableNameMatch(target, only, scope);
+        if (!steady) {
+          misses.push(`${attempt.description} (${verdict.summary})`);
+          continue;
+        }
+        measurement = steady;
       }
       // A point answers with one element whatever else the page holds, so its
       // count proves nothing about a twin. Scoring the family does.
@@ -293,7 +338,7 @@ function resolveIn(action: BrowserActionCommand, target: RecordedTarget | undefi
       // And when it accepts, its measurement is what the resolution reports.
       // The veto weighed this element on the way past; carrying the number out
       // is free, where scoring it again here would not be.
-      return { outcome: "resolved", target: { element: only, resolution: exactResolution(attempt, verdict?.measurement) } };
+      return { outcome: "resolved", target: { element: only, resolution: exactResolution(attempt, measurement) } };
     }
     // Several survived the gate. Scoring is the difference between "these two
     // tied" and "these two tied, and one of them is the recorded control".
@@ -462,6 +507,37 @@ function fingerprintMatches(target: RecordedTarget, roots: readonly LookupRoot[]
 function gatedPool(matches: Element[], target: RecordedTarget | undefined): Element[] {
   const preferred = matches.filter((element) => passesGate(element, target));
   return preferred.length ? preferred : matches;
+}
+
+/** The matches in the record the recording named, or every match when it named none. */
+function inRecordedRecord(matches: Element[], target: RecordedTarget | undefined): Element[] {
+  const record = target?.context?.record;
+  return record ? matches.filter((element) => agreesWithRecordedRecord(record, element)) : matches;
+}
+
+/**
+ * The measurement that lets a refused exact answer through as the recorded
+ * control with its state changed, or `undefined` when it is not one.
+ *
+ * Three conditions, all of them: the recording reads against the element by
+ * the stable part of its name (`identity/stable-name.ts`); that reading passes
+ * the veto's own rules, so it is Core's score of the kept part that decides and
+ * not this function; and no other visible, enabled control of the recorded
+ * family in the recorded scope reads the same way. The last is what keeps a
+ * row of buttons that share a label and differ in one run from being read as
+ * one control whose state changed: two readings are a tie, and a tie is not
+ * acted on. An enumeration the cap cut short cannot say there is no second
+ * one, so it answers no.
+ */
+function stableNameMatch(target: RecordedTarget, element: Element, scope: ShadowScope): TargetMeasurement | undefined {
+  const reading = stableNameReading(target, element);
+  if (!reading) return undefined;
+  const verdict = vetoCandidate(reading.recorded, reading.candidate);
+  if (verdict.refusedBecause || !verdict.measurement) return undefined;
+  const family = collectTargetCandidates(candidateFamily(target), scope.roots);
+  if (family.truncated) return undefined;
+  const alike = family.candidates.filter((candidate) => passesGate(candidate.element, target) && stableNameReading(target, candidate.element)?.stable === reading.stable);
+  return alike.length === 1 && alike[0]?.element === element ? verdict.measurement : undefined;
 }
 
 function passesGate(element: Element, target: RecordedTarget | undefined): boolean {

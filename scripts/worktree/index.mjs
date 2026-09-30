@@ -13,7 +13,8 @@
 //
 // By responsibility: `git-command.mjs` and `pnpm-command.mjs` run the two
 // tools; `checkout-repository.mjs` says which repository a directory is the top of;
-// `core-build.mjs` builds the Core packages a domain links;
+// `core-build.mjs` builds the Core packages a domain links and
+// `cache-delegation.mjs` says when Core's own build cache owns that build;
 // `path-identity.mjs` compares paths the way Windows does; `markers.mjs`
 // records what finished in a worktree and `side-state.mjs` reads one
 // worktree's whole state; `process-list.mjs` and `processes-using-roots.mjs`
@@ -29,6 +30,7 @@
 
 export { applyMove } from "./apply-move.mjs";
 export { buildCore, coreDistPaths, fullCoreDistPaths, CORE_PACKAGES, FULL_CORE_PACKAGES } from "./core-build.mjs";
+export { coreCacheOwnsBuild } from "./cache-delegation.mjs";
 export { checkoutRepository } from "./checkout-repository.mjs";
 export { resolveCoreSibling } from "./core-sibling.mjs";
 export { createWorktree } from "./create.mjs";

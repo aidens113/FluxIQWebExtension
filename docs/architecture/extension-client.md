@@ -348,6 +348,27 @@ to its text, ref and status. The composer sends typed instructions through
 `panelConversationSend`. The thread is re-read 300 ms after an event that names
 a conversation or ends the work. The 4 s poll stays as the fallback.
 
+**The chat builds and runs automations** (t198). The background relay
+(`background/panel/conversation-relay.ts`) adds two things to every message:
+
+- The capability ids Core executes server-side (`chat-capabilities.ts`):
+  `flow.createHere`, `flow.describe`, `flow.explore`, `flow.improve`,
+  `run.execute` and `ask.answer`. They are ids only, because Core supplies
+  their descriptors.
+- `onScreen.pageUrl`: the active tab's address (`chrome.tabs.query`, last
+  focused window), and only an http(s) address of at most 2048 characters
+  (`page-url.ts`). Core builds from that page. If the browser cannot say which
+  tab is active, nothing is sent, and the panel is told why.
+
+Core runs a chosen capability for the paired person's project, on that person's
+unlocked model key, and answers `response.execution`. For a build or a run
+that is `started`. The result arrives later as a thread turn, and progress
+arrives as activity stamped with the thread's id. An automation's own chat is
+`panelConversationSend` with `kind: "open"`, `subjectKind: "flow"` and the
+Flow's id. There, "run it" means that Flow. Core's side is described in
+FluxIQ Core's `docs/architecture/automation-studio/client-gateway.md`
+("The chat runs capabilities in Core").
+
 ## Action Surface
 
 The browser action set is `WEB_AUTOMATION_ACTION_TYPES`

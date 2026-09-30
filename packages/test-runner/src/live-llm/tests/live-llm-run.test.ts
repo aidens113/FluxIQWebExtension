@@ -102,11 +102,11 @@ test("an adapt run readies its Flow with its spend ceiling, carries its intent a
   assert.deepEqual(execution, { intent: "diagnose_and_adapt", permittedConsequences: [] });
   // The run's spend ceiling is a Flow setting now, saved with the rest.
   const saved = core.settingsRequests[0]?.flow.metadata;
-  assert.deepEqual(saved.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 2 });
+  assert.deepEqual(saved.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 0.25 });
   assert.equal(saved.llmModel, DEFAULT_LLM_MODEL);
   assert.equal(snapshot.authorized.maxCalls, 26);
   assert.equal(snapshot.authorized.maxTotalTokensPerRun, PER_REQUEST * 26);
-  assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, 2);
+  assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, 0.25);
   assert.deepEqual(snapshot.permittedConsequences, []);
   assert.equal(snapshot.exploration.source, "absent");
   assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
@@ -200,12 +200,12 @@ const proposedBuild: CreatedFlowBuild = {
   durationMs: 40_000,
 };
 
-async function settleBuildOnce(build: CreatedFlowBuild) {
+async function settleBuildOnce(build: CreatedFlowBuild, budget: Partial<LlmExecutionProfile["budget"]> = {}) {
   const core = fakeCore();
   // The whole per-request triple is the shared budget's. Overriding only the
   // output and total limits left the input limit at the default, and input plus
   // output may not exceed the total, so every build below was refused unrun.
-  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile(budget), task: "create-flow" }), CREDENTIAL);
   const prepared = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: unknown }> = [];
   const published: Record<string, unknown>[] = [];
@@ -298,13 +298,56 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
   assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
   assert.equal(snapshot.repair.purpose, "explore_and_adapt");
-  assert.equal(snapshot.repair.authorized.maxTotalEstimatedCostUsd, 2);
+  assert.equal(snapshot.repair.authorized.maxTotalEstimatedCostUsd, 0.25);
   assert.equal(snapshot.repair.runId, "run-1");
   assert.equal(snapshot.repair.observed.calls, 3);
   assert.equal(snapshot.repair.observed.observedCalls.length, 3);
   assert.deepEqual(published.at(-1), { repair: { calls: 3, interventions: 3, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true } } });
   assert.equal(run.usage.calls, 5 + 3, "the evaluation counts every call the run paid for");
   assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
+});
+
+/**
+ * The user's rule: a Flow build may spend $0.25 in all, and its repair another
+ * $0.25 of its own. `settleBuild` judges the build's record and `settleRepair`
+ * the repair run's detail, each against the plan's total, so neither phase's
+ * spend is counted against the other's, and neither may pass $0.25 however
+ * many calls it was allowed.
+ */
+async function buildThenRepair(buildCostUsd: number, repairCostUsd: number) {
+  const { core, run, settle } = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, estimatedCostUsd: buildCostUsd } }, { maxCallsPerRun: 64, maxEstimatedCostUsd: 0.25 });
+  const build = await settle().then(() => undefined, (error: unknown) => error);
+  await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const repairDetail: ExistingRunDetail = {
+    ...detail,
+    interventions: detail.interventions!.map((intervention, _index, all) => ({ ...intervention, estimatedCostUsd: repairCostUsd / all.length })),
+    llmAccounting: { ...detail.llmAccounting!, estimatedCostUsd: repairCostUsd },
+  };
+  const repair = await run.settleRepair({ getRunDetail: async () => repairDetail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async () => undefined }, async () => undefined)
+    .then(() => undefined, (error: unknown) => error);
+  return { core, build, repair };
+}
+
+function isCostBreach(error: unknown, spent: number): boolean {
+  return error instanceof RunnerFailure && error.category === "performance.budget"
+    && error.message.includes(`estimated cost ${spent} exceeded its total cost limit of 0.25 `);
+}
+
+test("a build and its repair are each held to $0.25 on its own: $0.20 apiece passes, and either one over $0.25 fails", async () => {
+  const within = await buildThenRepair(0.2, 0.2);
+  assert.equal(within.build, undefined, "a $0.20 build is inside its own $0.25");
+  assert.equal(within.repair, undefined, "and a $0.20 repair inside its own, though the two come to $0.40");
+  // The Flow is configured with the ceiling for both phases: 64 calls at $0.25 still total $0.25.
+  assert.deepEqual(within.core.settingsRequests[0]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 0.25 });
+  assert.deepEqual(within.core.settingsRequests[1]?.flow.metadata.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 0.25 });
+
+  const buildOver = await buildThenRepair(0.26, 0.2);
+  assert.ok(isCostBreach(buildOver.build, 0.26), `a $0.26 build fails on its own: ${String(buildOver.build)}`);
+  assert.equal(buildOver.repair, undefined, "and does not count against its repair");
+
+  const repairOver = await buildThenRepair(0.2, 0.26);
+  assert.equal(repairOver.build, undefined);
+  assert.ok(isCostBreach(repairOver.repair, 0.26), `a $0.26 repair fails on its own: ${String(repairOver.repair)}`);
 });
 
 /**

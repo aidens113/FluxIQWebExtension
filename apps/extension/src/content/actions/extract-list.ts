@@ -228,9 +228,14 @@ function readSummary(outcome: Outcome): string {
  */
 function faultAccount(outcome: Outcome): string {
   const items = outcome.itemFaults ?? 0;
+  // A refused page the read waited out and reloaded is recovered, and still
+  // said: the recovery is a fact about the site. One it stopped on is said by
+  // `pagingAccount` instead.
+  const retries = outcome.refusedStatus === undefined ? outcome.pageRetries ?? 0 : 0;
   const parts = [
     ...(items > 0 ? [`${count(items, "item")} could not be read and were skipped`] : []),
-    ...(outcome.pageFault ? ["the move to the next page failed, so the read ends with the pages it has"] : [])
+    ...(outcome.pageFault ? ["the move to the next page failed, so the read ends with the pages it has"] : []),
+    ...(retries > 0 ? [`the server refused a page and the read waited and reloaded it (${count(retries, "time")}) and went on`] : [])
   ];
   return parts.length === 0 ? "" : `, and ${parts.join(", and ")}`;
 }
@@ -255,6 +260,12 @@ function faultAccount(outcome: Outcome): string {
 function pagingAccount(outcome: Outcome): string {
   const stop = outcome.paginationStop;
   if (stop === undefined) return "";
+  const refused = outcome.refusedStatus;
+  if (refused !== undefined) {
+    const answer = refused === 429 ? "429, too many requests" : `${refused}, unavailable`;
+    const retried = (outcome.pageRetries ?? 0) > 0 ? ` and went on refusing after the read waited and reloaded it (${count(outcome.pageRetries ?? 0, "time")})` : "";
+    return `; paging stopped because the server refused the next page (HTTP ${answer})${retried} -- the list goes on past these records, so the read is incomplete`;
+  }
   const firstPageMiss = stop === "control_absent" && outcome.pagesRead <= 1;
   if (!firstPageMiss && (ORDINARY_END.has(stop) || stop === "deadline" || (stop === "page_fault" && outcome.pageFault))) return "";
   if (firstPageMiss) {
@@ -266,12 +277,16 @@ function pagingAccount(outcome: Outcome): string {
 /** The stops that are the list ending as lists end, which the phrase leaves to the summary's word. */
 const ORDINARY_END: ReadonlySet<NonNullable<Outcome["paginationStop"]>> = new Set(["control_absent", "control_disabled", "no_following_page", "scrolled_to_end"]);
 
-const PAGING_STOPPED: Record<NonNullable<Outcome["paginationStop"]>, string> = {
+// `rate_limited` is named ahead of the domain's closed set admitting it
+// (`extraction/pagination.ts`, `RATE_LIMITED_STOP`), so the phrase is ready the
+// day the word is sent.
+const PAGING_STOPPED: Record<NonNullable<Outcome["paginationStop"]> | "rate_limited", string> = {
   control_absent: "the pagination control was no longer on the page, which is the list ending",
   control_disabled: "the pagination control was disabled, which is the list ending",
   no_following_page: "the pager showed no page after the current one, which is the list ending",
   scrolled_to_end: "scrolling to the bottom brought nothing new, which is the list ending",
-  list_vanished: "the page the control led to showed none of the list and no way on -- a rate limit, a check page or an error, not the list ending",
+  list_vanished: "the page the control led to showed none of the list and no way on -- a rate limit, a check page or an error, not the list ending -- so the read is incomplete",
+  rate_limited: "the server kept refusing the next page as too many requests -- the list goes on past these records, so the read is incomplete",
   page_limit: "the page bound (maxPages, or maxScrolls for a scroll read) was reached while the list went on -- raise it to read more",
   item_limit: "maxItems was reached while the list went on -- raise it to read more",
   deadline: "the command's timeout ran out",

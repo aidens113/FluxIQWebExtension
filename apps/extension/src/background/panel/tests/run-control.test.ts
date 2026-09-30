@@ -15,7 +15,8 @@ function context(answer: (endpoint: string, payload: Record<string, unknown>) =>
       calls.push({ endpoint, payload });
       return answer(endpoint, payload);
     },
-    projectId: () => projectId
+    projectId: () => projectId,
+    pageLocation: async () => undefined
   };
   return { value, calls };
 }
