@@ -5,7 +5,6 @@
  * @typedef {{
  *   now: number,
  *   launch: { instance: string, task: string },
- *   budget: import("../spend-budget.mjs").SpendBudget,
  *   stopBalance: string | null,
  *   entries: import("../ledger.mjs").LedgerEntry[],
  *   fingerprint: string,
@@ -17,4 +16,4 @@
  */
 
 /** Every rule's name, in the order the rules are asked. */
-export const RULE_NAMES = ["balance", "budget", "loop", "debug", "unchanged"];
+export const RULE_NAMES = ["balance", "loop", "debug", "unchanged"];

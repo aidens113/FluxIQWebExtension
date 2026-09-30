@@ -1,6 +1,6 @@
 // The live-run guards: what `run-lab.mjs` asks before a `--live-llm` run may
-// start, and what it records once the run ends. Design and the five rules:
-// docs/architecture/testing-facility.md, "Live-run spend guards".
+// start, and what it records once the run ends. Design and the four rules:
+// docs/architecture/testing-facility.md, "Live-run waste guards".
 
 export { admitLiveRun, DEBUG_DIRECTORY } from "./admit-live-run.mjs";
 export { detectBalanceFailure } from "./balance-failure.mjs";
@@ -15,5 +15,4 @@ export { ABANDONED_AFTER_MS, reconcileLedger } from "./reconcile-ledger.mjs";
 export { recordLiveRunFinish, recordLiveRunStart } from "./record-live-run.mjs";
 export { readRunOutcomes } from "./run-outcomes.mjs";
 export { sourceFingerprint } from "./source-fingerprint.mjs";
-export { budgetWindowStart, readSpendBudget } from "./spend-budget.mjs";
 export * from "./rules/index.mjs";

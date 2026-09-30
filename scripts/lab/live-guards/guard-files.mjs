@@ -3,7 +3,8 @@
 //
 // The directory is fixed, not configurable. An environment variable or flag
 // that moved it would be a way for an agent to point the guards at an empty
-// ledger and a budget of its own; the only inputs are files a person writes.
+// ledger and no stop or override files; the only inputs are files a person
+// writes, and the ledger the guards themselves append to.
 // Tests pass a temporary directory to the functions directly.
 
 import os from "node:os";
@@ -14,12 +15,11 @@ export const DEFAULT_LAB_SLOTS_DIRECTORY = path.join(os.homedir(), "FluxStuff", 
 
 /**
  * @param {string} directory the lab-slots directory
- * @returns {{ directory: string, budget: string, ledger: string, stopBalance: string, override: (rule: string) => string }}
+ * @returns {{ directory: string, ledger: string, stopBalance: string, override: (rule: string) => string }}
  */
 export function guardFiles(directory) {
   return {
     directory,
-    budget: path.join(directory, "spend-budget.json"),
     ledger: path.join(directory, "spend-ledger.jsonl"),
     stopBalance: path.join(directory, "STOP-balance"),
     override: (rule) => path.join(directory, `OVERRIDE-${rule}`),

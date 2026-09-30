@@ -3,12 +3,12 @@
 // An override is a file, `lab-slots/OVERRIDE-<rule>`, never a flag or an
 // environment variable: an agent passes flags, and the point of these rules is
 // that an agent alone cannot talk its way past them. A rule that says it is
-// not overridable (`balance`, and `budget` when no budget is set) refuses
+// not overridable (`balance`) refuses
 // whatever files exist.
 
-import { checkBalanceStop, checkPreviousDebug, checkRelaunchLoop, checkSpendBudget, checkUnchangedRerun } from "./rules/index.mjs";
+import { checkBalanceStop, checkPreviousDebug, checkRelaunchLoop, checkUnchangedRerun } from "./rules/index.mjs";
 
-const RULES = [checkBalanceStop, checkSpendBudget, checkRelaunchLoop, checkPreviousDebug, checkUnchangedRerun];
+const RULES = [checkBalanceStop, checkRelaunchLoop, checkPreviousDebug, checkUnchangedRerun];
 
 /**
  * @param {import("./rules/guard-state.mjs").GuardState} state

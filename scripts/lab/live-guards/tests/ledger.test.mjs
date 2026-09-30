@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { appendLedgerEntry, budgetWindowStart, readLedger, windowSpend } from "../index.mjs";
+import { appendLedgerEntry, readLedger, windowSpend } from "../index.mjs";
 
 const finish = (at, totalEstimatedCostUsd) => ({ event: "finish", launchId: "l", at, runId: "run-a", instance: "i", task: "t", verdict: "failed", totalEstimatedCostUsd, balanceFailure: null, fingerprint: "f", exitCode: 1 });
 
@@ -20,12 +20,6 @@ test("window spend sums finishes from the window's start, exactly, and counts un
   ];
   assert.deepEqual(windowSpend(entries, since), { usd: 1.05, runs: 12, unknown: 1 });
   assert.deepEqual(windowSpend([], since), { usd: 0, runs: 0, unknown: 0 });
-});
-
-test("the day window starts at local midnight", () => {
-  const noon = new Date(2026, 8, 30, 12, 30).getTime();
-  assert.equal(budgetWindowStart("day", noon), new Date(2026, 8, 30, 0, 0, 0, 0).getTime());
-  assert.throws(() => budgetWindowStart("week", noon), /unknown budget window/u);
 });
 
 test("entries append one line each and read back in order; an absent ledger is empty", async () => {

@@ -37,7 +37,6 @@ async function fixture() {
   };
   return {
     directory, slots, root, runs, admit, writeRun,
-    budget: (maxUsd) => writeFile(path.join(slots, "spend-budget.json"), JSON.stringify({ maxUsd, window: "day" }), "utf8"),
     setDigest: (value) => { digest = value; },
     advance: (ms) => { clock += ms; return clock; },
     now: () => clock,
@@ -46,12 +45,11 @@ async function fixture() {
   };
 }
 
-test("with no budget set a live run is refused and nothing is written", async () => {
+test("a first live run is admitted from an empty lab-slots directory, admission writes nothing, and a run with no provider call is not guarded", async () => {
   const lab = await fixture();
   try {
     const admission = await lab.admit();
-    assert.deepEqual(admission.refusals.map((refusal) => refusal.rule), ["budget"]);
-    assert.match(admission.refusals[0].why, /no live spend budget is set/u);
+    assert.deepEqual(admission.refusals, []);
     assert.deepEqual(await lab.ledger(), []);
     assert.equal(await admitLiveRun({ args: ["run", "bigbox-retail"], env: {}, repositoryRoot: lab.root, coreRoot: lab.root, slotsDirectory: lab.slots }), null);
   } finally {
@@ -62,7 +60,6 @@ test("with no budget set a live run is refused and nothing is written", async ()
 test("a run that ends on an empty balance is ledgered with its cost and stops every later live run", async () => {
   const lab = await fixture();
   try {
-    await lab.budget(2);
     const admission = await lab.admit();
     assert.deepEqual(admission.refusals, []);
     assert.equal(admission.launch.runsDirectory, lab.runs);
@@ -94,7 +91,6 @@ test("a run that ends on an empty balance is ledgered with its cost and stops ev
 test("after the stop is cleared, a debug is written and the source changes, the next run is admitted", async () => {
   const lab = await fixture();
   try {
-    await lab.budget(2);
     const admission = await lab.admit();
     const start = await recordLiveRunStart(admission, { now: lab.now(), pid: 4242 });
     lab.advance(10_000);
@@ -122,34 +118,9 @@ test("after the stop is cleared, a debug is written and the source changes, the 
   }
 });
 
-test("the budget refuses once the day's ledgered spend reaches it", async () => {
-  const lab = await fixture();
-  try {
-    await lab.budget(0.1);
-    for (const [index, cost] of [0.04, 0.06].entries()) {
-      lab.setDigest(`sha256:${index}`);
-      const admission = await lab.admit();
-      assert.deepEqual(admission.refusals, [], `run ${index}`);
-      const start = await recordLiveRunStart(admission, { now: lab.now(), pid: 4242 });
-      const runId = runIdAt(lab.now() + 1000, `0000000${index}`);
-      await lab.writeRun(runId, { startedAt: new Date(lab.now() + 1000).toISOString(), cost, verdict: "passed" });
-      lab.advance(2 * MINUTE);
-      await recordLiveRunFinish(admission, start, { exitCode: 0, now: lab.now() });
-      await writeFile(path.join(lab.root, DEBUG_DIRECTORY, `${runId}.md`), "# debug\n", "utf8");
-      lab.advance(20 * MINUTE);
-    }
-    const refused = await lab.admit();
-    assert.deepEqual(refused.refusals.map((refusal) => refusal.rule), ["budget"]);
-    assert.match(refused.refusals[0].why, /\$0\.1000 over 2 run\(s\), has reached the \$0\.1 budget/u);
-  } finally {
-    await lab.cleanup();
-  }
-});
-
 test("a launch whose launcher died is reconciled from its run directory before the next admission", async () => {
   const lab = await fixture();
   try {
-    await lab.budget(2);
     const admission = await lab.admit();
     await recordLiveRunStart(admission, { now: lab.now(), pid: 999_999 });
     const runId = runIdAt(lab.now() + 1000, "00000001");
@@ -174,7 +145,6 @@ test("a launch whose launcher died is reconciled from its run directory before t
 test("a fourth start in 30 minutes on one instance is refused as a loop", async () => {
   const lab = await fixture();
   try {
-    await lab.budget(2);
     for (let index = 0; index < 3; index += 1) {
       await appendLedgerEntry(path.join(lab.slots, "spend-ledger.jsonl"), { event: "start", launchId: `launch-${index}`, at: new Date(lab.now() - (index + 1) * MINUTE).toISOString(), pid: 7, instance: "slot-1", scenarioId: "bigbox-retail", task: "t", fingerprint: "f", repositoryRoot: lab.root, runsDirectory: lab.runs, overridden: [] });
     }
@@ -188,7 +158,6 @@ test("a fourth start in 30 minutes on one instance is refused as a loop", async 
 test("a ledger that cannot be read fails the admission instead of admitting", async () => {
   const lab = await fixture();
   try {
-    await lab.budget(2);
     await writeFile(path.join(lab.slots, "spend-ledger.jsonl"), "not json\n", "utf8");
     await assert.rejects(lab.admit(), /not JSON/u);
     assert.equal(existsSync(path.join(lab.slots, "STOP-balance")), false);

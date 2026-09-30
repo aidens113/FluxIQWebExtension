@@ -16,8 +16,8 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 **Stopped, 2026-09-30 ~10:40 PDT. Read this first.** No live run is running, and none may start yet. The user's DeepSeek balance
 is exhausted. Every launcher and loop script in the old session's scratchpad was killed and renamed `*.disabled`. The previous
 session's lane agents are gone (Claude session limit), so a new session re-dispatches leads from the reports named below.
-Live runs resume only when all three hold: (1) the Lab spend guards below are merged; (2) the user has set
-`C:/Users/osrs_/FluxStuff/lab-slots/spend-budget.json`; (3) the user has topped up DeepSeek.
+Live runs resume once the user has topped up DeepSeek. The Lab waste guards below are merged. The user does not want a hard spend
+budget; the concern is only agents leaving loops that waste credits unattended.
 
 **What went wrong overnight (own it; do not repeat it).** 112 live runs spent **$9.46** between 21:53 and 05:18.
 **$4.25 of it (47 runs) came after the agents died at ~04:00**, from relaunch loops the lanes had built to "keep the slot busy",
@@ -28,8 +28,8 @@ furious: never an automatic loop that runs without an agent; "not idle" never me
 **Binding rules (user, all in force).**
 - Four live Lab slots, `lab-slots/slot-1..4`, one per live lane, no queueing between them; `ui-1` is for provider-free UI runs.
   Headed browsers only, and only the ten realistic scenarios.
-- A live run is started only by a live agent, for a reason (a fix to test). No keepers, relaunch loops or cron. It is capped by
-  the budget, and everything stops at the first balance failure.
+- A live run is started only by a live agent, for a reason (a fix to test). No keepers, relaunch loops or cron. No hard spend
+  budget (the user's choice), but everything stops at the first balance failure, and spend is reported from the ledger.
 - A pass means a working Flow that did the task. A permission stop with `flowCreated=false` is not a pass.
 - A live-run failure is a product or Lab defect, never "machine load"; trace the step and its regression.
 - Every debug reviews the UI from screenshots (the Full Debug Protocol below).
@@ -67,17 +67,15 @@ furious: never an automatic loop that runs without an agent; "not idle" never me
 - Per-run costs are in each run's `snapshots/live-llm.json` under `observed.totalEstimatedCostUsd`.
 
 **Finished at handoff: both guard workers are committed on dev (`5363e39b` guards, `f2f80024` honest pass).**
-1. **Lab live guards: done and committed** (supervisor re-ran live-guards 29/29; audit passed). Every live run is refused before any
-   model call when:
-   - there is no budget file `lab-slots/spend-budget.json` (`{ "maxUsd": n, "window": "day" }`), or the ledger total
-     (`lab-slots/spend-ledger.jsonl`) has reached it;
+1. **Lab live-run waste guards: done and committed** (the budget rule was removed at the user's request; supervisor re-ran
+   live-guards 24/24). Every live run is refused before any model call when:
    - `lab-slots/STOP-balance` exists (written on an insufficient-balance failure; no override);
    - the previous run failed and the source fingerprint is unchanged;
    - the previous run has no debug file;
    - one instance started more than 3 runs in 30 minutes (the 4th is refused).
-   Overrides are user-created `lab-slots/OVERRIDE-<rule>` files only. No budget file exists yet, so every live run is refused until
-   the user makes one. The debug rule applies across tasks, so a multi-task campaign stops after its first task until that
-   debug exists. A real admitted run's ledger lines are not yet proven.
+   `lab-slots/spend-ledger.jsonl` records each run's cost for reporting only, and no rule limits spend. Overrides are
+   user-created `lab-slots/OVERRIDE-<rule>` files only. The debug rule applies across tasks, so a multi-task campaign stops after
+   its first task until that debug exists. A real admitted run's ledger lines are not yet proven.
 2. **Honest pass verdict: done and committed, `f2f80024`** (supervisor re-ran built-flow and permission-stop, 8/8). A permission
    stop is now `stopped_for_permission`, never a pass or part of a streak. Still to do, in `scripts/lab`, after the guards worker:
    `live-campaign/row/summarize-task.mjs` reads the verdict from `result.permissionStop` or the `stopped-for-permission`
@@ -123,7 +121,7 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` unle
 - The Click node's description keeps no site-specific "click again" advice (reverted).
 
 **Waiting on the user.**
-- Set a budget and top up DeepSeek.
+- Top up DeepSeek.
 - Review t198's security change (an extension chat request uses the person's unlocked session key, only through Core's commands).
 - Decide whether to delete `fxwork/t187-bench` and `fxwork/t192-bench` (throwaway benchmark clones).
 - The robot-check decision stands unless the user overrides it.
@@ -132,7 +130,7 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` unle
 1. Finish the honest-pass follow-ups in `scripts/lab` (listed under item 2 above), with tests.
 2. Triage each lane's uncommitted work above.
 3. Integration round 3: C, t191, t192, t196, t197, t198.
-4. Once a budget is set: re-dispatch the four live leads, with briefs from `reports/supervisor-2026-09-29-lead-briefs.md`,
+4. Once DeepSeek is topped up: re-dispatch the four live leads, with briefs from `reports/supervisor-2026-09-29-lead-briefs.md`,
    the new guard rules and their fix logs. Keep them supervised.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).

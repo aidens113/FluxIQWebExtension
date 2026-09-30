@@ -2519,7 +2519,7 @@ Runtime target adaptations remain opaque in Core. When Core applies an `edit_act
 The certification run removes the recorded target on the loopback Scenario Lab, requires that deterministic action failure to precede exactly one `diagnosis` intervention, and validates the trusted Core budget ledger reports exactly one provider call. It rejects any patch/suggestion/proposal kind, adaptation or change-proposal ID, unexpected provider/model/prompt version, invalid or excessive usage, or nonterminal outcome. It then restores the fixture and runs the same Flow through the real UI in No LLM mode; that replay must succeed with zero interventions and zero Core-accounted provider calls. The fixed retained schema contains only run IDs/statuses, bounded invocation provenance/usage, evaluation, call counts, and aggregate leak-attestation totals. It excludes prompt/response bodies, key references, passwords, PINs, action messages, and raw metadata.
 Post-run provider-secret attestation is a separate bounded gate. A caller supplies one in-memory literal and exact approved relative paths beneath a canonical workspace. The scanner never follows reparse points or path escapes, reads SQLite databases with their `-wal`, `-shm` and `-journal` files byte for byte and cell by cell, skips only other known binary formats, limits files and bytes, and fails closed when approved text or a store is unreadable or oversized. Reports contain counts, categories, and sanitized relative paths only; they never include matching content or the literal. Live-lane composition must explicitly select run evidence, logs, manifests, workspace metadata, and cache metadata after UI provisioning and every provider-backed test.
 
-### Live-run spend guards
+### Live-run waste guards
 
 `scripts/lab/run-lab.mjs` asks `scripts/lab/live-guards/` whether a live run
 may start before it does anything else: before Core is waited on, before the
@@ -2528,6 +2528,7 @@ build and before any provider call, so a refusal costs nothing. Every
 call. On 2026-09-30 launcher loops with no agent watching spent $4.25 on 47 runs
 that fixed nothing and then fired about 1,050 more against an empty balance;
 these rules exist because notes asking agents not to do that did not stop it.
+They stop unattended loops that waste credits; they set no spending limit.
 
 The state is one machine-wide directory, `~/FluxStuff/lab-slots/`, shared by
 every checkout and worktree. Its location is fixed; no flag or environment
@@ -2535,7 +2536,6 @@ variable moves it.
 
 | Rule | Refuses when | Satisfied by |
 | --- | --- | --- |
-| `budget` | `spend-budget.json` (`{ "maxUsd": number, "window": "day" }`) is absent or invalid, or today's (local day) recorded spend has reached `maxUsd` | The user writing or raising the budget; `OVERRIDE-budget` lifts a spent budget but never a missing one |
 | `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
 | `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
 | `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
@@ -2554,8 +2554,8 @@ before the runner is spawned, with the instance, the task
 (`<scenario>/<instruction task or llm task>[/workflow=..][/variant=..]`), the
 pid and the source fingerprint; a `finish` line is written for each run the
 launch produced, with its runId, verdict and `snapshots/live-llm.json`
-`observed.totalEstimatedCostUsd`. The budget sums finishes; the loop rule
-counts starts, so a crashed run still counts. A start whose launcher died, or
+`observed.totalEstimatedCostUsd`, so the ledger records spend for reporting;
+no rule limits it. The loop rule counts starts, so a crashed run still counts. A start whose launcher died, or
 that is older than six hours, is closed from its run directory
 (`"reconciled": true`) before the next admission. When a finished run's
 `provider-failures.local.json` shows an empty balance or exhausted quota
@@ -2567,5 +2567,4 @@ The fingerprint is a SHA-256 over every file `git ls-files --cached --others
 --exclude-standard` lists in this repository and in the FluxIQ Core beside it,
 read from the working tree, leaving out `docs/`, Markdown, and build and run
 output. Writing a debug does not change it; editing source in either
-repository does. The budget is checked against spend already recorded, so the
-run that crosses it can overshoot by up to its own cost ceiling.
+repository does.

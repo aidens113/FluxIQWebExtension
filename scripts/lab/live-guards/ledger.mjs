@@ -4,7 +4,8 @@
 // spawned, with the pid, the task and the source fingerprint; `finish` is
 // written once per run the launch produced, with its runId, verdict and
 // `observed.totalEstimatedCostUsd`. The loop rule counts starts, so a run that
-// crashes still counts; the budget sums finishes. A start whose process is gone
+// crashes still counts; finishes carry each run's cost, so spend stays
+// visible for reporting (`windowSpend`) without limiting any run. A start whose process is gone
 // and has no finish is closed by `reconcileLedger` before the next admission.
 //
 // An unreadable line fails the read: the guards fail closed rather than

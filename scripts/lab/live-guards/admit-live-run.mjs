@@ -17,7 +17,6 @@ import { describeLiveLaunch } from "./live-launch.mjs";
 import { reconcileLedger } from "./reconcile-ledger.mjs";
 import { RULE_NAMES } from "./rules/index.mjs";
 import { sourceFingerprint } from "./source-fingerprint.mjs";
-import { readSpendBudget } from "./spend-budget.mjs";
 
 /** Where a run's debug file lives, relative to the tree the run is launched from. */
 export const DEBUG_DIRECTORY = path.join("docs", "working", "language-driven-flow-loop-plan", "debugs");
@@ -42,13 +41,13 @@ export async function admitLiveRun(options) {
   const files = guardFiles(slotsDirectory);
 
   await reconcileLedger(files, { now, isAlive });
-  const [entries, budget, stopBalance, tree] = await Promise.all([
-    readLedger(files.ledger), readSpendBudget(files.budget), readStop(files.stopBalance), fingerprint([repositoryRoot, coreRoot]),
+  const [entries, stopBalance, tree] = await Promise.all([
+    readLedger(files.ledger), readStop(files.stopBalance), fingerprint([repositoryRoot, coreRoot]),
   ]);
   const debugPath = (runId) => path.join(repositoryRoot, DEBUG_DIRECTORY, `${runId}.md`);
   const overrides = new Set(RULE_NAMES.filter((rule) => existsSync(files.override(rule))));
   const { refusals, overridden } = evaluateLiveGuards({
-    now, launch: described, budget, stopBalance, entries, fingerprint: tree.digest,
+    now, launch: described, stopBalance, entries, fingerprint: tree.digest,
     hasDebug: (runId) => existsSync(debugPath(runId)), debugPath, files,
   }, overrides);
 

@@ -36,14 +36,14 @@ const READ_ONLY_COMMANDS = new Set(["inspect", "compare", "auth", "clone-cache"]
 const loadsCore = !READ_ONLY_COMMANDS.has(args[0] ?? "");
 const timer = createStepTimer(note);
 
-// The live-run spend guards, asked before anything else a live run does: no
-// budget, an empty provider balance, a relaunch loop, an undebugged previous
+// The live-run waste guards, asked before anything else a live run does: an
+// empty provider balance, a relaunch loop, an undebugged previous
 // run, or a rerun of a failed task on unchanged source is refused here, before
 // Core is waited on, before the build and before any provider call. On
 // 2026-09-30 launcher loops with no agent watching spent $4.25 on 47 runs that
 // fixed nothing and fired about 1,050 more against an empty balance; a rule in
 // a note did not stop them. There is no flag past a refusal, only a file the
-// user creates (docs/architecture/testing-facility.md, "Live-run spend guards").
+// user creates (docs/architecture/testing-facility.md, "Live-run waste guards").
 const liveAdmission = await admitLiveRunOrExit();
 
 /** The Core scan this run started from; `null` when the run does not load Core. */
