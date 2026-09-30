@@ -383,6 +383,16 @@ and where is the evidence.** A stage whose evidence does not exist is a Phase 0
 finding — record it as a gap and fix the instrumentation, because an
 unanswerable stage means the next run cannot be debugged either.
 
+**Every debug also reviews the UI (user, 2026-09-29, binding).** Screenshot the
+page and the extension at the start, mid-build, while the Flow runs, at the end,
+and at any failure. Look at the screenshots and judge them: the extension chat
+must look and behave like ChatGPT's chat area (a clean message stream, clear
+user and assistant turns, a composer at the bottom); the on-page status overlay
+must be visible on the site whenever FluxIQ is working, side panel open or not;
+status text must be stable, never flickering, and polished. A UI defect is
+recorded with its screenshot and fixed in the same loop as a functional one. A
+run that works behind a bad UI has not passed.
+
 **Stage 1 — the instruction.** What was the person's instruction, exactly? What
 would a correct Flow have to do to satisfy it? Write that chain down *before*
 looking at what the run did, so the expected chain is not reverse-engineered
