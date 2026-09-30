@@ -160,3 +160,47 @@ Core `npx tsc --noEmit -p tsconfig.json` after the accounting/catalog test edits
 **Not verified:** the fix on the merged build with t185, which changes `background/connection.ts`. So the ten-start probe is re-run after the merge. Core's gateway integration doc and the package README do not yet mention `openTimeoutMs` or `FluxIQClientGatewayOpenError`.
 
 **Known and owned elsewhere:** the 3-call grant reservation in `loop-limits/flow-bootstrap-evidence-loop.ts` and its 4 failing `deepseek-bootstrap-exploration` tests, resolved by t186's grant removal. Core's structure audit counts `service.ts` at 4,536 against 4,535 after the t188 merge.
+
+## Merge of dev with t185, t186, t188, t189 and t190 (both trees), resolved
+
+Core, where dev's grant removal wins:
+- **Grant files deleted:**
+  - `llm/execution/{grants.ts, index.ts, tests/grant-call-refusal.test.ts}`
+  - `llm/grant-refusal/{call-refusal.ts, index.ts, refusal.ts}`
+  - `generation-failure/tests/grant-refused-call.test.ts`
+- **Taken whole from dev:**
+  - `llm/resolver-contract.ts`
+  - `loop-limits/flow-bootstrap-evidence-loop.ts` and its test (the 3-call reservation is gone)
+  - `llm/evidence-loop/tests/stall-guard.test.ts`
+  - `generation-failure/{codes, failure-state, harness-failure, harness-vocabulary}.ts`, `llm/harness/run.ts` and `llm/provider-contract.ts` (the lane's grant naming, including `grantRefusalReason`)
+  - `llm/index.ts`
+  - `.structure-baseline.json` (the lane's copy had lost three of dev's entries)
+  - `adaptation-host.ts` (EOL only)
+- **Kept from the lane:**
+  - `llm/evidence-loop.ts` is t189's structure with the progress-trace hook on existing lines: 668 lines, the same as dev.
+  - `service.ts` is dev's plus the lane's two line-neutral changes, the stage after the first decision and the `error` passed to `flowBootstrapPhaseFailure`. It is 4,480 lines, under the baseline.
+  - `accounting.test.ts` is dev's plus the `threwHere` case.
+  - `progress-trace.test.ts` sample codes are now non-grant codes.
+- `grantRefusalReason`, `grant-refusal` and the Flow Bootstrap grant codes no longer appear anywhere under `packages/fluxiq/src` or `apps/web/src`.
+- Core structure audit: passed. It says one entry could be lowered, which is not recorded here.
+
+Downstream:
+- `run-scenario.ts`: the import is the union of t185's `openLivePanel` and the lane's start-trace names. `launchBrowser` is dev's two lines, with `startTrace.attach` on the second. The file is 705 lines against dev's 706.
+- `build-proposal.ts`: dev's grant-free payload with `permittedConsequences`, plus the lane's `longRequest: true` held to the build deadline.
+- Downstream structure audit: passed.
+
+**Validation of the merge (heavy.sh).**
+
+| Check | Result |
+| --- | --- |
+| Core `packages/fluxiq` `tsc --noEmit` | rc 0, 25 s |
+| Core `apps/web` `tsc --noEmit` | rc 0, 35 s |
+| Core vitest `runtime/llm`, `runtime/loop-limits`, `flow-bootstrap/generation-failure` | 1 failure of 1,008 at first (fix below); after the fix, that file 8/8 and `progress-trace.test.ts` 4/4 |
+| Core `client-gateway-websocket` vitest | rc 0 |
+| Downstream test-runner `build` | rc 2 at first (fix below), then rc 0 |
+| Downstream test-runner `check` | rc 0 |
+| `node --test` on build-proposal, network-guard and extension-control-page | 46/46 |
+
+Two lane tests needed fixing after the merge:
+- **`llm/tests/evidence-loop-draft-shown.test.ts`**: its first run failed because it read the first packed entry, which after t189 is the decision history (`decision_rows_v1`). It now looks for the draft's own `step_rows_v1` in the last decision's evidence.
+- **`build-proposal.test.ts`** (the lane's three long-request tests): the first build failed because they authorized with `{ grantId }`. They now use t186's `{ permittedConsequences: [] }`.
