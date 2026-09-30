@@ -22,10 +22,12 @@ export const CHAT_ACTIVITY_ROW_LIMIT = 40;
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
 
-/** One activity row, and what it expands to. */
+/** One activity row: one line of a fold's list. */
 export type ActivityRow = {
   /** Stable for the row's life, so a re-render keeps it open. */
   key: string;
+  /** The unit of work it belongs to (`ClientGatewayActivity.activityId`). */
+  activityId: string;
   kind: ActivityDetail["kind"];
   title: string;
   text: string | undefined;
@@ -34,10 +36,10 @@ export type ActivityRow = {
   phase: ClientGatewayActivity["phase"];
   /** The row's first event's time, in ms. */
   at: number;
+  /** The row's last event's time, in ms. */
+  endAt: number;
   /** The last event folded into it. */
   sequence: number;
-  /** Whether there is anything to show beyond the title. */
-  expandable: boolean;
 };
 
 /** One item of the stream. */
@@ -76,9 +78,9 @@ function activityRows(recent: ExtensionActivityState["recent"]): ActivityRow[] {
     const text = detail.text?.trim() || undefined;
     if (index !== undefined) {
       const row = rows[index]!;
-      rows[index] = rowOf(row.key, event, detail, row.at, text ?? row.text);
+      rows[index] = rowOf(row.key, event, detail, { at: row.at, endAt: Math.max(row.at, at) }, text ?? row.text);
     } else {
-      rows.push(rowOf(`activity:${event.activityId}#${event.sequence}`, event, detail, at, text));
+      rows.push(rowOf(`activity:${event.activityId}#${event.sequence}`, event, detail, { at, endAt: at }, text));
     }
     if (detail.status === "started") open.set(identity, index ?? rows.length - 1);
     else open.delete(identity);
@@ -86,18 +88,25 @@ function activityRows(recent: ExtensionActivityState["recent"]): ActivityRow[] {
   return rows;
 }
 
-function rowOf(key: string, event: ClientGatewayActivity, detail: ActivityDetail, at: number, text: string | undefined): ActivityRow {
+function rowOf(
+  key: string,
+  event: ClientGatewayActivity,
+  detail: ActivityDetail,
+  time: { at: number; endAt: number },
+  text: string | undefined
+): ActivityRow {
   const ref = detail.ref?.trim() || undefined;
   return {
     key,
+    activityId: event.activityId,
     kind: detail.kind,
     title: detail.title,
     text,
     ref,
     status: detail.status,
     phase: event.phase,
-    at,
-    sequence: event.sequence,
-    expandable: text !== undefined || ref !== undefined || detail.status !== undefined
+    at: time.at,
+    endAt: time.endAt,
+    sequence: event.sequence
   };
 }

@@ -1,6 +1,10 @@
-// The chat's status header: the phase chip, Core's status sentence, the step,
-// the live/offline dot, and the on-page status control (Full, Small, Off).
-// Renders a `ChatHeaderModel`; text goes in through `textContent` only.
+// The chat's one quiet header line: the connection dot, "FluxIQ", the paced
+// status headline, and the on-page status control (Full, Small, Off).
+//
+// Built once and updated in place: every render writes only what changed, to
+// the same nodes, so a status that moves does not remount anything, and the
+// line keeps its height (the headline is one ellipsized line), so nothing
+// below it shifts. Text goes in through `textContent` only.
 
 import type { ActivityOverlayPreference } from "../../../shared/activity/index";
 import { createElement } from "../../dom";
@@ -14,24 +18,20 @@ export type ChatHeader = {
 
 /** Creates the header; `chooseOverlay` is called when the person picks an overlay option. */
 export function createChatHeader(chooseOverlay: (overlay: ActivityOverlayPreference) => void): ChatHeader {
-  const chip = createElement("span", { className: "chat-phase" });
-  const dot = createElement("span", { className: "dot", attrs: { "aria-hidden": "true" } });
-  const liveText = createElement("span", { className: "chat-live-text" });
-  const live = createElement("span", { className: "chat-live" }, [dot, liveText]);
-  const label = createElement("p", { className: "chat-label", attrs: { "aria-live": "polite" } });
-  const step = createElement("p", { className: "chat-step", hidden: true });
+  const dot = createElement("span", { className: "chat-conn", attrs: { role: "img" } });
+  const status = createElement("span", { className: "chat-status", attrs: { "aria-live": "polite" } });
   const buttons = new Map<ActivityOverlayPreference, HTMLButtonElement>();
-  const control = createElement("div", { className: "chat-overlay", attrs: { role: "group", "aria-label": "Status on the page" } }, [
-    createElement("span", { className: "chat-overlay-title", text: "On page" })
+  const control = createElement("div", { className: "chat-overlay", attrs: { role: "group", "aria-label": "Status on the page", title: "Status on the page" } }, [
+    createElement("span", { className: "chat-overlay-title", text: "Page", attrs: { "aria-hidden": "true" } })
   ]);
-  const overlayNotice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
-  const element = createElement("header", { className: "chat-header" }, [
-    createElement("div", { className: "chat-header-row" }, [chip, live]),
-    label,
-    step,
-    control,
-    overlayNotice
+  const overlayNotice = createElement("p", { className: "notice chat-header-notice", hidden: true, attrs: { role: "status" } });
+  const line = createElement("div", { className: "chat-header-line" }, [
+    dot,
+    createElement("span", { className: "chat-name", text: "FluxIQ" }),
+    status,
+    control
   ]);
+  const element = createElement("header", { className: "chat-header" }, [line, overlayNotice]);
 
   function button(value: ActivityOverlayPreference, text: string): HTMLButtonElement {
     const existing = buttons.get(value);
@@ -46,23 +46,28 @@ export function createChatHeader(chooseOverlay: (overlay: ActivityOverlayPrefere
   return {
     element,
     render(model) {
-      chip.textContent = model.phaseLabel;
-      chip.dataset.tone = model.tone;
-      chip.dataset.phase = model.phase;
-      dot.className = model.live ? "dot dot-green" : "dot";
-      liveText.textContent = model.live ? "Live" : "Offline";
-      live.title = model.liveLabel;
-      live.setAttribute("aria-label", model.liveLabel);
-      label.textContent = model.label;
-      step.textContent = model.step ?? "";
-      step.hidden = model.step === undefined;
+      setAttr(dot, "data-live", model.live ? "true" : "false");
+      setAttr(dot, "aria-label", model.liveLabel);
+      setAttr(dot, "title", model.liveLabel);
+      setText(status, model.status);
+      setAttr(status, "data-tone", model.tone);
+      setAttr(status, "data-working", model.working ? "true" : "false");
+      setAttr(status, "title", model.status);
       for (const option of model.overlay.options) {
         const made = button(option.value, option.label);
-        made.disabled = model.overlay.disabled;
-        made.setAttribute("aria-pressed", option.selected ? "true" : "false");
+        if (made.disabled !== model.overlay.disabled) made.disabled = model.overlay.disabled;
+        setAttr(made, "aria-pressed", option.selected ? "true" : "false");
       }
-      overlayNotice.textContent = model.overlay.error ?? "";
-      overlayNotice.hidden = model.overlay.error === undefined;
+      setText(overlayNotice, model.overlay.error ?? "");
+      if (overlayNotice.hidden !== (model.overlay.error === undefined)) overlayNotice.hidden = model.overlay.error === undefined;
     }
   };
+}
+
+function setText(node: HTMLElement, text: string): void {
+  if (node.textContent !== text) node.textContent = text;
+}
+
+function setAttr(node: HTMLElement, name: string, value: string): void {
+  if (node.getAttribute(name) !== value) node.setAttribute(name, value);
 }

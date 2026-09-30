@@ -1,9 +1,11 @@
-// The chat header's rules: the phase chip and its colour, "Step N of M"
-// (1-based, just "Step N" past the count), the live/offline dot with its
-// reason, and when the on-page overlay control is usable.
+// The chat header's rules: the status is the paced display's headline in its
+// colour, "Step N of M" (1-based, just "Step N" past the count), the
+// live/offline dot with its reason, and when the on-page overlay control is
+// usable.
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ActivityDisplay } from "../../../../shared/activity/index";
 import type { ActivityFeedSnapshot } from "../../feed";
 import { activityEvent, relayState } from "../../tests/activity-fixture";
 import { chatHeaderModel } from "../header-model";
@@ -13,33 +15,30 @@ function snapshot(fields: Partial<ActivityFeedSnapshot> = {}): ActivityFeedSnaps
   return { reach: "ready", state: relayState([]), overlaySaving: false, ...fields };
 }
 
-test("an empty relay state (a worker restart) reads as idle, cleanly", () => {
-  const model = chatHeaderModel(snapshot({ state: { current: null, recent: [], overlay: "expanded", live: true } }), true);
-  assert.equal(model.phase, "idle");
-  assert.equal(model.phaseLabel, "Idle");
+test("an empty relay state (a worker restart) says nothing, cleanly", () => {
+  const model = chatHeaderModel(snapshot({ state: { current: null, display: null, recent: [], overlay: "expanded", live: true } }), true);
+  assert.equal(model.status, "");
   assert.equal(model.tone, "neutral");
-  assert.equal(model.label, "Nothing running right now.");
-  assert.equal(model.step, undefined);
+  assert.equal(model.working, false);
   assert.equal(model.live, true);
 });
 
-test("the current event names the phase, its colour, Core's sentence and the step", () => {
-  const current = activityEvent(4, { phase: "running", label: "Running step 2 of 5", step: { index: 2, count: 5, label: "Open results" } });
-  const model = chatHeaderModel(snapshot({ state: relayState([current]) }), true);
-  assert.deepEqual([model.phase, model.phaseLabel, model.tone], ["running", "Running", "accent"]);
-  assert.equal(model.label, "Running step 2 of 5");
-  assert.equal(model.step, "Step 2 of 5: Open results");
+test("the paced display names the status and its colour: accent while working, then the outcome's", () => {
+  const display = (fields: Partial<ActivityDisplay>): ActivityDisplay => ({
+    activityId: "build:1", subjectKind: "build", phase: "building", headline: "Building your Flow", detail: null,
+    step: null, working: true, outcome: null, sequence: 1, ...fields
+  });
+  const model = chatHeaderModel(snapshot({ state: relayState([], { display: display({}) }) }), true);
+  assert.deepEqual([model.status, model.tone, model.working], ["Building your Flow", "accent", true]);
+  assert.equal(chatHeaderModel(snapshot({ state: relayState([], { display: display({ phase: "repairing" }) }) }), true).tone, "warning");
+  assert.equal(chatHeaderModel(snapshot({ state: relayState([], { display: display({ phase: "toString" as never }) }) }), true).tone, "accent", "a phase this build does not know");
   assert.deepEqual(
-    (["repairing", "waiting_permission", "done", "failed"] as const).map((phase) => chatHeaderModel(snapshot({ state: relayState([activityEvent(1, { phase })]) }), true).tone),
-    ["warning", "warning", "success", "danger"]
+    (["done", "failed", "waiting"] as const).map((outcome) => chatHeaderModel(snapshot({ state: relayState([], { display: display({ working: false, outcome }) }) }), true).tone),
+    ["success", "danger", "warning"]
   );
-});
-
-test("a phase this build does not know reads as idle rather than breaking", () => {
-  const odd = activityEvent(1, { phase: "toString" as never, label: "" });
-  const model = chatHeaderModel(snapshot({ state: relayState([odd]) }), true);
-  assert.equal(model.phase, "idle");
-  assert.equal(model.label, "Idle");
+  // A background from before the display existed sends none: the header says nothing rather than breaking.
+  const older = { ...relayState([activityEvent(1)]), display: undefined } as unknown as ActivityFeedSnapshot["state"];
+  assert.equal(chatHeaderModel(snapshot({ state: older }), true).status, "");
 });
 
 test("Step N of M is 1-based, and just Step N past the count or without one", () => {

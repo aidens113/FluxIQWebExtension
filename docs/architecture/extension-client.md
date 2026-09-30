@@ -236,18 +236,62 @@ relay:
 - keeps `current` and the last `ACTIVITY_RECENT_LIMIT` (60) events in memory
   only, so a worker restart forgets them. The conversation thread stays the
   durable record;
+- folds the events into one paced **display** (`ActivityPacer`, below), which
+  is what the overlay and the chat header draw;
 - broadcasts `{ type: "fluxiq.activity.changed", state }` to the extension's
-  pages on every kept event and every overlay change;
-- sends `{ type: "fluxiq.activity.overlay", activity, overlay, topFrameOnly:
-  true }` to the top frame of the tab the automation drives, through
-  `ensureContentScript` then `sendToTab`. Sends go one at a time, and events
-  that arrive during a send collapse into one send of the latest state. Nothing
-  is sent to a page the extension cannot automate;
-- re-sends the current state when that tab's top frame reports `contentReady`,
-  because a navigation replaced the document the overlay was drawn in.
+  pages when the event list, the display or the overlay preference changed;
+- sends `{ type: "fluxiq.activity.overlay", activity, display, overlay,
+  topFrameOnly: true }` to the top frame of the automation's tab
+  (`OverlayTarget`, below) through `ensureContentScript` then `sendToTab`, when
+  the display or the preference changed. Sends go one at a time, and changes
+  that arrive during a send collapse into one send of the latest state. When
+  the target moves to another tab, the tab it left is sent `display: null`, so
+  no stale status stays up there;
+- re-sends the current display when that tab's top frame reports
+  `contentReady`, because a navigation replaced the document the overlay was
+  drawn in.
 
-Every delivery is best-effort: a closed panel, a page that refuses the content
-script, or a tab that closed mid-send is absorbed.
+Each audience has its own rate gate (`FanOutGate`): at most one send per
+250 ms, the first change after a quiet interval at once and the last change of
+a burst at the interval's end. The panels' traffic therefore never delays the
+page. Every delivery is best-effort and the two are independent: a closed panel
+(the broadcast rejects), a panel send that never settles, a page that refuses
+the content script, or a tab that closed mid-send is absorbed and holds nothing
+else back.
+
+**The paced display** (`ActivityDisplay`, `shared/activity/activity-display.ts`)
+exists because Core reports every seam of a build -- ask the model, run a tool,
+read its result, ask again -- often inside one second. Drawn as they came, the
+t185 overlay's heading changed 103 times and its sentence 188 times over t174's
+200-second crossborder-marketplace build, up to 4 times in one second. The
+pacer keeps what Core says and changes how often it is said:
+
+- `headline` names the unit of work and changes only when the work or its
+  outcome does: "Building your Flow" or "Running your Flow" while it works,
+  then "Flow ready", "Build failed", "Run finished", "Run failed" or "Waiting
+  for you". Those changes show at once;
+- `detail` is Core's latest sentence, changed at most once per 1,200 ms. The
+  first change after a quiet interval shows at once; later ones wait for the
+  interval's end, where only the newest shows, so no stale sentence is left up;
+- `phase` and `step` belong to the event the detail came from, so they change
+  no faster than it does. A run's step is kept between its step events and
+  cleared when it settles;
+- a `final`, `failed` or `waiting_permission` event, a new unit of work, and
+  work resuming after a wait skip the interval.
+
+Replayed at its real timing, the same t174 build gives 2 headline changes and
+128 detail changes, never two working sentences less than 1.2 s apart
+(`background/activity/tests/activity-replay.test.ts`, whose fixture holds the
+run's 259 trace lines).
+
+**Which tab** (`OverlayTarget`): the first ordinary web page (`http:`, `https:`
+or `file:`) not on one of FluxIQ's own origins -- `coreApiUrl`, the gateway's
+host -- among, in order, the tab the last runtime command ran in (remembered
+after the runtime status moves on), the tab the extension holds as active, and
+the active tab of each window, the focused window's first. The t185 relay used
+only the extension's active tab, which depends on which of an extension page,
+FluxIQ's web panel and the scenario page was activated last; the driven tab
+comes first now and FluxIQ's own pages are refused outright.
 
 The overlay preference (`expanded` by default, `collapsed` or `hidden`) is
 kept in `chrome.storage.local` under `fluxiq.activity.overlay`. The panel reads
@@ -257,17 +301,29 @@ state }`, and both are accepted only from the side panel or the popup
 (`background/panel/panel-control.ts`), so the page under test cannot change
 what is drawn on it. An unknown preference is refused as `invalid_request`.
 
-**The on-page overlay** (`content/activity-overlay/`) draws the latest event
-in the top frame of that tab: a `<fluxiq-activity-overlay>` host on
-`document.documentElement`, fixed bottom-right, with a closed shadow root
-styled through the CSSOM and no `innerHTML`. `expanded` shows the phase, Core's
-sentence, "Step N of M" (just "Step N" when N passes M) and the latest detail
-title; `collapsed` is a pill; `hidden` removes the host. The overlay never
-takes input: every element is `pointer-events: none`, `inert` and
+**The on-page overlay** (`content/activity-overlay/`) draws the paced display
+in the top frame of that tab, never the raw event: a `<fluxiq-activity-overlay>`
+host on `document.documentElement`, fixed bottom-left, with a closed shadow
+root styled through the CSSOM and no `innerHTML`. `expanded` is a 300 by 54
+pixel pill: a mark, the headline, "Step N of M" (just "Step N" when N passes M)
+while a run works, and the detail as one muted line. `collapsed` is a 196 by 32
+pixel pill with the mark and the headline; `hidden` removes the host. The mark
+and its colour follow the unit of work (amber for a build, blue for a run) and
+its outcome (a check, a cross, or an attention mark), not Core's phase of the
+moment. It is built once and updated in place: the same host and nodes, only
+their text and attributes changing, a fixed box per mode so nothing shifts, and
+a 220 ms fade-in when the detail changes. Bottom-left because
+bottom-right is where nobody saw it: the Lab emulates a 1280-pixel viewport and
+the side panel covers its right 400 pixels without narrowing the page, so the
+t185 overlay was drawn, in the right tab, under the panel (t191 probe). That
+corner is also where pages put chat launchers, "back to top", cart bars and
+cookie-banner buttons. The overlay
+never takes input: every element is `pointer-events: none`, `inert` and
 `aria-hidden`, so hit-testing and the automation's own clicks reach the page.
 Its `data-fluxiq-activity` marker keeps it out of the recorder, DOM snapshots,
-evidence blockers and the interference checks. A `final` event fades after
-6 s; that fade is the only timer and it changes nothing but the display.
+evidence blockers and the interference checks (`isExtensionUiNode`). A display
+that settled as done or failed fades after 6 s; waiting for the person does
+not fade. That fade is the only timer and it changes nothing but the display.
 
 **The panel's chat** (`panel/chat/`) replaces Simple Mode's conversation card.
 Its header shows the current phase, Core's sentence, the step, a live/offline

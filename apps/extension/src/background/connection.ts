@@ -37,7 +37,8 @@ import type {
 import type { ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
-import { ActivityRelay, overlayPreferenceStorage } from "./activity/index";
+import { DEFAULT_CORE_API_URL } from "../shared/constants";
+import { ActivityRelay, OverlayTarget, overlayPreferenceStorage } from "./activity/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, removeQueuedRecordingEvent, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are
@@ -260,15 +261,29 @@ export class FluxIQConnection {
       stopRecording: (notifyServer) => this.stopRecording(notifyServer),
       disconnect: () => this.disconnect()
     });
+    // The page the automation drives, never an extension page or FluxIQ's
+    // own web panel (`activity/overlay-target.ts` says why the active tab
+    // alone named the wrong one).
+    const overlayTarget = new OverlayTarget({
+      drivenTabId: () => this.runtimeStatus.current().tabId,
+      activeTabId: () => this.page.tabId(),
+      activeTabs: async () => {
+        const [focused, all] = await Promise.all([
+          chrome.tabs.query({ active: true, lastFocusedWindow: true }),
+          chrome.tabs.query({ active: true })
+        ]);
+        return [...focused, ...all].map((tab) => ({ id: tab.id, url: tab.url }));
+      },
+      tabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
+      ownOrigins: () => [this.settings.coreApiUrl || DEFAULT_CORE_API_URL, this.settings.gatewayUrl]
+    });
     this.activity = new ActivityRelay({
       readOverlay: () => overlayPreferenceStorage.read(),
       writeOverlay: (overlay) => overlayPreferenceStorage.write(overlay),
       broadcast: async (message) => {
         await chrome.runtime.sendMessage(message);
       },
-      // An unsupported page (a browser page, the store) cannot take a content
-      // script, so the relay does not try.
-      automationTabId: () => (this.page.unsupported() ? undefined : this.page.tabId()),
+      automationTabId: () => overlayTarget.resolve(),
       deliverToTab: async (tabId, message) => {
         await ensureContentScript(tabId);
         await sendToTab(tabId, message, 0);

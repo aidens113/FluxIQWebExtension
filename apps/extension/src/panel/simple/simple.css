@@ -1,12 +1,62 @@
 /* The simple view (panel/simple). Colours come from panel/theme/tokens.css;
    the shared primitives (.card, .card-title, .card-line, .card-actions,
    .notice, .dot, .primary-button, .small-button) from panel/shell/shell.css.
-   The cards are compact so the primary ones fit the Firefox popup's 600px
-   height; the chat's stream scrolls inside its own card, and the
-   recent-automations list below them scrolls with the page. */
 
-.simple-view { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
+   Layout: the chat is the dominant surface. The view fills the panel's height
+   (the side panel's viewport, or the Firefox popup's 600px); the strip of
+   cards above the chat is capped to part of it and scrolls on its own, and the
+   chat (panel/chat/chat.css) takes the rest, with its own scrolling stream
+   and the composer pinned at the bottom. */
+
+html[data-surface="sidepanel"] .shell:has(> .app-main > .simple-view:not([hidden])) { height: 100vh; min-height: 0; }
+.app-main:has(> .simple-view:not([hidden])) { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+html[data-surface="popup"] .simple-view { height: 544px; }
+
+.simple-view { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.simple-view > .chat-panel { flex: 1 1 0; }
+.simple-top {
+  display: grid;
+  flex: 0 1 auto;
+  align-content: start;
+  gap: var(--space-2);
+  max-height: 42%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-bottom: 1px solid var(--divider);
+  padding: var(--space-2) var(--space-3);
+}
 .simple-view .card { gap: 6px; padding: 10px var(--space-3); }
+
+/* The tray: the start and automations cards folded into one line. */
+.simple-tray { border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); }
+.simple-tray-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 7px var(--space-3);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+  user-select: none;
+}
+.simple-tray-summary::-webkit-details-marker { display: none; }
+.simple-tray-summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin: 0 2px 3px 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.simple-tray[open] > .simple-tray-summary::after { margin-bottom: -2px; transform: rotate(-135deg); }
+.simple-tray-summary:hover { color: var(--text); }
+.simple-tray-summary:focus-visible { border-radius: var(--radius); outline: 2px solid var(--focus); outline-offset: -2px; }
+.simple-tray-body { display: grid; }
+.simple-tray-body > .card { border: 0; border-top: 1px solid var(--divider); border-radius: 0; background: transparent; }
 
 .link-button {
   justify-self: start;
@@ -49,27 +99,8 @@
 .simple-now > .small-button { justify-self: end; }
 .simple-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 
-/* 3. The chat (panel/chat/chat.css holds its header, stream and rows); these
-   are the turn and composer parts it mounts from ./conversation. */
-.turn { display: grid; gap: 4px; font-size: 12px; line-height: 1.4; }
-.turn-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.turn[data-author="person"] strong { color: var(--accent-text); }
-.turn-note { color: var(--muted); font-size: 12px; }
-.turn-ask { display: grid; gap: 4px; }
-.turn-answer-row, .composer-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: end; }
-.turn-answer, .composer-box {
-  width: 100%;
-  min-height: 32px;
-  border: 1px solid var(--divider);
-  border-radius: 7px;
-  background: var(--surface-muted);
-  color: var(--text);
-  padding: 6px 8px;
-  font-size: 12px;
-}
-.composer { display: grid; gap: 4px; }
-.composer-box { resize: none; line-height: 1.4; }
-.composer-box:focus-visible, .turn-answer:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* 3. The chat lives in panel/chat/chat.css, which also styles the question
+   controls it mounts from ./conversation. */
 
 /* 4. The start card: describe it, show FluxIQ how (manual actions), extract data. */
 .simple-option { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--divider); }

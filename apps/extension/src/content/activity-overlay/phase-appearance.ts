@@ -13,7 +13,7 @@ export type ActivityPhaseMark = "pulse" | "check" | "cross" | "attention";
 
 export type ActivityPhaseAppearance = { name: string; accent: string; mark: ActivityPhaseMark };
 
-/** Every phase Core sends. A phase a newer Core adds falls back to `UNKNOWN_PHASE_APPEARANCE`. */
+/** Every phase Core sends. The overlay reads the unit's phase (building, running) while it works and the settle phase once it settles. */
 export const ACTIVITY_PHASE_APPEARANCE: Readonly<Record<ClientGatewayActivityPhase, ActivityPhaseAppearance>> = Object.freeze({
   thinking: { name: "Thinking", accent: "#b39dfb", mark: "pulse" },
   exploring: { name: "Exploring", accent: "#5cc8fa", mark: "pulse" },
@@ -27,5 +27,3 @@ export const ACTIVITY_PHASE_APPEARANCE: Readonly<Record<ClientGatewayActivityPha
   failed: { name: "Failed", accent: "#fa8a8a", mark: "cross" }
 });
 
-/** A phase this build does not know: shown plainly, in a neutral colour, still marked as under way. */
-export const UNKNOWN_PHASE_APPEARANCE: ActivityPhaseAppearance = Object.freeze({ name: "Working", accent: "#c3c8d2", mark: "pulse" });

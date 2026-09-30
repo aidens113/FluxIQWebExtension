@@ -18,7 +18,7 @@ export function activityEvent(sequence: number, fields: Partial<ClientGatewayAct
 
 /** A relay state holding `recent`, the last as `current`. */
 export function relayState(recent: ClientGatewayActivity[], fields: Partial<ExtensionActivityState> = {}): ExtensionActivityState {
-  return { current: recent[recent.length - 1] ?? null, recent, overlay: "expanded", live: true, ...fields };
+  return { current: recent[recent.length - 1] ?? null, display: null, recent, overlay: "expanded", live: true, ...fields };
 }
 
 /** The time `activityEvent(sequence)` carries, in ms. */

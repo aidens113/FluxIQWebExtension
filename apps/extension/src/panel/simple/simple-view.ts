@@ -8,12 +8,19 @@
 //   now-card.ts             what FluxIQ is doing, with Stop or Stop recording
 //   recording/steps/        the recording's newest steps, each removable (plan 3.3)
 //   recording/review/       after a recording: analyze, preview, test, save (plan 3.3)
-//   start/start-card.ts     describe it, show FluxIQ how (Start recording),
+//   tray.ts                 folds the two below into one line above the chat:
+//     start/start-card.ts   describe it, show FluxIQ how (Start recording),
 //                           extract data (the extraction sheet's entry)
-//   ../chat/                the automation chat: live status, FluxIQ Core's
-//                           conversation and activity rows, and the composer
-//   automations/card.ts     recent automations, Run, what each run did, export
+//     automations/card.ts   recent automations, Run, what each run did, export
 //                           (plan 3.1, 3.5, 3.9)
+//   ../chat/                the automation chat: live status, FluxIQ Core's
+//                           conversation and its work, and the composer
+//
+// Layout (simple.css): the chat is the dominant surface. It fills the height
+// the panel has left, with its own scrolling stream and the composer pinned at
+// the bottom; everything above it sits in one strip that is capped to part of
+// the height and scrolls on its own. "Right now" hides while nothing is
+// running, since the chat's header already says so.
 //
 // Every card renders from the one PanelStore status. A one-second tick keeps
 // the recording clock, the one-minute "Done" window and Stop's wait moving; it
@@ -27,11 +34,13 @@ import { createElement } from "../dom";
 import type { PanelView, PanelViewContext } from "../shell";
 import { createAutomationsCard } from "./automations";
 import { createNowCard } from "./now-card";
+import { nowCopy } from "./now-copy";
 import { createOpenFluxIQButton } from "./open-fluxiq-button";
 import { createRecordingReview, createRecordingSteps } from "./recording";
 import { createRunStop } from "./run-stop";
 import { createSetupCard, createStartCard } from "./start";
 import { createStatusCard } from "./status-card";
+import { createSimpleTray } from "./tray";
 import "./simple.css";
 
 const TICK_MS = 1_000;
@@ -45,23 +54,28 @@ export function mountSimpleView(context: PanelViewContext): PanelView {
   // Both show themselves: the steps while recording, the review once a recording ends.
   const recordingSteps = createRecordingSteps(context);
   const recordingReview = createRecordingReview(context);
-  const conversation = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style));
-  const startCard = createStartCard(context, () => focusComposer(conversation.element));
+  // "Describe an automation" puts the caret in the chat's composer.
+  const startCard = createStartCard(context, () => conversation.focusComposer());
+  const automations = createAutomationsCard(context);
+  const tray = createSimpleTray([startCard.element, automations.element]);
+  const conversation = createChatPanel(
+    store.request,
+    (style) => createOpenFluxIQButton(store.request, style),
+    (hasTurns) => tray.conversationChanged(hasTurns)
+  );
   // Until the first status arrives only the status card shows ("Checking the connection...").
   // The setup card hides itself once its checklist is complete, so it is not in this list.
-  const automations = createAutomationsCard(context);
-  const rest = [nowCard.element, startCard.element, conversation.element, automations.element];
+  const rest = [nowCard.element, tray.element, conversation.element];
   for (const card of rest) card.hidden = true;
-  const element = createElement("section", { className: "simple-view", attrs: { "aria-label": "Simple" } }, [
+  const top = createElement("div", { className: "simple-top" }, [
     statusCard.element,
     setupCard.element,
     nowCard.element,
     recordingSteps.element,
     recordingReview.element,
-    startCard.element,
-    conversation.element,
-    automations.element
+    tray.element
   ]);
+  const element = createElement("section", { className: "simple-view", attrs: { "aria-label": "Simple" } }, [top, conversation.element]);
   let known = false;
   let tick: ReturnType<typeof setInterval> | undefined;
 
@@ -72,12 +86,20 @@ export function mountSimpleView(context: PanelViewContext): PanelView {
     }
     statusCard.render(status);
     setupCard.render(status);
-    nowCard.render(status, Date.now());
+    renderNow(status);
     recordingSteps.render(status);
     recordingReview.render(status);
     startCard.render(status);
     conversation.render(status);
     automations.render(status);
+  }
+
+  /** "Right now", hidden while nothing is running: the chat's header says that already. */
+  function renderNow(status: ExtensionStatus): void {
+    const now = Date.now();
+    nowCard.render(status, now);
+    const idle = nowCopy(status, now).kind === "idle";
+    if (nowCard.element.hidden !== idle) nowCard.element.hidden = idle;
   }
 
   store.subscribe(render);
@@ -93,7 +115,7 @@ export function mountSimpleView(context: PanelViewContext): PanelView {
     if (tick !== undefined) return;
     tick = setInterval(() => {
       const current = store.current();
-      if (current !== undefined) nowCard.render(current, Date.now());
+      if (current !== undefined && known) renderNow(current);
     }, TICK_MS);
   }
 
@@ -117,12 +139,4 @@ export function mountSimpleView(context: PanelViewContext): PanelView {
       stop();
     }
   };
-}
-
-/** "Describe an automation": the chat's composer is where it is described. */
-function focusComposer(card: HTMLElement): void {
-  const box = card.querySelector<HTMLTextAreaElement>("textarea");
-  if (!box) return;
-  box.scrollIntoView({ block: "nearest" });
-  box.focus();
 }
