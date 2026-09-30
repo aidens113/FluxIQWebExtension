@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -135,4 +135,85 @@ test("a Core library's fingerprint names no absolute path and covers its depende
   const fingerprinted = JSON.stringify({ meta: fluxiq.meta, labels }).toLowerCase();
   for (const spelling of pathSpellings([cores[0]])) assert.ok(!fingerprinted.includes(spelling), spelling);
   assert.equal(fluxiq.command, "pnpm --filter fluxiq build");
+});
+
+// Core with its own build cache: `scripts/build-cache/cli.mjs` exists and a
+// library's `build` script runs it. Such a package is built with exactly Core's
+// `pnpm --filter <name> build`, never through this repository's cache, and the
+// note carries Core's own outcome line. Decided per package of each checkout.
+
+const CORE_CLI_BUILD = (directory) => `node ../../scripts/build-cache/cli.mjs ${directory}:build -- "${BUILD}"`;
+
+async function giveCoreItsCache(root, directories, { cli = true } = {}) {
+  if (cli) await put(root, "scripts/build-cache/cli.mjs", "// Core's cache\n");
+  for (const directory of directories) {
+    const file = path.join(root, "packages", directory, "package.json");
+    const pkg = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(file, JSON.stringify({ ...pkg, scripts: { build: CORE_CLI_BUILD(directory) } }));
+  }
+}
+
+function coreCachedPnpm(calls) {
+  const inner = fakePnpm(calls);
+  return async (root, args, options) => {
+    await inner(root, args, options);
+    if (options.onLine) {
+      options.onLine("> tsc -b tsconfig.build.json");
+      options.onLine(JSON.stringify({ "build-cache": "reuse", step: `${args[1]}:build`, reason: "stamp matches", ms: 3, source: "stamp" }));
+    }
+  };
+}
+
+function buildWithSpy(root, calls, notes, steps) {
+  const env = { ...process.env, FLUXIQ_BUILD_CACHE_DIR: store, FLUXIQ_BUILD_FORCE: "" };
+  const step = async (resolved, options) => {
+    steps.push(resolved.command);
+    await options.run();
+    return { result: "build", source: "command", reason: "spy", ms: 0, exitCode: 0 };
+  };
+  return buildCore(root, { env, pnpm: coreCachedPnpm(calls), step, note: (line) => notes.push(line) });
+}
+
+test("a Core whose build scripts run its own cache is built with Core's command, never the downstream wrapper", async () => {
+  await giveCoreItsCache(cores[0], CORE_PACKAGES.map((item) => item.directory));
+  const calls = [];
+  const notes = [];
+  const steps = [];
+  await buildWithSpy(cores[0], calls, notes, steps);
+  assert.deepEqual(steps, []);
+  assert.deepEqual(calls, CORE_PACKAGES.map((item) => item.filter));
+  const packageNotes = notes.filter((line) => line.step === "build-core-package");
+  assert.deepEqual(packageNotes.map((line) => `${line.package}:${line["build-cache"]}:${line.core?.["build-cache"]}:${line.core?.source}`), CORE_PACKAGES.map((item) => `${item.filter}:delegated:reuse:stamp`));
+  const env = { ...process.env, FLUXIQ_BUILD_CACHE_DIR: store, FLUXIQ_BUILD_FORCE: "" };
+  await buildCore(cores[0], { env, pnpm: coreCachedPnpm([]), note: () => {} });
+  for (const item of CORE_PACKAGES) {
+    await assert.rejects(readdir(path.join(cores[0], "packages", item.directory, "node_modules", ".cache", "fluxiq-build")), { code: "ENOENT" }, `no downstream stamp for ${item.filter}`);
+  }
+  assert.deepEqual(await readdir(store), [], "nothing entered the downstream store");
+});
+
+test("a Core without the CLI keeps today's path, even when a script names it", async () => {
+  await giveCoreItsCache(cores[0], CORE_PACKAGES.map((item) => item.directory), { cli: false });
+  const calls = [];
+  const notes = [];
+  const steps = [];
+  await buildWithSpy(cores[0], calls, notes, steps);
+  assert.deepEqual(steps, CORE_PACKAGES.map((item) => `pnpm --filter ${item.filter} build`));
+  assert.deepEqual(calls, CORE_PACKAGES.map((item) => item.filter));
+  assert.ok(notes.every((line) => line["build-cache"] !== "delegated"));
+});
+
+test("delegation is decided per package script and per Core checkout", async () => {
+  await giveCoreItsCache(cores[0], ["contracts"]);
+  const calls = [];
+  const notes = [];
+  const steps = [];
+  await buildWithSpy(cores[0], calls, notes, steps);
+  assert.deepEqual(calls, CORE_PACKAGES.map((item) => item.filter));
+  assert.deepEqual(steps, ["pnpm --filter fluxiq build", "pnpm --filter @fluxiq/client-gateway-websocket build"]);
+  const cache = Object.fromEntries(notes.filter((line) => line.step === "build-core-package").map((line) => [line.package, line["build-cache"]]));
+  assert.deepEqual(cache, { "@fluxiq/contracts": "delegated", fluxiq: "build", "@fluxiq/client-gateway-websocket": "build" });
+  const other = [];
+  await buildWithSpy(cores[1], [], [], other);
+  assert.equal(other.length, CORE_PACKAGES.length, "the other checkout, without Core's cache, is not delegated");
 });
