@@ -1,5 +1,6 @@
 // One run's `RunEvaluation`: how it is assembled, and how a single `lab run`
 // produces the same judgement the bench records per corpus row.
+export * from "./adaptation/index.js";
 export * from "./declared-failure-verdict.js";
 export * from "./evidence-budget-invariant.js";
 export * from "./flow-lane-evidence-sizes.js";

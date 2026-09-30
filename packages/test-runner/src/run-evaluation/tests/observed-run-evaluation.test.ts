@@ -28,3 +28,26 @@ test("a run that passes no evidence sizes, as every recording-lane run does, rec
 test("a size the evaluation contract rejects is refused, never published", () => {
   assert.throws(() => evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence: { sanitizedPacketBytes: [-1], rawSnapshotBytes: [], truncationCount: 0, packets: [] } }), /sanitizedPacketBytes/u);
 });
+
+const measuredReplay = {
+  adaptationReuse: { exercisedAdaptationIds: ["adaptation.a"], providerCalls: 0, interventions: 0, resume: null },
+  adaptationValidation: { adaptations: [{ adaptationId: "adaptation.a", tier: "provisional" as const, trials: 1, replays: 0, lastFailure: null }] },
+  adaptationPersistence: { adaptations: [{ adaptationId: "adaptation.a", status: "applied" as const, baseRevision: 2, appliedRevision: 3 }] },
+  adaptationCost: { providerCalls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUsd: 0, reservedCalls: null },
+};
+
+test("a Flow that ran records the adaptation measurements its lane read from Core; any other run records them unmeasured", () => {
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, adaptation: measuredReplay });
+  assert.deepEqual([evaluation.adaptationReuse, evaluation.adaptationValidation, evaluation.adaptationPersistence, evaluation.adaptationCost], [measuredReplay.adaptationReuse, measuredReplay.adaptationValidation, measuredReplay.adaptationPersistence, measuredReplay.adaptationCost]);
+  for (const observation of [recording, { ...flow, flowCreated: false, reportedVerdict: null }]) {
+    const unmeasured = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation, adaptation: measuredReplay });
+    assert.deepEqual([unmeasured.adaptationReuse, unmeasured.adaptationValidation, unmeasured.adaptationPersistence, unmeasured.adaptationCost], [null, null, null, null]);
+  }
+});
+
+test("a provider count on a run that configured no live provider contradicts the run, so the two records stating it are left unmeasured instead of failing it", () => {
+  const contradicted = { ...measuredReplay, adaptationReuse: { ...measuredReplay.adaptationReuse, providerCalls: 2 }, adaptationCost: { ...measuredReplay.adaptationCost, providerCalls: 2 } };
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, adaptation: contradicted });
+  assert.deepEqual([evaluation.adaptationReuse, evaluation.adaptationCost], [null, null]);
+  assert.deepEqual(evaluation.adaptationPersistence, measuredReplay.adaptationPersistence);
+});

@@ -1,5 +1,6 @@
 import {
   adaptationConfidenceTiers, adaptationRecordStatuses,
+  type BenchAdaptationCost, type BenchAdaptationPersistence, type BenchAdaptationReuse, type BenchAdaptationValidation,
   type RunAdaptationConfidence, type RunAdaptationCost, type RunAdaptationPersistence, type RunAdaptationRecord,
   type RunAdaptationResume, type RunAdaptationReuse, type RunAdaptationValidation,
 } from "./adaptation-reuse.js";
@@ -96,6 +97,89 @@ export function validateRunAdaptationCost(input: unknown): ValidationResult<RunA
     }
   }
   return result(input, issues);
+}
+
+const benchReuseKeys = ["measuredRuns", "exercisingRuns", "deterministicReplays", "uncertifiedRuns", "resumedRuns", "rate"] as const satisfies readonly (keyof BenchAdaptationReuse)[];
+const benchCostKeys = ["measuredRuns", "countedRuns", "providerCalls", "accountedRuns", "inputTokens", "outputTokens", "totalTokens", "estimatedCostUsd"] as const satisfies readonly (keyof BenchAdaptationCost)[];
+
+/**
+ * Validates a bench's `BenchAdaptationReuse`. The counts nest -- replays and
+ * uncertified runs are exercising runs, exercising and resumed runs are
+ * measured ones -- and `rate` is exactly replays over the exercising runs
+ * whose count Core stated, `null` when there were none.
+ */
+export function validateBenchAdaptationReuse(input: unknown): ValidationResult<BenchAdaptationReuse> {
+  const issues: ValidationIssue[] = []; const value = object(input, "$", issues);
+  if (value) {
+    keys(value, benchReuseKeys, "$", issues);
+    for (const key of benchReuseKeys) if (key !== "rate") count(value[key], `$.${key}`, issues);
+    measured(value.measuredRuns, issues);
+    const { measuredRuns, exercisingRuns, deterministicReplays, uncertifiedRuns, resumedRuns } = value;
+    if ([measuredRuns, exercisingRuns, deterministicReplays, uncertifiedRuns, resumedRuns].every((figure) => typeof figure === "number")) {
+      const [runs, exercising, replays, uncertified, resumed] = [measuredRuns, exercisingRuns, deterministicReplays, uncertifiedRuns, resumedRuns] as number[];
+      if (exercising! > runs!) add(issues, "$.exercisingRuns", "must not exceed measuredRuns");
+      if (resumed! > runs!) add(issues, "$.resumedRuns", "must not exceed measuredRuns");
+      if (replays! + uncertified! > exercising!) add(issues, "$.deterministicReplays", "with uncertifiedRuns must not exceed exercisingRuns: both are exercising runs, and no run is both");
+      const certified = exercising! - uncertified!;
+      const expected = certified > 0 ? replays! / certified : null;
+      if (expected === null ? value.rate !== null : typeof value.rate !== "number" || Math.abs(value.rate - expected) > 1e-9) add(issues, "$.rate", "must be deterministicReplays over the exercising runs whose provider calls Core stated, or null when there were none");
+    }
+  }
+  return result(input, issues);
+}
+
+/** Validates a bench's `BenchAdaptationValidation`: every closed tier counted, and the tiers summing to the adaptations. */
+export function validateBenchAdaptationValidation(input: unknown): ValidationResult<BenchAdaptationValidation> {
+  return closedTally(input, "tiers", adaptationConfidenceTiers);
+}
+
+/** Validates a bench's `BenchAdaptationPersistence`: every closed status counted, and the statuses summing to the adaptations. */
+export function validateBenchAdaptationPersistence(input: unknown): ValidationResult<BenchAdaptationPersistence> {
+  return closedTally(input, "statuses", adaptationRecordStatuses);
+}
+
+/**
+ * Validates a bench's `BenchAdaptationCost`. Counted and accounted runs are
+ * measured ones, tokens nest as a run's do, and a bench whose counted runs
+ * made no call cannot have spent anything.
+ */
+export function validateBenchAdaptationCost(input: unknown): ValidationResult<BenchAdaptationCost> {
+  const issues: ValidationIssue[] = []; const value = object(input, "$", issues);
+  if (value) {
+    keys(value, benchCostKeys, "$", issues);
+    for (const key of benchCostKeys) if (key !== "estimatedCostUsd") count(value[key], `$.${key}`, issues);
+    finite(value.estimatedCostUsd, "$.estimatedCostUsd", issues, 0, Number.MAX_VALUE);
+    measured(value.measuredRuns, issues);
+    const { measuredRuns, countedRuns, accountedRuns, inputTokens, outputTokens, totalTokens } = value;
+    if (typeof measuredRuns === "number" && typeof countedRuns === "number" && countedRuns > measuredRuns) add(issues, "$.countedRuns", "must not exceed measuredRuns");
+    if (typeof measuredRuns === "number" && typeof accountedRuns === "number" && accountedRuns > measuredRuns) add(issues, "$.accountedRuns", "must not exceed measuredRuns");
+    if (typeof totalTokens === "number" && [inputTokens, outputTokens].some((part) => typeof part === "number" && part > totalTokens)) add(issues, "$.totalTokens", "must not be below inputTokens or outputTokens");
+    if (accountedRuns === 0) for (const key of ["inputTokens", "outputTokens", "totalTokens", "estimatedCostUsd"] as const) if (typeof value[key] === "number" && value[key] > 0) add(issues, `$.${key}`, "must be 0 when no run stated Core's accounting");
+  }
+  return result(input, issues);
+}
+
+function closedTally<T>(input: unknown, member: "tiers" | "statuses", words: readonly string[]): ValidationResult<T> {
+  const issues: ValidationIssue[] = []; const value = object(input, "$", issues);
+  if (value) {
+    keys(value, ["measuredRuns", "adaptations", member], "$", issues);
+    count(value.measuredRuns, "$.measuredRuns", issues);
+    measured(value.measuredRuns, issues);
+    count(value.adaptations, "$.adaptations", issues);
+    const tally = object(value[member], `$.${member}`, issues);
+    if (tally) {
+      keys(tally, words, `$.${member}`, issues);
+      for (const word of words) count(tally[word], `$.${member}.${word}`, issues);
+      const total = words.reduce((sum, word) => sum + (typeof tally[word] === "number" ? tally[word] : 0), 0);
+      if (typeof value.adaptations === "number" && total !== value.adaptations) add(issues, `$.${member}`, "must sum to adaptations: every adaptation is counted under exactly one");
+    }
+  }
+  return result(input, issues) as ValidationResult<T>;
+}
+
+/** A bench aggregate exists only when a run measured it: an aggregate over no run is `null`, not a record of zeros. */
+function measured(input: unknown, issues: ValidationIssue[]): void {
+  if (input === 0) add(issues, "$.measuredRuns", "must be at least 1: an aggregate no run measured is null");
 }
 
 function checkResume(input: unknown, path: string, issues: ValidationIssue[]): void {

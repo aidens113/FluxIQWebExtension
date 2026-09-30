@@ -44,9 +44,27 @@ export function comparisonMetricRows(baseline: BenchReport, candidate: BenchRepo
   rows.push({ metric: "run-duration-p50", baseline: baseline.metrics.runDurationMs.p50, candidate: candidate.metrics.runDurationMs.p50, tolerance: null, verdict: "no-tolerance-stated", note: "Week 1 repeatability tolerance applies to latency p95 only" });
   for (const metric of ["sanitizedPacketBytes", "rawSnapshotBytes"] as const) for (const percentile of ["p50", "p95"] as const) rows.push({ metric: `evidence-${metric}-${percentile}`, baseline: baseline.metrics[metric][percentile], candidate: candidate.metrics[metric][percentile], tolerance: null, verdict: "no-tolerance-stated", note: "Week 1 states no repeatability tolerance for evidence size" });
   rows.push({ metric: "evidence-truncation-count", baseline: baseline.metrics.truncationCount, candidate: candidate.metrics.truncationCount, tolerance: null, verdict: "no-tolerance-stated" });
-  for (const metric of ["harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const) rows.push({ metric: `week2-${metric}`, baseline: baseline.metrics[metric], candidate: candidate.metrics[metric], tolerance: null, verdict: "no-tolerance-stated", note: "Week 1 requires this reserved field to be null" });
+  rows.push({ metric: "week2-harnessRecovery", baseline: null, candidate: null, tolerance: null, verdict: "no-tolerance-stated", note: "reserved: no bench aggregate is defined, and each run keeps its own record" });
+  for (const [metric, of] of WEEK2_FIGURES) {
+    const [base, next] = [of(baseline), of(candidate)];
+    rows.push(base === null && next === null
+      ? { metric, baseline: null, candidate: null, tolerance: null, verdict: "not-applicable", note: "neither report measured it" }
+      : { metric, baseline: base, candidate: next, tolerance: null, verdict: "no-tolerance-stated", note: "Week 2 states no repeatability tolerance; null is unmeasured, never zero" });
+  }
   return rows;
 }
+
+/** The Week 2 figures a comparison lists, each read from a report's aggregates, `null` where the report measured none. */
+const WEEK2_FIGURES: ReadonlyArray<readonly [string, (report: BenchReport) => number | null]> = [
+  ["week2-adaptationReuse-rate", (report) => report.metrics.adaptationReuse?.rate ?? null],
+  ["week2-adaptationReuse-deterministicReplays", (report) => report.metrics.adaptationReuse?.deterministicReplays ?? null],
+  ["week2-adaptationReuse-uncertifiedRuns", (report) => report.metrics.adaptationReuse?.uncertifiedRuns ?? null],
+  ["week2-adaptationReuse-resumedRuns", (report) => report.metrics.adaptationReuse?.resumedRuns ?? null],
+  ["week2-adaptationValidation-established", (report) => report.metrics.adaptationValidation?.tiers.established ?? null],
+  ["week2-adaptationPersistence-applied", (report) => report.metrics.adaptationPersistence?.statuses.applied ?? null],
+  ["week2-adaptationCost-providerCalls", (report) => report.metrics.adaptationCost?.providerCalls ?? null],
+  ["week2-adaptationCost-estimatedCostUsd", (report) => report.metrics.adaptationCost?.estimatedCostUsd ?? null],
+];
 
 const resultKey = (item: { corpusRowId: string; scenarioId: string; workflowId: string | null; variantId: string | null; lane: EvaluationLane }): string => JSON.stringify([item.corpusRowId, item.scenarioId, item.workflowId, item.variantId, item.lane]);
 

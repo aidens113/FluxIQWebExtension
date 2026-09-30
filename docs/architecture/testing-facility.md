@@ -1801,6 +1801,27 @@ resumed.
   (23 unarmed and 21 variants).
   W19 to W23 and W29 are variants only. Because `week1` runs
   `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
+  `week2` is A01 to A06 on the Flow lane alone: identity-drift's
+  `renamed-redesign` with its unarmed baseline (the Week 2 exit chain's drift),
+  W04's and W08's extraction drifts, W13 and W24, and member-directory's
+  `restyled` with its baseline -- 8 results per repeat, 0 skipped.
+- **Week 2 adaptation metrics.** A Flow-lane run's evaluation carries
+  `adaptationReuse`, `adaptationValidation`, `adaptationPersistence` and
+  `adaptationCost`, read from the bundle's `snapshots/adaptation.json`
+  (`run-evaluation/adaptation/`). A lane writes that file from
+  `readRunAdaptationMeasurements`, which reads Core's run detail, the Flow and
+  Subflow graphs the run executed, and each adaptation the run created,
+  trialled, or executed a stamp of, before Core deletes the run's workspace.
+  Reuse names applied adaptations stamped on nodes the run attempted that it did
+  not create; validation is Core's own confidence rule over each adaptation's
+  stored results; persistence is its stored status and revisions; cost is
+  Core's `llmGate.costAccounting`. Without the file all four are `null`,
+  unmeasured. `report.json` aggregates them: reuse as deterministic replays (an
+  exercising run with 0 Core-counted provider calls and 0 interventions) over
+  the exercising runs whose count Core stated, with uncertified runs counted
+  beside the rate; tiers and statuses as tallies; cost as sums over the runs
+  that stated it. An aggregate no run measured is `null`, never zeros.
+  `harnessRecovery` has no aggregate and stays `null`.
 - **Runs.** Each repeat is one pass over the corpus. `--target` must be
   `isolated` or `persistent-isolated`. A result the corpus runs on no lane, or
   one that does not resolve against the registry, is recorded as skipped with
@@ -1862,7 +1883,11 @@ resumed.
   a presence test would read 1.000 whatever happened; `paginationAccuracy`
   needs both an expected page count and an observed one, which the Flow lane
   cannot supply; and `extractionExactSuccess` and `extractionFalseSuccess` are
-  per run. Beside them, `judgedSteps` and `unjudgedSteps`, and the split of the
+  per run. A run is an exact success only when every judged step listed its
+  records and matched them: a count-only step whose counts agree is a miss for
+  exact success (X5.5), so a lane of count-only steps such as
+  `data-table-inventory-large` can never print 1.0, while a count that
+  disagrees under a reported pass is still a false success. Beside them, `judgedSteps` and `unjudgedSteps`, and the split of the
   judged into `comparedSteps`, `countOnlySteps` and `unjudgeableSteps`, state
   what each number stands on; `report.md` prints that split as a sentence and
   each rate's own unit and population beside it, because no two of these rates

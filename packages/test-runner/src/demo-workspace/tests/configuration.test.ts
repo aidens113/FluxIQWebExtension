@@ -48,3 +48,9 @@ test("allocated endpoints pass the same checks as the environment's", () => {
   assert.throws(() => resolve({ origin: "http://127.0.0.1:52001", gatewayUrl: "ws://127.0.0.1:52002/client", workspaceDirectory: path.join(repository, "outside") }), /below FLUXIQ_TEST_RUNS_DIR/u);
   assert.throws(() => resolve({ origin: "http://127.0.0.1:52001", gatewayUrl: "ws://127.0.0.1:52002/client", extensionSourceDirectory: "relative/extension" }), /absolute path/u);
 });
+
+test("Lab browsers launch headed unless FLUXIQ_DEMO_HEADLESS opts in explicitly", () => {
+  assert.equal(resolveDemoWorkspaceConfiguration(repository, identity).headless, false);
+  assert.equal(resolveDemoWorkspaceConfiguration(repository, { ...identity, FLUXIQ_DEMO_HEADLESS: "false" }).headless, false);
+  assert.equal(resolveDemoWorkspaceConfiguration(repository, { ...identity, FLUXIQ_DEMO_HEADLESS: "true" }).headless, true);
+});

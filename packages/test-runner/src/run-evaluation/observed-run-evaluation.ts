@@ -1,4 +1,4 @@
-import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type LlmUsage, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type LlmUsage, type RunAdaptationMeasurements, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
 import { declaredFailureOutcome } from "./declared-failure-verdict.js";
 import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
@@ -50,6 +50,13 @@ export type ObservedRun = {
    * measures the automation, and a provider call is not part of it.
    */
   llm?: LlmUsage;
+  /**
+   * The run's Week 2 adaptation measurements, read by both Flow-lane producers
+   * from the bundle's `snapshots/adaptation.json` (`flowLaneAdaptationMeasurements`).
+   * Absent, all four are `null`: not measured. They are kept only for a run
+   * whose Flow was created and ran, the only run that has adaptations to measure.
+   */
+  adaptation?: RunAdaptationMeasurements;
 };
 
 /**
@@ -127,13 +134,26 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     // when the lane stated none. Like `extraction`, only the lane that ran can
     // tell "recovered nothing" from "never measured", so it is not derived here.
     harnessRecovery: observation.harnessRecovery ? structuredClone(observation.harnessRecovery) : null,
-    adaptationCost: null,
-    adaptationValidation: null,
-    adaptationPersistence: null,
-    adaptationReuse: null,
+    ...adaptationMeasurements(input),
   };
   assertRunEvaluation(evaluation);
   return evaluation;
+}
+
+/**
+ * The measurements to record: the lane's, for a run whose Flow was created and
+ * ran, and otherwise none. A provider count above 0 on a run that configured no
+ * live provider contradicts the run itself, so both records that state it are
+ * left unmeasured rather than failing a finished run's evaluation over them.
+ */
+function adaptationMeasurements(input: ObservedRun): RunAdaptationMeasurements {
+  const unmeasured: RunAdaptationMeasurements = { adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null };
+  const measured = input.adaptation;
+  if (!measured || input.observation.lane !== "flow" || input.observation.flowCreated !== true) return unmeasured;
+  const counts = [measured.adaptationReuse?.providerCalls, measured.adaptationCost?.providerCalls].filter((calls): calls is number => typeof calls === "number");
+  const live = input.llm?.mode === "live";
+  if ((!live && counts.some((calls) => calls > 0)) || new Set(counts).size > 1) return { ...measured, adaptationReuse: null, adaptationCost: null };
+  return { adaptationCost: measured.adaptationCost, adaptationValidation: measured.adaptationValidation, adaptationPersistence: measured.adaptationPersistence, adaptationReuse: measured.adaptationReuse };
 }
 
 /**

@@ -103,9 +103,11 @@ export async function extractionJourney(session: JourneySession, options: Extrac
   if (execution.status !== "succeeded") {
     throw new RunnerFailure("runtime.behavior", "The generated extraction Flow did not succeed when run from the panel", { details: { reasonCode: "run.not_succeeded", status: execution.status } });
   }
-  const detail = await waitForRoutedRunDetail(control, state, execution.runId, 1);
-  if (detail.actionAttempts.length !== 1 || detail.actionAttempts.some(action => action.status !== "succeeded")) {
-    throw new RunnerFailure("runtime.behavior", "The extraction run did not succeed at exactly its one action", { details: { reasonCode: "run.attempts_invalid", actionAttempts: detail.actionAttempts.length } });
+  // One attempt per generated node: the extract, and any scroll or navigation the recorder saw beside it.
+  const generatedNodes = (await control.getExactFlow(state.projectId, state.graphFlowId)).document.nodes as unknown[];
+  const detail = await waitForRoutedRunDetail(control, state, execution.runId, generatedNodes.length);
+  if (detail.actionAttempts.length !== generatedNodes.length || detail.actionAttempts.some(action => action.status !== "succeeded")) {
+    throw new RunnerFailure("runtime.behavior", "The extraction run did not succeed once at each generated action", { details: { reasonCode: "run.attempts_invalid", actionAttempts: detail.actionAttempts.length, generatedNodes: generatedNodes.length } });
   }
   const activity = assertProviderFreeRun(detail);
   timeline.mark("run-succeeded");
@@ -168,13 +170,26 @@ async function pickAndConfirm(session: JourneySession, input: { exampleItemTestI
   return { proposedItems, capturedRecords, review };
 }
 
-/** A recording-generated extraction Subflow: one policy action writing `web.dom.extract_list`, carrying the recording as evidence. */
+/**
+ * A recording-generated extraction Subflow: exactly one policy action writing
+ * `web.dom.extract_list`, and beside it at most a scroll and a navigation the
+ * recorder observed while the picker ran -- the same allowance the recorded
+ * task's check makes (`assertRecordedTaskFlow`). Measured on 2026-09-29: the
+ * picker's own scroll to the list was recorded, and the Subflow held a
+ * `web.dom.scroll` then the extract. Every node is a policy action carrying the
+ * recording as evidence, and the nodes form one chain.
+ */
 export function assertExtractionRecordingDerivedFlow(document: Record<string, unknown>, recordingId?: string): void {
   const nodes = Array.isArray(document.nodes) ? document.nodes as Array<Record<string, any>> : [];
   const edges = Array.isArray(document.edges) ? document.edges : [];
-  const valid = nodes.length === 1 && edges.length === 0 && nodes.every(node => node.definitionId === "builtin.policy.action"
-    && node.parameterValues?.outputId === "web.dom.extract_list"
-    && (!recordingId || Array.isArray(node.metadata?.evidence) && node.metadata.evidence.some((item: any) => item?.artifactId === recordingId)));
+  const outputs = nodes.map(node => String(node.parameterValues?.outputId ?? ""));
+  const incidental = new Set(["web.dom.scroll", "web.browser.navigate"]);
+  const valid = nodes.length >= 1 && nodes.length <= 3 && edges.length === nodes.length - 1
+    && outputs.filter(output => output === "web.dom.extract_list").length === 1
+    && outputs.every(output => output === "web.dom.extract_list" || incidental.has(output))
+    && new Set(outputs.filter(output => incidental.has(output))).size === outputs.filter(output => incidental.has(output)).length
+    && nodes.every(node => node.definitionId === "builtin.policy.action"
+      && (!recordingId || Array.isArray(node.metadata?.evidence) && node.metadata.evidence.some((item: any) => item?.artifactId === recordingId)));
   if (!valid) throw new RunnerFailure("runtime.behavior", "The generated Subflow is not one recorded extraction", { details: { reasonCode: "extraction.generated_flow_shape", nodeCount: nodes.length, edgeCount: edges.length } });
 }
 
@@ -186,5 +201,5 @@ const EXTRACTION_FLOW_PROFILE: DemoFlowProfile = {
   useSavedWorkspaceState: false,
   persistWorkspaceState: false,
   assertRecordingDerivedFlow: assertExtractionRecordingDerivedFlow,
-  renderedNodeCounts: [1],
+  renderedNodeCounts: [1, 2, 3],
 };
