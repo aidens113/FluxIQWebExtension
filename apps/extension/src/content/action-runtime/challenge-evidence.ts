@@ -20,9 +20,14 @@
 // A dialog is small and wholly on screen, so all of its text is read. A page
 // is not: an ordinary page may mention a captcha or have a card field on its
 // checkout form without being a challenge, so a page is read only for a robot
-// check or a code prompt, and only in its headings and labels. A reCAPTCHA v3
-// badge, which sits on every page of the sites that use it and asks nothing of
-// anyone, is not a robot check.
+// check or a code prompt, and only in its headings and labels -- unless the
+// whole page is small enough to be nothing but an interstitial, when all of its
+// painted text is read, as a dialog's is. A traffic screen is often a bare
+// document with its words in paragraphs: the crossborder marketplace's has no
+// heading at all, only "please confirm you are not a robot" and a box reading
+// "I'm not a robot", and live runs 15 and 17 navigated onto it eleven times
+// without anything seeing it. A reCAPTCHA v3 badge, which sits on every page of
+// the sites that use it and asks nothing of anyone, is not a robot check.
 //
 // Every read enters the open shadow roots beneath the root. The interference
 // defence now finds a way out inside a widget's shadow root, and it may press
@@ -42,7 +47,7 @@ export function challengeIn(root: Element, scope: "dialog" | "page"): ChallengeK
     if (renderedMatch(root, PASSWORD_SELECTOR)) return "credential";
     if (renderedMatch(root, CARD_SELECTOR)) return "payment";
   }
-  const text = scope === "dialog" ? renderedText(root) : headingText(root);
+  const text = scope === "dialog" ? renderedText(root) : `${headingText(root)} ${interstitialText(root)}`;
   if (CAPTCHA_WORDS.test(text)) return "captcha";
   if (CODE_WORDS.test(text)) return "credential";
   if (scope === "dialog" && PAYMENT_WORDS.test(text)) return "payment";
@@ -76,6 +81,15 @@ const PAYMENT_WORDS = /\bconfirm (?:your |this )?(?:payment|purchase)\b|\bauthor
 /** At most this much text is read from one dialog or from one page's headings. */
 const TEXT_LIMIT = 4_000;
 
+/**
+ * At most this much painted text, whitespace collapsed, makes a page an
+ * interstitial whose every word is read. The crossborder marketplace's traffic
+ * screen is about 170 characters; a page of ordinary content, even an empty
+ * basket with its header and footer, is well past this, and an article that
+ * explains robot checks is prose far longer than any check.
+ */
+const INTERSTITIAL_TEXT_LIMIT = 1_000;
+
 /** The headings and labels that say what a page is asking for. */
 const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6, [role="heading"], label, legend';
 
@@ -95,21 +109,29 @@ function renderedMatch(root: Element, selector: string): boolean {
 }
 
 /** The root's text as a reader sees it, bounded. `innerText` skips what is not rendered; `textContent` is the fallback where there is no layout. */
-function renderedText(root: Element): string {
+function renderedText(root: Element, limit = TEXT_LIMIT): string {
   // `innerText` does not read into a shadow root, so each open root's own
   // top-level elements are read after the root's text.
   let text = elementText(root);
   for (const shadow of openRootsWithin(root)) {
     for (const child of shadow.children) {
-      if (text.length >= TEXT_LIMIT) return text.slice(0, TEXT_LIMIT);
+      if (text.length >= limit) return text.slice(0, limit);
       text += ` ${elementText(child)}`;
     }
   }
-  return text.slice(0, TEXT_LIMIT);
+  return text.slice(0, limit);
 }
 
 function elementText(element: Element): string {
   return element instanceof HTMLElement && typeof element.innerText === "string" ? element.innerText : element.textContent ?? "";
+}
+
+/** All of the root's painted text when there is little enough of it to be an interstitial; otherwise nothing. */
+function interstitialText(root: Element): string {
+  // Measured after collapsing, over the whole text: a bound taken first would
+  // let a long page whose opening is mostly blank lines pass as a short one.
+  const text = renderedText(root, Number.POSITIVE_INFINITY).replace(/\s+/gu, " ").trim();
+  return text.length <= INTERSTITIAL_TEXT_LIMIT ? text : "";
 }
 
 /** The painted headings and labels under the root, joined and bounded. */

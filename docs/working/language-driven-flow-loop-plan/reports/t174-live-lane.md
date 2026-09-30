@@ -1,4 +1,30 @@
-# t174 live lane
+# t174 live lane (lane A: create & run, `lab-slots/slot-1`)
+
+Tasks, in order:
+1. crossborder-marketplace-hub-to-cart
+2. bigbox-retail-pickup-cart
+3. everything-store-kettle-to-cart
+4. company-website-quote-request
+
+The other live lanes:
+- t193: B, self-repair, slot-2.
+- t194: C, judge its own answer, slot-3.
+- t195: D, control flow and consequential acts, slot-4.
+
+Their fix logs are read before a cause is fixed here. The first lane to record a cause owns it.
+
+## Fix log
+
+| # | Fix | Files | Exposed by | Validation | Status |
+| --- | --- | --- | --- | --- | --- |
+| F1 | A packed draft row shown as `did_not_work` no longer ends a build | Core `llm/evidence-loop/draft-shown.ts`, 2 tests | runs 6, 7, 10 | tests fail without the fix and pass with it (16/16, 8/8) | committed `befca2f`, in dev |
+| F2 | The Lab's Core server maps stacks to their sources | `test-runner/src/core-web-build/server-process.ts` + test | run 10 | 2/2 | committed |
+| F3 | Extension start: the guard waits for the worker's scope; connect has a 10 s deadline and a named failure; the start is traced | `test-runner/src/network-guard.ts`, `run-lifecycle/*`, `run-scenario/extension-*`; extension `gateway-session.ts`; Core `client-gateway-websocket/src/*` | runs 3, 5, 8, 9, 11, 12 | 1/10 clean starts before the fix, 10/10 after, and 10/10 again on the merged build | committed `50eb684` / `5903a1e7` |
+| F4 | UI review in every run: page and panel PNGs at each moment, overlay samples and flicker counts | `test-runner/src/run-scenario/ui-review/**` (new), `run-scenario.ts` (line-neutral), `run-scenario/index.ts` | user rule, 2026-09-30 | ui-review 18/18; test-runner build 0; audit passed; provider-free Lab run passed, PNGs read | validated, uncommitted (overlaps t193's G2) |
+| F5 | A step that only goes to the start location cannot answer a non-`open` instructed act (new reason `step_only_arrives`); completion passes the start location into the check | Core `flow-bootstrap/instructed-acts/{check,contracts}.ts`, `reachability/{step-goes-to-location.ts (new), start-step.ts, index.ts}`, `llm/harness-options/bootstrap-completion.ts`, and tests | runs 13 and 15 (navigation-only Flows accepted) | new cases failed first (instructed-acts 1 failed / 56, bootstrap-completion 1 failed / 25), then instructed-acts + reachability + harness-options 180/180 (re-run by the lead); fluxiq tsc 0; audit passed | validated; live re-test in run 17 |
+| F6 | Instructed acts are also refused when:<br>- one step is claimed for a plural act (asked of by t195: "confirm everyone with five or more");<br>- an `optional` step is claimed (t195 run 2);<br>- a Flow claims a set or pick act with a step that only opens a chooser, and nothing claims the `create_new` consequence (bigbox run 16 cause 3). | Core `flow-bootstrap/instructed-acts/{check,contracts,instruction-acts}.ts` and tests | t195 runs; run 16 | Items 1 and 2 are done: new reasons `act_needs_repeat` and `step_is_optional`; tests failed first (10 failed / 78), then instructed-acts + reachability + harness-options 211/211 (re-run by the lead); tsc 0; audit passed. Item 3 was assessed as unsound without a domain-reported per-step change class (`reports/t174-w13-act-claims.md`). | validated (1, 2); 3 not built |
+| F7 | A navigation that lands on a page that is itself a robot check reports `web.intervention.required` rather than success, so the build knows a person must answer it and stops re-navigating into it | extension `content/action-runtime/{challenge-evidence,index,results}.ts`, `content/message-handler.ts`, `shared/page-challenge-message.ts` (new), `runtime/{landed-challenge.ts (new), action-results.ts, action-runner.ts}`, and tests (`runtime/tests/navigate-action.test.ts` is new, split from `action-runner.test.ts`) | runs 15, 17 | extension suite: 3 failed before, then 1228/1228 (heavy.sh); the lead re-ran the built navigate-action 12/12, challenge-evidence 4/4 and action-runner 30/30; audit passed | validated (unit). **Open decision:** Core does not end the build to ask the person, and crossborder's reference steps press the check. See `reports/t174-w14-navigation-challenge.md`. |
+| L1 | The Lab's call bound is the most its profile allows (`--llm-max-calls 64`; 65 was refused by the profile schema in run 14) until t193's cause B lands | the lane's launcher (scratchpad), not the repo | run 13 | - | temporary |
 
 Worker lane t174, the only lane that runs live Lab runs. Trees:
 `C:\Users\osrs_\FluxStuff\fxwork\t174\!FluxIQWebExtension` and its Core
@@ -204,3 +230,54 @@ Downstream:
 Two lane tests needed fixing after the merge:
 - **`llm/tests/evidence-loop-draft-shown.test.ts`**: its first run failed because it read the first packed entry, which after t189 is the decision history (`decision_rows_v1`). It now looks for the draft's own `step_rows_v1` in the last decision's evidence.
 - **`build-proposal.test.ts`** (the lane's three long-request tests): the first build failed because they authorized with `{ grantId }`. They now use t186's `{ permittedConsequences: [] }`.
+
+## Ten-start probe on the merged build (Core `4d126f6`, downstream `a7d83e17`, with t185)
+
+w7's probe (`scratchpad/t174w7-probe.mjs`, the Lab's own start path, provider-free, headed, crossborder-marketplace, slot-1), after building Core `contracts`, `client-gateway-websocket` and `fluxiq` plus the `t174-w7` instance: **10/10 clean**, 0 `cdp.crashed`. Runs `run-munmghv4-cc033166` … `run-munmkkp7-dec8d046`. From control page to paired took 200–240 ms, and the connect answered in 41–76 ms after being sent. Start 1's topology took 98 s because it included the Core web rebuild; the others took 8.4–13.5 s.
+
+## Run 13 (`run-munmmj5n-52d8a67d`), the first live build since the restart that proposed a Flow
+
+Debug: `debugs/run-munmmj5n-52d8a67d.md` (worker t174-w10).
+- **Start:** the extension started cleanly and the live panel opened (`[lab] live panel: side-panel (verified open)`).
+- **Build:** 62 decisions plus the instruction authority's call, 63 in all, $0.109. The build was refused `instructed_act_missing` at iterations 15, 51 and 57, then accepted at 62 with an 8-step dry run. An adaptation was created.
+- **Failure:** the Lab then failed the run `performance.budget` ("63 provider calls against --llm-max-calls 48") before playback.
+
+Causes:
+- **A. The Flow's configured call limit is ignored.** Since t186, the session-key resolver returns fixed defaults and never reads `llmExecutionSettings.maxCalls`, so the loop runs to its 64-decision ceiling. **Owned by t193**, which recorded it first as its cause B, with a worker dispatched. Until that lands, lane A's launcher passes `--llm-max-calls 65`, the loop's own 64 plus the authority, so that the Lab judges the Flow instead of a limit Core does not apply.
+- **B. The accepted Flow has no click.** The accepted plan (draft steps d36, d39-d42, d45, d46) is all `web.output.browser-navigate`. The only add-to-cart click, at iteration 49, was rejected `target_not_a_handle` and never retried. Iterations 16-42 were 21 navigations to the item page, each batch then withdrawn by an amendment. The instructed-acts check refused three times, then accepted a navigation-only plan. Unowned by another live lane so far; lane A investigates it after run 14's playback shows what the Flow does.
+- **C. Decision efficiency:** six `amend_draft` in a row (43-48), and repeated navigations that made no progress. This is the evidence-loop no-progress guard's area.
+
+**UI review tooling (worker t174-w9, `reports/t174-w9-ui-review.md`).**
+- New `packages/test-runner/src/run-scenario/ui-review/`, hooked into `run-scenario.ts` line-neutrally (706 lines).
+- At `start`, `mid-build` (every ~20 s), `flow-run`, `end` and `failure` it saves PNGs of the scenario tab and of the real side panel. The panel is captured through its own DevTools target.
+- Each moment also samples `<fluxiq-activity-overlay>` for about 3 s at 5 Hz: presence, visibility, text (shadow root included), phase, and counts of text changes and presence toggles.
+- Output sits beside the bundle, never in it: `<runs dir>/<runId>.ui-review.local.json` and `<runId>.ui-review.local/`.
+- **Validation:**
+  - `ui-review` tests: 18/18, re-run by the lead.
+  - Test-runner build: exit 0.
+  - Downstream audit: passed.
+  - Provider-free `lab run crossborder-marketplace`: passed (`run-munnzfiz-58c009b1`). The lead opened its start panel PNG; it shows the real side panel.
+  - The overlay was absent in every window of that run: 0 of 16 samples present. That run never had FluxIQ acting.
+- **Overlap to route:** t193's report records the same missing screenshots as its cause G2, with a worker dispatched. t174-w9's module is done and validated, so one of the two should stand.
+
+## Runs 14-17 (2026-09-30)
+
+| # | Run | Task | Stage reached | Causes | Fix |
+| --- | --- | --- | --- | --- | --- |
+| 14 | (no run id) | crossborder-marketplace-hub-to-cart | none | The Lab profile refused `--llm-max-calls 65` (the maximum is 64) | L1 changed to 64 |
+| 15 | `run-munoeac4-33c17306` | crossborder-marketplace-hub-to-cart | **4, the Flow ran** | The build took 14 decisions and $0.024. It accepted a 2-step Flow of navigations to the start URL. Core's verification refuted it (`does_not_answer_request`). Repair then made 3 diagnoses and refused `runtime_patch_goal_unachievable`. The build navigated blind, and the page it landed on was the scenario's robot check. Debug: `debugs/run-munoeac4-33c17306.md`, with UI review. | F5, F7 |
+| 16 | `run-munore4o-c84cfa29` | bigbox-retail-pickup-cart | **4, the Flow ran** | Playback step 2 was `blocked_by_dialog` under the consent dialog (t195 F1). The dry run's reset keeps the consent choice. The instructed-acts check accepted a Flow with no store pick. The amendment at 41 withdrew needed steps. `rerun` hit `unexpected_input_keys`. Repair hit `target_unanchored`. Debug: `debugs/run-munore4o-c84cfa29.md`, with UI review. | F6; the others are routed in the debug |
+| 17 | `run-munp80f5-c31ea417` | crossborder-marketplace-hub-to-cart | 2 | F5 held: every completion that claimed navigations was refused. But the model only ever navigated (11 navigations, 0 presses), mostly onto the robot check (`route.ts`: every third search load since the last check serves it). It then asked to complete 8 times in a row and ended `evidence_unusable_decision`. | F7; the model's navigate-only exploration stays open |
+
+**UI review findings for t191** (runs 15-17; the evidence is in the two debugs' "UI review" sections):
+- **U1:** raw tool ids and node ids are shown to the person ("Using core.run_node", "Running step 1 of 7: node.bootstrap…").
+- **U2:** the headline is repeated as the sub-line.
+- **U3:** the overlay covers the page's bottom-right controls: consent buttons and chat widgets.
+- **U4:** the panel says "RIGHT NOW: Done" mid-build, during repair and after a failure.
+- **U5:** "Add an AI model key: To do" is shown while a live build works.
+- **U6:** a control name is joined without a space in the "Clicking" line.
+- **U7:** the phase changes up to 1.0 times per second (5 text changes in 3 s in run 15, window 8), and the overlay drops out on each navigation (presence toggles).
+- **U8:** repair looks like building, and a failure is not left on screen.
+- **U9:** nothing tells the person that a robot check is waiting for them.
+
+| 18 | `run-munpwa5r-e7aefe04` | bigbox-retail-pickup-cart | **4, the Flow ran** | With F5 the build made 48 decisions and 49 calls ($0.090) and built a 9-node Flow: 1 navigate, 7 clicks, 1 type. Playback was `blocked_by_dialog` at step 2 under the consent dialog, as in run 16 (t195's F1 fixes that and arrives at this round). The harness made 3 interventions. Full debug pending. | t195 F1 at the merge |

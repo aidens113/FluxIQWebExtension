@@ -340,9 +340,12 @@ function namedUrlClaim(action: BrowserActionCommand): boolean {
  * resolver's own verdict: a Flow's target need not be a CSS selector, and when
  * the resolver found nothing, nothing was found whatever the selector's syntax.
  * The page is read only for a robot check or a code prompt, and only in what it
- * declares or states in its headings (`challenge-evidence.ts`): a card field on
- * a checkout page, or a captcha mentioned in passing, does not make a missing
- * target the person's.
+ * declares or states in its headings -- or, on a page small enough to be
+ * nothing but an interstitial, in all its words (`challenge-evidence.ts`): a
+ * card field on a checkout page, or a captcha mentioned in passing, does not
+ * make a missing target the person's. A navigation that lands on a robot check
+ * is reported by the worker, which asks this frame the same question
+ * (`runtime/landed-challenge.ts`).
  */
 function challengeGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
   const sought = soughtSelector(action);

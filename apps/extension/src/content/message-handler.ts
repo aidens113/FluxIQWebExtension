@@ -21,6 +21,10 @@
 // silent rather than putting a second overlay up inside itself, which the
 // worker reads as the page refusing.
 //
+// `fluxiq.pageChallenge` is top frame only too: it is asked about the page a
+// navigation landed on, which is the top document, and answers with one closed
+// word from `challenge-evidence.ts`, never with the page's text.
+//
 // The activity overlay's message (`content/activity-overlay/`) is top frame
 // only for the same reason: there is one status for the page the person is
 // watching. It is a display, so it is answered at once and changes nothing
@@ -29,12 +33,13 @@
 import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
 import { captureSettings } from "./capture-settings";
 import { setRecordingState } from "./recorder";
-import { actionFailure, captureSnapshotForResponse, executeAction } from "./action-runtime";
+import { actionFailure, captureSnapshotForResponse, challengeIn, executeAction } from "./action-runtime";
 import { inferListFromElement } from "./extraction";
 import { isTopFrame } from "./frame-geometry";
 import { extractionContentMessage, handleExtractionMessage } from "./picker";
 import { activityContentMessage, showActivityOverlay } from "./activity-overlay";
 import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../shared/extraction-messages";
+import { PAGE_CHALLENGE_MESSAGE, type PageChallengeResponse } from "../shared/page-challenge-message";
 import type { BrowserActionCommand } from "./types";
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
@@ -96,6 +101,12 @@ export function installMessageHandler(): void {
         .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));
       return true;
     }
+    if (typed.type === PAGE_CHALLENGE_MESSAGE) {
+      if (!isTopFrame()) return false;
+      // The read is synchronous, so the channel closes with the reply sent.
+      sendResponse(pageChallenge());
+      return false;
+    }
     const extraction = extractionContentMessage(typed);
     if (extraction) {
       if (!isTopFrame()) return false;
@@ -117,6 +128,13 @@ export function installMessageHandler(): void {
     }
     return false;
   });
+}
+
+/** What this page, as a whole, asks for that only a person can give. */
+function pageChallenge(): PageChallengeResponse {
+  const body = document.body;
+  const challenge = body ? challengeIn(body, "page") : undefined;
+  return { challenge: challenge === "captcha" || challenge === "credential" ? challenge : null };
 }
 
 /**

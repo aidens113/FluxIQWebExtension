@@ -65,7 +65,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots } from "./run-scenario/index.js";
+import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -138,7 +138,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // satisfy fails the run before anything is written (`run-scenario/resolve-run-secrets.ts`).
   const { declaredSecrets, secrets, redactionLiterals } = resolveRunSecrets({ scenario, workflow, environment, target, recordedFlowLane: options.flow === true, createdFlowLane: creation !== undefined, ...(live ? { live } : {}) });
   let redaction: RunRedactionAttestation | undefined;
-  const providerFailures = runProviderFailureLog({ secrets, live }); const startTrace = new ExtensionStartTrace({ secrets }); // The run's second tier of evidence: what a refused provider call said, kept locally and never published (`provider-failure/`).
+  const providerFailures = runProviderFailureLog({ secrets, live }); const startTrace = new ExtensionStartTrace({ secrets }); const uiReview = new UiReviewRecorder({ runsDirectory: options.runsDirectory, runId, secrets }); // Screenshots and the overlay's state, for <runId>.ui-review.local.json (`run-scenario/ui-review/`). The run's second tier of evidence: what a refused provider call said, kept locally and never published (`provider-failure/`).
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
   setFacilityStage("bundle.initialize");
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
@@ -271,7 +271,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     if (workflow.variant && !flowLane) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
-    await page.bringToFront();
+    await page.bringToFront(); uiReview.attach({ context, scenarioPage: page, controlPage: extensionControl });
     // The extension panel beside the fixture, for whoever watches a headed run. It never fails the run; the mode that ran is kept in the bundle.
     await bundle.writeStructured("snapshots/live-panel.json", await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) }));
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
@@ -302,7 +302,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         // (`apps/extension/src/runtime/navigation-target.ts`), so it drives the last tab the worker drove -- or opens
         // one -- and an exploration can therefore end somewhere other than here. A Flow left one fixture tab open
         // would start on a page it never reached, which is the thing this whole rule exists to stop.
-        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL);
+        if (startPage !== "scenario-start-page") for (const open of [page, ...context!.pages().filter(other => other !== page && isScenarioUrl(other.url()))]) await open.goto(BLANK_TAB_URL); if (moment !== "build") uiReview.phase("flow-run");
       },
       recordEvidence: async (evidence: E) => {
         // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:
@@ -329,7 +329,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live repair was applied and replayed"), details }),
     });
     const paired = topology.control ? await pairExtension(extensionPage, topology, startTrace) : undefined;
-    if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
+    if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin); uiReview.phase("start");
     const stepCapture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
     if (target.mode === "existing") {
       if (!paired || !existingControl || !existingPreflight) throw new RunnerFailure("gateway.pairing", "Existing FluxIQ extension pairing did not produce an executable session");
@@ -371,7 +371,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
-      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
+      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
@@ -471,7 +471,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         const recordingId = outcome.newRecordingIds[0];
         const { projectId, authorizationPin } = topology; if (!projectId || !authorizationPin) throw new RunnerFailure("environment.missing", "The Flow lane needs an authenticated isolated Core with an authorization PIN");
         if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
-        await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
+        await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
         // Settled however the lane ends: an overspend or an unreached provider fails a finished run, and a failed lane still leaves its provider calls itemized.
         const lane = await runLaneWithLiveLlmSettlement({ live, control, projectId, bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }) }, async flowRunIdentified => await runFlowLane({
           control, projectId, authorizationPin, recordingId,
@@ -496,7 +496,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
-    await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed"));
+    await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed")); await uiReview.finish("end");
     verdict = "passed";
   } catch (error) {
     failureCategory = classifyRunnerFailure(error);
@@ -514,7 +514,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
     // No picture is taken (see `screenshotAdapter` above), so the failure is
     // published as the event alone.
-    await capture.trigger(failureEvent).catch(() => undefined);
+    await capture.trigger(failureEvent).catch(() => undefined); await uiReview.finish("failure");
   } finally {
     setFacilityStage("scenario.cleanup");
     stepRunner?.dispose();
@@ -539,7 +539,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
-    try { await context?.close(); }
+    await uiReview.close(); try { await context?.close(); }
     catch (error) {
       const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
       const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "browser", error);
