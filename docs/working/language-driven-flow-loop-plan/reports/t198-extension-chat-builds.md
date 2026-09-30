@@ -35,6 +35,22 @@
     - The session carries `guard`, and `run-chat-check.ts` fails the check at stage `network guard` on any violation.
     - The structural test sanctions `launch-firefox.ts` and pins the order in both files.
   - Firefox limits, stated in `launch-firefox.ts`: there are no containment switches, and the add-on's background page is not a service worker, so the route guard is not known to see its requests.
+- **r3 browser proof, stopped by the user's order** (2026-09-30, worker, from the `fxwork/t198` tree after the branch merged to dev as 9d3461a3).
+  - Slot: `lab-slots/ui-1/owner` was claimed at 19:02:36Z and cleared (removed) afterwards.
+  - Builds: extension, scenario-lab and test-runner were rebuilt, and `cli.js --prepare-core-web-build` ran. The fresh bundles contain the chat-page code.
+  - **Chrome**: `node packages/test-runner/dist/extension-chat-check/cli.js --browser chrome --scenario social-network-feed --page friends/requests/`, headed, no provider, exit 2.
+    - It got as far as stage `claim relay`: the isolated Core, the recording proxy and the approval Flow were saved; Chrome opened; the extension paired (`connectionState connected`); the cookie prompt was declined; and the **real side panel opened** (`panelMode side-panel`).
+    - It failed there: "The panel sent no append-turn for the message within 60000 ms". The extension called only `list-conversations`, 30 times, all 200. The panel read "Couldn't send that. Try again." and, under Recent automations, "Something went wrong."
+    - Evidence: `C:/Users/osrs_/FluxStuff/evidence/t198/2026-09-30T19-16-25-751Z-chrome/`.
+    - So the active-tab read was **not reached**: the send was refused before `pageLocation` ran.
+  - **Cause, a product defect.** The log said "extension project after selecting it: unset". The relay's send refuses with `no_project` when `connection.projectId()` is empty, and that is only the stored session value. A just-paired browser learns its project only when a recording resolves it from Core's snapshot (`connection/project-context.ts`), so a person who pairs and chats before recording could never send.
+  - **Fix.** Validated by unit tests only.
+    - `PanelRelayContext.projectId` may now return a promise (`panel/relay-context.ts`).
+    - `panel-control-deps.ts` passes `connection.resolveProjectId("panel")`, a new method on `connection.ts` that calls `ProjectContext.resolve`: the stored project, or else Core's snapshot, then remembered.
+    - `conversation-relay.ts` and `run-control.ts` await it.
+    - A new test in `panel/tests/conversation-relay.test.ts` covers it.
+  - **Firefox was never started**: all Labs were stopped by the user's order before it.
+  - The Chrome run ended by itself. No chat-check process was left running.
 
 ## Why it could not work (confirmed 2026-09-30)
 
@@ -155,7 +171,22 @@ The attacker still cannot read the key, cannot call build endpoints directly, an
 
 ## Ready to commit
 
-Ready to commit:
+Ready to commit (r3, on top of 9d3461a3):
+- `apps/extension/src/background/connection.ts`
+- `apps/extension/src/background/panel/relay-context.ts`
+- `apps/extension/src/background/panel/conversation-relay.ts`
+- `apps/extension/src/background/panel/run-control.ts`
+- `apps/extension/src/background/panel/panel-control-deps.ts`
+- `apps/extension/src/background/panel/tests/conversation-relay.test.ts`
+- this report
+
+Validation (r3):
+- `heavy.sh pnpm --filter @fluxiq-web-extension/extension test` -> `# tests 1457`, `# pass 1457`, `# fail 0`.
+- `extension check` -> exit 0.
+- `node scripts/structure-audit.mjs` -> `passed (130 warning(s), 120 baselined)`.
+- The browser proof is still unproven: Chrome and Firefox must be re-run once Labs are allowed again.
+
+Ready to commit (r2, already merged as 9d3461a3):
 - `packages/test-runner/src/extension-chat-check/chat-network-policy.ts`
 - `packages/test-runner/src/extension-chat-check/firefox/launch-firefox.ts`
 - `packages/test-runner/src/extension-chat-check/open-chrome-session.ts`

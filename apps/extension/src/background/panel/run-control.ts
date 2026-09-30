@@ -21,7 +21,7 @@ const ENDED_RUN_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const STOP_REASON = "Stopped from the browser extension.";
 
 export async function stopRun(message: Partial<PanelStopRunRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
-  const projectId = text(message.projectId) ?? text(context.projectId());
+  const projectId = text(message.projectId) ?? text(await context.projectId());
   if (!projectId) return relayFailure("no_project");
   const runId = text(message.runId);
   if (runId) return context.call("cancel-runtime-session", { projectId, runId, reason: STOP_REASON });

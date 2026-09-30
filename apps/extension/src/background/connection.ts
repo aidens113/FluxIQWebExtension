@@ -485,6 +485,15 @@ export class FluxIQConnection {
     return this.session.projectId;
   }
 
+  /**
+   * The project as a recording resolves it: the one known, or else the one
+   * Core's snapshot names, which is then remembered. Undefined when Core names
+   * none, or cannot be asked.
+   */
+  resolveProjectId(reason: string): Promise<string | undefined> {
+    return this.projects.resolve(reason);
+  }
+
   currentSettings(): FluxIQSettings {
     return this.settings;
   }

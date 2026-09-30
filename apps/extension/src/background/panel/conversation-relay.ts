@@ -48,7 +48,7 @@ export async function relayConversation(message: ConversationMessage, context: P
 
 async function read(message: Partial<PanelConversationReadRequest> & { conversationId?: unknown }, context: PanelRelayContext): Promise<PanelRelayResponse> {
   if (message.kind === "get" || message.conversationId !== undefined) {
-    const projectId = projectFor(message.projectId, context);
+    const projectId = await projectFor(message.projectId, context);
     if (!projectId) return relayFailure("no_project");
     const conversationId = text(message.conversationId);
     if (!conversationId) return relayFailure("invalid_request", "Say which conversation to read.");
@@ -57,7 +57,7 @@ async function read(message: Partial<PanelConversationReadRequest> & { conversat
   }
   const list = message as Partial<Extract<PanelConversationReadRequest, { kind: "list" }>>;
   // An explicit null asks across every project; left out, the session's project.
-  const projectId = list.projectId === null ? null : projectFor(list.projectId, context) ?? null;
+  const projectId = list.projectId === null ? null : await projectFor(list.projectId, context) ?? null;
   return context.call("list-conversations", defined({
     projectId,
     status: text(list.status),
@@ -68,7 +68,7 @@ async function read(message: Partial<PanelConversationReadRequest> & { conversat
 }
 
 async function send(message: Partial<PanelConversationSendRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
-  const projectId = projectFor(message.projectId, context);
+  const projectId = await projectFor(message.projectId, context);
   if (!projectId) return relayFailure("no_project");
   const opening = defined({ projectId, subjectKind: text(message.subjectKind), subjectId: text(message.subjectId), title: text(message.title) });
   if (message.kind === "open") return context.call("open-conversation", opening);
@@ -90,7 +90,7 @@ async function send(message: Partial<PanelConversationSendRequest>, context: Pan
 }
 
 async function answer(message: Partial<PanelConversationAnswerRequest>, context: PanelRelayContext): Promise<PanelRelayResponse> {
-  const projectId = projectFor(message.projectId, context);
+  const projectId = await projectFor(message.projectId, context);
   if (!projectId) return relayFailure("no_project");
   const askId = text(message.askId);
   const kind = text(message.kind);
@@ -163,8 +163,8 @@ async function withPayload(
   return send(payload);
 }
 
-function projectFor(requested: unknown, context: PanelRelayContext): string | undefined {
-  return text(requested) ?? text(context.projectId());
+async function projectFor(requested: unknown, context: PanelRelayContext): Promise<string | undefined> {
+  return text(requested) ?? text(await context.projectId());
 }
 
 function text(value: unknown): string | undefined {
