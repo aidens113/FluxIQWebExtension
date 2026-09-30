@@ -11,7 +11,10 @@ process.env.DOMAIN_TEST_BUILD_IMPORT_ONLY = "1";
 const { assertTestBuildOutdirIsRemovable, cleanTestBuildOutdir, resolveTestBuildOutdir } =
   await import("../test-domain.mjs");
 
-const ROOT = path.resolve(path.join(tmpdir(), "fluxiq-domain-root"));
+// A package root the guards reason about as a path; nothing is written under
+// it. Named per process all the same, so no run can collide with another
+// (the shared-temp-root audit rule).
+const ROOT = path.resolve(path.join(tmpdir(), `fluxiq-domain-root-${process.pid}`));
 
 test("the two directories the runner produces are the two it may empty", () => {
   assertTestBuildOutdirIsRemovable(path.join(ROOT, ".test-build"), ROOT);
