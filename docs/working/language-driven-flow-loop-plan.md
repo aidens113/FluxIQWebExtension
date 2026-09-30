@@ -92,7 +92,10 @@ furious: never an automatic loop that runs without an agent; "not idle" never me
    `live-campaign/row/summarize-task.mjs` reads the verdict from `result.permissionStop` or the `stopped-for-permission`
    invariant; `summary/totals.mjs` and `summary/markdown.mjs` get a separate "stopped for permission" count; any pass streak in
    `live-campaign/runner.mjs` ends at a stop; and the comments in `flow-lane/creation/lane.ts` that call a stop "the pass" are
-   reworded. `bench/evaluate-run.ts` carries no stop invariant yet.
+   reworded. `bench/evaluate-run.ts` carries no stop invariant yet. **Follow-ups done: t199, merged `39e11fd8`** (supervisor
+   re-ran the four script test files: 14 pass, 0 fail; `pnpm task finish t199` printed `"passed":true`). The runner keeps no
+   pass streak, so a test proves a stop is its own verdict. Left open: `run-bench.ts` rebuilds a resumed evaluation without
+   the stop, so it still reads failed but loses the `stopped_for_permission` label.
 
 **Lane work: WIP-committed at the shutdown state, dev merged in, unvalidated.** Each lane's owner triages its WIP (finish or
 revert) against its report's fix log. A conflicted merge is left in progress for the owner to resolve and stage; the supervisor
@@ -110,7 +113,7 @@ what t174 drops at integration.
 | t196 | - | `0645df78` / `66c77aea` | ds clean; Core conflict `dry-run-gate.ts` + test | `reports/t196-state-digest-cost.md` | the dry run: N1 + D1 + wH (decisions below) |
 | t197 | ui-1 | `8e4b7bd3` / `0b3b7960` | both clean | `reports/t197-robot-check-handoff.md` | the recovery path must use the person-needed ask; a `ui-1` browser check |
 | t198 | ui-1 | `6587257d` / - | both clean | `reports/t198-extension-chat-builds.md` | prove the active-tab read in the Chrome side panel and the Firefox popup; a plain-words security summary for the user |
-| t199 | `fxwork/t199-honest-pass-followups` | new, off dev | - | `reports/t199-honest-pass-followups.md` | the honest-pass follow-ups in `scripts/lab` (item 2 above) |
+| t199 | `fxwork/t199-honest-pass-followups` | merged `39e11fd8` | - | `reports/t199-honest-pass-followups.md` | done; the worktree is removed once its two leftover processes exit |
 
 Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in the lane's own tree unless another plan is named.
 
@@ -144,7 +147,7 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in t
 **Next, in order.**
 1. Watch the lanes: commit each `Ready to commit` after re-running its validation; commit the conflicted merges once staged.
 2. Check the first admitted live run's `lab-slots/spend-ledger.jsonl` lines (the guards' ledger is not yet proven live).
-3. Integration round 3: t199, C, t191, t192, t196, t197 (t198 after the user's review), then A, B and D as their fixes validate.
+3. Integration round 3: C, t191, t192, t196, t197 (t198 after the user's review), then A, B and D as their fixes validate.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
 
@@ -722,6 +725,11 @@ debug and partitioned so neither touches the other's files:
   t191's interactive Lab. The guards' admission code (`scripts/lab/live-guards/admit-live-run.mjs`, `rules/debug.mjs`,
   `rules/unchanged.mjs`) finds a previous run only in `lab-slots/spend-ledger.jsonl`, which does not exist yet, so each lane's
   first run is admitted and the debug and unchanged rules bind from then on. No lane work validated yet.
+- Merges committed after each lead staged its resolution: t194 downstream `0d5b62c4`, t191 downstream `2faa7dc5` (with one
+  extra staged test, `panel/chat/conversation/tests/ask-copy.test.ts`), t174 Core `4e42d7ef`. The t174 merge also carries eight
+  of the lead's own staged edits beyond the merge (`flow-draft/dry-run.ts`, `flow-draft/verify-only.ts` and its test,
+  `decision-handlers/completion.ts`, and others), the lead's resolution of the `dry-run-gate.ts` conflict; reconcile them with
+  t196's dry-run design at integration.
 - Outcome: In progress. Pass streak 0.
 
 ## Open Questions
