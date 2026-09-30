@@ -1,7 +1,7 @@
 import type { FluxIQ } from "fluxiq";
 import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS, webAutomationActionWaitsOutChecks } from "./actions/check-wait";
+import { webAutomationCheckWaitNode } from "./actions/check-wait";
 import { webAutomationExtractListTimeoutMs, webAutomationRecordedExtraction } from "./actions/extraction";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
@@ -128,17 +128,18 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
  * A recorded DOM addition that no action maps from proposes a wait for the
  * next click's target, from the mutation's own call (`recording/proposals`).
  *
- * A click recorded through its action input arrives as Core's `action` entry.
- * When a landing in `following` names the event id Core stored on it, it gives
- * the candidate Core's fallback would propose for that entry, plus the claim.
- * An extraction arrives the same way and is mapped the same way, from the
- * definition kept beside the command. Every other `action` entry maps to
- * `null`, so Core's fallback stands for it.
+ * A click or navigation recorded through its action input arrives as Core's
+ * `action` entry. It gives the candidate Core's fallback would propose for that
+ * entry, plus the check allowance, and for a click whose landing in `following`
+ * names the event id Core stored on it, the claim too. An extraction arrives
+ * the same way and is mapped the same way, from the definition kept beside the
+ * command. Every other `action` entry maps to `null`, so Core's fallback stands
+ * for it.
  */
 export function mapWebRecordingObservation(observation: AutomationStudioRecordingMapperObservation, context?: Pick<AutomationStudioRecordingMapperContext, "following">): AutomationStudioRecordingMapperCandidate | null {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
-  if (!action) return recordedExtractionEntry(observation) ?? linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
+  if (!action) return recordedExtractionEntry(observation) ?? recordedActionEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
   // A recorded extraction proposes a candidate of its own. There is one such
   // input: the single-value form is registered as none (`io/input-model.ts`).
   if (action.inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return extractionCandidate(action, step.payload);
@@ -204,40 +205,49 @@ function candidate(outputId: string, parameters: JsonObject, sourceInputId: stri
   // A click or a navigation can land on a check that clears by itself, and is
   // given the room to wait it out on top of Core's default timeout
   // (`actions/check-wait.ts`); `checkWaitMs` says how much of it is that room.
-  const checkWait = webAutomationActionWaitsOutChecks(outputId);
-  const authored = checkWait ? { ...parameters, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } : parameters;
-  return { outputId, parameters: compact(authored), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(checkWait ? { timeoutMs: WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS + WEB_AUTOMATION_CHECK_WAIT_MS } : {}), ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
+  const node = webAutomationCheckWaitNode(outputId, { parameters });
+  return { outputId, parameters: compact(node.parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(node.timeoutMs === undefined ? {} : { timeoutMs: node.timeoutMs }), ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
 }
 
-/** The label Core's fallback gives a `web.dom.click` action entry, `readableTokenValue` of its output id. The Core proposal rows in `tests/domain.test.ts` hold the two equal. */
-const FALLBACK_CLICK_LABEL = "Web Dom Click";
+/**
+ * The labels Core's fallback gives a click's and a navigation's `action` entry,
+ * `readableTokenValue` of the output id. The Core proposal rows in
+ * `tests/domain.test.ts` hold the click's equal to Core's own.
+ */
+const FALLBACK_LABELS: Readonly<Record<string, string>> = { "web.dom.click": "Web Dom Click", "web.browser.navigate": "Web Browser Navigate" };
 
 /**
- * A click's `action` entry whose landing names the event id Core stored on it,
- * as the candidate Core's fallback (`recordingActionEntryCandidate`) proposes for
- * that entry, read off the same fields: output, parameters, source input,
- * confirmation, confidence and label, with the landing claim added. Any other
- * `action` entry gives `undefined`, and so does one the fallback refuses
- * (`policyEligible: false`), so Core's fallback decides for it.
+ * A recorded click's or navigation's `action` entry, as the candidate Core's
+ * fallback (`recordingActionEntryCandidate`) proposes for it, read off the same
+ * fields -- output, parameters, source input, confirmation, confidence and
+ * label -- with the check allowance every click and navigation has
+ * (`actions/check-wait.ts`). Core's fallback gives it none, so an entry left to
+ * it would run on Core's 5 s default and a check that clears after 8 s would
+ * outlast it. A click whose landing names the event id Core stored on it also
+ * claims that landing. Any other `action` entry gives `undefined`, and so does
+ * one the fallback refuses (`policyEligible: false`), so Core's fallback
+ * decides for it.
  */
-function linkedClickEntry(observation: AutomationStudioRecordingMapperObservation, following: readonly AutomationStudioRecordingMapperObservation[]): AutomationStudioRecordingMapperCandidate | undefined {
+function recordedActionEntry(observation: AutomationStudioRecordingMapperObservation, following: readonly AutomationStudioRecordingMapperObservation[]): AutomationStudioRecordingMapperCandidate | undefined {
   if (observation.type !== "action" || observation.metadata.policyEligible === false) return undefined;
   const entry = observation.payload;
   const outputId = nonBlankString(entry.outputId) ?? nonBlankString(entry.actionType);
-  if (outputId !== "web.dom.click") return undefined;
-  const expectedState = webAutomationClickLandingExpectation(recordedStep(observation), following.map(storedStep));
-  if (expectedState === undefined) return undefined;
+  const label = outputId === undefined ? undefined : FALLBACK_LABELS[outputId];
+  if (outputId === undefined || label === undefined) return undefined;
+  const expectedState = outputId === "web.dom.click" ? webAutomationClickLandingExpectation(recordedStep(observation), following.map(storedStep)) : undefined;
   const sourceInputId = nonBlankString(observation.metadata.inputId) ?? nonBlankString(entry.confirmationInputId);
   const confirmationInputId = readString(entry.confirmationInputId);
   const timeoutMs = entry.confirmationTimeoutMs;
+  const node = webAutomationCheckWaitNode(outputId, { parameters: (readObject(entry.parameters) ?? {}) as JsonObject });
   return {
     outputId,
-    parameters: (readObject(entry.parameters) ?? {}) as JsonObject,
+    parameters: node.parameters,
+    ...(node.timeoutMs === undefined ? {} : { timeoutMs: node.timeoutMs }),
     ...(sourceInputId === undefined ? {} : { sourceInputIds: [sourceInputId] }),
     ...(confirmationInputId ? { expectedConfirmation: { inputId: confirmationInputId, timeoutMs: typeof timeoutMs === "number" ? timeoutMs : 5_000 } } : {}),
-    expectedState,
+    ...(expectedState === undefined ? {} : { expectedState }),
     confidence: 0.95,
-    label: FALLBACK_CLICK_LABEL
+    label
   };
 }
 

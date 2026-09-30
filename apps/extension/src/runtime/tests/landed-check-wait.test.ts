@@ -6,9 +6,10 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { webAutomationActionFromGatewayCommand, webAutomationCheckWaitParameters } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../../shared/protocol";
 import type { LandedPageReading } from "../landed-challenge";
-import { SELF_CLEARING_WAIT_MS, checkWaitBudgetMs, settleLandedReading, waitOutLandedCheck, type LandedCheckProbe } from "../landed-check-wait";
+import { SELF_CLEARING_WAIT_MS, checkWaitBudgetMs, settleLandedReading, standingCheckWords, waitOutLandedCheck, type LandedCheckProbe } from "../landed-check-wait";
 
 const SELF_CLEARING: LandedPageReading = { kind: "robot_check", check: "self_clearing" };
 const PERSON_ONLY: LandedPageReading = { kind: "robot_check", check: "person_only" };
@@ -114,4 +115,50 @@ test("a recorded 5 s click given the check allowance waits a check out for the f
   const recorded = { ...ACTION, timeoutMs: 20_000, checkWaitMs: 15_000 } as BrowserActionCommand;
   assert.equal(checkWaitBudgetMs(recorded, 1_000, 2_000), 15_000);
   assert.equal(checkWaitBudgetMs(recorded, 1_000, 6_000), 14_000, "20 s less the 5 s spent and the 1 s margin");
+});
+
+// t203: a click a model built had no allowance. Its Flow node dispatches the
+// parameters the model wrote -- here `timeoutMs` 5 s -- so the page gave a check
+// about three seconds, and bigbox's clears after 8 s (`run-muoga8at`). Now the
+// node dispatches them through the one allowance every click gets
+// (`domain/src/actions/check-wait.ts`), and this is that command as the page
+// reads it off the gateway.
+function builtClick(parameters: Record<string, number | string>): BrowserActionCommand {
+  const command = webAutomationActionFromGatewayCommand({ commandId: "c-built", actionType: "web.dom.click", parameters: webAutomationCheckWaitParameters("web.dom.click", parameters) });
+  assert.ok(!("status" in command), "the built click is a command, not a rejection");
+  return command as BrowserActionCommand;
+}
+
+/** Bigbox's "Robot or human?": says it is clearing, and is gone after 8 s. */
+const EIGHT_SECOND_CHECK: LandedPageReading[] = [...Array.from({ length: 16 }, () => SELF_CLEARING), NO_CHECK];
+
+test("a click a model built waits out a check that clears by itself after 8 s", async () => {
+  const command = builtClick({ selector: "#add", timeoutMs: 5_000 });
+  assert.equal(command.timeoutMs, 5_000 + SELF_CLEARING_WAIT_MS);
+  assert.equal(command.checkWaitMs, SELF_CLEARING_WAIT_MS);
+  // The press took a second before the check went up.
+  const budget = checkWaitBudgetMs(command, 0, 1_000);
+  assert.equal(budget, SELF_CLEARING_WAIT_MS);
+  assert.deepEqual(await waitOutLandedCheck(tab(EIGHT_SECOND_CHECK), budget), { outcome: "cleared", waitedMs: 8_500 });
+  // A model that wrote no timeout is waited on in full too.
+  assert.equal(checkWaitBudgetMs(builtClick({ selector: "#add" }), 0, 1_000), SELF_CLEARING_WAIT_MS);
+});
+
+test("without the allowance the same click ran out before the 8 s check cleared", async () => {
+  const unallowed = { commandId: "c-before", actionType: "web.dom.click", selector: "#add", timeoutMs: 5_000 } as BrowserActionCommand;
+  const budget = checkWaitBudgetMs(unallowed, 0, 1_000);
+  assert.equal(budget, 3_000);
+  assert.equal((await waitOutLandedCheck(tab(EIGHT_SECOND_CHECK), budget)).outcome, "not_cleared");
+});
+
+test("a built click still hands a check that does not clear to the person", async () => {
+  const command = builtClick({ selector: "#add", timeoutMs: 5_000 });
+  const budget = checkWaitBudgetMs(command, 0, 1_000);
+  const stuck = await waitOutLandedCheck(tab([SELF_CLEARING]), budget);
+  assert.deepEqual(stuck, { outcome: "not_cleared", waitedMs: SELF_CLEARING_WAIT_MS });
+  assert.match(standingCheckWords("the page the browser landed on", stuck), /only a person can answer it now/u);
+  // One that turns into a person-only check is handed over at once.
+  const personOnly = await waitOutLandedCheck(tab([SELF_CLEARING, PERSON_ONLY]), budget);
+  assert.equal(personOnly.outcome, "person_only");
+  assert.match(standingCheckWords("the page the browser landed on", personOnly), /only a person can answer/u);
 });

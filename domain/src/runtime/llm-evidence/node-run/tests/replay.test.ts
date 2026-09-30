@@ -45,7 +45,8 @@ test("a reset goes to the recorded location, through the navigate the Flow uses"
   assert.equal(reset.resultCode, "core.replay.replayed");
   assert.equal(reset.effectApplied, true);
   const navigated = stubbed.commands.find((command) => command.actionType === "web.browser.navigate");
-  assert.deepEqual(navigated?.parameters, { url: START });
+  // With the room to wait out a check that clears by itself, as every navigation has (`actions/check-wait.ts`).
+  assert.deepEqual(navigated?.parameters, { url: START, checkWaitMs: 15_000 });
 });
 
 test("a reset with no usable location refuses, so nothing is replayed from the wrong place", async () => {
@@ -71,9 +72,11 @@ test("a replayed step dispatches the node's own command with the parameters the 
   assert.equal(replayed.resultCode, "core.replay.replayed");
   assert.equal(replayed.effectApplied, true);
   // The command the finished Flow dispatches, not a rehearsal of it. No handle
-  // is resolved: the draft's parameters are already real.
+  // is resolved: the draft's parameters are already real. The click carries
+  // the check allowance, as the Flow's own node does when it runs
+  // (`output-nodes/native-runtime.ts`).
   const clicked = stubbed.commands.find((command) => command.actionType === "web.dom.click");
-  assert.deepEqual(clicked?.parameters, { selector: "#go" });
+  assert.deepEqual(clicked?.parameters, { selector: "#go", checkWaitMs: 15_000 });
 });
 
 test("a step whose target is gone is unreproducible, and every other failure is a failure", async () => {
