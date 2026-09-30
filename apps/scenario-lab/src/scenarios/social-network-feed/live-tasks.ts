@@ -1,6 +1,8 @@
 import type { LiveInstructionTask } from "../live-instructions.js";
 
 const GROUP_POST = "Post this in the Riverside Allotment Society group, word for word: \"Spare rhubarb crowns at plot 14, free to anyone who can collect them this weekend. Bring a bag!\" Then make sure it is waiting for the group's admins to approve it.";
+/** Posting to the group publishes, so the build asks there, at the dialog's Post button, in both group-page designs. */
+const GROUP_POST_POINT = { consequence: "send_or_publish", control: "Post" } as const;
 const FEED_DIGEST = "Go through my Circleway home feed down to where it says I'm all caught up and collect every post my friends wrote themselves, including the ones they posted in groups. Leave out adverts, suggested posts, anything a friend only shared from someone else, and my own posts and memories, and list each post once even if the feed shows it again further down. Give me a table with columns author, group, posted, text, reactions and comments: author is the friend who wrote it, group is the group it was posted in and empty otherwise, posted is its full date and time rather than a short label like 3h, text is the whole post rather than the shortened version, and reactions and comments are exactly as the post shows them, empty where it shows none.";
 const CONFIRM_REQUESTS = "Go through my friend requests and confirm everyone I have at least five mutual friends with, and leave every other request as it is. Then give me a table of every request the list now shows as accepted, in the order the list shows them, with columns name and mutualFriends, where mutualFriends is written exactly as their request shows it.";
 const MOVE_OPEN_DAY = "My open-day post needs to say Sunday 27 September instead of Saturday 26 September; everything else about it, including who can see it, should stay the same. Once it reads right, give me every post of mine about the open day that my feed now shows, with columns text, audience and posted, where audience is who can see the post and posted is its full date and time.";
@@ -13,7 +15,9 @@ const MOVE_OPEN_DAY = "My open-day post needs to say Sunday 27 September instead
  *   which the server fills only with what it kept, so a post that tripped the
  *   hidden trap field or was pressed only once fails it. Its `regrouped` rows
  *   are the drifted group page, explored as it is and met only after the
- *   build.
+ *   build. Posting publishes, so every row declares its permission point at
+ *   the composer's Post button: the build asks there and the Lab answers as
+ *   the person, even though the instruction names the post (F10).
  * - `feed-digest` is the extraction, judged record by record, and its
  *   `app-install` row is the existing-Flow edge case: a Flow built on the
  *   baseline feed that then opens on the app interstitial.
@@ -31,9 +35,9 @@ const MOVE_OPEN_DAY = "My open-day post needs to say Sunday 27 September instead
  *   so a run that confirmed someone it should not have shows them.
  */
 export const SOCIAL_NETWORK_FEED_TASKS: readonly LiveInstructionTask[] = [
-  { id: "social-network-feed-group-post", scenarioId: "social-network-feed", kind: "form", instruction: GROUP_POST, judgeBy: "playback-goal" },
-  { id: "social-network-feed-group-post-regrouped", scenarioId: "social-network-feed", variantId: "regrouped", kind: "form", instruction: GROUP_POST, judgeBy: "playback-goal" },
-  { id: "social-network-feed-group-post-regrouped-after-creation", scenarioId: "social-network-feed", variantId: "regrouped", variantArmedAfterBuild: true, kind: "form", instruction: GROUP_POST, judgeBy: "playback-goal" },
+  { id: "social-network-feed-group-post", scenarioId: "social-network-feed", kind: "form", instruction: GROUP_POST, judgeBy: "playback-goal", permissionPoint: GROUP_POST_POINT },
+  { id: "social-network-feed-group-post-regrouped", scenarioId: "social-network-feed", variantId: "regrouped", kind: "form", instruction: GROUP_POST, judgeBy: "playback-goal", permissionPoint: GROUP_POST_POINT },
+  { id: "social-network-feed-group-post-regrouped-after-creation", scenarioId: "social-network-feed", variantId: "regrouped", variantArmedAfterBuild: true, kind: "form", instruction: GROUP_POST, judgeBy: "playback-goal", permissionPoint: GROUP_POST_POINT },
   { id: "social-network-feed-feed-digest", scenarioId: "social-network-feed", kind: "navigate-and-extract", instruction: FEED_DIGEST, judgeBy: "expected-dataset", expectedDatasetId: "extract-feed-digest" },
   { id: "social-network-feed-feed-digest-quiet-feed", scenarioId: "social-network-feed", variantId: "quiet-feed", kind: "navigate-and-extract", instruction: FEED_DIGEST, judgeBy: "expected-dataset", expectedDatasetId: "extract-feed-digest" },
   { id: "social-network-feed-feed-digest-app-install", scenarioId: "social-network-feed", variantId: "app-install", variantArmedAfterBuild: true, kind: "navigate-and-extract", instruction: FEED_DIGEST, judgeBy: "expected-dataset", expectedDatasetId: "extract-feed-digest" },
