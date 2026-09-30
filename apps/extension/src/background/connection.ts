@@ -25,6 +25,7 @@
 import type {
   ActivityEntry,
   CoreRecordingsPage,
+  PanelRelayResponse,
   ExtensionStatus,
   FluxIQSession,
   FluxIQSettings,
@@ -33,13 +34,15 @@ import type {
 } from "../shared/protocol";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
-import { clearQueuedEvents, queueEvent, readQueuedEvents, writeSession } from "./storage";
+import { RecordedStepIndex } from "./recorded-steps";
+import { clearQueuedEvents, queueEvent, readQueuedEvents, removeQueuedRecordingEvent, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are
 // siblings of the same name: "./connection" would resolve back to this file.
 import {
   ActivePage,
   ActiveRecording,
   ActivityLog,
+  callCoreProgram,
   compactObject,
   ContentAttachment,
   EventSequence,
@@ -66,6 +69,7 @@ export class FluxIQConnection {
   private readonly listeners = new Set<StatusListener>();
 
   private readonly activityLog = new ActivityLog();
+  private readonly recordedSteps = new RecordedStepIndex();
   private readonly sequence = new EventSequence();
   private readonly runtimeStatus = new RuntimeStatusTracker();
   private readonly navigation = new NavigationRecorder();
@@ -221,6 +225,10 @@ export class FluxIQConnection {
       attachment: this.attachment,
       sendToTab,
       onActivity,
+      onRecordedStep: (kind, label, detail, step) => {
+        this.recordedSteps.note(this.activityLog.record(kind, label, detail), step);
+        this.emitStatus();
+      },
       recordEvent
     });
     this.commands = new ServerCommandChannel({
@@ -301,6 +309,11 @@ export class FluxIQConnection {
     await this.gateway.connect();
   }
 
+  /** Retries a dropped connection now instead of when its backoff ends (`GatewaySession.retryNow`). */
+  retryConnection(): boolean {
+    return this.gateway.retryNow();
+  }
+
   disconnect(): void {
     this.scriptedNavigation.cancelAll("cancelled");
     this.gateway.stopReconnecting();
@@ -308,6 +321,42 @@ export class FluxIQConnection {
     this.gateway.closeClient();
     if (this.recording.state() === "recording") this.addActivity("connection", "Disconnected during recording", "Events will queue until reconnect.", "warning");
     this.gateway.markDisconnected();
+  }
+
+  /**
+   * Removes one recorded step by the activity id the panel's log showed it
+   * under: from the offline queue when it was never sent, otherwise from Core's
+   * recording (`remove-recording-entry`). A step Core has not received yet --
+   * sent but not arrived -- is not reported removed, so the panel can say "try
+   * again" rather than show a step gone that FluxIQ still has.
+   */
+  async removeRecordedStep(activityId: string): Promise<PanelRelayResponse<{ removedFrom: "queue" | "fluxiq"; removedCount: number }>> {
+    const step = this.recordedSteps.lookup(activityId);
+    if (!step) return { ok: false, code: "invalid_request", error: "That step can no longer be removed from here." };
+    const dequeued = await removeQueuedRecordingEvent(step.eventId);
+    if (dequeued > 0) {
+      this.forgetRecordedStep(activityId);
+      return { ok: true, payload: { removedFrom: "queue", removedCount: dequeued } };
+    }
+    const projectId = this.projects.activeRecordingProject() ?? this.session.projectId;
+    if (!projectId) return { ok: false, code: "no_project", error: "FluxIQ has not said which project this recording belongs to yet." };
+    const reply = await callCoreProgram(this.coreApiCredentials(), "remove-recording-entry", { projectId, recordingId: step.recordingId, eventId: step.eventId });
+    if (!reply.ok) return reply;
+    const removedCount = Number((reply.payload as { removedCount?: unknown } | null)?.removedCount ?? 0);
+    if (!(removedCount > 0)) return { ok: false, code: "failed", error: "FluxIQ has not received that step yet. Try again in a moment." };
+    this.forgetRecordedStep(activityId);
+    return { ok: true, payload: { removedFrom: "fluxiq", removedCount } };
+  }
+
+  /** The recording this browser stopped last, for turning it into an automation. */
+  lastStoppedRecordingId(): string | undefined {
+    return this.recording.lastStoppedRecordingId();
+  }
+
+  private forgetRecordedStep(activityId: string): void {
+    this.recordedSteps.forget(activityId);
+    this.activityLog.remove(activityId);
+    this.emitStatus();
   }
 
   startRecording(): Promise<void> {

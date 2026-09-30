@@ -30,6 +30,13 @@ export const REVIEWED_PERMISSIONS = Object.freeze([
     why: "Keeps the current tab usable when the user restricts site access to \"on click\" (Chrome) or has not yet granted the optional host permission (Firefox MV3, where <all_urls> is opt-in)."
   },
   {
+    permission: "alarms",
+    targets: ["chrome", "firefox"],
+    installWarning: "none",
+    usedBy: "background/reconnect-watchdog.ts (one periodic alarm, cleared once connected)",
+    why: "A service worker the browser has stopped cannot hold a timer, so after an extension reload or browser restart nothing would reconnect the extension to its FluxIQ runtime. One alarm wakes the worker to retry the connection and is cleared as soon as it connects. It reads nothing."
+  },
+  {
     permission: "downloads",
     targets: ["chrome", "firefox"],
     installWarning: "Manage your downloads",

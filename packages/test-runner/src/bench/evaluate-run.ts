@@ -1,7 +1,7 @@
 import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { classifyRunnerFailure } from "../failure.js";
 import type { RunLaneObservation } from "../flow-lane/index.js";
-import { evaluateObservedRun, flowLaneEvidenceSizes, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
+import { evaluateObservedRun, flowLaneAdaptationMeasurements, flowLaneEvidenceSizes, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
 
 /**
  * Where each recording-lane measurement comes from. The bench writes these
@@ -39,6 +39,7 @@ export const FLOW_LANE_SOURCES = {
   extraction: "the lane's own judgement of the workflow's expected.extracted against the datasets Core stored for the run (K5 runDetail.datasets, K8 get-run-dataset-page), one measurement per recorded extract step, paired with the steps by the recording's candidate order. Records are compared in full; the pages a read covered and whether it hit the page's item cap are not observable from Core's run detail or its datasets, so those members are reported as unjudged and enter no rate. A step's duration is the sum of its extract node's attempt durations, so a node Core retried reports the retries too: extractionDurationMs is time spent on the node, not the time one read took. extractionMsPerPage needs a page count and has no samples on this lane at all",
   evidenceSizes: "the run bundle's snapshots/flow-lane.json actions[].evidencePackets: sanitizedPacketBytes holds the UTF-8 size of each state-snapshot packet Core captured before and after a web action attempt, one entry per measured packet, and truncationCount counts those the domain trimmed. The failure packet is not in Core's run detail and is not measured. Both are empty and 0 when that file is absent, which is a run in which no Flow ran, and also when it is unreadable. rawSnapshotBytes is empty: no producer measures raw snapshots, and they are not a Week 1 metric. A measured packet over the domain's exploration budget fails the run's evidence-packet-budget invariant",
   llm: "disabled: Week 1 benches run provider-free",
+  adaptation: "the run bundle's snapshots/adaptation.json, which the lane writes from Core's run detail, the Flow and Subflow graphs the run executed, and each adaptation's stored record, read before Core deletes the run's workspace (run-evaluation/adaptation). Reuse names the applied adaptations stamped on nodes the run attempted that it did not create; validation is Core's own confidence rule over each adaptation's stored results; persistence is each adaptation's stored status and revisions; cost is Core's metadata.llmGate.costAccounting. All four are null -- unmeasured -- when the file is absent or no Flow was created",
 } as const;
 
 const RUNNER_VERDICT = "runner-verdict";
@@ -116,6 +117,7 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
       extraction: observed?.extraction ?? null,
     },
     evidence: flowLaneEvidenceSizes(input.result.path),
+    adaptation: flowLaneAdaptationMeasurements(input.result.path),
   });
 }
 

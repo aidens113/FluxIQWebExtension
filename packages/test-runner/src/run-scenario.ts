@@ -53,7 +53,7 @@ import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant } from "./lab-control/index.js";
 import { createdFlowLaneSnapshot, createdFlowSecretInputs, writeFlowExtractionMismatches, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resetScenarioLab, runLiveRepairLane, withDeclaredFlowRepair, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type LiveRepairLaneInput, type ProveLiveRepairControl, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
-import { attestRunRedaction, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
+import { attestRunRedaction, chromiumExtensionStorageDirs, runRedactionScopes, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
@@ -385,8 +385,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
         }),
       });
-      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
-      await proveRepair(control, activeTopology, createdProjectId, lane, "instruction");
+      // A consequential task without the grant for its act passes by stopping to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): no Flow ran, so nothing below applies.
+      if ("permissionStop" in lane) await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } });
+      else { await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
     } else {
       if (paired && topology.authorizationPin) {
         await proveCoreActionRoundTrip({ page, control: topology.control!, sessionId: paired.sessionId, authorizationPin: topology.authorizationPin, publish: (trigger, summary, details) => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, trigger, summary), details }), record: (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); } });
@@ -600,7 +601,13 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         verdict = "failed";
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", message), details: { failureCategory: "security.redaction", ...details } }).catch(() => undefined);
       };
-      try { redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined }) }); }
+      try {
+        // Every target's browser profile is the run allocation's own (never a user's), closed above; a persistent-isolated one outlives the run and is bounded like its workspace.
+        const writtenSince = target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined;
+        const profileDir = topology?.allocation.browserProfileDir;
+        const extensionStorage = profileDir === undefined ? undefined : { profileDir, dirs: await chromiumExtensionStorageDirs(profileDir), writtenSince };
+        redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: writtenSince, extensionStorage }) });
+      }
       catch (error) { await failRedaction(`Redaction attestation could not run: ${redactionLiterals.reduce((text, literal) => text.replaceAll(literal, "[redacted]"), error instanceof Error ? error.message : String(error))}`, {}); }
       if (redaction?.status === "failed") await failRedaction(`Redaction attestation found ${redaction.findingCount} file(s) holding a declared literal or left unread`, { findings: redaction.findings });
       if (redaction) await bundle.writeStructured("snapshots/redaction-attestation.json", redaction).catch(() => undefined);

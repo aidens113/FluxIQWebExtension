@@ -46,12 +46,9 @@ export async function fetchProjectIdFromCoreSnapshot(
   });
   const bodyText = await response.text().catch(() => "");
   const payload = parseJsonBody(bodyText);
-  console.info("FluxIQ project context lookup", {
-    url: url.toString(),
-    status: response.status,
-    reason,
-    body: payload ?? bodyText
-  });
+  // Status and reason only: the snapshot's body lists every paired client's
+  // session, which a console log has no business keeping.
+  console.info("FluxIQ project context lookup", { status: response.status, reason });
   if (!response.ok) return undefined;
   const root = objectValue(payload);
   if (root?.ok !== true) return undefined;
@@ -89,11 +86,7 @@ export async function uploadStateAsset(
   });
   const bodyText = await response.text().catch(() => "");
   const payload = parseJsonBody(bodyText);
-  console.info("FluxIQ screenshot upload", {
-    url: url.toString(),
-    status: response.status,
-    body: payload ?? bodyText
-  });
+  console.info("FluxIQ screenshot upload", { status: response.status });
   const responseObject = objectValue(payload);
   const responsePayload = objectValue(responseObject?.payload);
   const contentRef = stringValue(responsePayload?.contentRef);
@@ -107,7 +100,8 @@ export async function uploadStateAsset(
 const CORE_PROGRAM_CALL_TIMEOUT_MS = 120_000;
 
 /**
- * One call to an Automation Studio program endpoint, with the pairing token as
+ * One call to a Core program endpoint -- Automation Studio's unless another
+ * program is named -- with the pairing token as
  * the bearer credential. Core accepts the token only on the endpoints its
  * program route allowlists for a paired client (`apps/web/src/lib/program-route.ts`
  * in FluxIQ Core); any other answers 403, which comes back as `refused`.
@@ -120,13 +114,14 @@ const CORE_PROGRAM_CALL_TIMEOUT_MS = 120_000;
 export async function callCoreProgram(
   credentials: CoreApiCredentials,
   endpoint: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  programId = "automation-studio"
 ): Promise<PanelRelayResponse> {
   if (!credentials.token) return { ok: false, code: "not_paired", error: "This browser is not paired with FluxIQ yet." };
   let status: number;
   let bodyText: string;
   try {
-    const url = new URL(`/api/programs/automation-studio/${encodeURIComponent(endpoint)}`, credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+    const url = new URL(`/api/programs/${encodeURIComponent(programId)}/${encodeURIComponent(endpoint)}`, credentials.coreApiUrl || DEFAULT_CORE_API_URL);
     const response = await fetch(url.toString(), {
       method: "POST",
       credentials: "omit",
@@ -140,7 +135,13 @@ export async function callCoreProgram(
     });
     status = response.status;
     bodyText = await response.text();
-  } catch {
+  } catch (error) {
+    // The time limit ran out: FluxIQ was reached, or may have been, and may
+    // still be working on the request -- a conversation turn waits on a model.
+    // Saying "could not be reached" would invite a retry that does it twice.
+    if (isTimeout(error)) {
+      return { ok: false, code: "timed_out", error: "FluxIQ did not answer within two minutes. It may still be working on this, so check FluxIQ before trying again." };
+    }
     // No answer, or an answer cut off before its body arrived: either way
     // FluxIQ said nothing the panel can act on.
     return { ok: false, code: "unreachable", error: "FluxIQ could not be reached." };
@@ -153,6 +154,10 @@ export async function callCoreProgram(
     return { ok: false, code: "failed", httpStatus: status, error: stringValue(body?.error) ?? `FluxIQ answered ${status}.` };
   }
   return { ok: true, payload: body.payload ?? null };
+}
+
+function isTimeout(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "TimeoutError";
 }
 
 function recordingsApiUrl(coreApiUrl: string, page: number, pageSize: number): string {

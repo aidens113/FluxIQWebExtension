@@ -157,6 +157,14 @@ needs verifying, so reads are the cost: route discovery through a worker or
 `Explore` and read the conclusion. Briefs follow the protocol format, at most
 40 lines; the worker's final message follows the protocol's return contract.
 
+Every agent runs Opus 5.5. The supervisor works at high or extra-high effort
+depending on the task. Lane leads are dispatched as `lead` (high) or
+`lead-xhigh` (the live loop, core architecture); workers as `worker-low`
+(mechanical edits, running a named command), `worker` (medium, the default)
+or `worker-high` (root-cause debugging, cross-module design), chosen per
+brief. A lead dispatches a worker in the foreground when it needs the result
+to continue, because a background worker's completion does not wake it.
+
 ## Repository Boundaries
 
 This repository is the downstream FluxIQ web-automation implementation. It is
@@ -169,7 +177,8 @@ import domain contracts; domain code must not depend on extension UI or
 browser modules. Full structure is in
 [repository layout and commands](docs/architecture/repository-layout.md).
 
-Workspace packages link to FluxIQ Core in the sibling `F:\!FluxIQ` checkout.
+Workspace packages link to FluxIQ Core in the sibling `!FluxIQ` checkout
+(`C:\Users\osrs_\FluxStuff\!FluxIQ` on this machine; the copies under `F:\` are stale).
 Changes there are allowed when needed to complete work here. Before the first
 Core edit, alert the user that the task crosses the repository boundary,
 identify the Core area and reason, and mention any expected compatibility
@@ -297,7 +306,8 @@ that were simply being starved. Before starting a live run, check whether one is
 already going; if the supervisor has a campaign in flight, ask it rather than
 starting one, and say so in your report instead of theorising about the cause.
 
-Authoring worktrees live under `F:/fxwork/`, never `F:/fxlab/`, which holds the
+Authoring worktrees live under `fxwork/` beside the checkout
+(`C:/Users/osrs_/FluxStuff/fxwork/` here), never under `fxlab/`, which holds the
 Lab's pinned test worktrees. `domain/package.json` links Core by a relative path
 out of the repository, so Core must be the worktree's sibling; sibling worktrees
 therefore share one Core, which is what makes a second worktree cost about four

@@ -2,6 +2,7 @@ import {
   BENCH_REPORT_SCHEMA_VERSION, benchExtractionRateMetrics, benchFlakeClasses, benchRateMetrics, benchTargets, compareBenchMetric,
   type BenchCorpusMetrics, type BenchExtractionMetrics, type BenchReport,
 } from "./bench-report.js";
+import { validateBenchAdaptationCost, validateBenchAdaptationPersistence, validateBenchAdaptationReuse, validateBenchAdaptationValidation } from "./adaptation-reuse-validation.js";
 import { evaluationLanes, type EvaluationLane } from "./evaluation.js";
 import { validateLlmUsage } from "./evaluation-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
@@ -12,7 +13,15 @@ const CORPUS_ROW_ID = /^[A-Z]+[0-9]+$/u;
 /** The runner's `--repeat` bound. */
 const MAX_REPEAT = 100;
 const EPSILON = 1e-9;
-const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const;
+/** The Week 2 adaptation aggregates, each with its own validator (`adaptation-reuse-validation.ts`). */
+const adaptationAggregateValidators = {
+  adaptationCost: validateBenchAdaptationCost,
+  adaptationValidation: validateBenchAdaptationValidation,
+  adaptationPersistence: validateBenchAdaptationPersistence,
+  adaptationReuse: validateBenchAdaptationReuse,
+} as const;
+const adaptationAggregateKeys = ["adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const satisfies readonly (keyof typeof adaptationAggregateValidators)[];
+const week2Keys = ["harnessRecovery", ...adaptationAggregateKeys] as const;
 /** Optional: the eight benches on disk before these existed omit both, and an omission is an unmeasured count, not a zero one. */
 const coverageKeys = ["notExecutedRuns", "actionsExecuted"] as const;
 const distributionKeys = ["runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes"] as const;
@@ -108,7 +117,11 @@ function checkCorpusMetrics(input: unknown, population: ReportPopulation, issues
     finite(value.truncationCount, `${path}.truncationCount`, issues, 0, Number.MAX_SAFE_INTEGER, true);
     checkExecutionCoverage(value, path, population, issues);
     checkExtractionByLane(value.extractionByLane, `${path}.extractionByLane`, population, issues);
-    for (const key of week2Keys) if (value[key] !== null) add(issues, `${path}.${key}`, "must be null until Week 2 defines it");
+    if (value.harnessRecovery !== null) add(issues, `${path}.harnessRecovery`, "must be null until Week 2 defines its aggregate");
+    for (const key of adaptationAggregateKeys) {
+      if (!(key in value)) add(issues, `${path}.${key}`, "is required: null when no run measured it");
+      else if (value[key] !== null) nest(adaptationAggregateValidators[key](value[key]), `${path}.${key}`, issues);
+    }
   }
   return issues.length === before;
 }
