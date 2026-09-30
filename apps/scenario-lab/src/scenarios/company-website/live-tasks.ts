@@ -29,5 +29,5 @@ export const COMPANY_WEBSITE_LIVE_TASKS: readonly LiveInstructionTask[] = [
   { id: "company-website-gas-engineers", scenarioId: "company-website", kind: "navigate-and-extract", instruction: GAS_ENGINEERS, judgeBy: "expected-dataset", expectedDatasetId: "extract-gas-engineers" },
   { id: "company-website-gas-engineers-winter-notice", scenarioId: "company-website", variantId: "winter-notice", kind: "navigate-and-extract", instruction: GAS_ENGINEERS, judgeBy: "expected-dataset", expectedDatasetId: "extract-gas-engineers" },
   { id: "company-website-business-prices", scenarioId: "company-website", kind: "navigate-and-extract", instruction: BUSINESS_PRICES, judgeBy: "expected-dataset", expectedDatasetId: "extract-business-prices" },
-  { id: "company-website-book-service", scenarioId: "company-website", kind: "navigate-and-extract", instruction: BOOK_SERVICE, judgeBy: "expected-dataset", expectedDatasetId: "extract-booking" },
+  { id: "company-website-book-service", scenarioId: "company-website", kind: "navigate-and-extract", instruction: BOOK_SERVICE, judgeBy: "expected-dataset", expectedDatasetId: "extract-booking", permissionPoint: { consequence: "move_money", control: "Confirm and pay £30.00" } },
 ];

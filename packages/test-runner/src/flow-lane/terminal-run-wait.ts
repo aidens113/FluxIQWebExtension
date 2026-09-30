@@ -197,8 +197,15 @@ export type PersistedFlowTerminalWait = {
   recoveryGraceMs?: number;
 };
 
-/** What Core may still owe a reader about a run it has already ended. */
-export type PendingWork = "verdict" | "recovery";
+/**
+ * What Core may still owe a reader about a run it has already ended.
+ *
+ * `repair` is a wrong answer Core is still repairing: it saves the refuted run
+ * as `failed` with `resultRepair.phase` `reauthoring` before its re-author
+ * starts, re-runs the same run id, and writes `settled` only once the repaired
+ * answer is judged (Core `recovery/refuted-result/repair.ts`).
+ */
+export type PendingWork = "verdict" | "recovery" | "repair";
 
 /**
  * Why a recovery record never arrived, when Core said. Core marks a failed
@@ -263,7 +270,10 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   const recoveryWaitMs = wait.recoveryWaitMs ?? RECOVERY_RECORD_WAIT_MS;
   const recoveryGraceMs = wait.recoveryGraceMs ?? RECOVERY_RECORD_GRACE_MS;
   const started = now();
-  let deadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_BASE_WAIT_MS);
+  // The whole bound, kept apart from `deadline` because a recovery's shorter
+  // bound may cut it and a repair that then turns up in flight restores it.
+  const fullDeadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_BASE_WAIT_MS);
+  let deadline = fullDeadline;
   // What Core was still doing at the last terminal read, if anything: the
   // difference between a run that never finished and one Core was finishing.
   let pending: PendingWork | undefined;
@@ -298,12 +308,17 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
         } else if (pending === "recovery" && terminal === undefined) {
           deadline = Math.min(deadline, now() + (recoveryCouldBeRunning(detail) ? recoveryWaitMs : recoveryGraceMs));
         }
+        // A repair in flight is the run still running, however its nodes
+        // ended: it keeps the run's whole bound, which is the grant's lease for
+        // a granted run -- the longest Core itself will spend on it.
+        if (pending === "repair") deadline = fullDeadline;
         terminal = detail;
       }
     } catch { /* best-effort: the original timeout or abort stays authoritative until exact terminal evidence arrives, so a diagnostic read that fails must never replace what stopped the run */ }
     const delay = Math.min(intervalMs, Math.max(0, deadline - now()));
     if (delay > 0) await sleep(delay);
   }
+  if (pending === "repair" && terminal) return { detail: terminal, unsettled: "repair" };
   if (pending === "recovery" && terminal) return { detail: terminal, unsettled: "recovery", ...(recoveryMarker ? { recoveryState: "recovery.still_running" as const } : {}) };
   if (pending) {
     throw new RunnerFailure("performance.budget", `Core was still finishing the granted run's ${pending} when the wait for it ran out`, { details: { code: GRANTED_RUN_UNSETTLED_CODE, pending, waitedMs: now() - started } });
@@ -334,6 +349,9 @@ export function pendingWork(
   detail: TerminalRunCandidate,
   wait: Pick<PersistedFlowTerminalWait, "awaitVerdict" | "awaitRecovery">,
 ): PendingWork | undefined {
+  // First, because a repair in flight carries the first pass's recovery record
+  // and verdict already: either rule alone would call it finished.
+  if ((wait.awaitVerdict || wait.awaitRecovery) && resultRepairInFlight(detail.runDetail)) return "repair";
   if (wait.awaitVerdict && detail.summaryStatus === "succeeded" && detail.resultVerification === null) return "verdict";
   if (wait.awaitRecovery && detail.summaryStatus === "failed" && !recoveryRecordWritten(detail.runDetail)) return "recovery";
   return undefined;
@@ -364,6 +382,12 @@ export function pendingWork(
  */
 function recoveryCouldBeRunning(detail: TerminalRunCandidate): boolean {
   return !everyNodeRan(detail.actions);
+}
+
+/** Whether Core is still repairing this run's wrong answer: re-authoring its Flow, or re-running it. */
+function resultRepairInFlight(runDetail: Readonly<Record<string, unknown>>): boolean {
+  const phase = plainRecord(plainRecord(runDetail.metadata)?.resultRepair)?.phase;
+  return phase === "reauthoring" || phase === "rerunning";
 }
 
 /** Whether Core's recovery wrote its record: the gate that decided it, or the trace of its stages. */

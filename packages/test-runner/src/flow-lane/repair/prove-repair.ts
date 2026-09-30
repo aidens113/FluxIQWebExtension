@@ -100,6 +100,12 @@ export function assertLiveRepairProof(proof: LiveRepairProof): void {
       details: { calledReplays: called.map((replay) => ({ index: replay.index, providerCalls: replay.providerCalls, harnessActivations: replay.harnessActivations })) },
     });
   }
+  const reproduced = proof.replays.filter((replay) => replay.datasetsReproduced === false);
+  if (reproduced.length) {
+    throw new RunnerFailure("runtime.behavior", `The repaired Flow is not deterministic: ${reproduced.length} of ${proof.replays.length} replay(s) stored other rows than the run that was judged right`, {
+      details: { unreproducedReplays: reproduced.map((replay) => ({ index: replay.index, runId: replay.runId, status: replay.status })) },
+    });
+  }
   const failed = proof.replays.filter((replay) => !replay.goalPassed || !replay.flowSucceeded);
   if (failed.length) {
     throw new RunnerFailure("runtime.behavior", `The applied repair did not hold: ${failed.length} of ${proof.replays.length} replay(s) did not reach the fixture's expected final state`, {
