@@ -25,8 +25,16 @@
 //   navigation in another tab, or in a child frame, is not the click's landing.
 // - Only a click that succeeded is judged; a failed click already says why. A
 //   click whose reply is lost because its page unloaded first is judged too: a
-//   refused landing is its failure, and anything else rethrows the refusal
-//   unchanged for the command router.
+//   refused landing is its failure, a check it landed on is judged as above,
+//   and a landing nothing speaks against is the click's success -- the click
+//   navigated its page before it could answer, which is what bigbox's "Set as
+//   my store" (save, then `location.reload()`), a search submit and "Continue
+//   without an account" do. Until 2026-09-30 that rethrew, the domain read the
+//   step as refused, and a step that had done the act was dropped from the
+//   Flow (audit A2, cause 1). A lost reply with no committed navigation still
+//   rethrows unchanged for the command router: nothing says the click landed.
+//   So does one refused before delivery ("Receiving end does not exist"): the
+//   click never reached the page, so a navigation that commits is not its.
 // - The listeners go on before the click is sent, because a local page can
 //   commit within milliseconds of the click.
 // - A click that starts no navigation gets NAVIGATION_START_GRACE_MS to start
@@ -54,6 +62,7 @@ import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
 import { checkWaitBudgetMs, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
+import { unloadedUnderDeliveredMessage } from "./navigating-page";
 
 /** The id the browser always gives a tab's main frame. */
 const TOP_FRAME_ID = 0;
@@ -75,10 +84,14 @@ type Commit = { url: string; documentId: string | undefined };
 /** A landing the server refused: its status, and its path without query or fragment. */
 type RefusedLanding = { status: number; path: string };
 
-/** What the landing says about the click: it failed, a self-clearing check on it was waited out, or nothing. */
+/**
+ * What a committed landing says about the click: it failed, a self-clearing
+ * check on it was waited out, or nothing against it.
+ */
 type LandingVerdict =
   | { kind: "failed"; outcome: WorkerActionOutcome }
-  | { kind: "check_cleared"; wait: LandedCheckWait };
+  | { kind: "check_cleared"; wait: LandedCheckWait }
+  | { kind: "stood" };
 
 type NavigationWatch = {
   startedAt: number;
@@ -114,12 +127,18 @@ export async function sendClickCheckingLanding(
       reply = await send();
     } catch (error) {
       const verdict = await judgeLanding(action, tabId, watch, access);
-      if (verdict?.kind !== "failed") throw error;
-      return workerActionResult(action, watch.startedAt, verdict.outcome);
+      if (verdict === undefined) throw error;
+      if (verdict.kind === "failed") return workerActionResult(action, watch.startedAt, verdict.outcome);
+      // Only a click delivered to a page that then unloaded under it was made. A
+      // send that found no listener never reached the page, and any other
+      // refusal is the click's own failure, whatever the tab then did.
+      if (!unloadedUnderDeliveredMessage(error)) throw error;
+      const navigated = workerActionResult(action, watch.startedAt, navigatedBeforeAnsweringOutcome());
+      return verdict.kind === "check_cleared" ? clickAfterClearedCheck(navigated, verdict.wait) : navigated;
     }
     if (reply.status !== "succeeded") return reply;
     const verdict = await judgeLanding(action, tabId, watch, access);
-    if (verdict === undefined) return reply;
+    if (verdict === undefined || verdict.kind === "stood") return reply;
     return verdict.kind === "failed" ? failedClick(reply, verdict.outcome) : clickAfterClearedCheck(reply, verdict.wait);
   } finally {
     watch.stop();
@@ -128,7 +147,7 @@ export async function sendClickCheckingLanding(
 
 /**
  * The click's landing, judged: a robot check first, then the server's status.
- * Undefined when nothing committed, or when what committed says nothing
+ * Undefined when nothing committed; `stood` when what committed says nothing
  * against the click.
  */
 async function judgeLanding(
@@ -144,7 +163,7 @@ async function judgeLanding(
   if (settled.reading?.kind === "robot_check") return { kind: "failed", outcome: checkLandingOutcome(landedPath(commit.url), settled.checkWait) };
   const refused = await refusedLanding(tabId, commit);
   if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused) };
-  return settled.checkWait?.outcome === "cleared" ? { kind: "check_cleared", wait: settled.checkWait } : undefined;
+  return settled.checkWait?.outcome === "cleared" ? { kind: "check_cleared", wait: settled.checkWait } : { kind: "stood" };
 }
 
 /**
@@ -284,6 +303,20 @@ function checkLandingOutcome(path: string, checkWait: LandedCheckWait | undefine
     message: `The click was made and landed on a robot check at ${path}, which only a person can answer.`,
     validation: { status: "failed", expected: EXPECTED, actual },
     failure: navigationChallengeFailure(EXPECTED, `the click was made, and ${standingCheckWords(`the page it landed on (${path})`, checkWait)}`)
+  };
+}
+
+/**
+ * A click whose page navigated before it could answer, onto a landing nothing
+ * speaks against: the click was made -- the navigation is its doing, since the
+ * top frame of its own tab committed after it was sent -- so it stands. The
+ * landed address is not quoted, as no landing record here quotes a query.
+ */
+function navigatedBeforeAnsweringOutcome(): WorkerActionOutcome {
+  return {
+    status: "succeeded",
+    message: "The click navigated its page before it could answer.",
+    validation: { status: "passed", expected: EXPECTED, actual: "the click navigated its page before it could answer, and the page it landed on loaded" }
   };
 }
 

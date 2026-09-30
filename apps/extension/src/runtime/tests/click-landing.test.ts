@@ -278,6 +278,7 @@ for (const actionType of ["web.dom.type", "web.dom.assert"] as const) {
   });
 }
 
+// Cause 1 (c): the same lost reply onto a page served 403 stays `navigation_unexpected`.
 test("a click whose reply is lost to its own navigation still fails when the tab landed on a refused page", async (t) => {
   t.mock.method(Date, "now", () => 5_000);
   const browser = installBrowser(t, { "doc-blocked": 403 });
@@ -299,20 +300,93 @@ test("a click whose reply is lost to its own navigation still fails when the tab
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });
 
-for (const [landing, status] of [["no navigation", undefined], ["a page served 200", 200]] as const) {
-  test(`a click whose reply is lost, after ${landing}, rethrows the refusal unchanged`, async (t) => {
-    const browser = installBrowser(t, { "doc-fine": status });
-    const refusal = new Error(CHANNEL_CLOSED_ERROR);
-    await assert.rejects(
-      sendClickCheckingLanding(CLICK, TAB_ID, async () => {
-        if (status !== undefined) land(browser, `${ORIGIN}/fine`, "doc-fine");
-        throw refusal;
-      }),
-      (error: unknown) => error === refusal
-    );
-    assert.equal(browser.listening(), 0);
+// Audit A2, cause 1: a click that navigates its own page -- bigbox's "Set as my
+// store" saves and reloads, a search submits -- loses its reply to the unload.
+// Where the tab landed says whether the click worked.
+
+test("a click whose reply is lost to its own navigation onto a page served 200 succeeded, saying it navigated before answering", async (t) => {
+  t.mock.method(Date, "now", () => 5_000);
+  const browser = installBrowser(t, { "doc-reloaded": 200 });
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/?store=millbrook&token=s3cret`, "doc-reloaded");
+    throw new Error(CHANNEL_CLOSED_ERROR);
   });
-}
+  assert.deepEqual(result, {
+    commandId: "c-click",
+    actionType: "web.dom.click",
+    status: "succeeded",
+    validation: { status: "passed", expected: EXPECTED, actual: "the click navigated its page before it could answer, and the page it landed on loaded" },
+    message: "The click navigated its page before it could answer.",
+    startedAt: 5_000,
+    finishedAt: 5_000
+  });
+  assert.doesNotMatch(JSON.stringify(result), /s3cret/u);
+  assert.equal(browser.listening(), 0);
+});
+
+test("a click whose reply is lost to its own navigation onto a check that clears by itself succeeded, and says the check was waited out", async (t) => {
+  const browser = installBrowser(t, { "doc-check": 200 });
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/search?q=towels`, "doc-check");
+    throw new Error(CHANNEL_CLOSED_ERROR);
+  }, landedPage([SELF_CLEARING_CHECK, { challenge: null }]));
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.failure, undefined);
+  const validation = result.validation;
+  assert.match(
+    validation.status === "passed" ? validation.actual : "",
+    /^the click navigated its page before it could answer, and the page it landed on loaded; the page it landed on was a robot check that cleared by itself after \d+ ms, untouched$/u
+  );
+});
+
+test("a click whose reply is lost with no navigation started within the start grace rethrows the refusal unchanged", async (t) => {
+  const browser = installBrowser(t);
+  const refusal = new Error(CHANNEL_CLOSED_ERROR);
+  const sentAt = Date.now();
+  await assert.rejects(sendClickCheckingLanding(CLICK, TAB_ID, async () => { throw refusal; }), (error: unknown) => error === refusal);
+  assert.ok(Date.now() - sentAt >= START_GRACE_MS - 5, "the start grace was given");
+  assert.deepEqual(browser.injections, []);
+  assert.equal(browser.listening(), 0);
+});
+
+test("a click whose navigation ends without a commit, after its reply is lost, rethrows the refusal unchanged", async (t) => {
+  const browser = installBrowser(t);
+  const refusal = new Error(CHANNEL_CLOSED_ERROR);
+  await assert.rejects(
+    sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+      browser.fire("onBeforeNavigate", { url: `${ORIGIN}/export.csv` });
+      browser.fire("onErrorOccurred", { url: `${ORIGIN}/export.csv`, error: "net::ERR_ABORTED" });
+      throw refusal;
+    }),
+    (error: unknown) => error === refusal
+  );
+});
+
+test("a click refused before delivery rethrows, even when a navigation then commits a page served 200", async (t) => {
+  const browser = installBrowser(t, { "doc-fine": 200 });
+  const refusal = new Error("Could not establish connection. Receiving end does not exist.");
+  await assert.rejects(
+    sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+      land(browser, `${ORIGIN}/fine`, "doc-fine");
+      throw refusal;
+    }),
+    (error: unknown) => error === refusal
+  );
+  assert.equal(browser.listening(), 0);
+});
+
+test("a click refused for another reason rethrows, even when its tab then landed on a page served 200", async (t) => {
+  const browser = installBrowser(t, { "doc-fine": 200 });
+  const refusal = new Error("Cannot access contents of the page.");
+  await assert.rejects(
+    sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+      land(browser, `${ORIGIN}/fine`, "doc-fine");
+      throw refusal;
+    }),
+    (error: unknown) => error === refusal
+  );
+  assert.equal(browser.listening(), 0);
+});
 
 // A click whose navigation commits onto a robot check. A filter, pager or facet
 // click on a store that has decided the session is automated lands on its
