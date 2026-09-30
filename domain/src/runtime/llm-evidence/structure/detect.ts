@@ -163,7 +163,8 @@ async function capturedDetection(
     records: sanitized.records,
     shadowHosts: sanitized.shadowHosts,
     stateDigest: states?.stateDigest,
-    routeState: states?.routeState
+    routeState: states?.routeState,
+    pageQuery: sanitized.pageQuery
   });
   // A top-frame detection must describe the page the target was bound on; a
   // frame's own document has its own location, and its origin is held above.

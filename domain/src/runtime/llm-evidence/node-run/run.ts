@@ -14,8 +14,8 @@
 // what its call would lastingly do, Core's gate answers from the person's
 // instruction and permission, and a refusal carries the request the person will
 // answer (`../permission.ts`). The one thing this module decides for itself is
-// that exploration stays on the origin it started on, which is the scope policy
-// the authoring navigation has always had.
+// where exploration may go: the origin it started on, and there only to an
+// address the build was shown (`./shown-addresses.ts`).
 //
 // **A build may begin nowhere.** When Core says where the Flow starts
 // (`AS/runtime/flow-bootstrap/start-location.ts`), nothing was opened for this
@@ -66,6 +66,7 @@ import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSP
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
 import type { WebNodeArrivals } from "./arrival";
 import { webNodeReadResult } from "./read-result";
+import { webUnshownAddressRefusal, type WebNodeShownAddresses } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 
@@ -184,6 +185,8 @@ export type WebNodeRun = {
    * start location.
    */
   arrivals: WebNodeArrivals;
+  /** Where this build has been shown it can go, which is where it may navigate (`./shown-addresses.ts`). */
+  addresses: WebNodeShownAddresses;
 };
 
 /** Run the node a call named, and answer with what it did. */
@@ -210,6 +213,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // The build's opening call starts it not there, whatever the tab shows
   // (`./arrival.ts`). A build told no start location is not touched.
   if (run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
+  run.addresses.opening(buildOf(run), run.request.callId);
   const node = webRunnableNode(value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
@@ -335,6 +339,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
     }
+    // And only to an address this build was shown, with the page back so the link that goes there can be pressed.
+    if (run.addresses.refuses(buildOf(run), node, ran, { location: current?.evidence.location, startLocation: run.request.startLocation })) {
+      return refusal(current, "address_not_shown", webUnshownAddressRefusal(run.request.startLocation), run.request.maxEvidenceBytes, record);
+    }
     // What this step is, should it meet a robot check: the statement a success
     // would make, less what only the page it left can say.
     record.standing = {
@@ -387,6 +395,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // is. Returning it would be the one path by which a page's own markup
     // reached a decision.
     const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4))) : undefined;
+    run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);

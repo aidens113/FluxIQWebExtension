@@ -446,7 +446,8 @@ export async function captureEvidence(
     records: bounded.records,
     shadowHosts: bounded.shadowHosts,
     stateDigest: states.stateDigest,
-    routeState: states.routeState
+    routeState: states.routeState,
+    pageQuery: bounded.pageQuery
   });
 }
 

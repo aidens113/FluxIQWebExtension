@@ -63,7 +63,7 @@ import {
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { createWebNodeArrivals, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
+import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -249,6 +249,9 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   // navigated there yet, so a tab that was already open does not count as
   // arrival (`./node-run/arrival.ts`).
   const arrivals = createWebNodeArrivals();
+  // Where each build has been shown it can go, which is where it may navigate
+  // (`./node-run/shown-addresses.ts`). Fed from every packet shown, below.
+  const addresses = createWebNodeShownAddresses();
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -256,6 +259,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   const shown = (input: WebLlmEvidenceToolRequest, sessionId: string, snapshot: WebLlmSnapshotBinding): void => {
     returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
     targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
+    addresses.saw({ projectId: input.projectId, flowId: input.flowId, sessionId }, snapshot);
   };
   // Keyed by the packet itself, because Core hands the packet back to
   // `validateTargetOverrideEvidence` without the project or flow it came from.
@@ -347,7 +351,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
             stores: { targets: targetPackets, extractions: extractionHandles },
             restamp: (binding) => retain(stable(input, binding)),
             shown: (binding) => shown(input, sessionId, binding),
-            arrivals
+            arrivals,
+            addresses
           }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {

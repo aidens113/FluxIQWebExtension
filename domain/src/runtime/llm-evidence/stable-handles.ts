@@ -193,6 +193,6 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
-  // reads no handle), so both travel as they were taken.
-  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: binding.stateDigest, routeState: binding.routeState });
+  // reads no handle), so both travel as they were taken, and so does the query.
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: binding.stateDigest, routeState: binding.routeState, pageQuery: binding.pageQuery });
 }

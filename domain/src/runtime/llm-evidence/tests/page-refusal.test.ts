@@ -143,7 +143,8 @@ test("a navigation that landed somewhere else is refused page_changed, with the 
   const runtime = createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (_sessionId, command) => command.actionType === "web.dom.capture_snapshot"
-      ? { status: "succeeded", payload: { snapshot: { url: "https://network.test/feed", interactiveElements: [{ tagName: "a", selector: "#home", visibleText: "Home" }] } } }
+      // The search link is what shows the build the address it navigates to (`../node-run/shown-addresses.ts`).
+      ? { status: "succeeded", payload: { snapshot: { url: "https://network.test/feed", interactiveElements: [{ tagName: "a", selector: "#home", visibleText: "Home" }, { tagName: "a", selector: "#search", visibleText: "Search", href: "/search" }] } } }
       : { status: "failed", error: PRIVATE, failure: { category: "state_mismatch", code: WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED, retryable: false, stage: "verification", actual: PRIVATE } }
   });
   const refused = await runtime.executeTool({ ...BASE, callId: "call.navigate", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://network.test/search" }, consequences: [] } });

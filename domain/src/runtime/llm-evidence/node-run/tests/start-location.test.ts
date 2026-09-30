@@ -92,13 +92,17 @@ test("from nowhere, the origin an exploration is held to is the start location's
   assert.equal(elsewhere.resultCode, "web.action.rejected.cross_origin");
   assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
 
-  // A deeper page of the same site is where the model may legitimately decide
-  // the Flow begins, so the anchor is the origin and not the exact address.
+  // The anchor is the origin, and a deeper page of the same site passes the
+  // origin check. It is still an address nothing showed the build -- from
+  // nowhere, the start location is the only one it has been given -- so it is
+  // refused for that, with where the Flow starts (`../shown-addresses.ts`).
   const deeper = await runtime.executeTool({
     ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
     value: { node: NAVIGATE, parameters: { url: "https://store.test/search?q=earbuds" }, consequences: [] }
   });
-  assert.equal(deeper.resultCode, "web.action.succeeded");
+  assert.equal(deeper.resultCode, "web.action.rejected.address_not_shown");
+  assert.equal(((deeper.evidence as JsonObject).detail as JsonObject).startLocation, START);
+  assert.equal(stubbed.commands.some((command) => command.actionType === "web.browser.navigate"), false);
 });
 
 test("a build that was told no start location is refused exactly as it was before", async () => {

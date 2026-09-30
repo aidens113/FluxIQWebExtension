@@ -132,6 +132,12 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  * one that goes to the start location, and this says so and names it. It is
  * deliberately not a stopping refusal -- the model is meant to act on it, not
  * to be ended by it -- which is why it is not `out_of_scope`.
+ *
+ * `address_not_shown` is a build's navigation to an address nothing it was
+ * shown holds (`node-run/shown-addresses.ts`). Live, a build wrote one
+ * product's slug with another product's id, the site routed by the id, and the
+ * Flow's "first product" step opened the second (`run-munvvc3z-3eadc185`). It
+ * is a move to make rather than a stop, like `not_at_start_location`.
  */
 export const WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
@@ -154,7 +160,8 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "action_failed",
   "page_unreadable",
   "evidence_budget_exhausted",
-  "not_at_start_location"
+  "not_at_start_location",
+  "address_not_shown"
 ] as const;
 
 export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[number];
@@ -199,6 +206,13 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   from, and nothing was opened for it. `startLocation` names that place. Run
  *   the node that goes there, with that as its destination; it is also the
  *   Flow's own first step, because the Flow is built from the steps that ran.
+ *
+ * Where the call would go (`address_not_shown`):
+ * - `address_not_shown`: the address is not the start location, a page this
+ *   build has been on, a link a packet showed, an address a read returned, or
+ *   a site search this build ran itself, with other words. `instead` names the
+ *   two ways there: press the link that goes there, or navigate to an address
+ *   the evidence gave. `startLocation` names where the Flow starts, if known.
  *
  * The input the call wrote (`invalid_input`):
  * - `unexpected_input_keys` and `missing_input_keys`: the call's keys are not
@@ -286,6 +300,7 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  */
 export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "start_location_not_reached",
+  "address_not_shown",
   "nothing_observed_yet",
   "handle_not_in_packet",
   "page_moved_since_packet",

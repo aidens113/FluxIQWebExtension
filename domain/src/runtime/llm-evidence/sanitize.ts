@@ -144,7 +144,18 @@ export type WebLlmSnapshotBinding = {
    * only on the call's `routeState`, and only for the page the call left.
    */
   routeState?: JsonObject;
+  /**
+   * The captured page's own query, as key and value pairs, which the packet's
+   * `location` leaves out because a query is where secrets live
+   * (`./location.ts`). Like the selectors it never leaves the domain: it is kept
+   * only so a build may run a site search it performed again with other words
+   * (`node-run/shown-addresses.ts`). Absent for a page with no query.
+   */
+  pageQuery?: ReadonlyArray<readonly [string, string]>;
 };
+
+/** How many of a page's query pairs a binding keeps. */
+const MAX_PAGE_QUERY_PAIRS = 16;
 
 export type WebLlmSanitizeOptions = {
   expectedOrigin?: string;
@@ -240,7 +251,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, [selectors, records, shadowHosts], maxEvidenceBytes, () => tellWebLlmLookAlikesApart(evidence.elements, cues));
-  return { evidence, selectors, records, shadowHosts };
+  const pageQuery = [...url.searchParams].slice(0, MAX_PAGE_QUERY_PAIRS);
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 
 /** The widest handle a Flow can issue (`stable-handles.ts`). */

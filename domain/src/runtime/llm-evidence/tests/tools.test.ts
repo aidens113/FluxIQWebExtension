@@ -24,9 +24,13 @@ test("captures through the generic action bridge and keeps navigation on the ins
     eligibleSessionIds: () => ["session.one"],
     executeAction: async (sessionId, command) => {
       commands.push({ sessionId, ...command });
-      if (command.actionType === "web.browser.navigate") location = String(command.parameters.url);
+      // The site puts a private query on the page it lands on, which the packet must not repeat.
+      if (command.actionType === "web.browser.navigate") location = `${String(command.parameters.url)}?private=yes`;
+      // The start page links to the next one, which is what lets a build navigate there (`../node-run/shown-addresses.ts`).
+      const page = snapshot(location);
+      const next = { tagName: "a", selector: "#next", visibleText: "Next", href: "/next" };
       return command.actionType === "web.dom.capture_snapshot"
-        ? { status: "succeeded", payload: { snapshot: snapshot(location) } }
+        ? { status: "succeeded", payload: { snapshot: { ...page, interactiveElements: [...(page.interactiveElements as JsonObject[]), next] } } }
         : { status: "succeeded" };
     },
   };
@@ -35,7 +39,7 @@ test("captures through the generic action bridge and keeps navigation on the ins
   assert.equal(inspected.effectApplied, false);
   assert.equal(inspected.resultCode, "web.inspect.succeeded");
   assert.deepEqual((inspected.evidence as any).location, "https://example.test/start");
-  const navigated = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/next?private=yes" }, consequences: [] } });
+  const navigated = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/next" }, consequences: [] } });
   assert.equal(navigated.effectApplied, true);
   assert.equal(navigated.resultCode, "web.action.succeeded");
   assert.deepEqual((navigated.evidence as any).location, "https://example.test/next");

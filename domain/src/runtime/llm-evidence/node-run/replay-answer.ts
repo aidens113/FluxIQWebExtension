@@ -1,0 +1,137 @@
+// How a replay call answers Core: the closed codes, and the answer with or
+// without the page a step broke on.
+//
+// Shared by the replay (`./replay.ts`), which runs a step again, and the verify
+// (`./verify.ts`), which checks a step whose effect lasts without running it.
+// Both answer in the same vocabulary and the same shape, so they are built in
+// one place: a field dropped from one would be a packet Core reads differently
+// depending on which of the two produced it.
+
+import type { JsonObject, JsonValue } from "fluxiq/core";
+import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
+import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
+import type { WebLlmNameAssumption } from "../name-assumption";
+import { present } from "../present";
+import type { WebLlmSnapshotBinding } from "../sanitize";
+import type { WebLlmToolRejectionReason } from "../tool-rejection";
+import type { WebNodeRun } from "./run";
+
+/**
+ * The closed vocabulary a replay answers in.
+ *
+ * Core's own, because Core reads the answer and knows none of this domain's
+ * codes (`AS/runtime/llm/node-tools/replay.ts` holds the same six). What
+ * really happened, in this domain's words, goes in the evidence beside it.
+ */
+export const WEB_NODE_REPLAY_RESULT_CODES = {
+  replayed: "core.replay.replayed",
+  /** Checked, not run: the step could run now (`./verify.ts`). */
+  verified: "core.replay.verified",
+  failed: "core.replay.failed",
+  changed: "core.replay.changed",
+  unreproducible: "core.replay.unreproducible",
+  resetFailed: "core.replay.reset_failed"
+} as const;
+
+/**
+ * What a verify found wrong with the step's target, in this domain's words.
+ * Closed, and never page text: it is the check that failed, not what the page
+ * said.
+ */
+export type WebNodeVerifyFinding = "missing" | "hidden" | "disabled";
+
+/**
+ * What a replay says about itself, beside whatever page it carries.
+ *
+ * Named rather than written inline so both answers -- the bare one and the one
+ * with the page -- are the same fields, and a field dropped from one is a
+ * compile error rather than a packet the model quietly reasons without.
+ */
+type WebNodeReplayAnswer = { ok: boolean; code: string; said: string; found?: WebNodeVerifyFinding };
+
+/**
+ * What a replay answer says about itself beyond Core's replay code
+ * (`../capture.ts`): which step of the library it was, and -- where the replay
+ * refused for a reason this domain already has a word for -- which reason.
+ *
+ * Core's replay codes say what became of the draft, which is what Core asked.
+ * They do not say why, and `core.replay.failed` covers a step that was not
+ * permitted, a step whose handle no longer names anything, and a step the page
+ * would not run. Each wants a different fix, and the reason is already
+ * computed on the way past.
+ */
+export type WebNodeReplayFacts = {
+  resultReason: WebLlmToolRejectionReason | undefined;
+  nodeId: string | undefined;
+  /**
+   * Every name the step's resolution had to assume (`../name-assumption.ts`).
+   *
+   * A replay resolves the step's parameters again, so it guesses at the same
+   * column the exploration guessed at -- by the same code, against the same
+   * binding. It is said here too because a replay is the last thing that runs
+   * before a draft may be proposed, and a reader of one answer should not have
+   * to find another to learn that a column was assumed.
+   */
+  assumed: WebLlmNameAssumption[] | undefined;
+};
+
+/**
+ * One replay's answer: the code Core reads, and one line of this domain's own.
+ *
+ * `ok` is whether the step passed; `acted` whether anything was done to the
+ * page, which is what `effectApplied` tells Core. They differ only for a
+ * verified step, which passed and did nothing.
+ */
+export function webNodeReplayAnswer(code: string, said: string, ok = false, about?: WebNodeReplayFacts, acted = ok): WebLlmEvidenceToolExecution {
+  return toolExecution(present<WebNodeReplayAnswer>({ ok, code, said, found: undefined }) as unknown as JsonValue, acted, code, undefined, undefined, about);
+}
+
+/**
+ * The same, with the page a step broke on, because that is the page the
+ * correction has to be made from and the model has no free look to spend on it.
+ *
+ * A capture that cannot be taken, or that will not fit, leaves the line alone:
+ * a verdict without its page is still a verdict, and a packet over budget would
+ * cost the model the evidence it already has.
+ */
+export async function webNodeReplayAnswerWithPage(
+  run: WebNodeRun,
+  code: string,
+  said: string,
+  acted: boolean,
+  about?: WebNodeReplayFacts,
+  found?: WebNodeVerifyFinding
+): Promise<WebLlmEvidenceToolExecution> {
+  const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
+  const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: false, code, said, found }) as unknown as JsonObject;
+  let page: WebLlmSnapshotBinding | undefined;
+  try {
+    page = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
+    run.shown(page);
+    // The page, with what the replay made of this step written on the same
+    // packet: the one shape every other packet has, and a named spread of a
+    // typed value rather than a literal, so the fields are still checked.
+    const packet: JsonObject = page.evidence as unknown as JsonObject;
+    const value = { ...packet, ...verdict } as unknown as JsonValue;
+    if (serializedBytes(value) <= budget) return replayStates(toolExecution(value, false, code, undefined, undefined, about), page, acted);
+  } catch (error) {
+    if (run.request.signal?.aborted) throw error;
+  }
+  return replayStates(toolExecution(verdict as unknown as JsonValue, false, code, undefined, undefined, about), page, acted);
+}
+
+/** Which of the three permission refusals this was, in this domain's own words. */
+export function webNodeReplayPermissionReason(permission: { kind: "refused"; requestId: string | null } | { kind: "invalid" }): WebLlmToolRejectionReason {
+  if (permission.kind === "invalid") return "consequences_unreadable";
+  return permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted";
+}
+
+/**
+ * The states a replay answer saw, from the one capture it took after the step:
+ * the state it left, and the state it found as well when the step's command
+ * never went out. A step whose command went out took no capture before it, so
+ * what it found is not said.
+ */
+function replayStates(execution: WebLlmEvidenceToolExecution, page: WebLlmSnapshotBinding | undefined, acted: boolean): WebLlmEvidenceToolExecution {
+  return withCallStates(execution, acted ? undefined : page, page);
+}
