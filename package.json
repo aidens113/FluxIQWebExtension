@@ -59,7 +59,8 @@
     "structure:test": "node --test \"scripts/structure-audit/rules/tests/*.test.mjs\" \"scripts/structure-audit/tests/*.test.mjs\"",
     "task": "node scripts/task/run-task.mjs",
     "task:test": "node --test \"scripts/task/tests/*.test.mjs\" \"scripts/worktree/tests/*.test.mjs\"",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "ui:e2e": "pnpm --filter @fluxiq-web-extension/scenario-lab build && pnpm --filter @fluxiq-web-extension/extension test:e2e:build && pnpm --filter @fluxiq-web-extension/test-runner... build && node scripts/run/ui-e2e.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

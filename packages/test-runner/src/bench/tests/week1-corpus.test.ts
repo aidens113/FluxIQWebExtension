@@ -51,9 +51,9 @@ test("week1 lists W01 to W29 once each, in order; smoke is basic-form and one mo
     assert.deepEqual(row, week1Corpus.rows.find((candidate) => candidate.id === row.id));
     assert.deepEqual([row.unarmed, row.variantIds], [true, []]);
   }
-  assert.deepEqual(benchCorpora.map((corpus) => corpus.id), ["week1", "smoke"]);
+  assert.deepEqual(benchCorpora.map((corpus) => corpus.id), ["week1", "smoke", "week2"]);
   assert.equal(findBenchCorpus("smoke"), smokeCorpus);
-  assert.throws(() => findBenchCorpus("week2"), /Unknown bench corpus: week2\. Known corpora: week1, smoke/);
+  assert.throws(() => findBenchCorpus("week3"), /Unknown bench corpus: week3\. Known corpora: week1, smoke, week2/);
 });
 
 test("every week1 row resolves through resolveScenarioWorkflow against the built registry, apart from the named pending variants", async (t) => {

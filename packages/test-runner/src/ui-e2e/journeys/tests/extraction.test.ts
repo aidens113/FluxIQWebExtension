@@ -13,8 +13,17 @@ test("one recorded extract_list policy action is the generated Subflow", () => {
   assert.doesNotThrow(() => assertExtractionRecordingDerivedFlow({ nodes: [extract()], edges: [] }));
 });
 
-test("a second node, another action, or another recording's provenance is refused", () => {
-  assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [extract(), extract()], edges: [] }, "recording.one"), rejected);
+test("a scroll or navigation the recorder saw beside the pick is allowed once each, chained to the extract", () => {
+  const scroll = extract("recording.one", "web.dom.scroll");
+  assert.doesNotThrow(() => assertExtractionRecordingDerivedFlow({ nodes: [scroll, extract()], edges: [{}] }, "recording.one"));
+  assert.doesNotThrow(() => assertExtractionRecordingDerivedFlow({ nodes: [extract("recording.one", "web.browser.navigate"), scroll, extract()], edges: [{}, {}] }, "recording.one"));
+  assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [scroll, extract()], edges: [] }, "recording.one"), rejected);
+  assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [scroll, scroll, extract()], edges: [{}, {}] }, "recording.one"), rejected);
+  assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [scroll], edges: [] }, "recording.one"), rejected);
+});
+
+test("a second extract, another action, or another recording's provenance is refused", () => {
+  assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [extract(), extract()], edges: [{}] }, "recording.one"), rejected);
   assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [extract("recording.one", "web.dom.click")], edges: [] }, "recording.one"), rejected);
   assert.throws(() => assertExtractionRecordingDerivedFlow({ nodes: [extract("recording.other")], edges: [] }, "recording.one"), rejected);
 });

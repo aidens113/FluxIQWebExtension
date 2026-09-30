@@ -1,6 +1,7 @@
 import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { attestWorkspaceSecretAbsence, SECRET_LEAK_ATTESTATION_RUN_LIMITS, type SecretLeakFindingCategory } from "../secret-leak-attestation.js";
+import { isLevelDbFile, scanLevelDbFiles, type LevelDbScan } from "./leveldb-store/index.js";
 
 /**
  * One tree the attestation scans: each entry of `paths` is a named entry under
@@ -12,14 +13,30 @@ import { attestWorkspaceSecretAbsence, SECRET_LEAK_ATTESTATION_RUN_LIMITS, type 
  * every run's recordings and traces: scanned whole, it would fail a clean run for
  * an earlier run's leak, and would grow until the scan's ceilings failed every
  * run closed. `writtenEntries` says what the bound keeps.
+ *
+ * `store: "leveldb"` marks a tree of LevelDB databases, the browser profile's
+ * extension storage: every file under it whose name is LevelDB's (`isLevelDbFile`)
+ * is searched byte for byte for every literal in UTF-8 and UTF-16LE
+ * (`scanLevelDbFiles`) instead of being handed to the text scan, which would fail
+ * closed on its binary bytes. A `.ldb` table's blocks may be Snappy-compressed,
+ * so for a table the search is best effort: the reader decompresses the tables it
+ * can walk, and one it cannot is counted in the summary, not failed on. A LevelDB
+ * file the search cannot read is `unscanned-store`. Everything else under the
+ * tree, and every entry the walk cannot judge (a link, an unreadable directory),
+ * still goes to the text scan and fails closed there.
  */
-export type RunRedactionScope = { name: string; root: string; paths: readonly string[]; writtenSince?: number };
+export type RunRedactionScope = { name: string; root: string; paths: readonly string[]; writtenSince?: number; store?: "leveldb" };
 
 /** A file in which the scan found something: its scope and its relative path, with every declared literal redacted out of the path. Never content. */
 export type RunRedactionFinding = { scope: string; path: string; categories: SecretLeakFindingCategory[] };
 
-/** How much of one scope the scan read. */
-export type RunRedactionScopeSummary = { name: string; scannedFiles: number; scannedBytes: number; skippedBinaryFiles: number };
+/**
+ * How much of one scope the scan read. `undecodedLevelDbFiles`, on a `leveldb`
+ * scope only, counts the LevelDB logs and tables whose structure the reader
+ * could not walk, so only their raw bytes were searched: for a Snappy-compressed
+ * table that is best effort, not a guarantee of absence.
+ */
+export type RunRedactionScopeSummary = { name: string; scannedFiles: number; scannedBytes: number; skippedBinaryFiles: number; undecodedLevelDbFiles?: number };
 
 /**
  * What the Lab's redaction attestation observed for one run.
@@ -90,8 +107,10 @@ type FindingsByScope = Map<string, Map<string, Set<SecretLeakFindingCategory>>>;
  *
  * A scope with `writtenSince` is scanned as the entries `writtenEntries` finds,
  * `ENTRIES_PER_BOUNDED_SCAN` at a time, and its summary adds those scans up; one
- * with nothing written since scans nothing. Every other scope is one scan of its
- * `paths`.
+ * with nothing written since scans nothing. A `leveldb` scope is walked the same
+ * way, bounded or not, so that its LevelDB files can be taken out for
+ * `scanLevelDbFiles`, whose counts its summary adds. Every other scope is one
+ * scan of its `paths`.
  *
  * It runs before the scopes are cleaned and while nothing still writes to them,
  * which is the caller's responsibility. A scope with no entries, or a relative
@@ -106,7 +125,17 @@ export async function attestRunRedaction(input: RunRedactionAttestationInput): P
   const scopes: RunRedactionScopeSummary[] = [];
   for (const scope of input.scopes) {
     const summary: RunRedactionScopeSummary = { name: scope.name, scannedFiles: 0, scannedBytes: 0, skippedBinaryFiles: 0 };
-    const scans = scope.writtenSince === undefined ? [scope.paths] : chunks(await writtenEntries(scope.root, scope.paths, scope.writtenSince), ENTRIES_PER_BOUNDED_SCAN);
+    let scans: ReadonlyArray<readonly string[]>;
+    let levelDb: LevelDbScan | undefined;
+    if (scope.store === "leveldb") {
+      const entries = await writtenEntries(scope.root, scope.paths, scope.writtenSince ?? Number.NEGATIVE_INFINITY);
+      const isStore = (entry: WalkedEntry): boolean => entry.file && isLevelDbFile(path.posix.basename(entry.relative));
+      scans = chunks(entries.filter(entry => !isStore(entry)).map(entry => entry.relative), ENTRIES_PER_BOUNDED_SCAN);
+      levelDb = await scanLevelDbFiles(scope.root, entries.filter(isStore).map(entry => entry.relative), literals);
+      for (const finding of levelDb.findings) record(failing, scope.name, redactLiterals(finding.path, literals), finding.category);
+    } else {
+      scans = scope.writtenSince === undefined ? [scope.paths] : chunks((await writtenEntries(scope.root, scope.paths, scope.writtenSince)).map(entry => entry.relative), ENTRIES_PER_BOUNDED_SCAN);
+    }
     for (const literal of literals) {
       const read = { scannedFiles: 0, scannedBytes: 0, skippedBinaryFiles: 0 };
       for (const paths of scans) {
@@ -122,6 +151,11 @@ export async function attestRunRedaction(input: RunRedactionAttestationInput): P
       summary.scannedFiles = Math.max(summary.scannedFiles, read.scannedFiles);
       summary.scannedBytes = Math.max(summary.scannedBytes, read.scannedBytes);
       summary.skippedBinaryFiles = Math.max(summary.skippedBinaryFiles, read.skippedBinaryFiles);
+    }
+    if (levelDb) {
+      summary.scannedFiles += levelDb.scannedFiles;
+      summary.scannedBytes += levelDb.scannedBytes;
+      summary.undecodedLevelDbFiles = levelDb.undecodedFiles;
     }
     scopes.push(summary);
   }
@@ -147,27 +181,30 @@ export async function attestRunRedaction(input: RunRedactionAttestationInput): P
  * Directories themselves are not entries: what a directory holds is judged file
  * by file. The bound assumes nothing sets a file's times back, which Core does not.
  */
-async function writtenEntries(root: string, paths: readonly string[], since: number): Promise<string[]> {
+async function writtenEntries(root: string, paths: readonly string[], since: number): Promise<WalkedEntry[]> {
   if (!path.isAbsolute(root)) throw new Error("A bounded redaction scope needs an absolute root");
-  const entries: string[] = [];
+  const entries: WalkedEntry[] = [];
   const visit = async (relative: string): Promise<void> => {
     const absolute = path.join(root, ...relative.split("/"));
     let metadata;
     try { metadata = await lstat(absolute); }
-    catch { entries.push(relative); return; }
-    if (metadata.isSymbolicLink()) { entries.push(relative); return; }
+    catch { entries.push({ relative, file: false }); return; }
+    if (metadata.isSymbolicLink()) { entries.push({ relative, file: false }); return; }
     if (metadata.isDirectory()) {
       let names: string[];
       try { names = await readdir(absolute); }
-      catch { entries.push(relative); return; }
+      catch { entries.push({ relative, file: false }); return; }
       for (const name of names.sort()) await visit(`${relative}/${name}`);
       return;
     }
-    if (metadata.isFile() && Math.max(metadata.mtimeMs, metadata.birthtimeMs) >= since - TIMESTAMP_SLACK_MS) entries.push(relative);
+    if (metadata.isFile() && Math.max(metadata.mtimeMs, metadata.birthtimeMs) >= since - TIMESTAMP_SLACK_MS) entries.push({ relative, file: true });
   };
   for (const entry of paths) await visit(entry);
   return entries;
 }
+
+/** An entry `writtenEntries` found: `file` when it is a regular file, false when the walk could not judge it. */
+type WalkedEntry = { relative: string; file: boolean };
 
 function chunks(values: readonly string[], size: number): string[][] {
   const result: string[][] = [];
