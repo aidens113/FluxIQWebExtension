@@ -14,14 +14,14 @@ per call, 48 calls, $0.25 per call).
 
 | 2 | `run-mun8tgdh-36ae87a2` | everything-store-kettle-to-cart | 2 at most | Build ran 675 s and the Lab abandoned it (`lab.generation_unfinished`) with 1 call counted. It did not reproduce run 1's refusal. No record of where the time went (debug: `debugs/run-mun8tgdh-36ae87a2.md`). | Instrumentation: Core `llm/evidence-loop/progress-trace.ts`, enabled by `FLUXIQ_BUILD_PROGRESS_TRACE=1`. t177 applied to both trees as a working-tree patch (Core merged by hand in 5 files). | Trace test 3/3; affected suites 353/353; tsc, audit and build clean |
 
-| 3 | `run-muna3yfq-a7d8a2a0` | everything-store-kettle-to-cart | none (facility) | Chromium crashed ("Page crashed") while opening the extension side panel, before the build; 0 calls. Probably memory: 3.4 GB of commit free when checked afterwards (debug: `debugs/run-muna3yfq-a7d8a2a0.md`). | Re-run as run 4. Runs are now one at a time, each holding a `lab-slots` slot. | - |
+| 3 | `run-muna3yfq-a7d8a2a0` | everything-store-kettle-to-cart | none (facility) | Chromium crashed ("Page crashed") while opening the extension side panel, before the build; 0 calls. Cause not established. The machine-load explanation is withdrawn (user, 2026-09-30); root-causing as a product or Lab defect under t174-w7. (debug: `debugs/run-muna3yfq-a7d8a2a0.md`). | Re-run as run 4. Runs are now one at a time, each holding a `lab-slots` slot. | - |
 | 4 | `run-munaiz76-7026748c` | everything-store-kettle-to-cart | 2 (exploration; 5 completions refused) | (a) Every completion's dry run reported draft steps 3 and 6 as `core.replay.unreproducible` (about 6 s each), in all 5 attempts, so no completion was accepted (worker t174-w2 is tracing this). (b) The loop asked for a 48th decision after the grant's 48 calls were spent (one by the instruction authority): `execution_grant_unavailable` / `uses_spent`. This is the known grant defect; t186 is removing grants. (c) The Lab reported `lab.generation_unfinished`: its request timed out at 300 s and it then polled only for a proposal, so the failure at 8m08s was never seen. Run 2 was very likely the same, not starvation. The build's first decision came 17 s after dispatch. | (b) Core `loop-limits/flow-bootstrap-evidence-loop.ts` reserves the authority's call and each allowed retry; `llm/resolver-contract.ts` carries `providerRetryCount` (tests: new case plus 4 updated expectations, 80/80). (c) worker t174-w1, Lab `http-control` + `build-proposal.ts`. The trace now also logs completion verdict codes. | (b) 157/157 loop, limit and grant tests; Core build exit 0 |
 
-| 5 | `run-munbu244-4f4021a8` | bigbox-retail-pickup-cart | none (facility) | Same side-panel renderer crash as run 3; 0 calls; 2.8 GB of commit free at launch (debug: `debugs/run-munbu244-4f4021a8.md`) | Lab: `run-scenario/extension-control-page.ts` opens the control page once more in a fresh tab after a renderer crash | 3/3 new tests; test-runner build ok; audit clean |
+| 5 | `run-munbu244-4f4021a8` | bigbox-retail-pickup-cart | none (facility) | Same side-panel renderer crash as run 3; 0 calls (debug: `debugs/run-munbu244-4f4021a8.md`) | Lab: `run-scenario/extension-control-page.ts` opens the control page once more in a fresh tab after a renderer crash | 3/3 new tests; test-runner build ok; audit clean |
 | 6 | `run-muncqlr0-3348202b` | bigbox-retail-pickup-cart | 2 (37 decisions, 2 completions refused) | Completion 1: `completion_profile_limit_exceeded`, which was the 240-character summary limit applied to the draft path untruncated, plus `cannot_reach_start_location`. Completion 2: `instructed_act_missing`, because the store switch reloads the page, the pick is never kept, and the build loops on act 1 (w3). The build then ended on an unrecognised throw about 50 ms after a tool call, mislabelled `pre_provider_validation_failed` (debug: `debugs/run-muncqlr0-3348202b.md`, by w3). | Core `llm/harness-options/bootstrap-completion.ts` `fromDraft` bounds the summary as `authoring/accept.ts` does. The throw's naming and stage: see run 7. The keep-across-reload defect (evidence-loop draft recording plus the domain click post-condition across a reload) is t175's area; reported. | 93/93 harness-options tests, including the new summary test and the reworked restored-step test |
 | 7 | `run-munda7ub-d9214e3b` | crossborder-marketplace-hub-to-cart | 2 (22 decisions, 3 completions refused) | Completions refused `invalid_subflows` twice, then `instructed_act_missing`. The same unrecognised throw about 50 ms after a tool call (`act1`, `web.action.rejected.target_not_found`), again labelled `pre_provider_validation_failed`; the Lab then states "Core made none", which is false. | Core: `generation-failure/thrown-issue-codes.ts` publishes `thrown.<Class>` and `thrown.at:<Core file>:<line>` on an unrecognised throw (`flowBootstrapPhaseFailure` gains `thrown`). `service.ts` passes the error, and moves the build's running stage to `provider_output_validation` once a decision has returned (both on existing lines, since `service.ts` is at its line budget). | 350/350 generation-failure tests; accounting test updated |
 | 8 | `run-mundl2j0-df8e4a32` | crossborder-marketplace-hub-to-cart | none (facility) | Extension pairing timed out, pre-approval, `connectionState: unreported`, 0 calls | - | - |
-| 9 | `run-mundupr5-f1cde5aa` | crossborder-marketplace-hub-to-cart | none (facility) | Same pairing timeout. Commit free about 2.4 GB; other lanes were running test suites and a Lab dry-run. Reported to the supervisor. | - | - |
+| 9 | `run-mundupr5-f1cde5aa` | crossborder-marketplace-hub-to-cart | none (facility) | Same pairing timeout. Reported to the supervisor. | - | - |
 
 | 10 | `run-mune0xh1-2470406a` | crossborder-marketplace-hub-to-cart | 2 | Paired normally on the same builds as runs 8 and 9, so those pairing timeouts were not a pairing regression. The build again ended on an unrecognised throw right after a tool call (`c18`, `web.action.rejected.target_unobserved`). It is now correctly `provider_output_validation_failed` / attempted / received, with `issueCodes: ["thrown.Error"]`. The frame code is missing: Next bundles Core into `.next` chunks whose paths do not contain `automation-studio`, so `thrown-issue-codes.ts` finds no frame. | Not yet: see Next step | - |
 
@@ -120,12 +120,43 @@ Worker t174-w5 (`reports/t174-w5-validation.md`) ran every command under build s
 
 | # | Run | Task | Stage reached | Causes | Fix | Validation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 11 | `run-munhpy2m-036e9572` | crossborder-marketplace-hub-to-cart | none (facility) | The first `fluxiq.connect` got no answer in 15 s (`connectionState: unreported`, so `lastStatus` was never set), after a 175 s run-up the bundle cannot time. CPU was at 100% with another lane's `pnpm test` in b1 (debug: `debugs/run-munhpy2m-036e9572.md`). | Launcher now keeps the full Lab log | - |
+| 11 | `run-munhpy2m-036e9572` | crossborder-marketplace-hub-to-cart | none (facility) | The first `fluxiq.connect` got no answer in 15 s (`connectionState: unreported`, so `lastStatus` was never set), after a 175 s run-up the bundle cannot time. (debug: `debugs/run-munhpy2m-036e9572.md`). | Launcher now keeps the full Lab log | - |
 | 12 | `run-muni3pdr-80225d3f` | same | none (facility) | 11 s in, `page.goto` of `sidepanel/index.html` gave `net::ERR_ABORTED` ("frame was detached"); the opener retries only renderer crashes (debug: `debugs/run-muni3pdr-80225d3f.md`). | Not yet | - |
 
 The extension's start has now failed in 6 of 9 launches (runs 3, 5, 8, 9, 11 and 12). No provider call was spent in any of them. This is now the blocking cause, ahead of the build's own. Two findings to act on next:
 - (a) Reproduce the extension start with no provider (Playwright, this extension build) and time the worker, the control page and the first connect.
 - (b) `waitForOpen` in Core `packages/client-gateway-websocket/src/transport.ts:151` has no deadline, so an unopened socket leaves `fluxiq.connect` unanswered forever. This is a product defect in its own right.
-Candidate causes: the t182 background changes, new in runs 11 and 12, or renderer instability under the other lanes' load.
+Candidate causes: the t182 background changes, new in runs 11 and 12. Cause not established. The machine-load explanation is withdrawn (user, 2026-09-30); root-causing as a product or Lab defect under t174-w7.
 
 Core `npx tsc --noEmit -p tsconfig.json` after the accounting/catalog test edits (heavy.sh, b1): rc=0, no output.
+
+## Fix 3: the extension start (runs 3, 5, 8, 9, 11, 12), root-caused by t174-w7 (Lab)
+
+**Cause: the Lab's own network guard.** `packages/test-runner/src/network-guard.ts` `proveWorker` `evaluate`d a canary `fetch()` into the extension's service worker the moment Playwright announced the worker. That was before the worker's global scope existed: an evaluate there saw `setTimeout is not defined`. The `fetch()` killed the extension renderer (`Target.targetCrashed`, `STATUS_BREAKPOINT`, 180–273 ms after the worker started). Chromium then never restarted the worker, so every later `fluxiq.connect` went unanswered (runs 8, 9, 11). A side panel loading in the same process showed `Page crashed` (runs 3, 5) or `ERR_ABORTED` (run 12). The machine was not the cause. The load explanation is withdrawn from the Runs rows and debugs (worker t174-w8), and w6's machine-load sampling was removed.
+
+**Evidence** (w7's isolation matrix, provider-free, headed, crossborder-marketplace, 3–5 starts per variant; `reports/t174-w7-extension-start-cause.md`):
+- Canary only: 0/3 clean.
+- No guard: 3/3.
+- Routes without the canary: 3/3.
+- Canary 3 s later: 3/3.
+- Before the fix: 1/10. After: 10/10. One full provider-free `lab run` also passed.
+- All measured on the build before t185.
+
+**Fix.**
+- The guard waits for the worker's scope (`typeof setTimeout/fetch`) before its canary. A worker whose scope never readies becomes a `service-worker` violation, never a fetch.
+- The connect path now has a deadline and a named failure. Core `packages/client-gateway-websocket/src/transport.ts`: `connect()` waits at most `CLIENT_GATEWAY_OPEN_TIMEOUT_MS` (10 s), else `FluxIQClientGatewayOpenError` with `open_timeout` / `open_failed` / `closed_before_open` (new `open-error.ts`).
+- The extension's `gateway-session.ts` names that code in `lastError`, and a superseded attempt no longer fails the live one.
+- The Lab's pre-approval timeout publishes `connectFailure`. A retried control page must bring the worker back, or the start fails at once as `extension.worker`.
+- New `run-scenario/extension-start-trace/`: CDP target lifecycle, worker and page console, and the Lab's timed steps, screened, written as `extension-start.local.json`.
+
+**Validation (re-run by the lead).**
+- Core `client-gateway-websocket` `transport.test.ts`: 6/6.
+- Lab `node --test` on the network-guard, extension-control-page, pair-extension and pairing-status-wait tests: 51/51. Extension-start-trace: 4/4. The dist was newer than every changed source.
+- Extension `gateway-session.test.mjs` (built after the source edit): 5/5.
+- Downstream structure audit: passed.
+- w7 also reports the extension suite 1155/1155 and test-runner 1600/1603 through heavy.sh.
+- `runner-wiring.test.ts` #11 fails, but it is a pre-existing stale pin: its `runRedactionScopes({...})` string matches neither HEAD nor the tree.
+
+**Not verified:** the fix on the merged build with t185, which changes `background/connection.ts`. So the ten-start probe is re-run after the merge. Core's gateway integration doc and the package README do not yet mention `openTimeoutMs` or `FluxIQClientGatewayOpenError`.
+
+**Known and owned elsewhere:** the 3-call grant reservation in `loop-limits/flow-bootstrap-evidence-loop.ts` and its 4 failing `deepseek-bootstrap-exploration` tests, resolved by t186's grant removal. Core's structure audit counts `service.ts` at 4,536 against 4,535 after the t188 merge.

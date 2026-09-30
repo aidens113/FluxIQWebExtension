@@ -11,11 +11,6 @@
   `draft-shown.ts`, the service.ts blank line, the server-process source maps and their tests.
   Extension sha256 `4cb3a5bd…` from `apps/extension/.lab-instances/t174-slot-1/dist/e2e-chromium` (`run.json`).
   Core web rebuilt for this run: `logs/core-web-build.log`, `processExits.core-web-build: 0`.
-- Machine at launch: 2,676 MB of RAM free, 15,338 MB of commit free (checked before launch). Build
-  slot b1 was held by another lane while the run went: the owner line at 02:40 was
-  `t187 bench | C.test p2 | pnpm test | 02:35:51Z`, and the one before it is not recorded. CPU
-  load read 100% at 02:40:36Z, four minutes after the failure. What held the CPU during the run
-  itself was not measured.
 - Provider calls: 0 (`evaluation.json` `llm.calls: 0`).
 - Verdict: failed, `gateway.connection`, facility failure `scenario.execute` / `unclassified`.
 - **Stage reached:** none. This is a facility failure, not a product result.
@@ -42,4 +37,4 @@
 
 | # | Cause, precisely | Repo and file | Fix | Status |
 | --- | --- | --- | --- | --- |
-| 1 | The extension's first `fluxiq.connect` got no answer within 15 s. This is the third time on this task (runs 8, 9, 11); run 10 paired on the same kind of build. Shown: no acknowledgement at all, and a 175 s run-up before the wait. Not shown: why. **Inferred:** CPU starvation of the service worker. The CPU read 100% four minutes later, with other lanes' `pnpm test` in a build slot, and runs 8 and 9 had the same failure with other lanes' suites running. Not excluded: the t182 connection changes (`apps/extension/src/background/connection.ts`), merged downstream in `b1a82a21`, since this is the first run on them. | Facility, possibly the extension | None yet. Run 12 keeps the full Lab log, so the 175 s run-up and the connect can be timed. | Open (t174). |
+| 1 | The extension's first `fluxiq.connect` got no answer within 15 s. This is the third time on this task (runs 8, 9, 11); run 10 paired on the same kind of build. Shown: no acknowledgement at all, and a 175 s run-up before the wait. Not shown: why. Cause not established. The machine-load explanation is withdrawn (user, 2026-09-30); root-causing as a product or Lab defect under t174-w7. Candidate: the t182 connection changes (`apps/extension/src/background/connection.ts`), merged downstream in `b1a82a21`, since this is the first run on them. | Facility, possibly the extension | None yet. Run 12 keeps the full Lab log, so the 175 s run-up and the connect can be timed. | Open (t174). |

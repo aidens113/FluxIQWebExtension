@@ -10,8 +10,6 @@
 - Builds: facility `82a20780` dirty, Core `259a11ba` dirty, extension sha256 `6556c1ff…`
   (`run.json`). Core's web app was rebuilt in this run (`logs/core-web-build.log`: "Compiled
   successfully in 68s", `[exit] code=0`).
-- Memory at launch: NO EVIDENCE (not in the bundle, and the lane report gives no figure for this
-  run).
 - Provider calls: 0 (`evaluation.json` `llm.calls: 0`).
 - Verdict: failed, category `gateway.connection`, facility failure (`evaluation.json`).
 - **Stage reached:** none. This is a facility failure, not a product result.
@@ -30,4 +28,4 @@ dispatched and no Flow exists (`snapshots/decision-trace.json` `flows: []`).
 
 | # | Cause, precisely | Repo and file | Fix | Task id |
 | --- | --- | --- | --- | --- |
-| 1 | The extension never reported a connection state within 15 s of pre-approval, so pairing timed out before any build. Shown: the timeout and the unreported state. Not shown: why the extension was silent. Run 10 (`run-mune0xh1-2470406a`) paired normally with the same extension sha256 and Core commit, so the report concludes this was not a pairing regression; **inferred**, from run 9's conditions (about 2.4 GB of commit free, other lanes running suites and a Lab dry-run, per the report's Runs row 9), machine load is the likely cause. | Facility | None. | Open; the lane report names no owner (reported to the supervisor with run 9). |
+| 1 | The extension never reported a connection state within 15 s of pre-approval, so pairing timed out before any build. Shown: the timeout and the unreported state. Not shown: why the extension was silent. Run 10 (`run-mune0xh1-2470406a`) paired normally with the same extension sha256 and Core commit, so the report concludes this was not a pairing regression. Cause not established. The machine-load explanation is withdrawn (user, 2026-09-30); root-causing as a product or Lab defect under t174-w7. | Facility | None. | Open; the lane report names no owner (reported to the supervisor with run 9). |

@@ -11,8 +11,6 @@
 - Builds: facility `82a20780` dirty, Core `259a11ba` dirty, extension sha256 `6556c1ff…`
   (`run.json`), the same as runs 8 and 10. No Core web rebuild in this run (no
   `logs/core-web-build.log`; `run.json` `processExits` has no `core-web-build`).
-- Memory at launch: about 2.4 GB of commit free; other lanes were running test suites and a Lab
-  dry-run (lane report, Runs row 9; not in the bundle).
 - Provider calls: 0 (`evaluation.json` `llm.calls: 0`).
 - Verdict: failed, category `gateway.connection`, facility failure (`evaluation.json`).
 - **Stage reached:** none. This is a facility failure, not a product result.
@@ -30,4 +28,4 @@ build was dispatched (`snapshots/decision-trace.json` `flows: []`).
 
 | # | Cause, precisely | Repo and file | Fix | Task id |
 | --- | --- | --- | --- | --- |
-| 1 | The extension never reported a connection state within 15 s of pre-approval. Shown: the timeout and the unreported state. Not shown: why. Run 10 (`run-mune0xh1-2470406a`) paired normally on the same extension and Core builds, so it is not a pairing regression (lane report, Runs row 10). **Inferred:** machine load, with about 2.4 GB of commit free and other lanes' suites and a Lab dry-run running at the time (lane report, Runs row 9). | Facility | None. Reported to the supervisor (lane report, Runs row 9). | Open; the lane report names no owner. |
+| 1 | The extension never reported a connection state within 15 s of pre-approval. Shown: the timeout and the unreported state. Not shown: why. Run 10 (`run-mune0xh1-2470406a`) paired normally on the same extension and Core builds, so it is not a pairing regression (lane report, Runs row 10). Cause not established. The machine-load explanation is withdrawn (user, 2026-09-30); root-causing as a product or Lab defect under t174-w7. | Facility | None. Reported to the supervisor (lane report, Runs row 9). | Open; the lane report names no owner. |
