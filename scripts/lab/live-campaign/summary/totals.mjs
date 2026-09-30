@@ -6,6 +6,13 @@ export function totalsOf(rows) {
     passed: rows.filter((row) => row.verdict === "passed").length,
     succeeded: rows.filter((row) => row.succeeded).length,
     failed: rows.filter((row) => row.verdict === "failed" || row.verdict === "inconclusive").length,
+    /**
+     * Builds that stopped to ask a person at the task's declared permission
+     * point. Counted on their own, in neither `passed` nor `failed`: stopping
+     * there is right, and it built no Flow that did the task, so it is not a
+     * pass (`row/summarize-task.mjs`).
+     */
+    stoppedForPermission: rows.filter((row) => row.verdict === "stopped_for_permission").length,
     noResult: rows.filter((row) => row.verdict === "no-result").length,
     judgementsPassed: rows.filter((row) => row.judgement.passed === true).length,
     /** Builds that produced a proposal nothing was waiting on. */

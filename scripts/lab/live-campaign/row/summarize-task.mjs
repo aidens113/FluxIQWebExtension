@@ -64,7 +64,14 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
   // the evaluation applies (`packages/test-runner/src/run-evaluation`). Read
   // from the printed result alone, a correct refusal reads as a failure here,
   // in the totals, and in every dashboard built on them.
-  const verdict = result ? (evaluation?.verdict ?? result.verdict) : "no-result";
+  //
+  // A build that stopped to ask a person at the task's declared permission
+  // point reads `stopped_for_permission`, never `passed`: stopping there is
+  // right, but no Flow was built, so nothing did the task. The runner says so
+  // in its printed `permissionStop` and in the evaluation's failed
+  // `stopped-for-permission` invariant (commit f2f80024); either one decides.
+  const permissionStop = permissionStopOf(result, evaluation);
+  const verdict = result ? (permissionStop ? STOPPED_FOR_PERMISSION : evaluation?.verdict ?? result.verdict) : "no-result";
   const lastFault = attempts.at(-1)?.ramFault ?? null;
   return {
     taskId: task.id, scenarioId: task.scenarioId, workflowId: task.workflowId ?? null, variantId: task.variantId ?? null, kind: task.kind,
@@ -74,7 +81,15 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
     // A creation task succeeds on its run's verdict. A repair run's verdict
     // judges the variant's expectations, which a proposal alone never meets,
     // so a repair task succeeds on its judgement instead.
-    succeeded: repairing ? judgement.passed === true : verdict === "passed",
+    // A permission stop succeeds as neither: it built nothing that did the task.
+    succeeded: permissionStop ? false : repairing ? judgement.passed === true : verdict === "passed",
+    /**
+     * `null` unless the build stopped to ask at the task's declared permission
+     * point; then the consequence it asked permission for and whether the
+     * control it stopped at was the task's own (`matched`), each `null` when
+     * only the evaluation's invariant recorded the stop.
+     */
+    permissionStop,
     exitCode: final.code,
     /**
      * The campaign's own wall clock for this task: every attempt, every retry
@@ -167,8 +182,35 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
     // What stopped the run, when the run itself did not say: the runner's
     // refusal for an attempt with no result, or the facility failure a
     // finished bundle recorded.
-    runnerMessage: result ? (verdict === "passed" ? null : describeFacilityFailure(evaluation?.facilityFailure)) : shortMessage(refusal?.message),
+    runnerMessage: result ? (verdict === "passed" ? null : permissionStop ? describePermissionStop(permissionStop) : describeFacilityFailure(evaluation?.facilityFailure)) : shortMessage(refusal?.message),
   };
+}
+
+/** The verdict a build that stopped to ask for permission reads, as the runner names it. */
+const STOPPED_FOR_PERMISSION = "stopped_for_permission";
+
+/** The invariant id the runner's evaluation fails for such a build (`run-evaluation/permission-stop`). */
+const PERMISSION_STOP_INVARIANT = "stopped-for-permission";
+
+/**
+ * Where the build stopped to ask, or `null` when it did not: from the Lab's
+ * printed `permissionStop`, else from the evaluation's failed invariant, which
+ * names no consequence or control a row could read without parsing prose.
+ */
+function permissionStopOf(result, evaluation) {
+  const printed = result?.permissionStop;
+  if (printed?.verdict === STOPPED_FOR_PERMISSION) return { consequence: textOrNull(printed.consequence), control: textOrNull(printed.control) };
+  const invariants = Array.isArray(evaluation?.invariants) ? evaluation.invariants : [];
+  return invariants.some((invariant) => invariant?.id === PERMISSION_STOP_INVARIANT && invariant.passed === false) ? { consequence: null, control: null } : null;
+}
+
+/** What a permission stop did, for the row's reader: not a pass, and why. */
+function describePermissionStop({ consequence, control }) {
+  return `stopped for permission${consequence ? ` to ${consequence}` : ""}${control ? ` (control ${control})` : ""}; no Flow was built, so this is not a pass`;
+}
+
+function textOrNull(value) {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function isCount(value) {

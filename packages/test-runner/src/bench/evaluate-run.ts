@@ -1,6 +1,7 @@
 import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { classifyRunnerFailure } from "../failure.js";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import type { FlowLanePermissionStop } from "../lane-rules/index.js";
 import { evaluateObservedRun, flowLaneAdaptationMeasurements, flowLaneEvidenceSizes, personHandOffEvidence, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
 
 /**
@@ -65,9 +66,16 @@ export type RecordingRunInput = RunEvaluationIdentity & {
  * A Flow-lane run, whose runner result carries the lane's own observation of
  * what the Flow did and the path of the bundle it finalized, from which the
  * evidence sizes are read.
+ *
+ * `permissionStop` is the runner's report that the created-Flow build stopped
+ * to ask the person at the task's declared permission point
+ * (`RunScenarioResult.permissionStop`). The bench carries it into the
+ * evaluation, which then holds the same failed `stopped-for-permission`
+ * invariant a single `lab run` holds, so a benchmark row can never count a
+ * stop as a pass: no Flow was built, so nothing did the task.
  */
 export type FlowRunInput = Omit<RecordingRunInput, "result"> & {
-  result: RecordingRunInput["result"] & { path: string; observation?: RunLaneObservation };
+  result: RecordingRunInput["result"] & { path: string; observation?: RunLaneObservation; permissionStop?: FlowLanePermissionStop | undefined };
 };
 
 /**
@@ -119,6 +127,7 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
     evidence: flowLaneEvidenceSizes(input.result.path),
     adaptation: flowLaneAdaptationMeasurements(input.result.path),
     personHandOffs: personHandOffEvidence(input.result.path),
+    ...(input.result.permissionStop ? { permissionStop: { consequence: input.result.permissionStop.consequence, control: input.result.permissionStop.control } } : {}),
   });
 }
 

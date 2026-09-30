@@ -3,10 +3,11 @@
 // one caller.
 
 import type { ExtensionStatus } from "../../shared/protocol";
+import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 import type { FluxIQConnection } from "../connection";
 import { callCoreProgram } from "../connection/index";
 import { readSettings, writeSettings } from "../storage";
-import { acceptedPageUrl } from "./page-url";
+import { chatPageLocation } from "./chat-page";
 import type { PanelControlDeps } from "./panel-control";
 
 export function panelControlDeps(connection: FluxIQConnection, status: () => Promise<ExtensionStatus>): PanelControlDeps {
@@ -15,7 +16,21 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
       // Credentials are read per call, so a token FluxIQ rotated on reconnect is the one sent.
       call: (endpoint, payload) => callCoreProgram(connection.coreApiCredentials(), endpoint, payload),
       projectId: () => connection.projectId(),
-      pageLocation: activePageLocation
+      // The page beside the panel (`chat-page.ts`). A failed query rejects, and
+      // the relay says so instead of sending as if there were no page.
+      pageLocation: () => chatPageLocation({
+        activeTabs: async () => {
+          const [focused, all] = await Promise.all([
+            chrome.tabs.query({ active: true, lastFocusedWindow: true }),
+            chrome.tabs.query({ active: true })
+          ]);
+          return [...focused, ...all];
+        },
+        ownOrigins: () => {
+          const settings = connection.currentSettings();
+          return [settings.coreApiUrl || DEFAULT_CORE_API_URL, settings.gatewayUrl];
+        }
+      })
     },
     readSettings,
     writeSettings,
@@ -29,12 +44,4 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
       setOverlay: (overlay) => connection.setActivityOverlay(overlay)
     }
   };
-}
-
-// The last-focused window's active tab: with the side panel or popup open, that
-// is the page beside it. Anything but a web page is none. A failed query
-// rejects, and the relay says so instead of sending as if there were no page.
-async function activePageLocation(): Promise<string | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  return acceptedPageUrl(tab?.url);
 }

@@ -7,11 +7,16 @@ import type { ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocke
  * than the pacer lets it.
  *
  * - `headline` names the unit of work and stays put while it runs ("Building
- *   your Flow", "Running your Flow"); it changes only when the work changes
- *   or settles ("Flow ready", "Build failed", "Run finished", "Run failed",
- *   "Waiting for you"). Those changes show at once.
- * - `detail` is Core's latest sentence (its `label`), changed at most once per
- *   1,200 ms; the newest always shows once the interval ends.
+ *   your Flow", "Running your Flow", "Fixing your Flow" once Core repairs
+ *   it); it changes only when the work changes, settles ("Flow ready", "Build
+ *   failed", "Run finished", "Run failed", "Couldn't fix your Flow") or needs
+ *   the person ("Waiting for you: finish the check on the page", "Waiting for
+ *   you: answer in the FluxIQ panel"). Those changes show at once
+ *   (`background/activity/headline.ts`).
+ * - `detail` is Core's latest event in a person's words (`activityWording`),
+ *   never a tool id or result code, changed at most once per 1,200 ms; the
+ *   newest always shows once the interval ends. It is null rather than a
+ *   repeat of the headline (`isHeadlineEcho`).
  * - `phase` and `step` are the phase and step of the event `detail` came
  *   from, so they change no faster than `detail` does.
  *

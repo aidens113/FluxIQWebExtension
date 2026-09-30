@@ -15,12 +15,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ACTIVITY_MESSAGES, type ActivityContentMessage } from "../../../shared/activity/index";
-import { ACTIVITY_PHASE_APPEARANCE } from "../../../content/activity-overlay/index";
+import { ACTIVITY_MESSAGES, activityWording, type ActivityContentMessage } from "../../../shared/activity/index";
+import { ACTIVITY_PHASE_APPEARANCE, activityOverlayView } from "../../../content/activity-overlay/index";
 import { ActivityRelay } from "../activity-relay";
 import { buildTraceEvents, type TimedActivity } from "./build-trace-events";
 import { FakeClock } from "./fake-clock";
 import { T174_BUILD_TRACE } from "./fixtures/t174-build-trace";
+
+/** A dotted id such as `core.run_node` or `web.action.succeeded`: never in visible text. */
+const RAW_ID = /\b[a-z]+\.[a-z_]+/u;
 
 type Change = { at: number };
 type Rate = { total: number; meanPerSecond: number; maxInAnySecond: number };
@@ -133,6 +136,14 @@ test("measurement: the t185 behaviour against the pacer, and the pacer's bound",
   t.diagnostic(`paced detail: shortest gap ${Math.min(...gaps.slice(0, -1))} ms between working sentences; last gap (to the settle) ${gaps.at(-1)} ms`);
   assert.ok(gaps.slice(0, -1).every((gap) => gap >= 1_200), "no two working sentences closer than 1.2 s");
   assert.ok(afterDetail.total < beforeDetail.total, "fewer sentences reach the page than Core sent");
+  // Every word that reached the page, and every line the overlay drew from it, is a person's words.
+  for (const { value } of after) {
+    for (const text of [value.display?.headline ?? "", value.display?.detail ?? ""]) assert.doesNotMatch(text, RAW_ID, `display: "${text}"`);
+    for (const preference of ["expanded", "collapsed"] as const) {
+      const view = activityOverlayView(value.display, preference);
+      for (const text of [view?.headline ?? "", view?.detail ?? "", view?.step ?? ""]) assert.doesNotMatch(text, RAW_ID, `overlay (${preference}): "${text}"`);
+    }
+  }
   // Nothing stale is left: the last thing on the page is the build's own end.
   assert.equal(after.at(-1)?.value.display?.detail, "Build finished: a Flow is proposed");
   assert.equal(after.at(-1)?.value.type, ACTIVITY_MESSAGES.content);
@@ -162,4 +173,29 @@ test("the bound, stated plainly: N events inside one second give at most one det
     assert.ok(renders.length <= 4, `${count} events: ${renders.length} page sends`);
     assert.equal(new Set(renders.map((message) => message.display?.detail)).size, 1, `${count} events: one sentence inside the second`);
   }
+});
+
+test("every event of the real build reads in a person's words, and the whole build in a few sentences", () => {
+  const sentences = new Set<string>();
+  for (const { event } of events) {
+    const wording = activityWording(event);
+    for (const text of [wording.action, wording.outcome ?? "", wording.sentence]) assert.doesNotMatch(text, RAW_ID, `${event.label}: "${text}"`);
+    sentences.add(wording.sentence);
+  }
+  assert.deepEqual([...sentences].sort(), [
+    "Build finished: a Flow is proposed",
+    "Building the Flow",
+    "Checking the Flow does what you asked",
+    "Checking the Flow does what you asked — done",
+    "Checking the Flow does what you asked — not yet, trying another way",
+    "Looking at the page — done",
+    "Looking for the list of items",
+    "Looking for the list of items — done",
+    "Thinking about the next step",
+    "Trying a step on the page",
+    "Trying a step on the page — couldn't find it on the page",
+    "Trying a step on the page — done",
+    "Trying a step on the page — that didn't work, trying another way",
+    "Trying the Flow out — done"
+  ].sort());
 });

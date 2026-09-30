@@ -1,79 +1,158 @@
-// The panel shell, mounted by both surfaces.
+// The panel shell, mounted by both surfaces: `popup/index.ts` and
+// `sidepanel/index.ts` each call `mountPanel` with the stub page's `#app` and
+// their surface. There is one UI, laid out like a chat app:
 //
-// `popup/index.ts` and `sidepanel/index.ts` each call `mountPanel` with the
-// stub page's `#app`, their surface, and the views to host. The shell owns the
-// header (name, Simple / Advanced switch, Settings gear), the one PanelStore,
-// routing between the two views, and remembering the viewer's last route. It
-// owns no view content: that is `panel/simple` (workstream B) and
-// `panel/advanced` (workstream C).
+//   top bar          FluxIQ, the Chat / Automations tabs, record, the
+//                    connection dot, the gear, Open FluxIQ (`top-bar.ts`)
+//   recording bar    only while a recording runs (`panel/recording`)
+//   one screen       chosen by `screen-state.ts`:
+//     chat             the whole panel: the chat (`panel/chat`), with a slim
+//                      strip above it while it shows one automation
+//     automations      the person's automations, and New automation
+//     settings         the gear, in place of everything else
+//     getting-started  numbered steps, in place of the chat, until the
+//                      browser is connected and approved
 //
-//   panel/shell/contracts.ts        the pinned seam types (PanelRoute, PanelView, ...)
-//   panel/shell/mount-panel.ts      this file: store, header, routing, preference
-//   panel/shell/header.ts           name, mode switch and the "Settings" gear
-//   panel/shell/mode-switch.ts      the "View" radiogroup: Simple | Advanced
-//   panel/shell/mode-preference.ts  fluxiq.ui.mode / fluxiq.ui.advancedTab in storage
-//   panel/shell/view-host.ts        shows the routed view, hides the other
-//   panel/state/                    PanelStore, panelRequest, PanelResult
-//   panel/copy/                     connection, step and error sentences
-//   panel/dom/                      createElement
-//   panel/theme/tokens.css          light and dark colour tokens
-//   panel/extraction/               the extraction sheet, mounted into a host
+//   panel/shell/          this: the store, the bar, which screen shows
+//   panel/state/          PanelStore, panelRequest, PanelResult, sticky errors
+//   panel/getting-started/ the steps, `startGuide`
+//   panel/settings/       the connection, on-page status, report, forget pairing
+//   panel/automations/    the list, the strip, Run and exports
+//   panel/recording/      record, the recording bar, extraction's entry, review
+//   panel/open-fluxiq/    the Open FluxIQ button
+//   panel/copy/, dom/, theme/tokens.css, extraction/, chat/
 //
-// The view never switches by itself, with one exception from the UI audit
-// (section 4, "Switching"): while pairing is in progress the panel shows Simple,
-// because the pairing card is part of the simple view.
+// Nothing here shows the steps of a run: what FluxIQ decides and does is the
+// chat's to show, and internal page reads are never steps.
 
+import { RUNTIME_MESSAGES } from "../../shared/constants";
+import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
+import { chooseAutomation, createAutomationsTab } from "../automations";
+import { createChatPanel, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
+import { createStartView, startGuide } from "../getting-started";
+import { createOpenFluxIQButton } from "../open-fluxiq";
+import { createRecordingControls, createRecordingReview } from "../recording";
+import { createSettingsView } from "../settings";
 import { createPanelStore } from "../state";
-import type { AdvancedTab, PanelRoute, PanelSurface, PanelViewContext, PanelViews } from "./contracts";
-import { createHeader } from "./header";
-import { readRoutePreference, writeRoutePreference } from "./mode-preference";
-import { createModeSwitch } from "./mode-switch";
-import { createViewHost, type ViewHost } from "./view-host";
+import type { PanelContext, PanelSurface } from "./contracts";
+import { INITIAL_SHELL, reduceShell, shellScreen, type ShellEvent, type ShellScreen } from "./screen-state";
+import { createTopBar, screenId, tabId } from "./top-bar";
 import "../theme/tokens.css";
 import "./shell.css";
 
-const SIMPLE: PanelRoute = { mode: "simple" };
-
-/** Mounts the panel into `root` for `surface`, hosting `views`. */
-export function mountPanel(root: HTMLElement, surface: PanelSurface, views: PanelViews): void {
+/** Mounts the panel into `root` for `surface`. */
+export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   document.documentElement.dataset.surface = surface;
   const store = createPanelStore();
-  let route: PanelRoute = SIMPLE;
-  let advancedTab: AdvancedTab = "activity";
-  let viewerChose = false;
-  let host: ViewHost | undefined;
+  const context: PanelContext = { store, surface };
+  let state = INITIAL_SHELL;
+  let screen: ShellScreen | undefined;
+  let noAnswer = false;
+  let recordingWas: RecordingState | undefined;
+  let visible = true;
 
-  const modeSwitch = createModeSwitch((mode) => navigate(mode === "simple" ? SIMPLE : { mode: "advanced", tab: advancedTab }));
-  const context: PanelViewContext = { store, navigate, surface };
-  host = createViewHost({ simple: views.simple(context), advanced: views.advanced(context) });
-  const header = createHeader(modeSwitch, () => navigate({ mode: "advanced", tab: "connection" }));
-  root.replaceChildren(createElement("div", { className: "shell" }, [header, host.element]));
-  apply(route);
-
-  void readRoutePreference().then((stored) => {
-    if (stored.mode === "advanced") advancedTab = stored.tab;
-    if (!viewerChose && !pairing()) apply(stored);
+  const recording = createRecordingControls(context);
+  const review = createRecordingReview(context);
+  const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style));
+  const automations = createAutomationsTab(context, {
+    choose: (row) => void chooseAutomation(row, { open: openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }) }),
+    review: review.element,
+    newAutomation: recording.newAutomation
+  });
+  const start = createStartView(context, () => dispatch({ type: "gear" }));
+  const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }));
+  const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" });
+  const topBar = createTopBar({
+    onTab: (tab) => dispatch({ type: "tab", tab }),
+    onGear: () => dispatch({ type: "gear" }),
+    record: recording.recordButton,
+    openFluxIQ: openIcon.element
   });
 
-  store.subscribe((status) => {
-    if (status.connectionState === "pairing" && route.mode !== "simple") apply(SIMPLE);
+  const chatScreen = createElement("section", {
+    id: screenId("chat"),
+    className: "chat-screen",
+    attrs: { role: "tabpanel", "aria-labelledby": tabId("chat") }
+  }, [automations.strip.element, chat.element]);
+  automations.element.id = screenId("automations");
+  automations.element.setAttribute("role", "tabpanel");
+  automations.element.setAttribute("aria-labelledby", tabId("automations"));
+  const main = createElement("main", { className: "app-main" }, [recording.bar, start.element, settings.element, chatScreen, automations.element]);
+  root.replaceChildren(createElement("div", { className: "shell" }, [topBar.element, main]));
+
+  function openInChat(target: ChatTarget): void {
+    chat.open(target);
+    showTarget(chat.target());
+  }
+
+  /** The strip follows the chat's thread, whoever changed it (the chat has its own "Latest chat"). */
+  function showTarget(target: ChatTarget): void {
+    automations.strip.show(target.kind === "automation" ? target : undefined);
+    draw();
+  }
+  chat.onTargetChange(showTarget);
+
+  function dispatch(event: ShellEvent): void {
+    const next = reduceShell(state, event);
+    if (next === state) return;
+    state = next;
+    draw();
+  }
+
+  function draw(): void {
+    const status = store.current();
+    const guide = startGuide(status, noAnswer);
+    const next = shellScreen(state, guide.gated);
+    start.render(guide, status);
+    if (next !== screen) {
+      start.element.hidden = next !== "getting-started";
+      settings.element.hidden = next !== "settings";
+      chatScreen.hidden = next !== "chat";
+      automations.element.hidden = next !== "automations";
+      topBar.showScreen(next);
+      if (next === "settings") settings.shown();
+      else if (screen === "settings") settings.hidden();
+      screen = next;
+    }
+    activate();
+  }
+
+  /** Reads run only for what is on screen, and only while the panel is. */
+  function activate(): void {
+    chat.setActive(visible && screen === "chat");
+    automations.setActive(visible && (screen === "automations" || (screen === "chat" && chat.target().kind === "automation")));
+  }
+
+  store.subscribe((status: ExtensionStatus) => {
+    noAnswer = false;
+    topBar.render(status);
+    openIcon.observe(status);
+    recording.render(status);
+    review.render(status);
+    chat.render(status);
+    automations.render(status);
+    const ended = (recordingWas === "recording" || recordingWas === "paused") && status.recordingState === "idle";
+    recordingWas = status.recordingState;
+    // A recording that just ended is reviewed on the automations tab.
+    if (ended) dispatch({ type: "tab", tab: "automations" });
+    draw();
+  });
+  // The store asks once on creation; asking here too is what lets the panel
+  // say so when the background never answers (audit defect E2).
+  void store.request({ type: RUNTIME_MESSAGES.getStatus }).then((result) => {
+    if (result.ok || store.current() !== undefined) return;
+    noAnswer = true;
+    draw();
   });
 
-  function navigate(next: PanelRoute): void {
-    viewerChose = true;
-    if (next.mode === "advanced") advancedTab = next.tab;
-    apply(next);
-    writeRoutePreference(next);
-  }
-
-  function apply(next: PanelRoute): void {
-    route = next;
-    modeSwitch.set(next.mode);
-    host?.show(next);
-  }
-
-  function pairing(): boolean {
-    return store.current()?.connectionState === "pairing";
-  }
+  window.addEventListener("pagehide", () => {
+    visible = false;
+    activate();
+  });
+  window.addEventListener("pageshow", () => {
+    visible = true;
+    activate();
+  });
+  draw();
 }

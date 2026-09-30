@@ -32,7 +32,7 @@ export async function connectExtensionForProject(session: JourneySession, input:
     await extensionPage.getByRole("button", { name: "Forget", exact: true }).click();
   });
   await pollStatus(extensionPage, value => value.projectId === undefined && value.connectionState !== "connected", "extension session reset");
-  await evidence.step("extension", "extension-reset-close", "Return to the simple view", () => extensionPage.getByRole("radio", { name: "Simple", exact: true }).click());
+  await evidence.step("extension", "extension-reset-close", "Return to the chat", () => extensionPage.getByRole("tab", { name: "Chat", exact: true }).click());
   await connect();
   if (staleProject((await extensionStatus(extensionPage)).projectId, input.projectId)) {
     throw new RunnerFailure("gateway.connection", "The extension stayed on another project after its session was reset", { details: { reasonCode: "extension.project_stale" } });

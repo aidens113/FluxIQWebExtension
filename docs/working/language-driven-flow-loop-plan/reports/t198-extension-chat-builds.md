@@ -23,6 +23,19 @@
   - The stale `capabilities` comment in `shared/protocol.ts` was corrected, and `onScreen.pageUrl` added to its type.
   - The `client-gateway:` prefix pin in `apps/web/src/lib/tests/program-route.test.ts` now names the Core constant that depends on it.
 
+- **r2 triage of the WIP commit 6587257d** (2026-09-30, worker). The fix log did not describe the WIP, so it was read whole. It held two pieces:
+  - `apps/extension/src/background/panel/chat-page.ts` (+ test, barrel, `panel-control-deps.ts`). The chat's page is now the first active tab that is a web page and not FluxIQ's own origin: the last-focused window's first, then every window's. This is kept. It passes `check` and its 4 tests.
+  - `packages/test-runner/src/extension-chat-check/` (+ the `extension-chat-check` script). This is a headed, provider-free check of the relay in Chrome's side panel and Firefox's popup, and it is kept. Its one defect: **both browsers opened pages with no network guard.**
+    - Firefox launched Playwright's Firefox directly, which `guarded-browser/tests/launch-containment.test.ts` failed on.
+    - Chrome used the sanctioned `launchBrowser` but never installed the route guard that `run-scenario.ts` installs after it, which the structural test could not see.
+  - The fix:
+    - New `extension-chat-check/chat-network-policy.ts`: the run lane's policy with the recording proxy added as a FluxIQ origin.
+    - `firefox/launch-firefox.ts` installs `installDeterministicNetworkGuard` before it installs the add-on or returns.
+    - `open-chrome-session.ts` installs the guard right after `launchBrowser`, before any `goto` or `newPage`, and closes the browser if it cannot.
+    - The session carries `guard`, and `run-chat-check.ts` fails the check at stage `network guard` on any violation.
+    - The structural test sanctions `launch-firefox.ts` and pins the order in both files.
+  - Firefox limits, stated in `launch-firefox.ts`: there are no containment switches, and the add-on's background page is not a service worker, so the route guard is not known to see its requests.
+
 ## Why it could not work (confirmed 2026-09-30)
 
 Walkthrough sections 2.5 and 6 hold. The paired path had three more blockers:
@@ -89,11 +102,77 @@ Nothing is required for the chat to work: the relay adds the capabilities and th
   - `heavy.sh pnpm --filter @fluxiq-web-extension/extension check`: exit 0, run again after the protocol change.
   - `node scripts/structure-audit.mjs`: `passed (125 warning(s), 120 baselined)`.
 
+- **r2 triage (2026-09-30, worker)**, in `fxwork/t198`:
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/extension check`: exit 0.
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/extension test`: `# tests 1456`, `# pass 1456`, `# fail 0`. This includes the 4 `chat-page` tests.
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/test-runner check`: exit 0, before and after the guard fix.
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/test-runner test`, first run: `# fail 42`.
+    - 39 of the failures were from a `test-contracts` dist built before dev was merged: "does not provide an export named 'personHandOffResponses'".
+    - One was the WIP's own unguarded Firefox launch: "These files launch a browser without the network guard ...: extension-chat-check/firefox/launch-firefox.ts".
+  - After `pnpm --filter @fluxiq-web-extension/test-contracts build` and the guard fix: `# tests 1692`, `# pass 1690`, `# fail 2`.
+    - All 3 launch-containment tests and all 7 chat-check unit tests pass.
+    - The 2 failures are in code this branch does not change (`git diff dev...HEAD -- packages/test-runner` touches only `extension-chat-check/` and `package.json`):
+      - `run-evaluation/tests/runner-wiring.test.ts:122`, "a persistent-isolated workspace is bounded to what this run wrote ...".
+      - `tests/demo-workspace.test.ts:38`, "resolves one reusable demo directory below the configured runs root".
+  - `heavy.sh node scripts/structure-audit.mjs`: `passed (130 warning(s), 120 baselined)`.
+
 ## Not verified
 
+- **No browser proof (r2).** Step 2 was skipped as the brief directs, because the orphaned t191 interactive Lab is still alive:
+  - `tasklist /FI "PID eq 7468"` shows `node.exe 7468`, and its command line is `node scripts/lab/run-lab.mjs interactive "company-website" --target persistent-isolated --workspace t191-corepanel`, started 03:20 local.
+  - `lab-slots/ui-1` does not exist, so nothing was claimed or cleared.
+  - The proof needs no model provider. `extension-chat-check/cli.ts` scrubs provider secrets, and it only asks "What can you do?", which Core answers offline.
+  - To run it once the slot is free: `pnpm --filter @fluxiq-web-extension/test-runner build`, then `node packages/test-runner/dist/extension-chat-check/cli.js --browser both --scenario social-network-feed --page friends/requests/`. The extension's `dist/firefox` build is needed for Firefox.
+  - The harness has never been run end to end, before the guard fix or after it.
+- **The 2 remaining test-runner failures were not reproduced on dev itself.** It is only shown that this branch does not touch their code.
 - **No live or browser run.** A provider-free Lab run cannot exercise a build, because the build needs the model. A run through `lab-slots/ui-1` would only show that the relay reads the tab. So `chrome.tabs.query({active, lastFocusedWindow})` from Chrome's side panel and Firefox's popup is unexercised. Live lanes should exercise it after integration.
 - **The key mapping is unproven against the real Secret Keys.** In the end-to-end test, the session resolver and the provider's session check are fakes. `unlockedSessionFor` itself is unit-tested.
 - **The web panel's chat through Core is not exercised in a browser.** Only its unit tests ran.
+
+## Security change, in plain words
+
+**Which key and where it lives.** The key is the person's own model-provider API key (DeepSeek), stored sealed in Core's Secret Keys. Core never gives it to the extension.
+
+**How long it is unlocked.** When the person signs in to FluxIQ's web panel, `apps/web/src/app/api/auth/login/route.ts` calls `secretKeys.unlockSession` with their password. That holds the password-derived decryption keys in Core's process memory only (`packages/fluxiq/src/programs/secret-keys/runtime/held-keys.ts`). They are held until that sign-in session expires (`DEFAULT_SESSION_TTL_MS`, 12 hours, `identity-access/runtime/service.ts`), until logout (`auth/logout/route.ts` calls `revokeSessionUnlock`), or until Core stops. The buffers are zeroed when dropped.
+
+**The path a chat request takes.**
+1. The person types in the side panel or the popup.
+2. The background worker accepts that message only from those two exact extension pages (`apps/extension/src/background/control-page.ts`, checked in `background/panel/panel-control.ts`).
+3. It adds the chat's capability ids and the active tab's address (`background/panel/chat-page.ts`, `page-url.ts`). Then it calls Core's `append-turn` or `answer-ask` with the extension's own pairing token (`background/panel/conversation-relay.ts`, `connection.ts` `coreApiCredentials`). That token is in `chrome.storage.local` and never goes to the panel.
+4. Core's HTTP layer lets a token call only its paired allowlist, which is unchanged (`apps/web/src/lib/program-route.ts`, `PAIRED_CLIENT_ENDPOINTS`).
+5. Inside Core, `runtime/conversations/commands/caller.ts` sees the `client-gateway:` session and swaps in the approving person's live unlocked session id (`secretKeys.unlockedSessionFor`, `secret-keys/runtime/service.ts`). This skips expired sessions and unlocks that opened no key.
+6. The chat model and Core's own commands then run under that session, with the paired client's permissions unchanged. Core's commands include create-here, explore, improve, run and answer, and Core builds their payloads itself. Each command goes through `commands/port.ts`, which calls only endpoints classified `read` or `authoring` and refuses anything that deletes or pays.
+
+**What extension code can and cannot do.** Extension code never sees the key, its decryption keys, or the person's session id. It sends only words, capability ids, Flow and run ids, and a page address. It cannot choose which endpoint a command calls or what payload the command builds.
+
+**A compromised page.** The page cannot send chat messages, because content scripts fail the control-page check. It can influence a build only through what the build reads from it, and the model is told only its origin and path as the start page. A build exploring a hostile page is still exposed to what that page shows.
+
+**A compromised extension.** An attacker holding the pairing token can already call every paired endpoint. What this change adds is this: while the person is signed in with an unlocked session, the attacker can make Core spend the person's model key on chat replies, builds, improvements and runs. Two details make that reach wider than a direct token call:
+- A chat run goes through the registry in process, so it is not pinned to `no_llm_intervention` the way a direct token `run-runtime-session` is (`narrowPairedClientRequest`).
+- A "yes" typed into the chat applies a proposed change.
+
+The attacker still cannot read the key, cannot call build endpoints directly, and cannot reach delete or payment endpoints through a command, so those keep their PIN. Nothing is spent once the person signs out or the session expires.
+
+## Ready to commit
+
+Ready to commit:
+- `packages/test-runner/src/extension-chat-check/chat-network-policy.ts`
+- `packages/test-runner/src/extension-chat-check/firefox/launch-firefox.ts`
+- `packages/test-runner/src/extension-chat-check/open-chrome-session.ts`
+- `packages/test-runner/src/extension-chat-check/open-firefox-session.ts`
+- `packages/test-runner/src/extension-chat-check/run-chat-check.ts`
+- `packages/test-runner/src/extension-chat-check/types.ts`
+- `packages/test-runner/src/extension-chat-check/index.ts`
+- `packages/test-runner/src/guarded-browser/tests/launch-containment.test.ts`
+- `docs/working/language-driven-flow-loop-plan/reports/t198-extension-chat-builds.md`
+
+The WIP in 6587257d is kept as it is.
+
+Validation:
+- `heavy.sh pnpm --filter @fluxiq-web-extension/test-runner test` -> `# tests 1692`, `# pass 1690`, `# fail 2`. Both failures are outside this branch's changes; see Validation r2.
+- `extension test` -> `# pass 1456`, `# fail 0`.
+- `extension check` and `test-runner check` -> exit 0.
+- `structure-audit` -> `passed`.
 
 ## Worker reports
 

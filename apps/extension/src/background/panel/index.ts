@@ -1,6 +1,7 @@
 export { AutoConnect, shouldAutoConnect, workerDisconnectMemory, type AutoConnectState, type DisconnectMemory } from "./auto-connect";
 export { sessionDisconnectMemory } from "./session-disconnect-memory";
 export { CHAT_CAPABILITIES } from "./chat-capabilities";
+export { chatPageLocation, type ChatPageDeps, type ChatPageTab } from "./chat-page";
 export { relayConversation } from "./conversation-relay";
 export { fluxIQWebAddress } from "./open-fluxiq";
 export { acceptedPageUrl } from "./page-url";

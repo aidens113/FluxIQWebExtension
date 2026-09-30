@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Stopped 2026-09-30: DeepSeek balance exhausted ($9.46 over 112 live runs, $4.25 of it from unsupervised relaunch loops); no working Flow yet (pass streak 0); Lab spend guards and an honest pass verdict are being built before any live run resumes.
+Status detail: Resumed 2026-09-30 afternoon after a DeepSeek top-up: four supervised live lanes with the Lab spend guards and the honest pass verdict in their trees; no working Flow yet (pass streak 0).
 Created: 2026-09-24
 Last updated: 2026-09-30
 Owner: Senior supervisor agent
@@ -13,11 +13,22 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Stopped, 2026-09-30 ~10:40 PDT. Read this first.** No live run is running, and none may start yet. The user's DeepSeek balance
-is exhausted. Every launcher and loop script in the old session's scratchpad was killed and renamed `*.disabled`. The previous
-session's lane agents are gone (Claude session limit), so a new session re-dispatches leads from the reports named below.
-Live runs resume once the user has topped up DeepSeek. The Lab waste guards below are merged. The user does not want a hard spend
-budget; the concern is only agents leaving loops that waste credits unattended.
+**Resumed, 2026-09-30 afternoon. Read this first.** DeepSeek is topped up (user). The morning's "every loop killed" was wrong:
+t193's `loop2.sh` (old scratchpad) was still running as bash PID 23332 from 03:06. Renaming a running script does not stop the
+bash process that holds it open. The supervisor killed it with the user's explicit permission. When stopping a relaunch loop, kill
+the process tree and re-scan the process list; never rename the file and call it stopped. Still orphaned and provider-free: t191's
+`run-lab.mjs interactive company-website` (PIDs 26548, 7468; scenario server 1764). Stale `owner` files in `lab-slots/slot-1,2,4`
+were left for the user (the permission check refused their removal); leads overwrite them when they launch.
+
+Every lane tree's uncommitted work is now a WIP commit on its task branch, with dev (the guards and the honest verdict) merged in;
+the table below has the hashes. Dispatched in the background, each with its report as memory: live leads A t174 (slot-1),
+B t193 (slot-2), C t194 (slot-3) and D t195 (slot-4) as `lead-xhigh`; t191 UI as `lead`; workers t199 (the honest-pass
+follow-ups, new worktree `fxwork/t199-honest-pass-followups`), t192, t196 (`worker-high`), t197 and t198. Leads write
+`Ready to commit` in their fix logs; the supervisor commits, then runs integration round 3.
+
+**Stopped, 2026-09-30 ~10:40 PDT (history).** The DeepSeek balance was exhausted. The previous session's lane agents ended on a
+Claude session limit. The Lab waste guards below are merged. The user does not want a hard spend budget; the concern is only
+agents leaving loops that waste credits unattended.
 
 **What went wrong overnight (own it; do not repeat it).** 112 live runs spent **$9.46** between 21:53 and 05:18.
 **$4.25 of it (47 runs) came after the agents died at ~04:00**, from relaunch loops the lanes had built to "keep the slot busy",
@@ -81,24 +92,30 @@ furious: never an automatic loop that runs without an agent; "not idle" never me
    `live-campaign/row/summarize-task.mjs` reads the verdict from `result.permissionStop` or the `stopped-for-permission`
    invariant; `summary/totals.mjs` and `summary/markdown.mjs` get a separate "stopped for permission" count; any pass streak in
    `live-campaign/runner.mjs` ends at a stop; and the comments in `flow-lane/creation/lane.ts` that call a stop "the pass" are
-   reworded. `bench/evaluate-run.ts` carries no stop invariant yet.
+   reworded. `bench/evaluate-run.ts` carries no stop invariant yet. **Follow-ups done: t199, merged `39e11fd8`** (supervisor
+   re-ran the four script test files: 14 pass, 0 fail; `pnpm task finish t199` printed `"passed":true`). The runner keeps no
+   pass streak, so a test proves a stop is its own verdict. Left open: `run-bench.ts` rebuilds a resumed evaluation without
+   the stop, so it still reads failed but loses the `stopped_for_permission` label.
 
-**Uncommitted, unvalidated lane work (agents died mid-edit).** Downstream and Core changed-file counts; each lane's report has a
-fix log saying what is in progress. Triage each: validate and commit, or discard.
+**Lane work: WIP-committed at the shutdown state, dev merged in, unvalidated.** Each lane's owner triages its WIP (finish or
+revert) against its report's fix log. A conflicted merge is left in progress for the owner to resolve and stage; the supervisor
+commits it. t174 and t196 both edited Core `runtime/llm/node-tools/dry-run-gate.ts`: t196 owns the dry-run design and records
+what t174 drops at integration.
 
-| Lane | Tree `C:/Users/osrs_/FluxStuff/fxwork/<t>/` | Dirty (ds/core) | Report | Next |
-| --- | --- | --- | --- | --- |
-| A t174 | slot-1 | 21 / 19 | `reports/t174-live-lane.md` | P1: refuse navigating to an unseen address; quantity and size as instructed requirements; then bigbox, crossborder, everything-store |
-| B t193 | slot-2 | 1 / 0 | `reports/t193-live-self-repair.md` | bigbox redesigned until the repaired Flow passes; debugs for runs 3-9 |
-| C t194 | slot-3 | 38 / 24 | `reports/t194-live-judge-answer.md` | rung 1: the "Continue shopping" stop, the judge's page count, rejected rows, the "Charging Case" rule (round 2 not merged) |
-| D t195 | slot-4 | 24 / 4 | `reports/t195-live-control-flow.md` | F20 (a second press only when the first did nothing), R1/R2 interference, the withdraw permission point; pickup-order until a real Flow passes |
-| t191 UI | ui-1 | 216 / 28 | `live-activity-chat-plan/reports/t191-chat-ui.md` | round 2 (modes out, tabs, gear, getting-started) plus defects 1-9 below |
-| t192 | - | 2 / 13 | `automated-testing-facility-plan/reports/t193-bootstrap-test-speed.md` | service-bootstrap test speed: batched SQL done; share fixtures next |
-| t196 | - | 1 / 18 | `reports/t196-state-digest-cost.md` | the dry run: N1 + D1 + wH (decisions below) |
-| t197 | - | 22 / 10 | `reports/t197-robot-check-handoff.md` | the recovery path must use the person-needed ask; a `ui-1` browser check |
-| t198 | - | 6 / 0 | `reports/t198-extension-chat-builds.md` | prove the active-tab read in the Chrome side panel and the Firefox popup |
+| Lane | Tree `fxwork/<t>/`, slot | WIP commit (ds / core) | Merge of dev | Report | Next |
+| --- | --- | --- | --- | --- | --- |
+| A t174 | slot-1 | `af5e553e` / `f26e7eeb` | ds clean; Core conflict `dry-run-gate.ts` | `reports/t174-live-lane.md` | P1: refuse navigating to an unseen address; quantity and size as instructed requirements; then bigbox, crossborder, everything-store |
+| B t193 | slot-2 | `e747ed47` / - | ds clean; Core on dev | `reports/t193-live-self-repair.md` | debugs for runs 3-9; bigbox redesigned until the repaired Flow passes |
+| C t194 | slot-3 | `518e38fe` / `4c8753ed` | ds conflict `apps/extension/src/runtime/action-runner.ts`; Core clean | `reports/t194-live-judge-answer.md` | rung 1: the "Continue shopping" stop, the judge's page count, rejected rows, the "Charging Case" rule |
+| D t195 | slot-4 | `c22646d0` / `b6bf5eb0` | ds clean; Core on dev | `reports/t195-live-control-flow.md` | F20, R1/R2 interference, the withdraw permission point; pickup-order until a real Flow passes |
+| t191 UI | ui-1 | `47ba62dc` / `f9252172` | ds conflicts in 4 panel/overlay files; Core clean | `live-activity-chat-plan/reports/t191-chat-ui.md` | round 2 (modes out, tabs, gear, getting-started) plus defects 1-9 below |
+| t192 | - | `cbf9b88c` / `3c501999` | both clean | `automated-testing-facility-plan/reports/t193-bootstrap-test-speed.md` | service-bootstrap test speed: share fixtures |
+| t196 | - | `0645df78` / `66c77aea` | ds clean; Core conflict `dry-run-gate.ts` + test | `reports/t196-state-digest-cost.md` | the dry run: N1 + D1 + wH (decisions below) |
+| t197 | ui-1 | `8e4b7bd3` / `0b3b7960` | both clean | `reports/t197-robot-check-handoff.md` | the recovery path must use the person-needed ask; a `ui-1` browser check |
+| t198 | ui-1 | `6587257d` / - | both clean | `reports/t198-extension-chat-builds.md` | prove the active-tab read in the Chrome side panel and the Firefox popup; a plain-words security summary for the user |
+| t199 | `fxwork/t199-honest-pass-followups` | merged `39e11fd8` | - | `reports/t199-honest-pass-followups.md` | done; the worktree is removed once its two leftover processes exit |
 
-Report paths are relative to `docs/working/language-driven-flow-loop-plan/` unless another plan is named.
+Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in the lane's own tree unless another plan is named.
 
 **t191 UI defects from the supervisor's screenshot review** (evidence in `C:/Users/osrs_/FluxStuff/evidence/t191-shots/`):
 1. the Simple/Advanced toggle is still shown;
@@ -121,96 +138,28 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` unle
 - The Click node's description keeps no site-specific "click again" advice (reverted).
 
 **Waiting on the user.**
-- Top up DeepSeek.
-- Review t198's security change (an extension chat request uses the person's unlocked session key, only through Core's commands).
-- Decide whether to delete `fxwork/t187-bench` and `fxwork/t192-bench` (throwaway benchmark clones).
+- Review t198's security change (an extension chat request uses the person's unlocked session key, only through Core's commands);
+  t198's report carries a plain-words summary, and t198 stays out of dev until the user has looked.
+- Whether to stop t191's orphaned interactive Lab (it blocks `ui-1` browser checks) and clear the stale slot `owner` files.
+- `fxwork/t187-bench` and `fxwork/t192-bench`: build-timing copies from t187 and t192, not used by anything; delete only on a yes.
 - The robot-check decision stands unless the user overrides it.
 
 **Next, in order.**
-1. Finish the honest-pass follow-ups in `scripts/lab` (listed under item 2 above), with tests.
-2. Triage each lane's uncommitted work above.
-3. Integration round 3: C, t191, t192, t196, t197, t198.
-4. Once DeepSeek is topped up: re-dispatch the four live leads, with briefs from `reports/supervisor-2026-09-29-lead-briefs.md`,
-   the new guard rules and their fix logs. Keep them supervised.
+1. Watch the lanes: commit each `Ready to commit` after re-running its validation; commit the conflicted merges once staged.
+2. Done: the guards' ledger is proven on a real run. D's `run-muog33va-96469cb2` (social-feed confirm-requests) wrote a
+   `start` line at admission (18:34:38Z) and a `finish` line with `exitCode 1`, `verdict failed`,
+   `totalEstimatedCostUsd 0.061491408`, `balanceFailure null` (18:38:06Z).
+3. Integration round 3: C, t191, t192, t196, t197 (t198 after the user's review), then A, B and D as their fixes validate.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
 
 ---
 
-## What This Batch Established
+## What The 2026-09-26 Batch Established
 
-**Two bracket minters are still unscreened, and are fine only while they stay that way.**
-t160 fixed the notation where Core mints a path that then passes the locator screen, and
-found two more minters — `llm/deepseek/request-shape.ts` and `model/recording-domain.ts` —
-which produce bracketed paths that nothing screens today. They are harmless now and
-become the same defect the moment either output is screened. Dotting them is cheap;
-nobody has been asked to.
-
-**A new member on the evidence execution result refuses the whole call. Read this before
-adding a field to anything the domain sends Core.** t155 was asked to carry a recorded
-name assumption out to a run's artifact and stopped one line short of the wire, which was
-the right call. Both of Core's readers are closed key checks that refuse the whole value
-rather than ignoring an unknown member:
-
-- `llm/harness-options/plan-parameter-resolution.ts` — `exactKeys(answer, ["status","parameters"])`.
-  One unknown key and every resolved node of every plan fails validation.
-- `llm/evidence-loop-decision.ts` — `exactKeys` over the execution result's eight members.
-  One unknown key and **the whole execution result is refused
-  `llm_evidence_loop.tool_result_invalid`, and the call is recorded as a failure that
-  never happened.** Core's own comment says so.
-
-So emitting the field today would have made every node run of the next live exploration
-report as a failure — after passing `pnpm check` and all 837 domain tests. Nothing in this
-repository encoded that constraint before t155 restated Core's allow-list on the producing
-side as `WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS`, with a private `readable()` withholding
-any member Core has not learned. **Core widens first, then one entry here.** The ordered
-hops are in t155's report section 5.1, and they cross files two other workers hold, so
-that task waits for t161 and t162 rather than racing them.
-
-Note the shape of the near-miss: a field *inside* `evidence` is safe, because the check is
-over top-level members. t153's three read fields ride inside it and are unaffected. The
-difference is invisible unless someone has read the check.
-
-**Run 8's seven silent amendments are t140's defect and not the draft's — established,
-not assumed.** t157 was dispatched on the hypothesis that the model had been shown no
-draft, and refuted it from the run's own rows: the five consecutive `draft_unchanged`
-decisions at iterations 27–31 all report an identical `inputTokens: 15463`, so the request
-was byte-stable and the draft was present, and iterations 13, 17 and 26 recorded
-`draft_amended` and `draft_rerun`, so the model was reading it. What run 8 lacked was an
-answer to a no-op amendment, which is exactly what t140 built.
-
-The defect t157 found is real and was worse than the failing test suggested: any
-`maxEvidenceContextBytes` below 4,824 switched the draft off entirely, and
-`evidence-loop.ts` then filtered the `undefined` away — no draft, no refusal, no trace
-row, no log. The live profile uses 24,000, so this loop was clear of it by luck. t162
-makes that class of misconfiguration loud.
-
-**Two downstream assertions in this repository will fail the moment Core is rebuilt,
-and that is correct.** t156 predicted them by replaying its algorithm over the real key
-sets rather than by running them, because Core's `dist` was stale:
-`domain/src/runtime/llm-evidence/plan-resolution/extraction/tests/column-match.test.ts`
-— "a column with no plausible candidate is still an honest failure" — now sees `title`
-(0.497) and `prce` (0.597) resolve, and its comment is wrong; and that directory's
-`slot.test.ts` `unknownField` third entry, keyed `"title"`, now resolves. Both must be
-updated to assert the new behaviour, with `banana` and a selector still refused, during
-the integration pass and not before, since neither can be validated until Core is built.
-
-**One of t144's two handovers needed changing rather than applying.** It asked for
-`service.ts`'s private `unclassifiedThrowCode` to be replaced by the exported
-`flowBootstrapUnclassifiedThrowCode`, which would have lost information: the build's
-catch tracks a *phase-specific* code in `failureCode`, and the exported function falls
-back to the stage's generic default. A straight swap would have answered
-`flow_bootstrap.provider_transport_unknown` where the caller already knew
-`flow_bootstrap.instruction_resolution_failed`. The shared function now takes an
-optional `fallback` for a caller that knows better, so there is one classification and
-no loss. Verified: `npx tsc --noEmit` clean, 608 tests across 37 files, Core's audit
-passing.
-
-**Two loose ends recorded rather than fixed.** `parameter-screen.ts` passed its
-400-line advisory under three consecutive tasks (t151 is splitting it), and
-`expectedState.conditions[].expected` stayed withheld while an extraction's
-comparand became carried — the same structure under a different key, which t151 is
-settling.
+Moved to [archive/batch-established-2026-09-26.md](./language-driven-flow-loop-plan/archive/batch-established-2026-09-26.md)
+on 2026-09-30. **Read it before adding a field to anything the domain sends Core:** Core's readers of the evidence execution
+result are closed key checks, so one unknown top-level member refuses the whole value (Core widens first, then one entry here).
 
 ---
 
@@ -764,6 +713,26 @@ debug and partitioned so neither touches the other's files:
 - Agent: supervisor. Changed: dev pushed at Core `f4feb028`, downstream `379763fb`. Integration round 2 merged t174 (A), t193 (B), t195 (D), t192 (the Core build cache), t196 (route state from each call), t197 (robot-check hand-off) and t198 (the extension chat builds). The Click node's site-specific "click again" sentence was reverted (it broke the domain catalog-budget test, and it had no effect live). The lead agents all ended on a Claude session limit at about 04:00; launcher loops then relaunched live runs with nobody debugging. The supervisor killed every live `run-lab`, launcher and loop process at 10:22 and renamed the scratchpad's `live-run*.sh`, `t193/loop*.sh` to `*.disabled`.
 - Validation: the round-2 dev check (`pnpm build`, `pnpm check` and vitest of llm, flow-bootstrap, recovery, action-permissions and flow-draft in Core; `pnpm build`, `pnpm check` and the domain and extension tests downstream) printed `CORE_BUILD=0`, `CORE_CHECK=0`, `CORE_VITEST=0 Tests 2075 passed (2075)`, `DS_BUILD=0`, `DS_CHECK=0`, `EXT=0 # pass 1452 # fail 0`, and a domain load failure (`src/tests/domain.test.ts`: `missingRequiredTerms` `['end']`) that was traced to the Click description; after the revert, `pnpm --filter @fluxiq-web-extension/domain test` -> `# pass 976 # fail 0`. Spend, from each run's `snapshots/live-llm.json` `observed.totalEstimatedCostUsd`: `{"realRunsWithSpend":112,"totalUsd":9.46,"byLane":{"t174":3.86,"t193":2.65,"t194":0.25,"t195":2.7},"lastSpendingRunUtc":"2026-09-30T12:18:40.705Z"}`; split before and after 11:00Z: `{"before0400local":{"runs":65,"usd":5.21},"after0400local":{"runs":47,"usd":4.25}}`. Lane D's 12 "passed" runs have `evaluation.json` `flowCreated=false` (permission stops), so the real pass streak is 0. Not run: any check of the lane trees' uncommitted work (listed in Current State), and the two in-flight workers (Lab spend guards; the honest pass verdict), which were still editing when this was written.
 - Outcome: Stopped for handoff. No live run may start until the guards are merged, a budget is set and DeepSeek is topped up. Pass streak 0.
+
+### 2026-09-30 — Resumed: a live relaunch loop found still running, every lane committed and rebased, ten agents dispatched
+- Agent: supervisor. The user topped up DeepSeek and said go.
+- Found: t193's `scratchpad/t193/loop2.sh` still running as bash PID 23332, from 03:06. The morning's rename to `*.disabled` had
+  not stopped it. Killed with the user's explicit permission, after the permission check refused the supervisor's own attempt.
+  Also found: t191's provider-free interactive Lab still running (PIDs 26548, 7468, 1764), left for the user; and stale slot owner
+  files, whose removal the permission check refused.
+- Changed: a WIP commit of each lane tree's uncommitted work on its own task branch, then dev merged in; hashes and conflicts are
+  in the Current State table. New task t199 (`pnpm task start honest-pass-followups --worktree`, 2 min 46 s).
+- Validation: `taskkill //PID 23332 //T //F` -> `SUCCESS: The process with PID 23332 (child process of PID 9144) has been
+  terminated.`; a re-scan of process command lines for `loop\d?\.sh|live-run|lab:campaign|live-campaign|run-lab` found only
+  t191's interactive Lab. The guards' admission code (`scripts/lab/live-guards/admit-live-run.mjs`, `rules/debug.mjs`,
+  `rules/unchanged.mjs`) finds a previous run only in `lab-slots/spend-ledger.jsonl`, which does not exist yet, so each lane's
+  first run is admitted and the debug and unchanged rules bind from then on. No lane work validated yet.
+- Merges committed after each lead staged its resolution: t194 downstream `0d5b62c4`, t191 downstream `2faa7dc5` (with one
+  extra staged test, `panel/chat/conversation/tests/ask-copy.test.ts`), t174 Core `4e42d7ef`. The t174 merge also carries eight
+  of the lead's own staged edits beyond the merge (`flow-draft/dry-run.ts`, `flow-draft/verify-only.ts` and its test,
+  `decision-handlers/completion.ts`, and others), the lead's resolution of the `dry-run-gate.ts` conflict; reconcile them with
+  t196's dry-run design at integration.
+- Outcome: In progress. Pass streak 0.
 
 ## Open Questions
 

@@ -1,19 +1,36 @@
-// The one line a folded group of work shows: "Worked for 2m 5s · 46 steps",
-// "12 steps so far" while it is still going, and how many failed when any
-// did. Times are Core's own event times, so the duration is how long the work
-// took, not how long this panel was open.
+// The one quiet line a fold of work shows, the way ChatGPT's does:
+//
+//   done        "Worked for 2m 5s · 46 steps"
+//   partial     "Worked for 3m": the relay no longer holds the work's first
+//               steps, so a count would be a wrong number, and none is given
+//   working     "12 steps so far", or "Show the work so far" when partial
+//   failed      the same line, ending "· didn't finish" when the unit of work
+//               itself failed (a step that failed along the way is not that:
+//               exploring is trying, and its mark in the list says so)
+//
+// Times are Core's own event times, so the duration is how long the work
+// took, not how long this panel was open. Markers such as "Started building"
+// are listed but not counted as steps.
 
-import type { WorkGroup } from "./thread-entries";
+import type { WorkFold } from "./thread-entries";
 
-/** The group's summary line. `working` is true while the live line carries it. */
-export function workSummary(group: WorkGroup, working: boolean): string {
-  const count = group.rows.length;
+/** The fold's summary line. `working` is true while the live line carries it. */
+export function workSummary(fold: WorkFold, working: boolean): string {
+  const count = fold.rows.filter((row) => row.counted).length;
   const steps = `${count} ${count === 1 ? "step" : "steps"}`;
-  const failed = group.rows.filter((row) => row.status === "failed").length;
-  const tail = failed > 0 ? ` · ${failed} failed` : "";
-  if (working) return `${steps} so far${tail}`;
-  const took = duration(group.endAt - group.startAt);
-  return `${took === undefined ? "Worked" : `Worked for ${took}`} · ${steps}${tail}`;
+  if (working) return fold.complete && count > 0 ? `${steps} so far` : "Show the work so far";
+  const took = duration(fold.endAt - fold.startAt);
+  const head = took === undefined ? "Worked" : `Worked for ${took}`;
+  const parts = [head];
+  if (fold.complete && count > 0) parts.push(steps);
+  if (workFailed(fold)) parts.push("didn't finish");
+  return parts.join(" · ");
+}
+
+/** True when the fold's last unit of work ended in failure. */
+export function workFailed(fold: WorkFold): boolean {
+  const last = fold.rows[fold.rows.length - 1];
+  return last !== undefined && last.status === "failed" && (last.phase === "failed" || !last.counted);
 }
 
 /** `ms` as "45s", "2m 5s", "12m" or "1h 4m"; undefined when it is not a readable span. */

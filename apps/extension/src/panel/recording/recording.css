@@ -1,0 +1,40 @@
+/* Recording (panel/recording): the top bar's record button, the recording
+   bar, the automations tab's "New automation" section, and the review after a
+   recording. Colours come from panel/theme/tokens.css only; buttons, cards and
+   notices use the shared .card, .primary-button, .small-button and .notice
+   from panel/shell/shell.css. */
+
+.record-button { color: var(--danger); }
+.record-button:disabled { color: var(--muted); }
+
+.recording-bar { display: grid; gap: 6px; border-bottom: 1px solid var(--divider); background: var(--danger-soft); padding: 6px var(--space-3); }
+.recording-bar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--space-2); }
+.recording-bar-status { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.recording-bar-text { color: var(--danger-text); font-size: 12px; font-weight: 700; }
+.recording-bar-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.recording-bar .rec-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
+.recording-bar-extract .extract-button { width: auto; min-height: 28px; padding: 3px 10px; }
+.recording-bar .small-button { min-height: 28px; padding: 3px 10px; }
+.danger-fill { border-color: var(--danger); background: var(--danger); color: #ffffff; }
+.recording-block { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.recording-block-text { min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: no-preference) {
+  .recording-bar .rec-dot { animation: rec-pulse 1.5s ease-in-out infinite; }
+}
+@keyframes rec-pulse { 50% { opacity: .35; } }
+
+.new-automation { display: grid; gap: var(--space-2); border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); padding: var(--space-3); }
+.new-automation-title { margin: 0; font-size: 13px; font-weight: 750; }
+.new-automation-row { display: grid; gap: 4px; }
+.new-automation-row > .small-button, .new-automation-extract .extract-button { justify-self: start; width: auto; }
+
+.recording-heading { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); }
+.recording-preview-more, .recording-note { margin: 0; font-size: 12px; color: var(--muted); }
+.recording-preview-steps { display: grid; gap: var(--space-1); margin: 0; padding: 0; }
+.recording-sentence { margin: 0; font-size: 13px; color: var(--text); }
+.recording-review[aria-busy="true"] .recording-sentence { color: var(--accent-text); }
+.recording-preview { display: grid; gap: var(--space-2); border: 1px solid var(--divider); border-radius: 7px; background: var(--surface-muted); padding: var(--space-2); }
+.recording-preview-name { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.recording-preview-steps { list-style: decimal; padding-left: 20px; font-size: 12px; color: var(--text); }
+.recording-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.recording-actions .primary-button { flex: 1 1 100%; }
