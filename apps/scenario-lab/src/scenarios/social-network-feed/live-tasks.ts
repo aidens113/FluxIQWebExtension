@@ -38,5 +38,5 @@ export const SOCIAL_NETWORK_FEED_TASKS: readonly LiveInstructionTask[] = [
   { id: "social-network-feed-feed-digest-quiet-feed", scenarioId: "social-network-feed", variantId: "quiet-feed", kind: "navigate-and-extract", instruction: FEED_DIGEST, judgeBy: "expected-dataset", expectedDatasetId: "extract-feed-digest" },
   { id: "social-network-feed-feed-digest-app-install", scenarioId: "social-network-feed", variantId: "app-install", variantArmedAfterBuild: true, kind: "navigate-and-extract", instruction: FEED_DIGEST, judgeBy: "expected-dataset", expectedDatasetId: "extract-feed-digest" },
   { id: "social-network-feed-confirm-requests", scenarioId: "social-network-feed", kind: "navigate-and-extract", instruction: CONFIRM_REQUESTS, judgeBy: "expected-dataset", expectedDatasetId: "extract-confirmed" },
-  { id: "social-network-feed-move-open-day", scenarioId: "social-network-feed", kind: "navigate-and-extract", instruction: MOVE_OPEN_DAY, judgeBy: "expected-dataset", expectedDatasetId: "extract-open-day" },
+  { id: "social-network-feed-move-open-day", scenarioId: "social-network-feed", kind: "navigate-and-extract", instruction: MOVE_OPEN_DAY, judgeBy: "expected-dataset", expectedDatasetId: "extract-open-day", permissionPoint: { consequence: "delete", control: "Move" } },
 ];

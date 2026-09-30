@@ -265,11 +265,11 @@ checkout links. A campaign started from the working checkouts therefore tests
 whatever another agent has half-edited, and fails for reasons that are not in
 the commit under test. A campaign that must measure fixed commits runs from
 the pair instead: a worktree of this repository, by default
-`<parent of this checkout>/fxlab/lab-ext` (`F:\fxlab\lab-ext` here), and a
-Core worktree beside it, `F:\fxlab\!FluxIQ`. Nobody edits either. The Core
+`<parent of this checkout>/fxlab/lab-ext`, and a
+Core worktree beside it, `<parent>/fxlab/!FluxIQ`. Nobody edits either. The Core
 side is not a setting: `domain/package.json` links Core as
 `link:../../!FluxIQ/...`, so from `lab-ext` that link lands in the pair's own
-Core rather than in `F:\!FluxIQ`.
+Core rather than in the working `!FluxIQ` checkout.
 
 ```bash
 pnpm lab:pair --ext dev --core dev       # move both sides, detached
@@ -299,13 +299,13 @@ It then prints the environment a run from the pair needs, and the commands:
 
 | Variable | Value | Why |
 | --- | --- | --- |
-| `FLUXIQ_CORE_ROOT` | `F:/fxlab/!FluxIQ` | The runner and its Core-quiet guard watch the pair's Core. |
+| `FLUXIQ_CORE_ROOT` | `<parent>/fxlab/!FluxIQ` | The runner and its Core-quiet guard watch the pair's Core. |
 | `FLUXIQ_TEST_ENV_FILES` | `none` | No target configuration comes from an env file. |
 | `FLUXIQ_LAB_INSTANCE` | `lab-pair` | Builds go to the ignored `.lab-instances/`. Without a label the extension build rewrites the pair's own `apps/extension/build/` and `apps/extension/dist/`, and the destructive `rm` at the top of that build deletes the unpacked extension a concurrent run is reading. Both paths have been ignored since 2026-09-17, so an unlabelled build no longer turns the pair dirty and the next move no longer refuses for that reason. |
 | `npm_config_workspace_concurrency` | `1` | One workspace build at a time. |
 
 Start the Lab and the campaign from the pair by absolute path, as printed --
-`node F:/fxlab/lab-ext/scripts/lab/live-campaign.mjs --all ...` -- not as
+`node <parent>/fxlab/lab-ext/scripts/lab/live-campaign.mjs --all ...` -- not as
 `pnpm lab:campaign`. The pnpm form appears in the process list only as
 `node scripts/lab/live-campaign.mjs`, which names no checkout, so between two
 tasks `pnpm lab:pair` could not see the campaign and would move the pair
@@ -316,7 +316,7 @@ A live run reads `DEEPSEEK_API_KEY` from the process environment, or from
 `.env` or `.env.local` in the checkout it starts from. The pair has neither
 until someone provides one, and `pnpm lab:pair` says which applies, by source
 and never by value. The pair's runs and its web panel build cache live under
-`F:\fxlab\lab-ext\test-runs\instances\lab-pair\`, and ports are allocated per
+`<parent>/fxlab/lab-ext/test-runs/instances/lab-pair/`, and ports are allocated per
 run, so the pair and the working checkout can run at the same time, memory
 permitting.
 
@@ -500,7 +500,7 @@ exited is never touched by anything, and the same is true of a Lab instance's
 `.lab-instances`.
 
 The flat task layout leaks in the same way for the same reason. Every task
-worktree under `F:/fxwork/` shares one sibling Core, so no task can know it was
+worktree under `<parent>/fxwork/` shares one sibling Core, so no task can know it was
 the last to finish, and the Core outlives them all — 650 MB of it on the same
 date.
 
