@@ -1,7 +1,9 @@
 export { AutoConnect, shouldAutoConnect, workerDisconnectMemory, type AutoConnectState, type DisconnectMemory } from "./auto-connect";
 export { sessionDisconnectMemory } from "./session-disconnect-memory";
+export { CHAT_CAPABILITIES } from "./chat-capabilities";
 export { relayConversation } from "./conversation-relay";
 export { fluxIQWebAddress } from "./open-fluxiq";
+export { acceptedPageUrl } from "./page-url";
 export { handlePanelControl, type PanelControlDeps } from "./panel-control";
 export { panelControlDeps } from "./panel-control-deps";
 export type { PanelRelayContext } from "./relay-context";
