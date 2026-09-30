@@ -114,8 +114,9 @@ test("fifty step messages later the first is the same element, and only a messag
     assert.equal(messages.length, 50);
     assert.equal(messages[0], first, "the first message is the same element 49 messages later");
     assert.deepEqual([first, ...first.descendants()], firstNodes);
-    assert.equal(first.byClass("chat-step-outcome")[0]!.hidden, true, "its action never said it ended, and the work moved on");
+    assert.equal(first.byClass("chat-card-outcome")[0]!.hidden, true, "its action never said it ended, and the work moved on");
+    assert.equal(first.byClass("chat-card")[0]!.getAttribute("data-state"), "settled");
     assert.equal(messages[49]!.byClass("chat-step-title")[0]!.textContent, "Clicking button 99");
-    assert.equal(messages[49]!.byClass("chat-step-outcome-label")[0]!.textContent, "Done");
+    assert.equal(messages[49]!.byClass("chat-card-outcome")[0]!.textContent, "Done");
   });
 });

@@ -1,8 +1,9 @@
 // Which events become FluxIQ's step messages, and what each says: every
-// explained decision is a message with its reason, the action after it is
-// that message's outcome, checks and repairs are messages, a decision still
-// being made and Core's bookkeeping are not, a message is keyed by the event
-// that opened it and updated in place, and no raw id is ever shown.
+// explained decision is a message with its reason, the actions after it are
+// that message's cards, checks, asks and repairs are messages, a decision
+// still being made and Core's bookkeeping are not, a message and a card are
+// keyed by the event that opened them and updated in place, and no raw id is
+// ever shown.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -21,10 +22,10 @@ const tool = (sequence: number, title: string, status: Detail["status"], fields:
 const QUOTE = "Clicking “Get a free quote”";
 
 function said(messages: StepMessage[]): Array<[string, string | undefined, string | null]> {
-  return messages.map((message) => [message.title, message.text, message.outcome === null ? null : message.outcome.status]);
+  return messages.map((message) => [message.title, message.text, message.actions.at(-1)?.outcome ?? null]);
 }
 
-test("each explained decision is one message with its reason; the action after it is its outcome", () => {
+test("each explained decision is one message with its reason; the action after it is its card", () => {
   const events = [
     activityEvent(1, { detail: { kind: "step", title: "Build started", status: "started" } }),
     decide(2),
@@ -37,12 +38,16 @@ test("each explained decision is one message with its reason; the action after i
   ];
   const messages = stepMessages(events, 100);
   assert.deepEqual(said(messages), [
-    [QUOTE, "The quote form is behind this button, so I'm opening it.", "succeeded"],
+    [QUOTE, "The quote form is behind this button, so I'm opening it.", "done"],
     ["Typing the postcode", "The form asks where the job is.", "failed"]
   ]);
   assert.deepEqual(messages.map((message) => message.kind), ["decision", "decision"]);
-  assert.equal(messages[0]!.outcome?.text, undefined, "a result code is not words");
-  assert.equal(messages[1]!.outcome?.text, "The field was covered by a banner.");
+  assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.key, card.kind, card.target])), [
+    [["action:build-1#4", "click", "Get a free quote"]],
+    [["action:build-1#8", "type", null]]
+  ], "one card each, keyed by the event that started it");
+  assert.equal(messages[0]!.actions[0]!.said, undefined, "a result code is not words");
+  assert.equal(messages[1]!.actions[0]!.said, "The field was covered by a banner.");
   assert.deepEqual(messages.map((message) => message.key), ["step:build-1#3", "step:build-1#7"]);
   assert.deepEqual(messages.map((message) => message.latest), [false, true]);
 });
@@ -77,9 +82,15 @@ test("checks and repairs are messages with their verdict and diagnosis; a check 
   ]);
   assert.equal(messages[1]!.key, "step:build-1#2", "the check keeps the key of the event that opened it");
   assert.equal(messages[1]!.sequence, 3);
+  assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.key, card.kind, card.outcome, card.check])), [
+    [],
+    [["action:build-1#2", "test", "done", true]],
+    [["action:build-1#4", "test", "failed", true]],
+    []
+  ], "a check is its own card, updated in place; a repair's diagnosis and the failure marker are words");
 });
 
-test("an action with no decision before it is its own message, in words; a second action is not folded into the first decision", () => {
+test("an action with no decision before it is a message that is its card; every action after a decision is one of its cards", () => {
   const events = [
     tool(1, "Using core.run_node", "started"),
     tool(2, "Using core.run_node", "succeeded", { text: "Result: web.click.succeeded" }),
@@ -89,12 +100,18 @@ test("an action with no decision before it is its own message, in words; a secon
   ];
   const messages = stepMessages(events, 100);
   assert.deepEqual(said(messages), [
-    ["Clicked on the page", undefined, "succeeded"],
-    ["Opening the results", "The list is on the next page.", "succeeded"],
-    ["Looked at the page", undefined, "succeeded"]
+    ["Clicked on the page", undefined, "done"],
+    ["Opening the results", "The list is on the next page.", "done"]
   ]);
-  assert.deepEqual(messages.map((message) => message.kind), ["action", "decision", "action"]);
-  for (const message of messages) assert.doesNotMatch(`${message.title} ${message.text ?? ""}`, /\b[a-z]+\.[a-z_]+/u, "no raw id");
+  assert.deepEqual(messages.map((message) => message.kind), ["action", "decision"]);
+  assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.key, card.kind])), [
+    [["action:build-1#1", "click"]],
+    [["action:build-1#4", "navigate"], ["action:build-1#5", "look"]]
+  ]);
+  for (const message of messages) {
+    assert.doesNotMatch(`${message.title} ${message.text ?? ""}`, /\b[a-z]+\.[a-z_]+/u, "no raw id");
+    for (const card of message.actions) assert.doesNotMatch(`${card.target ?? ""} ${card.said ?? ""} ${card.why ?? ""}`, /\b[a-z]+\.[a-z_]+/u, "no raw id");
+  }
 });
 
 test("a run's steps are messages; one Core started is over once anything after it happened", () => {
@@ -106,7 +123,8 @@ test("a run's steps are messages; one Core started is over once anything after i
     detail: { kind: "step", title: label, status: "started" }
   });
   const messages = stepMessages([run(1, 1, "Open the shop"), run(2, 2, "Search for lamps")], 100);
-  assert.deepEqual(said(messages), [["Step 1: Open the shop", undefined, "succeeded"], ["Step 2: Search for lamps", undefined, "started"]]);
+  assert.deepEqual(said(messages), [["Step 1: Open the shop", undefined, "done"], ["Step 2: Search for lamps", undefined, "working"]]);
+  assert.deepEqual(messages.map((message) => message.actions.map((card) => [card.kind, card.target])), [[["navigate", "Open the shop"]], [["type", "Search for lamps"]]]);
 });
 
 test("units of work never share a message, and at most the limit are kept, the newest", () => {
@@ -117,7 +135,7 @@ test("units of work never share a message, and at most the limit are kept, the n
     tool(4, "Clicking Search", "succeeded")
   ];
   const messages = stepMessages(events, 100);
-  assert.deepEqual(messages.map((message) => [message.key, message.outcome?.status]), [["step:build-1#1", "succeeded"], ["step:run:r9#3", "succeeded"]]);
+  assert.deepEqual(messages.map((message) => [message.key, message.actions.map((card) => card.outcome)]), [["step:build-1#1", ["done"]], ["step:run:r9#3", ["done"]]]);
   const many = Array.from({ length: 30 }, (_, index) => thought(index + 1, `Step ${index + 1}`, "Because."));
   assert.deepEqual(stepMessages(many, 2).map((message) => message.key), ["step:build-1#29", "step:build-1#30"]);
   assert.deepEqual(stepMessages(many, 0), []);
@@ -132,4 +150,30 @@ test("messages keep their keys and order as events arrive; an unreadable time ta
   assert.equal(later[0]!.at, first[0]!.at);
   assert.equal(later[1]!.at, eventTime(2), "the time of the event before it");
   assert.deepEqual(later.map((message) => message.title), ["Looking for the form", "Found the form"]);
+});
+
+test("a question to the person is a card waiting on them: a robot check, or a permission", () => {
+  const events = [
+    activityEvent(1, { phase: "waiting_permission", detail: { kind: "ask", title: "Asked the person to complete a check", text: "Complete the check on this page, then press Continue." } }),
+    activityEvent(2, { phase: "waiting_permission", detail: { kind: "ask", title: "Asked for permission to send the message" } }),
+    activityEvent(3, { phase: "exploring", detail: { kind: "ask", title: "Asked for permission to pay" } })
+  ];
+  const messages = stepMessages(events, 100);
+  assert.deepEqual(messages.map((message) => [message.kind, message.actions.map((card) => [card.kind, card.outcome])]), [
+    ["ask", [["person_check", "waiting"]]],
+    ["ask", [["permission", "waiting"]]],
+    ["ask", [["permission", "waiting"]]]
+  ]);
+});
+
+test("an action that started keeps its card and its place when it ends; nothing is reordered", () => {
+  const events = [thought(1, QUOTE, "It opens the form."), tool(2, QUOTE, "started")];
+  const first = stepMessages(events, 100);
+  events.push(tool(3, QUOTE, "failed", { text: "Result: web.target.not_found · Node: web.output.dom-click" }));
+  const later = stepMessages(events, 100);
+  assert.equal(first[0]!.actions[0]!.key, later[0]!.actions[0]!.key);
+  assert.deepEqual([first[0]!.actions[0]!.outcome, later[0]!.actions[0]!.outcome], ["working", "failed"]);
+  assert.equal(later[0]!.actions[0]!.why, "it wasn't on the page");
+  assert.equal(later[0]!.actions[0]!.said, undefined, "the observer's record is not words");
+  assert.equal(later[0]!.actions.length, 1);
 });

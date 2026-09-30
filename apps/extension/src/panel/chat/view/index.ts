@@ -1,6 +1,8 @@
-// The chat's DOM parts: the message list and its turns, step messages and live line,
-// the empty state and the automation's context line, and following new
-// content while the person is at the bottom.
+// The chat's DOM parts: the message list and its turns, step messages with
+// their action cards, and the live line; the empty state and the
+// automation's context line; and following new content while the person is
+// at the bottom.
+export { createActionCardView, type ActionCardView } from "./action-card-view";
 export { createContextLine, type ContextLine } from "./context-line";
 export { createEmptyState, type EmptyState } from "./empty-state";
 export { emptyStateModel, type EmptyStateModel } from "./empty-state-model";
