@@ -157,6 +157,14 @@ needs verifying, so reads are the cost: route discovery through a worker or
 `Explore` and read the conclusion. Briefs follow the protocol format, at most
 40 lines; the worker's final message follows the protocol's return contract.
 
+Every agent runs Opus 5.5. The supervisor works at high or extra-high effort
+depending on the task. Lane leads are dispatched as `lead` (high) or
+`lead-xhigh` (the live loop, core architecture); workers as `worker-low`
+(mechanical edits, running a named command), `worker` (medium, the default)
+or `worker-high` (root-cause debugging, cross-module design), chosen per
+brief. A lead dispatches a worker in the foreground when it needs the result
+to continue, because a background worker's completion does not wake it.
+
 ## Repository Boundaries
 
 This repository is the downstream FluxIQ web-automation implementation. It is
