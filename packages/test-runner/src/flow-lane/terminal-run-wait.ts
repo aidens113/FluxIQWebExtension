@@ -208,6 +208,22 @@ export type PersistedFlowTerminalWait = {
 export type PendingWork = "verdict" | "recovery" | "repair";
 
 /**
+ * Why a recovery record never arrived, when Core said. Core marks a failed
+ * run's recovery on its run detail (`metadata.recoveryState`): `running` before
+ * it starts, `ended` with its last save, `threw` when it died. So the reader
+ * can name the absence instead of waiting it out:
+ *
+ * - `recovery.threw` -- Core's recovery threw; no record will ever come.
+ * - `recovery.ended_without_record` -- it ended and wrote no record.
+ * - `recovery.still_running` -- Core still said `running` when the wait, bounded
+ *   by Core's grant lease, ran out.
+ *
+ * A Core that writes no marker (older, or a re-run's re-projection overwrote
+ * it) gets no code, and the wait follows the rule it always did.
+ */
+export type RecoveryStateCode = "recovery.threw" | "recovery.ended_without_record" | "recovery.still_running";
+
+/**
  * As much of a run detail as this rule reads. `actions` is narrowed to the two
  * members `recoveryCouldBeRunning` reads -- Core's status word and the node the
  * attempt ran -- and to nothing else: this module still knows nothing about
@@ -236,7 +252,9 @@ export type TerminalRunCandidate = {
  *   datasets are complete, and nothing that judges a created Flow reads the
  *   recovery record; failing the run over a missing note about it threw away a
  *   whole product result. The absence is reported rather than swallowed, so a
- *   reader can tell "Core recovered nothing" from "Core never said".
+ *   reader can tell "Core recovered nothing" from "Core never said". When
+ *   Core marked its recovery, the wait follows the marker and names the
+ *   absence (`RecoveryStateCode`).
  *
  * A run that never read terminal at all is the original failure, unchanged: no
  * evidence arrived, so there is nothing to report but what stopped it.
@@ -245,7 +263,7 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   read: (timeoutMs: number) => Promise<T>,
   originalFailure: unknown,
   wait: PersistedFlowTerminalWait,
-): Promise<{ detail: T; unsettled?: PendingWork }> {
+): Promise<{ detail: T; unsettled?: PendingWork; recoveryState?: RecoveryStateCode }> {
   const now = wait.now ?? Date.now;
   const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const intervalMs = wait.intervalMs ?? TERMINAL_DETAIL_POLL_MS;
@@ -262,6 +280,10 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   // The last terminal read, kept so a run Core finished but never annotated is
   // still the run that happened.
   let terminal: T | undefined;
+  // When the run first read terminal, and Core's marker on its recovery at the
+  // last read that carried one.
+  let firstTerminalAt = 0;
+  let recoveryMarker: "running" | undefined;
   while (now() < deadline) {
     try {
       const detail = await read(Math.min(30_000, deadline - now()));
@@ -273,7 +295,17 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
         // own, shorter bound -- shorter again when the run left no failed
         // attempt for a recovery to plan from, since then there is nothing in
         // flight to wait for.
-        if (pending === "recovery" && terminal === undefined) {
+        if (terminal === undefined) firstTerminalAt = now();
+        const marker = pending === "recovery" ? coreRecoveryState(detail.runDetail) : undefined;
+        // Core said its recovery is over and wrote no record: none is coming.
+        if (marker === "threw" || marker === "ended") {
+          return { detail, unsettled: "recovery", recoveryState: marker === "threw" ? "recovery.threw" : "recovery.ended_without_record" };
+        }
+        // Core says it is still working: its grant lease, not a fixed guess, bounds it.
+        if (marker === "running") {
+          recoveryMarker = marker;
+          deadline = Math.max(deadline, firstTerminalAt + TERMINAL_DETAIL_MAX_WAIT_MS);
+        } else if (pending === "recovery" && terminal === undefined) {
           deadline = Math.min(deadline, now() + (recoveryCouldBeRunning(detail) ? recoveryWaitMs : recoveryGraceMs));
         }
         // A repair in flight is the run still running, however its nodes
@@ -286,7 +318,8 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
     const delay = Math.min(intervalMs, Math.max(0, deadline - now()));
     if (delay > 0) await sleep(delay);
   }
-  if ((pending === "recovery" || pending === "repair") && terminal) return { detail: terminal, unsettled: pending };
+  if (pending === "repair" && terminal) return { detail: terminal, unsettled: "repair" };
+  if (pending === "recovery" && terminal) return { detail: terminal, unsettled: "recovery", ...(recoveryMarker ? { recoveryState: "recovery.still_running" as const } : {}) };
   if (pending) {
     throw new RunnerFailure("performance.budget", `Core was still finishing the granted run's ${pending} when the wait for it ran out`, { details: { code: GRANTED_RUN_UNSETTLED_CODE, pending, waitedMs: now() - started } });
   }
@@ -361,6 +394,12 @@ function resultRepairInFlight(runDetail: Readonly<Record<string, unknown>>): boo
 function recoveryRecordWritten(runDetail: Readonly<Record<string, unknown>>): boolean {
   const metadata = plainRecord(runDetail.metadata);
   return plainRecord(metadata?.llmGate) !== undefined || plainRecord(metadata?.recoveryTrace) !== undefined;
+}
+
+/** Core's marker on a failed run's recovery (`metadata.recoveryState.state`), when it wrote a known one. */
+function coreRecoveryState(runDetail: Readonly<Record<string, unknown>>): "running" | "ended" | "threw" | undefined {
+  const state = plainRecord(plainRecord(runDetail.metadata)?.recoveryState)?.state;
+  return state === "running" || state === "ended" || state === "threw" ? state : undefined;
 }
 
 function plainRecord(value: unknown): Record<string, unknown> | undefined {

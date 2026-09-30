@@ -26,6 +26,8 @@ export type ExtractionPanelElements = {
   paginateRow: HTMLElement;
   paginate: HTMLInputElement;
   paginateLabel: HTMLElement;
+  /** "Pages": which pages the extraction reads, said in words whether or not more pages were found. */
+  pagesNote: HTMLElement;
   previewHead: HTMLTableRowElement;
   previewBody: HTMLElement;
   previewNote: HTMLElement;
@@ -62,6 +64,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
   const paginate = createElement("input", { id: "extractionPaginate", attrs: { type: "checkbox" } });
   const paginateLabel = createElement("span", { id: "extractionPaginateLabel", text: "Read every page" });
   const paginateRow = createElement("label", { id: "extractionPaginateRow", className: "extraction-paginate", hidden: true }, [paginate, paginateLabel]);
+  const pagesNote = createElement("span", { id: "extractionPagesNote" });
   const previewNote = createElement("span", { id: "extractionPreviewNote" });
   const previewHead = createElement("tr", { id: "extractionPreviewHead" });
   const previewBody = createElement("tbody", { id: "extractionPreviewBody" });
@@ -71,6 +74,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     summary,
     sectionHeading("Columns", createElement("span", { text: "Rename, remove, or exclude a column." })),
     fields,
+    sectionHeading("Pages", pagesNote),
     paginateRow,
     sectionHeading("Preview", previewNote),
     createElement("div", { className: "extraction-preview-scroll" }, [
@@ -115,6 +119,7 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     paginateRow,
     paginate,
     paginateLabel,
+    pagesNote,
     previewHead,
     previewBody,
     previewNote,

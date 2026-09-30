@@ -2,7 +2,7 @@ import type { RenderContext, ScenarioRouteRequest, ScenarioRouteResponse } from 
 import { advertById, composeFeed, feedQueryKey, listingById, parseFeedQuery, PLACES, type FeedSurface } from "./catalog/index.js";
 import { humanCheckDue } from "./limits.js";
 import { accountPage, advertPage, listingPage, mapPage, pageBuild, peoplePage, resultsPage, type AccountPage } from "./pages/index.js";
-import { buyingCount, latestOffer, offerReceiptText } from "./readouts.js";
+import { buyingCount, conversationText, latestOffer, offerReceiptText } from "./readouts.js";
 import type { ClassifiedsState } from "./types.js";
 import { batchMarkup, listingPanelMarkup, outsideMarkup } from "./view/index.js";
 
@@ -41,7 +41,7 @@ export function routeClassifieds(state: ClassifiedsState, request: ScenarioRoute
     }
     if (item[2] === "receipt.json") {
       const offer = latestOffer(state, listing.id);
-      return json({ receipt: offer ? offerReceiptText(offer) : null, buying: buyingCount(state) });
+      return json({ receipt: offer ? offerReceiptText(offer) : null, conversation: conversationText(state, listing.id), buying: buyingCount(state) });
     }
     return { ...html(listingPage(build, state, listing)), mutation: { operation: "view", payload: { id: listing.id } } };
   }

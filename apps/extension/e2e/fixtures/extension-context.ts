@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, test as base, type BrowserContext, type Page, type Worker } from "@playwright/test";
+import { compareBuildInfo } from "../../scripts/release/index.mjs";
 import { installDeterministicNetworkGuard, type DeterministicNetworkGuard } from "./network-policy.js";
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const repositoryRoot = path.resolve(extensionRoot, "..", "..");
 export const defaultExtensionPath = path.join(extensionRoot, "dist", "e2e-chromium");
 
 export type ExtensionMetadata = {
@@ -53,6 +55,7 @@ export { expect } from "@playwright/test";
 export async function launchExtensionSession(label = "run"): Promise<ExtensionSession> {
   const artifactPath = path.resolve(process.env.FLUXIQ_E2E_EXTENSION_PATH ?? defaultExtensionPath);
   const manifest = await readExtensionManifest(artifactPath);
+  await assertCurrentBuild(artifactPath);
   const artifactSha256 = await hashDirectory(artifactPath);
   const safeLabel = label.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 40);
   const profilePath = await mkdtemp(path.join(tmpdir(), `fluxiq-e2e-${safeLabel}-${randomUUID()}-`));
@@ -176,6 +179,39 @@ async function readExtensionManifest(artifactPath: string): Promise<{ name: stri
     throw new Error(`extension.install: invalid MV3 manifest at ${manifestPath}`);
   }
   return { name: manifest.name, version: manifest.version };
+}
+
+// A missing artifact was always refused; a stale one was loaded and certified,
+// so `playwright test` run by hand after an edit tested the previous build.
+// Every target carries the stamp scripts/build-extension.mjs writes -- the
+// content hash of each file its bundles read -- and a mismatch is refused as an
+// environment failure, never reported as a product one. `pnpm test:e2e`
+// rebuilds first, so it never meets this; a direct `playwright test` does.
+// Checked once per artifact per worker process: the tree does not change under
+// a running suite, and every test launches a session.
+const verifiedBuilds = new Map<string, Promise<void>>();
+
+function assertCurrentBuild(artifactPath: string): Promise<void> {
+  let pending = verifiedBuilds.get(artifactPath);
+  if (!pending) {
+    pending = checkCurrentBuild(artifactPath);
+    verifiedBuilds.set(artifactPath, pending);
+  }
+  return pending;
+}
+
+async function checkCurrentBuild(artifactPath: string): Promise<void> {
+  const rebuild = "Rebuild with `pnpm --filter @fluxiq-web-extension/extension build` (or run `pnpm test:e2e`, which builds first).";
+  const verdict = await compareBuildInfo(artifactPath, repositoryRoot);
+  if (verdict.state === "current") return;
+  if (verdict.state === "unstamped") {
+    throw new Error(`environment.stale: E2E extension artifact at ${artifactPath} cannot be shown to match the source: ${verdict.reason}. ${rebuild}`);
+  }
+  const drifted = [...verdict.changed, ...verdict.removed.map((file) => `${file} (removed)`)];
+  throw new Error(
+    `environment.stale: E2E extension artifact at ${artifactPath} is older than the source; ${drifted.length} input(s) changed since it was built: ` +
+    `${drifted.slice(0, 5).join(", ")}${drifted.length > 5 ? ", ..." : ""}. ${rebuild}`
+  );
 }
 
 async function hashDirectory(directory: string): Promise<string> {

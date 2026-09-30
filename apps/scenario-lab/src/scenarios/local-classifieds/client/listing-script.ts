@@ -13,6 +13,8 @@
  *   available?". Pressing Send sends it, and an offer made within the rate
  *   limit's interval after that is refused with how long to wait; the dialog
  *   stays open so it can be sent again.
+ * - Under the receipt, the action bar says what the buyer has sent this
+ *   seller so far -- messages and offers -- as the server counts them.
  */
 export const LISTING_SCRIPT = String.raw`
 (function listing() {
@@ -27,6 +29,11 @@ export const LISTING_SCRIPT = String.raw`
     if (data.receipt !== null && bar) {
       if (!receipt) { receipt = el('div', 'receipt', { 'data-testid': 'marketplace_offer_receipt' }); bar.append(receipt); }
       receipt.textContent = data.receipt;
+    }
+    let conversation = bar && bar.querySelector('[data-testid="marketplace_conversation"]');
+    if (data.conversation !== null && bar) {
+      if (!conversation) { conversation = el('div', 'receipt', { 'data-testid': 'marketplace_conversation' }); bar.append(conversation); }
+      conversation.textContent = data.conversation;
     }
     const buying = document.querySelector('[data-testid="marketplace_buying_count"]');
     if (buying) buying.textContent = String(data.buying);

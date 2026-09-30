@@ -105,6 +105,7 @@ jobs:
   static:
     name: Static gate (${{ matrix.os }})
     needs: prerequisites
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -144,11 +145,33 @@ jobs:
       - name: Build workspace
         working-directory: "!FluxIQWebExtension"
         run: pnpm build
+      # `pnpm build` already loads every extension target through
+      # apps/extension/scripts/release/verify-extension-target.mjs (Firefox
+      # included) and fails on any error. This step zips the Chrome/Edge and
+      # Firefox targets, reads each archive back and verifies it again as a
+      # store package. `--release` is not passed: the Firefox add-on id is still
+      # an owner placeholder, which a release build refuses.
+      - name: Package and verify store archives
+        working-directory: "!FluxIQWebExtension"
+        run: node apps/extension/scripts/release/package-extension.mjs
+      - name: Upload store archives
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-store-packages-${{ github.run_attempt }}
+          path: ./!FluxIQWebExtension/apps/extension/dist/store/
+          if-no-files-found: error
+          retention-days: 30
 
   chromium-smoke:
     name: Chromium smoke (${{ matrix.os }})
     needs: [prerequisites, select]
-    if: always() && needs.prerequisites.result == 'success' && (github.event_name == 'schedule' || needs.select.outputs.run_browser_smoke == 'true')
+    # The extension e2e suite is the only gate that loads the real extension in
+    # a browser, so it runs on every event rather than only when the selector
+    # asks for browser smoke; the scenario-page step below stays selective.
+    # `always()` keeps it running on a schedule, where `select` is skipped.
+    if: always() && needs.prerequisites.result == 'success'
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -189,8 +212,13 @@ jobs:
         working-directory: "!FluxIQWebExtension"
         run: ${{ matrix.browser_install }}
       - name: Run all scenario pages without extension or Core
+        if: github.event_name == 'schedule' || needs.select.outputs.run_browser_smoke == 'true'
         working-directory: "!FluxIQWebExtension"
         run: pnpm --filter @fluxiq-web-extension/scenario-lab test:e2e
+      # `test:e2e` builds the extension first, and the fixture refuses an
+      # artifact whose build stamp no longer matches the source
+      # (apps/extension/e2e/fixtures/extension-context.ts), so this can never
+      # certify a stale build.
       - name: Run real-extension smoke specs
         working-directory: "!FluxIQWebExtension"
         run: ${{ matrix.extension_test }}
@@ -257,11 +285,85 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  nightly-full-matrix:
-    name: Nightly full matrix and flake sample
+  nightly-plan:
+    name: Plan nightly shards
     if: github.event_name == 'schedule'
-    needs: [prerequisites, static]
+    needs: prerequisites
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      shards: ${{ steps.shards.outputs.shards }}
+      scenario_count: ${{ steps.shards.outputs.scenario_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: "!FluxIQWebExtension"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FLUXIQ_CORE_REPOSITORY }}
+          ref: ${{ env.FLUXIQ_CORE_REF }}
+          token: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+          path: "!FluxIQ"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install locked dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm install --frozen-lockfile
+      # Core's compiled output is loaded by this job; see the `select` job.
+      - name: Install FluxIQ Core dependencies
+        working-directory: "!FluxIQ"
+        run: pnpm install --frozen-lockfile
+      - name: Build FluxIQ Core
+        working-directory: "!FluxIQ"
+        run: pnpm build
+      - name: Build scenario registry and selector
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm --dir packages/test-matrix build:registry && pnpm --dir packages/test-matrix build
+      # The registry (apps/scenario-lab/src/registry.ts) is the one list of
+      # scenarios, read through the selector's own loader, so a new scenario
+      # joins a shard without this file changing. Round-robin keeps shards
+      # within one scenario of each other.
+      - name: Split the registry into shards
+        id: shards
+        working-directory: "!FluxIQWebExtension"
+        env:
+          SHARD_COUNT: "4"
+        run: |
+          node --input-type=module -e '
+          import { appendFileSync } from "node:fs";
+          import { loadScenarioCatalog } from "./packages/test-matrix/dist/scenario-catalog.js";
+          const ids = (await loadScenarioCatalog()).map((entry) => entry.id);
+          const count = Number(process.env.SHARD_COUNT);
+          if (ids.length === 0 || !(count > 0)) throw new Error("no scenarios to shard");
+          const shards = Array.from({ length: count }, (_, index) => ({ index: index + 1, ids: JSON.stringify(ids.filter((_, position) => position % count === index)) }))
+            .filter((shard) => shard.ids !== "[]");
+          console.log(ids.length + " scenarios in " + shards.length + " shards");
+          appendFileSync(process.env.GITHUB_OUTPUT, "shards=" + JSON.stringify(shards) + "\nscenario_count=" + ids.length + "\n");
+          '
+
+  nightly-full-matrix:
+    name: Nightly full matrix and flake sample (shard ${{ matrix.shard.index }})
+    if: github.event_name == 'schedule'
+    needs: [prerequisites, static, nightly-plan]
+    runs-on: ubuntu-latest
+    # Sizing (2026-09-29): 41 registered scenarios x 3 repeats = 123 runs, run
+    # strictly one after another inside a job (packages/test-runner/src/cli.ts
+    # awaits each run). The only complete deterministic runs on record (21, from
+    # 2026-09-13, Windows, one machine) took 44-108 s, median 62 s. Unsharded
+    # that is 127-221 min in one job: under the 360-minute job cap, but by a
+    # margin measured on only four scenarios. In four shards of 10-11
+    # scenarios (30-33 runs) it is 22-60 min per shard at those rates; the
+    # 150-minute step limit is 2.5x the slowest estimate, so a stall ends as a
+    # named timeout with time left for the evidence upload (`if: always()`).
+    # The first nightly's run.json files replace this estimate.
+    timeout-minutes: 210
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.nightly-plan.outputs.shards) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -294,33 +396,17 @@ jobs:
       - name: Install bundled Chromium
         working-directory: "!FluxIQWebExtension"
         run: pnpm --filter @fluxiq-web-extension/extension exec playwright install --with-deps chromium
-      # Runtime estimate (2026-09-28), kept at three repeats. `--all` is every
-      # scenario in apps/scenario-lab/src/registry.ts -- 41, not the 10 this job
-      # was sized for -- and the matrix runs them strictly one after another
-      # (packages/test-runner/src/cli.ts awaits each run), so this is 123 runs.
-      # The only COMPLETE deterministic runs on record are the 21 in test-runs/
-      # from 2026-09-13 (basic-form, iframe-checkout, ambiguous-targets,
-      # identity-drift; Windows, one developer machine): 44-108 s each, median
-      # 62 s, mean 68.8 s. 123 runs at those rates: 127 min (median), 141 min
-      # (mean), 221 min (slowest). Add about 2.5 min for the first run of a job,
-      # which primes caches (136-157 s observed, against 12-27 s warm), plus the
-      # setup steps above. Every figure is under GitHub's 360-minute job limit,
-      # so the repeat stays. Two caveats: the other 37 scenarios have no
-      # complete deterministic run on record (the deterministic manifests that
-      # exist for them all stopped at 0 steps), and none of these runs is on
-      # Linux.
-      # The first nightly's own run.json files replace this estimate. The step
-      # timeout below makes a stall end as a named timeout, leaving about an hour
-      # for setup and the evidence upload, which still runs (`if: always()`).
-      - name: Run full deterministic corpus three times
+      - name: Run this shard of the deterministic corpus three times
         working-directory: "!FluxIQWebExtension"
-        timeout-minutes: 300
-        run: xvfb-run --auto-servernum pnpm lab matrix --all --repeat 3 --evidence failure
+        timeout-minutes: 150
+        env:
+          FLUXIQ_SCENARIO_IDS: ${{ matrix.shard.ids }}
+        run: xvfb-run --auto-servernum pnpm lab matrix --scenarios-json "$FLUXIQ_SCENARIO_IDS" --repeat 3 --evidence failure
       - name: Upload certification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-certification-${{ github.run_id }}-${{ github.run_attempt }}
+          name: nightly-certification-${{ github.run_id }}-shard-${{ matrix.shard.index }}-${{ github.run_attempt }}
           path: "./!FluxIQWebExtension/test-runs/"
           if-no-files-found: error
           retention-days: 90
