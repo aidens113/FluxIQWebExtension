@@ -194,6 +194,21 @@ lost.
   capture where no call left a current page: recovery's annotation exploration,
   a run's router, and a build step after a call that carried none (a dry-run
   replay step that did not capture).
+- **The dry run's calls** (`domain/src/runtime/llm-evidence/node-run/replay.ts`,
+  `verify.ts`, `replay-answer.ts`) come only in a build's judgement phase: once
+  the model says the Flow is ready and Core's completion check accepts it, and
+  again after each repair. Nothing replays the draft while the build explores,
+  and a continued build carries on from wherever the page stands. `reset` is a
+  navigation to where the first step found the page and nothing more: it never
+  clears site data and never logs the person out. `step` runs a step again.
+  `verify` is sent instead of `step` for a changing step that declares any
+  consequence but none, and dispatches only `web.dom.assert` checks (visible,
+  then enabled) on the step's resolved target: `core.replay.verified` when it
+  could run now, `core.replay.present` when the target is gone from the very
+  page the step acted on (its recorded location, which Core sends back as
+  `from`), which is its effect already in place, and
+  `core.replay.unreproducible` when it is gone from another page. So a dry run
+  never repeats a lasting effect such as a save, an add or a submit.
 - **Legacy dotted aliases** (`browser.navigate`, `dom.click`, and the rest) are
   accepted on the wire and resolved to their canonical types once, in the
   domain (see below). The map is total over all eighteen types. For seven of

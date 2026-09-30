@@ -21,6 +21,13 @@
 //            `io/gateway-output-dispatcher.ts` sends, so what is being proved
 //            is the Flow and not a rehearsal of it.
 //
+//   verify -- check a step whose effect lasts, and run nothing that acts: a
+//            dry run never repeats a lasting effect (`./verify.ts`).
+//
+// The reset never clears site data and never logs the person out (decision
+// D1): a navigation is all it is, so what the site remembers stays remembered,
+// which is why a step whose effect lasts is checked rather than run again.
+//
 // **The gate is asked on every replayed step, with the step's own
 // declaration.** A replay is an act on a real page and is no more exempt from
 // the person's permission than the original was; Core's check arrives on the request
@@ -34,35 +41,24 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
-import { assertActive, captureEvidence, toolExecution, toolMetadata, withCallStates, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
-import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
+import { assertActive, toolMetadata, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
-import type { WebLlmNameAssumption } from "../name-assumption";
 import { resolveWebPlanNode } from "../plan-resolution";
-import type { WebLlmSnapshotBinding } from "../sanitize";
-import { webLlmHandleRejectionReason, type WebLlmToolRejectionReason } from "../tool-rejection";
+import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
+import {
+  WEB_NODE_REPLAY_RESULT_CODES as REPLAY_RESULT_CODES,
+  webNodeReplayAnswer as answer,
+  webNodeReplayAnswerWithPage as answerWithPage,
+  webNodeReplayPermissionReason as permissionReason
+} from "./replay-answer";
 import type { WebNodeRun } from "./context";
+import { verifyWebOutputNode } from "./verify";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";
-
-/**
- * The closed vocabulary a replay answers in.
- *
- * Core's own, because Core reads the answer and knows none of this domain's
- * codes (`AS/runtime/llm/node-tools/replay.ts` holds the same five). What
- * really happened, in this domain's words, goes in the evidence beside it.
- */
-const REPLAY_RESULT_CODES = {
-  replayed: "core.replay.replayed",
-  failed: "core.replay.failed",
-  changed: "core.replay.changed",
-  unreproducible: "core.replay.unreproducible",
-  resetFailed: "core.replay.reset_failed"
-} as const;
 
 /** The command a reset dispatches: the same move the Flow's own navigate makes. */
 const RESET_ACTION = "web.browser.navigate";
@@ -92,15 +88,19 @@ export function webNodeReplayStatement(input: { location: string; payload: JsonV
   });
 }
 
+/** What Core may ask of a replay call. */
+export type WebNodeReplayKind = "reset" | "step" | "verify";
+
 /** Whether a call is a replay Core asked for rather than a node the model named. */
-export function webNodeReplayCall(value: JsonObject): "reset" | "step" | undefined {
+export function webNodeReplayCall(value: JsonObject): WebNodeReplayKind | undefined {
   const asked = value[WEB_LLM_REPLAY_KEY];
-  return asked === "reset" || asked === "step" ? asked : undefined;
+  return asked === "reset" || asked === "step" || asked === "verify" ? asked : undefined;
 }
 
 /** Carry out one replay call. */
-export async function replayWebOutputNode(run: WebNodeRun, kind: "reset" | "step"): Promise<WebLlmEvidenceToolExecution> {
-  return kind === "reset" ? await resetPage(run) : await replayStep(run);
+export async function replayWebOutputNode(run: WebNodeRun, kind: WebNodeReplayKind): Promise<WebLlmEvidenceToolExecution> {
+  if (kind === "reset") return await resetPage(run);
+  return kind === "verify" ? await verifyWebOutputNode(run) : await replayStep(run);
 }
 
 /**
@@ -247,12 +247,6 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   return answer(REPLAY_RESULT_CODES.replayed, "the step ran again", true, { resultReason: undefined, nodeId: undefined, assumed });
 }
 
-/** Which of the three permission refusals this was, in this domain's own words. */
-function permissionReason(permission: { kind: "refused"; requestId: string | null } | { kind: "invalid" }): WebLlmToolRejectionReason {
-  if (permission.kind === "invalid") return "consequences_unreadable";
-  return permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted";
-}
-
 /** How many rows a reading node's payload holds: the longest list it carries. */
 export function webNodeRecordCount(payload: JsonValue | undefined, depth = 0): number | undefined {
   if (payload === undefined || payload === null || depth > MAX_PRODUCED_DEPTH) return undefined;
@@ -264,83 +258,6 @@ export function webNodeRecordCount(payload: JsonValue | undefined, depth = 0): n
     if (found !== undefined && (longest === undefined || found > longest)) longest = found;
   }
   return longest;
-}
-
-/**
- * What a replay says about itself, beside whatever page it carries.
- *
- * Named rather than written inline so both answers -- the bare one and the one
- * with the page -- are the same three fields, and a field dropped from one is a
- * compile error rather than a packet the model quietly reasons without.
- */
-type WebNodeReplayAnswer = { ok: boolean; code: string; said: string };
-
-/**
- * What a replay answer says about itself beyond Core's replay code
- * (`../capture.ts`): which step of the library it was, and -- where the replay
- * refused for a reason this domain already has a word for -- which reason.
- *
- * Core's five replay codes say what became of the draft, which is what Core
- * asked. They do not say why, and `core.replay.failed` covers a step that was
- * not permitted, a step whose handle no longer names anything, and a step the
- * page would not run. Each wants a different fix, and the reason is already
- * computed on the way past.
- */
-type WebNodeReplayFacts = {
-  resultReason: WebLlmToolRejectionReason | undefined;
-  nodeId: string | undefined;
-  /**
-   * Every name the step's resolution had to assume (`../name-assumption.ts`).
-   *
-   * A replay resolves the step's parameters again, so it guesses at the same
-   * column the exploration guessed at -- by the same code, against the same
-   * binding. It is said here too because a replay is the last thing that runs
-   * before a draft may be proposed, and a reader of one answer should not have
-   * to find another to learn that a column was assumed.
-   */
-  assumed: WebLlmNameAssumption[] | undefined;
-};
-
-/** One replay's answer: the code Core reads, and one line of this domain's own. */
-function answer(code: string, said: string, replayed = false, about?: WebNodeReplayFacts): WebLlmEvidenceToolExecution {
-  return toolExecution(present<WebNodeReplayAnswer>({ ok: replayed, code, said }) as unknown as JsonValue, replayed, code, undefined, undefined, about);
-}
-
-/**
- * The same, with the page a step broke on, because that is the page the
- * correction has to be made from and the model has no free look to spend on it.
- *
- * A capture that cannot be taken, or that will not fit, leaves the line alone:
- * a verdict without its page is still a verdict, and a packet over budget would
- * cost the model the evidence it already has.
- */
-async function answerWithPage(run: WebNodeRun, code: string, said: string, acted: boolean, about?: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution> {
-  const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
-  let page: WebLlmSnapshotBinding | undefined;
-  try {
-    page = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
-    run.shown(page);
-    // The page, with what the replay made of this step written on the same
-    // packet: the one shape every other packet has, and a named spread of a
-    // typed value rather than a literal, so the fields are still checked.
-    const packet: JsonObject = page.evidence as unknown as JsonObject;
-    const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: false, code, said }) as unknown as JsonObject;
-    const value = { ...packet, ...verdict } as unknown as JsonValue;
-    if (serializedBytes(value) <= budget) return replayStates(toolExecution(value, false, code, undefined, undefined, about), page, acted);
-  } catch (error) {
-    if (run.request.signal?.aborted) throw error;
-  }
-  return replayStates(answer(code, said, false, about), page, acted);
-}
-
-/**
- * The states a replay answer saw, from the one capture it took after the step:
- * the state it left, and the state it found as well when the step's command
- * never went out. A step whose command went out took no capture before it, so
- * what it found is not said.
- */
-function replayStates(execution: WebLlmEvidenceToolExecution, page: WebLlmSnapshotBinding | undefined, acted: boolean): WebLlmEvidenceToolExecution {
-  return withCallStates(execution, acted ? undefined : page, page);
 }
 
 /** Whether a recorded location is one this domain will navigate back to. */

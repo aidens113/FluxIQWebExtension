@@ -3,14 +3,17 @@
 // `core.replay.unreproducible` exists for one situation: the reset is a page
 // navigation, so a control the site stops serving once it has been answered --
 // a consent banner, a soft check -- is simply not there on the replay
-// (`../replay.ts`). Core then asks the model once and afterwards lets the step
-// through (`AS/runtime/flow-draft/dry-run.ts`, `automationStudioFlowDraftReplayOutcomeBlocks`).
+// (`../replay.ts`). Core used to ask the model once and afterwards let the step
+// through; since 2026-09-30 it blocks until the step replays or the draft marks
+// it optional or only_if (`AS/runtime/flow-draft/dry-run.ts`,
+// `automationStudioFlowDraftReplayOutcomeBlocks`).
 //
 // A remembered answer removes a control; it never makes one selector match
 // several. But `../../action-failure/refusal.ts` folds `web.target.ambiguous`
 // into the same `target_not_found` word, and `../replay.ts` decides
-// `unreproducible` from that word alone -- so a step the Flow cannot resolve is
-// waved through after one question, exactly like a dismissed banner.
+// `unreproducible` from that word alone -- so a step the Flow cannot resolve
+// would have been reported as a dismissed banner is, and under the old rule
+// waved through after one question.
 //
 // Found while debugging `run-munaiz76-7026748c` (t174-w2). That run's two
 // unreproducible steps were genuine absences -- each spent the full 3.75 s
