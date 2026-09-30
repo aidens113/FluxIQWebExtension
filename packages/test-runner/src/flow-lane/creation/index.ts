@@ -14,5 +14,6 @@ export * from "./flow-shape.js";
 export * from "./authored-nodes.js";
 export * from "./own-page.js";
 export * from "./judgement.js";
+export * from "./permission-point.js";
 export * from "./lane.js";
 export * from "./snapshot.js";

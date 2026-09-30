@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "@fluxiq-web-extension/domain/node";
-import { resolveScenarioWorkflow, validateAuthoredFlowNodes, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, validateAuthoredFlowNodes, type LlmActionConsequence, type ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../../failure.js";
 import type { DeclaredSecret } from "../../declared-secrets.js";
 import type { PersistedFlowLlmExecution } from "../../persisted-flow-run.js";
@@ -29,6 +29,8 @@ type LaneOptions = {
   settle?: (build: CreatedFlowBuild) => Promise<void>;
   authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   settleRun?: (runId: string | undefined) => Promise<void>;
+  /** What the operator permitted the build (`--llm-permit`). */
+  permitted?: readonly LlmActionConsequence[];
 };
 
 async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneOptions = {}) {
@@ -49,7 +51,7 @@ async function runLane(core: ReturnType<typeof fakeCreationCore>, options: LaneO
     startLocation: "http://127.0.0.1:4100/scenarios/catalog/",
     runToken: "run-token",
     secrets: options.secrets ?? [],
-    authorizeBuild: async () => { core.calls.push("authorize"); return { permittedConsequences: [] }; },
+    authorizeBuild: async () => { core.calls.push("authorize"); return { permittedConsequences: options.permitted ?? [] }; },
     settleBuild: async (build) => { core.calls.push("settle"); settled.push(build); await options.settle?.(build); },
     ...(options.authorizeRun ? { authorizeRun: options.authorizeRun } : {}),
     ...(options.settleRun ? { settleRun: options.settleRun } : {}),
@@ -450,4 +452,55 @@ test("a task that says to ask first passes on the stop at its point", async () =
   const request = resolveCreatedFlowRequest(catalogScenario, goalTask({ permissionPoint: { consequence: "delete", control: "Delete post", askFirst: true } }));
   const outcome = await (await runLane(core, { request })).raw;
   assert.ok("permissionStop" in outcome);
+});
+
+// L1: a consequential task not permitted its act gets a Flow one honest way.
+// The build asks at the act, the person allows it there, and the build goes
+// on; Core records the answer on the Flow's thread, which the lane reads back.
+const DELETE_POST = { consequence: "delete", control: "Delete post" } as const;
+const permissionAsk = (askId: string, answer: "grant" | "deny", control: string | null, missing = ["delete"]) => ({ askId, kind: "permission", status: "answered", answer: { kind: answer, value: null }, missing, control: { name: control, kind: "button" }, createdAt: 10 });
+
+test("a consequential task whose build proposed a Flow with nobody allowing the act at its point fails as not asked, before anything is applied", async () => {
+  const request = resolveCreatedFlowRequest(catalogScenario, goalTask({ permissionPoint: DELETE_POST }));
+  const silent = fakeCreationCore();
+  await assert.rejects((await runLane(silent, { request })).raw, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
+    && /without a person allowing it at the task's permission point/u.test(error.message) && error.details?.permissionPoint === "not_asked" && error.details?.consequence === "delete"
+    && JSON.stringify(error.details?.permissionAsks) === "[]");
+  for (const step of ["approve", "apply", "start", "run"]) assert.equal(silent.calls.includes(step), false, `${step} ran for a Flow nobody allowed`);
+
+  // Asked about another control and refused, then granted a class the task's act is not: neither is the person allowing the act.
+  const elsewhere = fakeCreationCore({ flowThreadAsks: [permissionAsk("request-move", "deny", "Move"), permissionAsk("request-new", "grant", "Delete post", ["create_new"])] });
+  await assert.rejects((await runLane(elsewhere, { request })).raw, (error: unknown) => error instanceof RunnerFailure && error.details?.permissionPoint === "not_asked"
+    && JSON.stringify(error.details?.permissionAsks) === JSON.stringify([
+      { askId: "request-move", status: "answered", answer: "deny", verdict: "elsewhere", reason: "control_differs" },
+      { askId: "request-new", status: "answered", answer: "grant", verdict: "elsewhere", reason: "class_not_missing" },
+    ]));
+  assert.equal(elsewhere.calls.includes("apply"), false);
+
+  // Asked at the point and refused is no more a pass than never asking.
+  const refused = fakeCreationCore({ flowThreadAsks: [permissionAsk("request-delete", "deny", "Delete post")] });
+  await assert.rejects((await runLane(refused, { request })).raw, (error: unknown) => error instanceof RunnerFailure && error.details?.permissionPoint === "not_asked");
+
+  // Allowed on a control Core left unnamed: nobody could tell that was the task's act (run-munzbfbj-2fb8947d asked for money on the cart page).
+  const unnamed = fakeCreationCore({ flowThreadAsks: [permissionAsk("request-unnamed", "grant", null)] });
+  await assert.rejects((await runLane(unnamed, { request })).raw, (error: unknown) => error instanceof RunnerFailure && error.details?.permissionPoint === "not_asked");
+  assert.equal(unnamed.calls.includes("apply"), false);
+});
+
+test("a consequential task whose build was allowed its act at the point is applied, run and judged", async () => {
+  const core = fakeCreationCore({ flowThreadAsks: [permissionAsk("request-delete", "grant", " delete POST ")] });
+  const request = resolveCreatedFlowRequest(catalogScenario, goalTask({ permissionPoint: DELETE_POST }));
+  const outcome = await (await runLane(core, { request })).run;
+  assert.equal(outcome.observation.oracleVerdict, "passed");
+  const readBack = core.calls.indexOf("get-conversation");
+  assert.ok(readBack >= 0 && readBack < core.calls.indexOf("approve"), "the grant is read back from Core before the proposal is applied");
+  assert.ok(core.calls.includes("run"));
+});
+
+test("a task whose act the operator permitted had nothing to ask, so no grant is required", async () => {
+  const core = fakeCreationCore();
+  const request = resolveCreatedFlowRequest(catalogScenario, goalTask({ permissionPoint: DELETE_POST }));
+  const outcome = await (await runLane(core, { request, permitted: ["delete"] })).run;
+  assert.equal(outcome.observation.oracleVerdict, "passed");
+  assert.equal(core.calls.includes("list-conversations"), false);
 });

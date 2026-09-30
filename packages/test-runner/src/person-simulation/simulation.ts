@@ -1,6 +1,7 @@
 import type { ExpectedPersonHandOff, ScenarioPersonChecks } from "@fluxiq-web-extension/test-contracts";
-import type { PersonHandOff, PersonHandOffSnapshot } from "./hand-off-record.js";
+import type { LabPersonSnapshot, PersonHandOff } from "./hand-off-record.js";
 import { answerPersonAsk, pendingPersonAsks, PERSON_DONE, PERSON_STOP, type PendingPersonAsk, type PersonAskControl, type PersonAskScope } from "./asks.js";
+import { answerPermissionAskAsPerson, type PermissionPlay, type PersonPermissionAnswer } from "./permission-answer.js";
 import type { PersonTab } from "./tab.js";
 import { playPersonCheck, type PlayedCheck } from "./play-person-check.js";
 
@@ -15,6 +16,10 @@ export type PersonSimulationInput = {
   readState: () => Promise<unknown>;
   /** Told of each hand-off as it is answered, so the run's timeline shows it where it happened. */
   onHandOff?: (handOff: PersonHandOff) => Promise<void>;
+  /** The task's permission point, for a run whose person answers permission asks; absent, they are left alone. */
+  permissions?: PermissionPlay | undefined;
+  /** Told of each permission answer as it is given. */
+  onPermissionAnswer?: (answer: PersonPermissionAnswer) => Promise<void>;
   /** How often Core's threads are read. Core itself waits in two-second steps, so one second answers within its next look. */
   pollMs?: number;
   lookForMs?: number;
@@ -24,7 +29,7 @@ export type PersonSimulationInput = {
 
 export type PersonSimulation = {
   /** Stops looking, waits for a hand-off in progress to be answered, and returns the whole record. */
-  stop(): Promise<PersonHandOffSnapshot>;
+  stop(): Promise<LabPersonSnapshot>;
 };
 
 const POLL_MS = 1_000;
@@ -43,13 +48,17 @@ const POLL_MS = 1_000;
  * knows was showing, when the check stayed, when the row declares the person
  * declines, or when the check already showed the automation's hand on it.
  *
- * Every other ask is left alone: a permission is the operator's, and the
- * Lab does not answer questions it was not built to answer.
+ * Given the task's permission point (`permissions`), it answers each
+ * permission ask too: allowed at the point, refused elsewhere
+ * (`permission-answer.ts`), each recorded in a list of its own. Without one a
+ * permission ask is left alone, and so is every other ask: the Lab does not
+ * answer questions it was not built to answer.
  */
 export function startPersonSimulation(input: PersonSimulationInput): PersonSimulation {
   const now = input.now ?? Date.now;
   const handled = new Set<string>();
   const handOffs: PersonHandOff[] = [];
+  const permissionAnswers: PersonPermissionAnswer[] = [];
   let pollFailures = 0;
   let lastPollFailure: string | null = null;
   let stopped = false;
@@ -65,6 +74,16 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
         lastPollFailure = firstLine(error);
       }
       for (const ask of asks.filter(({ askId }) => !handled.has(askId))) {
+        if (ask.kind === "permission") {
+          if (!input.permissions) continue;
+          handled.add(ask.askId);
+          const answer = await answerPermissionAskAsPerson({ control: input.control, scope: input.scope, play: input.permissions, now }, ask);
+          permissionAnswers.push(answer);
+          if (input.onPermissionAnswer) {
+            await input.onPermissionAnswer(answer).catch((error: unknown) => { lastPollFailure = `publishing a permission answer failed: ${firstLine(error)}`; });
+          }
+          continue;
+        }
         handled.add(ask.askId);
         const handOff = await handOffOne(input, ask, now);
         handOffs.push(handOff);
@@ -84,7 +103,7 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
       stopped = true;
       wake?.();
       await loop;
-      return Object.freeze({ scenarioId: input.scenarioId, expected: input.expected, playable: input.module !== null, handOffs: Object.freeze([...handOffs]), pollFailures, lastPollFailure });
+      return Object.freeze({ scenarioId: input.scenarioId, expected: input.expected, playable: input.module !== null, handOffs: Object.freeze([...handOffs]), pollFailures, lastPollFailure, permissionAnswers: Object.freeze([...permissionAnswers]) });
     },
   };
 }
