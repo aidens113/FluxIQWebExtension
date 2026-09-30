@@ -1,9 +1,9 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Pass streak 0. Six lanes run under leads after the 2026-09-29 restart; the live lane (t174) holds the one live slot and is blocked on an unrecognised throw after a tool call.
+Status detail: Stopped 2026-09-30: DeepSeek balance exhausted ($9.46 over 112 live runs, $4.25 of it from unsupervised relaunch loops); no working Flow yet (pass streak 0); Lab spend guards and an honest pass verdict are being built before any live run resumes.
 Created: 2026-09-24
-Last updated: 2026-09-29
+Last updated: 2026-09-30
 Owner: Senior supervisor agent
 Scope: Reaching the MVP goal — a person's instruction becomes a Flow, that Flow runs deterministically, repairs itself when it breaks, and judges its own answer — by running several complex, multi-node live scenarios in parallel lanes, debugging every run end to end, fixing every cause it exposes, and re-running that same scenario until it works. It deliberately does not cover corpus-wide campaigns, pass-count measurement, single-node extraction tasks, recorded Flows, or any surface that does not block this loop.
 Paired document: none
@@ -13,151 +13,127 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Lanes after the restart (2026-09-29 evening).** The user asked for as many agents as useful,
-with leads over them, inside the live-slot limit, and asked why builds take so long and how to cut
-them. Core t182 is merged (`af385f7`) and pushed with downstream `6cdc9abb`. Each lane has one lead
-and its own `fxwork/<id>` tree:
+**Stopped, 2026-09-30 ~10:40 PDT. Read this first.** No live run is running, and none may start yet. The user's DeepSeek balance
+is exhausted. Every launcher and loop script in the old session's scratchpad was killed and renamed `*.disabled`. The previous
+session's lane agents are gone (Claude session limit), so a new session re-dispatches leads from the reports named below.
+Live runs resume once the user has topped up DeepSeek. The Lab waste guards below are merged. The user does not want a hard spend
+budget; the concern is only agents leaving loops that waste credits unattended.
 
-| Lane | Lead | Owns |
-| --- | --- | --- |
-| t174 live lane | `lead-xhigh` | slot-1; throw fixed (`befca2f`); extension-start failure root-caused as a product defect, then live runs |
-| t176 t182 t185-t190 | merged | all pushed in both repositories; commits in the Work Ledger |
-| t193 live B self-repair | `lead-xhigh`, slot-2 | after-creation variants: fail, diagnose, repair, persist, zero-provider replay |
-| t194 live C judge answer | `lead-xhigh`, slot-3 | expected-dataset tasks from rung 1; exact answer, self-judgement, refute and re-author |
-| t195 live D control flow | `lead-xhigh`, slot-4 | routing, retry, loops; permission only for money, delete, send |
-| t196 page-capture cost | `lead` (t189's) | ~39 full captures per build from digests; ignored redirects must bite |
-| t192 Core build speed | `lead` (t187's) | Core `build`/`check` from about 162 s to seconds, provably safe |
-| t191 chat UI + overlay | `lead` (t185's) | user verdict: chat not ChatGPT-like, overlay not visible on the site, status flickers; screenshot-driven fix |
+**What went wrong overnight (own it; do not repeat it).** 112 live runs spent **$9.46** between 21:53 and 05:18.
+**$4.25 of it (47 runs) came after the agents died at ~04:00**, from relaunch loops the lanes had built to "keep the slot busy",
+with nobody debugging. After the balance ran out (~05:20), the loops fired about 1,050 instant failures until 10:22. The user,
+furious: never an automatic loop that runs without an agent; "not idle" never means burning credits. Pinned memory
+`live-runs-spend-real-money-cap-and-supervise` holds the rules.
 
-**Machine rules for every lane (binding).**
-- **Four live Lab slots, no locks** (user, 2026-09-29 evening): `lab-slots/slot-1` to `slot-4`, each owned by one
-  live lane for all its runs (A create & run t174; B self-repair; C judge its own answer; D control flow and
-  consequential acts), so no lane waits on another. `lab-slots/ui-1` holds provider-free UI runs (t191). Headed, ten
-  realistic scenarios only. Before fixing a cause, check the other live lanes' reports; the first lane to record a
-  cause owns its fix.
-- **Build slots** (`b1`-`b4`): run every heavy command (`pnpm check`, `pnpm build`, `pnpm test`, a package's whole
-  suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`) through
-  `bash C:/Users/osrs_/FluxStuff/build-slots/heavy.sh "<lane> <what>" <command...>`, which releases only its own slot.
-  Never `mkdir` or `rm` a build slot by hand. One test file or directory at `--maxWorkers=2 --minWorkers=1` needs none.
-- **A live-run failure is a product or Lab defect, never machine load** (user, 2026-09-29): trace the failing step and
-  its regression. The pre-pairing failures were the Lab's network guard crashing the extension's service worker.
-- **Iterate on your own branch; integrate in rounds** (user, 2026-09-29): every live lane fixes in its own worktree and
-  re-tests at once, never waiting for a commit, and keeps a "Fix log" (files, the exposing run, validation, status) at
-  the top of its report. Every 60-90 minutes the supervisor calls "Integration round N": each lane finishes its run
-  in flight and replies `Round N: ready`; the supervisor commits every lane, merges all branches into dev, checks it,
-  merges dev back into every lane, and resumes them. Leads coordinate shared causes through each other's fix logs.
-  Only the supervisor commits, merges, branches or makes worktrees.
+**Binding rules (user, all in force).**
+- Four live Lab slots, `lab-slots/slot-1..4`, one per live lane, no queueing between them; `ui-1` is for provider-free UI runs.
+  Headed browsers only, and only the ten realistic scenarios.
+- A live run is started only by a live agent, for a reason (a fix to test). No keepers, relaunch loops or cron. No hard spend
+  budget (the user's choice), but everything stops at the first balance failure, and spend is reported from the ledger.
+- A pass means a working Flow that did the task. A permission stop with `flowCreated=false` is not a pass.
+- A live-run failure is a product or Lab defect, never "machine load"; trace the step and its regression.
+- Every debug reviews the UI from screenshots (the Full Debug Protocol below).
+- Lanes iterate on their own branches; the supervisor merges in integration rounds. Leads coordinate through each other's fix
+  logs, and the first lane to record a cause owns it.
+- Only the supervisor commits, merges or pushes. Heavy commands go through
+  `bash C:/Users/osrs_/FluxStuff/build-slots/heavy.sh "<lane> <what>" <cmd>` (4 build slots). No LLM call grants.
+- Extension UI (user): no Simple/Advanced modes and no split screen. Chat is the primary tab and gets the whole panel. A second
+  tab lists automations. Settings live behind a gear. A full-screen getting-started view appears when not connected or
+  something is critical. A link opens the Core panel, which owns everything else and so must look good too.
 
-**The instruction that opened this document, 2026-09-24, and it is binding.**
-Live tests only. A full debug of every live run. Complex scenarios only. Full
-node runs, not single-node extraction. One run, one debug, fix those errors,
-continue — repeated until language-driven Flows run successfully, repair
-themselves, and measure their own progress.
+**On dev now (pushed): Core `f4feb028`, downstream `379763fb`.**
+- **Lanes merged tonight:** t176, t182, t185, t186, t187, t188, t189, t190, t192, t196, t197, t198; t191 round 1; t174 A, t193 B
+  and t195 D through round 2; t194 C through round 1.
+- **What they add:**
+  - the extension start fix (a network-guard crash; 1/10 clean starts became 10/10) and a gateway open timeout
+  - page captures cut (look 3→1, action 4→2; no route-state capture before a decision), and repeats shown to the model and
+    redirected
+  - robot checks never solved: self-clearing ones waited out, others pause and ask the person (the Lab plays the person)
+  - money, delete and send/publish always ask; the $0.25 cost ceiling per build enforced
+  - cookie walls declined; per-row loops; rate-limit waits; load-more retry; look-alike buttons told apart
+  - the extension chat can build, improve and run (Core executes chat capabilities for any client)
+  - the visible, paced overlay (t191 round 1)
+  - build caches in both repos: repeat builds in about 4-10 s
+- **Last verification of dev** (before the final revert): Core build, check and 2,075/2,075 vitest; downstream build and check;
+  extension 1,452/1,452. After `379763fb`: domain 976/976.
 
-**Only the ten realistic scenarios**, restated by the user 2026-09-25:
-`everything-store`, `crossborder-marketplace`, `bigbox-retail`, `job-board`,
-`local-classifieds`, `auction-marketplace`, `photo-social`,
-`social-network-feed`, `company-website`, `professional-network`. The Lab
-fixtures are not rungs and the one pass recorded against the old rung 1
-(`product-catalog`) is not evidence about the product's target.
+**Honest results.** No task has produced a working Flow end to end, and the real pass streak is 0.
+- Lane D's 12 "passes" on bigbox pickup-order are permission stops with `flowCreated=false`.
+- The best partials:
+  - A's bigbox run 28 played back all 15 actions, but with the wrong product and no size or quantity.
+  - C's rung-1 run 4 reached refute, re-author and re-run.
+  - B's bigbox reached the repair stage.
+  - D's run 6 built the first real loop.
+- Per-run costs are in each run's `snapshots/live-llm.json` under `observed.totalEstimatedCostUsd`.
 
-**A model's change to a Flow must be revertible**, instructed 2026-09-26 after run 5
-destroyed work it had itself proved. The instruction and the shape are in
-`A Model's Change To A Flow Must Be Revertible`; the design is Core's t136. Its first phase is
-built — Core `d035e1b` records which graph Flows a run executed at which revision and writes
-the verdict against exactly those versions — and **nothing rolls back yet**.
+**Finished at handoff: both guard workers are committed on dev (`5363e39b` guards, `f2f80024` honest pass).**
+1. **Lab live-run waste guards: done and committed** (the budget rule was removed at the user's request; supervisor re-ran
+   live-guards 24/24). Every live run is refused before any model call when:
+   - `lab-slots/STOP-balance` exists (written on an insufficient-balance failure; no override);
+   - the previous run failed and the source fingerprint is unchanged;
+   - the previous run has no debug file;
+   - one instance started more than 3 runs in 30 minutes (the 4th is refused).
+   `lab-slots/spend-ledger.jsonl` records each run's cost for reporting only, and no rule limits spend. Overrides are
+   user-created `lab-slots/OVERRIDE-<rule>` files only. The debug rule applies across tasks, so a multi-task campaign stops after
+   its first task until that debug exists. A real admitted run's ledger lines are not yet proven.
+2. **Honest pass verdict: done and committed, `f2f80024`** (supervisor re-ran built-flow and permission-stop, 8/8). A permission
+   stop is now `stopped_for_permission`, never a pass or part of a streak. Still to do, in `scripts/lab`, after the guards worker:
+   `live-campaign/row/summarize-task.mjs` reads the verdict from `result.permissionStop` or the `stopped-for-permission`
+   invariant; `summary/totals.mjs` and `summary/markdown.mjs` get a separate "stopped for permission" count; any pass streak in
+   `live-campaign/runner.mjs` ends at a stop; and the comments in `flow-lane/creation/lane.ts` that call a stop "the pass" are
+   reworded. `bench/evaluate-run.ts` carries no stop invariant yet.
 
-**Where rung 1 actually is.** `everything-store-plus-earbuds-under-50` has been attempted
-**eighteen times** since 2026-09-25 19:35 and has not passed; it is not left until it passes twice in
-a row. Eleven attempts built a Flow. Seven stopped before a Flow: `run-muhp2yip-3a0f198b` on a stale
-domain build; `run-muhs8hx3-6fd929e6` and `run-muhtuizo-c458e49c` on untyped provider-request
-failures whose exact throws remained unknown; `run-muhru6ny-a84eb4a2` without a lane record; and
-run 1, `run-muj2kzx1-8f9f8271`, run 3, `run-mujd550n-e8fbe7aa`, and run 4,
-`run-muje0grk-4d8d2d3f`, after exploration without a proposal. Run 4 is the latest accepted result. The consecutive-pass streak
-remains 0.
+**Uncommitted, unvalidated lane work (agents died mid-edit).** Downstream and Core changed-file counts; each lane's report has a
+fix log saying what is in progress. Triage each: validate and commit, or discard.
 
-The table below is the earlier ten-run scored/Flow-producing subset, not the complete 18-attempt ledger.
+| Lane | Tree `C:/Users/osrs_/FluxStuff/fxwork/<t>/` | Dirty (ds/core) | Report | Next |
+| --- | --- | --- | --- | --- |
+| A t174 | slot-1 | 21 / 19 | `reports/t174-live-lane.md` | P1: refuse navigating to an unseen address; quantity and size as instructed requirements; then bigbox, crossborder, everything-store |
+| B t193 | slot-2 | 1 / 0 | `reports/t193-live-self-repair.md` | bigbox redesigned until the repaired Flow passes; debugs for runs 3-9 |
+| C t194 | slot-3 | 38 / 24 | `reports/t194-live-judge-answer.md` | rung 1: the "Continue shopping" stop, the judge's page count, rejected rows, the "Charging Case" rule (round 2 not merged) |
+| D t195 | slot-4 | 24 / 4 | `reports/t195-live-control-flow.md` | F20 (a second press only when the first did nothing), R1/R2 interference, the withdraw permission point; pickup-order until a real Flow passes |
+| t191 UI | ui-1 | 216 / 28 | `live-activity-chat-plan/reports/t191-chat-ui.md` | round 2 (modes out, tabs, gear, getting-started) plus defects 1-9 below |
+| t192 | - | 2 / 13 | `automated-testing-facility-plan/reports/t193-bootstrap-test-speed.md` | service-bootstrap test speed: batched SQL done; share fixtures next |
+| t196 | - | 1 / 18 | `reports/t196-state-digest-cost.md` | the dry run: N1 + D1 + wH (decisions below) |
+| t197 | - | 22 / 10 | `reports/t197-robot-check-handoff.md` | the recovery path must use the person-needed ask; a `ui-1` browser check |
+| t198 | - | 6 / 0 | `reports/t198-extension-chat-builds.md` | prove the active-tab read in the Chrome side panel and the Firefox popup |
 
-| Time | Id | Calls | Flow | Records observed | Ended as |
-| --- | --- | --- | --- | --- | --- |
-| 19:35 | `run-muhd1vc7-0ec27a16` | 19 | 5 nodes | 0 of 13 | refuted |
-| 20:23 | `run-muher0en-508ddb69` | 25 | 3 nodes | 15, **1 matched** | refuted |
-| 00:27 | `run-muhnh0s5-98a27f42` | 32 | 7 nodes, a search | 8, **3 matched in order** | refuted |
-| 01:28 | `run-muhpo10p-771abad6` | 37 | — | 0 | refuted |
-| 01:57 | `run-muhqop38-997ee8e5` | 27 | — | **55** | refuted |
-| 02:17 | `run-muhrf6c4-9714939f` | 18 | — | 0 | refuted |
-| 02:33 | `run-muhrz0at-39a25508` | 23 | — | 0 | refuted |
-| 03:09 | `run-muht9lpw-a39aa056` | 17 | **1 node, 0 navigation** | 0, never ran | replay died on `about:blank` |
-| 03:30 | `run-muhu0tjc-bb62f6f4` | 17 | 3 nodes | 0 | refuted, **and the re-author applied a correction** |
-| 03:43 | `run-muhubegx-9469de5e` | 33 | 10 nodes, a search | **43** | refuted, re-author failed `extend_failed` |
+Report paths are relative to `docs/working/language-driven-flow-loop-plan/` unless another plan is named.
 
-**In the fourteen attempts then available, the dominant failure was ours: a wait, not a model.** T143 closed that batch's question by duration alone. Every
-extraction read that returned zero records ended at **~2 s** — exactly
-`PAGE_STILL_MS`/`EMPTY_PAGE_SETTLE_MS`, the early settle this repository shipped
-in `a05134a` at 18:29 on 2026-09-25. Every read that returned rows either found
-its list at once or waited much longer:
+**t191 UI defects from the supervisor's screenshot review** (evidence in `C:/Users/osrs_/FluxStuff/evidence/t191-shots/`):
+1. the Simple/Advanced toggle is still shown;
+2. a half split, with status cards above the chat;
+3. contradictory status (the card says "Done" while the chat says "Building");
+4. "Couldn't load the conversation." mid-build;
+5. raw "Using core.run_node: web.action.succeeded" wording;
+6. an unlabelled "Page | Full | Small | Off" control;
+7. the overlay pill covers the site's cookie banner;
+8. the pill is tiny and low-contrast;
+9. a false "Add an AI model key: To do" while building.
 
-```
-2089, 2576, 2109, 2082 ms                              -> zero records
-255, 4631, 6935, 10068, 11082, 14256, 14258, 14264 ms  -> records
-```
+**Decisions made (supervisor; the user may override).**
+- Robot checks: FluxIQ never presses or solves one (t197).
+- F10: money, delete and send/publish ask every time, even when instructed (`mvp-today-plan.md:150`).
+- D1 (the dry run): never clear site data or log the person out; never repeat a lasting effect; verify a mutating step (target
+  actionable, or its effect already present) rather than re-execute it (t196).
+- withdraw-stale-requests declares `permissionPoint: delete @ Withdraw`, never `--llm-permit`.
+- Declined: keeping SQLite pools open while idle, which would change the product for the sake of test speed.
+- The Click node's description keeps no site-specific "click again" advice (reverted).
 
-The fixture's own gates clear on a 4 s timer (`notifications`) and an 8 s timer
-(`softCheckAuto`). A page waiting on a `setTimeout` is mutation-quiet and
-`readyState: "complete"`, which is the one state `documentStillness` cannot tell
-from a finished page — so the read declared the page incapable of producing a list
-while the list was still two to six seconds away. **The zero read is a
-seventeen-hour-old regression of ours, not a model or draft failure**; t148 was assigned to fix it.
+**Waiting on the user.**
+- Top up DeepSeek.
+- Review t198's security change (an extension chat request uses the person's unlocked session key, only through Core's commands).
+- Decide whether to delete `fxwork/t187-bench` and `fxwork/t192-bench` (throwaway benchmark clones).
+- The robot-check decision stands unless the user overrides it.
 
-Two corrections to the table above follow from the same reading, and both were
-this repository's defects rather than the product's answers:
+**Next, in order.**
+1. Finish the honest-pass follow-ups in `scripts/lab` (listed under item 2 above), with tests.
+2. Triage each lane's uncommitted work above.
+3. Integration round 3: C, t191, t192, t196, t197, t198.
+4. Once DeepSeek is topped up: re-dispatch the four live leads, with briefs from `reports/supervisor-2026-09-29-lead-briefs.md`,
+   the new guard rules and their fix logs. Keep them supervised.
 
-- `run-muhd1vc7-0ec27a16` **stored 16 rows** and `run-muhrf6c4-9714939f`
-  **stored 8**. Both were scored against the wrong record set by the judge pairing
-  that `96833cf` fixed at 19:59, after both runs. Their rows were stored and
-  published; only the score was wrong.
-- `run-muhrz0at-39a25508` read 14264 ms and got rows, then read 2082 ms and got
-  none, and stored "0 records across 1 record set". Its two extraction nodes both
-  carry a `recordOutput`; the leading hypothesis, not established, is that the
-  empty second read replaced the first's rows in a shared dataset.
-
-So of the ten, one never ran (`run-muht9lpw`, no navigation node), two were
-mis-scored, one was probably overwritten by its own second read, two read nothing
-because of the wait, and two read far too much. **Only `run-muhnh0s5`'s three rows
-in the right position remain a real partial answer**, and the two over-wide reads
-are the only evidence about filtering that survives.
-
-**The three binding product rules the user set on 2026-09-26 — a defensive runtime for every
-node, grants only for genuinely risky actions, and a judge that issues fix instructions — and
-the ordered path to a passing live run are in [mvp-today-plan.md](./mvp-today-plan.md).** Read
-that first; this document remains the operating loop and the run history.
-
-**Latest accepted rung-1 measurement.** `run-muje0grk-4d8d2d3f` is an integrity-valid,
-redaction-verified failed product measurement. It reached Stage 2, used all 26 build decisions and
-22 tool calls, then stopped before proposal with `flow_bootstrap.evidence_unusable_decision` at
-`provider_output_validation` and issue `bootstrap.cannot_answer_instruction`. No Flow, runtime,
-oracle comparison, judgement, repair, persistence, or replay exists. The pass streak remains 0.
-
-Build and observed accounting are the same 26-call representation: 370,882 input plus 3,642 output
-tokens, 374,524 total, estimated USD 0.049289784; all calls are itemized. The 33 screened steps carry
-57,868 step-level bytes while the summary reports 70,126 total evidence bytes; these projections are
-not added. Run 4 triggers the predeclared stop after run 3's same terminal family.
-
-These findings, and what each one obliges the next agent to do, are in
-`What This Batch Established`. Read it before adding a field to anything the domain sends
-Core, and before updating a test that a resolution change made fail.
-
-**What is proven working, live, that this document once recorded as broken.** Run 2 remains the live
-proof that a multi-node created Flow can reach playback, exact extraction comparison, model-backed
-self-judgement, and wrong-answer routing. Run 3 additionally proves that terminal build exhaustion
-now retains its actionable issue instead of flattening to iteration-limit. The post-run-2 repair/
-grant-continuation chain is locally validated but remains live-unproven; no current run proves repair
-persistence, provider-free replay, recursive post-replay judgement, or terminal grant revocation.
-
-**Since t173 (merged 2026-09-29, not live-proven).** The t174 lane's live runs 1-10
-(`reports/t174-live-lane.md` in `fxwork/t174`) reached the provider, so the old key blocker is gone.
-The blocking cause now is an unrecognised throw right after a tool call (runs 6, 7 and 10). The
-consecutive-pass streak remains 0.
+Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
 
 ---
 
@@ -778,9 +754,16 @@ debug and partitioned so neither touches the other's files:
 - t187 merged and pushed (`4afa80fc`), answering the user's question of why builds became slow. The code grew about four times in three weeks (Core `packages/fluxiq/src` 386 to 1,479 files) while every build started clean, and September added redundant builds: four Lab builds per run, test-contracts built twice, a full build in `task start`, a serial `pnpm check` in `task finish`, and `coreHead` in the Core web build key. Now every package build and check is reused when its content fingerprint and output digest match. Lead, before to after with nothing changed: `pnpm build` 82.6 s to 4.5 s, `pnpm check` 181 s to 34 s, the finish check 314 s to 36 s, the Lab prelude 81 s to 7 s. Supervisor on the merged tree: first build 52 s; repeat 5 s with 11 of 11 reused; after a `domain/src` edit exactly domain, extension and test-runner rebuilt (35 s); after the revert 11 of 11 reused (7 s); `pnpm check` exit 0; `pnpm task finish t187` 40 s in total. Core's own build (162 s) is untouched; t187's proposal for it needs a paired Core branch.
 - Integration round 1 (four live lanes, iterating on their own branches): t196, t191 (round 1), t174 (A), t193 (B) and t195 (D) merged into dev in both repositories; t194 (C) joins when ready. Conflicts were `run-scenario.ts` hooks (t174's UI review, t193's window capture, and the lanes' hand-applied copies of t174's older lines): both hooks were kept and the imports unioned, with `tsc --noEmit` 0 and the audit passing after each. On the merged dev: Core `pnpm check` 0 (82 s), downstream `pnpm check` 0 (106 s), and the vitest of flow-bootstrap, service-bootstrap and llm at 841 passed, 6 failed. The 6 are all in `rejections.test.ts`, where t174's thrown-issue-codes tag typed refusals; the push of dev is held until t174 fixes it. No task has passed twice yet: A run 18 built a 9-node bigbox Flow blocked by the consent wall (t195 F1 is now in); D run 6 built the first real loop (For Each, per-row Confirm, rate limit waited out).
 - The Flow builder, traced from the code (`reports/flow-builder-walkthrough.md`), is 25 steps. It found five disagreements: the extension chat cannot start a build (capabilities `[]`; the executor lives only in the web panel), assigned to new lane t198; send/publish is not gated (only money and delete, since 2026-09-28), so t195 is fixing it per `mvp-today-plan.md:150`; a build's real cost bound is $1-$2 and the $0.25 per-call cap is never enforced, so t193 is making $0.25 the enforced build total; a route-state full capture still runs before most decisions, so t196 is removing it; and the panel sends no start location, which stays by design.
+- Round 1 finished and pushed (Core `838667e9`, downstream `6e6a5a28`): t174's rejections fix (`e75dcf29`: `thrown.*` codes only on unrecognised throws) and t194 (C) merged too. Final verification on the merged dev: Core `pnpm check` 0 (245 s), Core build 0, downstream `pnpm check` 0 (335 s), domain `# pass 948 # fail 0`, extension `# pass 1348 # fail 0`, and Core vitest (flow-bootstrap, service-bootstrap, llm) 1,529 of 1,536. The 7 failures are all `Test timed out in 15000ms` (plus one EBUSY on a SQLite `-shm`) in `runtime/tests/service-bootstrap`, with no assertion failures. Alone at one worker, that directory gave a different 3 timeouts and took 673 s, so the tests run too close to their limit. That is assigned to the t192 lead as test speed, not a raised timeout. Rung-1 first: run 4 reached refute, re-author, applied and re-run.
+- t192 merged and pushed: Core's build and check reuse unchanged steps. On the merged dev, a repeat `pnpm build` reused all 4 steps in about 4.1 s of step time (contracts 464 ms, fluxiq 1,538 ms, gateway 509 ms, web 1,618 ms); Core `pnpm check` 0 (136 s); downstream `pnpm check` 0 (174 s).
 - Robot checks (`reports/robot-check-behaviour.md`): the "refresh" the user saw was FluxIQ's own same-address navigations (`chrome.tabs.reload`) onto a robot-check page that reported success. Decision (supervisor, user may override): FluxIQ never presses or solves a check; a self-clearing check is waited out; any other check pauses, asks the person, and resumes, with the Lab playing the person. New lane t197.
 - Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
 - Outcome: In progress. Pass streak 0.
+
+### 2026-09-30 — Stopped: the DeepSeek balance ran out, unsupervised relaunch loops were killed, and this handoff
+- Agent: supervisor. Changed: dev pushed at Core `f4feb028`, downstream `379763fb`. Integration round 2 merged t174 (A), t193 (B), t195 (D), t192 (the Core build cache), t196 (route state from each call), t197 (robot-check hand-off) and t198 (the extension chat builds). The Click node's site-specific "click again" sentence was reverted (it broke the domain catalog-budget test, and it had no effect live). The lead agents all ended on a Claude session limit at about 04:00; launcher loops then relaunched live runs with nobody debugging. The supervisor killed every live `run-lab`, launcher and loop process at 10:22 and renamed the scratchpad's `live-run*.sh`, `t193/loop*.sh` to `*.disabled`.
+- Validation: the round-2 dev check (`pnpm build`, `pnpm check` and vitest of llm, flow-bootstrap, recovery, action-permissions and flow-draft in Core; `pnpm build`, `pnpm check` and the domain and extension tests downstream) printed `CORE_BUILD=0`, `CORE_CHECK=0`, `CORE_VITEST=0 Tests 2075 passed (2075)`, `DS_BUILD=0`, `DS_CHECK=0`, `EXT=0 # pass 1452 # fail 0`, and a domain load failure (`src/tests/domain.test.ts`: `missingRequiredTerms` `['end']`) that was traced to the Click description; after the revert, `pnpm --filter @fluxiq-web-extension/domain test` -> `# pass 976 # fail 0`. Spend, from each run's `snapshots/live-llm.json` `observed.totalEstimatedCostUsd`: `{"realRunsWithSpend":112,"totalUsd":9.46,"byLane":{"t174":3.86,"t193":2.65,"t194":0.25,"t195":2.7},"lastSpendingRunUtc":"2026-09-30T12:18:40.705Z"}`; split before and after 11:00Z: `{"before0400local":{"runs":65,"usd":5.21},"after0400local":{"runs":47,"usd":4.25}}`. Lane D's 12 "passed" runs have `evaluation.json` `flowCreated=false` (permission stops), so the real pass streak is 0. Not run: any check of the lane trees' uncommitted work (listed in Current State), and the two in-flight workers (Lab spend guards; the honest pass verdict), which were still editing when this was written.
+- Outcome: Stopped for handoff. No live run may start until the guards are merged, a budget is set and DeepSeek is topped up. Pass streak 0.
 
 ## Open Questions
 

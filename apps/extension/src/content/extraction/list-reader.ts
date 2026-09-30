@@ -45,7 +45,10 @@
 // `itemsSeen`, and in every mode none of its records is read again, since a new
 // document can only show them as new elements -- after waiting for the page to
 // show its records (`page-render.ts`). The worker's side of that is
-// `runtime/extract-list-continuation.ts`.
+// `runtime/extract-list-continuation.ts`. A document the server refused (429,
+// 503) is waited out and reloaded, and the reload goes on the same way; one it
+// kept refusing ends the read truncated, with the records already read
+// (`pagination.ts`).
 //
 // An item a `where` condition rejects is not a record and never becomes one:
 // it is left out of the records, it does not count toward `maxItems`, and a
@@ -119,7 +122,19 @@ import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
-import { advancePage, deadlineFor, paginationStopOf, type PaginationProgress, type PaginationStop } from "./pagination";
+import {
+  advancePage,
+  BROWSER_PAGE_HOST,
+  deadlineFor,
+  pageRefusalOf,
+  paginationStopOf,
+  RATE_LIMITED_STOP,
+  refusedPageWaitMs,
+  type PageRefusal,
+  type PaginationProgress,
+  type PaginationStop,
+  type RefusedPageHost
+} from "./pagination";
 
 /** One record: each included field's value, or `null` for an optional field the page could not read. */
 export type ExtractedListRecord = Record<string, string | null>;
@@ -128,7 +143,13 @@ export type ListExtractionOutcome = {
   records: ExtractedListRecord[];
   /** Pages actually read, the first included. */
   pagesRead: number;
-  /** Whether `maxItems` or the pagination's bound stopped the read before the list ended. */
+  /**
+   * Whether the read stopped before the list ended: `maxItems` or the
+   * pagination's bound, or a page advance that lost the list -- a page the
+   * server kept refusing, or one that showed none of the list and no way on.
+   * Until 2026-09-30 the last answered `false`, so a read cut short by a rate
+   * limit looked complete (`run-munnhi5q-4867dabe`).
+   */
   truncated: boolean;
   /** Whether the command's `timeoutMs` ran out before the list ended. */
   timedOut: boolean;
@@ -210,6 +231,10 @@ export type ListExtractionOutcome = {
    * `item_limit`, `page_repeated` and `list_vanished`).
    */
   paginationStop?: PaginationStop | undefined;
+  /** Reloads the read made of pages the server refused, across every document, or absent for none (`pagination.ts`). */
+  pageRetries?: number | undefined;
+  /** The HTTP status (429, 503) of the refused page the read stopped on, or absent for a read that did not stop on one. */
+  refusedStatus?: number | undefined;
   /** What `dedupe` and `sort` did, in counts alone, or absent for a request that named neither. */
   order?: ListExtractionOrderReport | undefined;
 };
@@ -225,6 +250,8 @@ export type ListExtractionOptions = {
   resume?: ExtractionCheckpoint | undefined;
   /** Takes the read so far before each control is followed; the control is followed once it resolves. */
   checkpoint?: ((progress: ExtractionCheckpoint) => Promise<void>) | undefined;
+  /** How the document says how it was served, and is waited on and reloaded: the browser's own unless a test stands it in. */
+  pageHost?: RefusedPageHost | undefined;
 };
 
 type FieldReaders = ReadonlyArray<readonly [name: string, reader: ExtractFieldReader]>;
@@ -286,6 +313,11 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     hasUnreadItem
   };
   const checkpoint = options.checkpoint;
+  // What the read has spent on refused pages, carried across documents, and the
+  // status of the one it stopped on, if it stopped on one.
+  const host = options.pageHost ?? BROWSER_PAGE_HOST;
+  const spent = { retries: resume?.refusals?.retries ?? 0, rateLimits: resume?.refusals?.rateLimits ?? 0 };
+  let refusedStatus: number | undefined;
   if (checkpoint) {
     progress.beforeFollow = () => {
       // `itemsSeen` is the whole read's count so far, so the document this control
@@ -298,7 +330,9 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         scrolls: progress.scrolls,
         missingFields: [...missing].sort(),
         filtered,
-        ...(seen === undefined ? {} : { itemsSeen: seen })
+        ...(seen === undefined ? {} : { itemsSeen: seen }),
+        ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach] } }),
+        ...(spent.retries + spent.rateLimits === 0 ? {} : { refusals: { ...spent } })
       });
     };
   }
@@ -321,13 +355,19 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   // And neither can it say, of the first, whether it waited for the list at all.
   let listWait: ListWait | undefined;
   let filtered = resume?.filtered ?? 0;
-  // Items the conditions were asked about in this document, and how many of
-  // them each condition rejected. A continued read carries its predecessor's
-  // `filtered` and not its rejected rows, so these counts say what this
-  // document did and `filtered` says what the whole read did.
-  let applied = 0;
-  let kept = 0;
-  const rejectedEach = (request.where ?? []).map(() => 0);
+  // Items the conditions were asked about, and how many of them each condition
+  // rejected, across the whole read: a continued read starts from the counts its
+  // predecessor checkpointed, as it starts from its `filtered` and `itemsSeen`.
+  // Until 2026-09-30 these restarted at each document, so a read that paged
+  // through documents of cards and ended on one with none -- the store's
+  // rate-limit page, by every sign the bundle kept -- reported `applied: 0`, as
+  // if its conditions had done nothing (`run-munnhi5q-4867dabe`). Its rejected
+  // rows still do not travel, which is `filtered-answer.ts`'s concern, not the
+  // count's.
+  const carried = carriedConditionCounts(resume, request.where?.length ?? 0);
+  let applied = carried.applied;
+  let kept = carried.kept;
+  const rejectedEach = [...carried.rejected];
 
   // Items the selector named, counted once each, whichever page or scroll named
   // them: a set rather than a running sum, because a `loadMore` or `scroll` read
@@ -375,15 +415,47 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
+      ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
+      ...(refusedStatus === undefined ? {} : { refusedStatus }),
       ...(ordered === undefined ? {} : { order: { duplicates: duplicates + ordered.duplicates, unsortable: ordered.unsortable } })
     };
   };
 
+  // A document a page advance loaded that the server refused, or that lost the
+  // list with no status to say why, is waited out and reloaded while the read
+  // can afford it (`pagination.ts`). Nothing was read here, so the checkpoint
+  // the reload goes on from is the one this document was handed, plus what the
+  // refusal spent. The reload takes this script with it; this returns only
+  // when the read stops on the refused page instead, which is then truncation.
+  const refusedDocument = async (refusal: PageRefusal, status: number | undefined): Promise<void> => {
+    const remaining = progress.deadline === undefined ? undefined : progress.deadline - Date.now();
+    const waitMs = refusedPageWaitMs(refusal, spent, remaining, checkpoint !== undefined && resume !== undefined);
+    if (waitMs !== undefined && checkpoint && resume) {
+      await host.pause(waitMs);
+      spent.retries += 1;
+      if (refusal !== "unavailable") spent.rateLimits += 1;
+      await checkpoint({ ...resume, refusals: { ...spent } });
+      await host.reload();
+    }
+    truncated = true;
+    refusedStatus = refusal === "unexplained" ? undefined : status;
+    paginationStop = refusal === "rate_limited" ? RATE_LIMITED_STOP : "list_vanished";
+  };
+
   // A document continuing a read was reached by the control the last one
-  // followed, so it is waited on as that control's page would have been.
-  if (resume && paginate && await awaitPageRendered(paginate, progress) === "timed_out") {
-    paginationStop = "deadline";
-    return outcome({ timedOut: true });
+  // followed, so it is waited on as that control's page would have been --
+  // unless the server refused it, which no wait for a list can change.
+  if (resume && paginate) {
+    const status = host.status();
+    const refusal = status === undefined ? undefined : pageRefusalOf(status);
+    if (refusal !== undefined) {
+      await refusedDocument(refusal, status);
+      return outcome({ timedOut: false });
+    }
+    if (await awaitPageRendered(paginate, progress) === "timed_out") {
+      paginationStop = "deadline";
+      return outcome({ timedOut: true });
+    }
   }
   // The page this read starts on gets the same wait as every page it moves to
   // (`page-render.ts`): a read dispatched at a page still rendering its list
@@ -545,13 +617,39 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
     timedOut = advance.outcome === "timed_out";
     // A page a control led to that showed no item of the list at all, and
     // nothing to go on with, did not end the list: it lost it -- a rate limit,
-    // a check page, an error. The word says so rather than calling it the end.
+    // a check page, an error. The word says so rather than calling it the end,
+    // the read is truncated, and the page is not counted as one read. Where it
+    // is the first page of a document an advance loaded and the browser gave no
+    // status, it is most likely a refusal, and is retried as one.
     const lostTheList = progress.pagesRead > 1 && shown.length === 0 && (advance.stop === "control_absent" || advance.stop === "no_following_page");
-    paginationStop = lostTheList ? "list_vanished" : advance.stop;
+    if (!lostTheList) {
+      paginationStop = advance.stop;
+      break;
+    }
+    progress.pagesRead -= 1;
+    const status = host.status();
+    const refusal = resume !== undefined && progress.pagesRead === resume.pagesRead ? pageRefusalOf(status) : undefined;
+    if (refusal !== undefined) await refusedDocument(refusal, status);
+    truncated = true;
+    paginationStop ??= "list_vanished";
     break;
   }
 
   return outcome({ timedOut });
+}
+
+/**
+ * The condition counts a continued read starts from: its predecessor's, or
+ * zeros for a read that began here, and zeros too for counts that do not fit
+ * this request's `where` -- one rejection count per condition is the only shape
+ * a positional count can be added to, and the same request always has it.
+ */
+function carriedConditionCounts(resume: ExtractionCheckpoint | undefined, conditions: number): { applied: number; kept: number; rejected: number[] } {
+  const carried = resume?.conditions;
+  if (carried === undefined || carried.rejected.length !== conditions) {
+    return { applied: 0, kept: 0, rejected: Array.from({ length: conditions }, () => 0) };
+  }
+  return { applied: carried.applied, kept: carried.kept, rejected: [...carried.rejected] };
 }
 
 /** Whether a throw is a refusal of the whole read, which carries its own failure record, rather than a page fault. */

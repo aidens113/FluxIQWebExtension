@@ -24,5 +24,6 @@ export { evidenceEvent, type EvidenceEventTrigger } from "./evidence-event.js";
 export * from "./extension-start-trace/index.js";
 export * from "./ui-review/index.js";
 export { extensionControlPage, extensionStartFailureDetails, openExtensionControlPage, type ExtensionControlPageOpen, type ExtensionControlPageOptions, type ExtensionControlPageReason } from "./extension-control-page.js";
+export { keepsRunState } from "./keeps-run-state.js";
 export { openScenarioStart } from "./open-scenario-start.js";
 export { resolveRunSecrets, type RunSecrets, type RunSecretsInput } from "./resolve-run-secrets.js";

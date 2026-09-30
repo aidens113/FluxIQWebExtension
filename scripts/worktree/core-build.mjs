@@ -34,12 +34,19 @@
 // the machine had usually built before. `@fluxiq/web` is not cached: it is
 // built as it always was.
 //
+// Unless Core caches the build itself (`cache-delegation.mjs`): then the
+// package is built with exactly Core's `pnpm --filter <name> build`, Core's
+// own cache decides, and the progress note says `"build-cache": "delegated"`
+// with Core's own outcome line (`core`) when one was printed. Decided per
+// package of each Core checkout, so an older Core keeps the path above.
+//
 // Written down once because two callers need the same order. Written twice, a
 // fourth Core package would be added to one copy and not the other, and the
 // symptom would be a type error in a worktree that looks correctly provisioned.
 
 import path from "node:path";
 import { resolveCoreLibrary, runStep } from "../build-cache/index.mjs";
+import { coreCacheOwnsBuild } from "./cache-delegation.mjs";
 import { runPnpm } from "./pnpm-command.mjs";
 import { noteProgress } from "./progress-note.mjs";
 
@@ -82,6 +89,17 @@ export async function buildCore(coreRoot, { env, note = noteProgress, packages =
   note({ step: "build-core", root: coreRoot, packages: packages.map((item) => item.filter) });
   for (const item of packages) {
     const build = () => pnpm(coreRoot, ["--filter", item.filter, "build"], { env });
+    if (coreCacheOwnsBuild(coreRoot, item)) {
+      const started = Date.now();
+      let outcome = null;
+      const onLine = (line) => {
+        if (line.trim().startsWith(OUTCOME_PREFIX)) outcome = line.trim();
+      };
+      await pnpm(coreRoot, ["--filter", item.filter, "build"], { env, onLine });
+      const core = outcome === null ? null : readOutcome(outcome, item.filter);
+      note({ step: "build-core-package", package: item.filter, "build-cache": "delegated", core, ms: Date.now() - started });
+      continue;
+    }
     if (!CORE_PACKAGES.some((library) => library.filter === item.filter)) {
       await build();
       continue;
@@ -91,5 +109,16 @@ export async function buildCore(coreRoot, { env, note = noteProgress, packages =
     const outcome = await step(resolved, { env, run: async () => { await build(); return 0; } });
     note({ step: "build-core-package", package: item.filter, "build-cache": outcome.result, source: outcome.source, reason: outcome.reason, ms: outcome.ms });
     if (outcome.exitCode !== 0) throw new Error(`pnpm --filter ${item.filter} build in ${coreRoot} was not stamped: ${outcome.reason}`);
+  }
+}
+
+/** Core's CLI prints one `{"build-cache":...}` line per step; anything else is build output. */
+const OUTCOME_PREFIX = '{"build-cache"';
+
+function readOutcome(line, filter) {
+  try {
+    return JSON.parse(line);
+  } catch (error) {
+    throw new Error(`pnpm --filter ${filter} build printed a build-cache line that is not JSON: ${line}`, { cause: error });
   }
 }

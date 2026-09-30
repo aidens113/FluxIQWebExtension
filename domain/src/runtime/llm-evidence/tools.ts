@@ -52,6 +52,7 @@ import {
   toolMetadata,
   type WebLlmEvidenceGateway,
   withCallStates,
+  withPersonNeeded,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "./capture";
@@ -176,7 +177,7 @@ export type WebAutomationLlmEvidenceRuntime = {
    * It is the one thing Core's exploration reducer cannot work out for itself:
    * Core's own digest is of the evidence a step returned, which is what the step
    * said rather than what the page was. This takes a fresh sanitized capture and
-   * hashes a projection of it (`state-digest.ts`), which is why it widens
+   * hashes a projection of it (`state-digest/state-digest.ts`), which is why it widens
    * nothing -- the input is the same packet the model would have been shown, and
    * what leaves is a hash of less of it.
    */
@@ -323,13 +324,16 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       boundedIdentifier(input.flowId, "flowId");
       boundedIdentifier(input.callId, "callId");
       const sessionId = selectSession(gateway.eligibleSessionIds());
+      // A new exploration's model has been told nothing yet, so no answer it
+      // gets repeats one an earlier exploration's model got (`./repeated-refusal.ts`).
+      if (opensExploration(input)) repeatedRefusals.startedOver(evidenceScope(input, sessionId));
       // Every way out of this call goes through here, because a refusal is
       // returned on one path and thrown on another: `node-run/run.ts` catches
       // its own and answers with it, while a detection and the resolver throw
       // past to the block below. A repeat that was only noticed on one of the
       // two would miss whichever half the next build spent itself on.
       const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution =>
-        repeatedRefusals.answered(`${evidenceScope(input, sessionId)}\u0000${input.toolId}`, answer);
+        repeatedRefusals.answered(evidenceScope(input, sessionId), input.toolId, answer);
       // The page a detection read the state in, kept here because a detection
       // refuses by throwing, past the result it would have carried it on. A
       // node run reports its own states (`./node-run/run.ts`).
@@ -366,11 +370,14 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           // can be pressed next.
           const page = error.page === undefined ? undefined : retain(stable(input, error.page));
           if (page !== undefined) shown(input, sessionId, page);
-          return answered(withCallStates(
+          const refused = withCallStates(
             toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code)),
             observed ?? page,
             page ?? observed
-          ));
+          );
+          // A detection that met a robot check only looked, so it proposes
+          // nothing: Core asks the person, and the model then looks afresh.
+          return answered(error.personNeeded ? withPersonNeeded(refused, undefined) : refused);
         }
         throw error;
       }
@@ -405,14 +412,18 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // every such build, before the Flow had done anything wrong
       // (`AS/runtime/llm/evidence-loop.ts`: a hook that throws fails the step).
       //
-      // The digest is the one every capture carries (`./snapshot-state-digest.ts`),
+      // The digest is the one every capture carries (`./state-digest/snapshot-states.ts`),
       // so what this answers and what a call reports on `stateDigests` for the
       // same page are one value by construction.
-      if (input.startLocation === undefined) return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
+      //
+      // A page behind a robot check is not a state anyone can read either, and
+      // it is the person's to clear (`./capture.ts`), so it answers "nothing"
+      // rather than failing the step it was asked about.
       try {
         return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
       } catch (error) {
-        if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
+        if (error instanceof RecoverableToolRejection && error.personNeeded) return undefined;
+        if (input.startLocation !== undefined && error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
         throw error;
       }
     },
@@ -540,6 +551,25 @@ function packetKey(evidence: WebLlmPageEvidence): string {
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {
   return `${sessionId}\0${input.projectId}\0${input.flowId}`;
+}
+
+/**
+ * The call id Core files a loop's free first look under: `initial.<toolId>`,
+ * once per evidence loop and before any decision (`AS/runtime/llm/evidence-loop.ts`).
+ * This domain's first look is always its run-node tool (`runsNodes.initial`).
+ */
+const OPENING_LOOK_CALL_ID = `initial.${WEB_LLM_RUN_NODE_TOOL_ID}`;
+
+/**
+ * Whether this call is the look a new Core evidence loop opens with.
+ *
+ * A model cannot borrow the id inside a loop that took its look: Core files a
+ * reused id under `<id>.2` (`AS/runtime/llm/evidence-loop/call-id.ts`). Where a
+ * loop took no look the id is the model's to spend, and the only cost of
+ * reading it as an opening is one repeat left unsaid.
+ */
+function opensExploration(input: WebLlmEvidenceToolRequest): boolean {
+  return input.toolId === WEB_LLM_RUN_NODE_TOOL_ID && input.callId === OPENING_LOOK_CALL_ID;
 }
 
 function requestedUrl(input: unknown): URL {

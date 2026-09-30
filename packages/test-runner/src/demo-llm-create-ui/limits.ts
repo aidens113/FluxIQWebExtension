@@ -28,7 +28,9 @@ export const EVIDENCE_GUIDED_CREATION_LIMITS = Object.freeze({
   maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
   maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
   runDeadlineSeconds: 600,
-  maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0,
+  // The whole build's spend is Core's $0.25 ceiling on a Flow build; it was $1,
+  // four builds' worth, which Core no longer allows.
+  maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 0.25, providerRetries: 0,
 });
 // The Flow Settings an exploration Flow is given.
 // 8,000 input tokens is the exact size measured, across thirty-six live

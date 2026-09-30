@@ -199,20 +199,20 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["delete", "send_or_publish", "create_new"] } });
 
-  // Only the high-risk part of the declaration is missing. Since 2026-09-28 that
-  // is deletion and money movement alone; ordinary creation and sending are
-  // free, because the instruction that asked for them is itself the authority.
+  // Only the gated part of the declaration is missing: deletion, money movement
+  // and, again since 2026-09-30, sending or publishing. Ordinary creation is free.
   assert.equal(codeOf(refused), "permission_required");
-  assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["delete"] });
+  assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["delete", "send_or_publish"] });
   assert.deepEqual(clicks, []);
 
   const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish", "create_new"] } });
-  assert.notEqual(codeOf(sent), "permission_required");
-  assert.equal(clicks.length, 1);
+  assert.equal(codeOf(sent), "permission_required");
+  assert.deepEqual(detailOf(sent), { reason: "nobody_to_ask", missing: ["send_or_publish"] });
+  assert.deepEqual(clicks, []);
 
   const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["create_new"] } });
   assert.notEqual(codeOf(created), "permission_required");
-  assert.equal(clicks.length, 2);
+  assert.equal(clicks.length, 1);
 
   // A declaration Core could not read is not a refusal to ask about: nothing was asked and nothing was pressed.
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["sell_the_company"] } });
@@ -233,7 +233,18 @@ test("no refusal carries a word of the page, whatever it refused", async () => {
   pages.set(TWINNED);
   refusals.push(await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } }));
 
-  const serialized = JSON.stringify(refusals);
+  // Everything a refusal says, which is everything on it but `routeState`.
+  // That member is not the refusal speaking: it is the host's route state of
+  // the page the call left (`../state-digest/snapshot-states.ts`), the very value Core's
+  // build routing used to fetch with a capture of its own
+  // (`observeRouteState`), and it is the page's words by construction -- the
+  // title and the control names a Router tests. It is held to its own
+  // contract in `./call-route-states.test.ts`.
+  const said = refusals.map((refusal) => {
+    const { routeState: _left, ...rest } = refusal as { routeState?: unknown };
+    return rest;
+  });
+  const serialized = JSON.stringify(said);
   for (const word of PAGE_WORDS) assert.equal(serialized.includes(word), false, word);
   // Every one of them refused, and every one of them said why.
   for (const refusal of refusals) assert.ok(detailOf(refusal as { evidence: unknown })?.reason, JSON.stringify(refusal));

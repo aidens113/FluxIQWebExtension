@@ -25,7 +25,7 @@ test("defaults to the certified instruction-only fixture and emits content-free 
   assert.equal("maxCalls" in readiness.providerBudget, false);
   assert.equal(readiness.providerBudget.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun);
   assert.equal(readiness.providerBudget.runDeadlineSeconds, 600);
-  assert.equal(readiness.providerBudget.maxTotalEstimatedCostUsd, 1);
+  assert.equal(readiness.providerBudget.maxTotalEstimatedCostUsd, 0.25);
   assert.equal(JSON.stringify(readiness).includes(BLANK_LLM_INSTRUCTION_BODY), false);
 });
 

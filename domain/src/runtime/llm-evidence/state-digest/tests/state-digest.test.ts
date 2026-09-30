@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeWebLlmSnapshot } from "../sanitize";
+import { sanitizeWebLlmSnapshot } from "../../sanitize";
 import { webLlmStateDigest } from "../state-digest";
 
 // The digest contract, asserted in both directions, because both halves of it

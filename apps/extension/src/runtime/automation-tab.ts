@@ -59,6 +59,13 @@ export type TabDriveRecord = {
   opened: boolean;
   /** The drive was issued as a reload, because the tab already showed the URL. */
   reloaded: boolean;
+  /**
+   * The tab already showed the URL and the page there was a robot check, so
+   * it was not reloaded: a reload asks the check again and restarts a
+   * countdown, and FluxIQ never reloads one. The navigation then waits the
+   * check out or hands it to the person (`action-runner.ts`).
+   */
+  heldForCheck?: boolean;
 };
 
 /** The tab an action runs in, and what driving it to the requested URL did, when it was driven anywhere. */
@@ -67,17 +74,27 @@ export type AutomationTabResolution = {
   drive?: TabDriveRecord | undefined;
 };
 
-export async function resolveAutomationTab(input: { requestedTabId?: number; initialUrl?: string; active?: boolean; forceNew?: boolean } = {}): Promise<AutomationTabResolution> {
+/** Where an action wants its tab, and, for a navigation, how to tell that the tab is showing a robot check. */
+export type AutomationTabRequest = {
+  requestedTabId?: number;
+  initialUrl?: string;
+  active?: boolean;
+  forceNew?: boolean;
+  /** Whether the tab's page is a robot check now. Asked only before reloading a tab that already shows the URL. */
+  holdsRobotCheck?: (tabId: number) => Promise<boolean>;
+};
+
+export async function resolveAutomationTab(input: AutomationTabRequest = {}): Promise<AutomationTabResolution> {
   const initialUrl = input.initialUrl && input.initialUrl !== DEFAULT_AUTOMATION_URL ? input.initialUrl : undefined;
   if (input.requestedTabId !== undefined) {
     // A named tab is still driven to the requested URL; otherwise a navigation
     // addressed at a specific tab would resolve the tab and go nowhere.
-    const drive = initialUrl ? await updateTabUrl(input.requestedTabId, initialUrl) : undefined;
+    const drive = initialUrl ? await updateTabUrl(input.requestedTabId, initialUrl, input.holdsRobotCheck) : undefined;
     return { tabId: input.requestedTabId, drive };
   }
   const existing = input.forceNew === true ? undefined : await existingAutomationTab();
   if (existing !== undefined) {
-    const drive = initialUrl ? await updateTabUrl(existing, initialUrl) : undefined;
+    const drive = initialUrl ? await updateTabUrl(existing, initialUrl, input.holdsRobotCheck) : undefined;
     return { tabId: existing, drive };
   }
   const tab = await chrome.tabs.create({
@@ -179,12 +196,24 @@ async function existingAutomationTab(): Promise<number | undefined> {
  * address bar reads the same either way, and a `tabs.reload` the browser did
  * not act on -- a page holding its own unload, an extension context torn down
  * mid-command -- leaves the tab exactly as it was.
+ *
+ * One page is never reloaded: a robot check. A check is served at the address
+ * that was asked for, so reloading it asks again, and a check that counts down
+ * starts its countdown over; on 2026-09-29 repeated same-address reloads kept
+ * the crossborder marketplace's check up for most of two builds. When the tab
+ * already shows the URL and `holdsRobotCheck` says its page is a check, the tab
+ * is only brought to the front, and the record says the drive was held
+ * (`heldForCheck`).
  */
-async function updateTabUrl(tabId: number, url: string): Promise<TabDriveRecord> {
+async function updateTabUrl(tabId: number, url: string, holdsRobotCheck?: (tabId: number) => Promise<boolean>): Promise<TabDriveRecord> {
   await clearSnapshotReadiness();
   const urlBefore = await readTabUrl(tabId);
   const documentBefore = await readTopDocumentId(tabId);
   const reloaded = urlBefore === url;
+  if (reloaded && holdsRobotCheck !== undefined && await holdsRobotCheck(tabId)) {
+    await chrome.tabs.update(tabId, { active: true });
+    return { urlBefore, documentBefore, urlAfter: urlBefore, documentAfter: documentBefore, opened: false, reloaded: false, heldForCheck: true };
+  }
   if (reloaded) {
     await chrome.tabs.update(tabId, { active: true });
     await chrome.tabs.reload(tabId);

@@ -41,6 +41,24 @@ test("the paced display names the status and its colour: accent while working, t
   assert.equal(chatHeaderModel(snapshot({ state: older }), true).status, "");
 });
 
+test("while the work waits for the person, the status is what Core asked of them, in the warning colour", () => {
+  // Core's person-needed ask at a robot check (t197): phase `waiting_permission`,
+  // the ask's text as the label. "Waiting for you" alone told the person
+  // nothing about what to do; for most of run 15 the check sat unexplained.
+  const ask = "FluxIQ needs you: complete the check on this page, then press Continue.";
+  const waiting: ActivityDisplay = {
+    activityId: "build:1", subjectKind: "build", phase: "waiting_permission", headline: "Waiting for you", detail: ask,
+    step: null, working: false, outcome: "waiting", sequence: 7
+  };
+  const model = chatHeaderModel(snapshot({ state: relayState([], { display: waiting }) }), true);
+  assert.deepEqual([model.status, model.tone, model.working], [ask, "warning", false]);
+  // With no sentence to show, the headline still says the work is waiting.
+  assert.equal(chatHeaderModel(snapshot({ state: relayState([], { display: { ...waiting, detail: null } }) }), true).status, "Waiting for you");
+  // Working, the headline names the work, not Core's latest sentence.
+  const working: ActivityDisplay = { ...waiting, phase: "building", headline: "Building your Flow", detail: "Reading the page", working: true, outcome: null };
+  assert.equal(chatHeaderModel(snapshot({ state: relayState([], { display: working }) }), true).status, "Building your Flow");
+});
+
 test("Step N of M is 1-based, and just Step N past the count or without one", () => {
   assert.equal(stepText({ index: 1, count: 3 }), "Step 1 of 3");
   assert.equal(stepText({ index: 3, count: 3 }), "Step 3 of 3");

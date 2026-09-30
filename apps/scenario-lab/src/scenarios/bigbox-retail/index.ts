@@ -1,5 +1,6 @@
 export { BIGBOX_RETAIL_LIVE_TASKS } from "./live-tasks.js";
 export { bigboxRetailManifest, ORDER_RECORDS, PICKUP_CART_FACTS, PICKUP_TOWEL_RECORDS } from "./manifest/index.js";
+export { PERSON_CHECKS as BIGBOX_RETAIL_PERSON_CHECKS } from "./person-check.js";
 export { BIGBOX_RETAIL_REPAIR_TASKS } from "./repair-tasks.js";
 export { bigboxRetailScenario } from "./scenario.js";
 export { createBigboxState, mutateBigboxState } from "./state/index.js";

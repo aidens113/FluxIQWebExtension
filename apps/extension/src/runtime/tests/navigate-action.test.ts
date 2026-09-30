@@ -26,15 +26,18 @@ type SentToTab = { tabId: number; message: Record<string, unknown>; frameId: num
 /**
  * `page` is what the landed page's top frame answers when asked whether it is a
  * challenge (`fluxiq.pageChallenge`): absent, the frame answers nothing, as a
- * page with no content script does; `"silent"`, it never answers at all.
+ * page with no content script does; `"silent"`, it never answers at all. A
+ * list is answered in turn, its last answer for ever after: a check that lifts
+ * by itself.
  */
+type PageAnswer = { challenge: string | null; robotCheck?: string };
 type BrowserTab = {
   url: string | undefined;
   loadFailed?: boolean;
   title?: string;
   document?: number;
   ignores?: boolean;
-  page?: { challenge: string | null } | "silent";
+  page?: PageAnswer | "silent" | PageAnswer[];
 };
 
 /**
@@ -81,6 +84,11 @@ function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: num
       sendMessage: (tabId: number, message: unknown, options: { frameId?: number }, callback: (response: unknown) => void) => {
         calls.asked.push({ tabId, message: message as Record<string, unknown>, frameId: options.frameId });
         const page = tabs[tabId]?.page;
+        if (Array.isArray(page)) {
+          callback(page[0]);
+          if (page.length > 1) page.shift();
+          return;
+        }
         if (page !== "silent") callback(page);
       }
     },
@@ -96,10 +104,10 @@ function installNavigationStub(tabs: Record<number, BrowserTab>): { updated: num
   return calls;
 }
 
-async function navigate(url: string, activeTabId: number | undefined, ownOrigins?: readonly string[]): Promise<Awaited<ReturnType<typeof runBrowserActionCommand>>> {
+async function navigate(url: string, activeTabId: number | undefined, ownOrigins?: readonly string[], timeoutMs?: number): Promise<Awaited<ReturnType<typeof runBrowserActionCommand>>> {
   try {
     return await runBrowserActionCommand({
-      action: { commandId: "c-nav", actionType: "web.browser.navigate", url },
+      action: { commandId: "c-nav", actionType: "web.browser.navigate", url, ...(timeoutMs !== undefined ? { timeoutMs } : {}) },
       ...(activeTabId !== undefined ? { activeTabId } : {}),
       ...(ownOrigins ? { ownOrigins } : {}),
       attachTabForRecording: () => Promise.resolve()
@@ -265,4 +273,89 @@ test("a page the browser could not load is not asked about, and stays a load fai
   const run = await navigate(RESULTS, 41);
   assert.deepEqual(calls.asked, []);
   assert.equal(run.result.failure?.code, "web.navigation.unexpected");
+});
+
+// A check that clears by itself. bigbox-retail's "Robot or human?" page checks
+// again automatically after 8 s, auction-marketplace's "Checking your browser"
+// page moves on after 5 s; a reload restarts either. So the navigation waits
+// where it stands, asking the page again, and judges the page behind it.
+
+const SELF_CLEARING_CHECK = { challenge: "captcha", robotCheck: "self_clearing" } as const;
+const ORDINARY_PAGE = { challenge: null } as const;
+
+test("a navigation that lands on a check which clears by itself waits it out untouched, then succeeds on the page behind it", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, page: [SELF_CLEARING_CHECK, ORDINARY_PAGE] } });
+  const run = await navigate(RESULTS, 41);
+
+  assert.equal(run.result.status, "succeeded");
+  assert.deepEqual(calls.reloaded, [], "the check was never reloaded");
+  assert.deepEqual(calls.updated, [41], "nor navigated again");
+  assert.ok(calls.asked.length >= 3, "the page was asked again until it was no check, and once more after it settled");
+  const validation = run.result.validation;
+  assert.match(validation.status === "passed" ? validation.actual : "", /a robot check stood on the page and cleared by itself after \d+ ms, untouched/u);
+});
+
+test("a check that says it clears by itself and has not within the command's time is the person's", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, page: SELF_CLEARING_CHECK } });
+  // 2.5 s leaves 1.5 s to wait once the 1 s reply margin is kept back.
+  const run = await navigate(RESULTS, 41, undefined, 2_500);
+
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, "web.intervention.required");
+  assert.match(run.result.failure?.actual ?? "", /^captcha: the page the browser landed on is a robot check that said it would clear by itself and had not after \d+ ms/u);
+  assert.match(run.result.message ?? "", /did not clear by itself/u);
+  assert.deepEqual(calls.reloaded, []);
+  assert.ok(parseAutomationStudioFailureRecord(run.result.failure), "Core's parser accepts the record");
+});
+
+test("a check that says it is checking and then asks for a person is the person's at once", async () => {
+  forgetAutomationTab();
+  installNavigationStub({ 41: { url: STORE, page: [SELF_CLEARING_CHECK, TRAFFIC_SCREEN] } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.failure?.code, "web.intervention.required");
+  assert.match(run.result.failure?.actual ?? "", /asked for what only a person can answer/u);
+});
+
+// A navigation to the address the tab already shows used to be a reload
+// (`automation-tab.ts`), and the check is served at that very address: each
+// reload asked again, and a countdown started over (the crossborder builds of
+// 2026-09-29). A tab showing a check is never reloaded.
+
+test("a navigation to the address a tab already shows, while it shows a check only a person can answer, does not reload it", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: RESULTS, page: TRAFFIC_SCREEN } });
+  const run = await navigate(RESULTS, 41);
+
+  assert.deepEqual(calls.reloaded, [], "no reload was issued");
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.failure?.code, "web.intervention.required", "the check is the person's, not a navigation that went nowhere");
+});
+
+test("a navigation to the address a tab already shows, while a self-clearing check stands there, waits it out and succeeds without reloading", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: RESULTS, page: [SELF_CLEARING_CHECK, SELF_CLEARING_CHECK, ORDINARY_PAGE] } });
+  const run = await navigate(RESULTS, 41);
+
+  assert.deepEqual(calls.reloaded, []);
+  assert.equal(run.result.status, "succeeded", "an unmoved tab behind a check is not NAVIGATION_UNEXPECTED");
+  const validation = run.result.validation;
+  assert.match(validation.status === "passed" ? validation.actual : "", /already at that address behind a robot check, so it was not loaded again/u);
+});
+
+test("a navigation to the address a tab already shows, with no check on it, still reloads it", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: RESULTS, page: ORDINARY_PAGE } });
+  const run = await navigate(RESULTS, 41);
+  assert.deepEqual(calls.reloaded, [41]);
+  assert.equal(run.result.status, "succeeded");
+});
+
+test("a frame from before the distinction, answering a robot check with no word on who clears it, is read as the person's", async () => {
+  forgetAutomationTab();
+  const calls = installNavigationStub({ 41: { url: STORE, page: { challenge: "captcha" } } });
+  const run = await navigate(RESULTS, 41);
+  assert.equal(run.result.failure?.code, "web.intervention.required");
+  assert.equal(calls.asked.length, 1, "and nothing was waited for");
 });

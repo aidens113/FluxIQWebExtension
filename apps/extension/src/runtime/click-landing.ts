@@ -1,5 +1,5 @@
-// Where a replayed click took its own tab, and whether the server refused the
-// page it landed on.
+// Where a replayed click took its own tab: whether the page it landed on is a
+// robot check, and whether the server refused it.
 //
 // A click that follows a retired link, or presses a button whose destination a
 // guard refuses, comes back `succeeded`. The content script cannot know better:
@@ -8,8 +8,18 @@
 // gone before the landing exists. What does say the landing is wrong, without
 // knowing anything about the recording, is the server's own answer: a retired
 // URL redirected to a notice served 404 (W10 `broken-link`), a destination a
-// guard answers 403 (W27 `blocked-url`). That is what is checked here, and only
-// that.
+// guard answers 403 (W27 `blocked-url`).
+//
+// And the landed page's own top frame, asked what `landed-challenge.ts` asks a
+// navigation's: a filter, pager or facet click on a store that has decided the
+// session is automated lands on its robot check, served 200 at the address the
+// click asked for, and until 2026-09-30 that was a successful click. A check
+// that clears by itself is waited out in place (`landed-check-wait.ts`) and the
+// click stands; one a person must answer, or one that did not clear, fails
+// USER_INTERVENTION_REQUIRED, with the record saying the click itself was
+// made, so the step stands once the person has answered the check. A check
+// overrides the status, as it does a navigation's address: a check served 403
+// is still the person's to answer, not a refused page.
 //
 // - Only `web.dom.click` is watched, and only its own tab's top frame. A
 //   navigation in another tab, or in a child frame, is not the click's landing.
@@ -30,6 +40,10 @@
 //   missing evidence never becomes a failure.
 // - The record names the status and the landed path without its query or
 //   fragment. It never quotes the page.
+// - The landed page is asked about a check only once a navigation committed,
+//   so a click that navigates nowhere pays nothing for it. The new document
+//   may not be listening yet at its commit, so an unread answer is asked again
+//   for up to LANDING_READ_MS; one still unread leaves the click as it was.
 //
 // Not caught: a soft 404, served 200 with an error notice, which needs the
 // landing the recording saw (Week 2's landing marker). A sign-in page served
@@ -37,7 +51,9 @@
 
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import type { WorkerActionOutcome } from "./action-results";
-import { boundWorkerValidation, navigationUnexpectedFailure, workerActionResult } from "./action-results";
+import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
+import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
+import { checkWaitBudgetMs, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
 
 /** The id the browser always gives a tab's main frame. */
 const TOP_FRAME_ID = 0;
@@ -59,6 +75,11 @@ type Commit = { url: string; documentId: string | undefined };
 /** A landing the server refused: its status, and its path without query or fragment. */
 type RefusedLanding = { status: number; path: string };
 
+/** What the landing says about the click: it failed, a self-clearing check on it was waited out, or nothing. */
+type LandingVerdict =
+  | { kind: "failed"; outcome: WorkerActionOutcome }
+  | { kind: "check_cleared"; wait: LandedCheckWait };
+
 type NavigationWatch = {
   startedAt: number;
   /** The top frame's commit, or undefined when none started in the grace or the navigation ended without one. */
@@ -66,15 +87,24 @@ type NavigationWatch = {
   stop(): void;
 };
 
+/** How long a committed landing's top frame is asked, again and again, before an unread answer is let stand. */
+const LANDING_READ_MS = 2_500;
+
+/** How long between asking a landing that did not answer. */
+const LANDING_READ_RETRY_MS = 150;
+
 /**
  * Sends the action and returns its result, with a click that took its own tab
- * to a page the server answered with HTTP 400 or above failed as
- * `navigation_unexpected`. Every other action is sent and returned untouched.
+ * to a robot check failed as USER_INTERVENTION_REQUIRED, once any check that
+ * clears by itself has been waited out, and one that took it to a page the
+ * server answered with HTTP 400 or above failed as `navigation_unexpected`.
+ * Every other action is sent and returned untouched.
  */
 export async function sendClickCheckingLanding(
   action: BrowserActionCommand,
   tabId: number,
-  send: () => Promise<BrowserActionResult>
+  send: () => Promise<BrowserActionResult>,
+  access: LandedTabAccess
 ): Promise<BrowserActionResult> {
   if (action.actionType !== "web.dom.click") return await send();
   const watch = watchTopFrameNavigation(tabId);
@@ -83,15 +113,52 @@ export async function sendClickCheckingLanding(
     try {
       reply = await send();
     } catch (error) {
-      const refused = await refusedLanding(tabId, watch);
-      if (refused === undefined) throw error;
-      return workerActionResult(action, watch.startedAt, refusedLandingOutcome(refused));
+      const verdict = await judgeLanding(action, tabId, watch, access);
+      if (verdict?.kind !== "failed") throw error;
+      return workerActionResult(action, watch.startedAt, verdict.outcome);
     }
     if (reply.status !== "succeeded") return reply;
-    const refused = await refusedLanding(tabId, watch);
-    return refused === undefined ? reply : failedClick(reply, refused);
+    const verdict = await judgeLanding(action, tabId, watch, access);
+    if (verdict === undefined) return reply;
+    return verdict.kind === "failed" ? failedClick(reply, verdict.outcome) : clickAfterClearedCheck(reply, verdict.wait);
   } finally {
     watch.stop();
+  }
+}
+
+/**
+ * The click's landing, judged: a robot check first, then the server's status.
+ * Undefined when nothing committed, or when what committed says nothing
+ * against the click.
+ */
+async function judgeLanding(
+  action: BrowserActionCommand,
+  tabId: number,
+  watch: NavigationWatch,
+  access: LandedTabAccess
+): Promise<LandingVerdict | undefined> {
+  const commit = await watch.landing();
+  if (commit === undefined) return undefined;
+  const first = await readCommittedLanding(tabId, access.send);
+  const settled = await settleLandedReading(first, tabId, access, checkWaitBudgetMs(action, watch.startedAt));
+  if (settled.reading?.kind === "robot_check") return { kind: "failed", outcome: checkLandingOutcome(landedPath(commit.url), settled.checkWait) };
+  const refused = await refusedLanding(tabId, commit);
+  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused) };
+  return settled.checkWait?.outcome === "cleared" ? { kind: "check_cleared", wait: settled.checkWait } : undefined;
+}
+
+/**
+ * The committed landing's reading, asked again while the new document is not
+ * yet listening, for at most LANDING_READ_MS. An answer that stays unread is
+ * returned as such, and leaves the click as it was.
+ */
+async function readCommittedLanding(tabId: number, send: FrameSender): Promise<LandedPageReading> {
+  const deadline = Date.now() + LANDING_READ_MS;
+  for (;;) {
+    const left = deadline - Date.now();
+    const reading = await readLandedPage(tabId, send, Math.max(1, Math.min(1_000, left)));
+    if (reading.kind !== "unread" || Date.now() + LANDING_READ_RETRY_MS >= deadline) return reading;
+    await new Promise<void>((resolve) => setTimeout(resolve, LANDING_READ_RETRY_MS));
   }
 }
 
@@ -160,9 +227,7 @@ function watchTopFrameNavigation(tabId: number): NavigationWatch {
   };
 }
 
-async function refusedLanding(tabId: number, watch: NavigationWatch): Promise<RefusedLanding | undefined> {
-  const commit = await watch.landing();
-  if (commit === undefined) return undefined;
+async function refusedLanding(tabId: number, commit: Commit): Promise<RefusedLanding | undefined> {
   const status = await servedStatus(tabId, commit);
   if (status === undefined || status < FIRST_ERROR_STATUS) return undefined;
   return { status, path: landedPath(commit.url) };
@@ -206,9 +271,24 @@ function refusedLandingOutcome(landing: RefusedLanding): WorkerActionOutcome {
   };
 }
 
+/**
+ * A click that landed on a robot check still standing: the click was made --
+ * its page is the check -- and only a person can let the run past it. The
+ * record says so, so the step can stand once the person has answered, and
+ * names the landed path without its query, as a refused landing's does.
+ */
+function checkLandingOutcome(path: string, checkWait: LandedCheckWait | undefined): WorkerActionOutcome {
+  const actual = `the click was made and landed on a robot check at ${path}`;
+  return {
+    status: "failed",
+    message: `The click was made and landed on a robot check at ${path}, which only a person can answer.`,
+    validation: { status: "failed", expected: EXPECTED, actual },
+    failure: navigationChallengeFailure(EXPECTED, `the click was made, and ${standingCheckWords(`the page it landed on (${path})`, checkWait)}`)
+  };
+}
+
 /** The frame's reply keeps what it says about the click itself; only its verdict is replaced. */
-function failedClick(reply: BrowserActionResult, landing: RefusedLanding): BrowserActionResult {
-  const outcome = refusedLandingOutcome(landing);
+function failedClick(reply: BrowserActionResult, outcome: WorkerActionOutcome): BrowserActionResult {
   return {
     ...reply,
     status: outcome.status,
@@ -217,4 +297,12 @@ function failedClick(reply: BrowserActionResult, landing: RefusedLanding): Brows
     failure: outcome.failure,
     finishedAt: Date.now()
   };
+}
+
+/** The frame's reply, standing, with its validation saying the landing's check was waited out untouched. */
+function clickAfterClearedCheck(reply: BrowserActionResult, wait: LandedCheckWait): BrowserActionResult {
+  const validation = reply.validation;
+  if (validation.status !== "passed") return reply;
+  const actual = `${validation.actual}; the page it landed on was a robot check that cleared by itself after ${wait.waitedMs} ms, untouched`;
+  return { ...reply, validation: boundWorkerValidation({ ...validation, actual }), finishedAt: Date.now() };
 }

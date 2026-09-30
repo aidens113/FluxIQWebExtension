@@ -174,3 +174,14 @@ test("the display carries the newest sequence folded into it", () => {
   h.pacer.accept(first);
   assert.equal(h.pacer.display()?.sequence, first.sequence);
 });
+
+test("Core's person-needed ask at a robot check shows at once, whole, as the waiting display's sentence", () => {
+  const ask = "FluxIQ needs you: complete the check on this page, then press Continue.";
+  const h = harness();
+  h.pacer.accept(event({ phase: "thinking", label: "Deciding the next step" }));
+  h.clock.advance(100);
+  h.pacer.accept(event({ phase: "waiting_permission", label: ask }));
+  const shown = h.shown.at(-1);
+  assert.equal(shown?.at, 1_100, "inside the detail interval, and still shown at once");
+  assert.deepEqual([shown?.display.headline, shown?.display.detail, shown?.display.outcome, shown?.display.working], ["Waiting for you", ask, "waiting", false]);
+});

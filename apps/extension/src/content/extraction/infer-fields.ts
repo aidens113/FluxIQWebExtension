@@ -11,8 +11,9 @@
 //   gives its `src` and its `alt`, an `<a href>` gives its words as `text`
 //   under its path and its URL as a `link` under the path and "url"
 //   (`offersOwnText` says why both), a form control
-//   gives its live `value`, an element with a test id gives its `text`, and a
-//   remaining leaf with words in it gives its `text`.
+//   gives its live `value`, an element with a test id gives its `text`, an
+//   icon badge -- no words, but an accessible name -- gives that name
+//   (`badge-name.ts`), and a remaining leaf with words in it gives its `text`.
 //
 // **A column labelled by its path says what it holds, and until 2026-09-29 it
 // did not.** On the everything store's cart a live build asked for "item,
@@ -64,9 +65,12 @@
 // sensitive control (D2), so a field proposed `include` there would refuse the
 // whole extraction rather than read one column.
 //
-// No label is text read inside an item (decision D3). A label is a test id, a
+// No label is a value read inside an item (decision D3). A label is a test id, a
 // column header -- page structure, not a sample value (D16) -- an attribute
-// name, or the path from the item down to the element. The key is derived from
+// name, the path from the item down to the element, or an icon badge's
+// accessible name when every item that has the badge gives it the same one,
+// which makes it chrome like a button's caption rather than any record's value
+// (`badge-name.ts`). The key is derived from
 // the label by the one domain key function, so every key is one Core's dataset
 // schema accepts.
 //
@@ -92,6 +96,7 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import { testIdFor } from "../describe-element";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
+import { badgeNaming, constantBadgeName } from "./badge-name";
 import { readField } from "./field-reader";
 import { recordControlType } from "./record-control";
 import { valueShape } from "./value-shape";
@@ -104,7 +109,7 @@ import { statedMoreTightly } from "./value-statement";
  */
 export type FieldSource = {
   kind: WebAutomationExtractFieldKind;
-  /** What the picker shows for the field. Never text read inside an item. */
+  /** What the picker shows for the field. Never a value read inside an item; a badge's constant accessible name is chrome, not a value (`badge-name.ts`). */
   label: string;
   /** Where inside the item the value is read; absent, the item itself. Not used by `column`. */
   selector?: string | undefined;
@@ -122,6 +127,12 @@ export type FieldSource = {
    * with what the element holds (`describedLabel`).
    */
   pathLabel?: boolean | undefined;
+  /**
+   * Whether the source reads an element with no words of its own by its
+   * accessible name -- an icon badge -- so its label becomes that name when the
+   * name is the same in every item that has the element (`badge-name.ts`).
+   */
+  accessibleName?: boolean | undefined;
 };
 
 /** The form controls whose live value a record can read. */
@@ -233,6 +244,7 @@ export function inferFields(item: Element, run: readonly Element[]): WebAutomati
  * sensitive column is never read, so it never has a shape.
  */
 function describedLabel(source: FieldSource, run: readonly Element[]): string {
+  if (source.accessibleName === true) return badgeLabel(source, run);
   if (source.kind !== "text" || source.pathLabel !== true || source.sensitive) return source.label;
   const reader = { kind: "text" as const, ...(source.selector === undefined ? {} : { selector: source.selector }), required: false };
   const samples = run.slice(0, MAX_SHAPE_SAMPLES).map((item) => readField(item, source.label, reader) ?? "");
@@ -365,11 +377,38 @@ function elementSources(item: Element): FieldSource[] {
       else if (sensitive) sources.push({ kind: "value", label, selector, sensitive, pathLabel });
     } else if (testIdFor(element) !== undefined) {
       sources.push({ kind: "text", label, selector, sensitive, pathLabel });
-    } else if (isTextLeaf(element) && !statedMoreTightly(item, element)) {
-      sources.push({ kind: "text", label, selector, sensitive, pathLabel });
+    } else {
+      // An icon badge has no words, so it is never a text leaf, and a text
+      // leaf is never a badge: the two branches cannot both apply.
+      const badge = badgeSource(item, element, named, sensitive);
+      if (badge !== undefined) sources.push(badge);
+      else if ((isTextLeaf(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
     }
   }
   return sources;
+}
+
+/**
+ * An icon badge as a source (`badge-name.ts`): its naming attribute read as an
+ * `attribute` field, or an `<svg>`'s `<title>` read as text. Labelled by its
+ * path until `describedLabel` has the whole run to judge whether its name is
+ * the same in every item.
+ */
+function badgeSource(item: Element, element: Element, name: ElementName, sensitive: boolean): FieldSource | undefined {
+  const naming = badgeNaming(element);
+  if (naming === undefined) return undefined;
+  if ("attribute" in naming) {
+    return { kind: "attribute", label: `${name.label} ${naming.attribute}`, selector: name.selector, attribute: naming.attribute, sensitive, accessibleName: true };
+  }
+  const title = selectorWithinItem(item, naming.title);
+  if (title === undefined) return undefined;
+  return { kind: "text", label: title.label, selector: title.selector, sensitive, pathLabel: title.path, accessibleName: true };
+}
+
+/** A badge's label: the name every item that has it gives it, or its path when there is no such name. A sensitive one is never read. */
+function badgeLabel(source: FieldSource, run: readonly Element[]): string {
+  if (source.sensitive || source.selector === undefined) return source.label;
+  return constantBadgeName(run, source.selector, source.kind === "attribute" ? source.attribute : undefined) ?? source.label;
 }
 
 /**
@@ -575,6 +614,24 @@ function testIdSelector(element: Element): string | undefined {
  */
 function isTextLeaf(element: Element): boolean {
   return element.children.length === 0 && collapsed(textOutsideSensitiveControls(element)) !== "";
+}
+
+/**
+ * Whether the element is a leaf whose words the page draws in an open shadow
+ * root rather than in its light DOM, so `isTextLeaf` sees it empty.
+ *
+ * **Until 2026-09-30 such an element was never offered.** The professional
+ * network draws each sent invitation's age with a childless `gl-time-ago`
+ * whose words exist only in its shadow root, so no column held the age and
+ * "withdraw every request a month or more old" had nothing to filter on
+ * (`t195-w9-row-age-in-shadow.md`). The host is the deepest element a selector
+ * can name, so it is the column. Its words are read once, through the field
+ * reader, only to decide this, and never carried anywhere; a sensitive host is
+ * never read at all.
+ */
+function drawsShadowText(item: Element, element: Element, selector: string, label: string, sensitive: boolean): boolean {
+  if (sensitive || element.shadowRoot === null || element.children.length > 0) return false;
+  return (readField(item, label, { kind: "text", selector, required: false }) ?? "") !== "";
 }
 
 /** The share of the run's items the field resolves in, from 0 to 1. */
