@@ -260,22 +260,13 @@ test("an item no frame reported is absent from the merged page, not present and 
   assert.equal("armPending" in (withDialog.dialogs ?? {}), false);
 });
 
-// The merged element list is bounded, and says so when the bound bites.
+// Nothing is cut (t200).
 //
-// Every other collection the merge produces has had a cross-frame budget since
-// the merge was written; the element list -- the largest of them -- had none.
-// The Lab's only multi-frame fixture holds six elements per frame, so nothing
-// in the corpus could show it: a real page carrying a dozen ad, chat and
-// payment frames can offer `MAX_SNAPSHOT_CANDIDATES` (2,000) from each, to a
-// payload rebuilt on every recorded event.
-//
-// What is pinned here is the bound, where the bound cuts, and that the cut is
-// reported through the flag the per-frame element cap already sets rather than
-// through a new one -- `evidence.elements.truncated`, with `matched` left at
-// the pre-cap total so `matched - returned` still says how many went missing.
-
-/** `MAX_MERGED_ELEMENTS` in the module under test. */
-const MERGED_ELEMENT_BOUND = 4_000;
+// The merged element list had a cap of 4,000 and every evidence collection its
+// own, and the blockers were sorted by how much they covered and cut to ten.
+// The user's order was that no limit stands between the page and the model, so
+// these rows pin the opposite of what they used to: everything every frame
+// sent arrives, in a fixed order, and nothing is marked truncated for it.
 
 function crowdedFrame(frameId: number, count: number): FrameFixture {
   const isTop = frameId === 0;
@@ -306,47 +297,119 @@ function crowdedFrame(frameId: number, count: number): FrameFixture {
   };
 }
 
-test("the merged element list is bounded across frames, as every collection beside it is", async () => {
-  // 1,000 from the page and 1,500 from each of three frames: 5,500 offered.
+/** The selectors a frame fixture of `count` elements carries, as the merge must pass them on. */
+function selectorsOf(frameId: number, count: number): string[] {
+  const prefix = frameId === 0 ? "" : `frame[${frameId}] >> `;
+  return Array.from({ length: count }, (_unused, index) => `${prefix}#f${frameId}-e${index}`);
+}
+
+test("every element of every frame survives the merge, in frame order and in each frame's own order", async () => {
+  // 1,000 from the page and 1,500 from each of three frames: 5,500 offered,
+  // past the 4,000 the merge used to keep.
   const frames = [crowdedFrame(0, 1_000), crowdedFrame(1, 1_500), crowdedFrame(2, 1_500), crowdedFrame(3, 1_500)];
   const merged = await mergeOf(frames);
 
-  assert.equal(merged.interactiveElements.length, MERGED_ELEMENT_BOUND, "the merged element list is unbounded");
-  // The cap takes a prefix, so what survives is what answered first and what is
-  // dropped is the tail -- here the whole of the last frame. Order across
-  // frames is the merge's existing rule (seed frame first, then answer order),
-  // not something this cap chose; it only decides who the cap reaches.
-  assert.equal(merged.interactiveElements[0]?.selector, "#f0-e0");
-  assert.equal(
-    merged.interactiveElements.some((element) => element.selector?.startsWith("frame[3]")),
-    false,
-    "the cap must drop the tail of the merged list, not thin it out"
+  assert.equal(merged.interactiveElements.length, 5_500, "the merged element list was cut");
+  assert.deepEqual(
+    merged.interactiveElements.map((element) => element.selector),
+    [...selectorsOf(0, 1_000), ...selectorsOf(1, 1_500), ...selectorsOf(2, 1_500), ...selectorsOf(3, 1_500)]
   );
 });
 
-test("what the merged cap dropped is reported, not silently absent", async () => {
+test("a merge of every element says it returned all of them and truncated none", async () => {
   const frames = [crowdedFrame(0, 1_000), crowdedFrame(1, 1_500), crowdedFrame(2, 1_500), crowdedFrame(3, 1_500)];
   const evidence = await mergedEvidence(frames);
 
-  assert.equal(evidence.elements.returned, MERGED_ELEMENT_BOUND, "returned must count the elements the payload carries");
-  assert.equal(evidence.elements.matched, 5_500, "matched stays the pre-cap total, so the drop is readable");
-  assert.equal(evidence.elements.truncated, true, "the capture's own truncation flag is what a merged drop sets");
+  assert.equal(evidence.elements.returned, 5_500);
+  assert.equal(evidence.elements.matched, 5_500);
+  assert.equal(evidence.elements.truncated, false);
 });
 
-test("a merge under the bound is untouched by it", async () => {
-  const frames = [crowdedFrame(0, 10), crowdedFrame(1, 10)];
-  const merged = await mergeOf(frames);
-
-  assert.equal(merged.interactiveElements.length, 20);
-  assert.equal(merged.evidence?.elements.returned, 20);
-  assert.equal(merged.evidence?.elements.truncated, false);
+test("the frames follow the order the browser lists them, not the order they answer in", async () => {
+  const frames = [crowdedFrame(0, 1), crowdedFrame(4, 1), crowdedFrame(9, 1)];
+  const lateFirst: TabSnapshotTransport = {
+    // Frame 4 answers last; the list still puts it before frame 9.
+    sendToTab: async <TResponse = unknown>(_tabId: number, _message: unknown, frameId?: number): Promise<TResponse> => {
+      if (frameId === 4) await new Promise((resolve) => setTimeout(resolve, 20));
+      return frames.find((frame) => frame.frameId === (frameId ?? 0))?.snapshot as TResponse;
+    },
+    allTabFrames: async () => [0, 4, 9].map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+  };
+  const merged = await captureMergedTabSnapshot(lateFirst, 7);
+  assert.deepEqual(merged?.interactiveElements.map((element) => element.selector), ["#f0-e0", "frame[4] >> #f4-e0", "frame[9] >> #f9-e0"]);
 });
 
-// The fallback path: the top frame is read once on its own before the frame
-// list is asked for, and that reading stands in for the top frame when no
-// listed frame is it -- the list omitted frame 0, or frame 0 did not answer its
-// second read in time. The page is still made of the same documents, so the
-// merge must say the same thing about it as when every frame was listed.
+test("every evidence item of every frame is carried whole, blockers in frame order rather than by how much they cover", async () => {
+  const top = topSnapshot();
+  const child = childSnapshot();
+  const many = <T>(count: number, make: (index: number) => T): T[] => Array.from({ length: count }, (_unused, index) => make(index));
+  top.evidence = {
+    ...top.evidence!,
+    loading: { documentState: "complete", busy: true, busyRegions: many(30, (index) => `#busy-${index}`), indicators: many(30, (index) => ({ selector: `#spin-${index}`, kind: "spinner" as const })), pendingNavigation: false },
+    dialogs: { open: many(12, (index) => ({ selector: `#dialog-${index}`, role: "dialog", modal: false, native: false })), modal: false },
+    overlays: { tested: 40, blockedCount: 3, blockers: [{ selector: "#small", blocks: 1, blocked: ["#a"] }] },
+    regions: many(50, (index) => ({ role: "region", selector: `#region-${index}` })),
+    repeating: many(15, (index) => ({ containerSelector: `#list-${index}`, signature: "li", itemCount: 3, representative: { selector: `#list-${index} > li` } })),
+    forms: many(20, (index) => ({ selector: `#form-${index}`, controlCount: 0, controls: [] }))
+  };
+  child.evidence = { ...child.evidence!, overlays: { tested: 9, blockedCount: 9, blockers: [{ selector: "#wall", blocks: 9, blocked: many(9, (index) => `#c${index}`) }] } };
+  const evidence = await mergedEvidence([{ frameId: 0, snapshot: top }, { frameId: CHILD_FRAME_ID, snapshot: child }]);
+
+  assert.equal(evidence.loading.busyRegions.length, 31, "busy regions were cut");
+  assert.equal(evidence.loading.indicators.length, 31, "loading indicators were cut");
+  assert.equal(evidence.dialogs?.open.length, 13, "dialogs were cut");
+  assert.equal(evidence.regions?.length, 51, "regions were cut");
+  assert.equal(evidence.repeating?.length, 16, "repeating structures were cut");
+  assert.equal(evidence.forms?.length, 21, "forms were cut");
+  // The child's wall covers more, and still follows the page's own blocker.
+  assert.deepEqual(evidence.overlays?.blockers.map((blocker) => blocker.selector), ["#small", `frame[${CHILD_FRAME_ID}] >> #wall`]);
+  assert.equal(evidence.overlays?.blockers[1]?.blocked.length, 9, "a blocker's covered controls were cut");
+});
+
+test("a child frame that does not answer is named on the merged evidence, not dropped silently", async () => {
+  const silentChild = 5;
+  const merged = await captureMergedTabSnapshot(transportFor(bothFrames, [0, CHILD_FRAME_ID, silentChild]), 7);
+  assert.ok(merged, "the merge produced no snapshot");
+  assert.deepEqual(merged.evidence?.unansweredFrameIds, [silentChild]);
+  // What did answer is all there.
+  assert.equal(merged.interactiveElements.length, 3);
+});
+
+test("a child frame still working when the wait ends is named too, and the merge does not wait for it past the wait", async () => {
+  const slowChild = 6;
+  const transport: TabSnapshotTransport = {
+    sendToTab: <TResponse = unknown>(_tabId: number, _message: unknown, frameId?: number): Promise<TResponse> =>
+      frameId === slowChild
+        ? new Promise<TResponse>(() => undefined)
+        : Promise.resolve(bothFrames.find((frame) => frame.frameId === (frameId ?? 0))?.snapshot as TResponse),
+    allTabFrames: async () => [0, CHILD_FRAME_ID, slowChild].map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+  };
+  const started = Date.now();
+  const merged = await captureMergedTabSnapshot(transport, 7, undefined, undefined, { waitMs: 30 });
+  assert.ok(Date.now() - started < 2_000, "the merge waited past its wait");
+  assert.deepEqual(merged?.evidence?.unansweredFrameIds, [slowChild]);
+  assert.equal(merged?.interactiveElements.length, 3);
+});
+
+test("a look seeded with the top frame's own snapshot asks the top frame nothing more", async () => {
+  const asked: Array<number | undefined> = [];
+  const transport: TabSnapshotTransport = {
+    sendToTab: async <TResponse = unknown>(_tabId: number, _message: unknown, frameId?: number): Promise<TResponse> => {
+      asked.push(frameId);
+      return bothFrames.find((frame) => frame.frameId === (frameId ?? 0))?.snapshot as TResponse;
+    },
+    allTabFrames: async () => [0, CHILD_FRAME_ID].map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+  };
+  const merged = await captureMergedTabSnapshot(transport, 7, topSnapshot(), 0);
+  assert.deepEqual(asked, [CHILD_FRAME_ID]);
+  assert.deepEqual(merged?.interactiveElements.map((element) => element.selector), ["#pay", `frame[${CHILD_FRAME_ID}] >> #card`, `frame[${CHILD_FRAME_ID}] >> #confirm`]);
+  assert.equal(merged?.evidence && "unansweredFrameIds" in merged.evidence, false, "every frame answered, so none is named");
+});
+
+// The top frame is read once, beside the frame list, and that reading stands
+// for frame 0 whether or not the list names it. The page is still made of the
+// same documents when the list omits it, so the merge must say the same thing
+// about it as when every frame was listed.
 
 test("a top frame the frame list omits still contributes its elements and its evidence", async () => {
   const merged = await mergeOfListed(bothFrames, [CHILD_FRAME_ID]);
@@ -383,3 +446,31 @@ async function mergeOfListed(frames: readonly FrameFixture[], listed: readonly n
   assert.ok(merged, "the merge produced no snapshot");
   return merged;
 }
+
+/** A descriptor as the content script writes it, flags and all; the domain's input type names only what it reads. */
+type WrittenElement = DomSnapshotPayload["interactiveElements"][number] & { frontLayer?: true; leadStatement?: true };
+
+test("an element's frontLayer and leadStatement, and a layer's kind, cross the merge as each frame wrote them", async () => {
+  const top = topSnapshot();
+  const topStatement: WrittenElement = { tagName: "SPAN", selector: "#count", leadStatement: true };
+  top.interactiveElements = [...top.interactiveElements, topStatement];
+  const child = childSnapshot();
+  const childBanner: WrittenElement = { tagName: "BUTTON", selector: "#decline", frontLayer: true, documentBounds: { x: 8, y: 80, width: 90, height: 24 } };
+  child.interactiveElements = [...child.interactiveElements, childBanner];
+  const childEvidence = child.evidence;
+  assert.ok(childEvidence?.dialogs && childEvidence.overlays);
+  childEvidence.dialogs.open = childEvidence.dialogs.open.map((dialog) => ({ ...dialog, kind: "robot_check" as const }));
+  childEvidence.overlays.blockers = childEvidence.overlays.blockers.map((blocker) => ({ ...blocker, kind: "consent" as const }));
+
+  const merged = await mergeOf([{ frameId: 0, snapshot: top }, { frameId: CHILD_FRAME_ID, snapshot: child }]);
+  const elements = merged.interactiveElements as WrittenElement[];
+  const count = elements.find((element) => element.selector === "#count");
+  const decline = elements.find((element) => element.selector === `frame[${CHILD_FRAME_ID}] >> #decline`);
+  assert.equal(count?.leadStatement, true, "the top frame's statement keeps its flag");
+  assert.equal(decline?.frontLayer, true, "a child frame's banner control keeps its flag through the frame translation");
+  // Nothing else gains a flag on the way.
+  assert.deepEqual(elements.filter((element) => element.frontLayer).map((element) => element.selector), [`frame[${CHILD_FRAME_ID}] >> #decline`]);
+  assert.deepEqual(elements.filter((element) => element.leadStatement).map((element) => element.selector), ["#count"]);
+  assert.equal(merged.evidence?.dialogs?.open[0]?.kind, "robot_check");
+  assert.equal(merged.evidence?.overlays?.blockers[0]?.kind, "consent");
+});

@@ -1,70 +1,41 @@
-// What a node that reads gives back to the model, bounded and stripped.
+// What a node that reads gives back to the model, whole but for its secrets.
 //
 // A node that acts is judged by the page it produced, which the packet already
 // carries. A node that reads is judged by what it read -- and that is the whole
 // point of running it while exploring: an extraction the model can see the rows
 // of is an extraction it can tell is wrong before the Flow ships with it.
 //
-// So a read's payload comes back, and it comes back through the same discipline
-// every other piece of page data goes through. Keys this domain denies never
-// travel (`tools.ts`, `deniedEvidenceKeys`) -- a field the model itself named
-// `selector` would otherwise put one on the wire and Core would refuse the
-// whole packet. Strings are cut, lists are cut and counted, depth is bounded,
-// and the whole thing is held to a byte budget with what was left out said
-// plainly rather than silently absent.
+// So a read's payload comes back whole (t200): every row, every field, every
+// string. Until 2026-09-30 strings were cut to 200 characters, lists to eight
+// items, objects to 24 keys, depth to six, and the whole to a quarter of the
+// call's byte budget, so a model checking an extraction of fifty rows saw
+// three. What still never travels is a key this domain denies (`tools.ts`,
+// `deniedEvidenceKeys`) -- a field the model itself named `selector` would
+// otherwise put one on the wire and Core would refuse the whole packet -- and a
+// string shaped like a credential, which becomes the marker (`../withheld.ts`).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webLlmEvidenceKeyIsDenied } from "../denied-keys";
-import { serializedBytes } from "../limits";
+import { screenedText } from "../withheld";
 
-const MAX_DEPTH = 6;
-const MAX_STRING = 200;
-const MAX_ITEMS = 8;
-const MAX_KEYS = 24;
-
-/**
- * One read's payload, bounded to `maxBytes`, or nothing when there is nothing
- * to show or no room to show it.
- *
- * Shrinks by showing fewer list items rather than by cutting the JSON, so what
- * arrives is always well formed and always says how much of the list it is.
- */
-export function webNodeReadResult(payload: JsonValue | undefined, maxBytes: number): JsonValue | undefined {
+/** One read's payload, screened, or nothing when there is nothing to show. */
+export function webNodeReadResult(payload: JsonValue | undefined): JsonValue | undefined {
   if (payload === undefined || payload === null) return undefined;
-  for (const items of [MAX_ITEMS, 4, 2, 1, 0]) {
-    const bounded = bound(payload, 0, items);
-    if (bounded === undefined) return undefined;
-    if (serializedBytes(bounded) <= maxBytes) return bounded;
-  }
-  return undefined;
+  return screened(payload);
 }
 
-function bound(value: JsonValue, depth: number, items: number): JsonValue | undefined {
-  if (depth > MAX_DEPTH) return undefined;
-  if (typeof value === "string") return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}...` : value;
+function screened(value: JsonValue): JsonValue {
+  if (typeof value === "string") return screenedText(value);
   if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
-  if (Array.isArray(value)) {
-    const shown = value.slice(0, items).flatMap((entry) => {
-      const kept = bound(entry, depth + 1, items);
-      return kept === undefined ? [] : [kept];
-    });
-    // The count is the fact that matters about a list: an extraction that read
-    // three rows where fifty were wanted is wrong, and only the count says so.
-    return value.length > shown.length ? { count: value.length, shown } : shown;
-  }
-  if (typeof value !== "object") return undefined;
+  if (Array.isArray(value)) return value.map(screened);
   const out: JsonObject = {};
-  let keys = 0;
   for (const [key, entry] of Object.entries(value)) {
     // Core refuses the whole decision request for one denied key anywhere in
     // the evidence, so a read is held to the declaration before it is
     // returned rather than after (`../denied-keys.ts`).
-    if (webLlmEvidenceKeyIsDenied(key)) continue;
-    if (keys >= MAX_KEYS) break;
-    const kept = bound(entry as JsonValue, depth + 1, items);
-    if (kept === undefined) continue;
-    out[key] = kept;
-    keys += 1;
+    if (webLlmEvidenceKeyIsDenied(key) || entry === undefined) continue;
+    // Core's credential check reads keys as well as values.
+    out[screenedText(key)] = screened(entry as JsonValue);
   }
   return out;
 }

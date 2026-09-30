@@ -64,7 +64,7 @@ import type {
 } from "fluxiq/automation-studio";
 
 /**
- * Match proposed handles and action semantics against the bounded sanitized
+ * Match proposed handles and action semantics against the sanitized
  * packet already supplied to the LLM, and resolve them into this domain's own
  * target.
  *

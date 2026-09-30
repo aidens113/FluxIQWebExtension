@@ -51,7 +51,6 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
-import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
@@ -88,8 +87,6 @@ const EXTRACTION_SLOT = "extractList";
 const HANDLE_SHAPE = ['target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'];
 /** The keys the library verb takes, and all it takes (`Core runtime/llm/node-tools/`). */
 const CALL_KEYS = ["node", "parameters", "consequences"];
-/** Room kept for what a look says about itself, beside the packet it returns. */
-const LOOK_ENVELOPE_BYTES = 128;
 
 /**
  * What a node call says about itself, beside the page it left behind.
@@ -128,7 +125,7 @@ export type WebNodeOutcome = {
   pageUnreadable?: true;
   /** The control it acted on, in the words the model was shown. */
   control?: string;
-  /** What a reading node read, bounded (`./read-result.ts`). */
+  /** What a reading node read, whole but for its secrets (`./read-result.ts`). */
   read?: JsonValue;
   /** Whether a successful run of this node is a step of the Flow. */
   inFlow: boolean;
@@ -227,11 +224,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   const node = webRunnableNode(value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
-  if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), undefined, { call: value });
+  if (!node) return refusal(undefined, "invalid_input", unknownNode(value.node), { call: value });
   const parameters = isJsonRecord(value.parameters) ? value.parameters : undefined;
   const record: WebNodeCallRecord = { actionId: node.definitionId, effect: node.effect, proposes: node.proposes, call: value, parameters: isJsonRecord(value.parameters) ? value.parameters : {} };
   if (!parameters || Object.keys(value).some((key) => !CALL_KEYS.includes(key))) {
-    return refusal(undefined, "invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined }), undefined, record);
+    return refusal(undefined, "invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined }), record);
   }
   let current: WebLlmSnapshotBinding | undefined;
   try {
@@ -239,12 +236,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // *is* the snapshot node running, so taking one before it and one after it
     // would make the cheapest thing a build does cost three.
     if (node.actionType === WEB_LLM_OBSERVATION_NODE_ACTION) {
-      // Room for what the node says about itself, so the packet plus those few
-      // keys stays inside what the call was allowed rather than overshooting it.
-      const looking = run.request.maxEvidenceBytes === undefined
-        ? run.request
-        : { ...run.request, maxEvidenceBytes: Math.max(1, run.request.maxEvidenceBytes - LOOK_ENVELOPE_BYTES) };
-      const looked = await currentPage(run, looking);
+      const looked = await currentPage(run, run.request);
       // Nothing to look at: this build was told where its Flow starts and has
       // not got there. The free first look is where that is said, so the
       // model's first paid decision is made knowing where it is meant to be.
@@ -298,7 +290,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (resolved.status === "refused") {
       // The handle codes say which way the handle stopped naming one control,
       // and each implies a different next call.
-      return refusal(undefined, "target_unobserved", handleRefusal(written, resolved.issueCodes), run.request.maxEvidenceBytes, record);
+      return refusal(undefined, "target_unobserved", handleRefusal(written, resolved.issueCodes), record);
     }
     // A node that acts on an element, whose parameters named no handle, is
     // acting on a locator the model invented: it has never been shown one.
@@ -307,7 +299,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (resolved.status === "unchanged" && node.definition.metadata?.elementTarget === true) {
       return refusal(undefined, "target_unobserved", rejectionDetail({
         reason: "target_not_a_handle", target: undefined, instead: HANDLE_SHAPE, missing: undefined, requestId: undefined
-      }), run.request.maxEvidenceBytes, record);
+      }), record);
     }
     const ran = resolved.status === "resolved" ? resolved.parameters : written;
     // No page, no control to have observed: the move that goes to the start
@@ -321,7 +313,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (node.effect === "mutate" && value.consequences === undefined) {
       return refusal(undefined, "invalid_input", rejectionDetail({
         reason: "missing_input_keys", target: undefined, instead: CALL_KEYS, missing: undefined, requestId: undefined
-      }), run.request.maxEvidenceBytes, record);
+      }), record);
     }
     const permission = await webActionPermission({
       check: run.request.permission,
@@ -334,20 +326,20 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       effect: node.effect
     });
     if (permission.kind === "invalid") {
-      return refusal(undefined, "invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
+      return refusal(undefined, "invalid_input", rejectionDetail({ reason: "consequences_unreadable", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), record);
     }
     if (permission.kind === "refused") {
       return refusal(undefined, "permission_required", rejectionDetail({
         reason: permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted",
         target: undefined, instead: undefined, missing: permission.missing, requestId: permission.requestId ?? undefined
-      }), run.request.maxEvidenceBytes, record);
+      }), record);
     }
     // Exploration stays where it started. The URL is the node's own parameter
     // and is run as written; where it may go is this domain's scope policy,
     // which the authoring navigation has always had.
     const leaving = crossOrigin(node, ran, webScopeAnchor(current?.evidence.location, run.request.startLocation));
     if (leaving) {
-      return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
+      return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), record);
     }
     // What this step is, should it meet a robot check: the statement a success
     // would make, less what only the page it left can say.
@@ -394,13 +386,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const settled = await captureAfterAction(run.gateway, run.sessionId, run.request, run.request.signal);
     const after = settled === undefined ? undefined : run.restamp(settled);
     if (after) run.shown(after);
-    const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
-    // What the node read, for a node that reads. Never for the look itself:
-    // its payload is the raw snapshot, which is the page before any of this
-    // domain's sanitizing, and the packet beside it already says what the page
-    // is. Returning it would be the one path by which a page's own markup
+    // What the node read, whole, for a node that reads. Never for the look
+    // itself: its payload is the raw snapshot, which is the page before any of
+    // this domain's sanitizing, and the packet beside it already says what the
+    // page is. Returning it would be the one path by which a page's own markup
     // reached a decision.
-    const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4))) : undefined;
+    const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined) : undefined;
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
@@ -425,7 +416,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // left is the read after -- unsaid where the page could not be read in time.
     return withCallStates(toolExecution(
       // No page, no packet: the outcome alone, which says why.
-      after === undefined ? outcome as unknown as JsonValue : bounded(nodeEvidence(after.evidence, outcome), budget, after.evidence, outcome),
+      after === undefined ? outcome as unknown as JsonValue : nodeEvidence(after.evidence, outcome),
       // The node ran and the command succeeded, so this step worked -- which is
       // what the draft reads it as. Whether the page then looked different is a
       // separate fact, reported as `pageChanged`: a press that applies a filter
@@ -485,7 +476,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // refused (`../tool-rejection.ts`).
       const page = error.page ? run.restamp(error.page) : undefined;
       if (page) run.shown(page);
-      const refused = refusal(page, error.code, error.detail, run.request.maxEvidenceBytes, record);
+      const refused = refusal(page, error.code, error.detail, record);
       // A robot check is the person's. The refusal is kept as the run's record
       // says it, and Core puts the check to the person rather than to the model.
       return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
@@ -512,16 +503,10 @@ function refusal(
   page: WebLlmSnapshotBinding | undefined,
   code: WebLlmToolRejectionCode,
   detail: ReturnType<typeof rejectionDetail> | undefined,
-  maxEvidenceBytes: number | undefined,
   record: WebNodeCallRecord
 ): WebLlmEvidenceToolExecution {
-  const budget = evidenceByteLimit(maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
-  const bare = toolRejection(code, undefined, detail);
-  const withPage = page ? toolRejection(code, page.evidence, detail) : bare;
-  // The page inside a refusal was already captured to fit what this call was
-  // allowed, envelope included (`pageRefusal`), so the only question left is
-  // whether the refusal as a whole fits.
-  const value = serializedBytes(withPage) <= budget ? withPage : bare;
+  // The refusal carries the whole page it found, whenever it has one.
+  const value = page ? toolRejection(code, page.evidence, detail) : toolRejection(code, undefined, detail);
   // What the refusal found is the page the call read before doing anything.
   // What it left is that same page when nothing was sent to it, and otherwise
   // only a page captured after the attempt: a command that failed may still
@@ -583,21 +568,6 @@ function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
     proposes: record.proposes,
     replay: record.standing.replay
   });
-}
-
-/**
- * The whole result when it fits, and the page with only what the node did to it
- * when it does not.
- *
- * The page is never what goes: it is the one thing the next decision cannot be
- * made without, and it was already sanitized to this call's own budget.
- */
-function bounded(evidence: JsonValue, budget: number, page: WebLlmPageEvidence, outcome: WebNodeOutcome): JsonValue {
-  if (serializedBytes(evidence) <= budget) return evidence;
-  return nodeEvidence(page, present<WebNodeOutcome>({
-    ok: outcome.ok, node: outcome.node, status: outcome.status,
-    pageChanged: undefined, unchangedPress: undefined, pageUnreadable: outcome.pageUnreadable, control: undefined, read: undefined, inFlow: outcome.inFlow
-  }));
 }
 
 /** What the call could have named instead: every node this domain can run. */
@@ -788,8 +758,8 @@ function buildOf(run: WebNodeRun): { projectId: string; flowId: string; sessionI
 }
 
 /** The refusal for a call made before the Flow has reached where it starts. */
-function notThereYet(run: WebNodeRun, record: Parameters<typeof refusal>[4]): WebLlmEvidenceToolExecution {
-  return refusal(undefined, "not_at_start_location", webStartLocationRefusal(run.request.startLocation ?? ""), run.request.maxEvidenceBytes, record);
+function notThereYet(run: WebNodeRun, record: Parameters<typeof refusal>[3]): WebLlmEvidenceToolExecution {
+  return refusal(undefined, "not_at_start_location", webStartLocationRefusal(run.request.startLocation ?? ""), record);
 }
 
 /** Republished so the runtime's tool table and this module cannot disagree. */

@@ -9,11 +9,15 @@
 // layer a covered target is under and the controls on it, for the refusal.
 // `layer-text.ts` reads a layer's own bounded words, for `way-out.ts` and for
 // `../rate-limit-notice.ts`, which asks whether a press was refused as too fast.
+// `layer-kind.ts` names what a layer is -- a robot check, a consent prompt, a
+// rate-limit notice -- for the snapshot's dialog and blocker evidence
+// (`../../evidence/`).
 
 export { clearInterference } from "./clear";
 export { coveringLayerSentence } from "./covering-layer";
 export { overlaysAt, overlaysOverPage } from "./overlays";
 export { boundedLayerText } from "./layer-text";
+export { layerKind } from "./layer-kind";
 export { dismissControlIn, hasDismissalControl } from "./way-out";
 export { isDismissalLabel, isRateLimitLayerText, DISMISS_LABEL_MAX } from "./vocabulary";
 

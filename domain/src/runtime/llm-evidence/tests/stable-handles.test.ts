@@ -22,7 +22,7 @@ import { webAutomationOutputNodeId } from "../../../output-nodes";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_PRESS_TOOL_ID, type WebAutomationLlmEvidenceRuntime,
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "..";
-import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
+import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSnapshotBinding } from "../sanitize";
 import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_MAX_NUMBER, WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 
 const PAGE_URL = "https://example.test/search";
@@ -189,33 +189,43 @@ test("an exploration that sees more than ninety-nine controls is handed numbers 
 test("a Flow that has spent every number starts again rather than handing one control's number to another", () => {
   const handles = createWebLlmStableTargetHandles();
   const scope = { projectId: "p", flowId: "f" };
-  const pages = Math.ceil(WEB_LLM_TARGET_HANDLE_MAX_NUMBER / 40);
+  // A packet is the whole page now, so pages are large: five thousand
+  // elements each, bound by hand rather than sanitized, since what is under
+  // test is the numbering.
+  const perPage = 5_000;
+  const pages = Math.ceil(WEB_LLM_TARGET_HANDLE_MAX_NUMBER / perPage);
   let last: string[] = [];
   for (let page = 1; page <= pages; page += 1) {
-    const { url, elements } = crowdedPage(page);
-    const binding = sanitizeWebLlmSnapshotWithBindings({ url, interactiveElements: elements });
-    last = handles.restamp(scope, binding).evidence.elements.map((element) => element.target);
-    for (const target of last) assert.ok(Number(target.slice("target.".length)) <= WEB_LLM_TARGET_HANDLE_MAX_NUMBER, target);
+    last = handles.restamp(scope, largeBinding(page, perPage)).evidence.elements.map((element) => element.target);
+    for (const target of [last[0]!, last.at(-1)!]) assert.ok(Number(target.slice("target.".length)) <= WEB_LLM_TARGET_HANDLE_MAX_NUMBER, target);
   }
-  // 249 pages spent 9,960 numbers; the 250th page's forty would pass 9,999.
-  assert.deepEqual([last[0], last.at(-1)], ["target.1", "target.40"]);
+  // 199 pages spent 995,000 numbers; the 200th page's 5,000 would pass 999,999.
+  assert.deepEqual([last[0], last.at(-1)], ["target.1", "target.5000"]);
 });
 
-test("a packet renumbered with the widest handles still fits the budget it was built for", async () => {
-  // Spend numbers into four digits first.
-  let page = crowdedPage(1);
+/** A binding of `count` elements on its own page, as `sanitize.ts` would issue it. */
+function largeBinding(page: number, count: number): WebLlmSnapshotBinding {
+  const selectors = new Map<string, string>();
+  const elements = Array.from({ length: count }, (_, index) => {
+    selectors.set(`target.${index + 1}`, `#p${page}-e${index}`);
+    return { target: `target.${index + 1}`, tag: "button" };
+  });
+  return {
+    evidence: { schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: `https://example.test/page-${page}`, elements, truncated: false },
+    selectors,
+    records: new Map()
+  };
+}
+
+test("a page of twelve thousand elements is numbered past four digits, and a five-digit handle is taken and pressed", async () => {
+  const page = { url: "https://example.test/huge", elements: Array.from({ length: 12_000 }, (_, index): JsonObject => ({ tagName: "button", selector: `#huge-${index}`, visibleText: `Huge ${index}` })) };
   const runtime = runtimeOver(() => page);
-  for (let index = 1; index <= 26; index += 1) {
-    page = crowdedPage(index);
-    await inspect(runtime);
-  }
-  page = crowdedPage(99);
-  const maxEvidenceBytes = 2_000;
-  const result = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.budget", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] }, maxEvidenceBytes });
-  const evidence = (result as unknown as { evidence: { elements: Array<{ target: string }>; budgetTruncated?: boolean } }).evidence;
-  assert.equal(evidence.budgetTruncated, true);
-  assert.ok(evidence.elements.every((element) => element.target.length === "target.1041".length), "every handle here has four digits");
-  assert.ok(new TextEncoder().encode(JSON.stringify(evidence)).byteLength <= maxEvidenceBytes);
+  const seen = await inspect(runtime);
+  assert.equal(seen.length, 12_000);
+  assert.deepEqual([seen[0]?.target, seen.at(-1)?.target], ["target.1", "target.12000"]);
+  assert.equal(await selectorFor(runtime, "target.12000"), "#huge-11999");
+  const pressed = await runtime.executeTool({ projectId: "p", flowId: "f", callId: "call.press.huge", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.12000" } }, consequences: [] } });
+  assert.equal((pressed as { resultCode?: string }).resultCode, "web.action.succeeded");
 });
 
 // A row control's selector is positional: row one's checkbox is

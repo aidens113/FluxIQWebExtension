@@ -6,30 +6,20 @@
 type Root = Document | ShadowRoot;
 
 /**
- * How many open shadow roots one walk collects. Real pages carry a handful;
- * the bound is what keeps a page that stamps a component per row from turning
- * every capture into an unbounded crawl.
- */
-const MAX_OPEN_ROOTS = 500;
-
-/** How many elements one walk inspects for a shadow root. The snapshot's own sweep bound. */
-const MAX_ROOT_SCAN = 50_000;
-
-/**
  * `root` and every open shadow root beneath it, nested roots included, in the
  * order their hosts appear. Closed roots are absent because they cannot be
  * reached, not because they were refused.
+ *
+ * Unbounded (t200): a walk that stopped at 500 roots or 50,000 elements left
+ * the rest of a page -- often the consent wall a vendor mounts last -- out of
+ * every capture, and nothing downstream could tell it had happened.
  */
 export function composedRoots(root: Root = document): Root[] {
   const roots: Root[] = [root];
-  let scanned = 0;
-  for (let index = 0; index < roots.length && roots.length < MAX_OPEN_ROOTS; index += 1) {
+  for (let index = 0; index < roots.length; index += 1) {
     for (const element of roots[index]!.querySelectorAll("*")) {
-      if (++scanned > MAX_ROOT_SCAN) return roots;
       const shadow = element.shadowRoot;
-      if (!shadow) continue;
-      roots.push(shadow);
-      if (roots.length >= MAX_OPEN_ROOTS) return roots;
+      if (shadow) roots.push(shadow);
     }
   }
   return roots;
@@ -38,8 +28,8 @@ export function composedRoots(root: Root = document): Root[] {
 /**
  * Everything beneath the element in the painted tree, lazily: what its own
  * open shadow root holds first -- that is what is drawn -- then its light
- * descendants, each descending into any open root it hosts. The caller bounds
- * how far it reads.
+ * descendants, each descending into any open root it hosts. A caller that
+ * needs a bound stops reading.
  */
 export function* composedDescendants(element: Element): Generator<Element> {
   const pending: Array<Element | ShadowRoot> = [element];
@@ -52,12 +42,10 @@ export function* composedDescendants(element: Element): Generator<Element> {
   }
 }
 
-/** The open shadow roots beneath the element, its own first, nested ones included, reading at most `limit` elements. */
-export function openRootsWithin(element: Element, limit = MAX_ROOT_SCAN): ShadowRoot[] {
+/** The open shadow roots beneath the element, its own first, nested ones included. */
+export function openRootsWithin(element: Element): ShadowRoot[] {
   const roots: ShadowRoot[] = element.shadowRoot ? [element.shadowRoot] : [];
-  let read = 0;
   for (const descendant of composedDescendants(element)) {
-    if (++read > limit || roots.length >= MAX_OPEN_ROOTS) break;
     if (descendant.shadowRoot) roots.push(descendant.shadowRoot);
   }
   return roots;

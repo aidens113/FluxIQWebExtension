@@ -16,7 +16,7 @@ import {
 // professional-network site's Flow creation died on its first press, because a
 // promotion had opened over the page after it loaded.
 
-const BASE = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
+const BASE = { projectId: "project.one", flowId: "flow.one" } as const;
 const PRIVATE = "div#ember789 covers the target: Download the Guildline app";
 const DIALOG_BOX = { x: 400, y: 200, width: 400, height: 300 };
 
@@ -82,8 +82,10 @@ test("a press behind a modal is refused blocked_by_dialog with the page, whose d
   assert.equal(refused.effectApplied, false);
   const refusal = refused.evidence as { schemaVersion: string; ok: boolean; code: string; page: { elements: unknown[]; dialogs?: unknown } };
   assert.deepEqual([refusal.schemaVersion, refusal.ok, refusal.code], ["web-llm-tool-result.v1", false, "blocked_by_dialog"]);
-  // The dialog's own control leads the packet although the capture listed it last, past the element bound.
-  assert.equal((refusal.page.elements[0] as { text?: string }).text, "Not now");
+  // The dialog's own control is in the packet where the page put it -- last,
+  // after forty-five others -- because the packet is the whole page (t200).
+  assert.equal(refusal.page.elements.length, 46);
+  assert.equal((refusal.page.elements[45] as { text?: string }).text, "Not now");
   assert.deepEqual(refusal.page.dialogs, [{ role: "dialog", modal: true }]);
   assert.equal(JSON.stringify(refused).includes("ember789"), false);
   assert.equal(JSON.stringify(refused).includes("Download"), false);
@@ -95,15 +97,15 @@ test("a press behind a modal is refused blocked_by_dialog with the page, whose d
   assert.deepEqual(state.clicks, ["#open-search", "#not-now", "#open-search"]);
 });
 
-test("a refusal and the page inside it stay within the call's budget", async () => {
+test("a refusal carries the whole page it found, however large, with nothing moved or cut", async () => {
   const { state, gateway } = promptPage();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const inspected = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 1_500, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   state.prompt = true;
-  const refused = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 1_500, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(inspected.evidence, "Search people") } }, consequences: [] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: handleFor(inspected.evidence, "Search people") } }, consequences: [] } });
   assert.equal(refused.resultCode, "web.action.rejected.blocked_by_dialog");
-  assert.ok(new TextEncoder().encode(JSON.stringify(refused.evidence)).byteLength <= 1_500);
-  assert.equal(((refused.evidence as { page: { elements: Array<{ text?: string }> } }).page.elements[0])?.text, "Not now");
+  const elements = (refused.evidence as { page: { elements: Array<{ text?: string }> } }).page.elements;
+  assert.deepEqual(elements.map((element) => element.text), ["Search people", ...Array.from({ length: 44 }, (_, index) => `Post ${index + 1}`), "Not now"]);
 });
 
 test("a refusal whose page cannot be captured again is the bare code", async () => {
@@ -127,12 +129,9 @@ test("a refusal whose page cannot be captured again is the bare code", async () 
   assert.equal(refused.effectApplied, false);
 });
 
-test("a page that cannot be captured, or cannot fit what is left of the budget, is refused rather than thrown", async () => {
+test("a page that cannot be captured is refused rather than thrown", async () => {
   const { state, gateway } = promptPage();
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const tiny = await runtime.executeTool({ ...BASE, maxEvidenceBytes: 40, callId: "call.tiny", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.deepEqual(tiny.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "evidence_budget_exhausted" });
-  assert.equal(tiny.resultCode, "web.action.rejected.evidence_budget_exhausted");
   state.captureFails = true;
   const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
   assert.deepEqual(unreadable.evidence, { schemaVersion: "web-llm-tool-result.v1", ok: false, code: "page_unreadable" });

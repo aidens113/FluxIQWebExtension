@@ -3,6 +3,7 @@ export * from "./automation-tab";
 export * from "./browser-download";
 export * from "./browser-tab";
 export * from "./command-router";
+export * from "./look-across-frames";
 export * from "./result-mapping";
 export * from "./snapshot-runner";
 export * from "./unsupported-page";

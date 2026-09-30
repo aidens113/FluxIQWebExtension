@@ -41,10 +41,17 @@ initial page through the production extension action bridge, asks an injected
 Core harness gateway to select a bounded subset of the observed same-origin
 links, visits those allowlisted HTTP(S) pages, and converts their extension DOM
 snapshots into an in-memory `web-flow-exploration.v1` evidence bundle. The bundle includes
-bounded element identity, accessible text, and same-origin links, while
-discarding input values, sensitive controls, selected text, credentials, URL
-queries/fragments, and unrestricted element attributes. Page evidence is
-explicitly marked untrusted and must not be written to Lab artifacts or logs.
+every element of each captured page with its identity, accessible text and
+same-origin links whole, while discarding input values, sensitive controls,
+selected text, credentials, URL queries/fragments, and unrestricted element
+attributes. Nothing else is cut: on 2026-09-30 the user ordered that the model
+see the whole page, so the 80-element per-page default (150 at most), the
+300-character cut on element text, names and titles, the 500-character cut on
+selectors, the 80-character cut on roles and the 48,000-byte evidence budget
+were all removed. Secret screening is the only filter, and the only bound on
+the request is the model's 1,000,000-token context window, which Core enforces
+by failing loudly rather than trimming. Page evidence is explicitly marked
+untrusted and must not be written to Lab artifacts or logs.
 
 Production composition uses the same ownership boundary. The web domain binds
 `domain/src/runtime/llm-evidence/` through `registerWebAutomationRuntime`,
@@ -1550,11 +1557,14 @@ Every isolated or persistent-isolated run also writes `evaluation.json`, its own
 `RunEvaluation`: the same judgement [the bench](#the-bench) records for a corpus
 row. A Flow-lane run's evidence sizes are read from `snapshots/flow-lane.json`
 by one reader, `run-evaluation/flow-lane-evidence-sizes.ts`, which a single run
-and its bench row both use, so the two record the same packets. The same reader
-feeds the `evidence-packet-budget` invariant: a measured packet over the
-domain's exploration budget, 6,000 bytes, fails a run the runner had passed, as
-`performance.budget`. A run with no packets gets no such invariant.
-`rawSnapshotBytes` stays empty, because no producer measures raw snapshots.
+and its bench row both use, so the two record the same packets. Packet sizes
+are recorded, never judged: no evidence byte budget exists. The
+`evidence-packet-budget` invariant, which failed a run the runner had passed as
+`performance.budget` when a measured packet exceeded the domain's 6,000-byte
+exploration budget, was deleted on 2026-09-30 together with the domain's
+evidence byte budgets, when the user ordered that no limit hide page
+information from the model. `rawSnapshotBytes` stays empty, because no producer
+measures raw snapshots.
 
 ### Declared replay secrets
 
@@ -2494,9 +2504,9 @@ recorded page data out of source control and user-facing logs.
 
 Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
 
-The default Lab allowance is 8,000 input tokens, 2,000 output tokens and 10,000 total tokens per request, a 30-second timeout, a $0.25 per-call estimated-cost ceiling that may only be lowered, and one live run at a time. Validation rejects any request total above the non-overridable 50,000-token ceiling. A live run permits no retries.
+The default Lab allowance is the model's whole context window: 992,000 input tokens, 8,000 output tokens and 1,000,000 total tokens per request (`DEFAULT_LLM_LAB_BUDGET`), with a 30-second timeout and a $0.25 per-call estimated-cost ceiling that may only be lowered. Validation rejects any request total above 1,000,000 tokens (`LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST`, mirroring Core's DeepSeek model limits). That number is what the model can read, not a budget: on 2026-09-30 the user ordered that no limit hide page information from the model, and a request over the window fails loudly rather than being trimmed. The allowance used to be 8,000/2,000/10,000 under a 50,000-token ceiling, then 48,000/8,000/56,000 under Core's 64,000-token ceiling, and each made a real page impossible to describe. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The run's total estimated cost is held to the smaller of $2 and the per-call ceiling times the authorized calls, and is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds every build and recovery on that Flow to it. The model is the Flow's `llmModel` setting.
+Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The live campaign (`scripts/lab/live-campaign`) passes no `--llm-max-run-tokens`: with whole-page requests a build may use more than a million tokens across its calls, and a run budget it outgrew would fail the run as `performance.budget` only after the money was spent, so what bounds a campaign run is its `--llm-max-cost-usd 0.25` spend ceiling, its call count and Core's stall guard. The run's total estimated cost is held to the smaller of $2 and the per-call ceiling times the authorized calls, and is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds every build and recovery on that Flow to it. The model is the Flow's `llmModel` setting.
 
 **Model calls need no grant.** Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`). The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`.
 

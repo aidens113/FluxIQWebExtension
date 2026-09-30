@@ -22,7 +22,6 @@ import test from "node:test";
 import type { FluxIQ } from "fluxiq";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import {
-  AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES,
   parseAutomationStudioFailureRecord,
   sanitizeAutomationStudioLlmFailureEvidence
 } from "fluxiq/automation-studio";
@@ -285,15 +284,12 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
   const evidence = metadata.failureEvidence as JsonObject;
   assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
   assert.equal(evidence.trust, "untrusted-page-evidence");
-  assert.equal(evidence.location, "https://fixture.test/checkout/pay", "the packet's location drops the query, which is where a session token rides");
-
-  const bytes = Buffer.byteLength(JSON.stringify(evidence), "utf8");
-  assert.ok(bytes <= AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES, `the packet is bounded to Core's failure-evidence gate (${bytes} bytes)`);
+  assert.equal(evidence.location, "https://fixture.test/checkout/pay?session=(withheld)", "the packet's location keeps the query and withholds the session token's value");
   // Core's own gate, applied to the packet exactly as the diagnosis path will.
   assert.deepEqual(sanitizeAutomationStudioLlmFailureEvidence("runtime_diagnosis", evidence), evidence);
 
   const diagnostics = metadata.failureDiagnostics as JsonObject;
-  assert.equal(diagnostics.url, "https://fixture.test/checkout/pay", "no query string reaches the attempt trace");
+  assert.equal(diagnostics.url, "https://fixture.test/checkout/pay?session=(withheld)#step2", "no secret query value reaches the attempt trace");
   // Phase T: what rides into Core is the handle the packet minted for the
   // control, never the control's own selector.
   assert.equal(diagnostics.selector, undefined, "no selector reaches Core on the attempt's metadata");

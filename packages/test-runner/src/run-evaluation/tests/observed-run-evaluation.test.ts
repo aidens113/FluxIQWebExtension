@@ -15,10 +15,24 @@ test("the evidence sizes a lane measured reach the evaluation, copied rather tha
     packets: [{ actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false }, { actionPosition: 1, point: "afterAction", bytes: 4_096, truncated: true }],
   };
   const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence });
-  // Only the contract's fields: the located packets are the budget check's input, not evaluation output.
+  // Only the contract's fields: the located packets are not evaluation output.
   assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
   evidence.sanitizedPacketBytes.push(8_192);
   assert.deepEqual(evaluation.evidence.sanitizedPacketBytes, [2_048, 4_096]);
+});
+
+test("no byte budget judges a packet: a packet of any size adds no invariant and quotes no content", () => {
+  // The domain's evidence byte budgets were removed on 2026-09-30, and with
+  // them the evidence-packet-budget invariant; a large packet is a measurement.
+  const evidence: FlowLaneEvidence = {
+    sanitizedPacketBytes: [5_000_000], rawSnapshotBytes: [], truncationCount: 0,
+    packets: [{ actionPosition: 2, point: "afterAction", bytes: 5_000_000, truncated: false }],
+  };
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence });
+  assert.equal(evaluation.verdict, "passed");
+  assert.equal("failureCategory" in evaluation, false);
+  assert.deepEqual(evaluation.invariants.map((item) => item.id), ["runner-verdict"]);
+  assert.deepEqual(evaluation.evidence.sanitizedPacketBytes, [5_000_000]);
 });
 
 test("a run that passes no evidence sizes, as every recording-lane run does, records empty lists and no truncation", () => {

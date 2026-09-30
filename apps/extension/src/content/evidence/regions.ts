@@ -1,5 +1,5 @@
 // The page's landmark regions: the shape a reader would describe the page by,
-// rather than the two thousand elements it is made of.
+// rather than the thousands of elements it is made of.
 //
 // A snapshot already says which landmark each element sits inside
 // (`DomElementContext.landmark`, from `identity/context.ts`), but nothing says
@@ -18,17 +18,20 @@
 
 import { selectorFor } from "../selector";
 import { accessibleNameFor, landmarkRole } from "../identity";
+import { queryComposedInOrder } from "../shadow-dom";
 import { visualDocumentBounds } from "../visual-bounds";
 import { present } from "../../shared/present";
 import type { RegionEvidence } from "./types";
 
-const MAX_REGIONS = 20;
 const REGION_SELECTOR = "main,nav,header,footer,aside,section,form,search,[role='main'],[role='navigation'],[role='banner'],[role='contentinfo'],[role='complementary'],[role='search'],[role='region'],[role='form']";
 
-/** The page's landmarks in document order, or `undefined` when it has none. */
+/**
+ * Every landmark of the page in composed document order, open shadow roots
+ * included, or `undefined` when it has none. There was a cap of twenty (t200).
+ */
 export function regionEvidence(): RegionEvidence[] | undefined {
   const regions: RegionEvidence[] = [];
-  for (const element of document.querySelectorAll(REGION_SELECTOR)) {
+  for (const element of queryComposedInOrder(REGION_SELECTOR)) {
     const role = landmarkRole(element);
     if (!role) continue;
     const label = accessibleNameFor(element);
@@ -39,7 +42,6 @@ export function regionEvidence(): RegionEvidence[] | undefined {
       label: label || undefined,
       bounds
     }));
-    if (regions.length >= MAX_REGIONS) break;
   }
   return regions.length ? regions : undefined;
 }

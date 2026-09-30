@@ -1,5 +1,5 @@
-// What the page's main region says about itself, lifted to rank with the
-// controls that change what it shows (`../lead-statements.ts`).
+// What the page's main region says about itself, marked on each element that
+// says it (`../lead-statements.ts`).
 //
 // The page below is the everything store's results page for a search that
 // found nothing, as it is built (`apps/scenario-lab/src/scenarios/
@@ -9,6 +9,10 @@
 // (`run-muntufao-7b7bc04a`) searched with a query the store matched nothing
 // for, and the packet the model was given held forty controls and none of
 // those lines, so it read that page as results five times over.
+//
+// Until t200 the rule lifted the first three lines to the head of a ranked
+// list. Nothing is ranked or cut now, so every line the rule recognises is
+// marked, where the page put it.
 //
 // The DOM is a stub because the extension's unit runner is Node; the rule reads
 // only tags, roles, text nodes and parents. Document order is the order the
@@ -25,12 +29,6 @@ const load = (): Promise<Module> => import("../lead-statements");
 /** Every element under `root`, root first, in document order. */
 function descendants(root: Element): Element[] {
   return [root, ...(root as unknown as { querySelectorAll(selector: string): Element[] }).querySelectorAll("*")];
-}
-
-/** Document order over one built tree: position in its pre-order walk. */
-function orderOf(root: Element): (left: Element, right: Element) => number {
-  const positions = new Map(descendants(root).map((node, index) => [node, index] as const));
-  return (left, right) => (positions.get(left) ?? 0) - (positions.get(right) ?? 0);
 }
 
 /** A record the page renders once per item, as `identity/record.ts` recognises one: an `<li>`. */
@@ -61,16 +59,14 @@ function noResultsPage() {
     element("header", {}, bannerLine, element("a", { href: "/cart" }, "Cart")),
     main,
     element("footer", {}, footerHeading, footerLine));
-  return { page, count, emptyLine, adviceLine, sortLabel, railHeading, bannerLine, footerHeading, footerLine };
+  return { page, count, emptyLine, adviceLine, sortLabel, railHeading, railFacet, bannerLine, footerHeading, footerLine };
 }
 
-test("a search that found nothing: the count and both empty-state lines are lifted, in document order", async () => {
-  await withStubPage(load, ({ mainLeadStatements }) => {
+test("a search that found nothing: the count and both empty-state lines are marked, and nothing else", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
     const shown = noResultsPage();
-    // Candidates arrive in gathering order, not document order: controls first, then text.
-    const candidates = [shown.sortLabel, ...descendants(shown.page).reverse()];
-    const lifted = [...mainLeadStatements(candidates, orderOf(shown.page))];
-    assert.deepEqual(lifted.map(textOf), [
+    const marked = descendants(shown.page).filter(isLeadStatement);
+    assert.deepEqual(marked.map(textOf), [
       "No results for \"a long query\"",
       "No results for a long query.",
       "Try checking your spelling or use more general terms."
@@ -79,50 +75,57 @@ test("a search that found nothing: the count and both empty-state lines are lift
 });
 
 test("the header's, the footer's and the filter rail's words are not the main region's own", async () => {
-  await withStubPage(load, ({ mainLeadStatements }) => {
+  await withStubPage(load, ({ isLeadStatement }) => {
     const shown = noResultsPage();
-    const lifted = mainLeadStatements(descendants(shown.page), orderOf(shown.page));
     for (const outside of [shown.bannerLine, shown.footerHeading, shown.footerLine, shown.railHeading]) {
-      assert.equal(lifted.has(outside), false, textOf(outside));
+      assert.equal(isLeadStatement(outside), false, textOf(outside));
     }
   });
 });
 
 test("a control's words are the control's, and a word inside a statement is the statement's", async () => {
-  await withStubPage(load, ({ mainLeadStatements }) => {
+  await withStubPage(load, ({ isLeadStatement }) => {
     const shown = noResultsPage();
-    const lifted = mainLeadStatements(descendants(shown.page), orderOf(shown.page));
-    assert.equal(lifted.has(shown.sortLabel), false, "the sort's label");
+    assert.equal(isLeadStatement(shown.sortLabel), false, "the sort's label");
+    const facetWords = descendants(shown.railFacet).find((node) => node.tagName === "SPAN");
+    assert.ok(facetWords);
+    assert.equal(isLeadStatement(facetWords), false, "a link's words");
     const strong = descendants(shown.emptyLine).find((node) => node.tagName === "STRONG");
     assert.ok(strong);
-    assert.equal(lifted.has(strong), false, "the query in bold is part of its line, not a line of its own");
+    assert.equal(isLeadStatement(strong), false, "the query in bold is part of its line, not a line of its own");
   });
 });
 
-test("at most three are lifted, the first three the region shows", async () => {
-  await withStubPage(load, ({ mainLeadStatements }) => {
-    const lines = ["One.", "Two.", "Three.", "Four.", "Five."].map((words) => element("p", {}, words));
-    const page = element("main", {}, ...lines);
-    const lifted = [...mainLeadStatements(descendants(page), orderOf(page))];
-    assert.deepEqual(lifted.map(textOf), ["One.", "Two.", "Three."]);
+test("every statement is marked, not the first three: there is no cap", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
+    const words = ["One.", "Two.", "Three.", "Four.", "Five.", "Six.", "Seven."];
+    const page = element("main", {}, ...words.map((line) => element("p", {}, line)));
+    assert.deepEqual(descendants(page).filter(isLeadStatement).map(textOf), words);
   });
 });
 
-test("an item's own words and a long passage of prose stay where they rank", async () => {
-  await withStubPage(load, ({ mainLeadStatements }) => {
+test("an item's own words and a long passage of prose are not statements", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
     const itemPrice = element("p", {}, "$44.99");
     const item = withMatches(element("li", {}, element("span", {}, "Kettle"), itemPrice), ["li"]);
     const prose = element("p", {}, "word ".repeat(80));
     const status = element("p", {}, "1-16 of 42 results");
     const page = element("main", {}, element("ul", {}, item), prose, status);
-    const lifted = [...mainLeadStatements(descendants(page), orderOf(page))];
-    assert.deepEqual(lifted.map(textOf), ["1-16 of 42 results"]);
+    assert.deepEqual(descendants(page).filter(isLeadStatement).map(textOf), ["1-16 of 42 results"]);
   });
 });
 
-test("a page with no main region lifts nothing, so it ranks as it always has", async () => {
-  await withStubPage(load, ({ mainLeadStatements }) => {
+test("a labelled region inside the main region is still the main region's", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
+    const line = element("p", {}, "Your cart is empty.");
+    element("main", {}, element("div", { role: "region", "aria-label": "Cart" }, line));
+    assert.equal(isLeadStatement(line), true);
+  });
+});
+
+test("a page with no main region has no lead statements", async () => {
+  await withStubPage(load, ({ isLeadStatement }) => {
     const page = element("div", {}, element("p", {}, "No results."), element("footer", {}, element("p", {}, "Help")));
-    assert.equal(mainLeadStatements(descendants(page), orderOf(page)).size, 0);
+    assert.deepEqual(descendants(page).filter(isLeadStatement), []);
   });
 });

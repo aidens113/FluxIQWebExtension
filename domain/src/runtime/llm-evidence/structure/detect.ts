@@ -116,8 +116,7 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
     handle,
     location: page.evidence.location,
     target: searchedPage ? undefined : target,
-    frameId: element?.frameId,
-    maxEvidenceBytes: request.maxEvidenceBytes
+    frameId: element?.frameId
   });
   if (!split) recoverable("sensitive_value");
   context.handles.retain({ projectId: request.projectId, flowId: request.flowId }, split.binding);
@@ -148,15 +147,13 @@ async function capturedDetection(
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === undefined ? undefined : new URL(current.evidence.location).origin;
   const sanitized = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
-    budget: "exploration",
-    maxEvidenceBytes: undefined,
     expectedOrigin,
     failedAction: undefined
   }));
   // Digested and projected only where the capture is of the page: a frame's
   // detection describes the frame's own document (`observed` above), which is
   // neither the page's state nor the route state `observeRouteState` reads.
-  const states = frameId === undefined ? webLlmSnapshotStates(payload.snapshot, sanitized, undefined) : undefined;
+  const states = frameId === undefined ? webLlmSnapshotStates(sanitized) : undefined;
   const page = present<WebLlmSnapshotBinding>({
     evidence: sanitized.evidence,
     selectors: sanitized.selectors,

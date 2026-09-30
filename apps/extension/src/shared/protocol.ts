@@ -469,12 +469,29 @@ export type DomElementDescriptor = {
   /**
    * How many elements of this one's kind the snapshot held, this one included:
    * the same control, link or cell in every row of one repeated list or table
-   * (`content/repeat-exemplars.ts`). Present only on the member ranked among
-   * the page's distinct elements -- the exemplar -- and only when there are at
-   * least two; every other member is ranked after all of them. Snapshot-scoped,
-   * like the two flags above: it counts what one capture held.
+   * (`content/repeat-exemplars.ts`). Present only on the run's first member --
+   * the exemplar -- and only when there are at least two. An annotation only:
+   * every member is listed, in document order (t200). Snapshot-scoped, like the
+   * two flags above: it counts what one capture held.
    */
   repeatCount?: number | undefined;
+  /**
+   * The element, one of its seven nearest ancestors, or an open shadow host
+   * above it is painted `position: fixed` or `sticky`: it is on a layer the
+   * page paints over itself -- a consent banner, a sticky action bar, a chat
+   * launcher (`content/evidence/front-layer.ts`). Present only when true. A
+   * fact, not an order: every element stays where the page put it (t200).
+   * Snapshot-scoped, like `repeatCount`.
+   */
+  frontLayer?: true | undefined;
+  /**
+   * The element is one of the main region's own short statements about what
+   * the page shows -- "No results for ...", "1-16 of 42 results", "Your cart
+   * is empty" (`content/evidence/lead-statements.ts`). Present only when true,
+   * on every element the rule recognises, in document order (t200).
+   * Snapshot-scoped, like `repeatCount`.
+   */
+  leadStatement?: true | undefined;
 };
 
 /**
@@ -564,13 +581,16 @@ export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "
  *   a fact about the element a recorded event names.
  * - `repeatCount` is snapshot-scoped too: it counts how many rows one capture
  *   held, which a replay of the recorded control neither needs nor can check.
+ * - `frontLayer` and `leadStatement` are snapshot-scoped the same way: they say
+ *   where one capture found the element painted and what it said on that
+ *   page, and only the snapshot's element list writes them.
  *
  * Nothing else may be left out silently. `WireElementTarget` is the descriptor
  * minus exactly this list, and the producer writes it through `present<T>()`,
  * so a field added to the descriptor stops the producer compiling until it is
  * either carried or named here.
  */
-type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted" | "repeatCount";
+type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted" | "repeatCount" | "frontLayer" | "leadStatement";
 
 /**
  * The recorded element's identity as it crosses the client gateway.
@@ -623,10 +643,10 @@ export type DomSnapshot = {
    * for the ones that describe a single document.
    *
    * `evidence.elements.truncated` is this capture's element cap and nothing
-   * else. Four caps stand between a page and a reader, and a flag that
-   * summarises more than one of them is named for the cap rather than called
-   * `truncated`; the rule and the four remedies are tabulated once, in
-   * `domain/src/recording/web-state/evidence/input.ts`.
+   * else, and the capture has none (t200): every rendered element of every
+   * frame is listed, so neither the content script nor the frame merge sets
+   * it. A child frame that did not answer the merge is named in
+   * `evidence.unansweredFrameIds` rather than dropped silently.
    */
   evidence?: PageEvidence | undefined;
 };

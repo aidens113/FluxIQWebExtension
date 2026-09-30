@@ -143,3 +143,40 @@ test("a container's text leaves those contents out and keeps its own words; an o
     assert.equal(visibleText(ordinary), "Contact time Mornings");
   });
 });
+
+// Nothing a reader is given is cut (t200). The text was cut at 500 characters,
+// a value at 2,000, and a select's options at twenty, each value and label at
+// 200 -- so a long consent notice, a long select of countries or a pasted
+// paragraph reached the model as its first part, with no mark that it was.
+
+test("an element's text is carried whole, however long", async () => {
+  await withStubPage(load, ({ visibleText, directVisibleText }) => {
+    const notice = "a".repeat(10_000);
+    const paragraph = element("p", {}, notice);
+    assert.equal(visibleText(paragraph)?.length, 10_000);
+    assert.equal(directVisibleText(paragraph), notice);
+    // A container's own words are whole too, beside a child's.
+    const container = element("div", {}, `${notice} `, element("span", {}, "tail"));
+    assert.equal(directVisibleText(container), notice);
+    assert.equal(visibleText(container), `${notice} tail`);
+  });
+});
+
+test("a control's value is carried whole, however long", async () => {
+  await withStubPage(load, ({ readElementValue }) => {
+    const pasted = "b".repeat(5_000);
+    assert.equal(readElementValue(input("text", pasted)), pasted);
+  });
+});
+
+test("a select lists every option, each value and label whole, and a selection past the twentieth", async () => {
+  await withStubPage(load, ({ selectState }) => {
+    const long = (index: number) => `${String(index).padStart(2, "0")}-${"c".repeat(300)}`;
+    const options = Array.from({ length: 60 }, (_unused, index) => option(`value-${long(index)}`, `Label ${long(index)}`));
+    const chosen = `value-${long(45)}`;
+    const state = selectState(select({}, chosen, ...options));
+    assert.equal(state?.options.length, 60, "the option list was cut");
+    assert.deepEqual(state?.options[59], { value: `value-${long(59)}`, label: `Label ${long(59)}` });
+    assert.equal(state?.selectedValue, chosen, "a selection past the twentieth option was dropped or cut");
+  });
+});

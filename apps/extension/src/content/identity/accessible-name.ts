@@ -22,13 +22,17 @@
 // caller so every caller has it: the descriptor, page evidence, and the
 // resolver's candidates. An associated `<label>`'s text is `label.ts`'s, which
 // skips nested form controls.
+//
+// The name is whole (t200): it was cut to 200 characters, so a consent wall's
+// long button label or a heading-named region reached the model as a fragment.
+// `MAX_LABELLEDBY_IDS` bounds the search for a name, not the name found: a
+// reference list longer than eight ids names nothing a person would read.
 
 import { isSensitiveFormControl } from "../element-traits";
 import { textOutsideSensitiveControls } from "../sensitive-text";
-import { boundedText } from "./bounded-text";
+import { normalizedText } from "./normalized-text";
 import { associatedLabel } from "./label";
 
-const MAX_NAME_LENGTH = 200;
 const MAX_LABELLEDBY_IDS = 8;
 const BUTTON_INPUT_TYPES = new Set(["submit", "button", "reset"]);
 const NAME_FROM_CONTENT_TAGS = new Set([
@@ -44,10 +48,10 @@ const NAME_FROM_CONTENT_ROLES = new Set([
 /** The element's accessible name, or `undefined` when the page gave it none. */
 export function accessibleNameFor(element: Element): string | undefined {
   return labelledByName(element)
-    ?? boundedText(element.getAttribute("aria-label"), MAX_NAME_LENGTH)
+    ?? normalizedText(element.getAttribute("aria-label"))
     ?? associatedLabel(element)
-    ?? boundedText(element.getAttribute("title") ?? element.getAttribute("alt"), MAX_NAME_LENGTH)
-    ?? boundedText(element.getAttribute("placeholder"), MAX_NAME_LENGTH)
+    ?? normalizedText(element.getAttribute("title") ?? element.getAttribute("alt"))
+    ?? normalizedText(element.getAttribute("placeholder"))
     ?? buttonValueName(element)
     ?? nameFromContent(element);
 }
@@ -74,10 +78,10 @@ function labelledByName(element: Element): string | undefined {
   if (!ids.length) return undefined;
   const parts = ids.flatMap((id) => {
     const target = document.getElementById(id);
-    const text = target && target !== element ? boundedText(textOutsideSensitiveControls(target), MAX_NAME_LENGTH) : undefined;
+    const text = target && target !== element ? normalizedText(textOutsideSensitiveControls(target)) : undefined;
     return text ? [text] : [];
   });
-  return boundedText(parts.join(" "), MAX_NAME_LENGTH);
+  return normalizedText(parts.join(" "));
 }
 
 /** A push button's value is its label; a sensitive field's value is never a name. */
@@ -85,12 +89,12 @@ function buttonValueName(element: Element): string | undefined {
   if (!(element instanceof HTMLInputElement)) return undefined;
   if (!BUTTON_INPUT_TYPES.has(element.type.toLowerCase())) return undefined;
   if (isSensitiveFormControl(element)) return undefined;
-  return boundedText(element.value, MAX_NAME_LENGTH);
+  return normalizedText(element.value);
 }
 
 /** The element's own text, less any sensitive control's contents, for a role that takes its name from content. */
 function nameFromContent(element: Element): string | undefined {
-  return supportsNameFromContent(element) ? boundedText(textOutsideSensitiveControls(element), MAX_NAME_LENGTH) : undefined;
+  return supportsNameFromContent(element) ? normalizedText(textOutsideSensitiveControls(element)) : undefined;
 }
 
 function supportsNameFromContent(element: Element): boolean {

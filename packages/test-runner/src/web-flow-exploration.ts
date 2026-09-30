@@ -1,17 +1,11 @@
 import type { Page } from "@playwright/test";
 
 const DEFAULT_MAX_PAGES = 4;
-const DEFAULT_MAX_ELEMENTS_PER_PAGE = 80;
-const DEFAULT_MAX_EVIDENCE_BYTES = 48_000;
 const MAX_INSTRUCTION_LENGTH = 4_000;
 const MAX_URL_LENGTH = 2_000;
-const MAX_SELECTOR_LENGTH = 500;
-const MAX_TEXT_LENGTH = 300;
 
 export type WebFlowExplorationLimits = {
   maxPages?: number;
-  maxElementsPerPage?: number;
-  maxEvidenceBytes?: number;
 };
 
 export type WebFlowExplorationRequest = {
@@ -95,17 +89,20 @@ export async function exploreWebsiteAndProposeFlow(
   const allowedOrigins = normalizeAllowedOrigins(request.allowedOrigins);
   const startUrl = allowedUrl(request.startUrl, allowedOrigins);
   const maxPages = boundedLimit(request.limits?.maxPages, DEFAULT_MAX_PAGES, 1, 10, "maxPages");
-  const maxElements = boundedLimit(request.limits?.maxElementsPerPage, DEFAULT_MAX_ELEMENTS_PER_PAGE, 1, 150, "maxElementsPerPage");
-  const maxEvidenceBytes = boundedLimit(request.limits?.maxEvidenceBytes, DEFAULT_MAX_EVIDENCE_BYTES, 1_000, 100_000, "maxEvidenceBytes");
+  // Nothing trims the evidence on its way to Core: on 2026-09-30 the user
+  // ordered that no limit hide page information from the model. Every element
+  // of every captured page is sent, with its text, name, title, selector and
+  // role whole. The only bound on the request is the model's context window,
+  // which Core enforces loudly. A 48,000-byte budget, an 80-element (150 max)
+  // per-page cap and 300/500/80-character text cuts used to hide page
+  // information here. Only secret screening remains (isSensitiveElement, and
+  // values and URL query data are never copied).
 
   const pages: WebFlowExplorationPage[] = [];
   let truncated = false;
 
   await dependencies.browser.navigate(startUrl.href);
-  const capturedInitialPage = sanitizeSnapshot(await dependencies.browser.captureSnapshot(), allowedOrigins, maxElements);
-  const initialPage = fitPageToEvidenceBudget(startUrl, [], capturedInitialPage, maxEvidenceBytes);
-  if (!initialPage) throw new Error("initial exploration page exceeds the evidence byte limit");
-  if (initialPage.elements.length !== capturedInitialPage.elements.length) truncated = true;
+  const initialPage = sanitizeSnapshot(await dependencies.browser.captureSnapshot(), allowedOrigins);
   pages.push(initialPage);
   const selectableLocations = new Set(initialPage.elements.flatMap(element => element.href ? [element.href] : []));
   const selection = maxPages === 1 ? [] : parsePageSelection(await dependencies.core.selectExplorationPages({
@@ -125,14 +122,7 @@ export async function exploreWebsiteAndProposeFlow(
   for (const selectedLocation of selection) {
     const destination = allowedUrl(selectedLocation, allowedOrigins);
     await dependencies.browser.navigate(destination.href);
-    const page = sanitizeSnapshot(await dependencies.browser.captureSnapshot(), allowedOrigins, maxElements);
-    const boundedPage = fitPageToEvidenceBudget(startUrl, pages, page, maxEvidenceBytes);
-    if (!boundedPage) {
-      truncated = true;
-      break;
-    }
-    if (boundedPage.elements.length !== page.elements.length) truncated = true;
-    pages.push(boundedPage);
+    pages.push(sanitizeSnapshot(await dependencies.browser.captureSnapshot(), allowedOrigins));
   }
   if (selection.length === maxPages - 1 && selectableLocations.size > selection.length) truncated = true;
   const explorationEvidence: WebFlowBootstrapExplorationEvidence = {
@@ -152,8 +142,8 @@ export async function exploreWebsiteAndProposeFlow(
   };
 }
 
-export function sanitizeWebExplorationSnapshot(input: unknown, allowedOrigins: readonly string[], maxElements = DEFAULT_MAX_ELEMENTS_PER_PAGE): WebFlowExplorationPage {
-  return sanitizeSnapshot(input, normalizeAllowedOrigins([...allowedOrigins]), boundedLimit(maxElements, DEFAULT_MAX_ELEMENTS_PER_PAGE, 1, 150, "maxElementsPerPage"));
+export function sanitizeWebExplorationSnapshot(input: unknown, allowedOrigins: readonly string[]): WebFlowExplorationPage {
+  return sanitizeSnapshot(input, normalizeAllowedOrigins([...allowedOrigins]));
 }
 
 export function createPlaywrightExtensionExplorationBrowser(input: {
@@ -186,29 +176,32 @@ export function createPlaywrightExtensionExplorationBrowser(input: {
   };
 }
 
-function sanitizeSnapshot(input: unknown, allowedOrigins: readonly string[], maxElements: number): WebFlowExplorationPage {
+function sanitizeSnapshot(input: unknown, allowedOrigins: readonly string[]): WebFlowExplorationPage {
   const snapshot = object(input, "DOM snapshot");
   const url = allowedUrl(snapshot.url, allowedOrigins);
   const rawElements = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements : fail("DOM snapshot interactiveElements must be an array");
   const elements: WebFlowExplorationElement[] = [];
   for (const raw of rawElements) {
-    if (elements.length >= maxElements) break;
     const element = object(raw, "DOM snapshot element");
-    const tag = optionalText(element.tagName, 40)?.toLowerCase();
-    const selector = optionalText(element.selector, MAX_SELECTOR_LENGTH);
+    const tag = optionalText(element.tagName)?.toLowerCase();
+    const selector = optionalText(element.selector);
     if (!tag || !selector || isSensitiveElement(element)) continue;
     const href = safeHref(element.href, url, allowedOrigins);
+    const role = optionalText(element.role);
+    const name = optionalText(element.name);
+    const text = optionalText(element.visibleText ?? element.text);
+    const inputType = optionalText(element.inputType)?.toLowerCase();
     elements.push({
       tag,
       selector,
-      ...(optionalText(element.role, 80) ? { role: optionalText(element.role, 80)! } : {}),
-      ...(optionalText(element.name, MAX_TEXT_LENGTH) ? { name: optionalText(element.name, MAX_TEXT_LENGTH)! } : {}),
-      ...(optionalText(element.visibleText ?? element.text, MAX_TEXT_LENGTH) ? { text: optionalText(element.visibleText ?? element.text, MAX_TEXT_LENGTH)! } : {}),
-      ...(optionalText(element.inputType, 40) ? { inputType: optionalText(element.inputType, 40)!.toLowerCase() } : {}),
+      ...(role ? { role } : {}),
+      ...(name ? { name } : {}),
+      ...(text ? { text } : {}),
+      ...(inputType ? { inputType } : {}),
       ...(href ? { href } : {}),
     });
   }
-  const title = optionalText(snapshot.title, MAX_TEXT_LENGTH);
+  const title = optionalText(snapshot.title);
   return {
     location: evidenceLocation(url),
     ...(title ? { title } : {}),
@@ -217,10 +210,10 @@ function sanitizeSnapshot(input: unknown, allowedOrigins: readonly string[], max
 }
 
 function isSensitiveElement(element: Record<string, unknown>): boolean {
-  const inputType = optionalText(element.inputType, 100)?.toLowerCase();
+  const inputType = optionalText(element.inputType)?.toLowerCase();
   if (inputType === "password") return true;
   const attributes = element.attributes && typeof element.attributes === "object" && !Array.isArray(element.attributes) ? element.attributes as Record<string, unknown> : {};
-  const autocomplete = optionalText(attributes.autocomplete, 100)?.toLowerCase() ?? "";
+  const autocomplete = optionalText(attributes.autocomplete)?.toLowerCase() ?? "";
   return autocomplete === "current-password" || autocomplete === "new-password" || autocomplete === "one-time-code" || autocomplete.startsWith("cc-") || attributes["data-sensitive"] === "true";
 }
 
@@ -248,15 +241,6 @@ function allowedUrl(value: unknown, allowedOrigins: readonly string[]): URL {
 }
 
 function evidenceLocation(url: URL): string { return `${url.origin}${url.pathname}`; }
-function evidenceBytes(startUrl: URL, pages: WebFlowExplorationPage[], truncated: boolean): number { return Buffer.byteLength(JSON.stringify({ schemaVersion: "web-flow-exploration.v1", trust: "untrusted-page-evidence", startLocation: evidenceLocation(startUrl), pages, truncated }), "utf8"); }
-function fitPageToEvidenceBudget(startUrl: URL, pages: WebFlowExplorationPage[], page: WebFlowExplorationPage, maximum: number): WebFlowExplorationPage | undefined {
-  const elements = [...page.elements];
-  while (evidenceBytes(startUrl, [...pages, { ...page, elements }], true) > maximum) {
-    if (!elements.length) return undefined;
-    elements.pop();
-  }
-  return { ...page, elements };
-}
 function parsePageSelection(input: unknown, selectableLocations: ReadonlySet<string>, maximum: number): string[] {
   const value = object(input, "Core exploration selection");
   if (Object.keys(value).some(key => key !== "locations")) throw new Error("Core exploration selection contains unsupported fields");
@@ -272,7 +256,7 @@ function parsePageSelection(input: unknown, selectableLocations: ReadonlySet<str
 function proposalRecord(input: unknown): { adaptationId: string; status: "proposed" } { const value = object(input, "Core proposal"); if (value.status !== "proposed") throw new Error("Core exploration result must remain a reviewable proposal"); return { adaptationId: identifier(value.adaptationId, "adaptationId"), status: "proposed" }; }
 function identifier(input: unknown, name: string): string { const value = boundedText(input, name, 200); if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/u.test(value)) throw new Error(`${name} must be a bounded identifier`); return value; }
 function boundedText(input: unknown, name: string, maximum: number): string { if (typeof input !== "string" || !input.trim() || input.length > maximum || /\0/u.test(input)) throw new Error(`${name} must be a bounded non-empty string`); return input.trim(); }
-function optionalText(input: unknown, maximum: number): string | undefined { if (typeof input !== "string") return undefined; const value = input.replace(/\s+/gu, " ").trim(); return value ? value.slice(0, maximum) : undefined; }
+function optionalText(input: unknown): string | undefined { if (typeof input !== "string") return undefined; const value = input.replace(/\s+/gu, " ").trim(); return value || undefined; }
 function boundedLimit(input: unknown, fallback: number, minimum: number, maximum: number, name: string): number { const value = input === undefined ? fallback : input; if (!Number.isSafeInteger(value) || Number(value) < minimum || Number(value) > maximum) throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`); return Number(value); }
 function object(input: unknown, name: string): Record<string, unknown> { if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error(`${name} must be an object`); return input as Record<string, unknown>; }
 function fail(message: string): never { throw new Error(message); }

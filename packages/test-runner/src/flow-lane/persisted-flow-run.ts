@@ -177,8 +177,8 @@ export type PersistedFlowAction = {
  * produces as well as a failing one, which is what makes it the measure of
  * evidence size.
  *
- * `bytes` is the UTF-8 length of the packet's JSON, the way the domain's own
- * budget counts it (`serializedBytes`, `domain/src/runtime/llm-evidence/limits.ts`).
+ * `bytes` is the UTF-8 length of the packet's JSON. It is a measurement only:
+ * the domain's evidence byte budgets were removed on 2026-09-30.
  */
 export type PersistedEvidencePacket = { point: (typeof EVIDENCE_PACKET_POINTS)[number]; bytes: number; truncated: boolean };
 

@@ -9,34 +9,30 @@
 // state, element change, interaction recency and the truncation totals existed
 // only inside the recorder or not as fields anyone downstream could read.
 //
-// Two modules here answer about one element rather than about the page, and
-// neither answer is carried as a field.
+// One module here answers about one element rather than about the page, and
+// its answer is not carried as a field: `controls.ts` says which elements the
+// page drew by hand as controls out of elements the browser makes nothing of,
+// which the interference scan asks of what covers a target
+// (`action-runtime/interference/covering-layer.ts`).
 //
-// `controls.ts` says which of the page's controls change what the page shows,
-// which the page drew by hand out of elements the browser makes nothing of, and
-// which are the site's standing footer; the snapshot's ranking reads it to
-// decide what the bounded element list describes first -- the difference
-// between a model being shown a filter rail and being shown twenty footer
-// links, and between being shown a marketplace's filters and not being shown
-// them at all because they are `<div>`s.
-//
-// `lead-statements.ts` says which few short lines are the main region's own
-// account of what it shows -- "No results for ...", a result count -- and the
-// ranking puts them with the page-state controls, because a packet of forty
-// controls tells a reader what it can do on a page and not what the page says.
-//
-// `link-address.ts` says when a link's address would only repeat the page the
-// link is on. The descriptor reads it to decide not to publish an address the
-// packet already carries as its `location`, which was 22% of the budget on one
-// of the campaign's sites before it did.
+// The snapshot's element list is not ranked any more (t200), so the rules that
+// only fed its ranking are gone: which controls change what the page shows,
+// which sit in the site's footer, and whether a link's address only repeats the
+// page's. Two rules that ranked also carried information, and they are kept as
+// facts on each element's own descriptor, in document order and moving
+// nothing: `front-layer.ts` marks what is painted over the page
+// (`frontLayer`), and `lead-statements.ts` marks the main region's own short
+// statements about what it shows (`leadStatement`). What a dialog or a
+// covering layer is (`kind`) comes from the interference classifiers
+// (`action-runtime/interference/layer-kind.ts`).
 
 export { markElementActivity, forgetElementActivity, type SnapshotElementEntry } from "./changes";
-export { isDrawnControl, isFrontLayer, isPageStateControl, isSiteChrome } from "./controls";
-export { mainLeadStatements } from "./lead-statements";
+export { isDrawnControl } from "./controls";
 export { dialogEvidence } from "./dialogs";
 export { formEvidence } from "./forms";
+export { frontLayerTest } from "./front-layer";
 export { forgetInteractedElements, recentlyInteractedElements, rememberInteractedElement } from "./interactions";
-export { repeatsTheDocumentAddress } from "./link-address";
+export { isLeadStatement } from "./lead-statements";
 export { loadingEvidence } from "./loading";
 export { navigationEvidence } from "./navigation";
 export { overlayEvidence } from "./overlays";
@@ -49,6 +45,7 @@ export type {
   DialogEvidenceItem,
   FormControlEvidence,
   FormEvidence,
+  LayerKind,
   LoadingEvidence,
   LoadingIndicator,
   LoadingIndicatorKind,

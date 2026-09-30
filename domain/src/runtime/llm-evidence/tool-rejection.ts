@@ -121,8 +121,10 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  *   somewhere else.
  * - `action_failed`: the action failed for a reason none of these names.
  * - `page_unreadable`: the page could not be captured at all.
- * - `evidence_budget_exhausted`: what is left of the exploration's evidence
- *   budget cannot hold even an empty packet of this page.
+ *
+ * There is no longer a refusal for a page too large to describe: the packet
+ * carries the whole page whatever its size (t200), so
+ * `evidence_budget_exhausted` was retired with the byte budget it reported.
  *
  * `not_at_start_location` is the one refusal that is about where the Flow is
  * rather than about what is on the page. A build that was told where its Flow
@@ -153,7 +155,6 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "not_permitted_here",
   "action_failed",
   "page_unreadable",
-  "evidence_budget_exhausted",
   "not_at_start_location"
 ] as const;
 
@@ -397,7 +398,7 @@ export type WebLlmToolRejectionDetail = {
   groupsSeen?: number;
   /** The most copies any one control has: the largest repeating run the capture saw (`elements[].repeats`). */
   rowsSeen?: number;
-  /** How many controls the page offered, before the packet's own bounds cut it (`elementTotal`). */
+  /** How many of the packet's elements are controls (`actionableEvidenceElement`); the packet carries every rendered element. */
   controlsSeen?: number;
   /**
    * What a read that fell short came back with, and no other refusal carries

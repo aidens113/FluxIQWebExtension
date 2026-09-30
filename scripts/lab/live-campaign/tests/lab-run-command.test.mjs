@@ -21,7 +21,15 @@ test("each repair task becomes one adapt run of the recorded Flow, with the live
   const overridden = labRunArguments(REPAIRS[1], parseCampaignArgs(["--", "--llm-max-cost-usd", "0.1", "--target", "isolated"]));
   assert.equal(overridden.filter((arg) => arg === "--llm-max-cost-usd").length, 1);
   assert.deepEqual(overridden.slice(-4), ["--llm-max-cost-usd", "0.1", "--target", "isolated"]);
-  assert.ok(overridden.includes("--llm-max-calls") && overridden.includes("--llm-max-run-tokens"));
+  assert.ok(overridden.includes("--llm-max-calls"));
+  // No run token budget is passed by default: cost bounds the run, so a build
+  // that needs more than a million tokens across its calls is not failed as
+  // `performance.budget` after the money is spent. An operator may still give one.
+  assert.equal(overridden.includes("--llm-max-run-tokens"), false);
+  assert.equal(labRunArguments(CATALOG[0], parseCampaignArgs([])).includes("--llm-max-run-tokens"), false);
+  const operatorBudget = labRunArguments(REPAIRS[1], parseCampaignArgs(["--", "--llm-max-run-tokens", "5000000"]));
+  assert.deepEqual(operatorBudget.slice(-2), ["--llm-max-run-tokens", "5000000"]);
+  assert.equal(operatorBudget.filter((arg) => arg === "--llm-max-run-tokens").length, 1);
 
   // A creation task keeps its own profile, and builds a Flow rather than
   // running one, so it is never a `--flow` run. It does carry a call ceiling:

@@ -24,7 +24,7 @@ const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, expl
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings on a Flow's LLM execution settings (`assertFlowLlmExecutionSettings`). */
-/** Core's own per-request ceiling -- once `deepseek-chat`'s whole context, now a budget Core sets, since the configured models carry a million tokens. Derived: a tenth copy of this number is how the previous nine happened. */
+/** The per-request ceiling: the configured models' own context window (Core's `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`), not a budget, so no limit hides page information from the model. Derived: a tenth copy of this number is how the previous nine happened. */
 const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;

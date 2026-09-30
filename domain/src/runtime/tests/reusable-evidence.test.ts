@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { produceWebReusableEvidence, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES } from "..";
+import { produceWebReusableEvidence } from "..";
 import type { WebLlmPageEvidence } from "..";
 
 const evidence = (overrides: Partial<WebLlmPageEvidence> = {}): WebLlmPageEvidence => ({
@@ -18,7 +18,7 @@ const evidence = (overrides: Partial<WebLlmPageEvidence> = {}): WebLlmPageEviden
   ...overrides,
 });
 
-test("produces deterministic versioned compatibility and a non-executable bounded projection", () => {
+test("produces deterministic versioned compatibility and a non-executable projection in the page's order", () => {
   const input = {
     evidence: evidence(),
     actions: [{ definitionId: "web.output.dom-type", status: "failed" as const, route: "failed" as const }],
@@ -30,10 +30,14 @@ test("produces deterministic versioned compatibility and a non-executable bounde
     evidence: evidence({ elements: [...input.evidence.elements].reverse(), title: "Irrelevant title noise" }),
     clientCapabilities: [...input.clientCapabilities].reverse(),
   });
-  assert.deepEqual(first, reordered);
+  // The fingerprint answers "is this the same page", and a page drawn in
+  // another order is; the projection is the page as it was drawn (t200).
+  assert.deepEqual(first.fingerprint, reordered.fingerprint);
+  const elementNames = (production: typeof first): unknown[] => production.promptProjection.facts.flatMap((fact) => fact.kind === "element" ? [fact.name] : []);
+  assert.deepEqual(elementNames(first), ["Name", "Plan", "Next", "Away"]);
+  assert.deepEqual(elementNames(reordered), ["Away", "Next", "Plan", "Name"]);
   assert.match(first.fingerprint.digest, /^[a-f0-9]{64}$/u);
   assert.equal(first.promptProjection.byteCount, Buffer.byteLength(JSON.stringify(first.promptProjection), "utf8"));
-  assert.ok(first.promptProjection.byteCount <= WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES);
   const serialized = JSON.stringify(first);
   assert.doesNotMatch(serialized, /private|enterprise|password|token|ticket|target\.1|instruction-name-adapted|#plan|#next/iu);
   assert.deepEqual(first.fingerprint.location, { origin: "https://example.test", path: "/form" });
@@ -60,20 +64,21 @@ test("keeps opposite run outcomes compatible while preserving them in prompt con
   assert.ok(failed.promptProjection.facts.some(fact => fact.kind === "action" && fact.status === "failed"));
 });
 
-test("enforces exact item and byte bounds by deterministic trimming", () => {
-  const many = Array.from({ length: 40 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index} ${"x".repeat(100)}` }));
-  const first = produceWebReusableEvidence({ evidence: evidence({ elements: many }) }, { maxProjectionItems: 7, maxProjectionBytes: 900 });
-  const second = produceWebReusableEvidence({ evidence: evidence({ elements: [...many].reverse() }) }, { maxProjectionItems: 7, maxProjectionBytes: 900 });
-  assert.deepEqual(first, second);
-  assert.equal(first.promptProjection.truncated, true);
-  assert.ok(first.promptProjection.facts.length <= 7);
-  assert.ok(first.promptProjection.byteCount <= 900);
+test("a 500-element page is projected whole, in document order, with no count or byte bound and no throw past forty", () => {
+  const many = Array.from({ length: 500 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index} ${"x".repeat(100)}` }));
+  const actions = Array.from({ length: 30 }, (_, index) => ({ definitionId: `web.output.dom-click-${index}`, status: "failed" as const }));
+  const clientCapabilities = Array.from({ length: 30 }, (_, index) => `web.capability.${index}`);
+  const first = produceWebReusableEvidence({ evidence: evidence({ elements: many }), actions, clientCapabilities });
+  const elementFacts = first.promptProjection.facts.filter((fact) => fact.kind === "element");
+  assert.equal(elementFacts.length, 500);
+  assert.deepEqual(elementFacts.map((fact) => fact.kind === "element" ? fact.name : undefined), many.map((element) => element.name));
+  assert.equal(first.promptProjection.facts.filter((fact) => fact.kind === "action").length, 30);
+  assert.equal("truncated" in first.promptProjection, false);
   assert.equal(first.promptProjection.byteCount, Buffer.byteLength(JSON.stringify(first.promptProjection), "utf8"));
-  assert.throws(() => produceWebReusableEvidence({ evidence: evidence() }, { maxProjectionBytes: 10 }), /envelope exceeds/u);
-  assert.throws(() => produceWebReusableEvidence({ evidence: evidence() }, { maxProjectionBytes: WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES + 1 }), /between 1 and/u);
-  assert.throws(() => produceWebReusableEvidence({ evidence: evidence({ elements: [...many, many[0]!] }) }), /element count exceeds 40/u);
-  assert.throws(() => produceWebReusableEvidence({ evidence: evidence(), actions: Array.from({ length: 21 }, () => ({ definitionId: "web.output.dom-click", status: "failed" as const })) }), /action count exceeds 20/u);
-  assert.throws(() => produceWebReusableEvidence({ evidence: evidence(), clientCapabilities: Array.from({ length: 21 }, (_, index) => `web.capability.${index}`) }), /capability count exceeds 20/u);
+  assert.ok(first.promptProjection.byteCount > 4_096, "larger than the projection used to be allowed");
+  // The same page drawn in another order is the same page to the fingerprint.
+  const reversed = produceWebReusableEvidence({ evidence: evidence({ elements: [...many].reverse() }), actions, clientCapabilities });
+  assert.deepEqual(reversed.fingerprint, first.fingerprint);
 });
 
 test("rejects credentialed and non-http locations", () => {

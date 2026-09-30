@@ -60,7 +60,6 @@ import {
   webAutomationExplorationRefusalClassifier,
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
-import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { createWebNodeArrivals, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
@@ -97,7 +96,7 @@ import {
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "./vocabulary";
 
-// A handle the authoring tools issue: numbered for the whole Flow, so up to four digits (`./stable-handles.ts`).
+// A handle the authoring tools issue: numbered for the whole Flow, so up to six digits (`./stable-handles.ts`).
 const TARGET_HANDLE_PATTERN = WEB_LLM_TARGET_HANDLE_PATTERN;
 const TARGET_HANDLE = new RegExp(TARGET_HANDLE_PATTERN, "u");
 
@@ -112,8 +111,6 @@ export type WebLlmFailureEvidenceRequest = {
     status: string;
     route?: string;
   };
-  /** Core always names one; absent, the packet falls back to Core's own failure-evidence gate. */
-  maxEvidenceBytes?: number;
   signal?: AbortSignal;
 };
 
@@ -401,7 +398,6 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         toolId: input.toolId,
         value: {},
         permission: undefined,
-        maxEvidenceBytes: undefined,
         startLocation: input.startLocation,
         signal: input.signal,
       });
@@ -453,11 +449,9 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       assertActive(input.signal);
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
-      const totalBudget = evidenceByteLimit(input.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure);
-      const candidateBudget = Math.min(1_024, Math.floor(totalBudget / 3));
+      // The whole page, as every packet is: a failure packet is no longer held
+      // to a byte gate of its own (t200).
       const binding = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
-        budget: "failure",
-        maxEvidenceBytes: totalBudget - candidateBudget,
         expectedOrigin: undefined,
         // Core's failed-action identity is an attempt, a node and a definition
         // id, and carries nothing about the control -- so this recapture marks
@@ -468,15 +462,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         // live repair was refused for guessing the key.
         failedAction: { repairParameters: webFailureRepairParameters({ definitionId: input.failedAction.definitionId }) },
       }));
-      // The candidate object's own bytes are not the whole cost of attaching
-      // it: JSON also adds the comma, property name and colon. Measure that
-      // envelope against this exact packet so the final serialized evidence,
-      // not merely each independently bounded part, stays inside Core's gate.
-      const baseBytes = serializedBytes(binding.evidence);
-      const envelopeBytes = serializedBytes({ ...binding.evidence, repairCandidates: null }) - baseBytes - serializedBytes(null);
-      const availableCandidateBytes = Math.min(candidateBudget, totalBudget - baseBytes - envelopeBytes);
-      const candidates = projectWebRepairCandidates(binding.evidence.elements, { definitionId: input.failedAction.definitionId }, availableCandidateBytes);
-      if (candidates) binding.evidence.repairCandidates = candidates;
+      binding.evidence.repairCandidates = projectWebRepairCandidates(binding.evidence.elements, { definitionId: input.failedAction.definitionId });
       return retainFailure(binding).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {

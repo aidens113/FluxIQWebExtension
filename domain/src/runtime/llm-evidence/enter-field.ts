@@ -1,5 +1,5 @@
 // Enter one model-supplied value into one observed field, then return the same
-// bounded page evidence every other web exploration action returns.
+// page evidence every other web exploration action returns.
 
 import { actAndCapture, type WebLlmEvidenceGateway, type WebLlmEvidenceToolRequest } from "./capture";
 import type { ResolvedWebLlmEvidenceElement } from "./elements";

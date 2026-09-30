@@ -13,6 +13,15 @@
 // taken at all while one is on screen, and reading its record here is what
 // `action-runtime/dialog-control.ts` calls the snapshot's pending-dialog
 // evidence.
+//
+// Every open dialog is reported, open shadow roots included (t200): a consent
+// wall is often a dialog inside a vendor's custom element, which
+// `document.querySelectorAll` never entered, and there was a cap of five.
+//
+// Each dialog carries what it is, when the interference classifiers recognise
+// it -- a consent prompt, a rate-limit notice, a robot check -- as `kind`
+// (`action-runtime/interference/layer-kind.ts`). The packet no longer puts an
+// open modal's controls first, so the dialog says what it is instead.
 
 import {
   DIALOG_ARM_ATTRIBUTE,
@@ -21,12 +30,13 @@ import {
 } from "../../shared/dialog-channel";
 import { selectorFor } from "../selector";
 import { accessibleNameFor } from "../identity";
+import { composedClosest, queryComposedInOrder } from "../shadow-dom";
 import { visualViewportBounds } from "../visual-bounds";
+import { layerKind } from "../action-runtime/interference";
 import { present } from "../../shared/present";
 import type { DialogEvidence, DialogEvidenceItem } from "./types";
 
 const DIALOG_SELECTOR = "dialog[open],[role='dialog'],[role='alertdialog'],[aria-modal='true']";
-const MAX_DIALOGS = 5;
 
 /** The dialogs in front of the page, or `undefined` when there are none and nothing native happened. */
 export function dialogEvidence(): DialogEvidence | undefined {
@@ -49,10 +59,10 @@ export function dialogEvidence(): DialogEvidence | undefined {
  */
 function openDialogs(): DialogEvidenceItem[] {
   const found: DialogEvidenceItem[] = [];
-  for (const element of document.querySelectorAll(DIALOG_SELECTOR)) {
+  for (const element of queryComposedInOrder(DIALOG_SELECTOR)) {
     if (isShown(element)) found.push(describeDialog(element));
   }
-  return found.reverse().slice(0, MAX_DIALOGS);
+  return found.reverse();
 }
 
 function describeDialog(element: Element): DialogEvidenceItem {
@@ -69,7 +79,8 @@ function describeDialog(element: Element): DialogEvidenceItem {
     modal: element.getAttribute("aria-modal") === "true" || (native && isNativeModal(element)),
     native,
     label: label || undefined,
-    bounds
+    bounds,
+    kind: layerKind(element)
   });
 }
 
@@ -88,7 +99,7 @@ function isNativeModal(element: HTMLDialogElement): boolean {
 
 /** Hidden dialogs are not evidence: `hidden`, `aria-hidden`, and the display and visibility rules. */
 function isShown(element: Element): boolean {
-  if (element.closest("[hidden],[aria-hidden='true']")) return false;
+  if (composedClosest(element, "[hidden],[aria-hidden='true']")) return false;
   if (element instanceof HTMLDialogElement && !element.open) return false;
   const style = getComputedStyle(element);
   return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;

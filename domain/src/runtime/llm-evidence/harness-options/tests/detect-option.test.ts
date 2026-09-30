@@ -58,7 +58,7 @@ let callSequence = 0;
 
 async function run(registry: AutomationStudioHarnessOptionRegistry, optionId: string, value: JsonObject, flowId = SCOPE.flowId): Promise<{ evidence: JsonObject; effectApplied: boolean; resultCode: string }> {
   callSequence += 1;
-  const result = await registry.execute({ projectId: SCOPE.projectId, flowId, callId: `call.${callSequence}`, optionId, value, maxEvidenceBytes: 64_000 }, gathering);
+  const result = await registry.execute({ projectId: SCOPE.projectId, flowId, callId: `call.${callSequence}`, optionId, value }, gathering);
   return result as { evidence: JsonObject; effectApplied: boolean; resultCode: string };
 }
 

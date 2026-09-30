@@ -1,23 +1,18 @@
-// One page element, reduced to the smallest description an LLM can still act
-// on: what it is, how to address it, what it is called, and where on the page
-// it sits. Values are never carried -- only whether one is present -- and a
-// control whose signature says it holds a secret is dropped entirely.
-//
-// That last decision is `isSensitiveElementDescriptor`, the one shared rule in
-// `domain/src/sensitivity/`. This module used to carry its own copy and it was
-// the weakest of the four in the repository: it compared the whole
-// `autocomplete` attribute rather than its tokens, so a card field marked
-// `billing cc-number` -- the ordinary form, and the form that leaked a card
-// number in Wave 2 -- was described in full, and it cut the attribute to 200
-// characters before reading it, which is a way past a security test. Signature,
-// not value: the packet never sees a value, so refusing to describe the
-// control at all is the only defence there is.
+// One page element, as the model is shown it: what it is, what it says, every
+// attribute, where it is and whether it is on screen, what it holds where that
+// is not a secret, and where it sits among forms, landmarks, lists and tables.
+// Nothing is cut (t200). Never published: a control the shared sensitivity rule
+// (`isSensitiveElementDescriptor`) marks, dropped before any of its strings is
+// read; a string shaped like a credential (`./withheld.ts`, `./location.ts`);
+// a selector; and an attribute map keyed by name (`./attributes.ts`).
 
 import { isSensitiveElementDescriptor } from "../../sensitivity";
-import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
-import { sameOriginHref } from "./location";
+import { attributeRecord, publishedAttributes, rawAttributes, WEB_LLM_FRAME_ID_ATTRIBUTE } from "./attributes";
+import type { WebLlmLayerMarks } from "./layer-marks";
+import { evidenceHref } from "./location";
 import { present } from "./present";
-import { boundedCount, boundedText, isJsonRecord, trueFlag } from "./untrusted-json";
+import { countValue, isJsonRecord, pageText, trueFlag } from "./untrusted-json";
+import { screenedPageText, screenedText } from "./withheld";
 
 /**
  * A merged tab snapshot rewrites a child frame's selector as
@@ -27,36 +22,47 @@ import { boundedCount, boundedText, isJsonRecord, trueFlag } from "./untrusted-j
  * inside the frame and `frameId` carries the frame, which is what a Flow's
  * `browserFrameId` needs. Left joined, the selector is valid in no frame.
  */
-const FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
-const FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
+export const FRAME_SELECTOR_PATTERN = /^frame\[(\d+)\]\s*>>\s*(.+)$/u;
 
 export type WebLlmEvidenceElement = {
-  /**
-   * The opaque handle this element is named by, and the only way anything
-   * outside the domain may refer to it. There is deliberately no `selector`
-   * beside it: the packet is what a language model reads, and a selector in it
-   * is a browser concept reaching the model however neutral the types around it
-   * are. The selector lives in `WebLlmSnapshotBinding.selectors`, keyed by this
-   * handle, and never leaves the domain.
-   */
+  /** The opaque handle this element is named by. Its selector stays in `WebLlmSnapshotBinding.selectors` and never leaves the domain. */
   target: string;
   tag: string;
   /** Present only for an element that lives in a child frame of the captured tab. */
   frameId?: number;
+  /** The `role` attribute the page wrote. */
   role?: string;
+  /** The role the tag implies (`a[href]` is a link), where it differs from `role`. */
+  implicitRole?: string;
+  /** The accessible name. */
   name?: string;
+  /** The text of the `<label>` naming the control, where it differs from `name`. */
+  label?: string;
+  /** The element's text, where it differs from `name`: its own words, or all of them for a control or a semantic text element. */
   text?: string;
+  /** Every attribute the page gave the element, `[name, value]`, in the page's order. */
+  attributes?: Array<[string, string]>;
   inputType?: string;
   controlType?: string;
   hasValue?: boolean;
+  /** What a non-sensitive text field holds, when the capture read it. Never on a control the sensitivity rule marks. */
+  value?: string;
+  /** A checkbox's or radio's checked state. */
+  checked?: boolean;
   selectedValue?: string;
   href?: string;
   options?: Array<{ value: string; label: string }>;
+  /** The page listens for a click on it. */
+  hasClickHandler?: true;
+  /** Where it is on the page, in document coordinates, rounded to whole pixels. */
+  box?: { x: number; y: number; width: number; height: number };
+  /** Whether any of it is inside the viewport as captured. */
+  onViewport?: boolean;
   revealKind?: "disclosure" | "view";
   expanded?: boolean;
   /** The document's focused element, when it survived sanitizing. */
   focused?: true;
-  /** The user touched this element recently; the capture ranks these first. */
+  /** The user touched this element recently. */
   recent?: true;
   /** This element differs from the previous capture of the same page. */
   changed?: true;
@@ -70,39 +76,15 @@ export type WebLlmEvidenceElement = {
   item?: { index: number; total: number };
   /** Position inside a table. */
   cell?: { row: number; column: number; header?: string };
-  /**
-   * This element is one example of this many of its kind: the same control,
-   * link or cell in every row of one repeated list or table. The others are
-   * listed after every distinct element, or not at all once the packet is
-   * full, so a page of 280 rows shows its own buttons and one row checkbox
-   * rather than 37 row checkboxes. A particular row's control is reached by
-   * narrowing the page -- a search, a filter -- until it is listed, and is then
-   * addressed by its own handle. Counted by the page
-   * (`apps/extension/src/content/repeat-exemplars.ts`).
-   */
+  /** How many of this control, link or cell one repeated list or table holds, this one included; each is listed in its own place. */
   repeats?: number;
-  /**
-   * Only on an element that would otherwise read exactly like another in this
-   * packet: the name of the open dialog it sits in, where the look-alikes are
-   * not all in one (`look-alikes.ts`).
-   */
+  /** Only on a look-alike (`look-alikes.ts`): the name of the open dialog it sits in. */
   dialog?: string;
-  /**
-   * Only on such an element: the words of the row, card or list item it sits
-   * in, less its controls' words, where those differ between the look-alikes --
-   * "the Add to cart in the Soundcrest Air Pro 2 card". Also on an element
-   * carrying `repeats` that has no look-alike in the packet: the example stands
-   * for copies the packet does not list, and this says which row it is.
-   */
+  /** Only on a look-alike, or a `repeats` element: the words of the row, card or list item it sits in, less its controls' words. */
   within?: string;
-  /**
-   * Only on elements that still read alike after `dialog` and `within`: which
-   * of them this is, top to bottom on the page, and how many of them this
-   * packet describes. No two elements of a packet share a description once it
-   * is set.
-   */
+  /** Only on elements still alike after `dialog` and `within`: which of them this is, top to bottom, of how many. */
   alike?: { index: number; total: number };
-};
+} & WebLlmLayerMarks;
 
 /** A packet element with its selector put back, which only domain code ever holds. */
 export type ResolvedWebLlmEvidenceElement = WebLlmEvidenceElement & { selector: string };
@@ -118,7 +100,7 @@ export type DescribedEvidenceElement = {
   element: WebLlmEvidenceElement;
   selector: string;
   record: string | undefined;
-  /** The record's own words, cut to the placement bound. Absent where the page keyed the record or it was not one of several. */
+  /** The record's own words, screened. Absent where the page keyed the record or it was not one of several. */
   within: string | undefined;
   /** Where the element starts on the page, when the capture measured it. */
   position: { top: number; left: number } | undefined;
@@ -126,13 +108,6 @@ export type DescribedEvidenceElement = {
   shadowHosts: readonly string[] | undefined;
 };
 
-/** More hosts than any real widget nests; past it the chain is not trusted. */
-const MAX_SHADOW_HOSTS = 16;
-/** A host selector longer than this is not one the extension wrote. */
-const MAX_HOST_SELECTOR_LENGTH = 512;
-
-/** More rows than a page holds; the bound only stops a hostile number reaching the packet. */
-const MAX_REPEATS = 100_000;
 /** Separates a record address's parts: a unit separator, which page keys and text do not use. */
 const RECORD_ADDRESS_SEPARATOR = String.fromCharCode(31);
 
@@ -155,46 +130,60 @@ export type EvidenceElementContext = {
  */
 export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementContext): DescribedEvidenceElement | undefined {
   if (!isJsonRecord(raw)) return undefined;
-  const tag = boundedText(raw.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const tag = pageText(raw.tagName)?.toLowerCase();
   const addressed = frameAddressedSelector(raw);
-  if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return undefined;
+  const attributes = rawAttributes(raw.attributes);
+  const byName = attributeRecord(attributes);
+  // Asked of the attributes in whichever form they arrived, so the rule sees
+  // `type`, `autocomplete` and `data-sensitive` however the capture sent them.
+  if (!tag || !addressed || isSensitiveElementDescriptor({ ...raw, attributes: byName })) return undefined;
 
-  const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
-  const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const role = screenedPageText(raw.role);
+  const rawImplicitRole = screenedPageText(raw.implicitRole);
   // The extension sends an element's accessible name as `accessibleName`
   // (and leaves it out for a secret field). Reading only `name` dropped it
-  // from every real packet while fixtures built with `name` kept passing, so
-  // the model never saw the label a drifted control is usually found by.
-  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
+  // from every real packet while fixtures built with `name` kept passing.
+  const name = screenedPageText(raw.accessibleName ?? raw.name);
+  const rawLabel = screenedPageText(raw.label);
+  const rawText = screenedPageText(raw.visibleText ?? raw.text);
   const text = rawText === name ? undefined : rawText;
-  const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const rawInputType = pageText(raw.inputType)?.toLowerCase();
   const inputType = rawInputType === "text" ? undefined : rawInputType;
-  const rawControlType = boundedText(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const rawControlType = pageText(byName.type)?.toLowerCase();
   const controlType = rawControlType === rawInputType || rawControlType === "text" ? undefined : rawControlType;
-  const href = sameOriginHref(raw.href, context.url);
+  const href = evidenceHref(raw.href, context.url);
   const options = tag === "select" ? sanitizedOptions(raw.options) : undefined;
-  const hasValue = safeFillTag(tag, inputType) && typeof raw.hasValue === "boolean" ? raw.hasValue : undefined;
-  const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : undefined;
-  const revealKind = semanticRevealKind(tag, role, attributes);
-  const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : undefined;
+  const fillable = safeFillTag(tag, inputType);
+  const hasValue = fillable && typeof raw.hasValue === "boolean" ? raw.hasValue : undefined;
+  const value = fillable && typeof raw.value === "string" && raw.value !== "" ? screenedText(raw.value) : undefined;
+  const selectedValue = tag === "select" ? sanitizedSelectedValue(raw.selectedValue, raw.options) : undefined;
+  const revealKind = semanticRevealKind(tag, role, byName);
+  const expanded = revealKind === "disclosure" ? semanticExpandedState(byName) : undefined;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== undefined && context.focusedSelector === addressed.selector ? true : undefined;
-  const repeats = boundedCount(raw.repeatCount, MAX_REPEATS);
+  const repeats = countValue(raw.repeatCount);
 
   const element = present<WebLlmEvidenceElement>({
     target: context.target,
     tag,
     frameId: addressed.frameId,
-    role: role || undefined,
-    name: name || undefined,
-    text: text || undefined,
+    role,
+    implicitRole: rawImplicitRole === role ? undefined : rawImplicitRole,
+    name,
+    label: rawLabel === name ? undefined : rawLabel,
+    text,
+    attributes: publishedAttributes(attributes, context.url),
     inputType: inputType || undefined,
     controlType: controlType || undefined,
     hasValue,
-    selectedValue: selectedValue || undefined,
-    href: href || undefined,
+    value,
+    checked: typeof raw.checked === "boolean" ? raw.checked : undefined,
+    selectedValue,
+    href,
     options: options?.length ? options : undefined,
+    hasClickHandler: trueFlag(raw.hasClickHandler),
+    box: documentBox(raw.documentBounds),
+    onViewport: typeof raw.isVisibleOnViewport === "boolean" ? raw.isVisibleOnViewport : undefined,
     revealKind,
     expanded,
     focused,
@@ -210,7 +199,11 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     // Written by the packet, not the element: only a look-alike carries them.
     dialog: undefined,
     within: undefined,
-    alike: undefined
+    alike: undefined,
+    // Joined across the whole capture by `./layers.ts`, which writes them.
+    isDialog: undefined, inDialog: undefined, covers: undefined, coversCount: undefined, kind: undefined, coveredBy: undefined,
+    frontLayer: trueFlag(raw.frontLayer),
+    statement: trueFlag(raw.leadStatement)
   });
   return {
     element,
@@ -228,8 +221,8 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
 function shadowHostChain(context: unknown): string[] | undefined {
   if (!isJsonRecord(context) || !Array.isArray(context.shadowHosts)) return undefined;
   const hosts: unknown[] = context.shadowHosts;
-  if (hosts.length === 0 || hosts.length > MAX_SHADOW_HOSTS) return undefined;
-  const readable = hosts.every((host) => typeof host === "string" && host.trim() !== "" && host.length <= MAX_HOST_SELECTOR_LENGTH);
+  if (hosts.length === 0) return undefined;
+  const readable = hosts.every((host) => typeof host === "string" && host.trim() !== "");
   return readable ? hosts as string[] : undefined;
 }
 
@@ -237,12 +230,12 @@ function shadowHostChain(context: unknown): string[] | undefined {
  * The words of the record the element sits in, as the page read them
  * (`apps/extension/src/content/identity/record.ts`): the row's or card's own
  * text less its controls' words, which is what a person reads to say which row
- * they mean. Cut to the placement bound, like a heading. Present only where the
- * page did not key the record, since a key is an identifier nobody reads.
+ * they mean. Present only where the page did not key the record, since a key
+ * is an identifier nobody reads.
  */
 function recordWords(context: unknown): string | undefined {
   if (!isJsonRecord(context) || !isJsonRecord(context.record)) return undefined;
-  return boundedText(context.record.text, WEB_LLM_EVIDENCE_BOUNDS.placement) || undefined;
+  return screenedPageText(context.record.text);
 }
 
 /** Where a measured box starts, or `undefined` for a box that is not one. */
@@ -250,6 +243,15 @@ function documentPosition(bounds: unknown): { top: number; left: number } | unde
   if (!isJsonRecord(bounds)) return undefined;
   const { x, y } = bounds;
   return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y) ? { top: y, left: x } : undefined;
+}
+
+/** The measured document box, rounded to whole pixels, or `undefined` for a box that is not one. */
+function documentBox(bounds: unknown): WebLlmEvidenceElement["box"] {
+  if (!isJsonRecord(bounds)) return undefined;
+  const { x, y, width, height } = bounds;
+  const parts = [x, y, width, height];
+  if (!parts.every((part) => typeof part === "number" && Number.isFinite(part))) return undefined;
+  return { x: Math.round(x as number), y: Math.round(y as number), width: Math.round(width as number), height: Math.round(height as number) };
 }
 
 /**
@@ -269,9 +271,9 @@ function documentPosition(bounds: unknown): { top: number; left: number } | unde
 function recordAddress(context: unknown): string | undefined {
   if (!isJsonRecord(context) || !isJsonRecord(context.record)) return undefined;
   const record = context.record;
-  const key = boundedText(record.key, WEB_LLM_EVIDENCE_BOUNDS.attribute);
-  if (key) return ["key", boundedText(record.keyAttribute, WEB_LLM_EVIDENCE_BOUNDS.attribute) ?? "", key].join(RECORD_ADDRESS_SEPARATOR);
-  const text = boundedText(record.text, WEB_LLM_EVIDENCE_BOUNDS.attribute);
+  const key = pageText(record.key);
+  if (key) return ["key", pageText(record.keyAttribute) ?? "", key].join(RECORD_ADDRESS_SEPARATOR);
+  const text = pageText(record.text);
   return text ? ["text", text].join(RECORD_ADDRESS_SEPARATOR) : undefined;
 }
 
@@ -284,7 +286,9 @@ export function safeFillTag(tag: string, inputType: string | undefined): boolean
 export function actionableEvidenceElement(element: WebLlmEvidenceElement): boolean {
   if (["button", "a", "summary", "select", "textarea"].includes(element.tag)) return true;
   if (element.tag === "input") return element.inputType !== "hidden";
-  return ["button", "link", "checkbox", "radio", "option", "switch", "tab", "menuitem", "treeitem"].includes(element.role ?? "");
+  if (element.hasClickHandler === true) return true;
+  const roles = ["button", "link", "checkbox", "radio", "option", "switch", "tab", "menuitem", "treeitem"];
+  return roles.includes(element.role ?? "") || roles.includes(element.implicitRole ?? "");
 }
 
 /**
@@ -295,13 +299,13 @@ export function actionableEvidenceElement(element: WebLlmEvidenceElement): boole
 export function semanticRevealKind(tag: string, role: string | undefined, attributes: Record<string, unknown>): "disclosure" | "view" | undefined {
   if (role === "tab" || role === "menuitem" || role === "treeitem") return "view";
   if (tag === "summary") return "disclosure";
-  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
-  const controls = boundedText(attributes["aria-controls"], WEB_LLM_EVIDENCE_BOUNDS.text);
+  const expanded = pageText(attributes["aria-expanded"])?.toLowerCase();
+  const controls = pageText(attributes["aria-controls"]);
   return expanded === "true" || expanded === "false" || controls ? "disclosure" : undefined;
 }
 
 function semanticExpandedState(attributes: Record<string, unknown>): boolean | undefined {
-  const expanded = boundedText(attributes["aria-expanded"], 10)?.toLowerCase();
+  const expanded = pageText(attributes["aria-expanded"])?.toLowerCase();
   return expanded === "true" ? true : expanded === "false" ? false : undefined;
 }
 
@@ -311,20 +315,19 @@ function semanticExpandedState(attributes: Record<string, unknown>): boolean | u
  * a merge that failed to translate geometry still stamps the attribute.
  */
 function frameAddressedSelector(raw: Record<string, unknown>): { selector: string; frameId?: number } | undefined {
-  const rawSelector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  const rawSelector = pageText(raw.selector);
   if (!rawSelector) return undefined;
   const match = FRAME_SELECTOR_PATTERN.exec(rawSelector);
-  const selector = match ? boundedText(match[2], WEB_LLM_EVIDENCE_BOUNDS.selector) : rawSelector;
+  const selector = match ? pageText(match[2]) : rawSelector;
   if (!selector) return undefined;
-  const frameId = stampedFrameId(raw) ?? (match ? boundedCount(Number(match[1]), 999_999) : undefined);
+  const frameId = stampedFrameId(raw) ?? (match ? countValue(Number(match[1])) : undefined);
   // Frame 0 is the top frame, which needs no addressing.
   return frameId ? { selector, frameId } : { selector };
 }
 
 function stampedFrameId(raw: Record<string, unknown>): number | undefined {
-  const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
-  const stamped = boundedText(attributes[FRAME_ID_ATTRIBUTE], 20);
-  return stamped === undefined ? undefined : boundedCount(Number(stamped), 999_999);
+  const stamped = pageText(attributeRecord(rawAttributes(raw.attributes))[WEB_LLM_FRAME_ID_ATTRIBUTE]);
+  return stamped === undefined ? undefined : countValue(Number(stamped));
 }
 
 /**
@@ -343,21 +346,20 @@ type EvidenceElementPlacement = { [K in "form" | "landmark" | "heading" | "item"
  * Where the element sits: the form, landmark, heading, list or table position
  * `describeElement` already derives. This is how the packet carries regions,
  * forms and repeating structure without a second page-level list -- the
- * placement rides on the element it describes, so trimming an element for
- * budget cannot leave a dangling reference behind.
+ * placement rides on the element it describes.
  */
 function elementPlacement(input: unknown, named: { name?: string | undefined; text?: string | undefined }): EvidenceElementPlacement {
   // A missing or malformed context reads as an empty record rather than an
   // early return, so every one of the five fields is still named below.
   const described: Record<string, unknown> = isJsonRecord(input) ? input : {};
-  const form = boundedText(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  const landmark = boundedText(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
-  const rawHeading = boundedText(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const form = screenedPageText(described.formId ?? described.formName);
+  const landmark = screenedPageText(described.landmark);
+  const rawHeading = screenedPageText(described.heading);
   const heading = rawHeading === named.name || rawHeading === named.text ? undefined : rawHeading;
   return {
-    form: form || undefined,
-    landmark: landmark || undefined,
-    heading: heading || undefined,
+    form,
+    landmark,
+    heading,
     item: listPlacement(described.listPosition),
     cell: tablePlacement(described.tablePosition)
   };
@@ -365,33 +367,31 @@ function elementPlacement(input: unknown, named: { name?: string | undefined; te
 
 function listPlacement(input: unknown): WebLlmEvidenceElement["item"] {
   if (!isJsonRecord(input)) return undefined;
-  const index = boundedCount(input.index, 100_000);
-  const total = boundedCount(input.total, 100_000);
+  const index = countValue(input.index);
+  const total = countValue(input.total);
   return index === undefined || total === undefined ? undefined : { index, total };
 }
 
 function tablePlacement(input: unknown): WebLlmEvidenceElement["cell"] {
   if (!isJsonRecord(input)) return undefined;
-  const row = boundedCount(input.row, 100_000);
-  const column = boundedCount(input.column, 100_000);
+  const row = countValue(input.row);
+  const column = countValue(input.column);
   if (row === undefined || column === undefined) return undefined;
-  const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  return present<NonNullable<WebLlmEvidenceElement["cell"]>>({ row, column, header: header || undefined });
+  return present<NonNullable<WebLlmEvidenceElement["cell"]>>({ row, column, header: screenedPageText(input.columnHeader) });
 }
 
+/** Every option, in the page's order, an empty value or label kept as the empty string it is. */
 function sanitizedOptions(input: unknown): Array<{ value: string; label: string }> | undefined {
   if (!Array.isArray(input)) return undefined;
-  const result: Array<{ value: string; label: string }> = [];
-  for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.options)) {
-    if (!isJsonRecord(raw)) continue;
-    const value = boundedText(raw.value, WEB_LLM_EVIDENCE_BOUNDS.attribute);
-    const label = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.attribute);
-    if (value && label) result.push({ value, label });
-  }
+  const result = input.flatMap((raw) => isJsonRecord(raw)
+    ? [{ value: typeof raw.value === "string" ? screenedText(raw.value) : "", label: screenedPageText(raw.label) ?? "" }]
+    : []);
   return result.length ? result : undefined;
 }
 
-function sanitizedSelectedValue(input: unknown, options: Array<{ value: string; label: string }>): string | undefined {
-  const value = boundedText(input, WEB_LLM_EVIDENCE_BOUNDS.attribute);
-  return value && options.some((option) => option.value === value) ? value : undefined;
+/** The selected value, when it is one of the options the page offered. */
+function sanitizedSelectedValue(input: unknown, options: unknown): string | undefined {
+  if (typeof input !== "string" || !Array.isArray(options)) return undefined;
+  const offered = options.some((option) => isJsonRecord(option) && option.value === input);
+  return offered ? screenedText(input) : undefined;
 }

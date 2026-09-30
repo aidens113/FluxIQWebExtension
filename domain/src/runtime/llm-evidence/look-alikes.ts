@@ -34,24 +34,28 @@
 // way. With them it reads as the first row's, and `repeats` says there are
 // others.
 //
-// All three are closed and bounded: two short page strings already cut to the
-// packet's placement bound, and a pair of counts. After them no two elements
-// of a packet have the same description, which is the property the tests hold.
+// All three are closed: two page strings already screened, and a pair of
+// counts. After them no two elements of a packet have the same description,
+// which is the property the tests hold.
 //
 // What "the same" means is every field that says what the element is and where
-// it sits. State -- a value, a selection, focus, whether it was just touched --
-// is not identity: it changes as the Flow runs, and "the one that is filled" is
-// not a control anybody can find again. `repeats` is a count of the page's
-// alike rows, not a fact about this element, and the handle is what is being
-// chosen, so neither counts either.
+// it sits, less its attributes, which on a repeated row differ only by ids and
+// classes nobody reads. State -- a value, a check, a selection,
+// focus, whether it was just touched -- is not identity: it changes as the Flow
+// runs, and "the one that is filled" is not a control anybody can find again.
+// Nor is the measured box or whether it is on screen: every element has its own
+// box, so counting it would make no two elements alike, and which of them is
+// higher on the page is what `alike` already says. `repeats` is a count of the
+// page's alike rows, not a fact about this element, and the handle is what is
+// being chosen, so neither counts either.
 
 import type { WebLlmEvidenceElement } from "./elements";
 
 /** What the page says about an element beyond what it is, published only where it tells two look-alikes apart, or says which row a repeated control's example is in. */
 export type WebLlmLookAlikeCues = {
-  /** The words of the row, card or list item the element sits in, already bounded. */
+  /** The words of the row, card or list item the element sits in, already screened. */
   within?: string | undefined;
-  /** The name of the open dialog the element sits in, already bounded. */
+  /** The name of the open dialog the element sits in, already screened. */
   dialog?: string | undefined;
   /** Where the element starts on the page, for counting look-alikes top to bottom. */
   position?: { top: number; left: number } | undefined;
@@ -62,9 +66,8 @@ const CUES = ["dialog", "within"] as const;
 
 /**
  * Give every element of `elements` that reads like another the cues that tell
- * them apart, in place. Any cue a previous call wrote is cleared first, so it
- * can be called again after the packet loses elements to its byte budget and
- * the look-alikes left are counted as they are now.
+ * them apart, in place. Any cue a previous call wrote is cleared first, so a
+ * second call counts the look-alikes as they are now.
  */
 export function tellWebLlmLookAlikesApart(elements: WebLlmEvidenceElement[], cues: ReadonlyMap<string, WebLlmLookAlikeCues>): void {
   for (const element of elements) {
@@ -140,10 +143,17 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     tag: element.tag,
     frameId: element.frameId,
     role: element.role,
+    implicitRole: element.implicitRole,
     name: element.name,
+    label: element.label,
     text: element.text,
+    // Not identity for this purpose: a row's copy of a control usually differs
+    // only by a per-instance id or class nobody reads, and counting those
+    // would withhold the row's words (`within`), which is what a person reads.
+    attributes: undefined,
     inputType: element.inputType,
     controlType: element.controlType,
+    hasClickHandler: element.hasClickHandler,
     href: element.href,
     options: element.options,
     revealKind: element.revealKind,
@@ -157,12 +167,27 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     alike: element.alike,
     // State and counts: they change as the Flow runs, or describe the page's rows rather than this element.
     hasValue: undefined,
+    value: undefined,
+    checked: undefined,
     selectedValue: undefined,
+    box: undefined,
+    onViewport: undefined,
     expanded: undefined,
     focused: undefined,
     recent: undefined,
     changed: undefined,
-    repeats: undefined
+    repeats: undefined,
+    // What stands in front of the page (`layers.ts`): it changes as a dialog
+    // opens or a wall is dismissed, and the handles it names are no cue a
+    // person reads. The dialog two alike controls sit in is told by `dialog`.
+    isDialog: undefined,
+    inDialog: undefined,
+    covers: undefined,
+    coversCount: undefined,
+    kind: undefined,
+    coveredBy: undefined,
+    frontLayer: undefined,
+    statement: undefined
   };
   return JSON.stringify(Object.values(parts));
 }

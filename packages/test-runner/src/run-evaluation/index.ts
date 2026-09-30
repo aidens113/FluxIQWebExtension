@@ -2,7 +2,6 @@
 // produces the same judgement the bench records per corpus row.
 export * from "./adaptation/index.js";
 export * from "./declared-failure-verdict.js";
-export * from "./evidence-budget-invariant.js";
 export * from "./flow-lane-evidence-sizes.js";
 export * from "./observed-run-evaluation.js";
 export * from "./permission-stop/index.js";

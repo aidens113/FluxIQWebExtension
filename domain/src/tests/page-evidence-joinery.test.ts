@@ -145,15 +145,19 @@ test("both readers see the same dialog, under the producer's own field names", (
   assert.equal(values["evidence.dialogs.modal"]?.value, true);
 });
 
-test("both readers see the same blocking overlay, and the packet takes the one the producer ranked first", () => {
+test("both readers see the same blocking overlays, every one of them, in the order the producer ranked them", () => {
   const values = projected(snapshot);
   const evidence = packet(snapshot);
-  const blocker = collection(values, "evidence.overlays.blockers").items[0];
+  const blockers = collection(values, "evidence.overlays.blockers").items;
   assert.ok(evidence.blockedBy, "the packet reported nothing covering the page");
-  assert.equal(Object.hasOwn(evidence.blockedBy, "selector"), false);
-  assert.equal(evidence.blockedBy.role, blocker?.role);
-  assert.equal(evidence.blockedBy.name, blocker?.label);
-  assert.equal(evidence.blockedBy.blocks, blocker?.blocks);
+  assert.equal(evidence.blockedBy.length, blockers.length);
+  const [carried] = evidence.blockedBy;
+  const blocker = blockers[0];
+  assert.ok(carried);
+  assert.equal(Object.hasOwn(carried, "selector"), false);
+  assert.equal(carried.role, blocker?.role);
+  assert.equal(carried.name, blocker?.label);
+  assert.equal(carried.blocks, blocker?.blocks);
   assert.equal(values["evidence.overlays.blockedCount"]?.value, 2);
 });
 
@@ -164,25 +168,26 @@ test("both readers see the same loading state, including which kind of indicator
   assert.equal(evidence.loading.readyState, values["evidence.loading.documentState"]?.value);
   assert.equal(evidence.loading.busy, values["evidence.loading.busy"]?.value);
   assert.equal(evidence.loading.pendingNavigation, values["evidence.loading.pendingNavigation"]?.value);
-  const kinds = collection(values, "evidence.loading.indicators").items.map((item) => item.kind);
-  assert.equal(evidence.loading.spinner, kinds.includes("spinner") ? true : undefined);
+  const indicators = collection(values, "evidence.loading.indicators").items;
+  assert.deepEqual(evidence.loading.indicators, indicators.map((item) => item.label === undefined ? { kind: item.kind } : { kind: item.kind, label: item.label }));
 });
 
-test("both readers see the same navigation facts, and the packet strips the query the state keeps", () => {
+test("both readers see the same navigation facts, and the packet withholds the secret the state keeps", () => {
   const values = projected(snapshot);
   const evidence = packet(snapshot);
   assert.ok(evidence.navigation, "the packet reported nothing about how the page was reached");
   assert.equal(evidence.navigation.type, values["evidence.navigation.type"]?.value);
   assert.equal(evidence.navigation.redirects, values["evidence.navigation.redirects"]?.value);
   const referrer = new URL(String(values["evidence.navigation.referrer"]?.value));
-  assert.equal(evidence.navigation.referrer, `${referrer.origin}${referrer.pathname}`);
-  assert.doesNotMatch(JSON.stringify(evidence), /session=private/u, "the packet must not carry a query string");
+  // The query is kept (t200); a parameter named like a session has its value withheld.
+  assert.equal(evidence.navigation.referrer, `${referrer.origin}${referrer.pathname}?session=(withheld)`);
+  assert.equal(evidence.navigation.url, pageEvidence.navigation.url);
+  assert.doesNotMatch(JSON.stringify(evidence), /session=private/u, "the packet must not carry a secret query value");
 });
 
-test("both readers see the same element funnel, so the model is told what the browser already cut", () => {
+test("both readers see the same element funnel, so the model is told when the browser itself cut", () => {
   const values = projected(snapshot);
   const evidence = packet(snapshot);
-  assert.equal(evidence.elementTotal, values["evidence.elements.matched"]?.value);
   assert.equal(evidence.captureTruncated, values["evidence.elements.truncated"]?.value);
   assert.equal(evidence.truncated, true);
   // The same fact outside the `evidence.` prefix, for a consumer reading the
@@ -217,8 +222,8 @@ test("a capture with no page evidence at all costs nothing on either side", () =
   assert.deepEqual(paths, []);
   const evidence = packet(bare);
   assert.deepEqual(
-    { loading: evidence.loading, navigation: evidence.navigation, dialogs: evidence.dialogs, blockedBy: evidence.blockedBy, elementTotal: evidence.elementTotal },
-    { loading: undefined, navigation: undefined, dialogs: undefined, blockedBy: undefined, elementTotal: undefined }
+    { loading: evidence.loading, navigation: evidence.navigation, dialogs: evidence.dialogs, blockedBy: evidence.blockedBy },
+    { loading: undefined, navigation: undefined, dialogs: undefined, blockedBy: undefined }
   );
   assert.equal(evidence.truncated, false);
   // The page's own facts still arrive: it is the evidence that is absent, not the capture.
@@ -280,7 +285,7 @@ test("real capture: what the page painted over its controls reaches both readers
   const capture = realSnapshot("modal-flows");
   const evidence = WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES["modal-flows"];
   const values = projected(capture);
-  const blockedBy = packet(capture).blockedBy;
+  const blockedBy = packet(capture).blockedBy?.[0];
   const blocker = collection(values, "evidence.overlays.blockers").items[0];
   assert.ok(blockedBy, "the packet reported nothing covering a page whose every control was behind a backdrop");
   // A bare backdrop div: no role, no accessible name, and no selector in the
@@ -311,12 +316,12 @@ test("real capture: a page caught mid-fetch is reported busy by both readers, wi
   assert.equal(values["evidence.loading.documentState"]?.value, "complete");
   assert.equal(loading.readyState, undefined);
   // The page's live region says "Loading more posts", which is a `status` and
-  // not a spinner; the packet must not promote it.
+  // not a spinner; the packet carries the kind the producer gave, and its words.
   assert.deepEqual(
     collection(values, "evidence.loading.indicators").items.map((item) => item.kind),
     evidence.loading.indicators.map((indicator) => indicator.kind)
   );
-  assert.equal(loading.spinner, undefined);
+  assert.deepEqual(loading.indicators?.map((indicator) => indicator.kind), evidence.loading.indicators.map((indicator) => indicator.kind));
   assert.deepEqual(
     collection(values, "evidence.loading.busyRegions").items,
     evidence.loading.busyRegions.map((selector) => ({ selector }))

@@ -1,33 +1,34 @@
-// What the page's main region says about itself: the first few short lines of
-// its own text, which the snapshot ranks with the controls that change what the
-// region shows (`dom-snapshot.ts`).
+// What the page's main region says about itself: the short lines of its own
+// text, marked on each such element's descriptor as `leadStatement: true`
+// (`dom-snapshot.ts`).
 //
 // ## The defect this closes
 //
-// The snapshot ranks text behind every control, the footer's links included,
-// because a control is something to act on (`dom-snapshot.ts`,
-// `snapshotElementBucket`). The packet a model reads describes the head of that
-// ranking: forty elements at most and about thirty once the 6,000-byte budget
-// bites, which on the everything store's results page are all controls
-// (`controls.ts` has the measurement). So a page's own statement of what it is
-// showing -- "No results for ...", "1-16 of 42 results for ...", "Your cart is
-// empty" -- never reaches the model, on any page with more controls than that.
+// A page's own statement of what it is showing -- "No results for ...", "1-16
+// of 42 results for ...", "Your cart is empty" -- reads like any other line of
+// text in an element list of thousands. Live run 21 (`run-muntufao-7b7bc04a`,
+// everything-store-kettle-to-cart) typed a query the store matched nothing for.
+// The page said "No results for ..." twice and "Try checking your spelling or
+// use more general terms", the location carries no query, the title reads like
+// any results page's, and a page-wide list detection found the page's
+// furniture and reported it detected. The model read that page as the
+// product's results five times, pressed "add to cart" eight times on a page
+// with no such control, and spent all 64 decisions without reaching the
+// product.
 //
-// Live run 21 (`run-muntufao-7b7bc04a`, everything-store-kettle-to-cart) typed a
-// query the store matched nothing for. The page said "No results for ..." twice
-// and "Try checking your spelling or use more general terms", and the packet
-// held none of it: the location carries no query, the title reads like any
-// results page's, and a page-wide list detection found the page's furniture
-// and reported it detected. The model read that page as the product's results
-// five times, pressed "add to cart" eight times on a page with no such control,
-// and spent all 64 decisions without ever reaching the product.
+// Until t200 this rule lifted the first three such lines to the head of a
+// ranked, capped element list (t174 F10). The list is no longer ranked or cut:
+// every rendered element is listed in document order. Removing the lift must
+// not remove what it knew, so the rule now marks every element it recognises,
+// where it stands, and moves nothing. A reader that wants the page's own
+// statements asks for the marked elements.
 //
 // ## The rule
 //
 // A lead statement is an element that
 //
 // 1. has words of its own (its own text nodes), under a parent that has none --
-//    so a line is lifted once, not once more for the bold query inside it;
+//    so a line is marked once, not once more for the bold query inside it;
 // 2. is short, at most `MAX_STATEMENT_CHARACTERS` -- a status line, a heading,
 //    an empty-state notice, not a passage of prose;
 // 3. is the main region's own: the nearest landmark above it is `main`, with a
@@ -39,18 +40,12 @@
 //    record -- an item's words are the list's, which detection and extraction
 //    read.
 //
-// The first `MAX_LEAD_STATEMENTS` of them in document order are lifted, so the
-// packet pays for three short lines at most. A page with no `main` landmark
-// lifts nothing and ranks as it always has.
+// A page with no `main` landmark has no lead statements.
 
 import { directVisibleText, visibleText } from "../describe-element";
-import { isPageControlElement, isPrimaryControlElement } from "../element-traits";
 import { isRecordElement, landmarkRole } from "../identity";
 
-/** How many of the main region's own lines rank with the page-state controls. */
-const MAX_LEAD_STATEMENTS = 3;
-
-/** Longer than this is prose, which ranks as text. A status line or a notice is well under it. */
+/** Longer than this is prose, not a statement. A status line or a notice is well under it. */
 const MAX_STATEMENT_CHARACTERS = 200;
 
 /** Raw text, markup whitespace and all, past which no statement can collapse to `MAX_STATEMENT_CHARACTERS`. Only a bound on work. */
@@ -62,23 +57,24 @@ const MAX_LANDMARK_DEPTH = 30;
 /** The words of a control, where the tag alone says so: a label names its control, an option is a choice of one. */
 const CONTROL_WORD_TAGS: ReadonlySet<string> = new Set(["label", "option", "optgroup", "legend"]);
 
-/**
- * The main region's lead statements among `candidates`, at most three, the
- * first ones in document order. `documentOrder` is the snapshot's own
- * comparator, so a statement inside an open shadow root is ordered where a
- * person sees it.
- */
-export function mainLeadStatements(candidates: readonly Element[], documentOrder: (left: Element, right: Element) => number): ReadonlySet<Element> {
-  const statements = candidates.filter(isLeadStatement);
-  return new Set([...statements].sort(documentOrder).slice(0, MAX_LEAD_STATEMENTS));
-}
+/** Tags that are controls in their own right: a form field, a button, a link, a disclosure. */
+const CONTROL_TAGS: ReadonlySet<string> = new Set(["select", "input", "textarea", "button", "summary", "a"]);
+
+/** Roles that make an element a control whatever its tag. */
+const CONTROL_ROLES: ReadonlySet<string> = new Set([
+  "button", "checkbox", "radio", "switch", "combobox", "listbox", "textbox", "searchbox",
+  "spinbutton", "slider", "link", "menuitem", "tab"
+]);
 
 /**
- * The cheap questions first: this is asked of every candidate of every
+ * Whether the element is one of the main region's own short statements about
+ * what the page shows.
+ *
+ * The cheap questions first: this is asked of every rendered element of every
  * capture, and `visibleText` walks the element's whole subtree, so it is asked
  * last and only of an element whose raw text could be short enough.
  */
-function isLeadStatement(element: Element): boolean {
+export function isLeadStatement(element: Element): boolean {
   if (!directVisibleText(element)) return false;
   const parent = element.parentElement;
   if (parent && directVisibleText(parent)) return false;
@@ -102,6 +98,15 @@ function belongsToMainRegion(element: Element): boolean {
   return false;
 }
 
+/**
+ * Whether the element is a control, or a control's words. The tag and role
+ * lists are the ones the snapshot's ranking used to call page and primary
+ * controls (`element-traits.ts` until t200); they are only read here now.
+ */
 function isControlWords(element: Element): boolean {
-  return isPageControlElement(element) || isPrimaryControlElement(element) || CONTROL_WORD_TAGS.has(element.tagName.toLowerCase());
+  const tagName = element.tagName.toLowerCase();
+  if (CONTROL_TAGS.has(tagName) || CONTROL_WORD_TAGS.has(tagName)) return true;
+  const role = element.getAttribute("role")?.toLowerCase();
+  if (role !== undefined && CONTROL_ROLES.has(role)) return true;
+  return element instanceof HTMLElement && element.isContentEditable;
 }

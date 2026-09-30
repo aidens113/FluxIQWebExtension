@@ -49,6 +49,7 @@
 
 export { accessibleNameFor, authoredNameAttribute } from "./accessible-name";
 export { boundedText } from "./bounded-text";
+export { normalizedText } from "./normalized-text";
 export { candidateFingerprint, candidateLabel, collectTargetCandidates } from "./candidates";
 export { corroboratesExactly } from "./corroboration";
 export { elementContext, landmarkRole } from "./context";

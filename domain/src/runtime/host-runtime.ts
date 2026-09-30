@@ -27,9 +27,9 @@
 //  - **A diff needs a snapshot on both sides.** With one side missing, every
 //    element on the other would read as added or removed, a claim about a page
 //    nobody observed, so `inspectStateDiff` declines instead.
-//  - **A snapshot is bounded by the sanitized packet's own byte budget.**
-//    `sanitizeWebLlmSnapshot` is what already decides how much page evidence may
-//    travel, and it drops values and sensitive controls on the way. Reusing it
+//  - **A snapshot is the sanitized packet.** `sanitizeWebLlmSnapshot` is what
+//    already decides what page evidence may travel -- every element, whole,
+//    with sensitive controls dropped and secrets screened (t200). Reusing it
 //    means a state ref cannot carry more, or more sensitive, page data than the
 //    LLM packet may.
 //  - **Snapshots are not stored here.** Core hands both refs back to
@@ -70,9 +70,6 @@ const SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 const HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
 /** Matches Core's default `builtin.policy.action` command timeout. */
 const HOST_STATE_COMMAND_TIMEOUT_MS = 5_000;
-
-/** At most this many elements are listed on each side of a diff; the counts stay exact. */
-const MAX_DIFF_ELEMENTS = 10;
 
 /**
  * Derived from the action vocabulary rather than from the `web.output.` string,
@@ -161,8 +158,9 @@ export function bindWebAutomationHostRuntime(fluxiq: FluxIQ): void {
 }
 
 /**
- * What changed between two bounded page summaries: where the browser is, what
- * the document is called, and which interactive elements appeared or left.
+ * What changed between two page summaries: where the browser is, what the
+ * document is called, and every element that appeared or left (t200: until
+ * 2026-09-30 each side listed ten and counted the rest).
  *
  * `.v2` identifies an element by what it is and what it is called rather than
  * by a selector. The packet stopped carrying selectors when they stopped being
@@ -198,8 +196,8 @@ export function webAutomationStateDiff(
     afterElementCount: afterElements.length,
     addedElementCount: added.length,
     removedElementCount: removed.length,
-    addedElements: added.slice(0, MAX_DIFF_ELEMENTS),
-    removedElements: removed.slice(0, MAX_DIFF_ELEMENTS)
+    addedElements: added,
+    removedElements: removed
   };
 }
 

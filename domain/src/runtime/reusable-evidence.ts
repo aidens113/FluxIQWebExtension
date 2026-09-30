@@ -1,20 +1,27 @@
+// A completed run's page evidence, reduced to what may be cached and shown to
+// a later build: a fingerprint that says which page and which client it was,
+// and a projection of the page's controls for the prompt.
+//
+// Nothing in it is capped (t200). Until 2026-09-30 a packet of more than forty
+// elements threw here, and the projection kept 24 facts in 4,096 bytes, sorted
+// rather than in the page's order. The packet now carries every element, so
+// every one is projected, in document order. The fingerprint is still computed
+// over the elements as a sorted set, because it answers "is this the same page"
+// and a page that re-rendered in another order is the same page.
+
 import { createHash } from "node:crypto";
 import { isSensitiveFieldSignature } from "../sensitivity";
 import { WEB_LLM_EVIDENCE_SCHEMA_VERSION, type WebLlmEvidenceElement, type WebLlmPageEvidence } from "./llm-evidence";
 
 export const WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION = "web-reusable-evidence-fingerprint.v1" as const;
-export const WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION = "web-reusable-evidence-projection.v1" as const;
+// `.v2`: every element in document order, and no `truncated`, since nothing is left out.
+export const WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION = "web-reusable-evidence-projection.v2" as const;
 // `.v2`: the packet stopped carrying element selectors, so the structural
 // digest below is computed over a different set of facts. Bumping the version
 // keeps a `.v1` fingerprint from ever being treated as compatible with a `.v2`
 // one, which is what the digest is for.
 export const WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v2" as const;
 export const WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION = "web-client-capabilities.v1" as const;
-export const WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS = 40;
-export const WEB_REUSABLE_EVIDENCE_MAX_ACTIONS = 20;
-export const WEB_REUSABLE_EVIDENCE_MAX_CAPABILITIES = 20;
-export const WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_ITEMS = 24;
-export const WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES = 4_096;
 
 export type WebReusableEvidenceAction = Readonly<{
   definitionId: string;
@@ -44,7 +51,6 @@ export type WebReusableEvidencePromptProjection = Readonly<{
   compatibilityDigest: string;
   location: { origin: string; path: string };
   facts: WebReusableEvidencePromptFact[];
-  truncated: boolean;
   digest: string;
   byteCount: number;
 }>;
@@ -58,18 +64,16 @@ export function produceWebReusableEvidence(input: Readonly<{
   evidence: WebLlmPageEvidence;
   actions?: readonly WebReusableEvidenceAction[];
   clientCapabilities?: readonly string[];
-}>, options: Readonly<{ maxProjectionBytes?: number; maxProjectionItems?: number }> = {}): WebReusableEvidenceProduction {
+}>): WebReusableEvidenceProduction {
   if (input.evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || input.evidence.trust !== "untrusted-page-evidence" || !Array.isArray(input.evidence.elements)) {
     throw new Error("Reusable web evidence requires the current sanitized evidence schema");
   }
-  enforceSourceItemLimit(input.evidence.elements.length, WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS, "element");
-  enforceSourceItemLimit(input.actions?.length ?? 0, WEB_REUSABLE_EVIDENCE_MAX_ACTIONS, "action");
-  enforceSourceItemLimit(input.clientCapabilities?.length ?? 0, WEB_REUSABLE_EVIDENCE_MAX_CAPABILITIES, "capability");
   const location = safeLocation(input.evidence.location);
   const elements = normalizedElements(input.evidence.elements, location);
   const actions = normalizedActions(input.actions ?? []);
   const capabilities = normalizedCapabilities(input.clientCapabilities ?? []);
-  const structuralDigest = digest({ location, elements });
+  // A set for the fingerprint, whatever order the page drew it in.
+  const structuralDigest = digest({ location, elements: [...elements].sort(compareCanonical) });
   const capabilityDigest = digest({ schemaVersion: WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION, capabilities });
   const fingerprintBase = {
     schemaVersion: WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION,
@@ -93,7 +97,7 @@ export function produceWebReusableEvidence(input: Readonly<{
   ];
   return {
     fingerprint,
-    promptProjection: boundedProjection(fingerprint, candidates, options),
+    promptProjection: promptProjection(fingerprint, candidates),
   };
 }
 
@@ -107,23 +111,25 @@ type NormalizedElement = Readonly<{
   sameOriginLink?: boolean;
 }>;
 
+/** Each distinct element once, in the packet's order -- document order. */
 function normalizedElements(input: readonly WebLlmEvidenceElement[], location: { origin: string; path: string }): NormalizedElement[] {
   const unique = new Map<string, NormalizedElement>();
   for (const element of input) {
-    const tag = boundedToken(element.tag, 40);
+    const tag = token(element.tag);
     if (!tag || unshareableControl(element)) continue;
     const normalized = compact({
       tag: tag.toLowerCase(),
-      role: boundedToken(element.role, 80)?.toLowerCase(),
-      name: boundedText(element.name, 160),
-      inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
-      controlType: boundedToken(element.controlType, 40)?.toLowerCase(),
-      optionCount: Array.isArray(element.options) ? Math.min(element.options.length, 20) : undefined,
+      role: token(element.role)?.toLowerCase(),
+      name: oneLine(element.name),
+      inputType: token(element.inputType)?.toLowerCase(),
+      controlType: token(element.controlType)?.toLowerCase(),
+      optionCount: Array.isArray(element.options) ? element.options.length : undefined,
       sameOriginLink: sameOriginHref(element.href, location.origin) ? true : undefined,
     }) as NormalizedElement;
-    unique.set(canonicalJson(normalized), normalized);
+    const key = canonicalJson(normalized);
+    if (!unique.has(key)) unique.set(key, normalized);
   }
-  return [...unique.values()].sort(compareCanonical);
+  return [...unique.values()];
 }
 
 function normalizedActions(input: readonly WebReusableEvidenceAction[]): WebReusableEvidenceAction[] {
@@ -155,28 +161,17 @@ function promptElementFact(element: NormalizedElement): WebReusableEvidencePromp
   return { kind: "element", ...element };
 }
 
-function boundedProjection(fingerprint: WebReusableEvidenceFingerprint, candidates: WebReusableEvidencePromptFact[], options: Readonly<{ maxProjectionBytes?: number; maxProjectionItems?: number }>): WebReusableEvidencePromptProjection {
-  const maxBytes = boundedLimit(options.maxProjectionBytes, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES, "projection byte limit");
-  const maxItems = boundedLimit(options.maxProjectionItems, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_ITEMS, "projection item limit");
-  const facts = candidates.slice(0, maxItems);
-  let truncated = facts.length !== candidates.length;
-  for (;;) {
-    const base = {
-      schemaVersion: WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION,
-      sanitizerVersion: WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION,
-      compatibilityDigest: fingerprint.digest,
-      location: fingerprint.location,
-      facts,
-      truncated,
-    };
-    const withDigest = { ...base, digest: digest(base) };
-    const byteCount = stableByteCount(withDigest);
-    const result: WebReusableEvidencePromptProjection = { ...withDigest, byteCount };
-    if (serializedBytes(result) <= maxBytes) return result;
-    if (!facts.length) throw new Error("Web reusable-evidence projection envelope exceeds the byte limit");
-    facts.pop();
-    truncated = true;
-  }
+/** Every fact, in order, with the digest and the byte count of what is stored. */
+function promptProjection(fingerprint: WebReusableEvidenceFingerprint, facts: WebReusableEvidencePromptFact[]): WebReusableEvidencePromptProjection {
+  const base = {
+    schemaVersion: WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION,
+    sanitizerVersion: WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION,
+    compatibilityDigest: fingerprint.digest,
+    location: fingerprint.location,
+    facts,
+  };
+  const withDigest = { ...base, digest: digest(base) };
+  return { ...withDigest, byteCount: stableByteCount(withDigest) };
 }
 
 function stableByteCount(input: object): number {
@@ -235,31 +230,23 @@ function unshareableControl(element: WebLlmEvidenceElement): boolean {
   return isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
 }
 
-function boundedLimit(input: number | undefined, hardMaximum: number, label: string): number {
-  if (input === undefined) return hardMaximum;
-  if (!Number.isSafeInteger(input) || input < 1 || input > hardMaximum) throw new Error(`${label} must be between 1 and ${hardMaximum}`);
-  return input;
-}
-
-function enforceSourceItemLimit(actual: number, maximum: number, label: string): void {
-  if (actual > maximum) throw new Error(`Reusable web evidence ${label} count exceeds ${maximum}`);
-}
-
+/** An identifier this domain or Core minted -- an action's definition id, a schema version -- never page text. */
 function boundedTag(input: unknown, label: string): string {
-  const value = boundedText(input, 160);
+  const value = oneLine(input);
   if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u.test(value)) throw new Error(`${label} is malformed`);
   return value;
 }
 
-function boundedToken(input: unknown, maximum: number): string | undefined {
-  const value = boundedText(input, maximum);
+/** A tag, role or type: one word of the page's markup vocabulary, or nothing. */
+function token(input: unknown): string | undefined {
+  const value = oneLine(input);
   return value && /^[A-Za-z0-9_.:-]+$/u.test(value) ? value : undefined;
 }
 
-function boundedText(input: unknown, maximum: number): string | undefined {
+function oneLine(input: unknown): string | undefined {
   if (typeof input !== "string") return undefined;
   const value = input.replace(/\s+/gu, " ").trim();
-  return value ? value.slice(0, maximum) : undefined;
+  return value || undefined;
 }
 
 function compact<T extends Record<string, unknown>>(input: T): T {

@@ -238,12 +238,12 @@ const evidenceCompletionSchema: JsonObject = {
 const evidencePage = {
   schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/products", title: "Products",
   // Addressed by handle, never by locator: this domain denies `selector`, and
-  // Core refuses to carry a decision request that holds a denied key.
-  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", target: `target.${index}`, role: "button", name: `Product ${index}`, text: "Open this bounded product result and inspect its available non-sensitive details." })),
+  // Core refuses to carry a decision request that holds a denied key. Forty
+  // elements was once the most a packet held; a packet is now the whole page
+  // (t200), so this is simply a page of forty products, not a ceiling.
+  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", target: `target.${index}`, role: "button", name: `Product ${index}`, text: "Open this product result and inspect its available non-sensitive details." })),
   truncated: false
 };
-const evidencePageBytes = Buffer.byteLength(JSON.stringify(evidencePage), "utf8");
-assert.equal(evidencePageBytes >= 6_500 && evidencePageBytes <= 7_488, true, `max-window evidence bytes ${evidencePageBytes}`);
 // The evidence request's limits, sized against Core's own per-request ceiling
 // rather than repeating a number. This test once pinned 8,000 input tokens --
 // the eleventh copy of a ceiling measured on 2026-09-17 as unable to describe any

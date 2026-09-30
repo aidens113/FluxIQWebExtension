@@ -16,10 +16,10 @@ import { sanitizeWebLlmSnapshotWithBindings, type WebLlmPageEvidence } from "../
 
 const PAGE_URL = "https://store.test/s";
 
-function packet(interactiveElements: JsonObject[], evidence?: JsonObject, maxEvidenceBytes?: number): WebLlmPageEvidence {
+function packet(interactiveElements: JsonObject[], evidence?: JsonObject): WebLlmPageEvidence {
   const snapshot: JsonObject = { url: PAGE_URL, title: "Results", interactiveElements };
   if (evidence !== undefined) snapshot.evidence = evidence;
-  return sanitizeWebLlmSnapshotWithBindings(snapshot, maxEvidenceBytes === undefined ? {} : { maxEvidenceBytes }).evidence;
+  return sanitizeWebLlmSnapshotWithBindings(snapshot).evidence;
 }
 
 /**
@@ -48,10 +48,11 @@ const wrapper = (selector: string, top: number): JsonObject => ({ tagName: "div"
 test("wrappers the page gives nothing to tell apart are counted top to bottom", () => {
   // The capture lists them out of page order; the count follows the page.
   const evidence = packet([wrapper("#c", 300), wrapper("#a", 100), wrapper("#b", 200)]);
+  // Each carries its own measured box, which is where the count comes from.
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "div", alike: { index: 3, total: 3 } },
-    { target: "target.2", tag: "div", alike: { index: 1, total: 3 } },
-    { target: "target.3", tag: "div", alike: { index: 2, total: 3 } }
+    { target: "target.1", tag: "div", box: { x: 0, y: 300, width: 100, height: 20 }, alike: { index: 3, total: 3 } },
+    { target: "target.2", tag: "div", box: { x: 0, y: 100, width: 100, height: 20 }, alike: { index: 1, total: 3 } },
+    { target: "target.3", tag: "div", box: { x: 0, y: 200, width: 100, height: 20 }, alike: { index: 2, total: 3 } }
   ]);
 });
 
@@ -80,11 +81,10 @@ test("the same control in two cards is told apart by each card's own words", () 
   ]);
 });
 
-test("a card's words are cut to the placement bound, like a heading", () => {
+test("a card's words arrive whole, however long, as a heading does", () => {
   const long = `Soundcrest Air Pro 2 ${"with a very long marketing description ".repeat(6)}`;
   const evidence = packet([addToCart("#add-1", long), addToCart("#add-2", "Brightaisle Buds Lite")]);
-  assert.equal(evidence.elements[0]?.within?.length, 80);
-  assert.ok(long.replace(/\s+/gu, " ").startsWith(evidence.elements[0]!.within!));
+  assert.equal(evidence.elements[0]?.within, long.replace(/\s+/gu, " ").trim());
 });
 
 test("cards with the same words are still told apart, by which comes first", () => {
@@ -104,10 +104,11 @@ const close = (selector: string, x: number, y: number): JsonObject => ({ tagName
 
 test("a dialog's control and the page's control of the same name are told apart by the dialog", () => {
   const evidence = packet([close("#banner-close", 900, 10), close("#promo-close", 460, 110)], { dialogs: { open: [promotion], modal: true } });
-  // The dialog's own control comes first (`front-layer.ts`) and says whose it is.
+  // In the page's order -- nothing is moved to the front -- and the dialog's
+  // own control says whose it is.
   assert.deepEqual(evidence.elements.map((element) => [element.target, element.name, element.dialog, element.alike]), [
-    ["target.1", "Close", "Never miss a deal", undefined],
-    ["target.2", "Close", undefined, undefined]
+    ["target.1", "Close", undefined, undefined],
+    ["target.2", "Close", "Never miss a deal", undefined]
   ]);
 });
 
@@ -127,18 +128,12 @@ test("elements the packet already tells apart are given nothing, so a page witho
   for (const element of evidence.elements) assert.deepEqual([element.dialog, element.within, element.alike], [undefined, undefined, undefined], element.target);
 });
 
-test("the count describes the packet that is sent: a look-alike the budget cut is not counted", () => {
+test("the count describes the packet that is sent, and the packet is the whole page: every look-alike is counted", () => {
   const elements = [wrapper("#a", 100), wrapper("#b", 200), { tagName: "p", selector: "#note", visibleText: "x".repeat(200) }, wrapper("#c", 300)];
   const whole = packet(elements);
-  assert.deepEqual(whole.elements.filter((element) => element.tag === "div").map((element) => element.alike?.total), [3, 3, 3]);
-  // Tighten the budget one byte at a time until the last wrapper is cut.
-  let budget = JSON.stringify(whole).length + 64;
-  let cut = packet(elements, undefined, budget);
-  while (cut.elements.length === 4) cut = packet(elements, undefined, --budget);
-  assert.equal(cut.elements.length, 3);
-  assert.equal(cut.budgetTruncated, true);
-  assert.deepEqual(cut.elements.filter((element) => element.tag === "div").map((element) => element.alike), [{ index: 1, total: 2 }, { index: 2, total: 2 }]);
-  assertNoTwoAlike(cut.elements);
+  assert.equal(whole.elements.length, 4);
+  assert.deepEqual(whole.elements.filter((element) => element.tag === "div").map((element) => element.alike), [{ index: 1, total: 3 }, { index: 2, total: 3 }, { index: 3, total: 3 }]);
+  assertNoTwoAlike(whole.elements);
 });
 
 test("a store results page read as the model reads it has no two elements alike", () => {
@@ -197,8 +192,8 @@ test("a 'Set as my store' says which store it sets, whether the capture lists ev
   const folded = packet([{ tagName: "a", selector: "#home", visibleText: "Home", href: "/" }, setAsMyStore(0, 3)]);
   const example = folded.elements.find((element) => element.text === "Set as my store");
   assert.equal(example?.repeats, 3);
-  // Cut to the placement bound, like every card's words.
-  assert.equal(example?.within, STORE_CARDS[0][1].slice(0, 80));
+  // Whole, like every card's words.
+  assert.equal(example?.within, STORE_CARDS[0][1]);
   assert.equal(example?.alike, undefined);
   assertNoTwoAlike(folded.elements);
 });

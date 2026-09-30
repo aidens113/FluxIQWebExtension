@@ -1,12 +1,19 @@
 // The page-level evidence the packet carries beside its elements: which frame
-// the capture came from, whether the page is still settling, whether a dialog
-// or an overlay is standing in front of everything, what the user has
-// selected, and how much of the page was left out.
+// the capture came from and which child frames did not answer, whether the
+// page is still settling and what says so, every dialog and everything painted
+// over the page's controls, how the page was reached, and what the user has
+// selected.
 //
 // These are the items that cannot be derived from an element. The ones that
 // can -- forms, landmarks and repeating structure -- ride on the elements
-// themselves in `elements.ts`, so trimming an element for budget can never
-// leave a page-level list pointing at something the packet no longer holds.
+// themselves in `elements.ts`.
+//
+// Nothing here is cut or chosen (t200). Until 2026-09-30 the packet named at
+// most three dialogs, only the first blocker, reduced the loading indicators to
+// a spinner flag, cut the selection to 300 characters and the referrer to its
+// origin and path. Every dialog and every blocker is now listed in the order
+// the producer reports them, each indicator with its label, and every string
+// whole but screened (`./withheld.ts`, `./location.ts`).
 //
 // ## Where every field is read from
 //
@@ -16,60 +23,56 @@
 // imported by the producer and by both of this package's readers -- and every
 // read below goes through `pageEvidenceWire<T>` with the contract's own type,
 // so a field renamed on either side of the wire stops compiling here.
-//
-// It did not always. This module was written against a guessed flat shape --
-// `snapshot.loading`, `snapshot.navigation`, `snapshot.dialogs`,
-// `snapshot.blockingOverlay`, `snapshot.pendingNativeDialog` -- and every one
-// of those paths was empty against the real capture, so the model was handed
-// nothing for the very items Phase 1.4 exists to give it. The tests passed
-// because they built the shape this reader expected rather than the shape the
-// producer emits. `domain/src/tests/page-evidence-joinery.test.ts` drives real
-// captures (`page-evidence/capture.ts`) into this reader and into the state
-// projection together, so the type is backed by data.
+// `domain/src/tests/page-evidence-joinery.test.ts` drives real captures
+// (`page-evidence/capture.ts`) into this reader and into the state projection
+// together, so the type is backed by data.
 //
 // The table is the contract. A left column entry with no right column entry is
 // a packet field with no producer, and there are none: that is the invariant.
 //
-// | Packet field             | Snapshot path                                      | Note |
-// | ------------------------ | -------------------------------------------------- | ---- |
-// | `frame`                  | `frame.isTop`, plus `data-fluxiq-frame-id` on merged elements | |
-// | `selectedText`           | `selectedText`                                      | |
-// | `elementTotal`           | `elementTotal`, else `evidence.elements.matched`, else the elements carried | |
-// | `captureTruncated`       | `truncated`, else `evidence.elements.truncated`     | the one field read at two paths, and why is on `capturedTruncated` |
-// | `loading.readyState`     | `evidence.loading.documentState`                    | omitted when `complete` |
-// | `loading.busy`           | `evidence.loading.busy`                             | |
-// | `loading.spinner`        | `evidence.loading.indicators[].kind === "spinner"`  | |
-// | `loading.pendingNavigation` | `evidence.loading.pendingNavigation`             | |
-// | `navigation.type`        | `evidence.navigation.type`                          | omitted when `navigate` |
-// | `navigation.redirects`   | `evidence.navigation.redirects`                     | omitted when none |
-// | `navigation.referrer`    | `evidence.navigation.referrer`                      | origin and path only |
-// | `dialogs[].role`         | `evidence.dialogs.open[].role`                      | |
-// | `dialogs[].name`         | `evidence.dialogs.open[].label`                     | `name` is the packet's word for an accessible name, as on an element |
-// | `dialogs[].modal`        | `evidence.dialogs.open[].modal`                     | |
-// | `blockedBy.role`         | `evidence.overlays.blockers[0].role`                | the producer orders them most-blocking first |
-// | `blockedBy.name`         | `evidence.overlays.blockers[0].label`               | |
-// | `blockedBy.blocks`       | `evidence.overlays.blockers[0].blocks`              | how many controls it takes the hit for |
+// | Packet field                  | Snapshot path                                   | Note |
+// | ----------------------------- | ----------------------------------------------- | ---- |
+// | `frame.isTop`                 | `frame.isTop`                                   | |
+// | `frame.childFrameIds`         | `data-fluxiq-frame-id` on merged elements       | |
+// | `frame.unansweredFrameIds`    | `evidence.unansweredFrameIds`                   | child frames the merge got no snapshot from |
+// | `selectedText`                | `selectedText`                                  | |
+// | `captureTruncated`            | `truncated`, else `evidence.elements.truncated` | the capture itself left elements out |
+// | `loading.readyState`          | `evidence.loading.documentState`                | omitted when `complete` |
+// | `loading.busy`                | `evidence.loading.busy`                         | |
+// | `loading.indicators[]`        | `evidence.loading.indicators[]`                 | `kind` and `label`, never the selector |
+// | `loading.pendingNavigation`   | `evidence.loading.pendingNavigation`            | |
+// | `navigation.url`              | `evidence.navigation.url`                       | screened as a location is |
+// | `navigation.type`             | `evidence.navigation.type`                      | omitted when `navigate` |
+// | `navigation.redirects`        | `evidence.navigation.redirects`                 | omitted when none |
+// | `navigation.referrer`         | `evidence.navigation.referrer`                  | screened as a location is |
+// | `dialogs[].role`              | `evidence.dialogs.open[].role`                  | |
+// | `dialogs[].name`              | `evidence.dialogs.open[].label`                 | `name` is the packet's word for an accessible name, as on an element |
+// | `dialogs[].modal`             | `evidence.dialogs.open[].modal`                 | |
+// | `dialogs[].target`            | `evidence.dialogs.open[].selector`              | the handle of the element the capture described with it, never the selector |
+// | `dialogs[].kind`              | `evidence.dialogs.open[].kind`                  | consent, robot_check, ... |
+// | `blockedBy[].role`            | `evidence.overlays.blockers[].role`             | in document order, as the producer lists them |
+// | `blockedBy[].name`            | `evidence.overlays.blockers[].label`            | |
+// | `blockedBy[].blocks`          | `evidence.overlays.blockers[].blocks`           | how many controls it takes the hit for |
+// | `blockedBy[].target`          | `evidence.overlays.blockers[].selector`         | as `dialogs[].target` |
+// | `blockedBy[].kind`            | `evidence.overlays.blockers[].kind`             | |
+//
+// The same dialogs and blockers are also marked on the elements they are and
+// cover (`./layers.ts`), which is where a model reading the elements meets them.
 //
 // Two producer facts are deliberately not carried. `evidence.dialogs.armPending`
 // is not "a native dialog is pending": it is an arming for `web.dom.dialog`
-// that the page-world override has not acknowledged, so a persistent `true`
-// means the override is missing, and a packet field called
-// `pendingNativeDialog` fed from it would tell a model a dialog is on screen
-// when none is. A native dialog that is actually on screen is not observable
-// at all -- it blocks the page's script, so no snapshot can be taken while one
-// stands. `evidence.dialogs.lastNative` is a dialog already answered, which is
-// history rather than the state of the page, and it is not worth the bytes on
-// a 3,000-byte failure packet.
+// that the page-world override has not acknowledged, so a packet field fed
+// from it would tell a model a dialog is on screen when none is. A native
+// dialog that is actually on screen is not observable at all -- it blocks the
+// page's script, so no snapshot can be taken while one stands.
+// `evidence.dialogs.lastNative` is a dialog already answered, which is history
+// rather than the state of the page. Selectors -- a dialog's, a blocker's, a
+// busy region's, an indicator's -- are addresses, and no address is published:
+// a dialog or a blocker is named by its element's handle instead, where the
+// capture described it.
 //
 // Every reader below is defensive over untrusted JSON, so a malformed field
-// costs nothing and reports nothing rather than failing the whole packet. The
-// contract fixes the key; the readers still decide whether the value is worth
-// anything.
-//
-// The table has no exception: there is no packet field here without a producer.
-// `pendingNativeDialog` used to be one -- unproduced, and unproducible, because
-// an unanswered `alert` blocks the page's own script so no snapshot can leave
-// the page while one stands -- and it is gone.
+// costs nothing and reports nothing rather than failing the whole packet.
 
 import type {
   PageEvidenceWire,
@@ -83,24 +86,24 @@ import type {
   WebAutomationPageEvidence,
   WebAutomationSnapshotElementTotals
 } from "../../page-evidence";
-import { pageEvidenceWire } from "../../page-evidence";
-import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
-import { evidenceLocation, safeEvidenceUrl } from "./location";
+import { pageEvidenceWire, type WebAutomationLayerKind } from "../../page-evidence";
+import { webLlmLayerKind } from "./layer-marks";
+import { screenedEvidenceUrl } from "./location";
 import { present } from "./present";
-import { boundedCount, boundedText, isJsonRecord, trueFlag } from "./untrusted-json";
+import { countValue, isJsonRecord, pageText, trueFlag } from "./untrusted-json";
+import { screenedPageText } from "./withheld";
 
 const READY_STATES = ["loading", "interactive", "complete"];
+const INDICATOR_KINDS = ["progressbar", "spinner", "status"];
 /** The navigation type of an ordinary link or address-bar visit: it tells a reader nothing it had not assumed. */
 const ORDINARY_NAVIGATION_TYPE = "navigate";
-/** A redirect chain longer than this is a page defect, not a fact worth carrying. */
-const MAX_REDIRECTS = 100;
-/** More controls than a page can hold; the bound only stops a hostile number reaching the packet. */
-const MAX_BLOCKED_CONTROLS = 10_000;
 
 export type WebLlmEvidenceFrame = {
   isTop: boolean;
   /** The child frames whose elements reached this packet, for a merged capture. */
   childFrameIds?: number[];
+  /** Child frames the capture asked and got no answer from, so their elements are absent. */
+  unansweredFrameIds?: number[];
 };
 
 /**
@@ -112,81 +115,71 @@ export type WebLlmEvidenceDialog = {
   role?: string;
   name?: string;
   modal?: true;
+  /** The handle of the element that is this dialog, where the capture described it. */
+  target?: string;
+  /** What the dialog is (a consent wall, a robot check), where the capture recognised it. */
+  kind?: WebAutomationLayerKind;
+};
+
+/**
+ * Something painted over the page's controls, and how many of them it takes
+ * the click for. Described, never addressed: the model's answer to an overlay
+ * is to say so, not to be handed a way to reach into it.
+ */
+export type WebLlmEvidenceBlocker = {
+  role?: string;
+  name?: string;
+  blocks?: number;
+  /** The handle of the element that is this blocker, where the capture described it. */
+  target?: string;
+  /** What the layer is, where the capture recognised it. */
+  kind?: WebAutomationLayerKind;
+};
+
+/** A progress bar, spinner or loading message on screen, and what it says. */
+export type WebLlmEvidenceLoadingIndicator = {
+  kind: string;
+  label?: string;
 };
 
 export type WebLlmPageContext = {
   frame?: WebLlmEvidenceFrame;
-  loading?: { readyState?: string; busy?: true; spinner?: true; pendingNavigation?: true };
-  /** How this document was reached, when that was anything other than an ordinary visit. */
-  navigation?: { type?: string; redirects?: number; referrer?: string };
+  loading?: { readyState?: string; busy?: true; indicators?: WebLlmEvidenceLoadingIndicator[]; pendingNavigation?: true };
+  /** How this document was reached. */
+  navigation?: { url?: string; type?: string; redirects?: number; referrer?: string };
+  /** Every open dialog, top-most first. */
   dialogs?: WebLlmEvidenceDialog[];
-  /**
-   * What is painted over the page's controls, and how many of them it takes the
-   * click for. Described, never addressed: the model's answer to an overlay is
-   * to say so, not to be handed a way to reach into it.
-   */
-  blockedBy?: { role?: string; name?: string; blocks?: number };
+  /** Everything painted over the page's controls, in document order. */
+  blockedBy?: WebLlmEvidenceBlocker[];
   selectedText?: string;
-  /** How many elements the page held before the capture's own filter, when that is more than the packet carries. */
-  elementTotal?: number;
 };
 
-/** Every page-level item the snapshot can supply, each omitted when it says nothing. */
-export function webLlmPageContext(snapshot: Record<string, unknown>, childFrameIds: number[]): WebLlmPageContext {
+/**
+ * Every page-level item the snapshot can supply, each omitted when it says
+ * nothing. `handleOf` names a capture selector by the handle of the element it
+ * addresses (`./layers.ts`).
+ */
+export function webLlmPageContext(snapshot: Record<string, unknown>, childFrameIds: number[], handleOf: (selector: unknown) => string | undefined = () => undefined): WebLlmPageContext {
   const evidence = pageEvidence(snapshot);
-  const frame = evidenceFrame(snapshot.frame, childFrameIds);
-  const loading = evidenceLoading(pageEvidenceWire<WebAutomationLoadingEvidence>(evidence?.loading));
-  const navigation = evidenceNavigation(pageEvidenceWire<WebAutomationNavigationEvidence>(evidence?.navigation));
-  const dialogs = evidenceDialogs(pageEvidenceWire<WebAutomationDialogEvidence>(evidence?.dialogs));
-  const blockedBy = evidenceBlocker(pageEvidenceWire<WebAutomationOverlayEvidence>(evidence?.overlays));
-  const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
   return present<WebLlmPageContext>({
-    frame,
-    loading,
-    navigation,
-    dialogs,
-    blockedBy,
-    selectedText: selectedText || undefined,
-    // The one page-context field this reader does not read. It is the element
-    // funnel's number, so `sanitize.ts` supplies it beside the elements it
-    // counted. Named here rather than left out, because leaving a field out is
-    // exactly what this seam exists to make impossible.
-    elementTotal: undefined
+    frame: evidenceFrame(snapshot.frame, childFrameIds, evidence?.unansweredFrameIds),
+    loading: evidenceLoading(pageEvidenceWire<WebAutomationLoadingEvidence>(evidence?.loading)),
+    navigation: evidenceNavigation(pageEvidenceWire<WebAutomationNavigationEvidence>(evidence?.navigation)),
+    dialogs: evidenceDialogs(pageEvidenceWire<WebAutomationDialogEvidence>(evidence?.dialogs), handleOf),
+    blockedBy: evidenceBlockers(pageEvidenceWire<WebAutomationOverlayEvidence>(evidence?.overlays), handleOf),
+    selectedText: screenedPageText(snapshot.selectedText)
   });
 }
 
 /**
- * The pre-filter element total the packet should report, or `undefined` when
- * it would only restate the number of elements already carried.
- *
- * It is the number half of `captureTruncated`: the flag says elements were cut
- * before the packet saw them and this says how many there were, so it reads
- * the same two places. `evidence.elements.matched` is what passed the content
- * script's inclusion filter before its cap; `scanned` is deliberately not
- * used, because it counts every node the sweep walked, most of which were
- * never candidates.
- */
-export function evidenceElementTotal(snapshot: Record<string, unknown>, carried: number): number | undefined {
-  const declared = boundedCount(snapshot.elementTotal, 10_000_000) ?? boundedCount(captureElementTotals(snapshot)?.matched, 10_000_000);
-  const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
-  const total = Math.max(declared ?? 0, received);
-  return total > carried ? total : undefined;
-}
-
-/**
- * Whether the capture itself says it dropped elements before the packet ever
- * saw them -- the `captureTruncated` limit, whose remedy is to capture less of
- * the page rather than to ask for a bigger packet.
+ * Whether the capture itself says it left elements out before the packet ever
+ * saw them. The packet leaves nothing out of its own; this is the one way it
+ * can be less than the page, and the remedy is the capture's, not the packet's.
  *
  * The content script reports its element funnel at `evidence.elements`
- * (`apps/extension/src/content/evidence/types.ts`), and that is the only place
- * the flag is written today. Reading only a bare top-level `truncated` -- the
- * shape the packet was first built against and which no producer has ever set
- * -- made this signal dead: a page whose tail had already been dropped in the
- * browser arrived at the model as `truncated: false`. The top-level flag is
- * still honoured beside the funnel, deliberately and unlike the five page
- * items above, because a host or a test that sets it is stating the same fact
- * and should not be silently ignored.
+ * (`apps/extension/src/content/evidence/types.ts`). A bare top-level
+ * `truncated` is honoured beside it, because a host or a test that sets it is
+ * stating the same fact and should not be silently ignored.
  */
 export function capturedTruncated(snapshot: Record<string, unknown>): boolean {
   if (trueFlag(snapshot.truncated) === true) return true;
@@ -207,27 +200,40 @@ function items(input: unknown): unknown[] {
   return Array.isArray(input) ? input : [];
 }
 
-function evidenceFrame(input: unknown, childFrameIds: number[]): WebLlmEvidenceFrame | undefined {
+function frameIds(input: unknown): number[] {
+  const ids = items(input).flatMap((id) => {
+    const value = countValue(id);
+    return value === undefined ? [] : [value];
+  });
+  return [...new Set(ids)].sort((left, right) => left - right);
+}
+
+function evidenceFrame(input: unknown, childFrameIds: number[], unanswered: unknown): WebLlmEvidenceFrame | undefined {
   const declared = isJsonRecord(input) ? input : undefined;
   const isTop = typeof declared?.isTop === "boolean" ? declared.isTop : undefined;
-  if (isTop === undefined && !childFrameIds.length) return undefined;
+  const unansweredFrameIds = frameIds(unanswered);
+  if (isTop === undefined && !childFrameIds.length && !unansweredFrameIds.length) return undefined;
   return present<WebLlmEvidenceFrame>({
     isTop: isTop ?? true,
-    childFrameIds: childFrameIds.length ? childFrameIds : undefined
+    childFrameIds: childFrameIds.length ? childFrameIds : undefined,
+    unansweredFrameIds: unansweredFrameIds.length ? unansweredFrameIds : undefined
   });
 }
 
 function evidenceLoading(input: PageEvidenceWire<WebAutomationLoadingEvidence> | undefined): WebLlmPageContext["loading"] {
   if (!input) return undefined;
-  const documentState = boundedText(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const documentState = pageText(input.documentState)?.toLowerCase();
   const readyState = documentState && READY_STATES.includes(documentState) ? documentState : undefined;
-  const spinner = items(input.indicators)
-    .map((indicator) => pageEvidenceWire<WebAutomationLoadingIndicator>(indicator))
-    .some((indicator) => indicator?.kind === "spinner");
+  const indicators = items(input.indicators).flatMap((item) => {
+    const indicator = pageEvidenceWire<WebAutomationLoadingIndicator>(item);
+    const kind = pageText(indicator?.kind)?.toLowerCase();
+    if (!indicator || !kind || !INDICATOR_KINDS.includes(kind)) return [];
+    return [present<WebLlmEvidenceLoadingIndicator>({ kind, label: screenedPageText(indicator.label) })];
+  });
   const loading = present<NonNullable<WebLlmPageContext["loading"]>>({
     readyState: readyState && readyState !== "complete" ? readyState : undefined,
     busy: trueFlag(input.busy),
-    spinner: spinner ? true : undefined,
+    indicators: indicators.length ? indicators : undefined,
     pendingNavigation: trueFlag(input.pendingNavigation)
   });
   return Object.keys(loading).length ? loading : undefined;
@@ -235,72 +241,52 @@ function evidenceLoading(input: PageEvidenceWire<WebAutomationLoadingEvidence> |
 
 function evidenceNavigation(input: PageEvidenceWire<WebAutomationNavigationEvidence> | undefined): WebLlmPageContext["navigation"] {
   if (!input) return undefined;
-  const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
+  const type = pageText(input.type)?.toLowerCase();
+  const redirects = countValue(input.redirects);
   const navigation = present<NonNullable<WebLlmPageContext["navigation"]>>({
+    url: screenedEvidenceUrl(input.url),
     type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : undefined,
     redirects: redirects || undefined,
-    referrer: safeLocation(input.referrer)
+    referrer: screenedEvidenceUrl(input.referrer)
   });
   return Object.keys(navigation).length ? navigation : undefined;
 }
 
-/**
- * A URL the page reported, reduced to origin and path, or `undefined` when it
- * is not a safe HTTP(S) URL.
- *
- * It used to return `{ [key]: ... }` or `{}` for its caller to spread, which
- * put the field's name in a second place and out of the compiler's reach. The
- * caller names the field now.
- */
-function safeLocation(input: unknown): string | undefined {
-  try {
-    return evidenceLocation(safeEvidenceUrl(input));
-  } catch {
-    return undefined;
-  }
-}
-
-function evidenceDialogs(input: PageEvidenceWire<WebAutomationDialogEvidence> | undefined): WebLlmEvidenceDialog[] | undefined {
+function evidenceDialogs(input: PageEvidenceWire<WebAutomationDialogEvidence> | undefined, handleOf: (selector: unknown) => string | undefined): WebLlmEvidenceDialog[] | undefined {
   if (!input) return undefined;
-  const dialogs: WebLlmEvidenceDialog[] = [];
-  for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
+  const dialogs = items(input.open).flatMap((item) => {
     const raw = pageEvidenceWire<WebAutomationDialogEvidenceItem>(item);
-    if (!raw) continue;
-    const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-    const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const modal = trueFlag(raw.modal);
-    if (!role && !name && !modal) continue;
-    dialogs.push(present<WebLlmEvidenceDialog>({
-      role: role || undefined,
-      name: name || undefined,
-      modal
-    }));
-  }
+    if (!raw) return [];
+    const dialog = present<WebLlmEvidenceDialog>({
+      role: screenedPageText(raw.role),
+      name: screenedPageText(raw.label),
+      modal: trueFlag(raw.modal),
+      target: handleOf(raw.selector),
+      kind: webLlmLayerKind(raw.kind)
+    });
+    return Object.keys(dialog).length ? [dialog] : [];
+  });
   return dialogs.length ? dialogs : undefined;
 }
 
 /**
- * The one overlay worth naming: the producer orders its blockers most-blocking
- * first, so the head of the list is the thing a reader has to deal with. The
- * rest are usually its own ancestors and descendants, and none of them is what
- * a click has to get past.
+ * Every blocker the producer reports, in the document order it lists them.
+ * A blocker is reported when it says anything at all -- what it is, what it is
+ * called, or how much it covers.
  */
-function evidenceBlocker(input: PageEvidenceWire<WebAutomationOverlayEvidence> | undefined): WebLlmPageContext["blockedBy"] {
-  const blocker = items(input?.blockers)
-    .map((item) => pageEvidenceWire<WebAutomationOverlayEvidenceItem>(item))
-    .find((item) => item !== undefined);
-  if (!blocker) return undefined;
-  const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
-  // The blocker used to be reported only when it had a selector, which is no
-  // longer a thing the packet may carry. It is reported when it says anything
-  // at all -- what it is, what it is called, or how much it covers.
-  if (!role && !name && !blocks) return undefined;
-  return present<NonNullable<WebLlmPageContext["blockedBy"]>>({
-    role: role || undefined,
-    name: name || undefined,
-    blocks: blocks || undefined
+function evidenceBlockers(input: PageEvidenceWire<WebAutomationOverlayEvidence> | undefined, handleOf: (selector: unknown) => string | undefined): WebLlmEvidenceBlocker[] | undefined {
+  const blockers = items(input?.blockers).flatMap((item) => {
+    const raw = pageEvidenceWire<WebAutomationOverlayEvidenceItem>(item);
+    if (!raw) return [];
+    const blocks = countValue(raw.blocks);
+    const blocker = present<WebLlmEvidenceBlocker>({
+      role: screenedPageText(raw.role),
+      name: screenedPageText(raw.label),
+      blocks: blocks || undefined,
+      target: handleOf(raw.selector),
+      kind: webLlmLayerKind(raw.kind)
+    });
+    return Object.keys(blocker).length ? [blocker] : [];
   });
+  return blockers.length ? blockers : undefined;
 }

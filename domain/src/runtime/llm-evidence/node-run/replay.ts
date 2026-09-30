@@ -35,7 +35,6 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
 import { assertActive, captureEvidence, toolExecution, toolMetadata, withCallStates, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
-import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
 import type { WebLlmNameAssumption } from "../name-assumption";
@@ -310,12 +309,10 @@ function answer(code: string, said: string, replayed = false, about?: WebNodeRep
  * The same, with the page a step broke on, because that is the page the
  * correction has to be made from and the model has no free look to spend on it.
  *
- * A capture that cannot be taken, or that will not fit, leaves the line alone:
- * a verdict without its page is still a verdict, and a packet over budget would
- * cost the model the evidence it already has.
+ * A capture that cannot be taken leaves the line alone: a verdict without its
+ * page is still a verdict. A page that can be taken always goes with it, whole.
  */
 async function answerWithPage(run: WebNodeRun, code: string, said: string, acted: boolean, about?: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution> {
-  const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
   let page: WebLlmSnapshotBinding | undefined;
   try {
     page = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
@@ -326,7 +323,7 @@ async function answerWithPage(run: WebNodeRun, code: string, said: string, acted
     const packet: JsonObject = page.evidence as unknown as JsonObject;
     const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: false, code, said }) as unknown as JsonObject;
     const value = { ...packet, ...verdict } as unknown as JsonValue;
-    if (serializedBytes(value) <= budget) return replayStates(toolExecution(value, false, code, undefined, undefined, about), page, acted);
+    return replayStates(toolExecution(value, false, code, undefined, undefined, about), page, acted);
   } catch (error) {
     if (run.request.signal?.aborted) throw error;
   }

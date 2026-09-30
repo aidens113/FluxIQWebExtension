@@ -8,7 +8,7 @@
 // sections 3 and 7). Now each result carries `routeState`, and Core captures
 // only where no call left one. These tests hold three things: the route state a
 // call reports is exactly what `observeRouteState` returns for the same page,
-// whatever the call's own evidence bound and whatever stands in front of the
+// whatever stands in front of the
 // page; it is always the page the call *left*, never an action's read before
 // acting; and reporting it costs no capture at all.
 
@@ -104,7 +104,7 @@ function smallPage(title = "Fixture"): FakePage {
   return { url: "https://example.test/start", title, elements: [button("#go", "Go"), button("#other", "Other")] };
 }
 
-/** A page too large for a tight evidence bound, so a bound call's packet names fewer controls than the route state reads. */
+/** A page of forty-one controls, more than the packet once held. */
 function largePage(): FakePage {
   const elements = Array.from({ length: 40 }, (_, index) => ({
     tagName: "a",
@@ -128,18 +128,14 @@ function frontedPage(): FakePage {
   };
 }
 
-async function look(runtime: WebAutomationLlmEvidenceRuntime, callId: string, maxEvidenceBytes?: number): Promise<WebLlmEvidenceToolExecution> {
+async function look(runtime: WebAutomationLlmEvidenceRuntime, callId: string): Promise<WebLlmEvidenceToolExecution> {
   const value = { node: SNAPSHOT, parameters: {}, consequences: [] };
-  return await runtime.executeTool(maxEvidenceBytes === undefined
-    ? { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value }
-    : { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value, maxEvidenceBytes });
+  return await runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value });
 }
 
-async function click(runtime: WebAutomationLlmEvidenceRuntime, callId: string, handle: string, maxEvidenceBytes?: number): Promise<WebLlmEvidenceToolExecution> {
+async function click(runtime: WebAutomationLlmEvidenceRuntime, callId: string, handle: string): Promise<WebLlmEvidenceToolExecution> {
   const value = { node: CLICK, parameters: { target: { handle } }, consequences: [] };
-  return await runtime.executeTool(maxEvidenceBytes === undefined
-    ? { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value }
-    : { ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value, maxEvidenceBytes });
+  return await runtime.executeTool({ ...PROJECT, callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value });
 }
 
 function handleOf(result: WebLlmEvidenceToolExecution, text: string): string {
@@ -153,21 +149,16 @@ test("Core's reader has learned routeState, so a result carrying it is not refus
   assert.equal(WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes("routeState"), true);
 });
 
-test("a look's route state is what observeRouteState answers for the same page, whatever bound the look had", async () => {
-  for (const maxEvidenceBytes of [undefined, 2_500, 9_000]) {
-    const fake = fakePage(largePage());
-    const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
-    const looked = await look(runtime, "call.look", maxEvidenceBytes);
-    const answer = await fake.observed();
+test("a look's route state is what observeRouteState answers for the same page, and is the route state of the packet it returned", async () => {
+  const fake = fakePage(largePage());
+  const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
+  const looked = await look(runtime, "call.look");
+  const answer = await fake.observed();
 
-    assert.deepEqual(looked.routeState, answer, `bound ${maxEvidenceBytes}`);
-    if (maxEvidenceBytes === 2_500) {
-      // The bound mattered: the packet the look returned names fewer controls
-      // than the host reads, so a route state of that packet would disagree.
-      assert.equal((looked.evidence as JsonObject).budgetTruncated, true);
-      assert.notDeepEqual(webAutomationRouteState(looked.evidence as unknown as WebLlmPageEvidence), answer);
-    }
-  }
+  assert.deepEqual(looked.routeState, answer);
+  // The packet is the whole page whatever the call (t200), so the route state
+  // of what the look returned and what the host reads are one value.
+  assert.deepEqual(webAutomationRouteState(looked.evidence as unknown as WebLlmPageEvidence), answer);
 });
 
 test("a page with a dialog open and an overlay in front says both, as observeRouteState does", async () => {
@@ -181,7 +172,7 @@ test("a page with a dialog open and an overlay in front says both, as observeRou
   assert.deepEqual(looked.routeState, answer);
 
   // Refused before acting, on the same page: it reports that page.
-  const refused = await click(runtime, "call.refused", "target.999", 2_000);
+  const refused = await click(runtime, "call.refused", "target.999");
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, answer);
 });
@@ -190,10 +181,10 @@ test("an action reports the page it left, never the page it acted on", async () 
   const moved: FakePage = { url: "https://example.test/list/next", title: "Moved", elements: largePage().elements };
   const fake = fakePage(largePage(), { onClick: moved });
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
-  const looked = await look(runtime, "call.look", 2_500);
+  const looked = await look(runtime, "call.look");
   const found = await fake.observed();
 
-  const pressed = await click(runtime, "call.click", handleOf(looked, "Go"), 3_000);
+  const pressed = await click(runtime, "call.click", handleOf(looked, "Go"));
   const left = await fake.observed();
 
   assert.equal(pressed.effectApplied, true);
@@ -221,7 +212,7 @@ test("a failed action reports the page captured after the attempt", async () => 
   const fake = fakePage(frontedPage(), { failClick: true });
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
   const looked = await look(runtime, "call.look");
-  const failed = await click(runtime, "call.failed", handleOf(looked, "Go"), 3_000);
+  const failed = await click(runtime, "call.failed", handleOf(looked, "Go"));
   assert.equal(failed.effectApplied, false);
   assert.equal(typeof (failed.evidence as JsonObject).page, "object");
   assert.deepEqual(failed.routeState, await fake.observed());

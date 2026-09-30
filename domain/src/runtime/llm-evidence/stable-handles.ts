@@ -46,24 +46,25 @@
 // numbers, exactly as the packet store keys them.
 
 import { createHash } from "node:crypto";
+import type { WebLlmEvidenceBlocker, WebLlmEvidenceDialog } from "./page-evidence";
 import { present } from "./present";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 
 /**
  * The handle numbers one Flow's authoring may issue, as
- * `plan-resolution/handle-tokens.ts` matches them: `target.1` to `target.9999`.
+ * `plan-resolution/handle-tokens.ts` matches them: `target.1` to
+ * `target.999999`.
  *
- * Sized so it is never reached by one exploration. Core allows an exploration
- * 64 tool calls (`AUTOMATION_STUDIO_LLM_EVIDENCE_LOOP_LIMITS.maxToolCalls`), a
- * call takes at most three captures (the look before it acts, the look after,
- * and a page refusal's look), and a capture describes at most
- * `WEB_LLM_EVIDENCE_BOUNDS.elements` (40): 7,680 numbers if every element of
- * every capture were new, which on a real site they are not. Numbers are
- * spent lowest first, so a handle is only as long as the exploration needed.
+ * A capture now describes every element of the page (t200), not forty, so a
+ * page of a few thousand elements spends a few thousand numbers on its first
+ * look. Six digits holds a thousand such captures of entirely new elements,
+ * which no exploration comes near: a recapture of a page reuses the numbers its
+ * elements already have. Numbers are spent lowest first, so a handle is only as
+ * long as the exploration needed.
  */
-export const WEB_LLM_TARGET_HANDLE_MAX_NUMBER = 9_999;
+export const WEB_LLM_TARGET_HANDLE_MAX_NUMBER = 999_999;
 /** Every handle this module can issue and nothing else: `target.` and a number from 1 to `WEB_LLM_TARGET_HANDLE_MAX_NUMBER`. */
-export const WEB_LLM_TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]{0,3}$";
+export const WEB_LLM_TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]{0,5}$";
 /** Flows remembered, as the packet store bounds them: a Flow the store still resolves still has its numbers. */
 const RETAINED_FLOWS = 32;
 
@@ -168,7 +169,9 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
 
 /**
  * The binding with each element's handle replaced, element and every
- * handle-keyed map together -- and the failed target with it, where the packet
+ * handle-keyed map together, and every handle one element names of another
+ * (`covers`, `coveredBy`, `inDialog`, a dialog's or blocker's `target`) with
+ * it -- and the failed target with it, where the packet
  * marks one, so a failure packet cannot end up naming a handle its own
  * elements no longer carry. Authoring captures never mark one; the line is
  * here so that a caller that does cannot be broken silently by this module.
@@ -189,8 +192,22 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (hosts !== undefined) shadowHosts.set(target, hosts);
     return { ...element, target };
   });
+  const rename = (handle: string): string => renamed.get(handle) ?? handle;
+  // The layer marks name other elements by handle (`layers.ts`), so they are
+  // renamed with them: a cover must still name what it covers.
+  for (const element of elements) {
+    if (element.covers !== undefined) element.covers = element.covers.map(rename);
+    if (element.coveredBy !== undefined) element.coveredBy = element.coveredBy.map(rename);
+    if (element.inDialog !== undefined) element.inDialog = rename(element.inDialog);
+  }
   const evidence: WebLlmPageEvidence = { ...binding.evidence, elements };
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;
+  if (evidence.dialogs !== undefined) {
+    evidence.dialogs = evidence.dialogs.map((dialog) => present<WebLlmEvidenceDialog>({ role: dialog.role, name: dialog.name, modal: dialog.modal, target: dialog.target === undefined ? undefined : rename(dialog.target), kind: dialog.kind }));
+  }
+  if (evidence.blockedBy !== undefined) {
+    evidence.blockedBy = evidence.blockedBy.map((blocker) => present<WebLlmEvidenceBlocker>({ role: blocker.role, name: blocker.name, blocks: blocker.blocks, target: blocker.target === undefined ? undefined : rename(blocker.target), kind: blocker.kind }));
+  }
   // The digest and the route state are of the page, and renumbering does not
   // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
   // reads no handle), so both travel as they were taken.
