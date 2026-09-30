@@ -36,7 +36,7 @@ import {
 import { testIdFor } from "../describe-element";
 import { selectorFor } from "../selector";
 import { inferListFromElement } from "../extraction";
-import { isPickerHostNode } from "../picker-host";
+import { isExtensionUiNode } from "../picker-host";
 import { closePickerOverlay, openPickerOverlay, pointPickerOverlay } from "./overlay";
 
 /** Every event of a press, so none of them reaches the page or the recorder. */
@@ -142,9 +142,9 @@ function pickedElement(target: Element): ExtractionPickedElement {
  */
 function pickTarget(event: MouseEvent): Element | null {
   const target = event.target;
-  if (target instanceof Element && !isPickerHostNode(target)) return target;
+  if (target instanceof Element && !isExtensionUiNode(target)) return target;
   const under = document.elementFromPoint(event.clientX, event.clientY);
-  return under && !isPickerHostNode(under) ? under : null;
+  return under && !isExtensionUiNode(under) ? under : null;
 }
 
 function trackPointer(event: PointerEvent): void {

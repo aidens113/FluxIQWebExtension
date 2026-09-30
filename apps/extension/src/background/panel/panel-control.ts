@@ -1,5 +1,5 @@
 // The worker half of the panel's own requests: saving settings, opening
-// FluxIQ, the conversation, and Stop.
+// FluxIQ, the conversation, Stop, and FluxIQ's live activity.
 //
 // Shaped like `extraction/control.ts`: one `handled` / `response` answer per
 // message, so `background/index.ts` gains two lines.
@@ -11,10 +11,14 @@
 // threads, answer a question FluxIQ asked them, or stop their run. Saving
 // settings is no less sharp: whoever sets the FluxIQ address decides where the
 // token is sent next. `tests/panel-control.test.ts` proves each refusal happens
-// before anything is touched.
+// before anything is touched. The activity requests spend no token, but the
+// overlay preference is the panel's control over what is drawn on the page
+// under test, so the page does not get to set it.
 
+import { ACTIVITY_MESSAGES, type ActivityOverlayPreference, type ExtensionActivityState } from "../../shared/activity/index";
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, FluxIQSettings, PanelStopRunRequest } from "../../shared/protocol";
+import { isActivityOverlayPreference } from "../activity/index";
 import { isControlPage } from "../control-page";
 import { relayConversation } from "./conversation-relay";
 import { fluxIQWebAddress } from "./open-fluxiq";
@@ -36,6 +40,10 @@ export type PanelControlDeps = {
   readonly applySettings: (settings: FluxIQSettings) => void;
   readonly status: () => Promise<ExtensionStatus>;
   readonly openTab: (url: string) => Promise<void>;
+  readonly activity: {
+    readonly read: () => Promise<ExtensionActivityState>;
+    readonly setOverlay: (overlay: ActivityOverlayPreference) => Promise<ExtensionActivityState>;
+  };
 };
 
 const PANEL_MESSAGES: ReadonlySet<string> = new Set([
@@ -44,7 +52,9 @@ const PANEL_MESSAGES: ReadonlySet<string> = new Set([
   RUNTIME_MESSAGES.panelConversationRead,
   RUNTIME_MESSAGES.panelConversationSend,
   RUNTIME_MESSAGES.panelConversationAnswer,
-  RUNTIME_MESSAGES.panelStopRun
+  RUNTIME_MESSAGES.panelStopRun,
+  ACTIVITY_MESSAGES.read,
+  ACTIVITY_MESSAGES.setOverlay
 ]);
 
 export async function handlePanelControl(message: ControlMessage, sender: chrome.runtime.MessageSender, deps: PanelControlDeps): Promise<ControlResult> {
@@ -64,6 +74,11 @@ async function respond(message: ControlMessage, deps: PanelControlDeps): Promise
     if (!url) return relayFailure("invalid_request", "The FluxIQ address in settings is not a web address.");
     await deps.openTab(url);
     return { ok: true, url };
+  }
+  if (message.type === ACTIVITY_MESSAGES.read) return { ok: true, state: await deps.activity.read() };
+  if (message.type === ACTIVITY_MESSAGES.setOverlay) {
+    if (!isActivityOverlayPreference(message.overlay)) return relayFailure("invalid_request", "The overlay must be expanded, collapsed or hidden.");
+    return { ok: true, state: await deps.activity.setOverlay(message.overlay) };
   }
   if (message.type === RUNTIME_MESSAGES.panelStopRun) return stopRun(message as Partial<PanelStopRunRequest>, deps.relay);
   return relayConversation(message, deps.relay);
