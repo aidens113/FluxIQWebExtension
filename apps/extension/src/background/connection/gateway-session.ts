@@ -9,6 +9,7 @@
 
 import {
   createClientGatewayMessage,
+  FluxIQClientGatewayOpenError,
   FluxIQClientGatewayWebSocketClient
 } from "@fluxiq/client-gateway-websocket";
 import { WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/client";
@@ -60,6 +61,9 @@ export type GatewaySessionDeps = {
   readonly beforeConnect: () => Promise<void>;
   readonly queue: GatewayEventQueue;
   readonly handlers: GatewaySessionHandlers;
+  // How long a socket is given to open. Omitted in the extension, which takes
+  // Core's `CLIENT_GATEWAY_OPEN_TIMEOUT_MS`; tests shorten it.
+  readonly openTimeoutMs?: number;
 };
 
 export type GatewaySessionHandlers = {
@@ -115,6 +119,7 @@ export class GatewaySession {
       url: this.deps.settings().gatewayUrl,
       client: this.clientHello(),
       WebSocketImpl: WebSocket as never,
+      ...(this.deps.openTimeoutMs !== undefined ? { openTimeoutMs: this.deps.openTimeoutMs } : {}),
       tokenStorage: {
         read: () => this.deps.session().token,
         write: async (token) => {
@@ -142,8 +147,12 @@ export class GatewaySession {
     this.attachClientHandlers(client);
     try {
       await client.connect();
-    } catch {
-      this.fail("WebSocket connection failed.");
+    } catch (error) {
+      // An attempt a newer connect() replaced -- a second Connect, a reconnect --
+      // owns nothing any more: failing here would mark the live attempt failed
+      // and schedule a reconnect that closes its socket.
+      if (this.client !== client) return;
+      this.fail(connectFailureMessage(error));
       if (this.shouldStayConnected && this.deps.settings().autoReconnect) this.scheduleReconnect();
     }
   }
@@ -338,4 +347,13 @@ export class GatewaySession {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
   }
+}
+
+// What a person, and the Lab, read in `lastError` when a socket never opened:
+// the reason by name, so a connect that used to hang now says which way it ended.
+function connectFailureMessage(error: unknown): string {
+  if (!(error instanceof FluxIQClientGatewayOpenError)) return "WebSocket connection failed.";
+  if (error.code === "open_timeout") return `FluxIQ did not open the connection within ${Math.max(1, Math.round((error.timeoutMs ?? 0) / 1000))} s (open_timeout).`;
+  if (error.code === "closed_before_open") return "FluxIQ closed the connection before it opened (closed_before_open).";
+  return "FluxIQ refused or dropped the connection before it opened (open_failed).";
 }

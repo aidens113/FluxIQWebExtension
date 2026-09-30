@@ -90,7 +90,9 @@ export type WebLlmEvidenceElement = {
   /**
    * Only on such an element: the words of the row, card or list item it sits
    * in, less its controls' words, where those differ between the look-alikes --
-   * "the Add to cart in the Soundcrest Air Pro 2 card".
+   * "the Add to cart in the Soundcrest Air Pro 2 card". Also on an element
+   * carrying `repeats` that has no look-alike in the packet: the example stands
+   * for copies the packet does not list, and this says which row it is.
    */
   within?: string;
   /**

@@ -157,3 +157,48 @@ test("a store results page read as the model reads it has no two elements alike"
   const evidence = packet(interactiveElements, { dialogs: { open: [{ ...promotion, bounds: { x: 0, y: 0, width: 50, height: 50 } }], modal: false } });
   assertNoTwoAlike(evidence.elements);
 });
+
+// The big-box store chooser of live run `run-munpjclw-52592f43`: three cards
+// with an identical "Set as my store", told apart only by the card. The record
+// words are what the page reads for them (`apps/extension/src/content/tests/
+// repeat-exemplars.test.ts`).
+const STORE_CARDS = [
+  ["Carden Falls Neighborhood Market", "Carden Falls Neighborhood Market212 W Mill St, Carden Falls · 3.4 miOpen until 10pm"],
+  ["Millbrook Crossing Supercenter", "Millbrook Crossing Supercenter88 Ferris Rd, Millbrook · 9.8 miOpen 24 hours"],
+  ["Millbrook Crossing Neighborhood Market", "Millbrook Crossing Neighborhood Market17 Canal St, Millbrook · 10.6 miOpen until 10pm"]
+] as const;
+
+function setAsMyStore(index: number, repeatCount?: number): JsonObject {
+  const button: JsonObject = {
+    tagName: "button",
+    selector: `.pl > li:nth-of-type(${index + 2}) > button`,
+    visibleText: "Set as my store",
+    attributes: { type: "button" },
+    context: { listPosition: { index: index + 2, total: 4 }, record: { text: STORE_CARDS[index]![1] }, shadowHosts: ["vr-fulfillment-picker"] },
+    documentBounds: { x: 20, y: 120 + 90 * index, width: 120, height: 28 }
+  };
+  if (repeatCount !== undefined) button.repeatCount = repeatCount;
+  return button;
+}
+
+test("a 'Set as my store' says which store it sets, whether the capture lists every card's or one for all three", () => {
+  // Listed, as the capture now lists a short run of controls. Each carries its
+  // place in the list, "item 3 of 4", which says no store: its card does.
+  const listed = packet([0, 1, 2].map((index) => setAsMyStore(index)));
+  for (const [index, [store]] of STORE_CARDS.entries()) {
+    const element = listed.elements[index];
+    assert.deepEqual(element?.item, { index: index + 2, total: 4 });
+    assert.ok(element?.within?.startsWith(store), `${element?.target} does not name ${store}: ${element?.within}`);
+  }
+  assertNoTwoAlike(listed.elements);
+
+  // Folded to one example standing for three, the example alone in the packet:
+  // it says whose it is, so it is not read as the button for any store.
+  const folded = packet([{ tagName: "a", selector: "#home", visibleText: "Home", href: "/" }, setAsMyStore(0, 3)]);
+  const example = folded.elements.find((element) => element.text === "Set as my store");
+  assert.equal(example?.repeats, 3);
+  // Cut to the placement bound, like every card's words.
+  assert.equal(example?.within, STORE_CARDS[0][1].slice(0, 80));
+  assert.equal(example?.alike, undefined);
+  assertNoTwoAlike(folded.elements);
+});

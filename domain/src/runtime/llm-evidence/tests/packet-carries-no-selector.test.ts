@@ -42,9 +42,16 @@ const SELECTORS = [
  * The records two row controls sit in, as the page identified them: a key and
  * the attribute it came from, and a row's own words. They are half of each
  * element's address, kept in the binding beside the selector, and none of them
- * may reach the packet either.
+ * may reach the packet as an address.
+ *
+ * The key and its attribute never reach it at all: an identifier nobody reads.
+ * The row's words reach it once, as the example's `within`, which is what
+ * says the example is the gift-wrap note's and not every note's
+ * (`../look-alikes.ts`) -- description, in the packet's one field for a row's
+ * words, cut to the placement bound, and never the record address.
  */
-const ROW_RECORD = ["data-line-id", "line_7d3c9d", "Gift wrap requested for the second parcel"];
+const ROW_KEY = ["data-line-id", "line_7d3c9d"];
+const ROW_WORDS = "Gift wrap requested for the second parcel";
 
 /**
  * Every key a packet element may carry, written out rather than derived, so
@@ -56,8 +63,11 @@ const ALLOWED_ELEMENT_KEYS = new Set([
   "focused", "recent", "changed", "form", "landmark", "heading", "item", "cell",
   // How many rows a repeated control's example stands for: a count the page
   // took, never a way to reach one of them. The record behind the row stays in
-  // the binding (`ROW_RECORD` above).
+  // the binding (`ROW_KEY` above).
   "repeats",
+  // The words of the row an example sits in, so it does not read as every
+  // row's control (`../look-alikes.ts`).
+  "within",
 ]);
 
 /** Every key the whole packet may carry, at any depth. */
@@ -147,7 +157,9 @@ test("no selector from a realistic page survives into the packet", () => {
   assert.doesNotMatch(serialized, /"(?:selector|selectors|xpath|queryPath|css|locator|cssSelector|path)"/u);
   // The row controls arrived, counted, and the rows they sit in did not.
   assert.deepEqual(evidence.elements.filter((element) => element.repeats !== undefined).map((element) => [element.name, element.repeats]), [["Line actions", 12], ["Dismiss note", 3]]);
-  for (const part of ROW_RECORD) assert.equal(serialized.includes(part), false, part);
+  for (const part of ROW_KEY) assert.equal(serialized.includes(part), false, part);
+  assert.equal(serialized.split(ROW_WORDS).length - 1, 1, "the row's words appear once");
+  assert.equal(evidence.elements.find((element) => element.name === "Dismiss note")?.within, ROW_WORDS);
   assert.doesNotMatch(serialized, /"(?:record|records|key|keyAttribute)"/u);
 
   // The guarantee that outlives this file: every key the packet carries,

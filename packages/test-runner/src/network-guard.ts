@@ -30,6 +30,23 @@ const SERVICE_WORKER_CANARY_ORIGIN = "http://fluxiq-network-guard-canary.invalid
 const SERVICE_WORKER_CANARY_TIMEOUT_MS = 5_000;
 
 /**
+ * How long a worker's global scope is given to finish being set up before its
+ * canary may be sent, and how often it is asked. Measured 2026-09-30 on
+ * Chromium 134 (t174-w7): Playwright announces a service worker -- and a
+ * `worker.evaluate` runs in it -- while its global scope is still being set
+ * up, so `setTimeout is not defined` there, and a `fetch()` evaluated at that
+ * moment kills the extension's renderer with STATUS_BREAKPOINT. The worker
+ * dies with it, so does every extension page in the same process, and in that
+ * browser the worker was not started again: the next `fluxiq.connect` was
+ * never answered. It ended 9 of 10 Lab starts that way before this wait.
+ */
+const SERVICE_WORKER_SCOPE_TIMEOUT_MS = 10_000;
+const SERVICE_WORKER_SCOPE_INTERVAL_MS = 50;
+
+/** Only for tests: how long and how often the guard waits for a worker's scope. */
+export type DeterministicNetworkGuardOptions = { workerScopeTimeoutMs?: number; workerScopeIntervalMs?: number };
+
+/**
  * Playwright 1.51.1 routes a service worker's requests through
  * `context.route` only when this variable is set in the Playwright process as
  * the worker attaches (`playwright-core/lib/server/chromium/crServiceWorker.js:38`).
@@ -82,7 +99,10 @@ export type DeterministicNetworkGuard = {
 export async function installDeterministicNetworkGuard(
   context: BrowserContext,
   policy: DeterministicNetworkPolicy,
+  options: DeterministicNetworkGuardOptions = {},
 ): Promise<DeterministicNetworkGuard> {
+  const scopeTimeoutMs = options.workerScopeTimeoutMs ?? SERVICE_WORKER_SCOPE_TIMEOUT_MS;
+  const scopeIntervalMs = options.workerScopeIntervalMs ?? SERVICE_WORKER_SCOPE_INTERVAL_MS;
   const allowed = compilePolicy(policy);
   const violations: NetworkViolation[] = [];
   const proofs = new Map<string, Promise<boolean>>();
@@ -122,6 +142,15 @@ export async function installDeterministicNetworkGuard(
   const workerProofs = new Set<Promise<void>>();
   const proveWorker = (worker: Worker): void => {
     const proof = (async () => {
+      // Never fetch into a scope that is still being set up (see SERVICE_WORKER_SCOPE_TIMEOUT_MS).
+      let scope: "ready" | "unready";
+      try {
+        scope = await awaitWorkerScope(worker, scopeTimeoutMs, scopeIntervalMs);
+      } catch {
+        // best-effort: the worker closed while it was being asked; its successor attaches as a new worker and is proven on its own event.
+        return;
+      }
+      if (scope === "unready") { violations.push({ kind: "service-worker", destination: workerOrigin(worker.url()) }); return; }
       const canary = `${SERVICE_WORKER_CANARY_ORIGIN}/${randomUUID()}`;
       canaries.set(canary, false);
       try {
@@ -148,6 +177,21 @@ export async function installDeterministicNetworkGuard(
     assertNoViolations: () => { if (violations.length) throw new DeterministicNetworkViolationError(violations.map(item => ({ ...item }))); },
     serviceWorkersProven: async () => { await Promise.all([...workerProofs]); },
   };
+}
+
+/**
+ * Asks the worker, with evaluates that touch nothing but `typeof`, until its
+ * global scope has its timers and `fetch`, or the deadline passes. Resolves
+ * `"ready"` or `"unready"`; a worker that closes while being asked rejects,
+ * which the caller treats as gone.
+ */
+async function awaitWorkerScope(worker: Worker, timeoutMs: number, intervalMs: number): Promise<"ready" | "unready"> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await worker.evaluate(() => typeof setTimeout === "function" && typeof fetch === "function")) return "ready";
+    if (Date.now() >= deadline) return "unready";
+    await new Promise<void>(resolve => { setTimeout(resolve, intervalMs); });
+  }
 }
 
 export function isAllowedDeterministicDestination(url: string, policy: DeterministicNetworkPolicy): boolean {

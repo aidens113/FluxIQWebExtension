@@ -113,8 +113,9 @@ async function contextWithWorkers(initial: Array<{ url: string; behaviour: Worke
   }) as unknown as Route;
   const worker = (url: string, behaviour: WorkerBehaviour) => ({
     url: () => url,
-    evaluate: async (_fn: unknown, arg: { url: string; timeoutMs: number }) => {
+    evaluate: async (_fn: unknown, arg?: { url: string; timeoutMs: number }) => {
       if (behaviour === "gone") throw new Error("Target page, context or browser has been closed");
+      if (arg === undefined) return true;
       // A routed worker's fetch reaches the context route; an unrouted one's goes straight to the network.
       if (behaviour === "routed") await requestHandler(routeFor(arg.url));
     },
@@ -177,4 +178,63 @@ test("each internal scheme passes because it is answered inside the browser; eve
   for (const url of ["file:///C:/Users/secret.txt", "chrome://version", "ftp://example.test/", "javascript:alert(1)", "filesystem:http://127.0.0.1:4100/temporary/x"]) {
     assert.equal(isAllowedDeterministicDestination(url, policy), false, url);
   }
+});
+
+// --- A worker's scope before its script has run ------------------------------
+// Measured 2026-09-30 on Chromium 134 (t174-w7): Playwright announces a service
+// worker while its global scope is still being set up -- an evaluate there sees
+// `setTimeout is not defined` -- and a `fetch()` evaluated at that moment kills
+// the extension's renderer (STATUS_BREAKPOINT), taking the worker and every
+// extension page with it. The canary fired then in 9 of 10 Lab starts; the same
+// canary 3 s later crashed nothing. So the canary must wait for the scope.
+
+/** A worker whose scope is set up only after `readyAfter` readiness questions; a canary before then "crashes" it. */
+function unreadyWorker(readyAfter: number, requestHandler: () => (route: Route) => Promise<void>) {
+  const calls: string[] = [];
+  let asked = 0;
+  return {
+    calls,
+    worker: {
+      url: () => "chrome-extension://abcdef/background/index.js",
+      evaluate: async (_fn: unknown, arg?: { url: string; timeoutMs: number }) => {
+        if (arg === undefined) { asked += 1; calls.push(asked > readyAfter ? "ready" : "not-ready"); return asked > readyAfter; }
+        if (asked <= readyAfter) { calls.push("canary-before-ready"); throw new Error("Target crashed"); }
+        calls.push("canary");
+        await requestHandler()({ request: () => ({ url: () => arg.url, resourceType: () => "fetch" }), continue: async () => undefined, abort: async () => undefined } as unknown as Route);
+      },
+    },
+  };
+}
+
+function contextWithWorker(worker: unknown) {
+  let requestHandler!: (route: Route) => Promise<void>;
+  const context = {
+    route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; },
+    routeWebSocket: async () => undefined,
+    serviceWorkers: () => [worker],
+    on: () => undefined,
+  } as unknown as BrowserContext;
+  return { context, handler: () => requestHandler };
+}
+
+test("the canary is not fetched in a worker whose global scope is not set up yet", async () => {
+  let handler!: () => (route: Route) => Promise<void>;
+  const subject = unreadyWorker(3, () => handler());
+  const built = contextWithWorker(subject.worker);
+  handler = built.handler;
+  const guard = await installDeterministicNetworkGuard(built.context, policy, { workerScopeIntervalMs: 1 });
+  await guard.serviceWorkersProven();
+  assert.deepEqual(subject.calls, ["not-ready", "not-ready", "not-ready", "ready", "canary"]);
+  assert.deepEqual(guard.violations(), [], "a worker proven after its scope was ready is not a finding");
+});
+
+test("a worker whose scope never becomes ready is unproven, and says so as a violation", async () => {
+  let handler!: () => (route: Route) => Promise<void>;
+  const subject = unreadyWorker(Number.POSITIVE_INFINITY, () => handler());
+  const built = contextWithWorker(subject.worker);
+  handler = built.handler;
+  const guard = await installDeterministicNetworkGuard(built.context, policy, { workerScopeIntervalMs: 1, workerScopeTimeoutMs: 20 });
+  await guard.serviceWorkersProven();
+  assert.ok(!subject.calls.includes("canary-before-ready") && !subject.calls.includes("canary"), "no canary is ever sent into an unready scope");
+  assert.deepEqual(guard.violations(), [{ kind: "service-worker", destination: "chrome-extension://abcdef" }]);
 });

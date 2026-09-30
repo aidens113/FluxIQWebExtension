@@ -18,9 +18,21 @@
 //   not all in the same one;
 // - `within`, the words of the row, card or list item it sits in -- the
 //   record's own words, less its controls' (`apps/extension/src/content/
-//   identity/record.ts`) -- where those words differ between them;
+//   identity/record.ts`) -- where those words differ between them, and whether
+//   or not their places in a list or table differ: "item 3 of 4" is a
+//   different string, not a store's name (`placeFreeDescription`);
 // - and, for any that still read the same, `alike`: which of them this is, top
 //   to bottom on the page, and how many there are in this packet.
+//
+// One element is a look-alike with nothing beside it in the packet: the example
+// the capture keeps of a control every row repeats, carrying `repeats`, whose
+// copies are listed after every distinct element or not at all
+// (`apps/extension/src/content/repeat-exemplars.ts`). It is given `within`
+// whenever its record has words. Without them it reads as *the* "Set as my
+// store" or *the* "Add to cart", and a model that wants another row's presses
+// it anyway: live run `run-munpjclw-52592f43` set the wrong store twice that
+// way. With them it reads as the first row's, and `repeats` says there are
+// others.
 //
 // All three are closed and bounded: two short page strings already cut to the
 // packet's placement bound, and a pair of counts. After them no two elements
@@ -35,7 +47,7 @@
 
 import type { WebLlmEvidenceElement } from "./elements";
 
-/** What the page says about an element beyond what it is, published only where it tells two look-alikes apart. */
+/** What the page says about an element beyond what it is, published only where it tells two look-alikes apart, or says which row a repeated control's example is in. */
 export type WebLlmLookAlikeCues = {
   /** The words of the row, card or list item the element sits in, already bounded. */
   within?: string | undefined;
@@ -60,7 +72,8 @@ export function tellWebLlmLookAlikesApart(elements: WebLlmEvidenceElement[], cue
     delete element.within;
     delete element.alike;
   }
-  for (const group of lookAlikeGroups(elements)) {
+  const groups = lookAlikeGroups(elements, placeFreeDescription);
+  for (const group of groups) {
     for (const cue of CUES) {
       const values = group.map((element) => cues.get(element.target)?.[cue]);
       // A cue every one of them shares, or none of them has, tells nobody apart.
@@ -71,7 +84,15 @@ export function tellWebLlmLookAlikesApart(elements: WebLlmEvidenceElement[], cue
       });
     }
   }
-  for (const group of lookAlikeGroups(elements)) {
+  // An example standing for copies the packet does not list is a look-alike
+  // of those copies, with nothing in the packet to be told apart from.
+  const grouped = new Set(groups.flat());
+  for (const element of elements) {
+    if (element.repeats === undefined || grouped.has(element)) continue;
+    const within = cues.get(element.target)?.within;
+    if (within !== undefined) element.within = within;
+  }
+  for (const group of lookAlikeGroups(elements, webLlmElementDescription)) {
     const ordered = [...group].sort(topToBottom(cues, elements));
     ordered.forEach((element, index) => {
       element.alike = { index: index + 1, total: ordered.length };
@@ -79,11 +100,23 @@ export function tellWebLlmLookAlikesApart(elements: WebLlmEvidenceElement[], cue
   }
 }
 
+/**
+ * The description less the element's place in a list or table. Used only to
+ * decide who is given `dialog` and `within`: "item 3 of 4" makes two controls
+ * different strings, but it does not say which store a "Set as my store" sets,
+ * and on the store chooser, all three listed, it was all the buttons carried. A position is
+ * what is left when the words are the same, which is what `alike` is for.
+ */
+function placeFreeDescription(element: WebLlmEvidenceElement): string {
+  const { item: _item, cell: _cell, ...placeFree } = element;
+  return webLlmElementDescription(placeFree);
+}
+
 /** Every set of two or more elements with one description, each in packet order. */
-function lookAlikeGroups(elements: readonly WebLlmEvidenceElement[]): WebLlmEvidenceElement[][] {
+function lookAlikeGroups(elements: readonly WebLlmEvidenceElement[], describe: (element: WebLlmEvidenceElement) => string): WebLlmEvidenceElement[][] {
   const groups = new Map<string, WebLlmEvidenceElement[]>();
   for (const element of elements) {
-    const key = webLlmElementDescription(element);
+    const key = describe(element);
     const group = groups.get(key);
     if (group) group.push(element);
     else groups.set(key, [element]);

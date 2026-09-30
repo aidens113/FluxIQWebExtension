@@ -51,6 +51,29 @@
 //   another. A passive wrapper is not exempt: the catalogue's `article`, which
 //   is all its keyed `li` holds, is one card of eight like any other.
 //
+// ## A short list of choices is not a template
+//
+// Folding assumes the rest of a run can be reached: a particular row's control
+// is reached by narrowing the page -- a search, a filter -- until it is listed.
+// A handful of cards offering the same button is not that page. The big-box
+// retailer's store chooser (`bigbox-retail/shell/store-picker.ts`) is four
+// store cards, three of them with an identical "Set as my store"; folded, the
+// first card's button was the exemplar and the other two ranked behind every
+// distinct element, past the forty the packet describes. Nothing narrows four
+// stores, so the model was shown one button for three stores and set the
+// first one -- twice, in live run `run-munpjclw-52592f43`, because after the
+// first switch another store was first.
+//
+// So a run of controls with at most `MAX_LISTED_CHOICES` members is not folded:
+// every member ranks where it would have, none stands for the others, and the
+// domain tells them apart by each record's words
+// (`domain/src/runtime/llm-evidence/look-alikes.ts`). Listing one costs at most
+// four more handles. Only controls: a short run's text, images and wrappers
+// still fold, because the words that tell its controls apart already ride on
+// each control as the record it sits in. Past the bound -- the scheduler's 280
+// rows, a grid of product cards, a queue narrowed to ten -- it is a template
+// and folds as before.
+//
 // An element the user or an action just touched keeps its place whatever run
 // it is in. The snapshot passes those in: what the recorder saw an event reach,
 // and what the runtime interaction ledger (`evidence/interactions.ts`) saw any
@@ -77,13 +100,15 @@ import { isRecordElement } from "./identity";
 
 /** Records a parent must hold to be a run rather than a coincidence, as `evidence/repeating.ts` counts one. */
 const MIN_RUN = 3;
+/** The most members a run of controls may have and still be listed whole: a choice among a few, not a template. */
+const MAX_LISTED_CHOICES = 5;
 /** How far above an element its record may be, as in `identity/record.ts`. */
 const MAX_RECORD_DEPTH = 12;
 /** Separates the parts of a kind; page markup cannot put it in a tag or a type. */
 const KIND_SEPARATOR = String.fromCharCode(31);
 
 export type RepeatExemplars = {
-  /** Each run's exemplar, with how many elements the run holds, the exemplar included. Only runs of two or more. */
+  /** Each run's exemplar, with how many elements the run holds, the exemplar included. Only folded runs: two or more of anything but controls, more than `MAX_LISTED_CHOICES` of controls. */
   counts: ReadonlyMap<Element, number>;
   /** Every other member of a run, which the snapshot ranks after every element that is not one. */
   followers: ReadonlySet<Element>;
@@ -112,6 +137,8 @@ export function repeatExemplars(elements: readonly Element[], touched: ReadonlyS
   const followers = new Set<Element>();
   for (const [exemplar, ...rest] of runs.values()) {
     if (!exemplar || rest.length === 0) continue;
+    // Every member of a kind has one tag and role, so the exemplar answers for the run.
+    if (rest.length + 1 <= MAX_LISTED_CHOICES && isInteractableUiElement(exemplar)) continue;
     counts.set(exemplar, rest.length + 1);
     for (const member of rest) {
       if (!touched.has(member)) followers.add(member);
