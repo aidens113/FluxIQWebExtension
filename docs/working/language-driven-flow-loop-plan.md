@@ -26,6 +26,7 @@ and its own `fxwork/<id>` tree:
 | t188 node limits | merged | Core `c961f4a`, downstream `37379fe3` |
 | t189 decision context | merged | Core `f0dbbd6`, downstream `ca07baae`; repeats now shown to the model; live effect unproven |
 | t185 live activity + chat | merged | Core `a28815c`, downstream `6818da22`; first browser proof is t174's next run |
+| t191 chat UI + overlay | `lead` (t185's) | user verdict: chat not ChatGPT-like, overlay not visible on the site, status flickers; screenshot-driven fix |
 | t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
 **Machine rules for every lane (binding).**
