@@ -27,10 +27,12 @@
 // reached it.
 
 import { spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { EXTENSION_ENTRY_NAMES, bundleExtensionEntry } from "./build-extension.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { browserEntryDrift } from "./browser-entries.mjs";
+import { EXTENSION_BUNDLE_SOURCES, EXTENSION_ENTRY_NAMES, bundleExtensionEntry } from "./build-extension.mjs";
 
 const tsc = createRequire(import.meta.url).resolve("typescript/bin/tsc");
 
@@ -51,14 +53,38 @@ for (const { project, args } of projects) {
 
 // Never written to: it only gives esbuild the output paths it would report.
 const unwrittenOutput = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".bundle-check");
+const metafiles = [];
+let bundled = true;
 for (const name of EXTENSION_ENTRY_NAMES) {
   try {
-    await bundleExtensionEntry(name, unwrittenOutput, { logLevel: "error", write: false });
+    await bundleExtensionEntry(name, unwrittenOutput, { logLevel: "error", write: false, metafiles });
   } catch {
     // esbuild has already printed each error, with its location, at log level "error".
     console.error(`extension check: the browser bundle "${name}" does not build.`);
     failed = true;
+    bundled = false;
   }
+}
+
+// The structure audit's browser-imports rule walks from configured entries in
+// this repository and in FluxIQ Core; hold both lists to the bundle just made
+// (browser-entries.mjs). Only when every entry bundled: a failed bundle has no
+// complete metafile to compare.
+if (bundled) {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const coreRoot = realpathSync(path.resolve(repoRoot, "..", "!FluxIQ"));
+  const load = async (root) => (await import(pathToFileURL(path.join(root, "scripts", "structure-audit", "config.mjs")).href)).CONFIG;
+  const drift = browserEntryDrift({
+    metafiles,
+    workingDirectory: process.cwd(),
+    repoRoot,
+    coreRoot,
+    bundledEntrySources: EXTENSION_BUNDLE_SOURCES.entries,
+    repositoryEntries: (await load(repoRoot)).browserBundles?.entries ?? [],
+    coreEntries: (await load(coreRoot)).browserBundles?.entries
+  });
+  for (const line of drift) console.error(`extension check: ${line}`);
+  if (drift.length > 0) failed = true;
 }
 
 process.exit(failed ? 1 : 0);

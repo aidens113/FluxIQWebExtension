@@ -405,9 +405,22 @@ The extension build writes unpacked targets to `apps/extension/dist/chrome`
 and `apps/extension/dist/firefox`, or under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT`
 when a Lab instance owns the build. `pnpm lab:test` runs the launcher's own
 tests on their own. `pnpm check` does not call it: it opens with one combined
-`node --test` over the structure-audit, Lab, task, worktree and build-cache
-tests, then runs `node scripts/structure-audit.mjs`, then `pnpm -r check`.
+`node --test` over the structure-audit, Lab, task, worktree, build-cache and
+check tests, then runs `node scripts/structure-audit.mjs`, then
+`node scripts/check/core-build.mjs`, then `pnpm -r check`.
 Tests are never cached; only the package builds and checks behind them are.
+
+`scripts/check/core-build.mjs` refuses a FluxIQ Core that is unbuilt or whose
+`dist` is older than its source, naming the newest source file and the rebuild
+command. It asks the Lab's own questions (`scripts/lab/core/build/`). The
+extension check bundles against Core's compiled `dist`, so without this gate a
+stale Core hid a `node:crypto` import from it on 2026-09-30. It refuses rather
+than rebuilds because `pnpm check` is read-only and the Core beside a worktree
+is usually shared. The extension check also fails when its bundle enters Core
+through a module missing from Core's `browserBundles.entries`, or when this
+repository's entries stop matching the bundled entries
+(`apps/extension/scripts/browser-entries.mjs`). Those lists are what the
+structure audit's `browser-imports` rule walks from.
 
 ### Build And Check Cache
 

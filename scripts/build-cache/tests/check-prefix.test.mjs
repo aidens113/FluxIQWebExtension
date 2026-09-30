@@ -10,7 +10,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { REPOSITORY_ROOT } from "../index.mjs";
 
-const SUITES = ["structure:test", "lab:test", "task:test", "build-cache:test"];
+const SUITES = ["structure:test", "lab:test", "task:test", "build-cache:test", "check:test"];
 const scripts = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT, "package.json"), "utf8")).scripts;
 
 function globsOf(command) {
@@ -21,5 +21,7 @@ function globsOf(command) {
 test("pnpm check starts with one node --test over exactly the suites' globs", () => {
   const [prefix, ...rest] = scripts.check.split(" && ");
   assert.deepEqual(globsOf(prefix), SUITES.flatMap((suite) => globsOf(scripts[suite])));
-  assert.deepEqual(rest, ["node scripts/structure-audit.mjs", "pnpm -r check"]);
+  // The Core build gate runs before `pnpm -r check` bundles the extension
+  // against Core's dist (scripts/check/core-build.mjs).
+  assert.deepEqual(rest, ["node scripts/structure-audit.mjs", "node scripts/check/core-build.mjs", "pnpm -r check"]);
 });

@@ -25,6 +25,28 @@ export const CONFIG = {
     }
   ],
 
+  // Where browser bundles enter this repository, for the browser-imports rule:
+  // nothing reachable from these by a value import may import a Node built-in
+  // or an undeclared package. These are the sources of the extension's five
+  // browser bundles; apps/extension/scripts/check-extension.mjs fails when they
+  // stop matching the entries build-extension.mjs bundles.
+  //
+  // FluxIQ Core's specifiers are owned elsewhere: Core's own copy of this rule
+  // walks from the modules this bundle enters Core through, and the same check
+  // fails when the bundle enters Core through one Core does not list.
+  browserBundles: {
+    consumer: "the web extension's browser bundles",
+    entries: [
+      "apps/extension/src/background/index.ts",
+      "apps/extension/src/content/index.ts",
+      "apps/extension/src/page-world/index.ts",
+      "apps/extension/src/popup/index.ts",
+      "apps/extension/src/sidepanel/index.ts"
+    ],
+    ownedElsewhere: [{ pattern: /^fluxiq(\/|$)/ }, { pattern: /^@fluxiq\// }],
+    browserPackages: []
+  },
+
   // Paths whose files build values that must satisfy an external wire
   // contract, where no property may arrive through a spread. TypeScript runs
   // no excess-property check on a property a spread brings in, so a renamed or
