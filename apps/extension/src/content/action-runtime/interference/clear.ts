@@ -59,9 +59,9 @@ const MAX_DISMISSALS_PER_ATTEMPT = 3;
  * Presses the way out of whatever is standing over the page, and answers how
  * many layers were dismissed.
  *
- * Zero is an ordinary answer: the obstacle may be a consent banner offering
- * only a choice about the person's data, which this does not make for them, or
- * a challenge, which is theirs. The caller waits and retries either way -- an
+ * Zero is an ordinary answer: the obstacle may be a consent banner that offers
+ * no way to decline optional cookies -- accepting is never pressed -- or a
+ * challenge, which is the person's. The caller waits and retries either way -- an
  * overlay that clears itself is common enough to be worth the retry, and the
  * refusal the page finally reports is the page's own.
  *

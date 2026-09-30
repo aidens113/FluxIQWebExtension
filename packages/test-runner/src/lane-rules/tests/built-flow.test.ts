@@ -16,3 +16,10 @@ test("the recording lane, and the existing and clone targets, are not judged on 
   assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: false, evaluated: true, published: undefined }), "the recording lane builds no Flow");
   assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: false, published: undefined }), "existing and clone run a pre-existing Flow");
 });
+
+test("a consequential build that stopped to ask at its declared permission point passes without a Flow", () => {
+  // Lane t195, run-munovwp3-d898de74: the build asked at Place order, and this rule then failed the run.
+  assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: undefined, stoppedToAsk: true }));
+  assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false }, stoppedToAsk: true }));
+  assert.throws(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false }, stoppedToAsk: false }), builtNoFlow);
+});

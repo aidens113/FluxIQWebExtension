@@ -27,9 +27,11 @@
 //   list has changed, the read waits for the new page to show its records
 //   (`page-render.ts`) before reading it.
 // - `loadMore`: press `control`, then wait until an item appears that the read
-//   has not taken, or the control detaches. An absent, disabled or
-//   `aria-disabled="true"` control is the list ending. A live control that
-//   yields nothing in ten seconds fails the read, as `next` does.
+//   has not taken, or the control detaches. A load that failed and offered a
+//   Retry beside the control has it pressed, at most twice (`load-retry.ts`).
+//   An absent, disabled or `aria-disabled="true"` control is the list ending.
+//   A live control that yields nothing in ten seconds fails the read, as
+//   `next` does.
 // - `scroll`: scroll the nearest scrollable ancestor of the first item, or the
 //   window, to its bottom, and wait up to 900 ms -- the window the scroll verb
 //   gives a lazy feed to grow -- for an item the read has not taken. The growth
@@ -81,6 +83,7 @@
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationExtractionSummary } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../types";
 import { waitUntil, type WaitOutcome } from "./list-wait";
+import { offeredLoadRetry } from "./load-retry";
 import { awaitPageRendered } from "./page-render";
 
 /** Why a read that pages stopped paging: the domain's closed set of words. */
@@ -146,6 +149,8 @@ const LIST_CHANGE_TIMEOUT_MS = 10_000;
  */
 const CANCELLED_LINK_WINDOW_MS = 2_000;
 const LIST_CHANGE_POLL_MS = 25;
+/** How many times one load-more press may have its failure retried through the Retry the page offered. */
+const LOAD_RETRIES = 2;
 /** How long a scroll waits for an unread item: the window `actions/scroll.ts` gives a lazy feed to grow. */
 const SCROLL_GROWTH_WINDOW_MS = 900;
 const SCROLL_POLL_MS = 50;
@@ -215,11 +220,32 @@ async function pressLoadMore(paginate: LoadMorePagination, progress: PaginationP
   if (pastDeadline(progress.deadline)) return TIMED_OUT;
   await progress.beforeFollow?.();
   control.click();
-  const outcome = await waitUntil(() => progress.hasUnreadItem() || !control.isConnected, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
+  const outcome = await waitForMoreItems(control, progress);
   if (outcome === "unchanged") {
     throw new PaginationFault("list_unchanged", `No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(paginate.control)} for page ${progress.pagesRead + 1}.`);
   }
   return outcome === "changed" ? ADVANCED : TIMED_OUT;
+}
+
+/**
+ * Waits for the press to bring an item the read has not taken, or for the
+ * control to leave. A load that failed and put a Retry beside the control
+ * (`./load-retry.ts`) has that Retry pressed, at most `LOAD_RETRIES` times,
+ * and each press gets the full window again.
+ */
+async function waitForMoreItems(control: HTMLElement, progress: PaginationProgress): Promise<WaitOutcome> {
+  let retried = 0;
+  for (;;) {
+    const offered: { retry: HTMLElement | undefined } = { retry: undefined };
+    const outcome = await waitUntil(() => {
+      if (progress.hasUnreadItem() || !control.isConnected) return true;
+      offered.retry = retried < LOAD_RETRIES ? offeredLoadRetry(control) : undefined;
+      return offered.retry !== undefined;
+    }, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
+    if (outcome !== "changed" || !offered.retry) return outcome;
+    retried += 1;
+    offered.retry.click();
+  }
 }
 
 async function scrollForMore(paginate: ScrollPagination, progress: PaginationProgress): Promise<PageAdvance> {

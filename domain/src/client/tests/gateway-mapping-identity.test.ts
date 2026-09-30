@@ -24,7 +24,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { adaptedTargetSupersedesRecording, elementFingerprint, outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
+import type { AutomationStudioNativeNodeContext } from "fluxiq/automation-studio/nodes";
+import { adaptedTargetSupersedesRecording, createWebAutomationOutputNodeImplementationBundle, elementFingerprint, outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
 import { createWebAutomationRecordingEvent, webAutomationActionFromGatewayCommand } from "../gateway-mapping";
 
 /** The `identity-drift` fixture's baseline Save action, as the extension puts it on the wire. */
@@ -176,4 +177,19 @@ test("a command whose wire target carried no element still takes the repair, nev
   const command = dispatchedClick("repair:bare-wire-target", prepared, { selector: String(repairedSave.selector) });
   assert.equal(command.element?.accessibleName, "Apply changes");
   assert.equal(command.element?.testId, undefined);
+});
+
+test("a loop's row reaches the page on the declared element, through the node, Core's rewrite and the wire target", async () => {
+  // t195: the node scopes its recorded record to the row, and nothing between
+  // it and the page may drop the values -- neither Core's target rewrite nor
+  // either of this domain's two element normalizers.
+  const node = { ...recordedSaveNode(), element: { ...recordedSave, context: { record: { keyAttribute: "data-id", key: "p1" } } } };
+  const implementation = createWebAutomationOutputNodeImplementationBundle().implementations["web.dom.click"];
+  assert.ok(implementation);
+  const context = { inputs: { item: { title: "Red Toaster", price: "$39.99" } }, parameters: node, log: () => undefined } as unknown as AutomationStudioNativeNodeContext;
+  const result = await implementation(context);
+  const parameters = (result.effects?.[0]?.payload as JsonObject).parameters as JsonObject;
+  const command = dispatchedClick("row", preparedByCore(parameters));
+  assert.deepEqual(command.element?.context?.record, { values: ["Red Toaster", "$39.99"] });
+  assert.deepEqual(outputTargetFromPayload(preparedByCore(parameters))?.element, command.element);
 });

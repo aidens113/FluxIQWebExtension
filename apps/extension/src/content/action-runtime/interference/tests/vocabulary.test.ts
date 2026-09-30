@@ -15,7 +15,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DISMISS_LABEL_MAX, isDismissalLabel } from "../vocabulary";
+import {
+  DISMISS_LABEL_MAX,
+  isConsentDeclineLabel,
+  isConsentLayerText,
+  isDismissalLabel,
+  isRateLimitAcknowledgeLabel,
+  isRateLimitLayerText
+} from "../vocabulary";
 
 const DISMISSALS = [
   "Close",
@@ -58,8 +65,8 @@ const NEVER = [
   "Share",
   "Unsubscribe",
   "Yes, delete it",
-  // Answering a cookie banner is a choice about the person's data, not a way
-  // out, so it is deliberately not a dismissal in either direction.
+  // Answering a cookie banner is not a general dismissal in either direction.
+  // Declining is a way out of a consent layer only (the battery below).
   "Accept all",
   "Accept all cookies",
   "Reject all",
@@ -106,4 +113,112 @@ test("a dismissal word inside a longer word is not a dismissal", () => {
   for (const label of ["Closeout deals", "Skipper", "Laterally"]) {
     assert.equal(isDismissalLabel(label), false, label);
   }
+});
+
+// The consent layer's way out (lane t195, run `run-munoa86g-150fb0d9`). Declining
+// optional cookies gives nothing away; accepting shares the person's data. The
+// first battery is every decline the ten realistic scenarios draw, the second is
+// every answer that accepts, manages or hides a consequence.
+const CONSENT_DECLINES = [
+  "Reject all",
+  "Reject all cookies",
+  "Reject",
+  "Reject optional cookies",
+  "Decline optional cookies",
+  "Decline all",
+  "Refuse all",
+  "Deny",
+  "Necessary cookies only",
+  "Use necessary cookies only",
+  "Essential only",
+  "Only allow essential cookies",
+  "Only necessary",
+  "Continue without accepting"
+];
+
+const CONSENT_NEVER = [
+  "Accept all",
+  "Accept all cookies",
+  "Accept",
+  "Allow all cookies",
+  "Allow all",
+  "Agree and continue",
+  "I agree",
+  "Manage choices",
+  "Manage preferences",
+  "Save preferences",
+  "Reject all or accept",
+  "Reject and delete my account",
+  "Decline and cancel my subscription",
+  "Rejected items",
+  "Declined payments"
+];
+
+test("every consent decline the scenarios draw may be pressed on a consent layer", () => {
+  for (const label of CONSENT_DECLINES) {
+    assert.equal(isConsentDeclineLabel(label), true, `${label} would not be pressed, so the consent wall would stop the Flow`);
+  }
+});
+
+test("nothing that accepts cookies, or deletes, cancels or pays, is a consent decline", () => {
+  for (const label of CONSENT_NEVER) {
+    assert.equal(isConsentDeclineLabel(label), false, `${label} would be pressed on the person's behalf`);
+  }
+});
+
+test("a consent decline is not a general dismissal: on any other dialog Reject and Decline stay unpressed", () => {
+  for (const label of ["Reject all", "Decline optional cookies", "Decline"]) {
+    assert.equal(isDismissalLabel(label), false, label);
+  }
+});
+
+// The rate-limit notice's way out (lane t195, social-network-feed's fourth
+// Confirm). Its OK closes it and confirms nothing; its "Try again" does the
+// refused act, which only the node's own re-run may do.
+const RATE_LIMIT_NOTICES = [
+  "You're going too fast It looks like you were misusing this feature by going too fast. You've been temporarily blocked from using it. You can try again in 12 seconds. OK",
+  "You're going too fast It looks like you were misusing this feature by going too fast. You've been temporarily blocked from using it. You can try again in 0 seconds. OK Try again",
+  "Slow down! Please wait 30 seconds before posting again.",
+  "Too many attempts. Try again in 2 minutes.",
+  "You're doing that too quickly.",
+  "Rate limited: retry later."
+];
+
+const NOT_RATE_LIMIT_NOTICES = [
+  "Priya Nair invited you to the Riverside Allotment Society. OK",
+  "Your payment could not be processed. Try again.",
+  "Delete this post? This cannot be undone. OK Cancel",
+  "Your privacy choices ValueRidge and our 38 partners use cookies",
+  "Saved. You can try again later if the list looks out of date."
+];
+
+test("the scenarios' going-too-fast notice, and every phrase of the closed list, reads as a rate-limit layer", () => {
+  for (const text of RATE_LIMIT_NOTICES) assert.equal(isRateLimitLayerText(text), true, text);
+});
+
+test("a dialog that is not about going too fast is not a rate-limit layer, however it ends", () => {
+  for (const text of NOT_RATE_LIMIT_NOTICES) assert.equal(isRateLimitLayerText(text), false, text);
+});
+
+test("OK acknowledges a rate-limit notice, and nothing longer or consequential does", () => {
+  for (const label of ["OK", "Ok", "Okay", "OK.", "Got it", "Got it!", "Understood", "I understand"]) {
+    assert.equal(isRateLimitAcknowledgeLabel(label), true, label);
+  }
+  for (const label of ["Try again", "Retry", "OK, delete it", "OK to charge my card", "Okay, confirm", "Confirm", "Continue", "", "OK".padEnd(DISMISS_LABEL_MAX + 1, "!")]) {
+    assert.equal(isRateLimitAcknowledgeLabel(label), false, label);
+  }
+});
+
+test("OK is not a general dismissal: on any other dialog it stays unpressed", () => {
+  for (const label of ["OK", "Okay", "Got it", "Try again"]) {
+    assert.equal(isDismissalLabel(label), false, label);
+    assert.equal(isConsentDeclineLabel(label), false, label);
+  }
+});
+
+test("only a layer that is about cookies or consent is read for a decline", () => {
+  assert.equal(isConsentLayerText("Your privacy choices ValueRidge and our 38 partners use cookies"), true);
+  assert.equal(isConsentLayerText("Allow the use of cookies from Circleway on this browser?"), true);
+  assert.equal(isConsentLayerText("Priya Nair invited you to the Riverside Allotment Society. Accept Decline"), false);
+  assert.equal(isConsentLayerText("You're going too fast. You can try again in 9 seconds."), false);
 });

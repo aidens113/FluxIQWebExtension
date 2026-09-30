@@ -152,6 +152,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let recordingStarted = false;
   let browserVersion = "unavailable";
   let verdict: "passed" | "failed" = "failed";
+  let stoppedToAsk = false;
   let failureCategory: RunnerFailureCategory | undefined;
   let failureMessage: string | undefined;
   let facilityFailure: RunEvaluation["facilityFailure"] = null;
@@ -379,7 +380,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         }),
       });
       // A consequential task run without permission for its act passes by stopping to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): no Flow ran, so nothing below applies.
-      if ("permissionStop" in lane) await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } });
+      if ("permissionStop" in lane) { stoppedToAsk = true; await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } }); }
       else { await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
     } else {
       if (paired && topology.authorizationPin) {
@@ -483,7 +484,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       }
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
-    assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });
+    assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, stoppedToAsk });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed")); await uiReview.finish("end");

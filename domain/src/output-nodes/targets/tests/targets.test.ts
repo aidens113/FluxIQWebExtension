@@ -529,3 +529,49 @@ test("a host chain with a hole in it is dropped whole, never shortened", () => {
     assert.equal(elementFingerprint({ selector: "button", context: { shadowHosts } })?.context, undefined, label);
   }
 });
+
+// t195: the row a For Each pass is on travels as `context.record.values`, and
+// every normalizer between the node and the page keeps it, bounded.
+
+test("a record's row values survive the normalizer, strings only and bounded", () => {
+  const long = "y".repeat(250);
+  const fingerprint = elementFingerprint({
+    tagName: "BUTTON",
+    context: { record: { values: ["  Red   Toaster ", 7, "$39.99", "", "$39.99", null, long, "a", "b", "c", "d", "e", "f"] } }
+  });
+  assert.deepEqual(fingerprint?.context?.record, { values: ["Red Toaster", "$39.99", "y".repeat(200), "a", "b", "c", "d", "e"] });
+  assert.equal(elementFingerprint({ tagName: "BUTTON", context: { record: { values: "Red Toaster" } } })?.context, undefined, "a string is not a list of values");
+  assert.equal(elementFingerprint({ tagName: "BUTTON", context: { record: { values: [] } } })?.context, undefined, "an empty list is no record");
+  assert.deepEqual(elementFingerprint(fingerprint)?.context?.record, fingerprint?.context?.record, "a normalized record round-trips");
+});
+
+test("the dispatched target carries a row's values to the page", () => {
+  const element = { tagName: "BUTTON", visibleText: "Add to cart", context: { record: { values: ["Red Toaster", "$39.99"] } } };
+  const target = outputTargetFromPayload({ selector: "li:nth-of-type(1) button", element });
+  assert.deepEqual((target?.element as JsonObject).context, { record: { values: ["Red Toaster", "$39.99"] } });
+});
+
+test("a row's values outrank a record an adapted target named, which was the build's row", () => {
+  const target = outputTargetFromPayload({
+    selector: "li:nth-of-type(1) button",
+    element: { tagName: "BUTTON", visibleText: "Add to cart", context: { record: { values: ["Red Toaster"] } } },
+    target: {
+      selectedCandidate: { candidateId: "c1" },
+      candidates: [{ candidateId: "c1", selector: "li:nth-of-type(1) button.add", tagName: "BUTTON", context: { record: { key: "p1", keyAttribute: "data-id" } } }]
+    }
+  });
+  assert.equal(target?.selector, "li:nth-of-type(1) button.add");
+  assert.deepEqual((target?.element as JsonObject).context, { record: { values: ["Red Toaster"] } });
+});
+
+test("a recorded record without values still yields to one an adapted target named", () => {
+  const target = outputTargetFromPayload({
+    selector: "li:nth-of-type(1) button",
+    element: { tagName: "BUTTON", context: { record: { key: "p1", keyAttribute: "data-id" } } },
+    target: {
+      selectedCandidate: { candidateId: "c1" },
+      candidates: [{ candidateId: "c1", selector: "li button.add", tagName: "BUTTON", context: { record: { key: "p2", keyAttribute: "data-id" } } }]
+    }
+  });
+  assert.deepEqual((target?.element as JsonObject).context, { record: { key: "p2", keyAttribute: "data-id" } });
+});

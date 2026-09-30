@@ -27,6 +27,17 @@ const outputPorts: AutomationNodePort[] = [
 const recordsPort: AutomationNodePort = { id: "records", label: "Records", valueType: "array", role: "data" };
 
 /**
+ * The row a For Each pass is on, for a node that acts on one element (t195).
+ * Core puts the loop's current item here -- one validated record of an
+ * extraction, field key to string -- when the node is in the loop's body, and
+ * `native-runtime.ts` scopes the node's recorded target to that row. Without it
+ * every pass acts on the element the build recorded, which is one card, so a
+ * loop over twelve results pressed the first result's control twelve times.
+ * Optional: outside a loop nothing arrives and the node runs as recorded.
+ */
+const itemInput: AutomationNodePort = { id: "item", label: "Item", valueType: "any", role: "data", required: false };
+
+/**
  * Where in an action's result the page puts a list of records, which Core's
  * record capture and proposal lift read (CD19). Only the list extraction
  * returns records; `./extract-list/records-path.ts` says why the path has two
@@ -199,7 +210,10 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       requiredPermissions: ["web-automation.action"]
     },
     outputAction: { fixedOutputId: definition.actionType },
-    inputs: [controlInput],
+    // An element-target node may be run on a loop's current row; the others
+    // (a navigation, a list extraction, a dialog answer) have no element to
+    // scope, so they declare no port a loop could wire.
+    inputs: requiredParameters.has("selector") ? [controlInput, itemInput] : [controlInput],
     outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
     // Every web parameter may be filled from state unless it says otherwise.
     // Only `recordOutput` does, for the reason Core gives its own: a binding

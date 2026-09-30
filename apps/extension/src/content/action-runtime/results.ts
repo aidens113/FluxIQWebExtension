@@ -59,6 +59,7 @@ import type {
 } from "../types";
 import { blockingDialog } from "./blocking-dialog";
 import { challengeIn } from "./challenge-evidence";
+import type { RateLimitNotice } from "./rate-limit-notice";
 import { boundValidation, statusForValidation } from "./validation-outcome";
 
 type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
@@ -225,6 +226,34 @@ export function actionRejected(
     validation,
     message: `Action rejected: ${observed}`,
     failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: `${reason}: ${observed}` })
+  }, evidence);
+}
+
+/**
+ * A press the page refused for going too fast, and said so
+ * (`rate-limit-notice.ts`). RATE_LIMITED is retryable and states the act did not
+ * happen, and it carries the wait the notice named as `retryAfterMs`, so Core
+ * re-runs the node after that wait instead of refusing to repeat a press or
+ * reading the refusal as done. The texts say what was concluded, never what the
+ * notice wrote.
+ */
+export function actionRateLimited(
+  action: BrowserActionCommand,
+  startedAt: number,
+  notice: RateLimitNotice,
+  evidence: ActionResultEvidence = {}
+): BrowserActionResult {
+  const expected = "the page accepts the press";
+  const wait = notice.retryAfterMs === undefined
+    ? "it named no wait"
+    : `it asked for a wait, so the press may be made again after ${notice.retryAfterMs} ms`;
+  const actual = `the page answered the press ${notice.afterMs} ms after it with a notice that it was refused for going too fast, and confirmed nothing; ${wait}`;
+  const validation = boundValidation({ status: "failed", expected, actual });
+  return buildResult(action, startedAt, {
+    status: "failed",
+    validation,
+    message: `Action refused by the page for going too fast; ${wait}.`,
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs: notice.retryAfterMs })
   }, evidence);
 }
 

@@ -28,13 +28,35 @@
 // obstacle this work exists for. So `pay` is not a denied verb; `purchase`,
 // `buy`, `checkout` and `payment` are, and each is matched on word boundaries.
 //
-// **Accepting or rejecting cookies is deliberately not a dismissal.** It is a
-// choice about the person's data, and the product does not make it on their
-// behalf. A consent banner whose only controls are Accept and Reject therefore
-// has no way out here, and an action refused under one stays refused -- which
-// is the behaviour `blocking-dialog.ts` has drawn since it was written. A
-// banner that *also* carries a close glyph is closed by that glyph, because
-// closing is not answering.
+// **Accepting cookies is never a way out; declining optional ones is, on a
+// consent layer and nowhere else.** Until 2026-09-30 neither answer was, on the
+// reasoning that either is a choice about the person's data. Live, that left a
+// replayed Flow dead at its first step on a store whose consent dialog opens on
+// every fresh session (lane t195, run `run-munoa86g-150fb0d9`: "Your privacy
+// choices", four absorbed attempts, then `web.action.blocked_by_dialog`). The
+// two answers are not symmetric. Declining optional cookies consents to
+// nothing -- it is the state a site must assume while nobody has answered -- so
+// pressing it gives nothing away on the person's behalf, and under the
+// product's permission rule only moving money, deleting and sending or
+// publishing are the person's to decide. Accepting shares their data, so a
+// label that accepts, allows all or agrees is never pressed. The decline list
+// (`isConsentDeclineLabel`) is separate from the dismissal list and is read
+// only on a layer whose own text is about cookies or consent
+// (`isConsentLayerText`), because "Decline" on any other dialog -- an
+// invitation, a meeting -- is an answer somebody receives. A banner that also
+// carries a close glyph is still closed by the glyph first.
+//
+// **A notice that the page refused a press for going too fast is closed by its
+// acknowledgement, and its "Try again" is never pressed.** social-network-feed
+// answers a fourth Confirm inside its window with "You're going too fast ... You
+// can try again in 12 seconds" and a lone OK, which closes it and confirms
+// nothing. OK on any other dialog may be the confirmation of whatever the dialog
+// asked, so the acknowledgement list (`isRateLimitAcknowledgeLabel`) is separate
+// from the dismissal list and is read only on a layer whose own text is a
+// rate-limit notice (`isRateLimitLayerText`), exactly as the consent decline is.
+// "Try again" is on no list: pressing it does the refused act on the page's
+// initiative, and the node's own re-run, after the wait the notice named, is
+// what does the act (`../rate-limit-notice.ts`).
 
 /**
  * Longer text than this is prose that happens to start with a dismissal word,
@@ -75,5 +97,69 @@ export function isDismissalLabel(label: string): boolean {
   if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
   if (CLOSE_GLYPH.test(label)) return true;
   if (!DISMISS_LABEL.test(label)) return false;
+  return !CONSEQUENTIAL_WORD.test(label);
+}
+
+/**
+ * A consent control that declines optional cookies, anchored at the start:
+ * reject, decline, refuse, "necessary/essential only", "only allow essential",
+ * "continue without accepting". Nothing beginning with accept, allow all,
+ * agree, save or manage can match.
+ */
+const CONSENT_DECLINE_LABEL = /^(?:(?:reject|decline|refuse|deny)(?: all| optional| non-essential| additional)?|(?:use |allow )?(?:only )?(?:strictly )?(?:necessary|essential|required)(?: cookies)? only|only (?:allow |use )?(?:strictly )?(?:necessary|essential|required)|continue without accepting)(?:$|[\s,.!:;-])/iu;
+
+/** A word that accepts or shares, refused anywhere in a decline label: "Reject all or accept" is not a decline. */
+const CONSENT_ACCEPT_WORD = /\b(?:accept|accepts|agree|agrees|consent to)\b|\ballow all\b/iu;
+
+/** The words a consent layer's own text carries. A layer without one is not about cookies. */
+const CONSENT_LAYER_WORD = /\b(?:cookie|cookies|consent|privacy|tracking|trackers)\b/iu;
+
+/**
+ * Whether this label declines optional cookies. The dismissal list's guards
+ * apply too -- the length bound, and the deny-list over the whole label -- so
+ * "Reject and delete my account" is refused.
+ */
+export function isConsentDeclineLabel(label: string): boolean {
+  if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
+  if (!CONSENT_DECLINE_LABEL.test(label)) return false;
+  if (CONSENT_ACCEPT_WORD.test(label.replace(/^continue without accepting/iu, ""))) return false;
+  return !CONSEQUENTIAL_WORD.test(label);
+}
+
+/** Whether a layer's own bounded text says it is a cookie or consent prompt. */
+export function isConsentLayerText(text: string): boolean {
+  return CONSENT_LAYER_WORD.test(text);
+}
+
+/**
+ * The phrases a rate-limit notice states its refusal in. A closed list, each on
+ * word boundaries: going too fast or too quickly, too many attempts, slow down,
+ * temporarily blocked, rate limited, and a wait of seconds or minutes before
+ * trying again. "Try again" alone is not one -- a failed payment says it too --
+ * so the wait has to be named with it.
+ */
+const RATE_LIMIT_LAYER_PHRASE = /\b(?:(?:going|moving|posting|clicking|doing (?:this|that)) too (?:fast|quickly)|too many (?:requests|attempts|tries|actions)|slow down|temporarily (?:blocked|restricted|limited)|rate[- ]limit(?:ed)?|try again in \d+ ?(?:s|secs?|seconds?|mins?|minutes?)|wait \d+ ?(?:s|secs?|seconds?|mins?|minutes?) before)\b/iu;
+
+/**
+ * The acknowledgement a rate-limit notice offers, as the whole label: OK, Okay,
+ * Got it, Understood, I understand. Anchored at both ends, so "OK, delete it" or
+ * "OK to charge my card" cannot match; "Close" and a close glyph are already
+ * dismissals everywhere.
+ */
+const RATE_LIMIT_ACKNOWLEDGE_LABEL = /^(?:ok|okay|got it|understood|i understand)[.!]?$/iu;
+
+/** Whether a layer's own bounded text says the page refused an act for going too fast. */
+export function isRateLimitLayerText(text: string): boolean {
+  return RATE_LIMIT_LAYER_PHRASE.test(text);
+}
+
+/**
+ * Whether this label acknowledges a rate-limit notice. Read only on a layer
+ * `isRateLimitLayerText` accepts; the deny-list applies too, though nothing the
+ * anchored list admits can carry a consequential word.
+ */
+export function isRateLimitAcknowledgeLabel(label: string): boolean {
+  if (label.length === 0 || label.length > DISMISS_LABEL_MAX) return false;
+  if (!RATE_LIMIT_ACKNOWLEDGE_LABEL.test(label)) return false;
   return !CONSEQUENTIAL_WORD.test(label);
 }
