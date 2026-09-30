@@ -744,7 +744,9 @@ debug and partitioned so neither touches the other's files:
 - Agent: supervisor. Pagefile fix confirmed: commit limit 28,604 MB, 21,278 MB free, slots empty.
 - Changed: Core dev `af385f7` (Merge task t182) pushed with downstream `6cdc9abb`; worktrees t188 and t189 created (Core-paired); t174, t185 and t186 work in progress committed on their task branches and dev merged in (conflicts left to each lane's lead); leads dispatched for t187, t188 and t189.
 - Validation: in the t182 Core tree, `node scripts/structure-audit.mjs` -> `structure-audit: passed (197 warning(s), 355 baselined).`; `npx tsc -p tsconfig.json --noEmit` (packages/fluxiq) -> exit 0; vitest `service/indexes/tests/without-recording.test.ts` -> 2 passed; vitest `runtime/tests/service-recordings` -> 7 files, 42 passed; Core `pnpm task finish t182` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, merged. First `pnpm task finish t176` (downstream) -> `structure-audit: 3 violation(s)`, all this document's (Current State 153 lines, a ledger entry without validation, stale index); fixed here.
-- Build time measured today: `pnpm task start --worktree --core` 151 s and 156 s; Core `pnpm check` 110 s (fluxiq tsc 39 s, structure audit 43 s). Given to t187.
+- Build time measured today: `pnpm task start --worktree --core` 151 s and 156 s; Core `pnpm check` 110 s (fluxiq tsc 39 s, structure audit 43 s against 8 s downstream). Given to t187.
+- t176 (a refuted answer is repaired, persisted and replayed with no provider call) merged in both repositories and pushed: downstream `pnpm task finish t176` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, 118 s, `02d95259`; Core `pnpm task finish t176` -> the same, 79 s, `528f52d`. Not live-proven.
+- dev (with t176) merged into t185 (both clean) and t174 downstream (`b1a82a21`: seven hand-applied dev files taken from dev, one import kept from both; test-runner `tsc --noEmit` exit 0).
 - Outcome: In progress. Pass streak 0.
 
 ## Open Questions
