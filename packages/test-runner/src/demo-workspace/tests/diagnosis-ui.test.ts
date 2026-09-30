@@ -40,7 +40,7 @@ test("adapting lanes never pin a call count or require an exact one", async () =
     assert.ok(calls.length > 0, name);
     for (const call of calls) assert.match(call, /, "adaptation"\)$/u, `${name}: ${call}`);
     assert.doesNotMatch(text, /providerCallCount \?\? 0\) !== \d|providerCallCount !== \d/u, name);
-    assert.match(text, /adaptationCallCountWithinGrant\(/u, name);
+    assert.match(text, /adaptationCallCountWithinCeiling\(/u, name);
   }
 });
 

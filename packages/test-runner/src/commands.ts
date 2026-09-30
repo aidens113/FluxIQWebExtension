@@ -247,15 +247,15 @@ const MAX_REPLAYS = 10;
  *
  * It is one option because the three steps are one claim. The run approves the
  * adaptation Core saved, applies it to the Flow, and then runs that Flow N
- * times with no execution grant, checking each time that no provider was called
+ * times with no model (no `runIntent`), checking each time that no provider was called
  * and that the fixture's goal still held. `--replays 0` applies the repair and
  * replays nothing, which is how a repair is made durable without paying for the
  * proof. Without the option none of it happens, so an existing repair run keeps
  * behaving exactly as it did.
  *
- * It belongs to the tasks whose Flow runs under a repair grant: `repair` and
- * `adapt`, which repair the Flow recorded from the run, and `create-flow`, whose
- * built Flow's playback runs under a proposal-only repair grant. `diagnose`
+ * It belongs to the tasks whose Flow the model repairs: `repair` and `adapt`,
+ * which repair the Flow recorded from the run, and `create-flow`, whose built
+ * Flow's playback runs with the model taking part. `diagnose`
  * changes nothing, so it has nothing to apply.
  */
 function replaysOption(args: string[], llm: LlmExecutionProfile | undefined, flowLane: boolean): { replays?: number } {
@@ -292,8 +292,10 @@ function positional(args: string[], index: number, label: string): string { cons
 /** Arguments that are neither an option nor the value following one. */
 function positionalValues(args: string[]): string[] { return args.filter((value, offset) => offset === 0 || !args[offset - 1]?.startsWith("--")).filter(value => !value.startsWith("--")); }
 /**
- * `--llm-permit send_or_publish,create_new`: the consequence classes the run's
- * execution grant permits, comma-separated, each once. An unknown class is
+ * `--llm-permit send_or_publish,create_new`: the consequence classes the run
+ * permits its actions, comma-separated, each once, sent with the build or the
+ * run as `permittedConsequences`. It is consequence permission only: a model
+ * call needs no grant. An unknown class is
  * refused here, before a key is read or a provider reached, never dropped.
  */
 function permittedConsequencesOption(args: string[]): { permittedConsequences?: LlmActionConsequence[] } {

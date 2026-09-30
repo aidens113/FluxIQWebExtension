@@ -32,10 +32,10 @@ const PROFILE: LlmExecutionProfile = {
 };
 
 /**
- * The run token budget this profile is granted -- Core's default -- and an
- * overspend one request past it. Both are taken from the plan rather than
- * written down: the budget moved from 100,000 to ten full requests, and a
- * literal overspend would simply have stopped breaching.
+ * The run token budget this profile plans and an overspend one request past
+ * it. Both are taken from the plan rather than written down: the budget has
+ * moved more than once, and a literal overspend would simply have stopped
+ * breaching.
  */
 const RUN_TOKEN_BUDGET = planLiveLlmExecution(PROFILE).maxTotalTokensPerRun;
 const OVERSPENT_TOKENS = RUN_TOKEN_BUDGET + DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
@@ -77,9 +77,8 @@ function fakeCore() {
     async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
       if (endpoint === "update-flow-settings") { metadata = (payload.flow as { metadata: unknown }).metadata; return {}; }
       if (endpoint === "get-flow") return { flow: { metadata } };
-      if (endpoint === "preflight-llm-execution") return { preflight: {} };
-      const maxCalls = payload.maxCalls as number;
-      return { grant: { grantId: "llm-grant:test", purpose: payload.purpose, maxCalls, maxTotalTokensPerRun: payload.maxTotalTokensPerRun, maxEstimatedCostUsd: payload.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: Math.min(2, (payload.maxEstimatedCostUsd as number) * maxCalls), timeoutMs: payload.timeoutMs, providerRetryCount: 0 } };
+      // A model call needs no grant; a run that asked for one fails here.
+      throw new Error(`unexpected endpoint ${endpoint}`);
     },
   };
 }
@@ -151,7 +150,8 @@ test("a lane that fails after Core ran the Flow still leaves its provider calls 
   assert.equal(written.observed.perCallRecords, "recorded");
   assert.deepEqual(written.observed.observedCalls.map((line: { taskKind: string }) => line.taskKind), ["runtime_diagnosis", "evidence_tool_decision", "runtime_patch"]);
   assert.equal(written.observed.accounting.totalTokens, 3_000);
-  assert.equal(written.granted.maxCalls, 26);
+  assert.equal(written.authorized.maxCalls, 26);
+  assert.equal("granted" in written, false);
   // What exploring did, from Core's own recovery trace, and nothing Core wrote in prose.
   assert.equal(written.exploration.source, "recovery-trace");
   assert.equal(written.exploration.outcome, "evidence_gathered");
@@ -179,7 +179,7 @@ test("a failed lane whose run cannot be read, or was never named, still leaves a
   await assert.rejects(runLaneWithLiveLlmSettlement(unreadable.settlement, async (identified) => { identified("run-failed"); throw unexpectedFailure; }), (error: unknown) => error === unexpectedFailure);
   assert.equal(unreadable.snapshot()?.settlement, "run_detail_unreadable");
   assert.equal(unreadable.snapshot()?.observed, null);
-  assert.equal(unreadable.snapshot()?.granted.maxCalls, 26);
+  assert.equal(unreadable.snapshot()?.authorized.maxCalls, 26);
   assert.deepEqual(unreadable.published, []);
   assert.equal(unreadable.live.usage.calls, 0);
 
@@ -189,10 +189,10 @@ test("a failed lane whose run cannot be read, or was never named, still leaves a
   assert.equal(unnamed.snapshot()?.settlement, "run_not_identified");
 });
 
-test("a lane that failed before any grant was issued writes nothing, and a snapshot that cannot be written hides nothing", async () => {
-  const ungranted = await harness({ authorize: false });
-  await assert.rejects(runLaneWithLiveLlmSettlement(ungranted.settlement, async () => { throw unexpectedFailure; }), (error: unknown) => error === unexpectedFailure);
-  assert.deepEqual(ungranted.written, []);
+test("a lane that failed before its Flow was readied writes nothing, and a snapshot that cannot be written hides nothing", async () => {
+  const unready = await harness({ authorize: false });
+  await assert.rejects(runLaneWithLiveLlmSettlement(unready.settlement, async () => { throw unexpectedFailure; }), (error: unknown) => error === unexpectedFailure);
+  assert.deepEqual(unready.written, []);
 
   const unwritable = await harness();
   unwritable.settlement.bundle.writeStructured = async () => { throw new Error("disk full"); };

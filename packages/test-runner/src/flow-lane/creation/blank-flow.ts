@@ -1,7 +1,7 @@
 // The Flow a live build fills in: a new, blank, top-level Flow in the run's
 // own project. Core builds only onto a blank orchestration Flow with no Router
 // and no Subflow (`assertBlankBootstrapTarget`), so that is checked here, where
-// a Core that seeds new Flows with anything fails before a grant is issued
+// a Core that seeds new Flows with anything fails before a model is called
 // rather than as a generation refusal after one.
 
 import { RunnerFailure } from "../../failure.js";

@@ -22,7 +22,7 @@ import { replayRepairedFlow, type RepairReplay, type RepairReplayControl, type R
 export type LiveRepairProof = Readonly<{
   /** The Lab task that asked for it: `repair` or `adapt`. */
   task: string;
-  /** Core's grant purpose for that task. */
+  /** Core's run intent for that task. */
   purpose: string;
   /** What the run saved, from its recovery record. Identifiers only. */
   adaptationIds: readonly string[];

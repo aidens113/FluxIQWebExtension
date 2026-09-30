@@ -34,7 +34,7 @@ async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?:
     projectId: PROJECT_ID,
     flowId: FLOW_ID,
     instruction: INSTRUCTION,
-    authorize: async (flowId) => { core.calls.push("authorize"); authorized.push(flowId); return { grantId: "llm-grant:build" }; },
+    authorize: async (flowId) => { core.calls.push("authorize"); authorized.push(flowId); return { permittedConsequences: [] }; },
   }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, pollMs: 1_000, ...(wait.deadlineMs === undefined ? {} : { deadlineMs: wait.deadlineMs }) });
   return { core, authorized, record };
 }
@@ -46,7 +46,7 @@ test("the build saves the instruction, then authorizes, selects the context and 
   assert.deepEqual(authorized, [FLOW_ID]);
   // No start location was named, so the request carries none and Core builds
   // from whatever is in front of it, exactly as it did before t103.
-  assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true }]);
+  assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, evidenceGuided: true }]);
   assert.deepEqual(record, {
     outcome: "proposed",
     adaptationId: ADAPTATION_ID,
@@ -203,7 +203,7 @@ test("the tools a build called include Core's own node runner, and never its dec
   assert.deepEqual(refusal.record.evidenceLoop?.steps?.map((step) => step.toolId), ["core.run_node", "core.decision_unusable", "web.inspect_current_page"]);
 });
 
-test("an instruction Core did not activate refuses before any grant is taken", async () => {
+test("an instruction Core did not activate refuses before the Flow is readied for the model", async () => {
   await assert.rejects(build({ instructionStatus: "draft" }), /Core did not make the task's instruction the Flow's active instruction/u);
 });
 
@@ -341,7 +341,7 @@ test("a refusal Core's parser does not accept keeps only its HTTP status, and a 
   const core = fakeCreationCore();
   const original = core.control.generateFlowBootstrapAdaptation;
   core.control.generateFlowBootstrapAdaptation = async (input) => { await original(input); return { status: 200, ok: true, payload: { adaptation: { projectId: PROJECT_ID, flowId: "another.flow", adaptationId: ADAPTATION_ID, status: "proposed" } } }; };
-  const escaped = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ grantId: "llm-grant:build" }) });
+  const escaped = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) });
   assert.deepEqual(escaped.failure, { code: "lab.generation_answer_invalid", stage: null, httpStatus: 200 });
 });
 
@@ -412,7 +412,7 @@ test("a build's declarations and Core's cross-check are read from where Core put
 test("a build's reported calls are every call it made, with the loop's own beside them", async () => {
   // Core spends provider calls outside the evidence loop -- reading what the
   // person's instruction already asks for -- and publishes them separately, so
-  // a reader taking the loop count alone under-reports what the grant paid for.
+  // a reader taking the loop count alone under-reports what the build paid for.
   const { record } = await build({
     evidenceLoop: { providerCallCount: 17, decisionCount: 17, additionalProviderCallCount: 1, totalProviderCallCount: 18, traceStepCount: 18, iterationCount: 18, toolCallCount: 9, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"] },
   });
@@ -438,14 +438,16 @@ test("the build tells Core where the Flow starts, when the run named a start loc
     flowId: FLOW_ID,
     instruction: INSTRUCTION,
     startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
-    authorize: async () => ({ grantId: "llm-grant:build" }),
+    authorize: async () => ({ permittedConsequences: ["send_or_publish"] }),
   }, {}, { now: () => 0, sleep: async () => {} });
 
   assert.deepEqual(core.generationRequests, [{
     projectId: PROJECT_ID,
     flowId: FLOW_ID,
-    llmExecutionGrantId: "llm-grant:build",
     evidenceGuided: true,
     startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
+    // No grant id: a model call needs none. The operator's permit travels
+    // with the build, and only because it permits something.
+    permittedConsequences: ["send_or_publish"],
   }]);
 });

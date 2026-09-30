@@ -225,7 +225,7 @@ test("HTTP abort and timeout diagnostics keep precedence over transport wrapping
 });
 
 test("a refused control request carries Core's reason instead of a bare status", () => {
-  // A live run whose grant Core refused used to report only "(400)".
+  // A live run whose request Core refused used to report only "(400)".
   assert.equal(controlRefusalReason({ ok: false, error: "LLM key changed during grant authorization." }), "LLM key changed during grant authorization.");
   assert.equal(controlRefusalReason({ ok: false, error: "  two\n lines  " }), "two lines");
   assert.equal(controlRefusalReason({ ok: false, error: "x".repeat(400) })?.length, 303);

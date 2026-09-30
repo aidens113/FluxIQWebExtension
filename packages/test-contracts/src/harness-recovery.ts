@@ -213,7 +213,34 @@ export type RunHarnessResultRepair = {
   attempted: boolean;
   nodeId: string | null;
   code: string | null;
+  /**
+   * Where the repair is, as Core's own word
+   * (`runtime/recovery/refuted-result/repair.ts`): `reauthoring` before the
+   * build starts, `rerunning` once an applied edit is about to run, `settled`
+   * when nothing more will happen. A reader follows it instead of guessing how
+   * long a repair takes. Absent in a record written before Core wrote it.
+   */
+  phase?: HarnessResultRepairPhase;
+  /**
+   * How a settled repair ended (`AutomationStudioResultRepairOutcome`). Present
+   * exactly when `phase` is `settled`: an unfinished repair has no outcome, and
+   * Core closes every one it settles with one.
+   */
+  outcome?: HarnessResultRepairOutcome;
 };
+
+/** Core's three phases of a result repair (`repair.ts`), in the order a repair moves through them. */
+export const harnessResultRepairPhases = ["reauthoring", "rerunning", "settled"] as const;
+export type HarnessResultRepairPhase = (typeof harnessResultRepairPhases)[number];
+
+/**
+ * Core's five words for how a settled repair ended
+ * (`AutomationStudioResultRepairOutcome`): the repaired answer was confirmed,
+ * checked and left unsettled, refuted and not repaired again, never re-run, or
+ * re-run without a result to judge.
+ */
+export const harnessResultRepairOutcomes = ["answered", "unverified", "stopped", "not_rerun", "rerun_failed"] as const;
+export type HarnessResultRepairOutcome = (typeof harnessResultRepairOutcomes)[number];
 
 /** Section names only, never a section's contents. See `contextSections`. */
 export type RunHarnessRecoveryContextSections = {

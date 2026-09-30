@@ -108,7 +108,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
-  // A Flow-lane run whose grant only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
+  // A Flow-lane run whose intent only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
   // Flow always, and a created one when `--replays` has its repair applied, whose proposal the repair lane then judges (`proveRepair` below).
   const workflow = resolveWorkflow(scenario, options, target);
   const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.flow === true || (options.creation !== undefined && options.replays !== undefined), proposalOnly: options.live?.proposesRepairOnly === true });
@@ -315,7 +315,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         catch { return false; }
       },
     });
-    // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no grant, so "the model fixed it" becomes "the Flow
+    // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no model, so "the model fixed it" becomes "the Flow
     // works without the model"; without the option nothing happens. `checkGoal` is the scenario's own final state, never the proposal-only one the run was
     // held to. A created Flow's lane judged no declared repair, so the repair lane judges it first, and rebuilds its inputs by the created lane's rule.
     const proveRepair = (control: ProveLiveRepairControl, activeTopology: RunningTopology, projectId: string, lane: LiveRepairLaneInput["lane"], builtFrom: "recording" | "instruction") => runLiveRepairLane(control, {
@@ -376,7 +376,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         startLocation: scenarioStartUrl(topology.scenarioOrigin, scenario),
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
-        // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
+        // The created Flow's playback runs with the model taking part, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
         authorizeRun: live.repairAuthorizer(control, activeTopology),
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
         recordIncompleteEvidence: incomplete => bundle.writeStructured("snapshots/flow-lane.json", incomplete),

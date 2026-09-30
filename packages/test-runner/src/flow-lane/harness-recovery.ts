@@ -66,7 +66,7 @@ export async function readHarnessRecovery(
   const attempted = interventions.length + runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
   // A refusal belongs on any run that got no repair, not only on one whose
   // recovery never started. `refusalCode` was `attempted ? null : ...`, so the
-  // loop's own reasons -- the plan asked for no patch, the grant's scope
+  // loop's own reasons -- the plan asked for no patch, the run's intent
   // allowed none, a person's answer was needed -- had nowhere to go the moment
   // a single intervention existed. What silences it now is a recovery that
   // produced something, because then the lists are the answer.

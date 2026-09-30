@@ -56,7 +56,8 @@ Core's permission check first (`domain/src/runtime/llm-evidence/permission.ts`).
 The model declares what its own action does in Core's classes -- `move_money`,
 `delete`, `send_or_publish`, `modify_existing`, `create_new` -- on the press's
 `consequences` input or on the step's target handle, and Core answers from the
-person's grant and from what his instruction asks for. A refusal ends the build
+consequences the person permitted (`permittedConsequences`) and from what his
+instruction asks for. A refusal ends the build
 with Core's permission request for the person; FluxIQ judges no control by how
 it looks. **An empty declaration is put to Core too.** Until 2026-09-22 this
 domain answered `no_consequence` for `[]` without calling the check, so a press
@@ -108,7 +109,7 @@ expose its current `selectedValue` only when that value exactly matches one of
 the same descriptor's already-sanitized bounded options.
 
 Neither production nor Testing Lab web code resolves a provider or invokes a
-model itself. Generic provider selection, secret access, budgets, grants,
+model itself. Generic provider selection, secret access, budgets,
 prompt/tool iteration, strict output parsing, and proposal persistence remain
 in Core's global Automation Studio LLM harness. The only accepted terminal
 result is an inert `proposed` Flow Bootstrap Adaptation; review, apply, and
@@ -593,9 +594,10 @@ A replay makes "no model" true rather than observing it:
   variable (`PROVIDER_SECRET_ENVIRONMENT_VARIABLES`), naming the variable;
 - it deletes every `llm` Secret Key the workspace's Core holds -- a live build
   installed one there -- and fails if one survives;
-- it runs the Flow with no execution grant, so `runPersistedFlow` asks Core for
-  `adaptiveMode: "deterministic"` and Core's provider resolver returns no
-  provider at all (Core `programs/_shared/runtime.ts`, `bindLlmExecutionProvider`).
+- it runs the Flow with no `runIntent`, so `runPersistedFlow` asks Core for
+  `adaptiveMode: "deterministic"`, the run carries no model caller, and Core's
+  provider resolver returns no provider at all (Core
+  `programs/_shared/runtime.ts`, `bindLlmExecutionProvider`).
 
 It then requires Core's own record of the run to show zero provider calls, zero
 interventions and zero harness activations, the saved Flow's content hash to be
@@ -1314,8 +1316,8 @@ $0.12 that measured nothing).
 Three things keep that from happening, and they are in order of authority.
 
 **The instruction is the authority.** Core permits any class it reads the
-person's own instruction as asking for, whatever the grant holds, so the
-ordinary consequential task needs no grant at all
+person's own instruction as asking for, whatever the run permits, so the
+ordinary consequential task needs no `--llm-permit` at all
 (`runtime/action-permissions/gate.ts`).
 
 **A task may declare what its own instruction asks for.** `LiveInstructionTask`
@@ -1333,8 +1335,8 @@ for.
 **A build that still parks is a product result, read off the proposal.** The
 build record's `outcome` is `permission_required` — the same ending as a build
 that died on the request, and reported as one — and the run fails as
-`runtime.behavior` with `permission.required` and the classes a later grant
-would have to add. Nothing is asked of the review surface, so no HTTP status
+`runtime.behavior` with `permission.required` and the classes a later
+`--llm-permit` would have to add. Nothing is asked of the review surface, so no HTTP status
 stands in for the answer.
 
 The row says which of those happened. `buildOutcome` is the build's own ending,
@@ -1342,7 +1344,7 @@ and `consequences.answeredBy` is one of:
 
 | `answeredBy` | What it means |
 | --- | --- |
-| `instruction` | Every class declared was one the instruction asks for. No grant was involved. |
+| `instruction` | Every class declared was one the instruction asks for. No permit was involved. |
 | `campaign` | A class the instruction did not cover was held by the task's own `permits`. |
 | `nobody` | Neither held it. The build asked, and the campaign had no answer. |
 | `nothing lasting` | Every action said it would cause nothing that stays. |
@@ -1368,7 +1370,7 @@ A build's `providerCalls` is **every** provider call it made, from the
 proposal's `totalProviderCallCount`. It used to be the evidence loop's
 decisions alone and was short by every call Core makes outside the loop — the
 instruction-authority derivation, which asks the model what the person's
-instruction already asks for. Those calls are spent against the grant's token
+instruction already asks for. Those calls are spent against the build's token
 and cost budget, so a build could die on its budget for calls no count
 explained. Core publishes them as `additionalProviderCallCount` and their sum as
 `totalProviderCallCount`, beside the two loop counts rather than inside them,
@@ -1391,8 +1393,8 @@ different in kind.
 
 **A missing verdict fails the run**, as `performance.budget` with `pending:
 "verdict"`. It decides the run's outcome, and a measurement that can report a
-false pass is worse than one that reports nothing. It keeps the grant's whole
-run lease.
+false pass is worse than one that reports nothing. It keeps the live run's
+whole ten-minute deadline (`LIVE_LLM_RUN_WAIT_MS`).
 
 **A missing recovery record does not.** The run is returned as it stands and
 marked `unsettled: "recovery"`, which the Flow-lane snapshot and the campaign
@@ -1403,7 +1405,7 @@ threw away a complete product result: on `run-mudslg9p-c59266aa` a Flow was
 built, ran, failed, Core's repair made its two calls, no record arrived, and the
 run spent ten minutes waiting before being reported `performance.budget`. It
 now takes its own bound, `RECOVERY_RECORD_WAIT_MS`, five minutes measured from
-the first terminal read — half of Core's lease on a claimed grant, and long
+the first terminal read — half of the live run's deadline, and long
 enough for any recovery this facility has been observed to complete.
 
 ### The adversarial lane
@@ -1426,15 +1428,15 @@ declares the recovery that must answer it.
 
 Two declarations govern a condition, and they answer different questions.
 `expected.providerCalls` says the run must spend nothing, and is the guard for
-when the campaign runs the row **with** a grant. `expected.recovery` says which
+when the campaign runs the row **with** `--live-llm`. `expected.recovery` says which
 recovery must absorb it, in the closed vocabulary the run itself publishes:
 Core's four ladder rungs, `host_target_resolution` for the browser's own
 re-resolution, or `none` for a condition nothing absorbs. Spend alone cannot
 tell a rung that absorbed the fault from a fixture whose arming never reached
 the page -- both spend nothing and both pass -- which is why the rung is
 declared as well as the cost. The lane itself runs each condition with **no**
-grant at all, so what finished the run can only have been the deterministic
-runtime.
+model at all -- no `--live-llm`, no key and no `runIntent` -- so what finished
+the run can only have been the deterministic runtime.
 
 A condition whose declaration says `none` is not a gap. `web.action.rejected`
 (a covered control) and `web.auth.required` (an expired session) are both
@@ -2352,13 +2354,15 @@ Live-provider testing is an explicit opt-in lane and is not part of ordinary det
 
 The default Lab allowance is 8,000 input tokens, 2,000 output tokens and 10,000 total tokens per request, a 30-second timeout, a $0.25 per-call estimated-cost ceiling that may only be lowered, and one live run at a time. Validation rejects any request total above the non-overridable 50,000-token ceiling. A live run permits no retries.
 
-Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core purpose `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core purpose `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to Core's `max(per-request total, min(per-request total × calls, 100,000))`, and `--llm-max-run-tokens` can lower or raise it. Until Core forwards that field, a lower typed budget is enforced by the Lab's post-run check rather than by the grant. The run's total estimated cost is held to the smaller of $2 and the per-call ceiling times the authorized calls. The Lab sends Core's high-token confirmation only when the run token budget is above 100,000, and records whether it did in `snapshots/live-llm.json`.
+Calls per run follow Core's model, not a fixed count. A diagnosis (`--llm-task diagnose`, Core run intent `diagnosis_only`) makes exactly one call. An adaptation (`--llm-task adapt`, Core run intent `diagnose_and_adapt`; `explore_and_adapt` and `build_and_adapt` behave the same way) makes as many calls as it needs, for example to gather evidence between its diagnosis and its patch. Core stops it on the run's estimated-cost ceiling, its token budget, the recovery deadline, or its no-progress guard. `--llm-max-calls` defaults to Core's default of 26 and is only a backstop against a runaway loop: it is refused below 1 or above 64, Core's absolute ceiling. The run's token budget defaults to the per-request total times the authorized calls, and `--llm-max-run-tokens` can lower it; it is enforced by the Lab's post-run check. The run's total estimated cost is held to the smaller of $2 and the per-call ceiling times the authorized calls, and is saved on the Flow as `adaptationPolicySettings.maxEstimatedCostUsdPerRun` with the rest of its LLM settings, so Core's loop budget holds every build and recovery on that Flow to it. The model is the Flow's `llmModel` setting.
 
-The panel-driven adaptation demos type no call count: the panel sends Core none for an adapting run, so Core authorizes its default. Those demos accept a source run that made at least one call per recorded intervention and no more than that default. `pnpm demo:llm:adapt` is narrower for now. Its certificate records exactly one diagnosis invocation and one patch invocation, so it refuses, with a message that says why, a run that spent calls between them.
+**Model calls need no grant.** Nothing is preflighted, issued, confirmed (high-token) or revoked before or during a provider call: Core resolves the provider from the caller's own unlocked Secret Keys session. The Lab installs the key, saves the Flow's LLM settings and spend ceiling, and then sends its build (`generate-flow-bootstrap-adaptation`) or run (`run-runtime-session` with a `runIntent`) with no grant id. The one thing the operator still allows is a consequence: `--llm-permit` names the classes (`move_money`, `delete`, `send_or_publish`, `modify_existing`, `create_new`) the run's actions may cause, and the Lab sends them as `permittedConsequences` on the build and the run only when it names any. Absent, a consequential act stops and asks a person (`permission_required`). `snapshots/live-llm.json` records the plan's `authorized` bounds and its `permittedConsequences`; it no longer carries `granted` or `highTokenConfirmation`.
+
+The panel-driven adaptation demos type no call count: the panel sends Core none for an adapting run, so Core applies its default. Those demos accept a source run that made at least one call per recorded intervention and no more than that default. `pnpm demo:llm:adapt` is narrower for now. Its certificate records exactly one diagnosis invocation and one patch invocation, so it refuses, with a message that says why, a run that spent calls between them.
 
 Scenario/browser traffic remains loopback-only and external side effects remain disabled. Provider control-plane traffic is separately restricted to a trusted Core-owned provider adapter; a Flow, scenario, extension, or CLI caller cannot choose an arbitrary endpoint. Raw prompts and responses are excluded from Lab artifacts. Successful invocations must record sanitized usage, while locally rejected, failed, or cancelled invocations may explicitly record usage as unavailable instead of fabricating counts. A passing evaluation requires a completed, passing zero-LLM replay and cannot attest more invocations than its declared allowance.
 
-The general Lab CLI reaches the real provider through Core's grant when `pnpm lab run ... --flow --live-llm` is given with the `--llm-*` options above. Panel-driven paid certification uses the narrower `pnpm demo:llm:diagnose` command after `demo:llm:setup` and `demo:llm:prepare`. The command drives the real panel UI in the persistent isolated workspace. It selects the stored opaque Testing Lab key summary and saves stricter first-live limits: 2,000 input tokens, 512 output tokens, 3,000 total tokens, exactly one call, zero retries, 20 seconds, and at most $0.25.
+The general Lab CLI reaches the real provider when `pnpm lab run ... --flow --live-llm` is given with the `--llm-*` options above. Panel-driven paid certification uses the narrower `pnpm demo:llm:diagnose` command after `demo:llm:setup` and `demo:llm:prepare`. The command drives the real panel UI in the persistent isolated workspace. It selects the stored opaque Testing Lab key summary and saves stricter first-live limits: 2,000 input tokens, 512 output tokens, 3,000 total tokens, exactly one call, zero retries, 20 seconds, and at most $0.25.
 
 The diagnosis command waits for Core's Flow readiness check and requires the
 real Runtime Debug Run control to be enabled before and after selecting
@@ -2366,7 +2370,7 @@ diagnosis-only mode. If the prepared Flow has no active instruction, it records
 only bounded boolean readiness facts and exits before opening authorization,
 creating a runtime run, or contacting the provider.
 
-The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. After login, normal LLM grants use the authenticated session's in-memory secret unlock and do not ask for the account password or PIN again. The panel shows a confirmation warning only when preflight total-token exposure is strictly greater than 100,000. Exposure is judged on the run's token budget, and that budget defaults to at most 100,000, so the warning appears only for a run that asks for a larger budget. Secret-key setup and other genuinely privileged credential actions remain screenshot-suppressed.
+The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. After login, model calls use the authenticated session's in-memory secret unlock and do not ask for the account password or PIN again. There is no preflight and no high-token confirmation: a model call needs no grant. Secret-key setup and other genuinely privileged credential actions remain screenshot-suppressed.
 
 Runtime target adaptations remain opaque in Core. When Core applies an `edit_action_target`, the web domain consumes the resulting `parameters.target` object as an override and maps its selector, element, or visual target through the existing client-gateway boundary; the generated top-level parameters remain the fallback.
 

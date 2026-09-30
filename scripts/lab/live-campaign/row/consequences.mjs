@@ -12,9 +12,9 @@
 //
 // - `instruction`: the person's own words asked for the class, Core read them
 //   that way, and the build went ahead without anybody being asked. This is
-//   the ordinary case and needs no grant at all.
+//   the ordinary case and needs no permission at all.
 // - `campaign`: the task declared the class on itself (`permits`), so the
-//   run's grant held it. The corpus's second opinion, for when Core's reading
+//   run's `--llm-permit` held it. The corpus's second opinion, for when Core's reading
 //   of the instruction and the model's declaration disagree.
 // - `nobody`: neither held it. The build asked and was not answered.
 // - `nothing lasting`: every action said it would cause nothing that stays, so
@@ -39,7 +39,7 @@ export function consequenceSummary(liveLlm) {
   if (!build || typeof build !== "object") return null;
   const declared = Array.isArray(build.declaredConsequences) ? build.declaredConsequences : null;
   const instructed = classesOf(Array.isArray(build.instructedConsequences) ? build.instructedConsequences.map((entry) => entry?.consequence) : []);
-  const granted = classesOf(liveLlm?.granted?.permittedConsequences ?? []);
+  const permitted = classesOf(liveLlm?.permittedConsequences ?? []);
   const request = build.permissionRequest && typeof build.permissionRequest === "object" ? build.permissionRequest : null;
   const crossCheck = build.consequenceCrossCheck && typeof build.consequenceCrossCheck === "object" ? build.consequenceCrossCheck : null;
   const lasting = declared === null ? [] : declared.filter((entry) => classesOf(entry?.consequences).length > 0);
@@ -51,9 +51,9 @@ export function consequenceSummary(liveLlm) {
   const reads = declared === null ? [] : declared.filter((entry) => entry?.effect === "observe");
   return {
     /** How the run's permission question was answered, or that there was none to answer. */
-    answeredBy: declared === null ? "not recorded" : answeredBy({ request, lasting, instructed, granted }),
-    /** What the task's own run was granted, which is what its `permits` asked for. */
-    granted,
+    answeredBy: declared === null ? "not recorded" : answeredBy({ request, lasting, instructed, permitted }),
+    /** What the task's own run was permitted (`--llm-permit`), which is what its `permits` asked for. */
+    permitted,
     /** What Core read the person's instruction as asking for. */
     instructed,
     /** Every class any action declared for itself. */
@@ -86,17 +86,17 @@ export function consequenceSummary(liveLlm) {
 
 /**
  * Nothing lasting was declared, or the classes that were came from the
- * instruction, from the campaign's own grant, or from neither.
+ * instruction, from the campaign's own permit, or from neither.
  *
  * A class held by both reads as `instruction`: the instruction is the
- * authority, and the grant only ever agrees with it.
+ * authority, and the permit only ever agrees with it.
  */
-function answeredBy({ request, lasting, instructed, granted }) {
+function answeredBy({ request, lasting, instructed, permitted }) {
   if (request !== null) return "nobody";
   if (lasting.length === 0) return "nothing lasting";
   const classes = classesOf(lasting.flatMap((entry) => entry.consequences));
   if (classes.every((entry) => instructed.includes(entry))) return "instruction";
-  if (classes.every((entry) => instructed.includes(entry) || granted.includes(entry))) return "campaign";
+  if (classes.every((entry) => instructed.includes(entry) || permitted.includes(entry))) return "campaign";
   // Permitted, and neither list explains it. Worth seeing rather than guessing.
   return "unexplained";
 }

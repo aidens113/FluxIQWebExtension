@@ -16,7 +16,6 @@ export type ProviderFreeGenerationReadiness = Readonly<{
   parsed: boolean;
   code: "readiness.ready" | "readiness.http-rejected" | "readiness.response-invalid" | "readiness.runtime-unavailable";
   supported: boolean;
-  llmExecutionGrantsConfigured: boolean;
   providerResolverConfigured: boolean;
   nativeNodeRegistryConfigured: boolean;
 }>;
@@ -34,7 +33,6 @@ export async function assertProviderFreeGenerationReadiness(page: Page, evidence
       responseBytes: readiness.responseBytes,
       responseParsed: readiness.parsed,
       supported: readiness.supported,
-      llmExecutionGrantsConfigured: readiness.llmExecutionGrantsConfigured,
       providerResolverConfigured: readiness.providerResolverConfigured,
       nativeNodeRegistryConfigured: readiness.nativeNodeRegistryConfigured,
     });
@@ -64,7 +62,6 @@ export async function readProviderFreeGenerationReadiness(
       AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS
     )) return unreadiness(status, responseBytes, "readiness.response-invalid");
     const compatible = parsed.supported === true
-      && parsed.runtime.llmExecutionGrantsConfigured === true
       && parsed.runtime.providerResolverConfigured === true
       && parsed.runtime.nativeNodeRegistryConfigured === true;
     return Object.freeze({
@@ -74,7 +71,6 @@ export async function readProviderFreeGenerationReadiness(
       parsed: true,
       code: compatible ? "readiness.ready" as const : "readiness.runtime-unavailable" as const,
       supported: parsed.supported,
-      llmExecutionGrantsConfigured: parsed.runtime.llmExecutionGrantsConfigured,
       providerResolverConfigured: parsed.runtime.providerResolverConfigured,
       nativeNodeRegistryConfigured: parsed.runtime.nativeNodeRegistryConfigured,
     });
@@ -84,7 +80,7 @@ export async function readProviderFreeGenerationReadiness(
 }
 
 function unreadiness(status: number, responseBytes: number, code: "readiness.http-rejected" | "readiness.response-invalid"): ProviderFreeGenerationReadiness {
-  return Object.freeze({ compatible: false, status, responseBytes, parsed: false, code, supported: false, llmExecutionGrantsConfigured: false, providerResolverConfigured: false, nativeNodeRegistryConfigured: false });
+  return Object.freeze({ compatible: false, status, responseBytes, parsed: false, code, supported: false, providerResolverConfigured: false, nativeNodeRegistryConfigured: false });
 }
 function matchesExactJson(value: unknown, expected: unknown): boolean {
   if (value === expected) return true;

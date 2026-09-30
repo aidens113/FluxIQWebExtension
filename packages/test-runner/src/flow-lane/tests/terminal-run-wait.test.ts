@@ -9,8 +9,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation-studio";
-import { awaitTerminalRunDetail, TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, TERMINAL_DETAIL_POLL_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation-studio";
+import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, TERMINAL_DETAIL_POLL_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
 
 test("one node's allowance is every attempt's readiness ceiling plus every retry's backoff, as Core defines them", () => {
   // Core awaits readiness once per attempt and sleeps a backoff before each
@@ -42,7 +42,7 @@ test("every node after the first adds its own allowance, so a multi-node Flow is
 });
 
 test("the derived bound is capped at the longest run this facility allows", () => {
-  assert.equal(TERMINAL_DETAIL_MAX_WAIT_MS, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS);
+  assert.equal(TERMINAL_DETAIL_MAX_WAIT_MS, LIVE_LLM_RUN_WAIT_MS);
   assert.equal(terminalDetailWaitMs(20), TERMINAL_DETAIL_MAX_WAIT_MS);
   assert.equal(terminalDetailWaitMs(Number.MAX_SAFE_INTEGER), TERMINAL_DETAIL_MAX_WAIT_MS);
   // Seven nodes is where Core's own per-node worst case reaches the cap, so
@@ -144,7 +144,7 @@ async function waitOn(reads: (clock: number) => ReturnType<typeof markedRun>) {
   return { settled, clock };
 }
 
-test("a recovery Core still marks running is waited for up to Core's grant lease, past the fixed five minutes", async () => {
+test("a recovery Core still marks running is waited for up to the live-run deadline, past the fixed five minutes", async () => {
   // Core finishes the recovery at 400 s, which the fixed wait would have missed.
   const { settled, clock } = await waitOn((now) => now < 400_000 ? markedRun({ state: "running", startedAt: 1 }) : markedRun({ state: "ended", startedAt: 1, endedAt: 2 }, true));
   assert.equal(settled.unsettled, undefined);

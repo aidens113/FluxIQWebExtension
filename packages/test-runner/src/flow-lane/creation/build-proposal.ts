@@ -1,5 +1,5 @@
 // The one paid step of a created-Flow run: give Core the task's instruction,
-// take out a `build_and_adapt` grant, and ask Core to explore the live page and
+// ready the Flow's LLM settings, and ask Core to explore the live page and
 // propose a Flow -- the calls the web panel's "Explore and create proposal"
 // makes (`authoring/BlankFlowAuthoringPanel.tsx`), in its order.
 //
@@ -8,6 +8,7 @@
 // record too, not a throw, so the run can publish what the build spent before
 // it fails on the refusal.
 
+import type { LlmActionConsequence } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS, parseAutomationStudioFlowBootstrapFailureDiagnostic } from "fluxiq/automation-studio";
 import type { ExistingAdaptationConsequenceCrossCheck, ExistingAdaptationDeclaredAction, ExistingFlowAdaptation, ExistingFlowAdaptationSummary, FlowBootstrapGenerationEnvelope } from "../../existing-fluxiq-control.js";
 import { publishableStepFields, type PublishableStepValue } from "../../existing-fluxiq-control/index.js";
@@ -17,10 +18,10 @@ import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../../http-control
 /** The longest one control request may wait (`http-control`'s own bound). */
 const GENERATION_REQUEST_TIMEOUT_MS = 300_000;
 /**
- * How long a build may still be running after it was dispatched: the grant's
- * claim window, Core's run lease once it is claimed
- * (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`), and the reply -- the
- * wait the web panel gives the same request (`WEBSITE_EXPLORATION_OVERALL_TIMEOUT_MS`).
+ * How long a build may still be running after it was dispatched: the wait the
+ * web panel gives the same request (`WEBSITE_EXPLORATION_OVERALL_TIMEOUT_MS`).
+ * It was the old grant's claim window, run lease and reply; grants are gone
+ * (t186), and the number stays because it is what a build was measured to need.
  */
 const GENERATION_DEADLINE_MS = 60_000 + 600_000 + 15_000;
 const PROPOSAL_POLL_MS = 1_000;
@@ -49,10 +50,20 @@ const CORE_DECISION_STEP_IDS: ReadonlySet<string> = new Set<string>(Object.value
 export type CreatedFlowBuildControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
-  generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true; startLocation?: string }, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
+  generateFlowBootstrapAdaptation(input: CreatedFlowBuildRequest, bounds?: FluxIQHttpOptions): Promise<FlowBootstrapGenerationEnvelope>;
   listFlowAdaptations(projectId: string, flowId: string, status?: string): Promise<ExistingFlowAdaptationSummary[]>;
   getFlowAdaptation(projectId: string, flowId: string, adaptationId: string): Promise<ExistingFlowAdaptation>;
 };
+
+/**
+ * One `generate-flow-bootstrap-adaptation` request. It carries no grant: a
+ * model call needs none. `permittedConsequences` is the operator's
+ * `--llm-permit`, sent only when it permits something.
+ */
+export type CreatedFlowBuildRequest = { projectId: string; flowId: string; evidenceGuided: true; startLocation?: string; permittedConsequences?: LlmActionConsequence[] };
+
+/** What readying a Flow for its build answers with: the consequences the operator permitted it (`--llm-permit`), empty for none. */
+export type CreatedFlowBuildLlm = { permittedConsequences: readonly LlmActionConsequence[] };
 
 /** Clock and bounds for the build's wait. Production passes none. */
 export type CreatedFlowBuildWait = { now?: () => number; sleep?: (ms: number) => Promise<void>; requestTimeoutMs?: number; deadlineMs?: number; pollMs?: number };
@@ -158,7 +169,7 @@ export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | nu
  *   call Core makes outside the loop -- the instruction-authority derivation
  *   asks the model what the person's instruction already asks for
  *   (`runtime/action-permissions/`, `deriveInstructed`). Those calls are spent
- *   against the grant's token and cost budget, so a build could die on its
+ *   against the build's token and cost budget, so a build could die on its
  *   budget for calls no count explained. Core publishes them as
  *   `additionalProviderCallCount` and their sum as `totalProviderCallCount`,
  *   and this is that sum. A Core that publishes neither still reports the loop
@@ -268,20 +279,20 @@ export type CreatedFlowPermissionRequest = Readonly<{
 }>;
 
 /**
- * Saves the instruction, authorizes, and builds. `authorize` takes out the
- * grant against the Flow as it stands once the instruction is saved, which is
- * the binding Core checks; a refusal there throws before anything is spent.
+ * Saves the instruction, readies the Flow's LLM settings, and builds.
+ * `authorize` installs the key and saves the settings once the instruction is
+ * saved; a refusal there throws before anything is spent.
  */
 export async function buildCreatedFlowProposal(
   control: CreatedFlowBuildControl,
-  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<{ grantId: string }> },
+  input: { projectId: string; flowId: string; instruction: string; startLocation?: string; authorize: (flowId: string) => Promise<CreatedFlowBuildLlm> },
   bounds: FluxIQHttpOptions = {},
   wait: CreatedFlowBuildWait = {},
 ): Promise<CreatedFlowBuild> {
   const now = wait.now ?? Date.now;
   const saved = record(await control.automationStudioCall("save-flow-generation-instruction", { projectId: input.projectId, flowId: input.flowId, instruction: input.instruction }, bounds));
   if (record(saved.instruction).status !== "active") throw new RunnerFailure("runtime.behavior", "Core did not make the task's instruction the Flow's active instruction");
-  const { grantId } = await input.authorize(input.flowId);
+  const { permittedConsequences } = await input.authorize(input.flowId);
   // Core's evidence tools act on the one connected client, in this project's context.
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const startedAt = now();
@@ -293,7 +304,13 @@ export async function buildCreatedFlowProposal(
       // port drawn per run -- so the run tells Core directly, and the build has
       // to reach the page itself before it may explore it
       // (`AS/runtime/flow-bootstrap/start-location.ts`).
-      { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true, ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }) },
+      {
+        projectId: input.projectId,
+        flowId: input.flowId,
+        evidenceGuided: true,
+        ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }),
+        ...(permittedConsequences.length ? { permittedConsequences: [...permittedConsequences] } : {}),
+      },
       { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {

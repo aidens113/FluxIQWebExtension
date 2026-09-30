@@ -101,16 +101,9 @@ export async function runAdaptationFromPanel(page: Page, flowTreeItemId: string,
   while (Date.now() < deadline && await runButton.isDisabled()) await page.waitForTimeout(100);
   if (await runButton.isDisabled()) throw new RunnerFailure("runtime.behavior", "Diagnose and propose adaptation mode was not ready to run");
   const response = await evidence.step("panel", "adaptation-runtime-run", "Run one bounded diagnosis and adaptation proposal", () => waitForPanelRunResponse(page, async () => {
+    // A model call needs no grant, so the run is one click: there is no
+    // preflight and no token-exposure confirmation in front of it.
     await runButton.click();
-    const confirmation = page.getByRole("dialog", { name: "Confirm high-token LLM Execution", exact: true });
-    // The confirmation follows an authenticated preflight request. A cold
-    // production panel can take several seconds to compile and answer it, so a
-    // two-second probe can miss a modal that is still legitimately on its way.
-    const confirmationObserved = await confirmation.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
-    if (confirmationObserved) {
-      await evidence.diagnostic("panel", "adaptation-high-token-confirmation", "adaptation.high-token-confirmation", { observed: true });
-      await confirmation.getByRole("button", { name: "Continue high-token execution", exact: true }).click();
-    }
   }, ADAPTING_RUN_TIMEOUT_MS));
   const body = await response.json() as any;
   if (!response.ok()) throw new RunnerFailure("runtime.behavior", "The authenticated adaptation run request was rejected", { details: { reasonCode: adaptationRunRejectionCode(body?.error) } });
@@ -123,7 +116,6 @@ export function adaptationRunRejectionCode(value: unknown): string {
   const message = typeof value === "string" ? value.toLowerCase() : "";
   if (/settings revision/u.test(message)) return "adaptation_run.settings_revision_mismatch";
   if (/execution digest/u.test(message)) return "adaptation_run.execution_digest_mismatch";
-  if (/execution grant|grant/u.test(message)) return "adaptation_run.grant_invalid";
   if (/provider resolution/u.test(message)) return "adaptation_run.provider_resolution_failed";
   if (/secret|api key|key unavailable/u.test(message)) return "adaptation_run.secret_unavailable";
   if (/budget|token|cost|call limit/u.test(message)) return "adaptation_run.budget_rejected";

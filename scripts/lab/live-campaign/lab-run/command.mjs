@@ -23,7 +23,7 @@ const REPAIR_LIMITS = Object.freeze([
  * 42000 -- five times smaller, for no reason other than that nobody named it.
  * Measured 2026-09-17 across thirty-six live creation tasks: seven of the ten
  * failures were `flow_bootstrap.provider_input_budget_exceeded`, thrown before
- * the request was ever sent, and the grant ends there, so the run produced no
+ * the request was ever sent, and the build ends there, so the run produced no
  * Flow at all. The slice holding the realistic pages -- an infinite feed, a
  * multi-tab order lookup, an auth gate, an admin console with a virtualised
  * list -- scored zero of six, four of them on that code alone, while the slice
@@ -39,8 +39,8 @@ const CREATE_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "48000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "56000"],
   // The same story as the input tokens above, one limit along, and it has to be
   // stated here for the same reason. Leaving the call count unnamed inherited
-  // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`, which mirrors Core's grant
-  // default of a diagnosis, a patch and 24 exploration decisions -- a shape
+  // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`, which mirrored Core's old
+  // execution-grant default of a diagnosis, a patch and 24 exploration decisions -- a shape
   // that predates a build exploring by running the library's own nodes. On
   // 2026-09-23 the first six tasks of a ten-site campaign each made 19 to 28
   // calls and every one that passed 26 was failed as `performance.budget`
@@ -62,16 +62,16 @@ const CREATE_LIMITS = Object.freeze([
  * answer that never comes. Two things keep that from being a harness failure.
  *
  * Core already permits any class it reads the person's own instruction as
- * asking for, whatever the grant holds -- the instruction is the authority --
+ * asking for, whatever the run permits -- the instruction is the authority --
  * so the ordinary consequential task needs nothing here at all. This is the
  * corpus's second opinion for the case where the two readings disagree: a task
  * whose instruction plainly asks for an act names the classes on itself
- * (`LiveInstructionTask.permits`), and its run is granted exactly those.
+ * (`LiveInstructionTask.permits`), and its run is permitted exactly those.
  *
  * A task that names none permits none. Its build then either proceeds on the
  * instruction's own authority, or stops and asks -- and a build that asks and
  * is not answered ends as `permission.required`, which is a result about the
- * product. What it must never be is a campaign-wide grant: permitting
+ * product. What it must never be is a campaign-wide permit: permitting
  * `move_money` for every task would hide exactly the over-declaration this
  * measurement exists to find.
  *

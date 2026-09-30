@@ -64,7 +64,7 @@ test("reports what an iterating proposal run actually spent, through apply and v
   }
 });
 
-test("refuses a proposal run whose call count its grant could not have produced", () => {
+test("refuses a proposal run whose call count its run could not have produced", () => {
   for (const calls of [undefined, 0, 1, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1]) {
     const base = fixture() as any;
     base.run.providerCallCount = calls;
@@ -173,7 +173,8 @@ test("apply launcher is secret-stripped and workspace command performs only one 
   assert.match(body, /allowPendingAdaptationId/u);
   assert.match(body, /reviewAndApplyAdaptationViaUi/u);
   assert.equal((body.match(/runZeroLlmAdaptationValidation/g) ?? []).length, 1);
-  assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*preflight-llm-execution[\s\S]*issue-llm-execution-grant/u);
+  assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*run-runtime-session[\s\S]*runIntentRequested/u);
+  assert.doesNotMatch(body, /preflight-llm-execution|issue-llm-execution-grant/u);
   assert.doesNotMatch(body, /runAdaptationFromPanel|configureFirstLiveDiagnosisViaUi|buildApproveApplyCreationViaUi/u);
 });
 
@@ -221,7 +222,8 @@ test("validate launcher is secret-stripped and command is one provider-free exac
   assert.match(body, /locateExactAppliedEvidenceGuidedCreation/u);
   assert.match(body, /selectFlowInCurrentProject|runZeroLlmAdaptationValidation/u);
   assert.equal((body.match(/runZeroLlmAdaptationValidation/g) ?? []).length, 1);
-  assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*preflight-llm-execution[\s\S]*issue-llm-execution-grant/u);
+  assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*run-runtime-session[\s\S]*runIntentRequested/u);
+  assert.doesNotMatch(body, /preflight-llm-execution|issue-llm-execution-grant/u);
   assert.doesNotMatch(body, /reviewAndApplyAdaptationViaUi|runAdaptationFromPanel|configureFirstLiveDiagnosisViaUi/u);
 });
 

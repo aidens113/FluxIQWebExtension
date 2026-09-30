@@ -1,5 +1,5 @@
 // What a created-Flow run builds and how it is judged, decided once, before a
-// topology, a browser or a grant exists. Everything a run later reads about
+// topology, a browser or a Flow exists. Everything a run later reads about
 // its task comes from here, so a task the scenario cannot judge is refused
 // while refusing is still free.
 

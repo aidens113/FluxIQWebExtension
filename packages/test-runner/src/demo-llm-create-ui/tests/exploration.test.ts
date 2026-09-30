@@ -2,8 +2,7 @@
 // evidence-guided exploration checkpoint. Every row here belongs to a run that
 // must stop at a *proposed* adaptation -- the parser refuses one that has
 // already been applied, the launcher and the UI driver carry no approve/apply
-// seam at all. The explicitly authorized golden lane confirms the visible
-// high-token boundary but still stops at a proposed adaptation. The driver
+// seam at all. The golden lane still stops at a proposed adaptation. The driver
 // also asserts the order of the panel's progress states, and answers the
 // consequence dialog either way: allow after proving Cancel changes nothing,
 // or refuse for good.
@@ -13,8 +12,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
-import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
+import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
 import { explorationProgressOrderIssue, refuseEvidenceGuidedCreationPermissionViaUi, settleObservedResponseText } from "../explore-proposal-ui.js";
 import { readCreateUiSource } from "./module-source.js";
 
@@ -75,7 +73,7 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
     maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
     maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
     maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
-    grantClaimWindowSeconds: 60, runLeaseSeconds: 600, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0,
+    runDeadlineSeconds: 600, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0,
   });
   assert.ok(EVIDENCE_GUIDED_CREATION_LIMITS.maxInputTokens + EVIDENCE_GUIDED_CREATION_LIMITS.maxOutputTokens <= EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens);
   // The exploration Flow's settings follow the shared budget instead of
@@ -85,12 +83,9 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: DEFAULT_LLM_MODEL, maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens, maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
   assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).find(([label]) => label === "Timeout (seconds)"), ["Timeout (seconds)", "25"]);
   assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.timeoutSeconds, 45);
-  // The panel's command timeout: a 60 s claim window, Core's 600 s run lease, and 15 s for the reply.
+  // The panel's command timeout: the 600 s run deadline, the minute the panel's number still carries, and 15 s for the reply.
   assert.equal(EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, 675_000);
   assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10);
-  // Core's own threshold, imported: this mirror carried the literal 100_000
-  // while Core had moved to ten full requests.
-  assert.equal(LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD);
   const workspace = await readFile(path.join(root, "packages", "test-runner", "src", "demo-workspace", "exploration-checkpoints.ts"), "utf8");
   assert.match(workspace, /configureEvidenceGuidedCreationViaUi\(panelPage, fixture\.flowTreeItemId, flowName/u);
   assert.match(workspace, /targetPage: scenarioPage/u);
@@ -111,12 +106,8 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /element\.scrollTop = next/u);
   assert.match(uiSource, /waitForExplorationTerminal/u);
   assert.match(uiSource, /authoring\.getByRole\("alert"\)/u);
-  assert.match(uiSource, /Confirm high-token Flow Build/u);
-  assert.match(uiSource, /configuredProfileRequiresConfirmation: aggregateAuthorizedTokens >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD/u);
-  assert.match(uiSource, /confirmationAttempted: true/u);
-  assert.match(uiSource, /Continue high-token build/u);
-  assert.match(uiSource, /ignoreHighTokenConfirmation: true/u);
-  assert.match(uiSource, /options\.ignoreHighTokenConfirmation !== true[\s\S]*Confirm high-token Flow Build/u);
+  // A model call needs no grant: there is no token-exposure confirmation to pass.
+  assert.doesNotMatch(uiSource, /high-token|HighToken|HIGH_TOKEN/u);
   assert.match(uiSource, /control\.listFlowAdaptations\(projectId, flowId, "proposed"\)/u);
   assert.match(uiSource, /Date\.now\(\) \+ EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS/u);
   assert.match(uiSource, /context\.on\("request", observeRequest\)/u);
@@ -139,21 +130,12 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.doesNotMatch(uiSource, /waitForEndpoint\(page, "generate-flow-bootstrap-adaptation", \(\) => explore\.click\(\), 190_000\)/u);
 });
 
-test("exploration UI terminal classifier stops at high-token confirmation without treating it as an alert", () => {
-  assert.deepEqual(classifyExplorationUiTerminal({ highTokenConfirmationVisible: true, alertVisible: false, requestObserved: false }), {
-    kind: "high_token_confirmation",
-    requestObserved: false,
-  });
-  assert.deepEqual(classifyExplorationUiTerminal({ highTokenConfirmationVisible: true, alertVisible: true, requestObserved: true }), {
-    kind: "high_token_confirmation",
-    requestObserved: true,
-  });
-  assert.deepEqual(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: true, requestObserved: true }), {
+test("exploration UI terminal classifier reports a visible alert as a UI failure, and nothing else", () => {
+  assert.deepEqual(classifyExplorationUiTerminal({ alertVisible: true, requestObserved: true }), {
     kind: "ui_failure",
     requestObserved: true,
   });
-  assert.equal(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: false, requestObserved: false }), undefined);
-  assert.equal(Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens) >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, true);
+  assert.equal(classifyExplorationUiTerminal({ alertVisible: false, requestObserved: false }), undefined);
 });
 
 test("external response-body observation is bounded independently of the product UI", async () => {
@@ -163,7 +145,7 @@ test("external response-body observation is bounded independently of the product
 
 test("progress must prepare before inspecting and end on its terminal state, never regressing after it", () => {
   assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "ready_for_review"], "proposal"), undefined);
-  // A confirmed high-token build and a permission continuation each prepare again.
+  // A permission continuation prepares again.
   assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "permission_pending", "preparing", "inspecting", "ready_for_review"], "proposal"), undefined);
   assert.equal(explorationProgressOrderIssue(["preparing", "inspecting", "permission_pending"], "permission_request"), undefined);
   assert.equal(explorationProgressOrderIssue(["inspecting", "ready_for_review"], "proposal"), "progress.preparing_missing");

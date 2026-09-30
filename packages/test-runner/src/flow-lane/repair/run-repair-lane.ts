@@ -3,7 +3,7 @@
 // The Flow lane builds a Flow, runs it, and lets Core's recovery repair the
 // run that failed. What it leaves behind is a proposal, and a proposal is not a
 // repair. This is the rest of the loop -- approve it, apply it to the Flow,
-// then run that Flow again with no execution grant -- and it lives beside the
+// then run that Flow again with no model -- and it lives beside the
 // repair's own judgement rather than in the runner, because every step of it is
 // a statement about the repair and none of it is about browsers or bundles.
 //
@@ -12,7 +12,7 @@
 // written once the assertions pass cannot explain the run that failed them.
 //
 // A Flow FluxIQ built from an instruction takes the same lane. Its playback ran
-// under a proposal-only repair grant, so what it leaves is the same kind of
+// with the model taking part, so what it leaves is the same kind of
 // proposal; two things differ. Its nodes ask for values the way the created
 // lane answered them, so its caller hands in that lane's rule to rebuild its
 // inputs, which keeps this lane free of the creation module. And its
@@ -31,7 +31,7 @@ import type { FlowRepairExpectation } from "./declared-repair.js";
 import { assertFlowRepair, judgeFlowRepair } from "./judge-repair.js";
 import { assertLiveRepairProof, proveLiveRepair, type LiveRepairProof, type ProveLiveRepairControl } from "./prove-repair.js";
 
-/** What the lane needs of the live run: whether its grant repairs a Flow, and the task and grant purpose that produced the repair. */
+/** What the lane needs of the live run: whether it repairs a Flow, and the task and run intent that produced the repair. */
 export type LiveRepairRun = { repairsFlow: boolean; describeRepair(): { task: string; purpose: string } };
 
 export type LiveRepairLaneInput = {
@@ -80,7 +80,7 @@ export type LiveRepairLaneInput = {
  * Applies and replays the repair, writes `snapshots/repair-lane.json`, and then
  * fails the run if the repair was not reusable. Returns the proof, or
  * `undefined` when the run asked for no replays or produced no repairable
- * grant. With an `expectation`, a proposal judged anything but `repaired` is
+ * proposal. With an `expectation`, a proposal judged anything but `repaired` is
  * recorded with `application: null` and fails the run before it is applied.
  */
 export async function runLiveRepairLane(

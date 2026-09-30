@@ -1,66 +1,41 @@
-// What a live provider run is actually authorized to do. The CLI's
-// `LlmExecutionProfile` is the Lab's vocabulary; Core authorizes an execution
-// grant in its own, and its bounds are narrower. This is the one place the two
-// are reconciled, and it refuses rather than silently widening: every effective
-// limit below is at or inside the profile's own, so a cap the operator typed
-// can only ever bind harder, never less. A creation build with no typed run
-// token budget defaults to every authorized call at the per-request limit, so
-// the operator's cost cap binds first (`runTokenBudget`).
+// What a live provider run is bounded to. The CLI's `LlmExecutionProfile` is
+// the Lab's vocabulary; Core's Flow settings are narrower. This is the one
+// place the two are reconciled, and it refuses rather than silently widening:
+// every effective limit below is at or inside the profile's own, so a cap the
+// operator typed can only ever bind harder, never less.
+//
+// Nothing here is an authorization. A model call needs no grant: the limits
+// become Flow settings Core's loop budget enforces, and the only thing the
+// operator still allows is a consequence (`--llm-permit`).
 
-import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 
 /**
- * The grant purposes the Lab can plan, and whether each one iterates. That
- * yes-or-no is all a purpose says about call counts, as it is in Core
- * (`runtime/llm/grant-capabilities.ts`): `diagnosis_only` asks one question,
- * and everything else takes its count from the operator. The purposes differ
- * in what a run may *change*, which is Core's to enforce, not in how many
- * times it may ask. The first three are the ones a Core runtime session
- * accepts (`AUTOMATION_STUDIO_RUNTIME_SESSION_GRANT_PURPOSES`);
- * `build_and_adapt` is a person asking for a new Flow, and only a Flow build
- * accepts it.
- *
- * `verify_result` is never a *plan's* purpose -- no `--llm-task` maps to it,
- * and `purposeOf` never returns it. It is the purpose of a second grant a lane
- * takes out alongside its own, so that the finished run's result can be judged
- * at all: a run carrying no grant makes no provider call, so Core's
- * verification records that nobody judged the result rather than a verdict,
- * and the run keeps the `succeeded` its steps earned. One call, and the run
- * itself stays exactly as deterministic as it was without it.
+ * The intents the Lab can plan -- Core's runtime-session LLM intents -- and
+ * whether each one iterates. That yes-or-no is all an intent says about call
+ * counts: `diagnosis_only` asks one question, and everything else takes its
+ * count from the operator. The intents differ in what a run may *change*,
+ * which is Core's to enforce. `build_and_adapt` is a person asking for a new
+ * Flow, and only a Flow build takes it.
  */
-const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true, build_and_adapt: true, verify_result: false } as const;
+const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true, build_and_adapt: true } as const;
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
-/** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */
+/** Core's own ceilings on a Flow's LLM execution settings (`assertFlowLlmExecutionSettings`). */
 /** Core's own per-request ceiling -- once `deepseek-chat`'s whole context, now a budget Core sets, since the configured models carry a million tokens. Derived: a tenth copy of this number is how the previous nine happened. */
 const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;
-/** Core's ceiling on a grant's total estimated cost (`MAX_TOTAL_COST_USD`), whatever its call count. */
-const CORE_MAX_TOTAL_COST_USD = 2;
-/** Core's runaway backstop on a grant's calls; the Lab contract carries the same number. */
-const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 /**
- * `AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD`. Core issues a grant
- * whose run token budget (`maxTotalTokensPerRun`) is above this only when the
- * request confirms the exposure, and it also caps the budget Core chooses when a
- * request names none.
- *
- * Derived, because a literal here does not merely drift -- it overrides. This
- * plan's number is sent on every grant request and Core honours a caller-named
- * budget, so while this said 100_000 Core's own default could never reach a Lab
- * run. Core's arithmetic at the current call size: a 100_000 pot, one call's
- * worth held as the patch reserve, and an exploration decision needing another
- * call's worth leaves ZERO decisions. Every Lab run without an explicit
- * `--llm-max-run-tokens` therefore reintroduced, inside the Lab, precisely the
- * regression the Core change was made to remove -- and the campaigns hid it by
- * passing their own larger budget.
- *
- * Ten full requests, which is what Core means by the threshold.
+ * The most a Lab run may spend in all, whatever its call count: Core's default
+ * run total (`maxTotalEstimatedCostUsd`). Core accepts a larger
+ * `maxEstimatedCostUsdPerRun`; the Lab asks for no more than it always has.
  */
-const CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10;
+const LAB_MAX_TOTAL_COST_USD = 2;
+/** Core's runaway backstop on a run's calls; the Lab contract carries the same number. */
+const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 
 export type LiveLlmPlan = {
   profileId: string;
@@ -69,54 +44,35 @@ export type LiveLlmPlan = {
   task: LlmTaskKind;
   purpose: LiveLlmPurpose;
   /**
-   * The grant's call count. One for a purpose that does not iterate; otherwise
+   * The run's call count. One for an intent that does not iterate; otherwise
    * exactly the operator's `--llm-max-calls`, which is never above Core's
    * backstop. Never more than the profile allows.
    */
   maxCalls: number;
   tokenLimits: { maxInputTokens: number; maxOutputTokens: number; maxTotalTokens: number };
   /**
-   * The tokens the whole run may use, sent to Core as the grant's
-   * `maxTotalTokensPerRun`: the operator's `--llm-max-run-tokens`, held to what
-   * the authorized calls could use, or without one Core's own default -- the
-   * smaller of that and Core's confirmation threshold. A creation build
-   * (`build_and_adapt`) without a typed budget is the exception: it defaults to
-   * every authorized call at the per-request limit, so `--llm-max-cost-usd`, the call count and
-   * Core's stall guard bind before tokens do (see `runTokenBudget`). Always
-   * sent, so the post-run check judges the number Core was asked for rather
-   * than a guess at the one it chose.
+   * The tokens the whole run may use, held by the Lab's post-run check: the
+   * operator's `--llm-max-run-tokens`, held to what the authorized calls could
+   * use, or without one every authorized call at the per-request limit, so
+   * `--llm-max-cost-usd`, the call count and Core's stall guard bind first.
    */
   maxTotalTokensPerRun: number;
   timeoutMs: number;
   maxEstimatedCostUsd: number;
   /**
-   * The estimated cost the whole run may reach, sent to Core as the grant's
-   * `maxTotalEstimatedCostUsd`: the per-call limit across the authorized calls,
-   * held to Core's ceiling -- Core's own default, made explicit so the post-run
-   * check judges the number Core enforces rather than a larger product of it.
+   * The estimated cost the whole run may reach: the per-call limit across the
+   * authorized calls, held to the Lab's ceiling. Saved as the Flow setting
+   * `adaptationPolicySettings.maxEstimatedCostUsdPerRun`, which Core's loop
+   * budget holds every build and recovery on the Flow to.
    */
   maxTotalEstimatedCostUsd: number;
-  /**
-   * Core's high-token consent, decided from the run token budget above. The
-   * explicit `--live-llm` and the budget typed with it are the confirmation, so
-   * the grant request carries it exactly when Core would otherwise refuse, and
-   * never when it would not.
-   */
-  highTokenConfirmation: {
-    /** Whether the grant request carries `highTokenConfirmation: true`. */
-    required: boolean;
-    /** `maxTotalTokensPerRun`, the figure Core compares. */
-    authorizedTokens: number;
-    threshold: number;
-    /** One sentence saying why, for the run's live-LLM snapshot. */
-    reason: string;
-  };
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
   declared: LlmTokenBudget;
   /**
-   * What the run's grant permits its actions to do: exactly the operator's
-   * `--llm-permit`, in Core's order, and empty without it. Nothing adds to it,
-   * so no grant this run takes out can carry a class nobody asked for.
+   * What the run permits its actions to do: exactly the operator's
+   * `--llm-permit`, in Core's order, and empty without it, sent with the build
+   * or the run as `permittedConsequences`. Nothing adds to it, so no request
+   * this run makes carries a class nobody asked for.
    */
   permittedConsequences: readonly LlmActionConsequence[];
 };
@@ -132,8 +88,8 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   if (profile.provider !== "deepseek") throw refusal(`--llm-provider ${describe(profile.provider)} is unsupported; Core resolves only deepseek`);
   const model = profile.model ?? DEFAULT_LLM_MODEL;
   // A model neither repository is configured for is refused here by name,
-  // before a key is read: Core would refuse it too, but only after the run had
-  // started and a grant had been taken out.
+  // before a key is read, rather than left for Core to discover once the run
+  // has started.
   if (!isLlmModel(model)) throw refusal(`--llm-model ${describe(profile.model)} is unsupported; Core is configured for ${llmModels.join(", ")}`);
   const purpose = purposeOf(profile.task);
   const budget = profile.budget;
@@ -150,7 +106,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   if (tokenLimits.maxInputTokens + tokenLimits.maxOutputTokens > tokenLimits.maxTotalTokens) {
     throw refusal("--llm-max-input-tokens plus --llm-max-output-tokens exceeds --llm-max-total-tokens");
   }
-  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls, purpose === "build_and_adapt");
+  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls);
   if (!Number.isSafeInteger(budget.timeoutMs) || budget.timeoutMs < 1) throw refusal(`--llm-timeout-ms ${budget.timeoutMs} must be a positive integer`);
   if (!Number.isFinite(budget.maxEstimatedCostUsd) || budget.maxEstimatedCostUsd <= 0) {
     throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive limit at or below ${CORE_MAX_COST_USD}`);
@@ -164,13 +120,12 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
     purpose,
     maxCalls,
     tokenLimits,
-    maxTotalTokensPerRun: runTokens.tokens,
+    maxTotalTokensPerRun: runTokens,
     // Both clamp downward only: Core refuses anything above its own ceiling,
     // and an operator who asked for less than the ceiling keeps their number.
     timeoutMs: Math.min(budget.timeoutMs, CORE_MAX_TIMEOUT_MS),
     maxEstimatedCostUsd,
-    maxTotalEstimatedCostUsd: Math.min(CORE_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
-    highTokenConfirmation: highTokenConfirmation(runTokens),
+    maxTotalEstimatedCostUsd: Math.min(LAB_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
     declared: { ...budget },
     permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };
@@ -179,8 +134,8 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
 /**
  * `--llm-permit`, judged against Core's own list rather than the Lab's mirror
  * of it, so a class Core would refuse is refused here -- before a key is read
- * or a provider reached -- and never dropped: a grant that silently held less
- * than was asked for would leave the run to discover the gap by stopping.
+ * or a provider reached -- and never dropped: a request that silently carried
+ * less than was asked for would leave the run to discover the gap by stopping.
  * Returned in Core's order, which is the order Core reports it back in.
  */
 function permittedConsequencesOf(asked: readonly string[] | undefined, purpose: LiveLlmPurpose): readonly LlmActionConsequence[] {
@@ -195,66 +150,34 @@ function permittedConsequencesOf(asked: readonly string[] | undefined, purpose: 
   return Object.freeze(AUTOMATION_STUDIO_ACTION_CONSEQUENCES.filter((consequence) => asked.includes(consequence)));
 }
 
-type RunTokenBudget = { tokens: number; source: string };
-
 /**
- * The run's token budget and where it came from. It only ever moves down: a
- * typed budget above what the authorized calls could use is held to that, and
- * one that cannot cover a single request is refused rather than raised.
+ * The run's token budget, for the Lab's post-run check. It only ever moves
+ * down: a typed budget above what the authorized calls could use is held to
+ * that, and one that cannot cover a single request is refused rather than
+ * raised. Without one it is every authorized call at the per-request limit.
  *
- * A creation build is the one exception, and it is deliberate. A build decides
- * once per call, and each decision re-sends the page and the draft: about 16k
- * input tokens a decision on a real store, so the 600,000-token budget the
- * campaigns typed ran out after about 34 decisions -- four beyond one cart
- * task's 30 recorded steps, with nothing left to inspect, explore or correct
- * (lane-summary round 1, rank 3). The token budget was acting as a decision
- * cap nobody chose. What is meant to stop a build is what it spends
- * (`--llm-max-cost-usd`, which stays exactly the operator's), the calls it was
- * authorized, and Core's stall guard when it stops making progress. So a
- * creation grant asks for every authorized call at the per-request limit --
- * the most Core issues -- unless the operator typed `--llm-max-run-tokens`,
- * which binds as it does everywhere else. Nothing is widened past the operator's own numbers: the
- * per-request limit and the call count are both theirs.
+ * It used to default lower, to the high-token confirmation threshold of the
+ * execution grant it was sent on, and for a creation build that acted as a
+ * decision cap nobody chose: about 16k input tokens a decision on a real store
+ * ran a 600,000-token budget out after about 34 decisions (lane-summary round
+ * 1, rank 3). What stops a run is what it spends (`--llm-max-cost-usd`, saved
+ * as the Flow's run spend ceiling), the calls it was allowed, and Core's stall
+ * guard.
  */
-function runTokenBudget(declared: number | undefined, perCall: number, calls: number, creation: boolean): RunTokenBudget {
+function runTokenBudget(declared: number | undefined, perCall: number, calls: number): number {
   const exposure = perCall * calls;
-  const exposureText = `--llm-max-total-tokens ${perCall} x ${calls} authorized call(s) = ${exposure}`;
   if (declared !== undefined && (!Number.isSafeInteger(declared) || declared < perCall)) {
     throw refusal(`--llm-max-run-tokens ${declared} must be a whole number of at least --llm-max-total-tokens ${perCall}`);
   }
-  if (creation && declared === undefined) {
-    return { tokens: exposure, source: `a creation build's default: ${exposureText}, so --llm-max-cost-usd and the stall guard bind before tokens` };
-  }
-  if (declared === undefined) {
-    // Core's formula, exactly. The outer `max` cannot bind here, since a
-    // request is at most one per-request ceiling, but a copy that differs is a
-    // copy that will drift -- and this one did, silently overriding Core.
-    return {
-      tokens: Math.max(perCall, Math.min(exposure, CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD)),
-      source: `Core's default: the smaller of ${exposureText} and ${CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD}`,
-    };
-  }
-  if (declared > exposure) return { tokens: exposure, source: `--llm-max-run-tokens ${declared}, held to ${exposureText}` };
-  return { tokens: declared, source: `--llm-max-run-tokens ${declared}` };
+  return declared === undefined ? exposure : Math.min(declared, exposure);
 }
 
-function highTokenConfirmation(budget: RunTokenBudget): LiveLlmPlan["highTokenConfirmation"] {
-  const threshold = CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
-  const required = budget.tokens > threshold;
-  const subject = `The run token budget of ${budget.tokens} (${budget.source})`;
-  const reason = required
-    ? `${subject} is above Core's ${threshold}-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation.`
-    : `${subject} is within Core's ${threshold}-token confirmation threshold; no confirmation is needed.`;
-  return { required, authorizedTokens: budget.tokens, threshold, reason };
-}
-
-// `adapt` stays the narrow `diagnose_and_adapt` grant, which now iterates and
+// `adapt` stays the narrow `diagnose_and_adapt` intent, which iterates and
 // may gather evidence but may still change only one target, as a proposal.
-// `repair` is the iterating repair: an `explore_and_adapt` grant, which may
-// gather its own evidence from the live page before it proposes, and whose
-// patch Core may execute rather than only propose. `create-flow` is the web
-// panel's "Explore and create proposal": an iterating `build_and_adapt` grant
-// for one Flow build.
+// `repair` is the iterating repair: `explore_and_adapt`, which may gather its
+// own evidence from the live page before it proposes, and whose patch Core may
+// execute rather than only propose. `create-flow` is the web panel's "Explore
+// and create proposal": an iterating `build_and_adapt` for one Flow build.
 function purposeOf(task: LlmTaskKind): LiveLlmPurpose {
   if (task === "diagnose") return "diagnosis_only";
   if (task === "adapt") return "diagnose_and_adapt";

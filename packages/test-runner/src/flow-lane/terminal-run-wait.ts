@@ -19,7 +19,7 @@
 // running": it reports the run's failure, which is a product verdict this
 // facility never observed.
 
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 import { everyNodeRan, type NodeAttempt } from "./node-recovery.js";
 
@@ -63,9 +63,26 @@ export const TERMINAL_DETAIL_POLL_MS = 250;
 export const TERMINAL_DETAIL_NODE_WAIT_MS = AUTOMATION_STUDIO_READINESS_CAP_MS * AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts + retryBackoffTotalMs();
 
 /**
- * The ceiling on the derived bound: Core's lease on a claimed grant, which is
- * the only whole-run deadline Core publishes and already this package's bound
- * for a granted run (`GRANTED_RUN_WAIT_MS`, `persisted-flow-run.ts`).
+ * How long a live LLM run is read back for after its request timed out: ten
+ * minutes, the whole-run deadline this facility gives a run the model takes
+ * part in. The poll ends as soon as the run settles; this bounds only a run
+ * that never does. It was Core's lease on a claimed execution grant
+ * (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`); grants are gone (t186),
+ * and the number stays because it is what a diagnosing, exploring recovery
+ * was measured to need.
+ *
+ * Why a live run needs more than the fixed 90 seconds a one-node run gets
+ * (`TERMINAL_DETAIL_BASE_WAIT_MS`): the single request that runs it also waits
+ * for its recovery and for the model to judge the result. On 2026-09-18 that
+ * outlasted the 30-second request bound in four units, and because the run's
+ * id arrived only in the reply, nothing could be read back and every one of
+ * them failed as `environment.missing`.
+ */
+export const LIVE_LLM_RUN_WAIT_MS = 600_000;
+
+/**
+ * The ceiling on the derived bound: the live-run deadline above, already this
+ * package's bound for a live run (`persisted-flow-run.ts`).
  *
  * It binds from seven nodes up, and it should. The per-node figure is the worst
  * case Core permits, not what a node costs -- a node that resolves its target
@@ -75,7 +92,7 @@ export const TERMINAL_DETAIL_NODE_WAIT_MS = AUTOMATION_STUDIO_READINESS_CAP_MS *
  * any run in this facility is allowed to be in flight, so a deterministic run
  * still unfinished after it is not a run that was merely taking long.
  */
-export const TERMINAL_DETAIL_MAX_WAIT_MS = AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS;
+export const TERMINAL_DETAIL_MAX_WAIT_MS = LIVE_LLM_RUN_WAIT_MS;
 
 /**
  * How long a run of `actionNodeCount` action nodes is read back for: the fixed
@@ -117,7 +134,7 @@ function retryBackoffTotalMs(): number {
  * of fifty-five rows cannot spend nine hours that way, and it must not lose
  * the result when it does.
  *
- * Five minutes is half of Core's own lease on a claimed grant and longer than
+ * Five minutes is half of the live-run deadline and longer than
  * any recovery this facility has been observed to complete. It bounds the
  * wait; it never fails the run.
  */
@@ -150,12 +167,12 @@ export const RECOVERY_RECORD_WAIT_MS = 300_000;
 export const RECOVERY_RECORD_GRACE_MS = 5_000;
 
 /**
- * The closed code for a granted run Core was still finishing when the wait for
+ * The closed code for a live run Core was still finishing when the wait for
  * it ran out. It is the facility's finding -- the run never settled inside its
  * own deadline -- and never the run's failure, which Core had not finished
  * deciding.
  */
-export const GRANTED_RUN_UNSETTLED_CODE = "flow_lane.granted_run_unsettled";
+export const LIVE_RUN_UNSETTLED_CODE = "flow_lane.live_run_unsettled";
 
 export type PersistedFlowTerminalWait = {
   now?: () => number;
@@ -170,14 +187,14 @@ export type PersistedFlowTerminalWait = {
   intervalMs?: number;
   /**
    * Whether a `succeeded` run is only finished once Core has recorded the
-   * verdict on its result. True for a granted run: Core publishes the status
+   * verdict on its result. True for a live run: Core publishes the status
    * its steps earned first and judges the result afterwards, so a read in
    * between sees a pass the verdict may still overturn.
    */
   awaitVerdict?: boolean;
   /**
    * Whether a `failed` run is only finished once Core's recovery has recorded
-   * how it ended. True for a granted run whose grant recovers. Core writes the
+   * how it ended. True for a live run whose intent recovers. Core writes the
    * failed status with the run's first save, before the recovery starts, and
    * the recovery's record -- `metadata.llmGate` and `metadata.recoveryTrace`,
    * which every way out of Core's recovery writes -- only with its last. The
@@ -209,7 +226,7 @@ export type PendingWork = "verdict" | "recovery";
  * - `recovery.threw` -- Core's recovery threw; no record will ever come.
  * - `recovery.ended_without_record` -- it ended and wrote no record.
  * - `recovery.still_running` -- Core still said `running` when the wait, bounded
- *   by Core's grant lease, ran out.
+ *   by the live-run deadline, ran out.
  *
  * A Core that writes no marker (older, or a re-run's re-projection overwrote
  * it) gets no code, and the wait follows the rule it always did.
@@ -291,7 +308,7 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
         if (marker === "threw" || marker === "ended") {
           return { detail, unsettled: "recovery", recoveryState: marker === "threw" ? "recovery.threw" : "recovery.ended_without_record" };
         }
-        // Core says it is still working: its grant lease, not a fixed guess, bounds it.
+        // Core says it is still working: the live-run deadline, not a fixed guess, bounds it.
         if (marker === "running") {
           recoveryMarker = marker;
           deadline = Math.max(deadline, firstTerminalAt + TERMINAL_DETAIL_MAX_WAIT_MS);
@@ -306,7 +323,7 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   }
   if (pending === "recovery" && terminal) return { detail: terminal, unsettled: "recovery", ...(recoveryMarker ? { recoveryState: "recovery.still_running" as const } : {}) };
   if (pending) {
-    throw new RunnerFailure("performance.budget", `Core was still finishing the granted run's ${pending} when the wait for it ran out`, { details: { code: GRANTED_RUN_UNSETTLED_CODE, pending, waitedMs: now() - started } });
+    throw new RunnerFailure("performance.budget", `Core was still finishing the live run's ${pending} when the wait for it ran out`, { details: { code: LIVE_RUN_UNSETTLED_CODE, pending, waitedMs: now() - started } });
   }
   throw originalFailure;
 }

@@ -1,7 +1,7 @@
 // The created-Flow lane: a Flow is built by FluxIQ from a live instruction
 // task rather than from a recording, then run and judged on the isolated
 // target like any other Flow-lane run. The lane owns neither the credential nor
-// Core's grant vocabulary; a live run hands it `authorizeBuild` and
+// the Flow's LLM settings; a live run hands it `authorizeBuild` and
 // `settleBuild` for the build, and `authorizeRun` and `settleRun` for the
 // repair its playback may make, and the lane decides only when each is used.
 
@@ -16,7 +16,7 @@ import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedF
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly, flowActionsSnapshot } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
-import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
+import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildLlm, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
 import { createdFlowAuthoredNodes } from "./authored-nodes.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
 import { assertCreatedFlowDataset, createdFlowDatasetHolds, judgeCreatedFlowDataset } from "./judgement.js";
@@ -54,8 +54,8 @@ export type CreatedFlowLaneInput = {
   runToken: string;
   /** The declared secrets the task's workflow needs (`resolveCreatedFlowSecrets`); the runner also adds their values to the evidence redaction list. */
   secrets: readonly DeclaredSecret[];
-  /** Installs the key, pins the Flow's settings and issues the `build_and_adapt` grant, against the Flow as it then stands. */
-  authorizeBuild: (flowId: string) => Promise<{ grantId: string }>;
+  /** Installs the key and saves the Flow's LLM settings and spend limit; answers with the consequences the operator permitted the build. */
+  authorizeBuild: (flowId: string) => Promise<CreatedFlowBuildLlm>;
   /**
    * Publishes what the build spent and holds it to its caps, throwing on a
    * breach or on a build that reached no provider. Called once, before the
@@ -64,16 +64,16 @@ export type CreatedFlowLaneInput = {
    */
   settleBuild: (build: CreatedFlowBuild) => Promise<void>;
   /**
-   * Issues the proposal-only repair grant the created Flow's playback runs
-   * under, against the Flow as the review left it. With it, a Flow that fails
-   * is diagnosed and repaired, every change is held as a proposal awaiting
-   * approval, and the run's result is judged once it ends. Absent, the
-   * playback carries no grant and runs as deterministically as it always has.
+   * Readies the created Flow's playback for the model, against the Flow as the
+   * review left it, and answers with the run's intent. With it, a Flow that
+   * fails is diagnosed and repaired and the run's result is judged once it
+   * ends. Absent, the playback carries no model and runs as deterministically
+   * as it always has.
    */
   authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   /**
    * Publishes what the repair spent and holds it to its caps. Called once the
-   * granted run ends, before anything is judged, and also when the run
+   * live run ends, before anything is judged, and also when the run
    * throws, with whatever run id Core had named by then.
    */
   settleRun?: (runId: string | undefined) => Promise<void>;
@@ -193,13 +193,13 @@ type CreatedFlowLaneProgress = {
  * the created Flow, and judges it: by the stored records for a dataset task,
  * by the scenario's playback goal otherwise.
  *
- * With `authorizeRun`, the run carries one proposal-only repair grant
- * (`diagnose_and_adapt`), and that grant does two jobs. A created Flow that
+ * With `authorizeRun`, the model takes part in the run, and does two jobs.
+ * A created Flow that
  * fails is diagnosed and repaired in the same run, the way the product
  * promises -- "created and repaired" -- rather than refused for want of a
  * model; its repair is only ever proposed, so the Flow judged here is the Flow
  * the build made, and a proposal waits for a person's approval. And the run's
- * result is judged afterwards: the grant covers Core's `loop_verification`, so
+ * result is judged afterwards: Core's `loop_verification` runs, so
  * Core asks whether what came back answers what was asked, rather than
  * recording that nobody judged it and keeping a `succeeded` that is
  * indistinguishable from a right answer. Without `authorizeRun` the run is
@@ -276,7 +276,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   // Exploration may have acted on the page; the Flow is judged on state it produced itself.
   await resetScenarioLab(input.scenarioOrigin, input.runToken, input.fetchLab);
   await input.prepareFlowPage("playback");
-  // Immediately before the run: Core expires the grant within the minute.
+  // Before the run: the playback's LLM settings are saved on the Flow.
   const llmExecution = input.authorizeRun ? await input.authorizeRun(flowId) : undefined;
   let identifiedRunId: string | undefined;
   let run: PersistedFlowRunOutcome;
@@ -370,8 +370,8 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
 
 /**
  * The build asked a person, which is an answer and not a transport failure:
- * the run reports `permission.required` and the classes a later grant must
- * add, and records no Flow, because none can be applied until somebody
+ * the run reports `permission.required` and the classes a later
+ * `--llm-permit` must add, and records no Flow, because none can be applied until somebody
  * answers. Codes only -- the control's name stays on the build record, where
  * Core already bounded it.
  *

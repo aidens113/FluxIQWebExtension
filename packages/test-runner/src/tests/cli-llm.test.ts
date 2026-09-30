@@ -60,7 +60,7 @@ async function liveRun(argv: readonly string[]): Promise<{ code: number; stderr:
 /**
  * The created-Flow lane is gated closed the same way, and it has a dry run
  * that proves a command would start without starting anything: it plans the
- * grant, finds the credential, resolves the instruction task against the run's
+ * build, finds the credential, resolves the instruction task against the run's
  * scenario lab build, prints what it would do, and exits. A stub build stands
  * in for the scenario lab, so these read no real catalog and no real key.
  */
@@ -106,7 +106,7 @@ test("a create-flow run fails closed before anything starts: no credential, or a
   await assert.rejects(access(path.join(lab.root, "test-runs")));
 });
 
-test("a create-flow dry run resolves the task, plans the build grant and starts nothing", async (t) => {
+test("a create-flow dry run resolves the task, plans the build and starts nothing", async (t) => {
   const lab = await stubLab(t);
   const env = { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY };
   // The whole per-request triple is typed, never two thirds of it: an input

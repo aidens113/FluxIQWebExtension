@@ -1,8 +1,13 @@
-// Pins a generated Flow to the run's provider, key and bounds, through the same
-// `update-flow-settings` endpoint the Flow Settings screen posts. The limits
-// written here are the ones Core then enforces on its own side: writing them is
-// how a parsed `--llm-max-*` becomes a cap the provider call is actually held
-// to, rather than a number the CLI accepted and dropped.
+// Pins a generated Flow to the run's provider, model, key and bounds, through
+// the same `update-flow-settings` endpoint the Flow Settings screen posts. The
+// limits written here are the ones Core then enforces on its own side: writing
+// them is how a parsed `--llm-max-*` becomes a cap the provider call is
+// actually held to, rather than a number the CLI accepted and dropped.
+//
+// The run's spend ceiling is one of them. It used to ride on an execution
+// grant; a model call needs no grant now, and the ceiling is a plain Flow
+// setting, `adaptationPolicySettings.maxEstimatedCostUsdPerRun`, that Core's
+// loop budget reads for every build and recovery on the Flow.
 
 import { RunnerFailure } from "../failure.js";
 import type { LiveLlmPlan } from "./live-llm-plan.js";
@@ -12,10 +17,9 @@ export type LiveLlmFlowSettingsControl = {
 };
 
 /**
- * Writes the Flow's LLM connection and its bounded execution settings.
- * `manual_approval` is the runtime mode an explicit LLM run requires: Core
- * refuses an execution grant on any other, and it is what keeps a diagnosis
- * from applying itself.
+ * Writes the Flow's LLM connection, its bounded execution settings and its
+ * run spend ceiling. `manual_approval` is the runtime mode an explicit LLM run
+ * requires, and it is what keeps a diagnosis from applying itself.
  */
 export async function configureFlowLiveLlmExecution(control: LiveLlmFlowSettingsControl, input: {
   projectId: string;
@@ -42,6 +46,9 @@ export async function configureFlowLiveLlmExecution(control: LiveLlmFlowSettings
           maxEstimatedCostUsd: plan.maxEstimatedCostUsd,
           retryCount: 0,
         },
+        // Merged by Core into the Flow's stored policy settings, so the other
+        // policy fields keep whatever the Flow already had.
+        adaptationPolicySettings: { maxEstimatedCostUsdPerRun: plan.maxTotalEstimatedCostUsd },
       },
     },
   });
@@ -76,6 +83,10 @@ function assertSettingsPersisted(payload: unknown, secretKeyId: string, plan: Li
     || tokens.maxOutputTokens !== plan.tokenLimits.maxOutputTokens
     || tokens.maxTotalTokens !== plan.tokenLimits.maxTotalTokens;
   if (mismatch) throw refusal("Core stored LLM execution limits that differ from the ones this run authorized");
+  const policy = metadata.adaptationPolicySettings;
+  if (!isRecord(policy) || policy.maxEstimatedCostUsdPerRun !== plan.maxTotalEstimatedCostUsd) {
+    throw refusal("Core did not store the run's spend ceiling (adaptationPolicySettings.maxEstimatedCostUsdPerRun)");
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
