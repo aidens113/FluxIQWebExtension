@@ -15,13 +15,16 @@ export {
 export { parseAssistantText, renderTextBlocks, type TextBlock, type TextRun } from "./format";
 export { createOnPageStatusSetting, onPageStatusModel, type OnPageStatusModel, type OnPageStatusSetting } from "./settings";
 export {
+  actionCard,
   activityForTarget,
   buildChatStream,
+  cardWords,
   CHAT_STEP_MESSAGE_LIMIT,
   createTurnClock,
-  outcomeWords,
   stepMessages,
   stepWords,
+  type ActionCard,
+  type CardWords,
   type ChatStream,
   type ChatStreamItem,
   type StepMessage

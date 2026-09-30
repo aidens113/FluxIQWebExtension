@@ -1,7 +1,9 @@
 // FluxIQ's step messages as data: which activity events are messages and
-// what each says (`stepMessages`), how the action behind one went, in words
-// (`outcomeWords`), and any step, tool or check in a person's words rather
+// what each says (`stepMessages`), each action FluxIQ took as a card
+// (`actionCard`, read by Core's shared `activityActionOf`) and that card in
+// words (`cardWords`), and any step, tool or check in a person's words rather
 // than an id (`stepWords`). No DOM.
-export { stepMessages, type StepMessage, type StepMessageKind, type StepOutcome } from "./messages";
-export { outcomeWords, type OutcomeWords } from "./outcome";
+export { actionCard, type ActionCard } from "./action-card";
+export { cardWords, type CardWords } from "./card-words";
+export { stepMessages, type StepMessage, type StepMessageKind } from "./messages";
 export { stepWords, type StepWords } from "./words";

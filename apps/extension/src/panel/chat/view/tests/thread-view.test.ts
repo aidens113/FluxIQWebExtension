@@ -1,7 +1,8 @@
 // The message list is reconciled, not rebuilt: turns and step messages keep
 // their elements across re-reads, the person's turn is a bubble and FluxIQ's
 // is formatted, every step is its own message with its reason (no folds, no
-// counts), and a step message is updated in place as its action ends.
+// counts) and its action as a card, and a step message and its card are
+// updated in place as the action ends.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -39,8 +40,11 @@ test("the person's turn is a bubble; each step is FluxIQ's own message with its 
     assert.equal(step!.getAttribute("data-kind"), "decision");
     assert.equal(step!.byClass("chat-step-title")[0]!.textContent, QUOTE);
     assert.equal(step!.byClass("chat-step-text")[0]!.textContent, ` — ${WHY}`);
-    assert.equal(step!.byClass("chat-step-outcome")[0]!.hidden, false);
-    assert.equal(step!.byClass("chat-step-outcome-label")[0]!.textContent, "Done");
+    const card = step!.byClass("chat-card")[0]!;
+    assert.equal(card.getAttribute("data-kind"), "click");
+    assert.equal(card.byClass("chat-card-target")[0]!.textContent, "Get a free quote");
+    assert.equal(card.byClass("chat-card-outcome")[0]!.hidden, false);
+    assert.equal(card.byClass("chat-card-outcome")[0]!.textContent, "Done");
     assert.equal(answer!.getAttribute("data-author"), "fluxiq");
     assert.deepEqual(answer!.byClass("chat-answer")[0]!.children.map((node) => node.tagName), ["P", "UL"]);
     assert.equal(list.byClass("chat-work").length + list.byClass("chat-work-label").length, 0, "no fold, no count");
@@ -64,7 +68,7 @@ test("an equal turn from a re-read keeps its element; a changed one keeps it too
   });
 });
 
-test("a step message is the same element from its decision to its outcome and after the answer arrives; nothing reorders", async () => {
+test("a step message and its card are the same elements from its decision to its outcome and after the answer arrives; nothing reorders", async () => {
   await withFakeDocument(() => {
     const view = createThreadView();
     const ask = { turn: turn("t1", "person"), at: eventTime(0) };
@@ -74,15 +78,15 @@ test("a step message is the same element from its decision to its outcome and af
     const list = fake(view.element);
     const step = list.children[1]!;
     const nodes = [step, ...step.descendants()];
-    assert.equal(step.byClass("chat-step-outcome-label")[0]!.textContent, "Working on it");
+    assert.equal(step.byClass("chat-card-outcome")[0]!.textContent, "Working on it");
     assert.equal(list.children[2]!.hidden, false, "the live line is last");
 
     events.push(click(3, "failed"));
     view.render(buildChatStream([ask], events), live, controls, "build-1");
     assert.equal(list.children[1], step);
     assert.deepEqual([step, ...step.descendants()], nodes, "updated in place, nothing remounted");
-    assert.equal(step.getAttribute("data-outcome"), "failed");
-    assert.equal(step.byClass("chat-step-outcome-label")[0]!.textContent, "Didn't work");
+    assert.equal(step.byClass("chat-card")[0]!.getAttribute("data-state"), "failed");
+    assert.equal(step.byClass("chat-card-outcome")[0]!.textContent, "Didn't work");
 
     view.render(buildChatStream([ask, { turn: turn("t2", "automation", "All done"), at: eventTime(4) }], events), null, controls);
     assert.deepEqual(list.children.slice(0, 3).map((child) => child.getAttribute("data-author") ?? child.getAttribute("data-kind")), ["person", "decision", "fluxiq"]);

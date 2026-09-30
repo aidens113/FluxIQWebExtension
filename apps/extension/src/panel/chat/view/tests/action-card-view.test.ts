@@ -1,0 +1,151 @@
+// Every action FluxIQ takes shows in the chat as a card: the icon Core pins
+// for its kind in a mark tinted by how it went, the kind's name and what it
+// acted on, and the outcome in words, under a label that says all three.
+// A card keeps its element from start to end, and no card, label or word in
+// the chat ever shows a dotted id.
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import { ACTIVITY_ACTION_ICONS, ACTIVITY_ACTION_NAMES, type ActivityActionKind } from "fluxiq/ui";
+import type { ClientGatewayActivity } from "../../../../shared/activity/index";
+import { buildChatStream } from "../../stream";
+import { activityEvent } from "../../tests/activity-fixture";
+import { fake, withFakeDocument, type FakeElement } from "../../tests/fake-dom";
+import { createThreadView } from "../thread-view";
+
+type Detail = NonNullable<ClientGatewayActivity["detail"]>;
+
+const controls = () => ({ ask: undefined as never, state: "" });
+const event = (sequence: number, phase: ClientGatewayActivity["phase"], detail: Detail, fields: Partial<ClientGatewayActivity> = {}) =>
+  activityEvent(sequence, { phase, detail, ...fields });
+const record = (code: string, node: string) => `Result: ${code} · Node: ${node}`;
+
+/** One event of each kind, shaped the way Core's emitters send it. */
+const ONE_OF_EACH: ReadonlyArray<[ActivityActionKind, (sequence: number) => ClientGatewayActivity]> = [
+  ["click", (n) => event(n, "exploring", { kind: "tool", title: "Clicking “Get a free quote”", ref: "core.run_node", status: "succeeded", text: record("web.click.succeeded", "web.output.dom-click") })],
+  ["type", (n) => event(n, "building", { kind: "tool", title: "Typing the postcode", ref: "core.run_node", status: "failed", text: "The field was covered by a banner." })],
+  ["navigate", (n) => event(n, "exploring", { kind: "tool", title: "Opening the results", ref: "web.navigate", status: "succeeded" })],
+  ["read", (n) => event(n, "exploring", { kind: "tool", title: "Reading “Listings”", ref: "core.run_node", status: "succeeded", text: record("web.extract_list.succeeded", "web.output.extract-list") })],
+  ["look", (n) => event(n, "exploring", { kind: "tool", title: "Using web.inspect_current_page", ref: "web.inspect_current_page", status: "succeeded" })],
+  ["wait", (n) => event(n, "exploring", { kind: "tool", title: "Waiting for the results", ref: "core.run_node", status: "succeeded", text: record("web.wait.succeeded", "web.output.wait-for") })],
+  ["person_check", (n) => event(n, "waiting_permission", { kind: "ask", title: "Asked the person to complete a check", text: "Complete the check on this page, then press Continue." })],
+  ["permission", (n) => event(n, "waiting_permission", { kind: "ask", title: "Asked for permission to send the message" })],
+  ["draft", (n) => event(n, "building", { kind: "tool", title: "Amending the draft flow", ref: "core.flow_draft", status: "succeeded" })],
+  ["test", (n) => event(n, "verifying", { kind: "tool", title: "Using core.dry_run", ref: "core.dry_run", status: "failed", text: "Result: core.replay.diverged" })],
+  ["repair", (n) => event(n, "repairing", { kind: "tool", title: "Clicking “Accept cookies”", ref: "core.run_node", status: "succeeded" })],
+  ["other", (n) => event(n, "exploring", { kind: "tool", title: "Using core.something_else", ref: "core.something_else", status: "succeeded" })]
+];
+
+/** An id such as `web.output.dom-click` or `core.run_node`. */
+const DOTTED_ID = /\b[a-z][\w-]*\.[a-z][\w-]*/u;
+
+function cards(root: FakeElement): FakeElement[] {
+  return root.byClass("chat-card");
+}
+
+function text(card: FakeElement, name: string): string | undefined {
+  const part = card.byClass(name)[0];
+  return part === undefined || part.hidden ? undefined : part.textContent;
+}
+
+test("a card for each kind: Core's icon in an aria-hidden mark, Core's name, the target, the outcome, and a label saying all three", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const events = ONE_OF_EACH.map(([, make], index) => make(index + 1));
+    view.render(buildChatStream([], events), null, controls, "build-1");
+    const shown = cards(fake(view.element));
+    assert.deepEqual(shown.map((card) => card.getAttribute("data-kind")), ONE_OF_EACH.map(([kind]) => kind));
+    for (const card of shown) {
+      const kind = card.getAttribute("data-kind") as ActivityActionKind;
+      const mark = card.byClass("chat-card-mark")[0]!;
+      assert.equal(mark.getAttribute("aria-hidden"), "true", kind);
+      assert.equal(mark.children[0]!.getAttribute("data-icon"), ACTIVITY_ACTION_ICONS[kind], kind);
+      assert.equal(text(card, "chat-card-name"), ACTIVITY_ACTION_NAMES[kind], kind);
+      assert.equal(card.getAttribute("role"), "group", kind);
+    }
+    const byKind = new Map(shown.map((card) => [card.getAttribute("data-kind"), card]));
+    const read = (kind: ActivityActionKind) => {
+      const card = byKind.get(kind)!;
+      return [text(card, "chat-card-target"), text(card, "chat-card-outcome"), card.getAttribute("data-state"), card.getAttribute("aria-label")];
+    };
+    assert.deepEqual(read("click"), ["Get a free quote", "Done", "done", "Click, Get a free quote: Done"]);
+    assert.deepEqual(read("type"), ["the page", "Didn't work: the field was covered by a banner.", "failed", "Type, the page: Didn't work: the field was covered by a banner."]);
+    assert.deepEqual(read("read"), ["Listings", "Done", "done", "Read list, Listings: Done"]);
+    assert.deepEqual(read("navigate"), [undefined, "Done", "done", "Open page: Done"]);
+    assert.deepEqual(read("test"), [undefined, "Didn't work: it didn't work the same way again", "failed", "Test run: Didn't work: it didn't work the same way again"]);
+    assert.deepEqual(read("person_check"), [undefined, undefined, "settled", "Robot check"], "a wait that is not the action of the moment says nothing about it");
+    assert.deepEqual(read("permission"), [undefined, undefined, "settled", "Permission"]);
+    assert.deepEqual(read("repair"), ["Accept cookies", "Done", "done", "Repair, Accept cookies: Done"]);
+    assert.deepEqual(read("other"), ["the page", "Done", "done", "Action, the page: Done"]);
+    for (const message of fake(view.element).byClass("chat-step-msg")) {
+      assert.equal(message.byClass("chat-step-line")[0]!.hidden, true, "a message that is an action is only its card");
+    }
+  });
+});
+
+test("a robot check that is the action of the moment waits for you", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const [, robot] = ONE_OF_EACH.find(([kind]) => kind === "person_check")!;
+    view.render(buildChatStream([], [robot(1)]), null, controls, "build-1");
+    const card = cards(fake(view.element))[0]!;
+    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome"), card.getAttribute("aria-label")], ["waiting", "Waiting for you", "Robot check: Waiting for you"]);
+  });
+});
+
+test("a card is the same element, icon included, from started to done or failed; later cards come after it", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const quote = "Clicking “Get a free quote”";
+    const events: ClientGatewayActivity[] = [
+      event(1, "exploring", { kind: "thought", title: quote, text: "The quote form is behind this button.", status: "succeeded" }),
+      event(2, "exploring", { kind: "tool", title: quote, ref: "core.run_node", status: "started" })
+    ];
+    view.render(buildChatStream([], events), null, controls, "build-1");
+    const root = fake(view.element);
+    const message = root.byClass("chat-step-msg")[0]!;
+    const card = cards(root)[0]!;
+    const nodes = [card, ...card.descendants()];
+    assert.equal(message.byClass("chat-step-line")[0]!.hidden, false, "the reasoning shows beside its card");
+    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["working", "Working on it"]);
+
+    events.push(event(3, "exploring", { kind: "tool", title: quote, ref: "core.run_node", status: "failed", text: record("web.target.not_found", "web.output.dom-click") }));
+    view.render(buildChatStream([], events), null, controls, "build-1");
+    assert.equal(cards(root)[0], card);
+    assert.deepEqual([card, ...card.descendants()], nodes, "updated in place, nothing remounted");
+    assert.deepEqual([card.getAttribute("data-state"), text(card, "chat-card-outcome")], ["failed", "Didn't work: it wasn't on the page"]);
+
+    events.push(event(4, "exploring", { kind: "tool", title: "Clicking “Accept cookies”", ref: "core.run_node", status: "started" }));
+    view.render(buildChatStream([], events), null, controls, "build-1");
+    const [first, second] = cards(root);
+    assert.equal(first, card, "the first card stays first");
+    assert.deepEqual([second!.getAttribute("data-state"), text(second!, "chat-card-outcome")], ["working", "Working on it"]);
+    assert.equal(root.byClass("chat-step-msg").length, 1, "both are the decision's cards");
+
+    events.push(event(5, "exploring", { kind: "tool", title: "Clicking “Accept cookies”", ref: "core.run_node", status: "succeeded" }));
+    view.render(buildChatStream([], events), null, controls, null);
+    assert.deepEqual(cards(root), [first, second]);
+    assert.equal(text(second!, "chat-card-outcome"), "Done");
+  });
+});
+
+test("no card, label or word in the chat shows a dotted id", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
+    const events = [
+      ...ONE_OF_EACH.map(([, make], index) => make(index + 1)),
+      event(20, "exploring", { kind: "tool", title: "Using core.run_node", ref: "core.run_node", status: "failed", text: record("web.target.not_found", "web.output.dom-click") }),
+      event(21, "verifying", { kind: "check", title: "Completion check", status: "failed", text: "Result: core.completion_check.failed" })
+    ];
+    view.render(buildChatStream([], events), null, controls, "build-1");
+    const root = fake(view.element);
+    for (const element of root.descendants()) {
+      const label = element.getAttribute("aria-label");
+      if (label !== null) assert.doesNotMatch(label, DOTTED_ID, label);
+    }
+    // Each piece of text on its own: neighbouring pieces run together in `textContent`.
+    const leaves = root.descendants().filter((element) => element.children.length === 0 && element.textContent !== "");
+    assert.ok(leaves.length > 40, `${leaves.length} pieces of text`);
+    for (const leaf of leaves) assert.doesNotMatch(leaf.textContent, DOTTED_ID, leaf.textContent);
+  });
+});

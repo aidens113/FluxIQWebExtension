@@ -52,8 +52,11 @@ const TITLES: Readonly<Record<string, Tense>> = {
 const UNKNOWN_TOOL: Tense = { now: "Using a tool", done: "Used a tool" };
 /** A dotted id such as `core.run_node` or `web.inspect.succeeded`, anywhere in a sentence. */
 const RAW_ID = /\b[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+\b/u;
-/** A sentence that is only codes: "Result: web.inspect.succeeded", or "a.b, c.d". */
-const ONLY_CODES = /^(?:result:\s*)?[a-z0-9-]*[._][a-z0-9_.-]+(?:\s*,\s*[a-z0-9-]*[._][a-z0-9_.-]+)*$/iu;
+/**
+ * A sentence that is only codes: "Result: web.inspect.succeeded", "a.b, c.d",
+ * or the observer's record "Result: web.click.succeeded · Node: web.output.dom-click".
+ */
+const ONLY_CODES = /^(?:[a-z]+:\s*)?[a-z0-9-]*[._][a-z0-9_.-]+(?:\s*[,·]\s*(?:[a-z]+:\s*)?[a-z0-9-]*[._][a-z0-9_.-]+)*$/iu;
 
 /** `detail` in words; `step` is the run step it came from, when it did. */
 export function stepWords(detail: ActivityDetail, step?: ClientGatewayActivity["step"]): StepWords {

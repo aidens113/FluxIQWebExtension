@@ -1,52 +1,69 @@
-// One of FluxIQ's step messages, the way it reads in the chat: what it is
-// doing in bold and why after a dash, on FluxIQ's side of the conversation,
-// with a quiet line beneath saying how the action went.
+// One of FluxIQ's step messages, the way it reads in the chat: on FluxIQ's
+// side of the conversation, what it decided in bold and why after a dash,
+// then each action that led to as a card (`action-card-view.ts`).
 //
 //   **Clicking “Get a free quote”** — The quote form is behind this button,
 //   so I'm opening it.
-//   ✓ Done
+//   [( icon ) Click · Get a free quote / Done]
 //
-// The element lives as long as the message. A render changes only the words
-// and marks that changed, so a message never remounts or flickers while its
-// action starts and ends. Text goes in through `textContent` only.
+// A message that is an action itself (an action with no reason before it, a
+// check, a question to the person, a run's step) is only its card; a note,
+// or anything with no card, is only its words.
+//
+// The element lives as long as the message, and each card's element as long
+// as its card: a render changes only the words and marks that changed, and
+// adds a new card after the others, so nothing remounts, reorders or flickers
+// while actions start and end. Text goes in through `textContent` only.
 
 import { createElement } from "../../dom";
-import { outcomeWords, type StepMessage } from "../stream";
+import type { StepMessage } from "../stream";
+import { createActionCardView, type ActionCardView } from "./action-card-view";
+import { placeChildren } from "./place-children";
 
 /** The mounted message. */
 export type StepMessageView = {
   readonly element: HTMLElement;
-  /** Shows `message`; `working` is true while its unit of work runs. */
-  update(message: StepMessage, working: boolean): void;
+  /** Shows `message`; `current` is true while its unit of work is under way or waiting on the person. */
+  update(message: StepMessage, current: boolean): void;
 };
 
-const MARKS: Readonly<Record<string, string>> = { succeeded: "✓", failed: "✕", working: "" };
+/** Messages whose words are shown beside their cards: the reasoning, not the act. */
+const SPOKEN: ReadonlySet<StepMessage["kind"]> = new Set<StepMessage["kind"]>(["decision", "repair", "note"]);
 
 /** Creates an empty message. */
 export function createStepMessageView(): StepMessageView {
   const title = createElement("strong", { className: "chat-step-title" });
   const text = createElement("span", { className: "chat-step-text" });
-  const mark = createElement("span", { className: "chat-step-mark", attrs: { "aria-hidden": "true" } });
-  const outcomeLabel = createElement("span", { className: "chat-step-outcome-label" });
-  const outcome = createElement("p", { className: "chat-step-outcome", hidden: true }, [mark, outcomeLabel]);
   const line = createElement("p", { className: "chat-step-line" }, [title, text]);
-  const element = createElement("li", { className: "chat-entry chat-step-msg" }, [line, outcome]);
+  const cards = createElement("div", { className: "chat-cards", hidden: true });
+  const element = createElement("li", { className: "chat-entry chat-step-msg" }, [line, cards]);
+  const views = new Map<string, ActionCardView>();
 
   return {
     element,
-    update(message, working) {
+    update(message, current) {
       setAttr(element, "data-kind", message.kind);
+      const spoken = SPOKEN.has(message.kind) || message.actions.length === 0;
+      if (line.hidden === spoken) line.hidden = !spoken;
       setText(title, message.title);
       const reason = message.text !== undefined && message.text !== message.title ? ` — ${message.text}` : "";
       setText(text, reason);
       if (text.hidden !== (reason === "")) text.hidden = reason === "";
-      const said = outcomeWords(message, working);
-      if (outcome.hidden !== (said === null)) outcome.hidden = said === null;
-      setAttr(element, "data-outcome", said?.state ?? "none");
-      if (said === null) return;
-      setAttr(outcome, "data-state", said.state);
-      setText(mark, MARKS[said.state] ?? "");
-      setText(outcomeLabel, said.label);
+
+      const last = message.actions.length - 1;
+      const shown = message.actions.map((card, index) => {
+        let view = views.get(card.key);
+        if (view === undefined) {
+          view = createActionCardView();
+          views.set(card.key, view);
+        }
+        view.update(card, current && message.latest && index === last);
+        return view.element;
+      });
+      const keys = new Set(message.actions.map((card) => card.key));
+      for (const key of [...views.keys()]) if (!keys.has(key)) views.delete(key);
+      placeChildren(cards, shown);
+      if (cards.hidden !== (shown.length === 0)) cards.hidden = shown.length === 0;
     }
   };
 }
