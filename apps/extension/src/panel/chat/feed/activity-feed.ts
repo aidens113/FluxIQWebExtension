@@ -59,7 +59,7 @@ export type ActivityFeed = {
   setOverlay(overlay: ActivityOverlayPreference): Promise<void>;
 };
 
-const EMPTY_STATE: ExtensionActivityState = { current: null, recent: [], overlay: "expanded", live: false };
+const EMPTY_STATE: ExtensionActivityState = { current: null, display: null, recent: [], overlay: "expanded", live: false };
 const OVERLAY_FAILED = "Couldn't change the on-page status. Try again.";
 
 /** Creates the feed. `onChange` is called after every change to `snapshot()`. */

@@ -1,0 +1,47 @@
+// One turn of the conversation, the way a chat shows it:
+//
+//   the person    a bubble on the right, their words as typed
+//   FluxIQ        full width on the left, no bubble: the work that led to it
+//                 folded above (its `workSlot`), then its words formatted
+//                 (`parseAssistantText`), a note for an attachment only
+//                 FluxIQ can show, and a question's answer controls
+//
+// The element lives as long as the turn. Its words and controls are rebuilt
+// only when their `signature` changes, so a half-typed answer keeps its text
+// and focus across every poll; the work slot is filled by the thread view.
+
+import { createElement } from "../../dom";
+import { askControls, type AskControlsContext, type CoreTurn } from "../../simple/conversation";
+import { parseAssistantText, renderTextBlocks } from "../format";
+import { placeChildren } from "./place-children";
+
+/** The mounted turn. */
+export type MessageView = {
+  readonly element: HTMLElement;
+  readonly workSlot: HTMLElement;
+  /** Shows `turn`; rebuilds its words and controls only when `signature` differs from the last. */
+  update(turn: CoreTurn, signature: string, ask: AskControlsContext): void;
+};
+
+/** Creates the view for a turn by `author` (`person` or anything else, which is FluxIQ). */
+export function createMessageView(author: string): MessageView {
+  const person = author === "person";
+  const workSlot = createElement("div", { className: "chat-work-slot" });
+  const content = createElement("div", { className: person ? "chat-bubble" : "chat-answer" });
+  const element = createElement("li", { className: "chat-entry chat-msg", attrs: { "data-author": person ? "person" : "fluxiq" } }, person ? [content] : [workSlot, content]);
+  let shown: string | undefined;
+  return {
+    element,
+    workSlot,
+    update(turn, signature, ask) {
+      if (signature === shown) return;
+      shown = signature;
+      const parts: HTMLElement[] = person
+        ? [createElement("p", { className: "chat-bubble-text", text: turn.text })]
+        : renderTextBlocks(parseAssistantText(turn.text));
+      if (turn.attachment) parts.push(createElement("p", { className: "chat-note" }, ["FluxIQ attached something you can see in FluxIQ. ", ask.openFluxIQ()]));
+      if (turn.ask !== null) parts.push(askControls(turn.ask, ask));
+      placeChildren(content, parts);
+    }
+  };
+}

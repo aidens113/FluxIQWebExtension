@@ -48,7 +48,7 @@ function harness(settings: FluxIQSettings = baseSettings) {
   const opened: string[] = [];
   const calls: Array<{ endpoint: string; payload: Record<string, unknown> }> = [];
   const overlays: ActivityOverlayPreference[] = [];
-  const activityState = (overlay: ActivityOverlayPreference): ExtensionActivityState => ({ current: null, recent: [], overlay, live: true });
+  const activityState = (overlay: ActivityOverlayPreference): ExtensionActivityState => ({ current: null, display: null, recent: [], overlay, live: true });
   const deps: PanelControlDeps = {
     relay: {
       call: async (endpoint, payload) => {
@@ -177,10 +177,10 @@ test("the panel reads the live activity state and sets the overlay preference", 
   installChrome();
   const h = harness();
   assert.deepEqual(await handlePanelControl({ type: ACTIVITY_MESSAGES.read }, sidepanel, h.deps), {
-    handled: true, response: { ok: true, state: { current: null, recent: [], overlay: "expanded", live: true } }
+    handled: true, response: { ok: true, state: { current: null, display: null, recent: [], overlay: "expanded", live: true } }
   });
   assert.deepEqual(await handlePanelControl({ type: ACTIVITY_MESSAGES.setOverlay, overlay: "collapsed" }, popup, h.deps), {
-    handled: true, response: { ok: true, state: { current: null, recent: [], overlay: "collapsed", live: true } }
+    handled: true, response: { ok: true, state: { current: null, display: null, recent: [], overlay: "collapsed", live: true } }
   });
   assert.deepEqual(h.overlays, ["collapsed"]);
   assert.ok(!h.touched.includes("call"), "activity never reaches Core over HTTP");

@@ -1,4 +1,5 @@
 export { ACTIVITY_MESSAGES } from "./activity-messages.js";
+export type { ActivityDisplay } from "./activity-display.js";
 export {
   ACTIVITY_RECENT_LIMIT,
   type ActivityContentMessage,
