@@ -17,9 +17,21 @@ test("the recording lane, and the existing and clone targets, are not judged on 
   assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: false, published: undefined }), "existing and clone run a pre-existing Flow");
 });
 
-test("a consequential build that stopped to ask at its declared permission point passes without a Flow", () => {
-  // Lane t195, run-munovwp3-d898de74: the build asked at Place order, and this rule then failed the run.
-  assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: undefined, stoppedToAsk: true }));
-  assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false }, stoppedToAsk: true }));
-  assert.throws(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false }, stoppedToAsk: false }), builtNoFlow);
+const stoppedForPermission = (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /stopped_for_permission/u.test(error.message) && (error.details as { verdict?: unknown } | undefined)?.verdict === "stopped_for_permission";
+
+test("a build that stopped to ask at its declared permission point is stopped_for_permission, never a pass", () => {
+  // Lane D's bigbox pickup-order: 12 such runs were recorded as passes, every one with flowCreated false.
+  const stop = { consequence: "move_money", control: "matched" } as const;
+  assert.throws(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: undefined, permissionStop: stop }), stoppedForPermission);
+  assert.throws(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false }, permissionStop: stop }), stoppedForPermission);
+  // Even a published Flow does not turn a stop into a pass: the stop means the build never finished the task.
+  assert.throws(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: true }, permissionStop: stop }), stoppedForPermission);
+  try { assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false }, permissionStop: { consequence: "delete", control: "unnamed" } }); assert.fail("a permission stop passed"); }
+  catch (error) { assert.deepEqual((error as RunnerFailure).details, { verdict: "stopped_for_permission", consequence: "delete", control: "unnamed", flowCreated: false }); }
+});
+
+test("a build the person granted and that continued passes only if it then created its Flow", () => {
+  // The Lab plays the person, grants, and the build continues: no stop is left, so the ordinary rule judges it.
+  assert.throws(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: false } }), builtNoFlow);
+  assert.doesNotThrow(() => assertFlowLaneBuiltFlow({ flowLane: true, evaluated: true, published: { flowCreated: true } }));
 });
