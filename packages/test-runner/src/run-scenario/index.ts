@@ -15,6 +15,7 @@
 export * from "./browser-session/index.js";
 export * from "./clone-target/index.js";
 export * from "./core-round-trip/index.js";
+export * from "./decision-trace/index.js";
 export * from "./persisted-flow-target/index.js";
 export * from "./workflow/index.js";
 export { configuredCredentials, type ConfiguredCredentials } from "./configured-credentials.js";

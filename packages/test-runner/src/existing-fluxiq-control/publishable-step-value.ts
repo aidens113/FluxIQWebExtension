@@ -42,11 +42,29 @@ const PROGRESS_FIELDS = new Set(["draftRevisionBefore", "draftRevisionAfter", "p
 const DRAFT_CHANGE_FIELDS = new Set(["targetedStepIds", "appliedCount", "refusedCount", "keptStepCount", "rerunStepId"]);
 const DRAFT_FIELDS = new Set(["bytes", "budget", "steps", "instructionBytes", "unlisted", "withoutInput", "inputTooLarge", "overBudget", "budgetBelowFloor"]);
 const ANSWERABILITY_FIELDS = new Set(["recordsRequested", "recordProducerPresent", "recordStorePresent", "issueCode"]);
+const AMENDMENT_REFUSAL_FIELDS = new Set(["step", "reason", "nodeId"]);
+/**
+ * Why an amendment changed nothing, in the draft's own closed vocabulary (Core
+ * `flow-bootstrap/evidence-loop-steps.ts`, `EVIDENCE_STEP_AMENDMENT_REFUSAL_REASONS`).
+ * A reason outside it refuses the whole list, as Core's reader of a stored step does.
+ */
+const AMENDMENT_REFUSAL_REASONS: readonly string[] = ["no_such_step", "already_so", "no_such_position", "run_by_the_loop", "no_step_before_it", "not_a_kept_step"];
+/** Core's own bounds on one step's refusals: the most amendments one decision may carry, and the largest position a refusal may name. */
+const MAX_AMENDMENT_REFUSALS = 16;
+const MAX_AMENDED_POSITION = 9_999;
+/** Core's flat refusal form, `<step>:<reason>[:<node>]`. Its node part may run past `PUBLISHABLE_TEXT`'s 128, which is how the generic rule dropped it. */
+const AMENDMENT_REFUSAL_CODE = /^([0-9]{1,4}):([a-z_]{1,40})(?::([a-z0-9_.:-]{1,200}))?$/iu;
 
 type PublishableStepScalar = string | number | boolean;
 type PublishableStepRecordValue = PublishableStepScalar | readonly PublishableStepScalar[];
-/** What one member of a decision row may hold: a count, a flag, a closed code or identifier, a bounded list of those, or a bounded one-level record of them. */
-export type PublishableStepValue = PublishableStepScalar | readonly PublishableStepScalar[] | Readonly<Record<string, PublishableStepRecordValue>>;
+/** One refused amendment: the draft position the model named, the draft's closed reason, and the node where Core resolved one. */
+export type PublishableAmendmentRefusal = Readonly<{ step: number; reason: string; nodeId?: string }>;
+/**
+ * What one member of a decision row may hold: a count, a flag, a closed code or
+ * identifier, a bounded list of those, a bounded one-level record of them, or --
+ * for `amendmentsRefused` alone -- Core's bounded list of refused amendments.
+ */
+export type PublishableStepValue = PublishableStepScalar | readonly PublishableStepScalar[] | Readonly<Record<string, PublishableStepRecordValue>> | readonly PublishableAmendmentRefusal[];
 
 /**
  * One member of a decision row, or `undefined` for one that may not travel.
@@ -118,6 +136,8 @@ function publishableNamedStepField(field: string, value: unknown): PublishableSt
   if (field === "draftChange") return draftChangeRecord(value);
   if (field === "draft") return draftRecord(value);
   if (field === "answerability") return answerabilityRecord(value);
+  if (field === "amendmentsRefused") return amendmentRefusalList(value);
+  if (field === "amendmentRefusals") return amendmentRefusalCodes(value);
   return publishableStepValue(value);
 }
 
@@ -166,6 +186,42 @@ function answerabilityRecord(value: unknown): PublishableStepValue | undefined {
     || typeof value.recordsRequested !== "boolean" || typeof value.recordProducerPresent !== "boolean" || typeof value.recordStorePresent !== "boolean"
     || (value.issueCode !== undefined && value.issueCode !== "bootstrap.cannot_answer_instruction")) return undefined;
   return Object.freeze({ ...value }) as Readonly<Record<string, PublishableStepRecordValue>>;
+}
+
+/**
+ * Core's refused amendments, validated as a unit.
+ *
+ * The generic rule keeps no list of records, so this list reached every bundle
+ * as nothing: `run-mulx76vv-a882551e` refused eighteen amendments and the
+ * bundle kept no reason and no node for any of them. Every member is a
+ * position, a code from the draft's closed set, or a node identifier -- the
+ * three things Core's own reader of a stored step admits -- and a list holding
+ * anything else is refused whole rather than filtered, because a shorter list
+ * would claim fewer refusals than Core made.
+ */
+function amendmentRefusalList(value: unknown): PublishableStepValue | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_AMENDMENT_REFUSALS) return undefined;
+  const refusals: PublishableAmendmentRefusal[] = [];
+  for (const refusal of value) {
+    if (!isExactRecord(refusal, AMENDMENT_REFUSAL_FIELDS) || !amendedPosition(refusal.step) || !oneOf(refusal.reason, AMENDMENT_REFUSAL_REASONS)
+      || (refusal.nodeId !== undefined && !buildLocalStepId(refusal.nodeId))) return undefined;
+    refusals.push(Object.freeze({ step: refusal.step, reason: refusal.reason, ...(refusal.nodeId === undefined ? {} : { nodeId: refusal.nodeId as string }) }));
+  }
+  return Object.freeze(refusals);
+}
+
+/** The same refusals in Core's flat form, held to the same closed reasons and node grammar, and refused whole on any member that is not one. */
+function amendmentRefusalCodes(value: unknown): PublishableStepValue | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_AMENDMENT_REFUSALS) return undefined;
+  for (const code of value) {
+    const match = typeof code === "string" ? AMENDMENT_REFUSAL_CODE.exec(code) : null;
+    if (!match || !oneOf(match[2], AMENDMENT_REFUSAL_REASONS) || (match[3] !== undefined && !buildLocalStepId(match[3]))) return undefined;
+  }
+  return Object.freeze([...value] as string[]);
+}
+
+function amendedPosition(value: unknown): value is number {
+  return nonNegativeInteger(value) && value <= MAX_AMENDED_POSITION;
 }
 
 function buildLocalStepId(value: unknown): value is string {

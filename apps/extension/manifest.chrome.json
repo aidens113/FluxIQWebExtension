@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "FluxIQ Web Automation Client",
-  "description": "Browser recorder and action client for FluxIQ.",
+  "description": "Record, run and repair browser automations with FluxIQ. Connects only to the FluxIQ runtime you run and pair.",
   "version": "0.1.0",
+  "minimum_chrome_version": "116",
   "action": {
     "default_title": "FluxIQ"
   },

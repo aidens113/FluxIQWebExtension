@@ -19,6 +19,14 @@ const noFrames: ExpectedFact = { id: "no-frames", subject: "document", predicate
 const ARRIVAL: ExpectedFact[] = [atFrontPage, buyingIs(2), savedBadgeIs(2), noFrames];
 
 const OFFER_RECEIPT: ExpectedFact = { id: "offer-receipt", subject: "marketplace_offer_receipt", predicate: "text", value: `Offer of ${priceText(OFFER_AMOUNT)} sent to ${sellerById(OFFER_LISTING.seller).name}` };
+/**
+ * The one thing the seller has had from the buyer: this offer. Without it the
+ * goal passes a run that also pressed Send on the ready-made "Hi, is this
+ * still available?" the instruction forbids, or sent the offer twice -- the
+ * receipt names only the latest offer and Buying counts conversations, not
+ * what went into them.
+ */
+const ONLY_THE_OFFER: ExpectedFact = { id: "only-the-offer", subject: "marketplace_conversation", predicate: "text", value: `You've sent ${sellerById(OFFER_LISTING.seller).name} 1 offer` };
 const SAVED_TOTAL: ExpectedFact = { id: "saved-total", subject: "marketplace_saved_total", predicate: "text", value: SAVED_TOTAL_AFTER };
 
 /**
@@ -127,13 +135,13 @@ export const localClassifiedsManifest = createScenarioManifest({
   playbackGoal: {
     id: "offer-on-folding-bike",
     description: `Offer ${priceText(OFFER_AMOUNT)} to the seller of the cheapest like-new folding bike listed within 10 miles of Kelford in the last 7 days, and nobody else.`,
-    successFacts: [OFFER_RECEIPT, buyingIs(3)],
+    successFacts: [OFFER_RECEIPT, ONLY_THE_OFFER, buyingIs(3)],
   },
   expected: {
     pageFacts: ARRIVAL,
     recordingEvents: [{ type: "web.element.clicked" }, { type: "web.element.input_changed" }],
     actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.check", outcome: "succeeded" }],
-    finalState: [OFFER_RECEIPT, buyingIs(3)],
+    finalState: [OFFER_RECEIPT, ONLY_THE_OFFER, buyingIs(3)],
     allowedConsoleErrors: [],
   },
   workflows: [

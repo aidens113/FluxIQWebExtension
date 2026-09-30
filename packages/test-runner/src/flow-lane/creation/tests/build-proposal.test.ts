@@ -242,6 +242,33 @@ test("a refusal is read through Core's diagnostic parser, keeping its code, stag
   assert.deepEqual(early.record.failure, { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 });
 });
 
+test("an unnamed provider throw publishes its class and codes, never its message", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.provider_transport_unknown",
+    stage: "provider_request",
+    retryable: false,
+    providerInvocation: "unknown",
+    providerResponse: "unknown",
+    providerThrow: { errorClass: "TypeError", causeClass: "Error", causeCode: "ECONNRESET", message: "fetch failed" },
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(record.failure?.providerThrow, { errorClass: "TypeError", causeClass: "Error", causeCode: "ECONNRESET" });
+  assert.doesNotMatch(JSON.stringify(record), /fetch failed/u);
+});
+
+test("a build that ran out and kept its draft says which revision it kept and how many steps", async () => {
+  const diagnostic = {
+    code: "flow_bootstrap.evidence_iteration_limit",
+    stage: "provider_output_validation",
+    retryable: true,
+    providerInvocation: "attempted",
+    providerResponse: "received",
+    evidenceLoop: { iterationCount: 6, decisionCount: 5, toolCallCount: 5, evidenceBytes: 12_000, steps: [{ toolId: "web.recovery.inspect" }], incompleteDraft: { revision: 4, steps: 7 } },
+  };
+  const { record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  assert.deepEqual(record.evidenceLoop?.incompleteDraft, { revision: 4, steps: 7 });
+});
+
 test("a build Core stopped to ask a person is a permission request naming the missing classes, not an HTTP failure", async () => {
   const diagnostic = await permissionRequiredDiagnostic();
   const { core, record } = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });

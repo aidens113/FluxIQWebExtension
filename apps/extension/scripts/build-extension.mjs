@@ -1,9 +1,10 @@
-import { realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { builtinModules } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { hashBuildInputs, readTargetFiles, renderIconPng, verifyExtensionTarget, writeBuildInfo } from "./release/index.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "..", "..");
@@ -19,18 +20,7 @@ const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client",
 const buildRoot = resolveBuildRoot(process.env.FLUXIQ_LAB_EXTENSION_BUILD_ROOT);
 const buildDir = path.join(buildRoot, "build");
 const distDir = path.join(buildRoot, "dist");
-const placeholderPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAI" +
-  "AAAACACAYAAADDPmHLAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAA" +
-  "AadJREFUeNrs3cENwjAQRUEj/Rd2gBqogZqogcqogXqohRFhh5QYe77cuZkOAAAAAAAAAAA" +
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAwN8k7vO+3+4D+JvjdYAfQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
-  "QAAQAAQAAQAAQAAQAAQAAQAAQAASDU/HAD5WUMR2QAAAABJRU5ErkJggg==";
+const extensionVersion = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version;
 
 // `distDir` is deleted on every build, so a build root outside the repository
 // is refused rather than trusted.
@@ -65,21 +55,40 @@ const extensionEntries = {
 /** Every entry's name, in build order: what `check-extension.mjs` bundles to prove the browser graph. */
 export const EXTENSION_ENTRY_NAMES = Object.freeze(Object.keys(extensionEntries));
 
-async function buildTarget(target, manifestName) {
+// Everything a target is made from besides the bundles' own inputs: the build
+// code that shapes it and the static files it copies. Hashed into each target's
+// build stamp (scripts/release/build-info.mjs) with the bundle inputs.
+const BUILD_CODE = [
+  "scripts/build-extension.mjs",
+  "scripts/release/build-info.mjs",
+  "scripts/release/icon-png.mjs"
+];
+
+async function buildTarget(target, manifestName, bundleInputs) {
   const out = path.join(distDir, target);
   await mkdir(out, { recursive: true });
   await cp(buildDir, out, { recursive: true });
   await rewriteModuleImports(out);
-  await copyStatic("popup", out);
-  await copyStatic("sidepanel", out);
+  const pages = [...await copyStatic("popup", out), ...await copyStatic("sidepanel", out)];
   await ensureIcons(path.join(out, "icons"));
   await copyFile(path.join(root, manifestName), path.join(out, "manifest.json"));
+  const inputs = await hashBuildInputs(repoRoot, [
+    ...bundleInputs,
+    ...pages,
+    path.join(root, manifestName),
+    path.join(root, "package.json"),
+    ...BUILD_CODE.map((file) => path.join(root, file))
+  ]);
+  await writeBuildInfo(out, { target, version: extensionVersion, inputs });
 }
 
+/** @returns {Promise<Set<string>>} the absolute path of every file esbuild read for any entry */
 async function bundleExtension() {
   await rm(buildDir, { recursive: true, force: true });
-  for (const name of Object.keys(extensionEntries)) await bundleExtensionEntry(name, buildDir);
+  const inputs = new Set();
+  for (const name of Object.keys(extensionEntries)) await bundleExtensionEntry(name, buildDir, { inputs });
   await assertPageStylesheets();
+  return inputs;
 }
 
 /**
@@ -92,7 +101,10 @@ async function bundleExtension() {
  *
  * @param {"background" | "content" | "page-world" | "popup" | "sidepanel"} name
  * @param {string} outputDir
- * @param {{ logLevel?: import("esbuild").LogLevel, write?: boolean }} [options]
+ * `inputs`, when given, receives the absolute path of every file the bundle
+ * read (esbuild's metafile), which is what the build stamp hashes.
+ *
+ * @param {{ logLevel?: import("esbuild").LogLevel, write?: boolean, inputs?: Set<string> }} [options]
  * @returns {Promise<string>}
  */
 export async function bundleExtensionEntry(name, outputDir, options = {}) {
@@ -101,8 +113,9 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
   }
   const entry = extensionEntries[name];
   const outfile = path.join(outputDir, entry.outfile);
-  await build({
+  const result = await build({
     bundle: true,
+    metafile: options.inputs !== undefined,
     platform: "browser",
     target: ["chrome109", "firefox109"],
     sourcemap: true,
@@ -116,6 +129,12 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
     outfile,
     format: entry.format
   });
+  if (options.inputs && result.metafile) {
+    for (const input of Object.keys(result.metafile.inputs)) {
+      const file = path.resolve(input);
+      if (existsSync(file)) options.inputs.add(file);
+    }
+  }
   return outfile;
 }
 
@@ -261,11 +280,14 @@ async function copyStatic(folder, out) {
   const source = path.join(root, "src", folder);
   const target = path.join(out, folder);
   await mkdir(target, { recursive: true });
+  const copied = [];
   for (const entry of await readdir(source)) {
     if (entry.endsWith(".html")) {
       await copyFile(path.join(source, entry), path.join(target, entry));
+      copied.push(path.join(source, entry));
     }
   }
+  return copied;
 }
 
 // The page entries whose stub HTML links `./index.css`.
@@ -284,15 +306,13 @@ async function assertPageStylesheets() {
   }
 }
 
+// Each icon is rendered at its own size (scripts/release/icon-png.mjs); the
+// target verification below checks every declared size against the PNG.
 async function ensureIcons(iconDir) {
   await mkdir(iconDir, { recursive: true });
   for (const size of [16, 32, 48, 128]) {
-    await writeFile(path.join(iconDir, `icon${size}.png`), pngDataUriToBuffer(placeholderPng));
+    await writeFile(path.join(iconDir, `icon${size}.png`), renderIconPng(size));
   }
-}
-
-function pngDataUriToBuffer(dataUri) {
-  return Buffer.from(dataUri.split(",", 2)[1], "base64");
 }
 
 async function rewriteModuleImports(directory) {
@@ -315,12 +335,34 @@ async function rewriteModuleImports(directory) {
   }
 }
 
+const TARGETS = [
+  ["chrome", "manifest.chrome.json"],
+  ["firefox", "manifest.firefox.json"],
+  ["e2e-chromium", "manifest.e2e.json"]
+];
+
 async function buildExtension() {
   await rm(distDir, { recursive: true, force: true });
-  await bundleExtension();
-  await buildTarget("chrome", "manifest.chrome.json");
-  await buildTarget("firefox", "manifest.firefox.json");
-  await buildTarget("e2e-chromium", "manifest.e2e.json");
+  const inputs = await bundleExtension();
+  for (const [target, manifestName] of TARGETS) await buildTarget(target, manifestName, inputs);
+  await verifyTargets();
+}
+
+// Loads every built target the way a browser would at install time
+// (scripts/release/verify-extension-target.mjs) and fails the build on any
+// error. This is the automated check that loads the Firefox build on every
+// `pnpm build`; store packaging repeats it on the archives.
+async function verifyTargets() {
+  let failed = false;
+  for (const [target] of TARGETS) {
+    const files = await readTargetFiles(path.join(distDir, target));
+    const { errors, warnings } = await verifyExtensionTarget({ target, files, expectedVersion: extensionVersion });
+    for (const warning of warnings) console.warn(`extension build: ${target}: warning: ${warning}`);
+    for (const error of errors) console.error(`extension build: ${target}: ${error}`);
+    if (errors.length > 0) failed = true;
+    else console.log(`extension build: ${target}: verified ${files.size} files`);
+  }
+  if (failed) throw new Error("extension build: a built target failed verification; see the errors above.");
 }
 
 // Build only when node runs this file. Importing it for bundleExtensionEntry

@@ -1,0 +1,25 @@
+/* The recent-automations card (panel/simple/automations). Colours come from
+   panel/theme/tokens.css; .card, .card-title, .card-line, .notice and
+   .small-button from panel/shell/shell.css; .link-button and .open-fluxiq
+   from panel/simple/simple.css. */
+
+.automations-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.automations-row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  padding: var(--space-2);
+}
+.automations-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.automations-name { margin: 0; color: var(--text); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.automations-lines { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
+.automations-hint { margin: 0; color: var(--muted); font-size: 11px; }
+.automations-exports { display: grid; gap: 4px; }
+.automations-dataset { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-2); }
+.automations-dataset-label { color: var(--text); font-size: 12px; overflow-wrap: anywhere; }
+.automations-row .notice .open-fluxiq { margin-top: 2px; }
+.automations-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.simple-automations .card-title { margin: 0; }

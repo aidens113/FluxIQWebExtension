@@ -158,3 +158,16 @@ test("a log nothing failed on holds nothing", () => {
   assert.equal(log.size, 0);
   assert.deepEqual(log.entries(), []);
 });
+
+test("an unnamed throw carries its class, code, cause and screened message, redacted again, and is null when Core sent none", () => {
+  const key = "sk-livekeyvalue0123456789";
+  const log = new ProviderFailureLog({ secrets: [key], now });
+  record(log, coreRefusal({ providerThrow: { errorClass: "TypeError", causeClass: "Error", causeCode: "ECONNRESET", message: `fetch failed: socket hang up near ${key}`, withheld: ["cause_message_unscreened"] } }));
+  record(log, coreRefusal());
+  const [thrown, plain] = log.entries() as ProviderFailureRecord[];
+
+  assert.deepEqual({ ...thrown?.provider.thrown, message: undefined }, { errorClass: "TypeError", errorCode: null, causeClass: "Error", causeCode: "ECONNRESET", message: undefined, withheld: ["cause_message_unscreened"] });
+  assert.match(thrown?.provider.thrown?.message ?? "", /^fetch failed: socket hang up near \[REDACTED\]$/u);
+  assert.ok(!JSON.stringify(log.entries()).includes(key));
+  assert.equal(plain?.provider.thrown, null);
+});

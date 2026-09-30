@@ -1,6 +1,6 @@
 import type { LiveInstructionTask } from "../live-instructions.js";
 
-const FIRST_PAGE = "Search the store for wireless earbuds, narrow the results to Brightaisle Plus items, and collect every product on the first page of results, leaving out sponsored placements, into a table with columns name, price, rating and url.";
+const FIRST_PAGE = "Search the store for wireless earbuds, narrow the results to Brightaisle Plus items, and collect every search result on the first page, leaving out sponsored placements, into a table with columns name, price, rating and url.";
 
 /**
  * The everything store's live instruction tasks: what a shopper would type.
