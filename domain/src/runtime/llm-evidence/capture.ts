@@ -16,6 +16,7 @@ import { webActionFailureRefusal, type WebActionRefusal, type WebFailedActionRes
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
+import { webLlmSnapshotStateDigest } from "./snapshot-state-digest";
 import {
   recoverable,
   RecoverableToolRejection,
@@ -121,6 +122,20 @@ export type WebLlmEvidenceToolExecution = {
    * domain's half of it is done.
    */
   assumed?: WebLlmNameAssumption[];
+  /**
+   * The state the call found and the state it left, as `captureStateDigest`
+   * would have digested them, taken from the captures the call itself made
+   * (`withCallStates`, `./snapshot-state-digest.ts`).
+   *
+   * Core used to ask for these around every call, and each answer was a page
+   * capture of its own: three for a look, four and the action for an action.
+   * Reporting them here, with `stateDigestsOnCalls` on the binding, is what
+   * stops Core asking (`AS/runtime/llm/evidence-loop/tool-execution.ts`). A
+   * side the call took no capture for -- no page yet, an input refused before
+   * anything was read, a page unreadable after acting -- is absent, and Core
+   * reads that side as unobserved.
+   */
+  stateDigests?: { before?: string; after?: string };
   /**
    * What this one call did, for the draft Core is accruing.
    *
@@ -230,7 +245,7 @@ type WebLlmEvidenceToolCallFacts = {
  * never before. `tests/name-assumption.test.ts` holds the two together.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "nodeId", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "nodeId", "stateDigests", "draft"
 ];
 
 export function toolExecution(
@@ -255,8 +270,31 @@ export function toolExecution(
     repeatedAnswer: undefined,
     nodeId: said?.nodeId,
     assumed: said?.assumed,
+    // Written afterwards, by `withCallStates`, from the captures the call made.
+    stateDigests: undefined,
     draft
   }));
+}
+
+/**
+ * The result, with the state the call found and the state it left, each
+ * digested from a capture the call itself took (`WebLlmSnapshotBinding`
+ * `stateDigest`). Written onto the result just built, as
+ * `./repeated-refusal.ts` writes its count, rather than rebuilt around it.
+ *
+ * `found` is the page as the call found it -- a look's one capture, an
+ * action's read before acting -- and `left` the page as the call left it. A
+ * side with no capture, or whose capture was too large to digest, is left
+ * unsaid; with neither, the key is absent.
+ */
+export function withCallStates(
+  execution: WebLlmEvidenceToolExecution,
+  found: WebLlmSnapshotBinding | undefined,
+  left: WebLlmSnapshotBinding | undefined
+): WebLlmEvidenceToolExecution {
+  const digests = present<NonNullable<WebLlmEvidenceToolExecution["stateDigests"]>>({ before: found?.stateDigest, after: left?.stateDigest });
+  if (digests.before !== undefined || digests.after !== undefined) execution.stateDigests = digests;
+  return execution;
 }
 
 /**
@@ -330,7 +368,7 @@ export async function captureEvidence(
   // condition the model can wait out or work around, not a fault.
   if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web evidence action payload");
-  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
+  const bounded = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     budget: "exploration",
     maxEvidenceBytes: request.maxEvidenceBytes,
     expectedOrigin,
@@ -338,6 +376,16 @@ export async function captureEvidence(
     // target at all -- neither a handle nor a "the target is gone".
     failedAction: undefined,
   }));
+  // Digested now, before any caller writes on the packet, and at the bound
+  // `captureStateDigest` uses rather than this call's, so a call's own capture
+  // answers for the state it saw (`./snapshot-state-digest.ts`).
+  return present<WebLlmSnapshotBinding>({
+    evidence: bounded.evidence,
+    selectors: bounded.selectors,
+    records: bounded.records,
+    shadowHosts: bounded.shadowHosts,
+    stateDigest: webLlmSnapshotStateDigest(payload.snapshot, bounded, request.maxEvidenceBytes)
+  });
 }
 
 /**

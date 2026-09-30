@@ -40,6 +40,7 @@ import {
   pageRefusal,
   toolExecution,
   toolMetadata,
+  withCallStates,
   type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
@@ -136,6 +137,18 @@ type WebNodeCallRecord = {
   parameters?: JsonObject;
   status?: string;
   assumed?: WebLlmNameAssumption[] | undefined;
+  /**
+   * The page as the call found it, once it has been read: the state a refusal
+   * says it found (`stateDigests.before`), and, for a refusal raised before the
+   * node's command went out, the state it left as well.
+   */
+  found?: WebLlmSnapshotBinding | undefined;
+  /**
+   * The node's command has gone to the page. From here a refusal cannot say
+   * the page is as it was found; only a page captured afterwards says what the
+   * call left.
+   */
+  acted?: true;
 };
 
 export type WebNodeRun = {
@@ -205,7 +218,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // model's first paid decision is made knowing where it is meant to be.
       if (!looked) return notThereYet(run, record);
       run.shown(looked);
-      return toolExecution(
+      // One capture, which is both the state the look found and the one it left.
+      return withCallStates(toolExecution(
         nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
@@ -217,9 +231,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // reader of a failed run is trying to tell apart from another. It named
         // nothing either, so it assumed nothing.
         { resultReason: undefined, nodeId: undefined, assumed: undefined }
-      );
+      ), looked, looked);
     }
     current = await currentPage(run, run.request);
+    // Absent from nowhere, which leaves the state this call found unsaid.
+    record.found = current;
     // From nowhere, the only call that runs is the one that goes to the start
     // location. Everything else is refused with where to go, rather than with
     // `page_unreadable`, which says what happened and not what to do about it.
@@ -301,6 +317,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
     }
+    record.acted = true;
     const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
     assertActive(run.request.signal);
     if (result.status !== "succeeded") {
@@ -361,7 +378,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       read,
       inFlow: node.proposes
     });
-    return toolExecution(
+    // The state the node found is the read before it acted, and the state it
+    // left is the read after -- unsaid where the page could not be read in time.
+    return withCallStates(toolExecution(
       // No page, no packet: the outcome alone, which says why.
       after === undefined ? outcome as unknown as JsonValue : bounded(nodeEvidence(after.evidence, outcome), budget, after.evidence, outcome),
       // The node ran and the command succeeded, so this step worked -- which is
@@ -413,7 +432,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // `actionId`. What the resolution had to assume is said, because this is
       // the call the Flow's step is made of and the guess is in it.
       { resultReason: undefined, nodeId: undefined, assumed }
-    );
+    ), current, after);
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
       // Only a refusal the page caused carries the page, and only the page the
@@ -457,7 +476,13 @@ function refusal(
   // allowed, envelope included (`pageRefusal`), so the only question left is
   // whether the refusal as a whole fits.
   const value = serializedBytes(withPage) <= budget ? withPage : bare;
-  return toolExecution(value as unknown as JsonValue, false, webLlmToolRejectionResultCode(code), undefined, present<WebNodeDraftStatement>({
+  // What the refusal found is the page the call read before doing anything.
+  // What it left is that same page when nothing was sent to it, and otherwise
+  // only a page captured after the attempt: a command that failed may still
+  // have moved something, and a state nobody read is not said. The page is
+  // digested even when it is too large to go back with the refusal.
+  const left = page ?? (record.acted ? undefined : record.found);
+  return withCallStates(toolExecution(value as unknown as JsonValue, false, webLlmToolRejectionResultCode(code), undefined, present<WebNodeDraftStatement>({
     actionId: record.actionId,
     effect: record.effect,
     // `input` is always given, even for a refusal, because the loop would
@@ -485,7 +510,7 @@ function refusal(
     // for every refusal before it, which is the honest answer: nothing had been
     // resolved, so nothing was guessed at.
     assumed: record.assumed
-  });
+  }), record.found, left);
 }
 
 /**
