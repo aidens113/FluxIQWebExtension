@@ -156,3 +156,13 @@ Staged with `git add` (conflict files only); step 2 edits stay unstaged.
 - Downstream `pnpm check` rc=0 (structure 182/106/120 pass, structure-audit passed, every package check Done incl. test-runner, scenario-lab, extension); `packages/test-contracts` `pnpm test` 155/155; `apps/extension` `pnpm test` rc=0.
 - Downstream `packages/test-runner` `pnpm test`: 1559/1562. `clone-cache.test` "serializes simultaneous independent-run writes" timed out on its lock under load and passes alone. Two fail deterministically and are dev's, untouched here: `run-evaluation/tests/runner-wiring.test.ts` expects a `runRedactionScopes(...)` call text that dev's `run-scenario.ts:609` no longer has (`writtenSince`, `extensionStorage`); `tests/demo-workspace.test.ts` expects `headless: true`, but dev's `demo-workspace/configuration.ts` defaults to headed (user rule 2026-09-29).
 - No Lab or browser runs.
+
+## Core merge of dev carrying t188 (Flow size) and t185 (live activity), 2026-09-30
+
+Staged (the four conflict files only):
+- `docs/architecture/automation-studio/persistence.md`: dev's paragraph with `flowSizeSettings.maxNodesPerSubflow`; "64-call execution-grant backstop" -> "64-call backstop".
+- `_shared/runtime.ts` import: the grant-free list plus t185's `automationStudioActivityHub` (its subscription at line 79 auto-merged); `AutomationStudioLlmExecutionGrantService` dropped.
+- `runtime/service.ts`: `generateFlowBootstrapAdaptation` wraps in t185's `withAutomationStudioBuildActivity` with the grant-free internal signature `(input, repairBrief?)` (dev's `retainRunOwnedGrant` dropped); `runRuntimeSession` opens t185's `withAutomationStudioRunActivity(...)` wrapper and keeps the no-grant body and comment (dev's grant-era t166 comment dropped); the wrapper's `}); }` close auto-merged. 4480 lines (baseline 4558).
+- `service/flow-settings/settings-fingerprint.ts`: no-grant header plus t188's Flow-size paragraph reworded (a proposal stays current); t188's code (size included only when not the default 100) untouched.
+Unstaged follow-up: t188's `runtime/tests/service-bootstrap/tests/flow-size.test.ts` called the removed `grant()` fixture with `executionGrant`; now `caller: caller()`.
+Validation: `heavy.sh ... pnpm check` rc=0 (structure-audit passed; contracts, client-gateway-websocket, fluxiq, apps/web check Done; audit notes 1 baseline entry can be lowered -- `pnpm structure:baseline`). `npx vitest run .../runtime/service/flow-settings .../runtime/tests/service-bootstrap .../runtime/llm --maxWorkers=2 --minWorkers=1`: 79 files, 711 passed.
