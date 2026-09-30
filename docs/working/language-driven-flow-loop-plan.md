@@ -13,6 +13,31 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
+**Lanes after the restart (2026-09-29 evening).** The user asked for as many agents as useful,
+with leads over them, inside the live-slot limit, and asked why builds take so long and how to cut
+them. Core t182 is merged (`af385f7`) and pushed with downstream `6cdc9abb`. Each lane has one lead
+and its own `fxwork/<id>` tree:
+
+| Lane | Lead | Owns |
+| --- | --- | --- |
+| t174 live lane | `lead-xhigh` | slot-1; the throw after a tool call, then one live run at a time |
+| t186 remove call grants | `lead` | finishes grant removal; t174's grant-naming work is dropped when t186 lands |
+| t187 build and Lab startup speed | `lead` | why builds are slow, and cutting them (Lab prelude, `task start`/`finish`, `pnpm check`/`build`) |
+| t188 node limits | `lead` | no 16-node cap; 100 nodes per Subflow by default, set in the UI |
+| t189 decision context | `lead-xhigh` | why the model repeats itself, and the context fix |
+| t185 live activity + chat | `lead` | the on-page overlay and the extension chat |
+
+**Machine rules for every lane (binding).**
+- **Lab slots** (`C:/Users/osrs_/FluxStuff/lab-slots/`): `slot-1` is the only live run, held by t174. `slot-2` is one
+  provider-free run on the ten scenarios, and only while free RAM is above 4 GB. Claim with `mkdir`, release with `rmdir`.
+- **Build slots** (`C:/Users/osrs_/FluxStuff/build-slots/b1`, `b2`): claim one with `mkdir`, writing an `owner` file
+  (lane, command, ISO time), before any heavy command: `pnpm check`, `pnpm build`, `pnpm test`, a package's whole
+  suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`. Release right after, on failure too. `b2` only
+  while `lab-slots/slot-1` is absent. One test file, or one test directory at `--maxWorkers=2` /
+  `--test-concurrency=2`, needs no slot. A slot whose owner file is over 90 minutes old may be removed.
+- Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
+  validation, and the supervisor commits and continues it.
+
 **The instruction that opened this document, 2026-09-24, and it is binding.**
 Live tests only. A full debug of every live run. Complex scenarios only. Full
 node runs, not single-node extraction. One run, one debug, fix those errors,
