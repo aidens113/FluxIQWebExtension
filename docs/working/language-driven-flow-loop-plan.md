@@ -21,17 +21,12 @@ and its own `fxwork/<id>` tree:
 | Lane | Lead | Owns |
 | --- | --- | --- |
 | t174 live lane | `lead-xhigh` | slot-1; throw fixed (`befca2f`); extension-start failure root-caused as a product defect, then live runs |
-| t186 remove call grants | merged | Core `91262bd`, downstream `bfb7f8eb`; t174 drops its grant work at its next merge |
-| t187 build and Lab startup speed | merged | downstream `4afa80fc`; Core build proposal pending a paired branch |
-| t188 node limits | merged | Core `c961f4a`, downstream `37379fe3` |
-| t189 decision context | merged | Core `f0dbbd6`, downstream `ca07baae`; repeats now shown to the model; live effect unproven |
-| t185 live activity + chat | merged | Core `a28815c`, downstream `6818da22`; first browser proof is t174's next run |
+| t176 t182 t185-t190 | merged | all pushed in both repositories; commits in the Work Ledger |
 | t193 live B self-repair | `lead-xhigh`, slot-2 | after-creation variants: fail, diagnose, repair, persist, zero-provider replay |
 | t194 live C judge answer | `lead-xhigh`, slot-3 | expected-dataset tasks from rung 1; exact answer, self-judgement, refute and re-author |
 | t195 live D control flow | `lead-xhigh`, slot-4 | routing, retry, loops; permission only for money, delete, send |
 | t192 Core build speed | `lead` (t187's) | Core `build`/`check` from about 162 s to seconds, provably safe |
 | t191 chat UI + overlay | `lead` (t185's) | user verdict: chat not ChatGPT-like, overlay not visible on the site, status flickers; screenshot-driven fix |
-| t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
 **Machine rules for every lane (binding).**
 - **Four live Lab slots, no locks** (user, 2026-09-29 evening): `lab-slots/slot-1` to `slot-4`, each owned by one
