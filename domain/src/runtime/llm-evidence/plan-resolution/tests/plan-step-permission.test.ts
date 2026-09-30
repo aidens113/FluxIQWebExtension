@@ -161,22 +161,25 @@ test("a step that says it would publish, under a gate that permits nothing, asks
   assert.equal(request?.action.ref, "main.post");
   assert.equal(request?.control.name, "Schedule post");
   assert.equal(request?.control.kind, "button");
-  assert.equal(request?.sentence, "The Flow its instruction describes would press \"Schedule post\" (button) each time it runs, which would delete or remove something. Neither its instruction nor a grant allows that, so the build stopped to ask.");
+  assert.equal(request?.sentence, "The Flow its instruction describes would press \"Schedule post\" (button) each time it runs, which would delete or remove something. A person has to allow that each time, even when the instruction asks for it, so the build stopped to ask.");
   // The issue names the request the person is answering, so the record joins them.
   assert.equal(issue?.message.includes(request?.requestId ?? "-"), true);
 });
 
-test("a permission that holds the class builds it, and so does an instruction that asked for it", async () => {
+test("a permission that holds the class builds it, and an instruction that asked for it does not", async () => {
   const permitting = gateHolding(["delete"]);
   const byPermit = await resolveUnder(permitting, await explored(permitting), PRESS_SCHEDULE, ["delete"]);
   assert.equal(byPermit.ok, true);
   assert.equal(permitting.request, undefined);
 
-  // FluxIQ is capable by default and the person's instruction is the authority.
+  // Deleting needs a person's permission every time, even when the instruction
+  // asked for it (the user's rule, restored 2026-09-30); the instruction's words
+  // travel with the question.
   const instructed = gateHolding([], [{ consequence: "delete", instructionId: "instruction.one", instructionDigest: `sha256:${"a".repeat(64)}`, quote: "delete the post" }]);
   const byInstruction = await resolveUnder(instructed, await explored(instructed), PRESS_SCHEDULE, ["delete"]);
-  assert.equal(byInstruction.ok, true);
-  assert.equal(instructed.request, undefined);
+  assert.equal(byInstruction.ok, false);
+  assert.equal(instructed.request?.missing.join(","), "delete");
+  assert.equal(instructed.request?.authority.instructed[0]?.consequence, "delete");
 });
 
 test("a press that causes nothing lasting builds with nobody asked, and the declaration never reaches the Flow", async () => {
