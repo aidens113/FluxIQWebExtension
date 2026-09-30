@@ -156,8 +156,7 @@ function permittedConsequencesOf(asked: readonly string[] | undefined, purpose: 
  * that, and one that cannot cover a single request is refused rather than
  * raised. Without one it is every authorized call at the per-request limit.
  *
- * It used to default lower, to the high-token confirmation threshold of the
- * execution grant it was sent on, and for a creation build that acted as a
+ * It used to default lower, and for a creation build that acted as a
  * decision cap nobody chose: about 16k input tokens a decision on a real store
  * ran a 600,000-token budget out after about 34 decisions (lane-summary round
  * 1, rank 3). What stops a run is what it spends (`--llm-max-cost-usd`, saved

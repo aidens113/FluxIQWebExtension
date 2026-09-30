@@ -275,7 +275,7 @@ test("the lane refuses what it cannot build or run honestly, before the step it 
 });
 
 // Readied for the model, the created Flow's playback is a live run: it starts
-// its own session with its intent and no grant, and what it spent is settled
+// its own session with its intent and permitted consequences, and what it spent is settled
 // before anything is judged. Without it it is the deterministic run the first
 // test pins, "start" and all, which is what keeps a replay exactly as it was.
 test("a created Flow's playback runs with the intent it was given, and its spend is settled before anything is judged", async () => {
@@ -291,7 +291,7 @@ test("a created Flow's playback runs with the intent it was given, and its spend
       return named[0] ? JSON.parse(JSON.stringify(answer).replaceAll('"run.created"', JSON.stringify(named[0]))) : answer;
     }
     core.calls.push("run");
-    sent.push({ grantId: payload.llmExecutionGrantId, intent: payload.runIntent, permittedConsequences: payload.permittedConsequences });
+    sent.push({ intent: payload.runIntent, permittedConsequences: payload.permittedConsequences });
     named.push(String(payload.newRunId));
     return { runtimeSession: { runId: payload.newRunId, status: "succeeded", flowId: FLOW_ID } };
   };
@@ -301,7 +301,7 @@ test("a created Flow's playback runs with the intent it was given, and its spend
     settleRun: async (runId) => { core.calls.push("settle-run"); settledRuns.push(runId); },
   });
   await run;
-  assert.deepEqual(sent, [{ grantId: undefined, intent: "explore_and_adapt", permittedConsequences: ["create_new"] }]);
+  assert.deepEqual(sent, [{ intent: "explore_and_adapt", permittedConsequences: ["create_new"] }]);
   assert.deepEqual(settledRuns, named, "the repair is settled from the run it ran as");
   // Readied once the page is presented and immediately before the run; a live run starts no session of its own beforehand.
   assert.deepEqual(core.calls.slice(core.calls.indexOf("reset:/__control/reset")), [
@@ -410,7 +410,7 @@ test("a dataset task whose workflow declares no final state is judged by its rec
   assert.equal(core.calls.includes("oracle"), false);
 });
 
-// A consequential task without the grant for its act passes by stopping to ask
+// A consequential task not permitted its act passes by stopping to ask
 // at its declared point: the fixture's build asks for `delete` on "Delete post".
 test("a build that stops to ask at the task's declared permission point is the pass: nothing is applied or run, and the stop is written down", async () => {
   const core = fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic: await permissionRequiredDiagnostic() } } });

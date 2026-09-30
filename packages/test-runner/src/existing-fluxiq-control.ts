@@ -376,7 +376,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
   /**
    * `llmExecution` turns this into a run the model takes part in: it sends the
    * run's intent and, when there are any, the consequences the operator
-   * permitted, and never a grant. Core refuses such a run a pre-started run id,
+   * permitted. Core refuses such a run a pre-started run id,
    * an authorized domain, an idempotency key or any adaptive mode but
    * `manual_approval`, so those fields are omitted here rather than left to a
    * caller.

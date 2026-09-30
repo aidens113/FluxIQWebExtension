@@ -345,7 +345,7 @@ test("a refusal Core's parser does not accept keeps only its HTTP status, and a 
   assert.deepEqual(escaped.failure, { code: "lab.generation_answer_invalid", stage: null, httpStatus: 200 });
 });
 
-test("a build that outlives its request is found by polling for its proposal, within the run lease and no longer", async () => {
+test("a build that outlives its request is found by polling for its proposal, within the build's deadline and no longer", async () => {
   const recovered = await build({ generation: { kind: "timeout", proposalAfterPolls: 3 } });
   assert.equal(recovered.record.outcome, "proposed");
   assert.equal(recovered.record.recoveredAfterTimeout, true);
@@ -446,8 +446,8 @@ test("the build tells Core where the Flow starts, when the run named a start loc
     flowId: FLOW_ID,
     evidenceGuided: true,
     startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
-    // No grant id: a model call needs none. The operator's permit travels
-    // with the build, and only because it permits something.
+    // The operator's permit travels with the build, and only because it
+    // permits something.
     permittedConsequences: ["send_or_publish"],
   }]);
 });

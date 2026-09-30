@@ -77,7 +77,6 @@ function fakeCore() {
     async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
       if (endpoint === "update-flow-settings") { metadata = (payload.flow as { metadata: unknown }).metadata; return {}; }
       if (endpoint === "get-flow") return { flow: { metadata } };
-      // A model call needs no grant; a run that asked for one fails here.
       throw new Error(`unexpected endpoint ${endpoint}`);
     },
   };
@@ -151,7 +150,6 @@ test("a lane that fails after Core ran the Flow still leaves its provider calls 
   assert.deepEqual(written.observed.observedCalls.map((line: { taskKind: string }) => line.taskKind), ["runtime_diagnosis", "evidence_tool_decision", "runtime_patch"]);
   assert.equal(written.observed.accounting.totalTokens, 3_000);
   assert.equal(written.authorized.maxCalls, 26);
-  assert.equal("granted" in written, false);
   // What exploring did, from Core's own recovery trace, and nothing Core wrote in prose.
   assert.equal(written.exploration.source, "recovery-trace");
   assert.equal(written.exploration.outcome, "evidence_gathered");

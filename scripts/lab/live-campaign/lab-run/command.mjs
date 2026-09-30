@@ -39,8 +39,8 @@ const CREATE_LIMITS = Object.freeze([
   ["--llm-max-input-tokens", "48000"], ["--llm-max-output-tokens", "8000"], ["--llm-max-total-tokens", "56000"],
   // The same story as the input tokens above, one limit along, and it has to be
   // stated here for the same reason. Leaving the call count unnamed inherited
-  // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`, which mirrored Core's old
-  // execution-grant default of a diagnosis, a patch and 24 exploration decisions -- a shape
+  // `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun: 26`: a diagnosis, a patch and 24
+  // exploration decisions -- a shape
   // that predates a build exploring by running the library's own nodes. On
   // 2026-09-23 the first six tasks of a ten-site campaign each made 19 to 28
   // calls and every one that passed 26 was failed as `performance.budget`

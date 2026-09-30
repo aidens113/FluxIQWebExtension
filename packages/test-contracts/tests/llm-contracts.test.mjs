@@ -73,8 +73,7 @@ test("validates an explicit loopback-only live profile", () => {
 });
 
 test("the call ceiling is Core's runaway backstop, not a per-task count", () => {
-  // Mirrors Core's AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS and
-  // AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS. The Lab once capped
+  // The Lab's own backstop and default; Core enforces no call ceiling. The Lab once capped
   // every run at two calls, which left a recovery no call to gather evidence with.
   assert.equal(LLM_LAB_MAX_CALLS_PER_RUN, 64);
   assert.equal(DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, 26);

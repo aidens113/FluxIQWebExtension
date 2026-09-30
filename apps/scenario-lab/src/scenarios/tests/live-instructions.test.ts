@@ -147,8 +147,8 @@ test("the catalog and its tasks are frozen", () => {
   for (const task of LIVE_INSTRUCTION_TASKS) assert.ok(Object.isFrozen(task), task.id);
 });
 
-// A consequential task declares where its lasting act is, so a run without the
-// grant for that act is scored by stopping there to ask (t176; the six tasks
+// A consequential task declares where its lasting act is, so a run without
+// permission for that act is scored by stopping there to ask (t176; the six tasks
 // lane t184 found). Each control is the label its fixture renders.
 test("every consequential task declares its permission point, as a closed class and the label its page shows", () => {
   const declared = Object.fromEntries(LIVE_INSTRUCTION_TASKS.filter((task) => task.permissionPoint).map((task) => [task.id, task.permissionPoint]));

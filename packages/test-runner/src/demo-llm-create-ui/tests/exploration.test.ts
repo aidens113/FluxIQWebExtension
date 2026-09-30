@@ -106,8 +106,6 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.match(uiSource, /element\.scrollTop = next/u);
   assert.match(uiSource, /waitForExplorationTerminal/u);
   assert.match(uiSource, /authoring\.getByRole\("alert"\)/u);
-  // A model call needs no grant: there is no token-exposure confirmation to pass.
-  assert.doesNotMatch(uiSource, /high-token|HighToken|HIGH_TOKEN/u);
   assert.match(uiSource, /control\.listFlowAdaptations\(projectId, flowId, "proposed"\)/u);
   assert.match(uiSource, /Date\.now\(\) \+ EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS/u);
   assert.match(uiSource, /context\.on\("request", observeRequest\)/u);

@@ -37,7 +37,7 @@ export type RunHarnessRecovery = {
    *
    * From the loop when it started and stopped without repairing anything
    * (`llmGate.patchSkippedCode`, `llmGate.patchHeldCode`): the plan asked for
-   * no patch, the grant's scope allowed none, a person's permission was
+   * no patch, the run's intent allowed none, a person's permission was
    * needed. **That half was missing.** The field had to be `null` whenever
    * `attempted` was true, so a recovery that engaged, spent a diagnosis call
    * and then declined recorded no reason at all: live run
@@ -58,25 +58,6 @@ export type RunHarnessRecovery = {
    * when Core named no rung -- an older Core, not an unattributed refusal.
    */
   refusalRung?: HarnessRecoveryRung | null;
-  /**
-   * The cause behind the refusal, where Core named one.
-   *
-   * `refusalCode` says which step declined and `refusalRung` says who; neither
-   * says why that step could not proceed. For most refusals there is nothing
-   * further to say -- "the policy permits no patch kind" is already the reason.
-   * For one there is: a repair that could not resolve a provider records
-   * `llm.provider_resolution_failed`, which names the step and nothing about
-   * what stopped it, and Core now records its own grant refusal code beside it
-   * (`llm.execution_grant_no_longer_valid` and its three siblings).
-   *
-   * Live run `run-muexhp0k-73172f73` (2026-09-24) is why. Its repair died there
-   * with 29 of 48 calls and $0.227 of its $0.25 unspent, well inside the grant's
-   * 600s window, and no artifact could say which of those four it was.
-   *
-   * `null` when Core named no cause, which is the ordinary case, and **absent**
-   * in a record written before this member existed.
-   */
-  refusalCause?: string | null;
   /**
    * Which sections of Core's recovery context reached the model, and why each
    * one that did not was left out.
@@ -171,8 +152,8 @@ export type RunHarnessResultReauthor = {
    * first run in which this route ever opened, failed
    * `flow_bootstrap.provider_request_failed` — the default code for the whole
    * `provider_request` stage, which says only that a request was attempted and
-   * its answer is unknown. A per-request timeout, a transport error, a refused
-   * grant and a provider status are all that one word, and Core parsed the
+   * its answer is unknown. A per-request timeout, a transport error and a
+   * provider status are all that one word, and Core parsed the
    * diagnostic that told them apart and kept only the code.
    *
    * Every member is absent when Core did not record it, so "not recorded" and
@@ -187,18 +168,17 @@ export type RunHarnessResultReauthor = {
 };
 
 /**
- * Core's four words for why a refuted run did not re-enter the build loop
+ * Core's words for why a refuted run did not re-enter the build loop
  * (`AutomationStudioRefutedResultReauthorRefusal`): the run failed for
- * something other than its answer, no Flow was in hand to extend, the run's
- * grant does not buy exploring, or training settings forbid creating an
- * adaptation.
+ * something other than its answer, no Flow was in hand to extend, or training
+ * settings forbid creating an adaptation.
  *
  * The record checks a refusal's *shape* rather than its membership here, so a
  * fifth word Core adds travels and is read, instead of failing a run over a
  * vocabulary this repository has not caught up with. This is the set to key on;
  * it is not a gate.
  */
-export const harnessResultReauthorRefusals = ["not_a_wrong_answer", "flow_unavailable", "grant_does_not_buy_exploration", "adaptations_not_permitted"] as const;
+export const harnessResultReauthorRefusals = ["not_a_wrong_answer", "flow_unavailable", "adaptations_not_permitted"] as const;
 export type HarnessResultReauthorRefusal = (typeof harnessResultReauthorRefusals)[number];
 
 /**

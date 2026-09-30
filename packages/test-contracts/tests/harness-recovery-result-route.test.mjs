@@ -22,7 +22,7 @@ const refused = (refusal) => ({ routed: false, refusal, adaptationId: null, appl
 const routed = (extra) => ({ routed: true, refusal: null, adaptationId: null, applied: false, failureCode: null, ...extra });
 
 test("each gate that can close the route to the build loop is a stated reason", () => {
-  assert.deepEqual([...harnessResultReauthorRefusals], ["not_a_wrong_answer", "flow_unavailable", "grant_does_not_buy_exploration", "adaptations_not_permitted"]);
+  assert.deepEqual([...harnessResultReauthorRefusals], ["not_a_wrong_answer", "flow_unavailable", "adaptations_not_permitted"]);
   for (const refusal of harnessResultReauthorRefusals) {
     assert.deepEqual(issuesOf({ ...none, resultReauthor: refused(refusal) }), [], refusal);
   }
@@ -45,7 +45,7 @@ test("a refusal and a route cannot borrow each other's members", () => {
 });
 
 test("nothing free-text travels in either record", () => {
-  assert.deepEqual(issuesOf({ ...none, resultReauthor: refused("The run's grant does not buy exploring.") }), ["$.resultReauthor.refusal must be a kind name of at most 64 lowercase words joined by underscores"]);
+  assert.deepEqual(issuesOf({ ...none, resultReauthor: refused("The run failed for something other than its answer.") }), ["$.resultReauthor.refusal must be a kind name of at most 64 lowercase words joined by underscores"]);
   assert.deepEqual(issuesOf({ ...none, resultReauthor: routed({ failureCode: "The build could not extend the Flow." }) }), ["$.resultReauthor.failureCode must be an issue code, never an issue message"]);
   assert.deepEqual(issuesOf({ ...none, resultRepair: { attempted: true, nodeId: "the second extract step", code: null } }), ["$.resultRepair.nodeId must be a Core identifier of at most 256 characters"]);
   assert.deepEqual(issuesOf({ ...none, resultRepair: { attempted: true, nodeId: null, code: "The run stored eight rows where thirteen were expected." } }), ["$.resultRepair.code must be an issue code, never an issue message"]);

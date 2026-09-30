@@ -123,7 +123,7 @@ test("a run with a node that would not run still takes the full recovery wait", 
 // settles the phase only when the repaired answer has been judged (Core
 // `recovery/refuted-result/repair.ts`). The first pass may already have written
 // `llmGate`, and every node ran, so the recovery rule read this as finished --
-// or granted it five seconds -- and the Lab reported a failed run while Core was
+// or gave it five seconds -- and the Lab reported a failed run while Core was
 // still repairing it (`run-mulwm2dc-0bd95f22` ended `unsettled: "recovery"`).
 test("a run whose wrong-answer repair is still in flight is waited for until Core settles it", async () => {
   const reads = [
@@ -134,7 +134,7 @@ test("a run whose wrong-answer repair is still in flight is waited for until Cor
   let clock = 0;
   let read = 0;
   const detailAt = () => {
-    // Twenty seconds a phase: far past the five-second grace, well inside the lease.
+    // Twenty seconds a phase: far past the five-second grace, well inside the run's bound.
     const current = reads[Math.floor(clock / 20_000)];
     read += 1;
     return {
@@ -156,7 +156,7 @@ test("a run whose wrong-answer repair is still in flight is waited for until Cor
   assert.ok(read > 3);
 });
 
-test("a repair still in flight when the run's lease ends is reported unsettled as a repair, never as finished", async () => {
+test("a repair still in flight when the run's bound ends is reported unsettled as a repair, never as finished", async () => {
   let clock = 0;
   const settled = await awaitTerminalRunDetail(
     async () => ({ summaryStatus: "failed", actions: [{ status: "succeeded", nodeId: "n1" }], resultVerification: "refuted", runDetail: { metadata: { llmGate: {}, resultRepair: { phase: "reauthoring" } } } }),
@@ -201,7 +201,7 @@ test("a recovery Core still marks running is waited for up to the live-run deadl
   assert.ok(clock >= 400_000 && clock < 400_000 + 2 * TERMINAL_DETAIL_POLL_MS, `waited ${clock}ms`);
 });
 
-test("a recovery still running when the lease runs out is returned unsettled and named", async () => {
+test("a recovery still running when the run's bound runs out is returned unsettled and named", async () => {
   const { settled, clock } = await waitOn(() => markedRun({ state: "running", startedAt: 1 }));
   assert.equal(settled.unsettled, "recovery");
   assert.equal(settled.recoveryState, "recovery.still_running");

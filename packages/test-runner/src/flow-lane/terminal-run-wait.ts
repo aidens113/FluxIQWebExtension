@@ -66,10 +66,8 @@ export const TERMINAL_DETAIL_NODE_WAIT_MS = AUTOMATION_STUDIO_READINESS_CAP_MS *
  * How long a live LLM run is read back for after its request timed out: ten
  * minutes, the whole-run deadline this facility gives a run the model takes
  * part in. The poll ends as soon as the run settles; this bounds only a run
- * that never does. It was Core's lease on a claimed execution grant
- * (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS`); grants are gone (t186),
- * and the number stays because it is what a diagnosing, exploring recovery
- * was measured to need.
+ * that never does. The number is what a diagnosing, exploring recovery was
+ * measured to need.
  *
  * Why a live run needs more than the fixed 90 seconds a one-node run gets
  * (`TERMINAL_DETAIL_BASE_WAIT_MS`): the single request that runs it also waits
@@ -126,7 +124,7 @@ function retryBackoffTotalMs(): number {
  * known: Core writes the failed status with the run's first save and the
  * record with the recovery's last, and nothing that judges a created Flow
  * reads it. So the two things a whole-run wait buys are different in kind, and
- * only one of them is worth the whole lease. Measured on
+ * only one of them is worth the whole bound. Measured on
  * `run-mudslg9p-c59266aa`: a Flow was built, ran, failed, Core's repair made
  * its two calls, and no recovery record ever arrived; the run then spent ten
  * minutes waiting and was reported `performance.budget` -- a verdict about the
@@ -326,8 +324,7 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
           deadline = Math.min(deadline, now() + (recoveryCouldBeRunning(detail) ? recoveryWaitMs : recoveryGraceMs));
         }
         // A repair in flight is the run still running, however its nodes
-        // ended: it keeps the run's whole bound, which is the grant's lease for
-        // a granted run -- the longest Core itself will spend on it.
+        // ended: it keeps the run's whole bound, the live-run deadline.
         if (pending === "repair") deadline = fullDeadline;
         terminal = detail;
       }

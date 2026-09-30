@@ -109,7 +109,6 @@ test("create-flow plans the web panel's iterating build_and_adapt, with the oper
   // A build's token budget is every authorized call at the per-request limit,
   // so the cost cap and the stall guard bind before tokens do.
   assert.equal(byDefault.maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
-  assert.equal("highTokenConfirmation" in byDefault, false);
   assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
   // The campaigns' 600,000 at ~16k input tokens a decision capped real builds
   // at ~34 decisions, so an untyped build budget outlasts every decision ...
@@ -131,9 +130,8 @@ test("create-flow plans the web panel's iterating build_and_adapt, with the oper
 });
 
 test("without --llm-max-run-tokens the run token budget is every authorized call at the per-request limit", () => {
-  // There is no confirmation threshold to hold it down any more: that was the
-  // execution grant's, and a model call needs no grant. What bounds a run is
-  // its spend ceiling, the calls it was allowed and Core's stall guard.
+  // What bounds a run is its spend ceiling, the calls it was allowed and
+  // Core's stall guard.
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 3 })).maxTotalTokensPerRun, PER_REQUEST * 3);
   assert.equal(planLiveLlmExecution(profile()).maxTotalTokensPerRun, PER_REQUEST);
@@ -210,9 +208,8 @@ test("token limits are held inside Core's ceiling and must add up", () => {
 });
 
 test("a backstop-sized plan's spend ceiling is the Lab's $2, whatever its call count", () => {
-  // Core's own drift anchors for these numbers were the execution grant's
-  // constants, which are gone with it (t186); the ceiling is now the Lab's own
-  // choice, saved on the Flow as `maxEstimatedCostUsdPerRun`.
+  // The ceiling is the Lab's own choice, saved on the Flow as
+  // `maxEstimatedCostUsdPerRun`.
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd, 2);
 });
 

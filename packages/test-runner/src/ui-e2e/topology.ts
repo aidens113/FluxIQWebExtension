@@ -31,9 +31,8 @@ export const UI_E2E_EXCLUDED_PORTS: ReadonlySet<number> = new Set([3000, 4711, 3
 const PROVIDER_ENDPOINTS = ["generate-flow-bootstrap-adaptation"] as const;
 /**
  * The run request a provider-free journey may send only without a `runIntent`.
- * A model call needs no grant, so there is no grant endpoint to block: a run
- * the model takes part in is one `run-runtime-session` carrying a `runIntent`,
- * and that request is the one refused.
+ * A run the model takes part in is one `run-runtime-session` carrying a
+ * `runIntent`, and that request is the one refused.
  */
 const RUN_ENDPOINT = "run-runtime-session";
 const RUN_ID = /^[a-z0-9][a-z0-9-]{0,39}$/u;

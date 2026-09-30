@@ -266,7 +266,7 @@ export type PanelRelayResponse<TPayload = unknown> =
  *
  * Core accepts the token on these endpoints only with a narrowed request
  * (`apps/web/src/lib/program-route.ts` in FluxIQ Core): a run names a saved
- * Flow and never an inline document, an LLM grant, an LLM intent or external
+ * Flow and never an inline document, an LLM intent or external
  * side effects; a proposal is generated directly, never LLM-assisted; the
  * AI-key snapshot answers each key's kind, provider and enabled flag only.
  */

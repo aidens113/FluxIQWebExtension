@@ -145,7 +145,7 @@ export type CreatedFlowLaneEvidence = Readonly<{
 }>;
 
 /**
- * A consequential task's right ending without the grant for its act: the build
+ * A consequential task's right ending when its act is not permitted: the build
  * stopped to ask a person at the task's declared permission point
  * (`permission-point.ts`), so no Flow was applied or run, and none should be.
  * Returned rather than thrown, because it is the pass.
@@ -415,7 +415,7 @@ function permissionRequired(build: CreatedFlowBuild, request: CreatedFlowPermiss
   return new RunnerFailure("runtime.behavior", `FluxIQ asked for permission ${proposal} a Flow from the task's instruction (permission.required: ${request.missing.join(", ")})`, {
     details: {
       outcome: "permission.required",
-      // Why this request is not the task's declared stop: none is declared, the grant held the declared class, or Core named another control.
+      // Why this request is not the task's declared stop: none is declared, the run already permitted the declared class, or Core named another control.
       permissionPoint: stop.reason,
       missing: [...request.missing],
       consequences: [...request.consequences],

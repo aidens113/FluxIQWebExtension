@@ -174,7 +174,6 @@ test("apply launcher is secret-stripped and workspace command performs only one 
   assert.match(body, /reviewAndApplyAdaptationViaUi/u);
   assert.equal((body.match(/runZeroLlmAdaptationValidation/g) ?? []).length, 1);
   assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*run-runtime-session[\s\S]*runIntentRequested/u);
-  assert.doesNotMatch(body, /preflight-llm-execution|issue-llm-execution-grant/u);
   assert.doesNotMatch(body, /runAdaptationFromPanel|configureFirstLiveDiagnosisViaUi|buildApproveApplyCreationViaUi/u);
 });
 
@@ -223,7 +222,6 @@ test("validate launcher is secret-stripped and command is one provider-free exac
   assert.match(body, /selectFlowInCurrentProject|runZeroLlmAdaptationValidation/u);
   assert.equal((body.match(/runZeroLlmAdaptationValidation/g) ?? []).length, 1);
   assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*run-runtime-session[\s\S]*runIntentRequested/u);
-  assert.doesNotMatch(body, /preflight-llm-execution|issue-llm-execution-grant/u);
   assert.doesNotMatch(body, /reviewAndApplyAdaptationViaUi|runAdaptationFromPanel|configureFirstLiveDiagnosisViaUi/u);
 });
 

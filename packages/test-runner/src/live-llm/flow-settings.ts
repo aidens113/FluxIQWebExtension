@@ -4,10 +4,9 @@
 // them is how a parsed `--llm-max-*` becomes a cap the provider call is
 // actually held to, rather than a number the CLI accepted and dropped.
 //
-// The run's spend ceiling is one of them. It used to ride on an execution
-// grant; a model call needs no grant now, and the ceiling is a plain Flow
-// setting, `adaptationPolicySettings.maxEstimatedCostUsdPerRun`, that Core's
-// loop budget reads for every build and recovery on the Flow.
+// The run's spend ceiling is one of them: a plain Flow setting,
+// `adaptationPolicySettings.maxEstimatedCostUsdPerRun`, that Core's loop
+// budget reads for every build and recovery on the Flow.
 
 import { RunnerFailure } from "../failure.js";
 import type { LiveLlmPlan } from "./live-llm-plan.js";

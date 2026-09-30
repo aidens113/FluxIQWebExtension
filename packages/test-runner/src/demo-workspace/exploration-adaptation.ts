@@ -190,9 +190,8 @@ export async function runDemoLlmExplorationAdaptationApply(config: DemoWorkspace
       flowName: target.flowName, updatedAt: new Date().toISOString(),
     };
     return withDemoBrowser(config, panelCookie, "demo-llm-exploration-adaptation-apply", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
-      // A model call needs no grant, so a provider-free run is guarded at the
-      // two requests that can reach one: a Flow build, and a run carrying a
-      // `runIntent`.
+      // A provider-free run is guarded at the two requests that can reach a
+      // model: a Flow build, and a run carrying a `runIntent`.
       const forbiddenEndpoints = ["generate-flow-bootstrap-adaptation"] as const;
       const forbiddenRequests: string[] = [];
       const context = panelPage.context();
@@ -262,9 +261,8 @@ export async function runDemoLlmExplorationAdaptationValidation(config: DemoWork
       flowName: target.flowName, updatedAt: new Date().toISOString(),
     };
     return withDemoBrowser(config, panelCookie, "demo-llm-exploration-adaptation-validation", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
-      // A model call needs no grant, so a provider-free run is guarded at the
-      // two requests that can reach one: a Flow build, and a run carrying a
-      // `runIntent`.
+      // A provider-free run is guarded at the two requests that can reach a
+      // model: a Flow build, and a run carrying a `runIntent`.
       const forbiddenEndpoints = ["generate-flow-bootstrap-adaptation"] as const;
       const forbiddenRequests: string[] = [];
       const context = panelPage.context();

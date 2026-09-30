@@ -157,7 +157,7 @@ panel's message:
 
 Core accepts the token on these endpoints only with the same narrowed requests
 (Core's `docs/architecture/automation-studio/client-gateway.md`), so a run from
-the panel never carries an inline Flow, run inputs, an LLM grant or external
+the panel never carries an inline Flow, run inputs, an LLM run intent or external
 side effects. The step index and the last stopped recording live in the worker,
 so neither survives a worker restart; the relay then says the step can no longer
 be removed.

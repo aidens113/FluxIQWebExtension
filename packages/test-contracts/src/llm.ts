@@ -27,16 +27,14 @@ export function isLlmModel(value: unknown): value is LlmModel {
  *
  * It was 50,000, and that was the fifth and last of the ceilings that between
  * them made a real page impossible to describe on 2026-09-17 -- the others
- * being this file's default budget, the Lab plan's cap, Core's then execution
- * grant default and Core's provider-side rejection. Raising any one of them alone was
+ * being this file's default budget, the Lab plan's cap, a Core default since
+ * removed and Core's provider-side rejection. Raising any one of them alone was
  * silently overridden by the next.
  */
 export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 64_000 as const;
 /**
- * The most provider calls any Lab run may declare: FluxIQ Core's absolute
- * backstop against a runaway loop, mirrored because this package depends only
- * on Core's public contracts. It was Core's execution-grant call ceiling;
- * grants are gone (t186), and the Lab keeps the number as its own backstop.
+ * The most provider calls any Lab run may declare: the Lab's own backstop
+ * against a runaway loop. Core enforces no call ceiling of its own.
  *
  * It is deliberately far above what an adaptation needs and is not a per-task
  * count. An adaptation iterates for as many calls as it needs; what is meant to
@@ -141,8 +139,7 @@ export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
   maxOutputTokens: 8_000,
   maxTotalTokensPerRequest: 56_000,
   // What an iterating run declares when the operator names no call count:
-  // what Core's execution grant defaulted to while there was one -- a
-  // diagnosis, a patch, and the exploration's own default ceiling of 24
+  // a diagnosis, a patch, and the exploration's own default ceiling of 24
   // decisions. Tokens are bounded separately, by `maxTotalTokensPerRun`, so a
   // larger count does not by itself raise what a run may spend.
   maxCallsPerRun: 26,

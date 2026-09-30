@@ -42,9 +42,8 @@ export const EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS = Object.freeze({
   maxEstimatedCostUsd: 0.25, providerRetries: 0,
 });
 // Mirrors the panel's `WEBSITE_EXPLORATION_COMMAND_TIMEOUT_MS`: the run's whole
-// deadline, and the answer still has to come back. The extra minute is the old
-// grant claim window the panel's number was sized with; it is kept so this
-// wait is never shorter than the panel's own.
+// deadline, and the answer still has to come back. The extra 75 seconds match
+// the panel's own number, so this wait is never shorter than the panel's.
 export const EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS = EVIDENCE_GUIDED_CREATION_LIMITS.runDeadlineSeconds * 1_000 + 75_000;
 
 export type CreationSettingsLimits = typeof FIRST_LIVE_CREATION_LIMITS | typeof EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS;

@@ -29,7 +29,7 @@
 // already shows (`./tool-rejection.ts`). Nothing is refused on FluxIQ's own
 // judgement of what a control looks like: the model declares what its own call
 // would lastingly do and Core's gate answers from the person's instruction and
-// grant (`./permission.ts`).
+// permission (`./permission.ts`).
 
 import type { FluxIQ } from "fluxiq";
 import type {

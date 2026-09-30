@@ -12,9 +12,8 @@ import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
 /**
  * One live run end to end against a fake Core: ready the Flow, settle, and
- * read back `snapshots/live-llm.json`. A model call needs no grant, so the
- * fake refuses every grant endpoint outright: a run that still asked for one
- * fails here rather than passing against a Core that answered it.
+ * read back `snapshots/live-llm.json`. The fake answers only the endpoints a
+ * live run uses; any other request fails the test.
  */
 
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
@@ -40,8 +39,6 @@ function profile(budget: Partial<LlmExecutionProfile["budget"]>): LlmExecutionPr
   };
 }
 
-const GRANT_ENDPOINTS = new Set(["preflight-llm-execution", "issue-llm-execution-grant"]);
-
 function fakeCore() {
   const settingsRequests: Array<Record<string, any>> = [];
   let metadata: unknown;
@@ -54,7 +51,6 @@ function fakeCore() {
         return { id: "key-1", name: payload.name, kind: "llm", provider: "DeepSeek", scope: "global", enabled: true };
       },
       async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
-        if (GRANT_ENDPOINTS.has(endpoint)) throw new Error(`a live run asked Core for a grant (${endpoint})`);
         if (endpoint === "update-flow-settings") {
           settingsRequests.push(payload);
           metadata = (payload.flow as { metadata: unknown }).metadata;
@@ -101,7 +97,7 @@ async function runOnce(budget: Partial<LlmExecutionProfile["budget"]>) {
   return { core, run, execution, snapshot };
 }
 
-test("an adapt run readies its Flow with its spend ceiling, carries its intent and no grant, and records what it spent", async () => {
+test("an adapt run readies its Flow with its spend ceiling, carries its intent and permitted consequences, and records what it spent", async () => {
   const { core, run, execution, snapshot } = await runOnce({});
   assert.deepEqual(execution, { intent: "diagnose_and_adapt", permittedConsequences: [] });
   // The run's spend ceiling is a Flow setting now, saved with the rest.
@@ -112,7 +108,6 @@ test("an adapt run readies its Flow with its spend ceiling, carries its intent a
   assert.equal(snapshot.authorized.maxTotalTokensPerRun, PER_REQUEST * 26);
   assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, 2);
   assert.deepEqual(snapshot.permittedConsequences, []);
-  for (const gone of ["granted", "highTokenConfirmation"]) assert.equal(gone in snapshot, false, gone);
   assert.equal(snapshot.exploration.source, "absent");
   assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
   assert.deepEqual(snapshot.verification, { source: "absent", status: null, basis: null, code: null, verdicts: [], recordedCalls: null, calls: 0, interventions: [], totalEstimatedCostUsd: 0 });
@@ -218,7 +213,7 @@ async function settleBuildOnce(build: CreatedFlowBuild) {
   return { core, run, prepared, written, published, settle };
 }
 
-test("a create-flow run readies its build with no grant and records the build it settled", async () => {
+test("a create-flow run readies its build with its permitted consequences and records the build it settled", async () => {
   const { core, run, prepared, written, published, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   assert.deepEqual(prepared, { permittedConsequences: [] });
@@ -303,7 +298,6 @@ test("a create-flow run repairs the Flow it built with explore_and_adapt, and se
   assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
   assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
   assert.equal(snapshot.repair.purpose, "explore_and_adapt");
-  assert.equal("granted" in snapshot.repair, false);
   assert.equal(snapshot.repair.authorized.maxTotalEstimatedCostUsd, 2);
   assert.equal(snapshot.repair.runId, "run-1");
   assert.equal(snapshot.repair.observed.calls, 3);

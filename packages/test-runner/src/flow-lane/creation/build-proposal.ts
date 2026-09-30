@@ -20,8 +20,7 @@ const GENERATION_REQUEST_TIMEOUT_MS = 300_000;
 /**
  * How long a build may still be running after it was dispatched: the wait the
  * web panel gives the same request (`WEBSITE_EXPLORATION_OVERALL_TIMEOUT_MS`).
- * It was the old grant's claim window, run lease and reply; grants are gone
- * (t186), and the number stays because it is what a build was measured to need.
+ * The number is what a build was measured to need.
  */
 const GENERATION_DEADLINE_MS = 60_000 + 600_000 + 15_000;
 const PROPOSAL_POLL_MS = 1_000;

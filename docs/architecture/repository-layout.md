@@ -140,8 +140,9 @@ pnpm lab:adversarial --only basic-form/primary/renamed-submit
 Runs every corpus row that declares `expected.recovery` -- the fixtures armed
 with the faults a deterministic runtime is supposed to survive -- and prints
 which recovery absorbed each one, at what cost in attempts, and for how many
-provider calls. Each run is provider-free by construction: no grant is issued,
-so whatever finished the run was the runtime. Output goes to
+provider calls. Each run is provider-free by construction: it runs without
+`--live-llm`, so no key is installed and whatever finished the run was the
+runtime. Output goes to
 `test-runs/.adversarial/<timestamp>/`, and the exit status is 0 only when every
 condition was absorbed by what it declared, for no calls. The design and the
 vocabulary are in

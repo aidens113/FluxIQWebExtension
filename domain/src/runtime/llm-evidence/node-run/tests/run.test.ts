@@ -109,7 +109,7 @@ test("a node this domain cannot run is refused with the ones it can, and nothing
   assert.deepEqual(stubbed.commands, []);
 });
 
-test("a declared consequence nobody granted refuses the run, and nothing is dispatched", async () => {
+test("a declared consequence nobody permitted refuses the run, and nothing is dispatched", async () => {
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
@@ -136,7 +136,7 @@ test("a declared consequence nobody granted refuses the run, and nothing is disp
 // ... into a table" stopped and asked a person for permission to read the page
 // (`run-mueozmp8-348a2057`, 21 provider calls, no Flow). The instruction is the
 // authority; reading the list is the instruction being carried out.
-test("a node that only reads runs under a grant that permits nothing, whatever it declared", async () => {
+test("a node that only reads runs under a gate that permits nothing, whatever it declared", async () => {
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const gate = new AutomationStudioActionPermissionGate({ stage: "authoring", permittedConsequences: [] });

@@ -87,16 +87,12 @@ export async function readHarnessRecovery(
  * model wrote that a person has to allow first. Core's sentences -- `reason`,
  * `patchSkipped` -- stay behind in every case.
  */
-function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null; refusalCause?: string } {
+function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null } {
   const none = { refusalCode: null, refusalRung: null };
   const gate = plainRecord(metadataValue(runDetail, "llmGate"));
   if (!gate) return none;
-  const { invoked, code, cause, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate;
-  // Core's own cause behind the gate's code, where it named one. Only a string:
-  // the slot is Core's vocabulary, and the contract holds it to a code shape.
-  if (invoked === false && code !== undefined) {
-    return { refusalCode: code as string, refusalRung: "gate", ...(typeof cause === "string" ? { refusalCause: cause } : {}) };
-  }
+  const { invoked, code, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate;
+  if (invoked === false && code !== undefined) return { refusalCode: code as string, refusalRung: "gate" };
   if (patchSkippedCode !== undefined) return { refusalCode: patchSkippedCode as string, refusalRung: rung(patchSkippedRung) };
   if (patchHeldCode !== undefined) return { refusalCode: patchHeldCode as string, refusalRung: rung(patchHeldRung) ?? "resolution" };
   return none;
