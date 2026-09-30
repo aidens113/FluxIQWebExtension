@@ -20,6 +20,11 @@
 // addresses frame 0 to reach it; a child frame that receives one anyway stays
 // silent rather than putting a second overlay up inside itself, which the
 // worker reads as the page refusing.
+//
+// The activity overlay's message (`content/activity-overlay/`) is top frame
+// only for the same reason: there is one status for the page the person is
+// watching. It is a display, so it is answered at once and changes nothing
+// the page or the automation can see.
 
 import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
 import { captureSettings } from "./capture-settings";
@@ -28,6 +33,7 @@ import { actionFailure, captureSnapshotForResponse, executeAction } from "./acti
 import { inferListFromElement } from "./extraction";
 import { isTopFrame } from "./frame-geometry";
 import { extractionContentMessage, handleExtractionMessage } from "./picker";
+import { activityContentMessage, showActivityOverlay } from "./activity-overlay";
 import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../shared/extraction-messages";
 import type { BrowserActionCommand } from "./types";
 
@@ -94,6 +100,13 @@ export function installMessageHandler(): void {
     if (extraction) {
       if (!isTopFrame()) return false;
       return handleExtractionMessage(extraction, sendResponse) === "open";
+    }
+    const activity = activityContentMessage(typed);
+    if (activity) {
+      if (!isTopFrame()) return false;
+      showActivityOverlay(activity);
+      sendResponse({ ok: true });
+      return false;
     }
     if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
       if (!isAddressedToThisFrame(typed)) return false;

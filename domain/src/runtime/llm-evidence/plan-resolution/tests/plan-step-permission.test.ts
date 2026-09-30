@@ -2,24 +2,24 @@
 //
 // The hole this exists for was measured live (`run-mud4ywy4-45c2002f`): a
 // nine-node Flow that filled a scheduler's composer and submitted it -- a
-// `delete` act -- was authored and replayed under a grant that
+// `delete` act -- was authored and replayed under a permission gate that
 // permitted nothing, with `permissionRequest: null` and
 // `instructedConsequences: []`. Nobody was asked anything, because the web
 // domain never declared or called the per-step check Core hands it.
 //
 // These rows drive the real seam with no provider: Core's own
 // `resolveAutomationStudioFlowBootstrapPlanParameters` over a plan, with a real
-// `AutomationStudioActionPermissionGate` under a real grant, against the real
+// `AutomationStudioActionPermissionGate` under real permitted consequences, against the real
 // web runtime that issued the handles. The handles are issued by running the
 // snapshot node through the library verb, because that is now the only way a
 // build looks at a page at all. What they hold:
 //
 // - a step that presses and says nothing about what pressing would do never
 //   builds, so the measured run cannot happen again by silence;
-// - a step that says it would publish, under a grant that permits nothing,
+// - a step that says it would publish, under a gate that permits nothing,
 //   raises the request a person answers -- naming the classes, and naming the
 //   control in the words the model was shown;
-// - the same step builds when a grant holds the class, and when the person's
+// - the same step builds when the run permits the class, and when the person's
 //   own instruction asked for it, which is the standing rule that FluxIQ is
 //   capable by default and the instruction is the authority;
 // - a press that says it causes nothing lasting builds with nobody asked, so
@@ -144,7 +144,7 @@ test("a step that presses and says nothing about it never builds", async () => {
   assert.equal(resolved.ok === false ? resolved.issues[0]?.path : undefined, "plan.subflows.0.nodes.1.parameters");
 });
 
-test("a step that says it would publish, under a grant that permits nothing, asks the person", async () => {
+test("a step that says it would publish, under a gate that permits nothing, asks the person", async () => {
   const gate = gateHolding([]);
   const resolved = await resolveUnder(gate, await explored(gate), PRESS_SCHEDULE, ["delete"]);
 
@@ -154,7 +154,7 @@ test("a step that says it would publish, under a grant that permits nothing, ask
   assert.match(issue?.message ?? "", /delete/u);
 
   // The request a person answers, with the control named in the words the
-  // evidence carried and the class a later grant must add.
+  // evidence carried and the class a later permission must add.
   const request = gate.request;
   assert.equal(request?.missing.join(","), "delete");
   assert.equal(request?.action.kind, "flow_step");
@@ -166,11 +166,11 @@ test("a step that says it would publish, under a grant that permits nothing, ask
   assert.equal(issue?.message.includes(request?.requestId ?? "-"), true);
 });
 
-test("a grant that holds the class builds it, and so does an instruction that asked for it", async () => {
-  const granted = gateHolding(["delete"]);
-  const byGrant = await resolveUnder(granted, await explored(granted), PRESS_SCHEDULE, ["delete"]);
-  assert.equal(byGrant.ok, true);
-  assert.equal(granted.request, undefined);
+test("a permission that holds the class builds it, and so does an instruction that asked for it", async () => {
+  const permitting = gateHolding(["delete"]);
+  const byPermit = await resolveUnder(permitting, await explored(permitting), PRESS_SCHEDULE, ["delete"]);
+  assert.equal(byPermit.ok, true);
+  assert.equal(permitting.request, undefined);
 
   // FluxIQ is capable by default and the person's instruction is the authority.
   const instructed = gateHolding([], [{ consequence: "delete", instructionId: "instruction.one", instructionDigest: `sha256:${"a".repeat(64)}`, quote: "delete the post" }]);
@@ -275,9 +275,9 @@ test("a declaration written onto the step's parameters is read, and is still tak
   assert.equal(resolved.ok === false ? resolved.issues[0]?.code : undefined, "bootstrap.step_permission_required");
   assert.equal(gate.request?.control.name, "Schedule post");
 
-  // And when the class is granted it builds, with the declaration gone.
-  const granted = gateHolding(["delete"]);
-  const built = await resolveUnder(granted, await explored(granted), { ...PRESS_SCHEDULE, consequences: "delete" });
+  // And when the class is permitted it builds, with the declaration gone.
+  const permitting = gateHolding(["delete"]);
+  const built = await resolveUnder(permitting, await explored(permitting), { ...PRESS_SCHEDULE, consequences: "delete" });
   assert.equal(built.ok, true);
   const node = built.ok ? built.plan.subflows[0]?.nodes[1] : undefined;
   assert.equal(node?.parameters && "consequences" in node.parameters, false);

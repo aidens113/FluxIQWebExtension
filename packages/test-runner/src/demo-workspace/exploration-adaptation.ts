@@ -3,7 +3,7 @@
 import type { ExistingFlowAdaptation } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import { assertRecordingSetUnchanged, BLANK_LLM_SCENARIO_PATH, loadBlankLlmPreparationState } from "../demo-llm-blank-workspace.js";
-import { adaptationCallCountWithinGrant } from "../demo-llm-adaptation-control.js";
+import { adaptationCallCountWithinCeiling } from "../demo-llm-adaptation-control.js";
 import { type DemoLlmAdaptationReadiness, inspectDemoLlmAdaptationReadiness } from "../demo-llm-adaptation-readiness.js";
 import { inspectExactExplorationAdaptationReadiness, locateExactAppliedEvidenceGuidedCreation } from "../demo-llm-exploration-adaptation-readiness.js";
 import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation, type ExplorationAdaptationApplyCheckpoint, type ExplorationAdaptationProposalCheckpoint, type ExplorationAdaptationValidationCheckpoint } from "../demo-llm-exploration-adaptation.js";
@@ -190,13 +190,20 @@ export async function runDemoLlmExplorationAdaptationApply(config: DemoWorkspace
       flowName: target.flowName, updatedAt: new Date().toISOString(),
     };
     return withDemoBrowser(config, panelCookie, "demo-llm-exploration-adaptation-apply", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
-      const forbiddenEndpoints = ["generate-flow-bootstrap-adaptation", "preflight-llm-execution", "issue-llm-execution-grant"] as const;
+      // A provider-free run is guarded at the two requests that can reach a
+      // model: a Flow build, and a run carrying a `runIntent`.
+      const forbiddenEndpoints = ["generate-flow-bootstrap-adaptation"] as const;
       const forbiddenRequests: string[] = [];
       const context = panelPage.context();
       const routes = forbiddenEndpoints.map(endpoint => `**/api/programs/automation-studio/${endpoint}`);
       for (const [index, routePattern] of routes.entries()) {
         await context.route(routePattern, route => { forbiddenRequests.push(forbiddenEndpoints[index]!); return route.abort("blockedbyclient"); });
       }
+      await context.route("**/api/programs/automation-studio/run-runtime-session", route => {
+        if (!runIntentRequested(route.request().postData())) return route.fallback();
+        forbiddenRequests.push("run-runtime-session:runIntent");
+        return route.abort("blockedbyclient");
+      });
       try {
         await openProjectInPanel(panelPage, config.origin, state.projectName, evidence);
         await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, state.flowId, scenarioUrl, evidence);
@@ -243,7 +250,7 @@ export async function runDemoLlmExplorationAdaptationValidation(config: DemoWork
     const applied = appliedTargets[0]!;
     if (!applied.sourceRunId) throw new RunnerFailure("runtime.behavior", "Applied exploration adaptation has no source run", { details: { reasonCode: "exploration_adaptation_validation.source_invalid" } });
     const sourceRun = await control.getRunDetail(target.projectId, applied.sourceRunId);
-    if (!adaptationCallCountWithinGrant(sourceRun)) throw new RunnerFailure("runtime.behavior", "Applied exploration adaptation's source run made a provider call count its grant could not have produced", { details: { reasonCode: "exploration_adaptation_validation.source_invalid" } });
+    if (!adaptationCallCountWithinCeiling(sourceRun)) throw new RunnerFailure("runtime.behavior", "Applied exploration adaptation's source run made a provider call count its run could not have produced", { details: { reasonCode: "exploration_adaptation_validation.source_invalid" } });
     const adaptationIdsBefore = new Set(summaries.map(item => item.adaptationId));
     const recordingsBefore = recordingIds(await control.listRecordings(target.projectId));
     const project = await control.requireProject(target.projectId, "web-automation");
@@ -254,13 +261,20 @@ export async function runDemoLlmExplorationAdaptationValidation(config: DemoWork
       flowName: target.flowName, updatedAt: new Date().toISOString(),
     };
     return withDemoBrowser(config, panelCookie, "demo-llm-exploration-adaptation-validation", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
-      const forbiddenEndpoints = ["generate-flow-bootstrap-adaptation", "preflight-llm-execution", "issue-llm-execution-grant"] as const;
+      // A provider-free run is guarded at the two requests that can reach a
+      // model: a Flow build, and a run carrying a `runIntent`.
+      const forbiddenEndpoints = ["generate-flow-bootstrap-adaptation"] as const;
       const forbiddenRequests: string[] = [];
       const context = panelPage.context();
       const routes = forbiddenEndpoints.map(endpoint => `**/api/programs/automation-studio/${endpoint}`);
       for (const [index, routePattern] of routes.entries()) {
         await context.route(routePattern, route => { forbiddenRequests.push(forbiddenEndpoints[index]!); return route.abort("blockedbyclient"); });
       }
+      await context.route("**/api/programs/automation-studio/run-runtime-session", route => {
+        if (!runIntentRequested(route.request().postData())) return route.fallback();
+        forbiddenRequests.push("run-runtime-session:runIntent");
+        return route.abort("blockedbyclient");
+      });
       try {
         await openProjectInPanel(panelPage, config.origin, state.projectName, evidence);
         await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, state.flowId, scenarioUrl, evidence);
@@ -282,4 +296,15 @@ export async function runDemoLlmExplorationAdaptationValidation(config: DemoWork
       }
     }, credentialLiterals(config), BLANK_LLM_SCENARIO_PATH);
   }));
+}
+
+/** Whether a `run-runtime-session` body asks for a run the model takes part in; an unreadable one is treated as asking. */
+function runIntentRequested(body: string | null): boolean {
+  if (!body) return false;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return typeof parsed === "object" && parsed !== null && typeof (parsed as { runIntent?: unknown }).runIntent === "string";
+  } catch {
+    return true;
+  }
 }

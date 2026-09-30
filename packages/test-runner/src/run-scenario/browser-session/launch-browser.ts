@@ -18,8 +18,14 @@ import { networkContainmentArgs } from "../../guarded-browser/index.js";
  * the hosts of the run's own origins; the
  * caller installs the route-level guard (`installRunNetworkGuard`) before it
  * opens any page, which `guarded-browser/tests/launch-containment.test.ts` pins.
+ *
+ * The window is 1700 by 1000 so the extension panel shown beside the fixture
+ * (`openLivePanel`) has room next to the 1280-wide viewport. `headless` is
+ * returned so the caller decides from the launch itself whether there is a
+ * window to show that panel in.
  */
-export async function launchBrowser(topology: RunningTopology, extensionPath: string): Promise<{ context: BrowserContext; browserVersion: string }> {
-  const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless: false, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps", ...networkContainmentArgs([topology.scenarioOrigin, topology.fluxiqOrigin, topology.gatewayUrl])] });
-  return { context, browserVersion: context.browser()?.version() ?? "chromium" };
+export async function launchBrowser(topology: RunningTopology, extensionPath: string): Promise<{ context: BrowserContext; browserVersion: string; headless: boolean }> {
+  const headless = false;
+  const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps", "--window-size=1700,1000", ...networkContainmentArgs([topology.scenarioOrigin, topology.fluxiqOrigin, topology.gatewayUrl])] });
+  return { context, browserVersion: context.browser()?.version() ?? "chromium", headless };
 }

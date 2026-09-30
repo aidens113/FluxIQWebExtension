@@ -22,7 +22,7 @@ import { replayRepairedFlow, type RepairReplay, type RepairReplayControl, type R
 export type LiveRepairProof = Readonly<{
   /** The Lab task that asked for it: `repair` or `adapt`. */
   task: string;
-  /** Core's grant purpose for that task. */
+  /** Core's run intent for that task. */
   purpose: string;
   /** What the run saved, from its recovery record. Identifiers only. */
   adaptationIds: readonly string[];
@@ -98,6 +98,12 @@ export function assertLiveRepairProof(proof: LiveRepairProof): void {
   if (called.length) {
     throw new RunnerFailure("runtime.behavior", `The applied repair is not deterministic: ${called.length} of ${proof.replays.length} replay(s) called the model`, {
       details: { calledReplays: called.map((replay) => ({ index: replay.index, providerCalls: replay.providerCalls, harnessActivations: replay.harnessActivations })) },
+    });
+  }
+  const reproduced = proof.replays.filter((replay) => replay.datasetsReproduced === false);
+  if (reproduced.length) {
+    throw new RunnerFailure("runtime.behavior", `The repaired Flow is not deterministic: ${reproduced.length} of ${proof.replays.length} replay(s) stored other rows than the run that was judged right`, {
+      details: { unreproducedReplays: reproduced.map((replay) => ({ index: replay.index, runId: replay.runId, status: replay.status })) },
     });
   }
   const failed = proof.replays.filter((replay) => !replay.goalPassed || !replay.flowSucceeded);

@@ -27,16 +27,14 @@ export function isLlmModel(value: unknown): value is LlmModel {
  *
  * It was 50,000, and that was the fifth and last of the ceilings that between
  * them made a real page impossible to describe on 2026-09-17 -- the others
- * being this file's default budget, the Lab plan's cap, Core's grant default
- * and Core's provider-side rejection. Raising any one of them alone was
+ * being this file's default budget, the Lab plan's cap, a Core default since
+ * removed and Core's provider-side rejection. Raising any one of them alone was
  * silently overridden by the next.
  */
 export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 64_000 as const;
 /**
- * The most provider calls any Lab run may declare: FluxIQ Core's absolute
- * backstop against a runaway loop (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS`
- * in Core's `runtime/llm/execution/grants.ts`), mirrored because this package
- * depends only on Core's public contracts.
+ * The most provider calls any Lab run may declare: the Lab's own backstop
+ * against a runaway loop. Core enforces no call ceiling of its own.
  *
  * It is deliberately far above what an adaptation needs and is not a per-task
  * count. An adaptation iterates for as many calls as it needs; what is meant to
@@ -68,7 +66,7 @@ export type LlmEvidenceKind = (typeof llmEvidenceKinds)[number];
  * `runtime/action-permissions/consequences.ts`, in Core's order. Mirrored
  * because this package depends only on Core's public contracts; the test
  * runner's plan tests pin it to Core's own export, so a class Core adds or
- * renames fails the build here instead of being refused at the grant.
+ * renames fails the build here instead of being refused by Core at run time.
  */
 export const llmActionConsequences = ["move_money", "delete", "send_or_publish", "modify_existing", "create_new"] as const;
 export type LlmActionConsequence = (typeof llmActionConsequences)[number];
@@ -79,9 +77,8 @@ export type LlmTokenBudget = {
   maxTotalTokensPerRequest: number;
   maxCallsPerRun: number;
   /**
-   * The tokens the whole run may use, across every call. Absent means the
-   * provider-side default: the smaller of `maxTotalTokensPerRequest *
-   * maxCallsPerRun` and Core's high-token confirmation threshold.
+   * The tokens the whole run may use, across every call, held by the Lab's
+   * post-run check. Absent means `maxTotalTokensPerRequest * maxCallsPerRun`.
    */
   maxTotalTokensPerRun?: number;
   timeoutMs: number;
@@ -105,11 +102,12 @@ export type LlmExecutionProfile = {
   maxConcurrentRuns: 1;
   budget: LlmTokenBudget;
   /**
-   * `--llm-permit`: the consequences this run's execution grant permits its
-   * actions to have, carried into the grant's `permittedConsequences` and
-   * nowhere else. Absent permits none, as it does in Core, so a run nobody
-   * permitted anything stops and asks exactly as before. Live runs only, each
-   * class at most once.
+   * `--llm-permit`: the consequences this run permits its actions to have,
+   * sent with the build or the run as `permittedConsequences` and nowhere
+   * else. It is consequence permission only: a model call needs no grant.
+   * Absent permits none, as it does in Core, so a run nobody permitted
+   * anything stops and asks exactly as before. Live runs only, each class at
+   * most once.
    *
    * This is not `externalSideEffects`, which stays `false`: that is about a run
    * reaching past the loopback fixture, and a permitted consequence lands on the
@@ -131,7 +129,7 @@ export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
   // before the request was ever sent on the slice holding an infinite feed, a
   // multi-tab order lookup, an auth gate and an admin console with a
   // virtualised list -- that slice scored zero of six while the slice of small
-  // forms scored six of seven. The grant ends on that error, so those runs
+  // forms scored six of seven. The build ends on that error, so those runs
   // produced no Flow at all and the page shapes went untested. An empty table
   // tripped it too, which is how little headroom 8k left.
   //
@@ -141,8 +139,7 @@ export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
   maxOutputTokens: 8_000,
   maxTotalTokensPerRequest: 56_000,
   // What an iterating run declares when the operator names no call count:
-  // Core's `AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS` -- a
-  // diagnosis, a patch, and the exploration's own default ceiling of 24
+  // a diagnosis, a patch, and the exploration's own default ceiling of 24
   // decisions. Tokens are bounded separately, by `maxTotalTokensPerRun`, so a
   // larger count does not by itself raise what a run may spend.
   maxCallsPerRun: 26,

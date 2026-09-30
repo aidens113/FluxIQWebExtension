@@ -7,11 +7,12 @@ export type TargetMode = FluxIQTargetMode;
 export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isolated">;
 // `evidence` is absent unless `--evidence` is given, so a scenario manifest's `evidencePolicy` drives capture.
 // A compare report is a bench id under `<runs>/bench/`, or a path to its `report.json` or bench directory.
+// `livePanel: false` is `--no-live-panel`: the headed browser does not show the extension panel beside the scenario page. Absent means it does.
 export type LabCommand =
   // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
   // `replays` exists only with `llm.task` `repair`, `adapt` or `create-flow`: present, the run approves and applies the repair it produced and replays the applied Flow that many times.
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number }
-  | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true; replays?: number; livePanel?: false }
+  | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; livePanel?: false }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
   | { command: "auth"; operation: "status" | "clear" }
@@ -19,7 +20,7 @@ export type LabCommand =
   | { command: "inspect"; runId: string }
   | { command: "compare"; baselineReport: string; candidateReport: string; sharedLoad: boolean }
   | { command: "compare"; halvesReport: string }
-  | { command: "interactive"; scenarioId: string; seed?: number; target?: TargetMode; workspace?: string; freshLogin?: true }
+  | { command: "interactive"; scenarioId: string; seed?: number; target?: TargetMode; workspace?: string; freshLogin?: true; livePanel?: false }
   // A saved Flow, replayed on the persistent workspace it was built in, with no model: `lab replay`.
   | { command: "replay"; scenarioId: string; workspace: string; flowId: string; instructionTaskId?: string; seed?: number };
 
@@ -29,16 +30,18 @@ const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> [
 export function parseLabCommand(argv: string[]): LabCommand {
   const [command, ...args] = argv;
   if (command === "interactive") {
-    rejectUnknownOptions(args, ["--seed", "--target", "--workspace", "--fresh-login"]);
+    rejectUnknownOptions(argv.slice(1), ["--seed", "--target", "--workspace", "--fresh-login", "--no-live-panel"]);
+    const { livePanel, rest: args } = livePanelOption(argv.slice(1));
     const scenarioId = positional(args, 0, "scenario ID");
     const target = targetOptions(args);
     if (target.flowId) throw new Error("interactive mode does not accept --flow");
     if (target.target === "clone") throw new Error("interactive mode does not support clone targets");
-    return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}) };
+    return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}), ...livePanel };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--replays", ...llmOptionNames]);
-    const { flowLane, rest: withoutFlow } = flowLaneOption(args);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", "--replays", "--no-live-panel", ...llmOptionNames]);
+    const { livePanel, rest: withoutLivePanel } = livePanelOption(args);
+    const { flowLane, rest: withoutFlow } = flowLaneOption(withoutLivePanel);
     const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
     const llm = llmOptions(rest);
@@ -49,10 +52,11 @@ export function parseLabCommand(argv: string[]): LabCommand {
     const replays = replaysOption(rest, llm, flowLane);
     // A created Flow is built for the task's variant and run on it, so the variant needs no recorded Flow lane.
     if (variant.variantId && !flowLane && !creation) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
-    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...creation, ...replays };
+    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...creation, ...replays, ...livePanel };
   }
   if (command === "matrix") {
-    rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
+    rejectUnknownOptions(argv.slice(1), ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", "--no-live-panel", ...llmOptionNames]);
+    const { livePanel, rest: args } = livePanelOption(argv.slice(1));
     const all = args.includes("--all");
     const json = option(args, "--scenarios-json");
     if (all === Boolean(json)) throw new Error("matrix requires exactly one of --all or --scenarios-json");
@@ -68,7 +72,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (llm?.task === "create-flow") throw new Error("--llm-task create-flow builds one instruction task per run: use lab run <scenario> --instruction-task ID");
     if (llm && (all || scenarioIds?.length !== 1)) throw new Error("live LLM matrix mode requires exactly one explicit scenario");
     if (llm && repeat !== 1) throw new Error("live LLM matrix mode requires --repeat 1");
-    return { command, all, repeat, ...optionalEvidence(args), ...targetOptions(args), ...(scenarioIds ? { scenarioIds } : {}), ...(llm ? { llm } : {}) };
+    return { command, all, repeat, ...optionalEvidence(args), ...targetOptions(args), ...(scenarioIds ? { scenarioIds } : {}), ...(llm ? { llm } : {}), ...livePanel };
   }
   if (command === "auth") {
     if (args.length !== 1 || (args[0] !== "status" && args[0] !== "clear")) throw new Error("Usage: lab auth status | auth clear");
@@ -127,7 +131,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] [--no-live-panel] | run <scenario> [--no-live-panel] [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] [--replays N (with --live-llm --llm-task repair|adapt --flow, or --llm-task create-flow)] | matrix (--all|--scenarios-json JSON) [--no-live-panel] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | replay <scenario> --workspace NAME --flow ID [--instruction-task ID] [--seed N] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -225,6 +229,17 @@ function dryRunOption(args: string[]): { dryRun: boolean; rest: string[] } {
   return { dryRun: count === 1, rest: args.filter(value => value !== "--dry-run") };
 }
 /**
+ * `--no-live-panel` takes no value and is removed before a positional is read,
+ * as `--dry-run` is. It turns off the extension panel a headed run shows
+ * beside its scenario page (`openLivePanel`); the panel is on by default
+ * because Lab browsers are always headed.
+ */
+function livePanelOption(args: string[]): { livePanel: { livePanel?: false }; rest: string[] } {
+  const count = args.filter(value => value === "--no-live-panel").length;
+  if (count > 1) throw new Error("--no-live-panel may only be specified once");
+  return { livePanel: count === 1 ? { livePanel: false } : {}, rest: args.filter(value => value !== "--no-live-panel") };
+}
+/**
  * The created-Flow lane's options, `undefined` when the run is not one. They
  * belong to `--llm-task create-flow` alone, and that task builds its Flow from
  * an instruction task rather than from the run's recording, so the lane flag
@@ -247,15 +262,15 @@ const MAX_REPLAYS = 10;
  *
  * It is one option because the three steps are one claim. The run approves the
  * adaptation Core saved, applies it to the Flow, and then runs that Flow N
- * times with no execution grant, checking each time that no provider was called
+ * times with no model (no `runIntent`), checking each time that no provider was called
  * and that the fixture's goal still held. `--replays 0` applies the repair and
  * replays nothing, which is how a repair is made durable without paying for the
  * proof. Without the option none of it happens, so an existing repair run keeps
  * behaving exactly as it did.
  *
- * It belongs to the tasks whose Flow runs under a repair grant: `repair` and
- * `adapt`, which repair the Flow recorded from the run, and `create-flow`, whose
- * built Flow's playback runs under a proposal-only repair grant. `diagnose`
+ * It belongs to the tasks whose Flow the model repairs: `repair` and `adapt`,
+ * which repair the Flow recorded from the run, and `create-flow`, whose built
+ * Flow's playback runs with the model taking part. `diagnose`
  * changes nothing, so it has nothing to apply.
  */
 function replaysOption(args: string[], llm: LlmExecutionProfile | undefined, flowLane: boolean): { replays?: number } {
@@ -292,8 +307,10 @@ function positional(args: string[], index: number, label: string): string { cons
 /** Arguments that are neither an option nor the value following one. */
 function positionalValues(args: string[]): string[] { return args.filter((value, offset) => offset === 0 || !args[offset - 1]?.startsWith("--")).filter(value => !value.startsWith("--")); }
 /**
- * `--llm-permit send_or_publish,create_new`: the consequence classes the run's
- * execution grant permits, comma-separated, each once. An unknown class is
+ * `--llm-permit send_or_publish,create_new`: the consequence classes the run
+ * permits its actions, comma-separated, each once, sent with the build or the
+ * run as `permittedConsequences`. It is consequence permission only: a model
+ * call needs no grant. An unknown class is
  * refused here, before a key is read or a provider reached, never dropped.
  */
 function permittedConsequencesOption(args: string[]): { permittedConsequences?: LlmActionConsequence[] } {

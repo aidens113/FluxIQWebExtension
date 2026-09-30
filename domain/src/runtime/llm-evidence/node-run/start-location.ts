@@ -24,6 +24,17 @@
 // time it runs on its own, so a build cannot succeed under a rule the Flow will
 // not face. Nothing here enumerates what a build may do; it names the one thing
 // it may do first, and the world refuses the rest.
+//
+// **And when the world is already there, the build remembers it is not.** A
+// tab can already stand on the start location -- on `run-muncqlr0-3348202b`
+// (run 6, 2026-09-29) it stood on `/scenarios/bigbox-retail/` itself -- and
+// then nothing refuses the first look, no step ever reaches the page, and Core
+// refuses the finished build `bootstrap.cannot_reach_start_location` after it
+// has spent its decisions. So arrival is a fact of the build, not of the tab:
+// until a navigation node has succeeded in this build (`./arrival.ts`), the
+// page is treated as absent whether or not it could be read, and the same
+// refusal and the same one way past it apply. Core cannot write the missing
+// step, because only this domain knows which node navigates.
 
 import type { WebAutomationActionType } from "../../../actions/types";
 import { rejectionDetail, type WebLlmToolRejectionDetail } from "../tool-rejection";

@@ -192,12 +192,12 @@ test("refuses a certificate whose call count disagrees with its invocations", ()
   }
 });
 
-test("certifies up to the grant's ceiling and refuses a call count past it", () => {
+test("certifies up to the run's ceiling and refuses a call count past it", () => {
   const ceiling = FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun;
   const atCeiling = evaluateDemoLlmAdaptation(withEvidenceCalls(validInput(), ceiling - 2));
   assert.equal(atCeiling.providerCallCount, ceiling);
   assert.equal(atCeiling.evaluation.invocations.length, ceiling);
-  assert.throws(() => evaluateDemoLlmAdaptation(withEvidenceCalls(validInput(), ceiling - 1)), /grant could not have produced/);
+  assert.throws(() => evaluateDemoLlmAdaptation(withEvidenceCalls(validInput(), ceiling - 1)), /run could not have produced/);
 });
 
 test("requires exactly one diagnosis first and one patch last, and rejects retries or invalid accounting", () => {

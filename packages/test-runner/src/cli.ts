@@ -29,7 +29,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     if (command.command === "interactive") {
       const target = resolveInteractiveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
       if (target.mode === "clone") throw new Error("interactive mode does not support clone targets");
-      await runInteractiveSession({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), environment: resolvedEnvironment, target });
+      await runInteractiveSession({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target });
       return 0;
     }
     if (command.command === "auth") {
@@ -108,7 +108,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
         return 0;
       }
       const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), environment: resolvedEnvironment, target });
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), ...(command.replays === undefined ? {} : { replays: command.replays }), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
@@ -118,7 +118,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     // runs the Flow lane because that is the only lane a provider is authorized
     // against; `runScenario` refuses the combination otherwise.
     const matrixLive = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: true, targetMode: target.mode }) : undefined;
-    for (const job of expandMatrix(command, manifests.map(item => item.id))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(matrixLive ? { live: matrixLive, flow: true } : {}), environment: resolvedEnvironment, target }));
+    for (const job of expandMatrix(command, manifests.map(item => item.id))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(matrixLive ? { live: matrixLive, flow: true } : {}), ...(command.livePanel === false ? { livePanel: false } : {}), environment: resolvedEnvironment, target }));
     const passed = results.every(result => result.verdict === "passed");
     process.stdout.write(`${JSON.stringify({ status: passed ? "passed" : "failed", runs: results })}\n`);
     return passed ? 0 : 1;

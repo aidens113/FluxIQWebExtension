@@ -32,7 +32,6 @@ try {
     responseBytes: readiness.responseBytes,
     responseParsed: readiness.parsed,
     supported: readiness.supported,
-    llmExecutionGrantsConfigured: readiness.llmExecutionGrantsConfigured,
     providerResolverConfigured: readiness.providerResolverConfigured,
     nativeNodeRegistryConfigured: readiness.nativeNodeRegistryConfigured,
     providerCallCount: 0,

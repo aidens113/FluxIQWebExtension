@@ -94,7 +94,7 @@ test("fails closed on ambiguous, cross-Subflow, and wrong-patch applied state", 
   }
 });
 
-test("reverts and rejects when the source run iterated past two calls within its grant", async () => {
+test("reverts and rejects when the source run iterated past two calls within its ceiling", async () => {
   const iterating = async (calls: number) => ({ ...(await fixture().control.getRunDetail()), providerCallCount: calls });
   for (const calls of [3, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
     const applied = fixture();
@@ -115,7 +115,7 @@ test("reverts and rejects when the source run iterated past two calls within its
   }
 });
 
-test("revert fails closed before mutation when the source run spent more than its grant", async () => {
+test("revert fails closed before mutation when the source run spent more than its ceiling", async () => {
   const over = fixture();
   over.control.getRunDetail = async () => ({ ...(await fixture().control.getRunDetail()), providerCallCount: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1 });
   await assert.rejects(() => revertExactAppliedExplorationTargetAdaptation(over.control as any, "project.one", "pin"), /source run/u);

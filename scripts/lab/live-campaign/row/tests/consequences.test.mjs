@@ -12,7 +12,7 @@ const press = (consequences, permitted, extra = {}) => ({
 });
 const read = { actionKind: "exploration_step", actionId: "web.output.dom-type", ref: "call-2", verb: "enter", controlName: "Post text", controlKind: "textbox", consequences: [], permitted: true };
 
-const snapshot = (build, granted = []) => ({ granted: { permittedConsequences: granted }, build });
+const snapshot = (build, permitted = []) => ({ permittedConsequences: permitted, build });
 
 test("a run that made no build has nothing to say about consequences", () => {
   assert.equal(consequenceSummary(null), null);
@@ -36,7 +36,7 @@ test("a build whose every action declared nothing lasting had nothing to permit"
   assert.deepEqual(summary.lastingActions, []);
 });
 
-test("a class the person's own instruction asks for was allowed by the instruction, with no grant involved", () => {
+test("a class the person's own instruction asks for was allowed by the instruction, with no permit involved", () => {
   const summary = consequenceSummary(snapshot({
     outcome: "proposed",
     declaredConsequences: [read, press(["send_or_publish"], true)],
@@ -57,7 +57,7 @@ test("a class only the task's own permits covered was allowed by the campaign, w
   }, ["move_money"]));
 
   assert.equal(summary.answeredBy, "campaign");
-  assert.deepEqual(summary.granted, ["move_money"]);
+  assert.deepEqual(summary.permitted, ["move_money"]);
 });
 
 test("a build that asked and was not answered says so, and names what it lacked", () => {

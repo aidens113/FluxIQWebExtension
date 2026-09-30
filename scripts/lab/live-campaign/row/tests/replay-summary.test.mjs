@@ -7,7 +7,7 @@ import { summarizeTask } from "../index.mjs";
 import { replaySummary } from "../replay-summary.mjs";
 
 // `--replays N` leaves `snapshots/repair-lane.json`, for a creation task as for a
-// repair task: the created Flow's playback runs under a repair grant too. The row
+// repair task: the created Flow's playback runs with the model taking part too. The row
 // states whether the repair was applied and how many replays with no model met
 // the goal, which is the created Flow's proof of deterministic reuse.
 const replay = (index, fields = {}) => ({ index, outcome: "ran", runId: `run-${index}`, status: "succeeded", providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: true, flowSucceeded: true, ...fields });

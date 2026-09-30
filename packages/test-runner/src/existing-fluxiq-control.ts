@@ -6,7 +6,7 @@ import {
   adaptationConsequences, adaptationEvidenceLoop, array, boolean, enumeration, finite, integer, invalid, nullableText, nullableUrl, optionalRecord, positiveInteger, record, stringArray, text,
   type ExistingAdaptationConsequenceCrossCheck, type ExistingAdaptationConsequences, type ExistingAdaptationDeclaredAction, type ExistingAdaptationEvidenceLoop, type JsonRecord,
 } from "./existing-fluxiq-control/index.js";
-import type { PersistedFlowLlmExecution } from "./flow-lane/index.js";
+import type { CreatedFlowBuildRequest, PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
 import type { ProviderFailureLog } from "./provider-failure/index.js";
 
@@ -300,7 +300,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
    * response. The payload is returned unread: the caller parses it with Core's
    * own parser and keeps only what that parser admits.
    */
-  async generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds: FluxIQHttpOptions = {}): Promise<FlowBootstrapGenerationEnvelope> {
+  async generateFlowBootstrapAdaptation(input: CreatedFlowBuildRequest, bounds: FluxIQHttpOptions = {}): Promise<FlowBootstrapGenerationEnvelope> {
     const response = await this.authenticatedResponse("/api/programs/automation-studio/generate-flow-bootstrap-adaptation", input, "POST", bounds, "runtime.behavior");
     // Read as text, then parse. The envelope this returns is unchanged, and the
     // raw reply is what the local provider-failure diagnostic keeps: `payload`
@@ -374,10 +374,12 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
   }
 
   /**
-   * `llmExecution` turns this into an explicit live-provider run. Core refuses
-   * such a run a pre-started run id, an authorized domain, an idempotency key or
-   * any adaptive mode but `manual_approval`, and revokes the grant when it sees
-   * one, so those fields are omitted here rather than left to a caller.
+   * `llmExecution` turns this into a run the model takes part in: it sends the
+   * run's intent and, when there are any, the consequences the operator
+   * permitted. Core refuses such a run a pre-started run id,
+   * an authorized domain, an idempotency key or any adaptive mode but
+   * `manual_approval`, so those fields are omitted here rather than left to a
+   * caller.
    */
   async runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: JsonRecord; maxSteps?: number; authorizedDomainIds?: string[]; idempotencyKey?: string; llmExecution?: PersistedFlowLlmExecution } & FluxIQHttpOptions): Promise<{ session: ExistingRuntimeSession; summary?: ExistingRunSummary }> {
     if (input.llmExecution && (input.runId || input.idempotencyKey || input.authorizedDomainIds?.length)) {
@@ -388,7 +390,8 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
       ...(input.maxSteps === undefined ? {} : { maxSteps: positiveInteger(input.maxSteps, "maxSteps") }), ...(input.authorizedDomainIds ? { authorizedDomainIds: input.authorizedDomainIds } : {}),
       ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       adaptiveMode: input.llmExecution ? "manual_approval" : "deterministic", authorizedExternalSideEffects: false,
-      ...(input.llmExecution ? { runIntent: input.llmExecution.purpose, llmExecutionGrantId: input.llmExecution.grantId } : {}),
+      ...(input.llmExecution ? { runIntent: input.llmExecution.intent } : {}),
+      ...(input.llmExecution?.permittedConsequences.length ? { permittedConsequences: [...input.llmExecution.permittedConsequences] } : {}),
     }, input), "run runtime payload");
     const session = runtimeSession(payload.runtimeSession, "runtimeSession", input.projectId, input.flowId);
     const summary = payload.runSummary == null ? undefined : runSummary(payload.runSummary, "runSummary");

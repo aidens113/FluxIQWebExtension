@@ -1,8 +1,7 @@
 // The proposal-only half of the module: explore the connected website and
 // leave exactly one reviewable proposal behind. There is no approve or apply
-// seam here by design. The terminal classifier is why: a high-token
-// confirmation dialog is a stopping point, not an alert, and the run reports
-// it rather than clicking through to a build nobody authorized.
+// seam here by design. The terminal classifier stops at a visible alert
+// rather than clicking through it, and the run reports it.
 //
 // Two things a person sees are asserted as well as waited on. The authoring
 // panel's progress states must come in order -- "Preparing exploration..."
@@ -26,7 +25,7 @@ import { sanitizeGenerationFailureBody } from "./generation-failure.js";
 import { recordExplorationGenerationFailure } from "./exploration-failure-evidence.js";
 import { assertProviderFreeGenerationReadiness } from "./generation-readiness.js";
 import { finite, identifier, integer, record, text } from "./json-shapes.js";
-import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "./limits.js";
+import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_LIMITS } from "./limits.js";
 import { exactVisible, openStepsPane } from "./panel-interaction.js";
 import { fail } from "./runner-fail.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
@@ -71,8 +70,8 @@ export async function refuseEvidenceGuidedCreationPermissionViaUi(input: Explora
  * some "preparing" before the first "inspecting", and the terminal state --
  * "ready_for_review" for a proposal, "permission_pending" for a request left
  * unanswered -- after the last "inspecting", with nothing preparing or
- * inspecting after it. A permission continuation or a confirmed high-token
- * build prepares again, which the rule allows.
+ * inspecting after it. A permission continuation prepares again, which the
+ * rule allows.
  */
 export function explorationProgressOrderIssue(states: readonly ExplorationProgressState[], outcome: "proposal" | "permission_request"): string | undefined {
   const firstInspecting = states.indexOf("inspecting");
@@ -111,35 +110,12 @@ async function exploreEvidenceGuidedCreationViaUi(input: ExplorationInput, decis
   await exactVisible(explore, "the Explore and create proposal action");
   const progress = await watchExplorationProgress(page);
   await evidence.step("scenario", "explore-target-reactivate", "Reactivate the intended website immediately before evidence-guided generation", () => input.targetPage.bringToFront());
+  // A model call needs no grant, so there is no confirmation to pass before
+  // the build: it answers, proposes, or asks about a consequence.
   let terminal = await evidence.step("panel", "explore-propose", "Explore the connected website and create one reviewable proposal", () => waitForExplorationTerminal(page, authoring, control, projectId, flowId, () => explore.click()));
-  if (terminal.kind === "high_token_confirmation") {
-    // Core's own rule: the run's token budget, or one call's limit if larger. Not calls times tokens.
-    const aggregateAuthorizedTokens = Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens);
-    await evidence.diagnostic("panel", "exploration-high-token-confirmation", "exploration.high-token-confirmation-required", {
-      apiRequestObserved: terminal.requestObserved,
-      aggregateAuthorizedTokens,
-      confirmationThreshold: LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
-      configuredProfileRequiresConfirmation: aggregateAuthorizedTokens >= LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
-      confirmationAttempted: true,
-    });
-    const dialog = page.getByRole("dialog", { name: "Confirm high-token Flow Build", exact: true });
-    await exactVisible(dialog, "the high-token Flow Build confirmation");
-    terminal = await evidence.step("panel", "explore-high-token-confirm", "Confirm the explicitly authorized high-token exploration", () => waitForExplorationTerminal(
-      page,
-      authoring,
-      control,
-      projectId,
-      flowId,
-      () => dialog.getByRole("button", { name: "Continue high-token build", exact: true }).click(),
-      { ignoreHighTokenConfirmation: true },
-    ));
-  }
   if (terminal.kind === "ui_failure") {
     await evidence.diagnostic("panel", "exploration-ui-terminal", "exploration.ui-terminal-failure", { apiRequestObserved: terminal.requestObserved, apiResponseObserved: false, uiTerminalFailure: true });
     fail("Evidence-guided Flow generation reached a terminal UI failure");
-  }
-  if (terminal.kind === "high_token_confirmation") {
-    fail("Evidence-guided Flow generation repeated its high-token confirmation after explicit approval");
   }
   if (terminal.kind === "timeout") {
     await evidence.diagnostic("panel", "exploration-terminal-timeout", "exploration.terminal-timeout", { apiResponseObserved: false, uiTerminalFailure: false });
@@ -191,7 +167,6 @@ async function exploreEvidenceGuidedCreationViaUi(input: ExplorationInput, decis
     terminal = await evidence.step("panel", "explore-permission-confirm", "Approve only the named Flow action consequences", () => waitForExplorationTerminal(
       page, authoring, control, projectId, flowId,
       () => dialog.getByRole("button", { name: "Allow and continue", exact: true }).click(),
-      { ignoreHighTokenConfirmation: true },
     ));
   }
   const proposed = await control.listFlowAdaptations(projectId, flowId, "proposed");
@@ -322,9 +297,8 @@ export function parseEvidenceGuidedCreationProposal(body: unknown, projectId: st
 }
 
 type ExplorationTerminal = { kind: "response"; response: Response } | { kind: "proposal"; adaptationId: string } | ExplorationUiTerminal | { kind: "timeout" };
-export type ExplorationUiTerminal = { kind: "high_token_confirmation" | "ui_failure"; requestObserved: boolean };
-export function classifyExplorationUiTerminal(input: { highTokenConfirmationVisible: boolean; alertVisible: boolean; requestObserved: boolean }): ExplorationUiTerminal | undefined {
-  if (input.highTokenConfirmationVisible) return { kind: "high_token_confirmation", requestObserved: input.requestObserved };
+export type ExplorationUiTerminal = { kind: "ui_failure"; requestObserved: boolean };
+export function classifyExplorationUiTerminal(input: { alertVisible: boolean; requestObserved: boolean }): ExplorationUiTerminal | undefined {
   if (input.alertVisible) return { kind: "ui_failure", requestObserved: input.requestObserved };
   return undefined;
 }
@@ -335,7 +309,6 @@ async function waitForExplorationTerminal(
   projectId: string,
   flowId: string,
   dispatch: () => Promise<void>,
-  options: { ignoreHighTokenConfirmation?: boolean } = {},
 ): Promise<ExplorationTerminal> {
   const context = page.context();
   let request: Request | undefined;
@@ -360,8 +333,6 @@ async function waitForExplorationTerminal(
     while (Date.now() < deadline) {
       if (captured) return { kind: "response", response: captured };
       const uiTerminal = classifyExplorationUiTerminal({
-        highTokenConfirmationVisible: options.ignoreHighTokenConfirmation !== true
-          && await page.getByRole("dialog", { name: "Confirm high-token Flow Build", exact: true }).isVisible().catch(() => false),
         alertVisible: await authoring.getByRole("alert").isVisible().catch(() => false),
         requestObserved: request !== undefined,
       });

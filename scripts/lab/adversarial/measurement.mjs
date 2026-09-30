@@ -31,7 +31,7 @@ export function measureCondition(condition, attempt, bundle) {
     agreed: declared === "none" ? resolvedBy.length === 0 : resolvedBy.includes(declared),
     maxAttemptsPerNode: attribution?.maxAttemptsPerNode ?? null,
     declaredMaxAttemptsPerNode: condition.declared.maxAttemptsPerNode ?? null,
-    // With no grant issued, Core cannot reach a provider, so this is a
+    // With no key installed and no `runIntent`, Core cannot reach a provider, so this is a
     // structural zero rather than an observed one -- and a non-zero here would
     // mean something reached a model the run never authorized, which is worth
     // failing on loudly.

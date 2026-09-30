@@ -8,7 +8,7 @@ import { assertRecordingSetUnchanged, BLANK_LLM_FLOW_NAME, BLANK_LLM_SCENARIO_PA
 import { inspectDemoLlmAdaptationReadiness } from "../demo-llm-adaptation-readiness.js";
 import { unexecutedTargetProposalIsSound } from "../demo-llm-exploration-adaptation.js";
 import { type DemoLlmAdaptationInvocation, type DemoLlmAdaptationInvocations, type DemoLlmAdaptationResult, evaluateDemoLlmAdaptation, persistDemoLlmAdaptationResult } from "../demo-llm-adaptation.js";
-import { adaptationCallCountWithinGrant, controlExistingLlmTargetAdaptation, type ExistingTargetAdaptationAction, type ExistingTargetAdaptationControlResult, type ExistingTargetAdaptationSelector } from "../demo-llm-adaptation-control.js";
+import { adaptationCallCountWithinCeiling, controlExistingLlmTargetAdaptation, type ExistingTargetAdaptationAction, type ExistingTargetAdaptationControlResult, type ExistingTargetAdaptationSelector } from "../demo-llm-adaptation-control.js";
 import { assertAdaptationFlowsRemainRecordingFree, openAdaptationFromPanel, requireRunEventSequence, reviewAndApplyAdaptationViaUi, runAdaptationFromPanel, runZeroLlmAdaptationValidation, waitForAdaptationRun } from "./adaptation-ui.js";
 import { connectExtension, withDemoBrowser } from "./browser-session.js";
 import { type DemoWorkspaceConfiguration, credentialLiterals } from "./configuration.js";
@@ -81,8 +81,8 @@ export async function runDemoLlmAdaptation(config: DemoWorkspaceConfiguration): 
       if (interventions.length !== 2 || interventions[0]?.kind !== "diagnosis" || interventions[1]?.kind !== "runtime_patch") {
         throw new RunnerFailure("runtime.behavior", "Adaptation run did not persist exactly diagnosis then runtime_patch");
       }
-      if (!adaptationCallCountWithinGrant(failedRun)) {
-        throw new RunnerFailure("runtime.behavior", "Adaptation run made a provider call count its grant could not have produced");
+      if (!adaptationCallCountWithinCeiling(failedRun)) {
+        throw new RunnerFailure("runtime.behavior", "Adaptation run made a provider call count its run could not have produced");
       }
       // The certificate (`demo-llm-adaptation.ts`) needs one record for every
       // provider call, and takes them from Core's per-call lines. Refuse here,

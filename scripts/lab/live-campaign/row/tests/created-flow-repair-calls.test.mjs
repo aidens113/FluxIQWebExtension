@@ -4,7 +4,7 @@ import { attempt, resultLine } from "../../tests/attempts.mjs";
 import { CATALOG } from "../../tests/tasks.mjs";
 import { summarizeTask } from "../index.mjs";
 
-// A created Flow's playback may run under a repair grant. Its provider calls are
+// A created Flow's playback may run with the model taking part. Its provider calls are
 // recorded beside the build's in `snapshots/live-llm.json`, and the row counts
 // both, from the same record its tokens and dollars come from, so the three
 // figures describe the same spend. Shaped like run-mu7fas8b-66a630b1: six

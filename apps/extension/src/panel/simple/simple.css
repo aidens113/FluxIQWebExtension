@@ -2,7 +2,7 @@
    the shared primitives (.card, .card-title, .card-line, .card-actions,
    .notice, .dot, .primary-button, .small-button) from panel/shell/shell.css.
    The cards are compact so the primary ones fit the Firefox popup's 600px
-   height; the conversation's turns scroll inside their own card, and the
+   height; the chat's stream scrolls inside its own card, and the
    recent-automations list below them scrolls with the page. */
 
 .simple-view { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
@@ -49,20 +49,8 @@
 .simple-now > .small-button { justify-self: end; }
 .simple-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 
-/* 3. Conversation. */
-.conversation-live { display: grid; gap: 6px; min-width: 0; }
-.turns {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  max-height: 116px;
-  margin: 0;
-  padding: 0 2px 0 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  list-style: none;
-}
-html[data-surface="sidepanel"] .turns { max-height: 40vh; }
+/* 3. The chat (panel/chat/chat.css holds its header, stream and rows); these
+   are the turn and composer parts it mounts from ./conversation. */
 .turn { display: grid; gap: 4px; font-size: 12px; line-height: 1.4; }
 .turn-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .turn[data-author="person"] strong { color: var(--accent-text); }
@@ -82,7 +70,6 @@ html[data-surface="sidepanel"] .turns { max-height: 40vh; }
 .composer { display: grid; gap: 4px; }
 .composer-box { resize: none; line-height: 1.4; }
 .composer-box:focus-visible, .turn-answer:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.conversation-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 
 /* 4. The start card: describe it, show FluxIQ how (manual actions), extract data. */
 .simple-option { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--divider); }
