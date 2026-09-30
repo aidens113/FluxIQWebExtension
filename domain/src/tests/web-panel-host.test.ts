@@ -25,6 +25,7 @@ import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, Automati
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry, createEnvelope } from "fluxiq/io";
 import { WEB_AUTOMATION_DOMAIN_ID } from "..";
+import { WEB_AUTOMATION_CHECK_WAIT_MS, webAutomationActionWaitsOutChecks } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { createWebAutomationRecordingEvent } from "../client";
 import { WEB_AUTOMATION_INPUT_IDS, actionInputDefinitions, webAutomationInputIdForRecordedEvent, webAutomationRecordsInputPayload } from "../io/input-model";
@@ -232,7 +233,9 @@ test("every recorded row sent as a domain event maps to what the live input path
     const proposed = mapCall(observationCall(calls, event));
     assert.equal(proposed?.outputId, liveOutputId, `${label}: proposal and live output agree`);
     assert.deepEqual(proposed?.sourceInputIds, liveInputId === undefined ? undefined : [liveInputId], `${label}: proposal cites the live input`);
-    if (liveOutputId !== undefined) assert.deepEqual(proposed?.parameters, webAutomationOutputPayload(liveOutputId, event.payload ?? {}), `${label}: proposal parameters equal the live output binding payload`);
+    // A click or a navigation also carries the check allowance (`actions/check-wait.ts`), which the live binding has no part in.
+    const allowance = liveOutputId !== undefined && webAutomationActionWaitsOutChecks(liveOutputId) ? { checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } : {};
+    if (liveOutputId !== undefined) assert.deepEqual(proposed?.parameters, { ...webAutomationOutputPayload(liveOutputId, event.payload ?? {}), ...allowance }, `${label}: proposal parameters equal the live output binding payload, with the check allowance where it applies`);
   }
   assert.deepEqual(web.map((candidate) => candidate.outputId), recorded.flatMap(({ liveOutputId }) => liveOutputId === undefined ? [] : [liveOutputId]), "Core's proposal holds each executable row once, in recorded order");
   const eventOf = (kind: string): RecordingEvent => {

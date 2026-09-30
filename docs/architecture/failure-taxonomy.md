@@ -252,7 +252,12 @@ check on this page, then press Continue", with the choices Continue and Stop.
   as person-only or self-clearing, and waits a self-clearing one out in place —
   no reload, at most about fifteen seconds. One that does not clear in that time
   is treated as person-only. A navigation or a press that lands on a person-only
-  check reports `USER_INTERVENTION_REQUIRED`, never success.
+  check reports `USER_INTERVENTION_REQUIRED`, never success. A recorded click
+  or navigation is given the fifteen seconds on top of its own timeout, and its
+  command says so in `checkWaitMs` (`domain/src/actions/check-wait.ts`): Core's
+  deadline then covers the wait, while every other wait in the command, and its
+  retries, stay within the timeout it had before (`run-munx9bvj-a7ba7442`,
+  where a 5 s click cut the wait to 3.9 s and an 8 s check went to a person).
 - **Building a Flow.** The domain marks the call's execution result
   `personNeeded: true` (`domain/src/runtime/llm-evidence/node-run/run.ts`,
   `personDraft`) and keeps its `needs_person` code and reason for the run's own
