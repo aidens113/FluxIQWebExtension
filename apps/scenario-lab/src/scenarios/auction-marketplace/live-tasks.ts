@@ -61,5 +61,7 @@ export const AUCTION_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] = [
     kind: "form",
     instruction: PLACE_BID,
     judgeBy: "playback-goal",
+    // A bid binds the bidder to buy if it wins ("Bids cannot be retracted"), so it moves money, at the drawer's Confirm bid.
+    permissionPoint: { consequence: "move_money", control: "Confirm bid" },
   },
 ];

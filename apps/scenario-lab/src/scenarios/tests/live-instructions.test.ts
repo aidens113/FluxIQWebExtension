@@ -3,6 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { getScenarioManifest, listScenarioManifests } from "../../registry.js";
 import { LIVE_INSTRUCTION_TASKS, SCENARIO_PERSON_CHECKS, type LiveInstructionTask } from "../index.js";
+import { REALISTIC_SITE_LIVE_TASKS } from "../realistic-site-live-tasks.js";
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const KINDS = new Set(["form", "navigate", "extract", "navigate-and-extract"]);
@@ -163,7 +164,75 @@ test("every consequential task declares its permission point, as a closed class 
     // A withdrawal is a deletion, asked about even when the instruction names it (t195, 2026-09-30).
     "professional-network-withdraw-stale-requests": { consequence: "delete", control: "Withdraw" },
     "professional-network-invitation-allowance": { consequence: "delete", control: "Withdraw" },
+    // Posting and sending always ask, even when the instruction names the act (F10; audit A3 cause 3, t205).
+    "social-network-feed-group-post": { consequence: "send_or_publish", control: "Post" },
+    "social-network-feed-group-post-regrouped": { consequence: "send_or_publish", control: "Post" },
+    "social-network-feed-group-post-regrouped-after-creation": { consequence: "send_or_publish", control: "Post" },
+    "company-website-quote-request": { consequence: "send_or_publish", control: "Send request" },
+    "company-website-quote-request-redesigned-after-creation": { consequence: "send_or_publish", control: "Send request" },
+    // A purchase and a binding bid move money; a classifieds offer is a message to the seller (t205).
+    "everything-store-buy-kettle": { consequence: "move_money", control: "Place your order" },
+    "auction-marketplace-place-bid": { consequence: "move_money", control: "Confirm bid" },
+    "local-classifieds-make-offer": { consequence: "send_or_publish", control: "Send offer" },
   });
+});
+
+/**
+ * Every realistic-site task that declares no permission point, by the first
+ * row of its instruction, and why its lasting act does not ask. A task that
+ * moves money, deletes, or sends or publishes must declare a point instead:
+ * without one the Lab refuses to play the person, and its build ends at
+ * `permission_required` (audit A3 cause 3). A new task is in neither place
+ * until someone decides which, so it fails the build until then.
+ */
+const ASKS_NOTHING: Readonly<Record<string, string>> = {
+  "everything-store-plus-earbuds-under-50": "a read",
+  "everything-store-first-page-plus-earbuds": "a read",
+  "everything-store-kettle-to-cart": "fills the cart and buys nothing",
+  "crossborder-marketplace-spain-hubs": "a read",
+  "crossborder-marketplace-hub-to-cart": "fills the cart and buys nothing",
+  "bigbox-retail-pickup-towels": "a read",
+  "bigbox-retail-pickup-cart": "fills the cart and buys nothing",
+  "job-board-save-halvard-week": "saves jobs to the account's own list",
+  "job-board-remote-rust-roles": "a read",
+  "local-classifieds-bike-search": "a read",
+  "local-classifieds-save-dining-tables": "saves listings to the account's own list",
+  "auction-marketplace-kestrel-auctions": "a read",
+  "auction-marketplace-watch-endings": "adds to the account's own watchlist",
+  "photo-social-glaze-collection": "creates a private collection of saved posts",
+  "photo-social-giveaway-entries": "a read",
+  "social-network-feed-feed-digest": "a read",
+  "social-network-feed-confirm-requests": "confirms friend requests, which neither pays, deletes nor publishes",
+  "company-website-gas-engineers": "a read",
+  "company-website-business-prices": "a read",
+  "professional-network-rotterdam-data-engineers": "a read",
+};
+
+/** The first row of each realistic-site instruction, by task id: variants share their base row's instruction. */
+function instructionFamilies(): Map<string, LiveInstructionTask[]> {
+  const families = new Map<string, LiveInstructionTask[]>();
+  const firstByInstruction = new Map<string, string>();
+  for (const task of REALISTIC_SITE_LIVE_TASKS) {
+    const key = JSON.stringify([task.scenarioId, task.instruction]);
+    const first = firstByInstruction.get(key) ?? task.id;
+    firstByInstruction.set(key, first);
+    families.set(first, [...(families.get(first) ?? []), task]);
+  }
+  return families;
+}
+
+// A variant row asks where its base row asks: the build explores the same
+// act, so a variant left without its base's point ends at the ask unanswered.
+test("every row of an instruction declares the same permission point as its first row", () => {
+  for (const [first, rows] of instructionFamilies()) {
+    for (const row of rows) assert.deepEqual(row.permissionPoint, rows[0]!.permissionPoint, `${row.id} differs from ${first}`);
+  }
+});
+
+test("every realistic-site task either declares its permission point or is recorded as asking nothing", () => {
+  const families = instructionFamilies();
+  const undeclared = [...families].filter(([, rows]) => !rows[0]!.permissionPoint).map(([first]) => first).sort();
+  assert.deepEqual(undeclared, Object.keys(ASKS_NOTHING).sort(), "a task with no permission point must be listed in ASKS_NOTHING with its reason, or declare one");
 });
 
 // A task whose honest path meets a check only a person may pass says so, and
