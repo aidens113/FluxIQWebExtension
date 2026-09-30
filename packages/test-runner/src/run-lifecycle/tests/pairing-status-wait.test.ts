@@ -67,6 +67,34 @@ test("only the pairing wait's closed detail shape is selected for publication", 
   assert.equal(pairingStatusWaitFailureDetails(new RunnerFailure("gateway.connection", "other", { details: { activeTabUrl: "private" } })), undefined);
 });
 
+test("the first-connect fields pass through only when well-formed and consistent", () => {
+  const base = {
+    pairingStage: "pre-approval", timeoutMs: 15_000, waitedMs: 15_000,
+    lastStatus: { connectionState: "unreported", hasPairingReferenceCode: false, hasSessionId: false, queueSize: null, msSinceLastMessage: null },
+  };
+  const never = new RunnerFailure("gateway.connection", "timed out", { details: { ...base, firstConnectAnswered: false, firstConnectMs: null } });
+  assert.deepEqual(pairingStatusWaitFailureDetails(never), never.details);
+  const late = new RunnerFailure("gateway.connection", "timed out", { details: { ...base, firstConnectAnswered: true, firstConnectMs: 4_200 } });
+  assert.deepEqual(pairingStatusWaitFailureDetails(late), late.details);
+  for (const malformed of [{ firstConnectAnswered: true, firstConnectMs: null }, { firstConnectAnswered: false, firstConnectMs: 10 }, { firstConnectAnswered: "yes", firstConnectMs: 10 }, { firstConnectAnswered: true, firstConnectMs: -1 }]) {
+    assert.deepEqual(pairingStatusWaitFailureDetails(new RunnerFailure("gateway.connection", "timed out", { details: { ...base, ...malformed } })), base);
+  }
+});
+
+test("a named connect failure passes through only as one of the closed codes", () => {
+  const base = {
+    pairingStage: "pre-approval", timeoutMs: 15_000, waitedMs: 15_000,
+    lastStatus: { connectionState: "error", hasPairingReferenceCode: false, hasSessionId: false, queueSize: 0, msSinceLastMessage: null },
+  };
+  for (const code of ["open_timeout", "open_failed", "closed_before_open", null]) {
+    const failure = new RunnerFailure("gateway.connection", "timed out", { details: { ...base, connectFailure: code } });
+    assert.deepEqual(pairingStatusWaitFailureDetails(failure), failure.details);
+  }
+  for (const malformed of ["FluxIQ did not open the connection", "timeout", 3]) {
+    assert.deepEqual(pairingStatusWaitFailureDetails(new RunnerFailure("gateway.connection", "timed out", { details: { ...base, connectFailure: malformed } })), base);
+  }
+});
+
 test("a pending status transport is bounded, cleaned, and its late rejection is observed", async () => {
   let rejectStatus!: (error: unknown) => void;
   const status = new Promise<unknown>((_resolve, reject) => { rejectStatus = reject; });

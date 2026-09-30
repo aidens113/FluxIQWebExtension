@@ -57,9 +57,13 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
  * it, because then it is describing a record and not merely inheriting one.
  */
 function withRecordedRecord(element: WebAutomationElementFingerprint | undefined, payload: JsonObject): WebAutomationElementFingerprint | undefined {
-  if (!element || element.context?.record) return element;
+  if (!element) return element;
   const record = elementRecord(objectValue(objectValue(payload.element)?.context)?.record);
   if (!record) return element;
+  // A For Each pass's row (`record.values`, `native-runtime.ts`) is not the
+  // recording's record but the run's, so it outranks one an adapted source
+  // named as well: that one was written about the row the Flow was built on.
+  if (element.context?.record && !record.values) return element;
   return { ...element, context: { ...element.context, record } };
 }
 
@@ -355,9 +359,36 @@ function elementRecord(value: unknown): WebAutomationElementContext["record"] {
   const fields = compact({
     keyAttribute: stringValue(record.keyAttribute),
     key: stringValue(record.key),
-    text: stringValue(record.text)
+    text: stringValue(record.text),
+    values: webAutomationRecordValues(record.values)
   } satisfies ContractFields<NonNullable<WebAutomationElementContext["record"]>>);
   return Object.keys(fields).length > 0 ? fields as NonNullable<WebAutomationElementContext["record"]> : undefined;
+}
+
+/** How many of a row's values travel as its identity: enough to tell rows apart, few enough to stay a signal. */
+const MAX_RECORD_VALUES = 8;
+/** Characters of one row value. The page compares a value this long by the same cut. */
+const MAX_RECORD_VALUE_LENGTH = 200;
+
+/**
+ * The values that say which row a For Each pass is on, or nothing: the strings
+ * among `value`, each whitespace-collapsed and cut at 200 characters, empties
+ * and repeats dropped, at most 8. One rule for both ends of the domain --
+ * `native-runtime.ts` builds the list from the row through it and this
+ * normalizer re-reads a dispatched one through it -- so the page receives the
+ * same bounds whichever path the value took. Anything but an array is no list.
+ */
+export function webAutomationRecordValues(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const text = item.replace(/\s+/gu, " ").trim().slice(0, MAX_RECORD_VALUE_LENGTH).trimEnd();
+    if (!text || values.includes(text)) continue;
+    values.push(text);
+    if (values.length === MAX_RECORD_VALUES) break;
+  }
+  return values.length > 0 ? values : undefined;
 }
 
 /**

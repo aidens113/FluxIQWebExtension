@@ -27,8 +27,10 @@
 //
 // **What it does not claim.** In the inert shape there is no hit point, so a
 // target that is hidden for its own reasons on a page with a painted modal is
-// put down to the modal. A cookie banner is not a dialog here: its way out is a
-// choice about the person's data, so a refusal under one stays ACTION_REJECTED.
+// put down to the modal. A cookie banner with no close glyph and no way to
+// decline optional cookies is not a dialog here, so a refusal under one stays
+// ACTION_REJECTED; one that can be declined is, because declining gives nothing
+// away (`interference/vocabulary.ts`).
 // And nothing here refuses an action aimed *inside* a challenge -- it explains
 // a refusal, it does not make one. What keeps a robot check unanswered is that
 // Core never offers USER_INTERVENTION_REQUIRED to a model, and that a model

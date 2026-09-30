@@ -79,11 +79,14 @@ test("the runner publishes only the closed topology-readiness projection in its 
 });
 
 test("the focused extension-readiness lifecycle validates the worker before opening any page", async () => {
-  const source = await runnerSource();
-  assert.match(source, /import \{[^}]*\bawaitExtensionWorker\b[^}]*\} from "\.\/run-lifecycle\/index\.js";/u);
-  const ready = source.indexOf("await awaitExtensionWorker(context)");
-  const page = source.indexOf("context.newPage()", ready);
-  assert.ok(ready > 0 && page > ready, "worker readiness precedes creation of the extension control page");
+  // t174-w6 moved the start out of the spine into `run-scenario/extension-control-page.ts`, which also times it.
+  assert.ok((await runnerSource()).includes("await extensionControlPage(context)"), "the spine starts the extension through the module");
+  const source = await runnerModuleSource("run-scenario", "extension-control-page.ts");
+  assert.match(source, /import \{[^}]*\bawaitExtensionWorker\b[^}]*\} from "\.\.\/run-lifecycle\/index\.js";/u);
+  const start = source.indexOf("export async function extensionControlPage(");
+  const ready = source.indexOf("await awaitWorker(context)", start);
+  const page = source.indexOf("await openExtensionControlPage(context", ready);
+  assert.ok(start > 0 && ready > start && page > ready, "worker readiness precedes creation of the extension control page");
   assert.equal(source.includes('waitForEvent("serviceworker"'), false, "the old unvalidated ten-second wait is gone");
 });
 

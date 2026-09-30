@@ -61,6 +61,11 @@
 //    fallback, not a supplement: a keyed record carries no text, so the
 //    comparison never degrades to the weaker rule when the stronger one exists.
 //
+// Both name the row the recording was made on. A step inside a For Each runs
+// on a different row each pass, so the domain replaces them with the pass's row
+// **values** -- what the list extraction read from that row -- and those win
+// over both (`holdsRowValues` below, t195).
+//
 // The text leaves out two kinds of words. A sensitive control's contents, by
 // the one rule `sensitive-text.ts` owns (decision D2). And the words inside
 // buttons, switches, checkboxes and editable regions -- those say what a
@@ -151,6 +156,8 @@ export function recordIdentity(element: Element): RecordIdentity | undefined {
  * the only thing left to do with it.
  */
 export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, element: Element): boolean {
+  const values = rowValues(recorded?.values);
+  if (values.length) return holdsRowValues(enclosingRecord(element), values);
   if (!recorded || (!recorded.key && !recorded.text)) return true;
   const record = enclosingRecord(element);
   if (!record) return false;
@@ -161,6 +168,114 @@ export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, e
     return found === recorded.key;
   }
   return recordText(record) === recorded.text;
+}
+
+/** Characters of a record's text searched for a row's values. A card, however long its description, says which it is well before this. */
+const MAX_ROW_TEXT = 4_000;
+/** Nodes walked while reading a record for a row's values: text and elements, both. */
+const MAX_ROW_NODES = 2_000;
+/** Characters of one row value, as the domain cut it (`output-nodes/targets` `webAutomationRecordValues`). */
+const MAX_ROW_VALUE = 200;
+
+/**
+ * Whether a record is the row a For Each pass is on (t195).
+ *
+ * The domain writes `values` from the loop's current item: the values the list
+ * extraction read out of that row (`domain/src/output-nodes/native-runtime.ts`).
+ * They take precedence over `key` and `text`, which name the row the Flow was
+ * built on -- asked on pass two, those accept only the first row's control,
+ * which is the defect: every pass pressed the first card's button.
+ *
+ * Each value must be found in the record, by the ways the extraction can have
+ * read it (`content/extraction/field-reader.ts`): inside its text, which is the
+ * record's own words *including* its buttons' (a field may read one), bounded
+ * and whitespace-collapsed; equal to the resolved `href` of a link in it, which
+ * is how a `link` field reads; or equal to an attribute value on the record or
+ * inside it -- an `attribute` field, a microdata `content`, an `aria-label` --
+ * or a form control's current value. Every value, not most: a row is told from
+ * its neighbours by the values it does not share with them.
+ *
+ * Fail closed as the rest of this module does: a candidate in no record, a
+ * record inside a sensitive control, and a value the bounded read did not reach
+ * all disagree. A step refused on the right row reaches the automation loop; a
+ * press on the wrong one reports success.
+ */
+function holdsRowValues(record: Element | undefined, values: readonly string[]): boolean {
+  if (!record || isWithinSensitiveControl(record)) return false;
+  const { text, exact } = rowContents(record);
+  return values.every((value) => text.includes(value) || exact.has(value));
+}
+
+/** The recorded values as this module compares them: each collapsed and cut the way the domain cut it, empties dropped. */
+function rowValues(values: readonly unknown[] | undefined): string[] {
+  if (!Array.isArray(values)) return [];
+  return values.flatMap((value) => {
+    const text = typeof value === "string" ? rowValue(value) : undefined;
+    return text ? [text] : [];
+  });
+}
+
+/** One string collapsed, trimmed and cut at the row-value bound, as `webAutomationRecordValues` writes one. */
+function rowValue(value: string): string | undefined {
+  return boundedText(value, MAX_ROW_VALUE)?.trimEnd();
+}
+
+/**
+ * What a record says, for finding a row's values in: its collapsed text up to
+ * `MAX_ROW_TEXT`, and every attribute value, resolved link and control value on
+ * it or inside it, each cut as a row value is. One bounded walk reads both; a
+ * sensitive control is skipped whole, its text, attributes and value alike
+ * (decision D2), because a list extraction refuses to read one too.
+ */
+function rowContents(record: Element): { text: string; exact: Set<string> } {
+  const exact = new Set<string>();
+  let text = "";
+  let budget = MAX_ROW_NODES;
+  const pending: Node[] = [record];
+  for (let node = pending.pop(); node && budget > 0; node = pending.pop()) {
+    budget -= 1;
+    if (node.nodeType === TEXT_NODE) {
+      if (text.length < MAX_ROW_TEXT * 2) text += node.nodeValue ?? "";
+      continue;
+    }
+    if (node.nodeType !== ELEMENT_NODE) continue;
+    const element = node as Element;
+    if (isSensitiveFormControl(element)) continue;
+    for (const found of elementValues(element)) {
+      const value = rowValue(found);
+      if (value) exact.add(value);
+    }
+    for (const child of childrenInReverse(element)) pending.push(child);
+  }
+  return { text: boundedText(text, MAX_ROW_TEXT) ?? "", exact };
+}
+
+/** An element's attribute values, its resolved link and its current control value: the non-text places a field reads. */
+function elementValues(element: Element): string[] {
+  const found: string[] = [];
+  for (const name of attributeNames(element)) {
+    const value = element.getAttribute(name);
+    if (value) found.push(value);
+  }
+  const href = resolvedHref(element);
+  if (href) found.push(href);
+  const value = (element as { value?: unknown }).value;
+  if (typeof value === "string" && value) found.push(value);
+  return found;
+}
+
+/**
+ * The link an element names, absolute, as the extraction's `link` field reads
+ * it. An HTML link answers through its own `href`; any other element's `href`
+ * attribute is resolved against its base, and one that is no URL is simply not
+ * a link -- its raw text is still among the attribute values above.
+ */
+function resolvedHref(element: Element): string | undefined {
+  const property = (element as { href?: unknown }).href;
+  if (typeof property === "string") return property || undefined;
+  const attribute = element.getAttribute("href");
+  if (!attribute || !URL.canParse(attribute, element.baseURI)) return undefined;
+  return new URL(attribute, element.baseURI).href;
 }
 
 /**

@@ -79,7 +79,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../../types";
  * *command* finally reported, and a reader tallying one must not be able to
  * mistake it for the other.
  */
-export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target";
+export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "rate_limited";
 
 /**
  * Each retryable code's fault word. Total over the retryable half of the closed
@@ -97,8 +97,23 @@ export const RECOVERY_FAULT_BY_CODE: Readonly<Partial<Record<WebAutomationFailur
   // (`runtime/action-runner.ts`), so this loop does not see it in practice. It is
   // mapped all the same, because the totality check below is what keeps a code
   // Core may later mark retryable from arriving here as a fault with no name.
-  [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "transport"
+  [WEB_AUTOMATION_FAILURE_CODES.TRANSPORT_TRANSIENT]: "transport",
+  // Named for the totality check, and never absorbed here: see
+  // `ABSORBED_ELSEWHERE` below.
+  [WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED]: "rate_limited"
 } as const);
+
+/**
+ * Retryable faults this loop names and leaves to Core.
+ *
+ * A press the page refused for going too fast asks for a wait of seconds --
+ * twelve on social-network-feed -- and this loop's whole budget is five
+ * (`budget.ts`), so a retry here would press again inside the page's window and
+ * earn the same notice. Core's node-level defence honours the wait the record
+ * carries (`retryAfterMs`) and re-runs the node after it, which is the one place
+ * the act is made again.
+ */
+const ABSORBED_ELSEWHERE: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["rate_limited"]);
 
 /**
  * The refusal reason words that mean "something was over the target", as
@@ -248,7 +263,7 @@ export function recoverableFault(result: BrowserActionResult, action: Pick<Brows
   if (obstruction !== undefined) return obstruction;
   if (!WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code].retryable) return undefined;
   const fault = RECOVERY_FAULT_BY_CODE[code];
-  if (fault === undefined) return undefined;
+  if (fault === undefined || ABSORBED_ELSEWHERE.has(fault)) return undefined;
   if (webActionReadsOnly(action)) return fault;
   return DECIDED_BEFORE_DISPATCH.has(fault) ? fault : undefined;
 }

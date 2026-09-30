@@ -96,7 +96,7 @@ test("a paginated list read is not read again, because pressing next moved the p
   );
 });
 
-test("a verb that only reads absorbs every transient fault the closed set names", () => {
+test("a verb that only reads absorbs every transient fault the closed set names, except the one Core waits out", () => {
   const reading = ["web.dom.capture_snapshot", "web.dom.extract", "web.dom.assert", "web.dom.wait_for_selector", "web.dom.wait_for_text"];
   for (const actionType of reading) {
     assert.equal(webActionReadsOnly(command(actionType)), true);
@@ -104,9 +104,17 @@ test("a verb that only reads absorbs every transient fault the closed set names"
       Object.values(WEB_AUTOMATION_FAILURE_CODES)
         .filter(isWebAutomationFailureCode)
         .filter((code) => RECOVERY_FAULT_BY_CODE[code] !== undefined)
+        .filter((code) => code !== WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED)
         .map((code) => recoverableFault(failed(actionType, code), command(actionType))),
       ["target_absent", "output_not_observed", "page_changed", "timeout", "transport", "action_failed"]
     );
+  }
+});
+
+test("a press the page refused as too fast is never retried by this loop, on any verb: its wait outlasts this budget and Core honours it", () => {
+  assert.equal(RECOVERY_FAULT_BY_CODE[WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED], "rate_limited");
+  for (const actionType of RECOVERY_KNOWN_ACTION_TYPES) {
+    assert.equal(recoverableFault(failed(actionType, WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED), command(actionType)), undefined, actionType);
   }
 });
 

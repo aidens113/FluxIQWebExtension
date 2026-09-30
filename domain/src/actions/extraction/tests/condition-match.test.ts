@@ -50,6 +50,22 @@ test("a number is read off the value in the formats the fixtures write it in", (
   for (const [value, number] of rows) assert.equal(webAutomationExtractConditionNumber(value), number, value);
 });
 
+// Lane t195: Circleway writes five mutual friends as "Aisha Khan and 4 other
+// mutual friends", and "at least five" must keep that request.
+test("a named one and N others counts N + 1, and only when no digit comes first", () => {
+  const rows: Array<[string, number | undefined]> = [
+    ["Aisha Khan and 4 other mutual friends", 5],
+    ["Liked by Sam and 12 others", 13],
+    ["Ana and 1,204 others", 1205],
+    ["23 mutual friends", 23],
+    ["4 mutual friends", 4],
+    ["$10 and 2 others", 10],
+    ["3 sellers and 2 others", 3],
+    ["Grace Liu is a mutual friend", undefined]
+  ];
+  for (const [value, number] of rows) assert.equal(webAutomationExtractConditionNumber(value), number, value);
+});
+
 test("every numeric comparison reads that number, and a value with none fails", () => {
   assert.equal(holds({ atLeast: 4 }, "4.0"), true);
   assert.equal(holds({ atLeast: 4 }, "3.7 out of 5 stars"), false);

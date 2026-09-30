@@ -309,3 +309,18 @@ test("the list extraction describes its request for a model to write one", () =>
     assert.equal(nodeFor(outputId).description, definition?.description, `${outputId} description`);
   }
 });
+
+test("a node that acts on one element takes a loop's current row on an optional item input, and the others do not", () => {
+  // t195. Core wires a For Each's current row into a body node that declares
+  // `item`; without the port every pass acted on the element the build recorded.
+  const item = { id: "item", label: "Item", valueType: "any", role: "data", required: false };
+  for (const outputId of ["web.dom.click", "web.dom.type", "web.dom.select", "web.dom.check", "web.dom.clear", "web.dom.upload", "web.dom.extract"] as WebAutomationActionType[]) {
+    const inputs = nodeFor(outputId).inputs;
+    assert.equal(inputs[0]?.id, "in", `${outputId} keeps its control input first`);
+    assert.deepEqual(inputs[1], item, `${outputId} declares the item input after in`);
+    assert.equal(inputs.length, 2);
+  }
+  for (const outputId of ["web.browser.navigate", "web.dom.extract_list", "web.dom.dialog", "web.browser.tab", "web.dom.capture_snapshot"] as WebAutomationActionType[]) {
+    assert.deepEqual(nodeFor(outputId).inputs.map((port) => port.id), ["in"], `${outputId} has no element to scope to a row`);
+  }
+});

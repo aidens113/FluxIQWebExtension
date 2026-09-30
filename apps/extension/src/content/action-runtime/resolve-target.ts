@@ -115,6 +115,7 @@ import { findClosestFingerprint, type ElementFingerprint } from "../element-find
 import { deepElementFromPoint, resolveShadowScope, type LookupRoot, type ShadowScope } from "../selector";
 import { composedRoots } from "../shadow-dom";
 import {
+  agreesWithRecordedRecord,
   candidateFingerprint,
   candidateLabel,
   collectTargetCandidates,
@@ -329,7 +330,11 @@ type ScoredFamily = { nearby: TargetCandidatePool; decided: CandidateSelection |
 const NO_FAMILY: ScoredFamily = { nearby: NO_POOL, decided: undefined };
 
 function scoreFamily(target: RecordedTarget, scope: ShadowScope): ScoredFamily {
-  const nearby = collectTargetCandidates(candidateFamily(target), scope.roots);
+  // A loop pass scoped to one row gates the pool before its cap, so a row past
+  // the page's sixtieth same-family control is still weighed (`candidates.ts`).
+  const record = target.context?.record;
+  const admits = record?.values?.length ? (element: Element) => agreesWithRecordedRecord(record, element) : undefined;
+  const nearby = collectTargetCandidates(candidateFamily(target), scope.roots, admits);
   return { nearby, decided: scoreTargetCandidates(target, nearby.candidates) };
 }
 

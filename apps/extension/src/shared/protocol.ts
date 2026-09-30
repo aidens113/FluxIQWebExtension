@@ -506,11 +506,18 @@ export type DomElementContext = {
    * for the same attribute rather than guessing. `text` is the fallback for a
    * record the author keyed by nothing, and is present only when the page held
    * more than one such record at capture time.
+   *
+   * `values` is never recorded: the domain writes it when a For Each pass runs
+   * a step on the current row (`domain/src/output-nodes/native-runtime.ts`), as
+   * the values the extraction read from that row. It takes precedence over
+   * `key` and `text`, which name the row the Flow was built on, and the page
+   * accepts a candidate only in a record holding every one of them.
    */
   record?: {
     keyAttribute?: string | undefined;
     key?: string | undefined;
     text?: string | undefined;
+    values?: string[] | undefined;
   } | undefined;
   /**
    * The open shadow roots the element sat inside, outermost first, each named

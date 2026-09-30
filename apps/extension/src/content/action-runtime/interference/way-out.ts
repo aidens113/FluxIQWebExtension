@@ -5,9 +5,14 @@
 // `hasDismissalControl` is the classification question -- does this layer carry
 // its own way out, and so count as a dialog rather than as an ordinary banner?
 // It is what `blocking-dialog.ts` has asked since it was written, and its
-// answer decides which failure code a refusal reports. Narrowing it would move
-// refusals between codes, so it is kept exactly as it was: a painted element
-// inside the overlay whose own label, attribute or text says "close".
+// answer decides which failure code a refusal reports: a painted element inside
+// the overlay whose own label, attribute or text says "close", or, since
+// 2026-09-30, on a layer whose own text is about cookies or consent, one that
+// declines optional cookies (`vocabulary.ts`). So a consent wall over a target
+// is now `blocked_by_dialog`, which the defence clears, not an ordinary refusal.
+// Likewise a notice that the page refused a press for going too fast, whose OK
+// closes it and confirms nothing: on such a layer, and on no other, OK is its
+// way out (`layer-text.ts` reads the layer's own words for both questions).
 //
 // `dismissControlIn` is the *press* question, and it is stricter, because
 // pressing is an act and classifying is not. Two candidates the classifier
@@ -28,7 +33,8 @@
 // every word in it -- can never be mistaken for a control.
 
 import { composedDescendants } from "../../shadow-dom";
-import { isDismissalLabel } from "./vocabulary";
+import { boundedLayerText } from "./layer-text";
+import { isConsentDeclineLabel, isConsentLayerText, isDismissalLabel, isRateLimitAcknowledgeLabel, isRateLimitLayerText } from "./vocabulary";
 
 /** At most this many elements of one overlay are read for a way out. */
 const DISMISS_SCAN_LIMIT = 400;
@@ -51,19 +57,56 @@ export function dismissControlIn(overlay: Element): Element | undefined {
   return firstDismissal(overlay, true);
 }
 
+/**
+ * A close glyph or dismissal first; failing that, on a layer whose own text is
+ * about cookies or consent, the control that declines optional cookies
+ * (`vocabulary.ts` says why declining, and never accepting, is a way out); and
+ * on a layer whose own text says the page refused an act for going too fast,
+ * the control that acknowledges it -- its OK -- and never its "Try again".
+ */
 function firstDismissal(overlay: Element, pressable: boolean): Element | undefined {
-  let scanned = 0;
   // Into the overlay's open shadow roots too: a widget's close glyph lives in
-  // one as often as not. The bound and the vocabulary are unchanged, so a
-  // consent wall offering only Accept and Reject still has no way out here.
+  // one as often as not.
+  const closing = firstMatching(overlay, pressable, saysDismissal);
+  if (closing) return closing;
+  const text = boundedLayerText(overlay);
+  if (isConsentLayerText(text)) {
+    const declining = firstMatching(overlay, pressable, saysConsentDecline);
+    if (declining) return declining;
+  }
+  if (!isRateLimitLayerText(text)) return undefined;
+  return firstMatching(overlay, pressable, saysRateLimitAcknowledge);
+}
+
+function firstMatching(overlay: Element, pressable: boolean, says: (element: Element) => boolean): Element | undefined {
+  let scanned = 0;
   for (const element of composedDescendants(overlay)) {
     if (++scanned > DISMISS_SCAN_LIMIT) return undefined;
     if (element.getClientRects().length === 0) continue;
-    if (!saysDismissal(element)) continue;
+    if (!says(element)) continue;
     if (pressable && !mayBePressed(element)) continue;
     return element;
   }
   return undefined;
+}
+
+/** Whether this element's own name or text declines optional cookies. Leaves only, as for a dismissal. */
+function saysConsentDecline(element: Element): boolean {
+  return ownLabelSays(element, isConsentDeclineLabel);
+}
+
+/** Whether this element's own name or text acknowledges a rate-limit notice. Leaves only, as for a dismissal. */
+function saysRateLimitAcknowledge(element: Element): boolean {
+  return ownLabelSays(element, isRateLimitAcknowledgeLabel);
+}
+
+/** The element's accessible name, or -- for a leaf only -- its text, read by one label rule. */
+function ownLabelSays(element: Element, rule: (label: string) => boolean): boolean {
+  const named = (element.getAttribute("aria-label") ?? element.getAttribute("title") ?? "").trim();
+  if (named && rule(named)) return true;
+  if (element.childElementCount > 0) return false;
+  const text = (element.textContent ?? "").replace(/\s+/gu, " ").trim();
+  return text.length > 0 && rule(text);
 }
 
 /** Whether this element's own attribute, name or text says it closes what it sits in. */

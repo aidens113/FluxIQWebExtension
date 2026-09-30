@@ -13,7 +13,7 @@ stage it always carries.
 
 ## The Closed Set
 
-`WEB_AUTOMATION_FAILURE_CODES` names eighteen codes. Read a code from that
+`WEB_AUTOMATION_FAILURE_CODES` names nineteen codes. Read a code from that
 object rather than writing its string: the key is the name source code and
 this page use, and the value is the code Core stores and a scenario manifest's
 expected failure names.
@@ -31,6 +31,7 @@ expected failure names.
 | `AUTH_REQUIRED` | `web.auth.required` | `auth_required` | no | `confirmation` |
 | `USER_INTERVENTION_REQUIRED` | `web.intervention.required` | `user_intervention_required` | no | `execution` |
 | `BLOCKED_BY_DIALOG` | `web.action.blocked_by_dialog` | `unexpected_state` | no | `execution` |
+| `RATE_LIMITED` | `web.action.rate_limited` | `action_failed` | yes | `execution` |
 | `BROWSER_PERMISSION_DENIED` | `web.browser.permission_denied` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `TRANSPORT_TRANSIENT` | `web.transport.transient` | `action_failed` | yes | `execution` |
 | `UNSUPPORTED_TYPE` | `web.action.unsupported_type` | `blocked_by_capability_or_policy` | no | `dispatch` |
@@ -68,6 +69,19 @@ repeated. `BLOCKED_BY_DIALOG` is a stable page state that needs a different
 action, not a retry. `BROWSER_PERMISSION_DENIED` is a browser capability/policy
 refusal that must be resolved before dispatch, unlike `ACTION_REJECTED`, which
 is the actionability decision about a particular target on a drivable page.
+
+`RATE_LIMITED` is the one row that states the act did not happen: its record
+carries `effect: "unacted"`, a field Core's record gained for it. The click verb
+reports it when a press that is not a link opens a notice whose own words say
+the page refused it for going too fast
+(`apps/extension/src/content/action-runtime/rate-limit-notice.ts`), and the
+record also carries the wait the notice named, plus half a second and held to a
+minute, as `retryAfterMs`. The page-side loop never retries it, because the wait
+outlasts its five-second budget; Core's defensive executor reads `unacted` as
+licence to repeat even a mutating node and waits the hinted time first, bounded
+by its own 30-second per-wait cap. The notice's OK is pressed by the
+interference defence only on a layer whose text is such a notice; its "Try
+again" is never pressed.
 
 ## Why The Binding Matters
 
