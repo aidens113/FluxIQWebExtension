@@ -61,8 +61,13 @@ test("the build lock excludes a second holder and is released afterwards", async
     await withBuildLock(lockPath, async () => {
       const held = JSON.parse(await readFile(lockPath, "utf8"));
       assert.equal(held.pid, process.pid);
+      // The waiter's clock advances 15 ms per reading, so its 40 ms deadline
+      // passes after a fixed number of looks at the lock, however slowly the
+      // machine runs them. On the wall clock, a loaded machine used to pass the
+      // deadline before the first look and time out without announcing.
+      let clock = Date.now();
       await assert.rejects(
-        withBuildLock(lockPath, async () => undefined, { pid: process.pid + 1, timeoutMs: 40, pollMs: 10, isProcessAlive: () => true, onWait: () => { observedWait = true; } }),
+        withBuildLock(lockPath, async () => undefined, { pid: process.pid + 1, timeoutMs: 40, pollMs: 1, now: () => (clock += 15), isProcessAlive: () => true, onWait: () => { observedWait = true; } }),
         /Timed out waiting/u,
       );
       assert.equal(observedWait, true);
