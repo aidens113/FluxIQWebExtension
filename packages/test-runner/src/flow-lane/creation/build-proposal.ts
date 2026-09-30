@@ -15,14 +15,21 @@ import { publishableStepFields, type PublishableStepValue } from "../../existing
 import { RunnerFailure } from "../../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../../http-control/index.js";
 
-/** The longest one control request may wait (`http-control`'s own bound). */
-const GENERATION_REQUEST_TIMEOUT_MS = 300_000;
 /**
  * How long a build may still be running after it was dispatched: the wait the
  * web panel gives the same request (`WEBSITE_EXPLORATION_OVERALL_TIMEOUT_MS`).
  * The number is what a build was measured to need.
  */
 const GENERATION_DEADLINE_MS = 60_000 + 600_000 + 15_000;
+/*
+ * The build request itself is held open until that deadline, as a long request
+ * (`http-control/long-request.ts`). Until 2026-09-29 it was held for the
+ * ordinary 300 s cap and then only a *proposal* was polled for, so a build that
+ * ran eight minutes and failed with a named diagnostic was recorded as
+ * `lab.generation_unfinished` (run-munaiz76-7026748c). Core's answer, success
+ * or refusal, is now what the record is read from; the poll is left for a
+ * request that still times out.
+ */
 const PROPOSAL_POLL_MS = 1_000;
 /** The shape of a Core or domain identifier, such as `web.recovery.inspect` or `web.action.rejected.no_progress`. */
 const VOCABULARY_ID = /^[a-z][a-z0-9_-]*(?:[.:][a-z0-9_-]+)*$/u;
@@ -310,7 +317,7 @@ export async function buildCreatedFlowProposal(
         ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }),
         ...(permittedConsequences.length ? { permittedConsequences: [...permittedConsequences] } : {}),
       },
-      { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
+      { timeoutMs: wait.requestTimeoutMs ?? wait.deadlineMs ?? GENERATION_DEADLINE_MS, longRequest: true, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {
     // Core keeps building after the client has stopped waiting, and persists
@@ -332,12 +339,15 @@ async function awaitProposal(control: CreatedFlowBuildControl, input: { projectI
   const now = wait.now ?? Date.now;
   const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const deadline = startedAt + (wait.deadlineMs ?? GENERATION_DEADLINE_MS);
-  while (now() < deadline) {
+  // At least one look: the request is held to the deadline itself, so it can
+  // time out with no time left, just as Core saves a proposal.
+  do {
     const pending = await control.listFlowAdaptations(input.projectId, input.flowId, "proposed");
     if (pending.length > 1) throw new RunnerFailure("runtime.behavior", "Core left more than one pending proposal on the Flow a single build was asked for", { details: { pending: pending.length } });
     if (pending[0]) return pending[0].adaptationId;
+    if (now() >= deadline) break;
     await sleep(Math.min(wait.pollMs ?? PROPOSAL_POLL_MS, Math.max(0, deadline - now())));
-  }
+  } while (now() < deadline);
   return undefined;
 }
 

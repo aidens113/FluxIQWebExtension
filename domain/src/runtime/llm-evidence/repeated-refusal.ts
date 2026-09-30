@@ -31,6 +31,16 @@
 // between them are still two identical refusals, but the page they describe has
 // moved on, so the count starts again rather than accumulating across a build
 // that is making progress.
+//
+// **A new exploration starts from nothing.** The count is what one model was
+// told, so it belongs to one conversation with that model -- one Core evidence
+// loop -- and not to the Flow. On `run-munnhi5q-4867dabe`, 2026-09-29, the
+// build's last detection was refused `nothing_repeats_on_page`; the Flow ran,
+// its answer was refuted, and the re-author's first detection, on the page the
+// run ended on, came back `answered_the_same_again`, `repeatedAnswer: 2`. The
+// re-author's model had heard nothing: the memory had outlived the loop that
+// heard it. So the caller says when a loop opens (`startedOver`), and every
+// slot of that project, flow and session is let go.
 
 import type { JsonValue } from "fluxiq/core";
 import type { WebLlmEvidenceToolExecution } from "./capture";
@@ -54,15 +64,23 @@ export type WebLlmRepeatedRefusals = {
   /**
    * The call's own answer, with the fact that it repeats written on it when it
    * does. Returned unchanged the first time, and for every answer that is not a
-   * refusal.
+   * refusal. `scope` is the project, flow and session the call was made in,
+   * and the answer is compared with the last one `toolId` gave there.
    */
-  answered(key: string, answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution;
+  answered(scope: string, toolId: string, answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution;
+  /**
+   * A new exploration opened in `scope`: nothing its model is told is a repeat
+   * of what an earlier exploration's model was told.
+   */
+  startedOver(scope: string): void;
 };
 
 export function createWebLlmRepeatedRefusals(): WebLlmRepeatedRefusals {
   const given = new Map<string, { said: string; times: number }>();
+  const slot = (scope: string, toolId: string): string => `${scope}\u0000${toolId}`;
   return {
-    answered(key, answer) {
+    answered(scope, toolId, answer) {
+      const key = slot(scope, toolId);
       const packet = refusalPacket(answer.evidence);
       if (packet === undefined) {
         // Not a refusal: whatever the call did, it did something, and the next
@@ -84,6 +102,10 @@ export function createWebLlmRepeatedRefusals(): WebLlmRepeatedRefusals {
       answer.resultReason = "answered_the_same_again";
       answer.repeatedAnswer = times;
       return answer;
+    },
+    startedOver(scope) {
+      const opened = slot(scope, "");
+      for (const key of [...given.keys()]) if (key.startsWith(opened)) given.delete(key);
     }
   };
 }

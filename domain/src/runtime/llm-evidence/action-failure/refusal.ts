@@ -35,11 +35,21 @@ export type WebActionRefusal = {
   code: WebLlmToolRejectionCode;
   /** Absent only where the code is the whole of what the model could act on. */
   detail: WebLlmToolRejectionDetail | undefined;
+  /**
+   * True only for `USER_INTERVENTION_REQUIRED`: a robot check the client met
+   * and did not act on. Such a refusal is never shown to the model -- Core asks
+   * the person to clear the check (`AS/runtime/parking/person-needed-ask.ts`).
+   * `AUTH_REQUIRED` shares the `needs_person` code and not this: a sign-in is
+   * not something a Continue press clears. Absent, never `undefined`, on
+   * every other refusal.
+   */
+  personNeeded?: true;
 };
 
 // A dialog anyone may close and a challenge only a person may answer are two
 // codes on the client's side, and they stay two here: the first invites the
-// model to deal with the dialog, and the second tells it not to try.
+// model to deal with the dialog, and the second is not the model's at all --
+// the call is marked `personNeeded` and the person is asked to clear it.
 const BY_FAILURE_CODE: Readonly<Record<string, WebLlmToolRejectionCode>> = Object.freeze({
   [WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG]: "blocked_by_dialog",
   [WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED]: "needs_person",
@@ -106,14 +116,26 @@ const BY_FAILURE_REASON: Readonly<Record<string, WebLlmToolRejectionReason>> = O
 export function webActionFailureRefusal(result: WebFailedActionResult): WebActionRefusal {
   const code = webActionFailureRejectionCode(result);
   const shortfall = webActionReadShortfall(result.payload);
-  if (shortfall !== undefined) return { code, detail: readDetail(shortfall) };
   const reason = typeof result.failure?.code === "string" ? BY_FAILURE_REASON[result.failure.code] : undefined;
-  return {
+  const refusal: WebActionRefusal = {
     code,
-    detail: reason === undefined
-      ? undefined
-      : rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined })
+    detail: shortfall !== undefined
+      ? readDetail(shortfall)
+      : reason === undefined
+        ? undefined
+        : rejectionDetail({ reason, target: undefined, instead: undefined, missing: undefined, requestId: undefined })
   };
+  if (webActionNeedsPerson(result)) refusal.personNeeded = true;
+  return refusal;
+}
+
+/**
+ * Whether the client met something only a person can clear -- a robot check --
+ * and did not act on it: failure code `USER_INTERVENTION_REQUIRED`, and nothing
+ * else. Read off the closed code alone, never the sentence beside it.
+ */
+export function webActionNeedsPerson(result: WebFailedActionResult): boolean {
+  return result.status !== "timed_out" && result.failure?.code === WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED;
 }
 
 /** The refusal code alone, for a caller that reports the failure under a code of its own. */

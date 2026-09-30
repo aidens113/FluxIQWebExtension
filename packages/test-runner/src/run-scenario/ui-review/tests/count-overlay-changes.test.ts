@@ -1,0 +1,55 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { countOverlayChanges, type OverlaySample } from "../index.js";
+
+const shown = (atMs: number, text: string, visible = true): OverlaySample => ({ atMs, present: true, hostCount: 1, visible, text, textParts: text.split(" | ") });
+const gone = (atMs: number): OverlaySample => ({ atMs, present: false, hostCount: 0, visible: false });
+const failed = (atMs: number): OverlaySample => ({ atMs, present: false, hostCount: 0, visible: false, error: "read timed out" });
+
+test("an overlay that shows one status throughout is stable", () => {
+  const counts = countOverlayChanges([0, 200, 400, 600].map(at => shown(at, "BUILDING | Reading the page")));
+  assert.deepEqual(counts, { samples: 4, readFailures: 0, presentSamples: 4, visibleSamples: 4, textChanges: 0, presenceToggles: 0, visibilityToggles: 0, textRevisits: 0, distinctTexts: 1, status: "stable" });
+});
+
+test("no overlay in any sample is absent, not stable", () => {
+  const counts = countOverlayChanges([gone(0), gone(200), gone(400)]);
+  assert.equal(counts.status, "absent");
+  assert.equal(counts.presentSamples, 0);
+  assert.equal(counts.presenceToggles, 0);
+});
+
+test("one change of status is counted and reads as changed", () => {
+  const counts = countOverlayChanges([shown(0, "A"), shown(200, "A"), shown(400, "B"), shown(600, "B")]);
+  assert.equal(counts.textChanges, 1);
+  assert.equal(counts.distinctTexts, 2);
+  assert.equal(counts.status, "changed");
+});
+
+test("a status that switches back and forth is flickering, and each switch is a change", () => {
+  const counts = countOverlayChanges([shown(0, "A"), shown(200, "B"), shown(400, "A"), shown(600, "B")]);
+  assert.equal(counts.textChanges, 3);
+  assert.equal(counts.textRevisits, 2, "A then B again are both returns to a text already shown");
+  assert.equal(counts.status, "flickering");
+});
+
+test("an overlay that comes and goes counts presence toggles, and the text is compared only across present samples", () => {
+  const counts = countOverlayChanges([shown(0, "A"), gone(200), shown(400, "A"), gone(600)]);
+  assert.equal(counts.presenceToggles, 3);
+  assert.equal(counts.textChanges, 0, "the same status reappearing is not a text change");
+  assert.equal(counts.status, "flickering");
+});
+
+test("visibility flips are counted apart from presence", () => {
+  const counts = countOverlayChanges([shown(0, "A"), shown(200, "A", false), shown(400, "A")]);
+  assert.equal(counts.visibilityToggles, 2);
+  assert.equal(counts.presenceToggles, 0);
+  assert.equal(counts.visibleSamples, 2);
+  assert.equal(counts.status, "flickering");
+});
+
+test("a failed read is counted and skipped: it is neither absence nor a toggle", () => {
+  const counts = countOverlayChanges([shown(0, "A"), failed(200), shown(400, "A")]);
+  assert.equal(counts.readFailures, 1);
+  assert.equal(counts.presenceToggles, 0);
+  assert.equal(counts.status, "stable");
+});

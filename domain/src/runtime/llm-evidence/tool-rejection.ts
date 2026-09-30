@@ -32,8 +32,8 @@
 //
 // 1. **the model's own input, echoed back** -- the handle it named;
 // 2. **this domain's own closed vocabulary** -- one `reason` from the list
-//    below, the input keys a tool declares in its own schema, and Core's
-//    consequence classes;
+//    below, the input keys a tool declares in its own schema, the id of a
+//    node this domain runs (`useNode`), and Core's consequence classes;
 // 3. **an identifier Core minted** -- the id of the permission request now in
 //    front of the person.
 // 4. **a count of what the packet the model was already shown describes** --
@@ -95,7 +95,11 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  *   answer or close it first.
  * - `needs_person`: what stands in the way is for a person alone to answer --
  *   a robot check, a sign-in, a second-factor code, a payment confirmation --
- *   or a value only the person can supply. Do not try to get past it.
+ *   or a value only the person can supply. Do not try to get past it. A robot
+ *   check (`USER_INTERVENTION_REQUIRED`) never reaches the model at all: the
+ *   call is marked `personNeeded` (`RecoverableToolRejection.personNeeded`),
+ *   and Core asks the person to clear it and press Continue instead
+ *   (`AS/runtime/parking/person-needed-ask.ts`).
  * - `target_covered`: something that is not a modal -- a banner, an overlay --
  *   lies over the control.
  * - `target_not_actionable`: the control is there but disabled or hidden.
@@ -180,7 +184,10 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  *   one the handle's element is in, so moving it there would be a guess.
  * - `handle_wrong_kind_of_control`: the handle names a real control, and not
  *   one this node can act on -- a choice step given a button, an entry step
- *   given a link. Choose a handle whose control the node fits.
+ *   given a link. The handle is not the mistake; the node is. When the
+ *   control's own kind says which node does act on it, `useNode` names that
+ *   node: call it with the same handle (`target`). Without `useNode`, choose
+ *   a handle whose control this node fits.
  * - `extraction_handle_required`: a repeating list was already detected here,
  *   so an extraction written from selectors is a guess at what was never
  *   shown. Name the detected list's own handle.
@@ -350,6 +357,19 @@ export type WebLlmToolRejectionDetail = {
   target?: string;
   /** What the call could have written instead: the keys the tool's own schema declares. */
   instead?: string[];
+  /**
+   * The node that acts on the control `target` names, when the node the call
+   * named cannot (`handle_wrong_kind_of_control`): one of this domain's node
+   * ids, read off the resolver's own closed codes, never page text. The move is
+   * the same call again with this node and the same handle.
+   *
+   * A field of its own rather than a member of `instead`, because on this
+   * refusal `instead` already carries the resolver's codes and the shapes a
+   * handle is written in, and a node id among them is one the model has to
+   * pick out. Live, the refusal without it was made five times in one build
+   * with the right handle and the wrong node (`run-munnq7vz-98c3481c`).
+   */
+  useNode?: string;
   /** Core's consequence classes this run does not hold. */
   missing?: string[];
   /** Core's id for the permission request now in front of the person. */
@@ -430,11 +450,19 @@ export type WebLlmToolRejection = {
 };
 
 export class RecoverableToolRejection extends Error {
-  /** `page` is set only for a refusal the page caused, and only when the page could be captured. */
+  /**
+   * `page` is set only for a refusal the page caused, and only when the page could be captured.
+   *
+   * `personNeeded` is set only when the page answered `USER_INTERVENTION_REQUIRED`:
+   * a robot check stood in the way and nothing was done about it. Such a refusal
+   * is not for the model -- the call's result says `personNeeded` and Core puts
+   * the check to the person (`./node-run/run.ts`).
+   */
   constructor(
     readonly code: WebLlmToolRejectionCode,
     readonly detail?: WebLlmToolRejectionDetail,
-    readonly page?: WebLlmSnapshotBinding
+    readonly page?: WebLlmSnapshotBinding,
+    readonly personNeeded?: true
   ) {
     super(code);
   }
@@ -494,6 +522,26 @@ export function webLlmHandleRejectionReason(issueCodes: readonly string[]): WebL
 }
 
 /**
+ * The resolver's codes for the node that fits a control it refused a node on
+ * (`plan-resolution/resolve-plan-node.ts`, `web.handle.expected.node.*`),
+ * against that node's id. Both halves are closed: a code not in this table
+ * names no node, whatever it says.
+ */
+const HANDLE_FITTING_NODES: ReadonlyMap<string, string> = new Map([
+  ["web.handle.expected.node.web.output.dom-click", "web.output.dom-click"],
+  ["web.handle.expected.node.web.output.dom-select", "web.output.dom-select"]
+]);
+
+/** The node a resolver refusal says fits the control its handle names, or nothing when it names none. */
+function webLlmHandleFittingNode(issueCodes: readonly string[]): string | undefined {
+  for (const code of issueCodes) {
+    const node = HANDLE_FITTING_NODES.get(code);
+    if (node !== undefined) return node;
+  }
+  return undefined;
+}
+
+/**
  * One reason, carrying only the fields that reason gives a meaning to.
  *
  * A caller that has the resolver's codes but not the reason behind them says
@@ -521,13 +569,18 @@ export function rejectionDetail(fields: {
   paginationStop?: string | undefined;
   repeatedAnswer?: number | undefined;
 }): WebLlmToolRejectionDetail {
+  const reason = fields.reason === "parameters_not_resolved" && fields.instead !== undefined
+    ? webLlmHandleRejectionReason(fields.instead)
+    : fields.reason;
   return present<WebLlmToolRejectionDetail>({
-    reason: fields.reason === "parameters_not_resolved" && fields.instead !== undefined
-      ? webLlmHandleRejectionReason(fields.instead)
-      : fields.reason,
+    reason,
     target: fields.target,
     // Copied, so a caller's own list cannot be changed by what goes on the wire, and the packet stays plain JSON.
     instead: fields.instead === undefined ? undefined : [...fields.instead],
+    // Read off the same codes the reason was, and in the same one place, so a
+    // repeat of this refusal (`repeated-refusal.ts`), which passes `instead`
+    // back through here, names the node again without knowing it exists.
+    useNode: reason === "handle_wrong_kind_of_control" && fields.instead !== undefined ? webLlmHandleFittingNode(fields.instead) : undefined,
     missing: fields.missing === undefined ? undefined : [...fields.missing],
     requestId: fields.requestId,
     startLocation: fields.startLocation,

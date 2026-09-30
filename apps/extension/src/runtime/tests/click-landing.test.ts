@@ -13,7 +13,23 @@ import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
-import { sendClickCheckingLanding } from "../click-landing";
+import { sendClickCheckingLanding as sendWithAccess } from "../click-landing";
+import type { LandedTabAccess } from "../landed-check-wait";
+
+/** Every page these rows land on answers that it is no robot check; the rows about checks name their own access. */
+const NO_CHECK: LandedTabAccess = {
+  send: <T>() => Promise.resolve({ challenge: null } as T),
+  settle: () => Promise.resolve()
+};
+
+function sendClickCheckingLanding(
+  action: BrowserActionCommand,
+  tabId: number,
+  send: () => Promise<BrowserActionResult>,
+  access: LandedTabAccess = NO_CHECK
+): Promise<BrowserActionResult> {
+  return sendWithAccess(action, tabId, send, access);
+}
 
 const TAB_ID = 41;
 const ORIGIN = "http://127.0.0.1:4000";
@@ -297,3 +313,97 @@ for (const [landing, status] of [["no navigation", undefined], ["a page served 2
     assert.equal(browser.listening(), 0);
   });
 }
+
+// A click whose navigation commits onto a robot check. A filter, pager or facet
+// click on a store that has decided the session is automated lands on its
+// check, served 200 at the address the click asked for, and until 2026-09-30
+// that was a successful click. The landed page's top frame is asked, as a
+// navigation's is (`landed-challenge.ts`).
+
+/** A landed page that answers `answers` in turn, its last one for ever after, and counts what it was asked. */
+function landedPage(answers: unknown[]): LandedTabAccess & { asked: number } {
+  const access = {
+    asked: 0,
+    send: <T>() => {
+      access.asked += 1;
+      const answer = answers[0];
+      if (answers.length > 1) answers.shift();
+      return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer as T);
+    },
+    settle: () => Promise.resolve()
+  };
+  return access;
+}
+
+const PERSON_ONLY_CHECK = { challenge: "captcha", robotCheck: "person_only" };
+const SELF_CLEARING_CHECK = { challenge: "captcha", robotCheck: "self_clearing" };
+
+test("a click that lands on a robot check only a person can answer fails as needing a person, saying the click was made", async (t) => {
+  const browser = installBrowser(t, { "doc-check": 200 });
+  const page = landedPage([PERSON_ONLY_CHECK]);
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/scenarios/crossborder/search?q=towels&token=s3cret`, "doc-check");
+    return REPLY;
+  }, page);
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.intervention.required");
+  assert.equal(result.failure?.retryable, false);
+  assert.match(result.failure?.actual ?? "", /^captcha: the click was made, and the page it landed on \(\/scenarios\/crossborder\/search\) is a robot check, which only a person can answer$/u);
+  assert.match(result.message ?? "", /^The click was made and landed on a robot check/u);
+  assert.doesNotMatch(JSON.stringify(result), /s3cret/u, "the landed address's query is never quoted");
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+  assert.equal(result.commandId, REPLY.commandId, "what the frame said about the click itself is kept");
+  assert.deepEqual(browser.injections, [], "a check decides the landing before the status is read");
+});
+
+test("a robot check served 403 is still the person's to answer, not a refused page", async (t) => {
+  const browser = installBrowser(t, { "doc-check": 403 });
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/cdn-cgi/challenge`, "doc-check");
+    return REPLY;
+  }, landedPage([PERSON_ONLY_CHECK]));
+  assert.equal(result.failure?.code, "web.intervention.required");
+});
+
+test("a click that lands on a check which clears by itself waits it out untouched, and the click stands and says so", async (t) => {
+  const browser = installBrowser(t, { "doc-check": 200 });
+  const page = landedPage([SELF_CLEARING_CHECK, { challenge: null }]);
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/scenarios/auction/sch/i.html?_pgn=4`, "doc-check");
+    return REPLY;
+  }, page);
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.failure, undefined);
+  const validation = result.validation;
+  assert.match(validation.status === "passed" ? validation.actual : "", /^it did; the page it landed on was a robot check that cleared by itself after \d+ ms, untouched$/u);
+  assert.equal(page.asked, 3, "asked at the landing, again after half a second, and once more when the tab settled");
+});
+
+test("a click whose reply is lost to its own navigation onto a robot check fails as needing a person", async (t) => {
+  const browser = installBrowser(t, { "doc-check": 200 });
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/search`, "doc-check");
+    throw new Error(CHANNEL_CLOSED_ERROR);
+  }, landedPage([PERSON_ONLY_CHECK]));
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.intervention.required");
+});
+
+test("a landed document not yet listening is asked again, and one that then says it is no check leaves the click as it was", async (t) => {
+  const browser = installBrowser(t, { "doc-second": 200 });
+  const page = landedPage([new Error("Could not establish connection. Receiving end does not exist."), { challenge: null }]);
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => {
+    land(browser, `${ORIGIN}/second`, "doc-second");
+    return REPLY;
+  }, page);
+  assert.equal(result, REPLY);
+  assert.equal(page.asked, 2);
+});
+
+test("a click that navigates nowhere never asks the page about a check", async (t) => {
+  installBrowser(t);
+  const page = landedPage([PERSON_ONLY_CHECK]);
+  const result = await sendClickCheckingLanding(CLICK, TAB_ID, async () => REPLY, page);
+  assert.equal(result, REPLY);
+  assert.equal(page.asked, 0);
+});

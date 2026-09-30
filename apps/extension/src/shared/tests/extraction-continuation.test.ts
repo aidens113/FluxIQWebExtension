@@ -51,3 +51,37 @@ test("the item count crosses the document boundary, and an absent one stays abse
   // as one rather than folded into absence.
   assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, itemsSeen: 0 })?.itemsSeen, 0);
 });
+
+test("the condition counts cross the document boundary, and unreadable ones refuse the checkpoint rather than becoming none", () => {
+  // Without them a read that filtered four pages and ended on a fifth with no
+  // item reported `applied: 0` (`run-munnhi5q-4867dabe`).
+  const counted = { ...CHECKPOINT, conditions: { applied: 56, kept: 28, rejected: [20, 8] } };
+  const read = readExtractionCheckpoint(counted);
+  assert.deepEqual(read, counted);
+  assert.notEqual(read?.conditions?.rejected, counted.conditions.rejected);
+  assert.equal("conditions" in (readExtractionCheckpoint(CHECKPOINT) ?? {}), false);
+  for (const conditions of [
+    null,
+    [],
+    { applied: 1, kept: 1 },
+    { applied: -1, kept: 0, rejected: [] },
+    { applied: 1, kept: 2, rejected: [] },
+    { applied: 2, kept: 1, rejected: [1.5] },
+    { applied: 2, kept: 1, rejected: "1" }
+  ]) {
+    assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, conditions }), undefined, JSON.stringify(conditions));
+  }
+});
+
+test("what a read spent on refused pages crosses the document boundary, and unreadable counts refuse the checkpoint rather than reset", () => {
+  // A reload is a new document: a read that forgot its retries would reload a
+  // refusing page for ever (`content/extraction/pagination.ts`).
+  const spent = { ...CHECKPOINT, refusals: { retries: 1, rateLimits: 1 } };
+  const read = readExtractionCheckpoint(spent);
+  assert.deepEqual(read, spent);
+  assert.notEqual(read?.refusals, spent.refusals);
+  assert.equal("refusals" in (readExtractionCheckpoint(CHECKPOINT) ?? {}), false);
+  for (const refusals of [null, [], { retries: 1 }, { retries: -1, rateLimits: 0 }, { retries: 1, rateLimits: 0.5 }, { retries: "1", rateLimits: 0 }]) {
+    assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, refusals }), undefined, JSON.stringify(refusals));
+  }
+});

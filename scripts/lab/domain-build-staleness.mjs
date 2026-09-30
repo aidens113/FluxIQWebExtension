@@ -28,11 +28,20 @@ import { scanNewest } from "./core/index.mjs";
  * The builds a run loads from this repository, each with the source that
  * produces it and the command that rebuilds it.
  *
- * `apps/extension/dist` is per build label, so the root is passed in rather
- * than assumed: a run against one label must not be failed by another's output.
+ * The extension's build root is per Lab instance (`apps/extension`, or its
+ * `.lab-instances/<instance>` directory), so it is passed in rather than
+ * assumed: a run against one instance must not be failed by another's output.
+ * Its output root is `dist/e2e-chromium` under that root, the bundle the
+ * browser loads. It must not be the build root itself: without an instance
+ * that is `apps/extension`, which contains `src`, so the newest output could
+ * never be older than the newest source and the guard could never fire.
+ *
+ * The Lab asks this after its build phase (`prelude/build-phase.mjs`), which
+ * rebuilds an edited package or, on a reuse, moves the outputs' timestamps to
+ * now, so a stale answer there means a source changed while it was building.
  *
  * @param {string} repositoryRoot
- * @param {string} extensionBuildRoot
+ * @param {string} extensionBuildRoot `paths.extensionBuildRoot` from `lab-instance.mjs`
  */
 export function repositoryBuilds(repositoryRoot, extensionBuildRoot) {
   return [
@@ -45,7 +54,7 @@ export function repositoryBuilds(repositoryRoot, extensionBuildRoot) {
     {
       name: "extension",
       sourceRoot: path.join(repositoryRoot, "apps", "extension", "src"),
-      outputRoot: extensionBuildRoot,
+      outputRoot: path.join(extensionBuildRoot, "dist", "e2e-chromium"),
       rebuild: "pnpm --filter @fluxiq-web-extension/extension build"
     }
   ];

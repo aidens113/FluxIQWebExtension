@@ -201,11 +201,16 @@ export type PanelConversationSendRequest = {
   conversationId?: string | undefined;
   text?: string | undefined;
   /**
-   * The panel capabilities Core may answer with. Left out, an empty list is
-   * sent, so Core still reads the message and answers it in the thread.
+   * Extra capabilities Core may answer with. The relay always offers the
+   * chat's own (`background/panel/chat-capabilities.ts`, which Core runs
+   * itself) and adds these after them, minus any id already offered.
    */
   capabilities?: unknown[] | undefined;
-  onScreen?: { flowId?: string; subflowId?: string; runId?: string; recordingId?: string } | undefined;
+  /**
+   * What the panel has open. `pageUrl` is only a fallback: the relay sends the
+   * active tab's address when the browser gives one, and Core builds from it.
+   */
+  onScreen?: { flowId?: string; subflowId?: string; runId?: string; recordingId?: string; pageUrl?: string } | undefined;
   subjectKind?: string | undefined;
   subjectId?: string | undefined;
   title?: string | undefined;
@@ -506,11 +511,18 @@ export type DomElementContext = {
    * for the same attribute rather than guessing. `text` is the fallback for a
    * record the author keyed by nothing, and is present only when the page held
    * more than one such record at capture time.
+   *
+   * `values` is never recorded: the domain writes it when a For Each pass runs
+   * a step on the current row (`domain/src/output-nodes/native-runtime.ts`), as
+   * the values the extraction read from that row. It takes precedence over
+   * `key` and `text`, which name the row the Flow was built on, and the page
+   * accepts a candidate only in a record holding every one of them.
    */
   record?: {
     keyAttribute?: string | undefined;
     key?: string | undefined;
     text?: string | undefined;
+    values?: string[] | undefined;
   } | undefined;
   /**
    * The open shadow roots the element sat inside, outermost first, each named

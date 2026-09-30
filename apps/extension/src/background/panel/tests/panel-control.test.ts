@@ -59,6 +59,10 @@ function harness(settings: FluxIQSettings = baseSettings) {
       projectId: () => {
         touched.push("projectId");
         return "project-1";
+      },
+      pageLocation: async () => {
+        touched.push("pageLocation");
+        return undefined;
       }
     },
     readSettings: async () => {

@@ -12,10 +12,11 @@
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
-import { webActionFailureRefusal, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
+import { webActionFailureRefusal, webActionNeedsPerson, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "./sanitize";
+import { webLlmSnapshotStates } from "./state-digest";
 import {
   recoverable,
   RecoverableToolRejection,
@@ -84,6 +85,18 @@ export type WebLlmEvidenceToolExecution = {
    */
   repeatedAnswer?: number;
   /**
+   * The call met a robot check -- the client answered
+   * `USER_INTERVENTION_REQUIRED` -- and did not act on it
+   * (`AS/runtime/llm/evidence-loop/tool-execution.ts`).
+   *
+   * Core never shows such a result to the model: it asks the person to clear
+   * the check and press Continue, and on Continue the call stands with `draft`
+   * as written here, so `draft` describes the step as it stands once the check
+   * is cleared (`withPersonNeeded`, `./node-run/run.ts`). `resultCode` and
+   * `resultReason` stay what the refusal was, for the run's own record.
+   */
+  personNeeded?: true;
+  /**
    * The catalog id of the node the call named, when this domain resolved one
    * (`./node-run/catalog.ts`).
    *
@@ -121,6 +134,36 @@ export type WebLlmEvidenceToolExecution = {
    * domain's half of it is done.
    */
   assumed?: WebLlmNameAssumption[];
+  /**
+   * The state the call found and the state it left, as `captureStateDigest`
+   * would have digested them, taken from the captures the call itself made
+   * (`withCallStates`, `./state-digest/snapshot-states.ts`).
+   *
+   * Core used to ask for these around every call, and each answer was a page
+   * capture of its own: three for a look, four and the action for an action.
+   * Reporting them here, with `stateDigestsOnCalls` on the binding, is what
+   * stops Core asking (`AS/runtime/llm/evidence-loop/tool-execution.ts`). A
+   * side the call took no capture for -- no page yet, an input refused before
+   * anything was read, a page unreadable after acting -- is absent, and Core
+   * reads that side as unobserved.
+   */
+  stateDigests?: { before?: string; after?: string };
+  /**
+   * The route state of the page the call left, exactly as the host's
+   * `observeRouteState` would read it from the same page (`../host-runtime.ts`,
+   * `../route-state/project.ts`), taken from the capture the call itself made
+   * (`withCallStates`, `./state-digest/snapshot-states.ts`).
+   *
+   * Core's build routing records the route state each exploration step left,
+   * and asked `observeRouteState` for it -- a whole page capture -- at build
+   * start and before most decisions
+   * (`AS/runtime/route-state.ts`). Reporting it here lets Core capture only
+   * where no call left one. Always the page the call *left*: an action's read
+   * before acting is never it. A call that left no page it read -- refused
+   * before anything was read, a page unreadable after acting, a detection in a
+   * frame -- carries the key absent.
+   */
+  routeState?: JsonObject;
   /**
    * What this one call did, for the draft Core is accruing.
    *
@@ -230,7 +273,7 @@ type WebLlmEvidenceToolCallFacts = {
  * never before. `tests/name-assumption.test.ts` holds the two together.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "nodeId", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "draft"
 ];
 
 export function toolExecution(
@@ -253,10 +296,60 @@ export function toolExecution(
     // Written afterwards, by `./repeated-refusal.ts`, onto the one call that
     // repeats; never known when the call is first built.
     repeatedAnswer: undefined,
+    // Written afterwards, by `withPersonNeeded`, onto a call that met a robot check.
+    personNeeded: undefined,
     nodeId: said?.nodeId,
     assumed: said?.assumed,
+    // Written afterwards, by `withCallStates`, from the captures the call made.
+    stateDigests: undefined,
+    routeState: undefined,
     draft
   }));
+}
+
+/**
+ * The result, with the state the call found and the state it left, each
+ * digested from a capture the call itself took (`WebLlmSnapshotBinding`
+ * `stateDigest`). Written onto the result just built, as
+ * `./repeated-refusal.ts` writes its count, rather than rebuilt around it.
+ *
+ * `found` is the page as the call found it -- a look's one capture, an
+ * action's read before acting -- and `left` the page as the call left it. A
+ * side with no capture, or whose capture was too large to digest, is left
+ * unsaid; with neither, the key is absent.
+ *
+ * The route state is of `left` alone, because it is what Core's routing
+ * records as the state a step left; with no `left`, or one too large to read,
+ * `routeState` is absent.
+ */
+export function withCallStates(
+  execution: WebLlmEvidenceToolExecution,
+  found: WebLlmSnapshotBinding | undefined,
+  left: WebLlmSnapshotBinding | undefined
+): WebLlmEvidenceToolExecution {
+  const digests = present<NonNullable<WebLlmEvidenceToolExecution["stateDigests"]>>({ before: found?.stateDigest, after: left?.stateDigest });
+  if (digests.before !== undefined || digests.after !== undefined) execution.stateDigests = digests;
+  if (left?.routeState !== undefined) execution.routeState = left.routeState;
+  return execution;
+}
+
+/**
+ * The result, marked as needing a person, with the draft statement the call
+ * stands on once the person has cleared the check.
+ *
+ * Written onto the result just built, like `withCallStates`, so the refusal's
+ * own code, reason and states are kept exactly as an ordinary refusal would
+ * carry them; only the draft is replaced, because Core reads it as the step
+ * that stands after Continue (`AS/runtime/llm/evidence-loop/tool-execution.ts`).
+ */
+export function withPersonNeeded(
+  execution: WebLlmEvidenceToolExecution,
+  draft: WebLlmEvidenceToolExecution["draft"]
+): WebLlmEvidenceToolExecution {
+  execution.personNeeded = true;
+  if (draft === undefined) delete execution.draft;
+  else execution.draft = draft;
+  return execution;
 }
 
 /**
@@ -326,11 +419,15 @@ export async function captureEvidence(
     metadata: toolMetadata(request),
   });
   assertActive(signal);
+  // A look that met a robot check is the person's, not the model's: it is not
+  // "unreadable", and a model told so would look again and again at the check.
+  // Checks that clear themselves were already waited out by the client.
+  if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true);
   // A page that cannot be read now -- still loading, mid-navigation -- is a
   // condition the model can wait out or work around, not a fault.
   if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web evidence action payload");
-  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
+  const bounded = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     budget: "exploration",
     maxEvidenceBytes: request.maxEvidenceBytes,
     expectedOrigin,
@@ -338,6 +435,19 @@ export async function captureEvidence(
     // target at all -- neither a handle nor a "the target is gone".
     failedAction: undefined,
   }));
+  // Digested and projected now, before any caller writes on the packet, and at
+  // the bound `captureStateDigest` and `observeRouteState` use rather than this
+  // call's, so a call's own capture answers for the state it saw
+  // (`./state-digest/snapshot-states.ts`).
+  const states = webLlmSnapshotStates(payload.snapshot, bounded, request.maxEvidenceBytes);
+  return present<WebLlmSnapshotBinding>({
+    evidence: bounded.evidence,
+    selectors: bounded.selectors,
+    records: bounded.records,
+    shadowHosts: bounded.shadowHosts,
+    stateDigest: states.stateDigest,
+    routeState: states.routeState
+  });
 }
 
 /**
@@ -485,12 +595,12 @@ export async function pageRefusal(
   signal?: AbortSignal
 ): Promise<RecoverableToolRejection> {
   const budget = request.maxEvidenceBytes === undefined ? undefined : request.maxEvidenceBytes - PAGE_REFUSAL_ENVELOPE_BYTES;
-  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(refusal.code, refusal.detail);
+  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, refusal.personNeeded);
   try {
     const page = await captureEvidence(gateway, sessionId, budget === undefined ? request : { ...request, maxEvidenceBytes: budget }, signal, new URL(current.evidence.location).origin);
-    return new RecoverableToolRejection(refusal.code, refusal.detail, page);
+    return new RecoverableToolRejection(refusal.code, refusal.detail, page, refusal.personNeeded);
   } catch (error) {
     if (signal?.aborted) throw error;
-    return new RecoverableToolRejection(refusal.code, refusal.detail);
+    return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, refusal.personNeeded);
   }
 }

@@ -418,14 +418,49 @@ first paint (104 ms), and a 200 ms sampler across the navigation saw 16 of 16
 samples present. An earlier run of the same probe saw 1 absent sample of 16
 in a 121 ms gap, again ending before first paint.
 
+**Waiting for the person.** Core's asks arrive as a `waiting_permission`
+event whose label is the ask's text. At a robot check that text is "FluxIQ
+needs you: complete the check on this page, then press Continue." (Core's
+person-needed ask, `control.kind: "person_check"`). The pacer shows it at once
+as the detail under "Waiting for you". The expanded overlay draws it whole,
+because it fits the line, and does not fade. The collapsed pill shows only the
+headline.
+
 **The panel's chat** (`panel/chat/`) replaces Simple Mode's conversation card.
 Its header shows the current phase, Core's sentence, the step, a live/offline
-dot and the overlay control. Its stream interleaves Core's thread turns (timed
+dot and the overlay control. Its one status line is the display's headline
+while the work runs. While the work waits for the person, the line is Core's
+ask instead (`header-model.ts`), because "Waiting for you" does not say what
+to do. The ask's own turn in the thread carries its choices as buttons
+(`panel/simple/conversation/ask-copy.ts`): the person-needed ask shows
+"Continue" and "Stop", which send `choice` with `person_done` or
+`person_stop`. Its stream interleaves Core's thread turns (timed
 by Core's own `createdAt`) with activity rows. An event with a `detail` becomes
 a row, a tool that started and then finished stays one row, and a row expands
 to its text, ref and status. The composer sends typed instructions through
 `panelConversationSend`. The thread is re-read 300 ms after an event that names
 a conversation or ends the work. The 4 s poll stays as the fallback.
+
+**The chat builds and runs automations** (t198). The background relay
+(`background/panel/conversation-relay.ts`) adds two things to every message:
+
+- The capability ids Core executes server-side (`chat-capabilities.ts`):
+  `flow.createHere`, `flow.describe`, `flow.explore`, `flow.improve`,
+  `run.execute` and `ask.answer`. They are ids only, because Core supplies
+  their descriptors.
+- `onScreen.pageUrl`: the active tab's address (`chrome.tabs.query`, last
+  focused window), and only an http(s) address of at most 2048 characters
+  (`page-url.ts`). Core builds from that page. If the browser cannot say which
+  tab is active, nothing is sent, and the panel is told why.
+
+Core runs a chosen capability for the paired person's project, on that person's
+unlocked model key, and answers `response.execution`. For a build or a run
+that is `started`. The result arrives later as a thread turn, and progress
+arrives as activity stamped with the thread's id. An automation's own chat is
+`panelConversationSend` with `kind: "open"`, `subjectKind: "flow"` and the
+Flow's id. There, "run it" means that Flow. Core's side is described in
+FluxIQ Core's `docs/architecture/automation-studio/client-gateway.md`
+("The chat runs capabilities in Core").
 
 ## Action Surface
 
@@ -551,6 +586,79 @@ neither holds the address the page is at. A URL claim that names no URL is a
 malformed Flow and still fails as `web.validation.state_mismatch`, as does a
 failed URL claim on a page with no gate. Every producer is listed in
 [the failure taxonomy](failure-taxonomy.md#who-produces-what).
+
+### Robot Checks
+
+FluxIQ never presses, types into, solves or reloads a robot check. What it
+does next depends on who clears the check, which
+[`content/action-runtime/challenge-evidence.ts`](../../apps/extension/src/content/action-runtime/challenge-evidence.ts)
+reads from wording and structure a visitor sees, never from a site's name
+(`robotCheckIn`):
+
+- **Self-clearing.** The page says it is checking and will let the visitor on
+  by itself. Examples: "Checking your browser before you continue",
+  "Checking you are human…", "we'll check your browser again automatically
+  in 8 seconds", or a disabled "Checking…" button on a page about robots,
+  humans or the browser. Such a check is waited out in place, untouched, for
+  at most 15 s. The wait is held within the command's own `timeoutMs`, less
+  1 s for the reply.
+- **Person-only.** The page asks the visitor to prove something: an "I'm not
+  a robot" box, "Confirm you are human", a press-and-hold with no countdown,
+  or characters in a picture. The result is `USER_INTERVENTION_REQUIRED`
+  (`web.intervention.required`), and Core asks the person to complete the
+  check and press Continue.
+
+Characters in a picture are always person-only. Otherwise, a check that says
+it clears by itself counts as self-clearing even if it also offers a box or a
+hold. A self-clearing check that does not clear in time is handed to the
+person like a person-only one. A page is read in its headings, in full when
+it is small enough to be an interstitial (1,000 characters), and in the
+regions a page draws a check into over its own content: a dialog, an alert or
+status region, a live region. In a dialog, every robot check is `captcha` to
+`challengeIn`, so the interference defence never presses a self-clearing
+check's Continue. On a page, only a person-only check is `captcha`. The page
+reading feeds `challengeGateFailure`, which hands a missing target to the
+person, and a self-clearing check is waited out instead: by the navigation or
+click that met it, or by the retry a missing target is given.
+
+Where checks are met:
+
+- **A navigation** asks the landed page's top frame (`fluxiq.pageChallenge`,
+  [`shared/page-challenge-message.ts`](../../apps/extension/src/shared/page-challenge-message.ts)).
+  The answer is `{ challenge: "captcha", robotCheck: "self_clearing" |
+  "person_only" }`; a content script from before `robotCheck` existed
+  answers `captcha` alone, which is read as person-only. A self-clearing check
+  is polled every 500 ms
+  ([`runtime/landed-check-wait.ts`](../../apps/extension/src/runtime/landed-check-wait.ts)).
+  When it reads as no check, the tab is let settle and asked once more. The
+  landing is then judged as usual, and the validation says the check was
+  waited out.
+- **A navigation to the address the tab already shows** is normally a reload
+  ([`runtime/automation-tab.ts`](../../apps/extension/src/runtime/automation-tab.ts)).
+  If the tab is showing a check, it is not reloaded: a reload asks the check
+  again and restarts its countdown. The drive record says `heldForCheck`,
+  which `judgeTabMovement` does not treat as a no-op, and the check is waited
+  out or handed over as above.
+- **A click whose navigation commits onto a check**
+  ([`runtime/click-landing.ts`](../../apps/extension/src/runtime/click-landing.ts)):
+  the landed top frame is asked the same question, again for up to 2.5 s while
+  the new document is not yet listening. A check decides the landing before
+  the HTTP status does, so a check served 403 is still the person's. The
+  failure says the click was made and names the landed path without its
+  query.
+- **A press that puts a check up in place**, with no navigation
+  ([`content/action-runtime/robot-check/`](../../apps/extension/src/content/action-runtime/robot-check/robot-check-watch.ts)).
+  The click verb watches the page's reading beside the rate-limit watch,
+  within the same 500 ms window and ending on the same signals, so an
+  ordinary press waits no longer. Only a check that appeared after the press,
+  or one that turned from self-clearing into person-only, is the press's
+  answer. A self-clearing one is followed for up to 15 s; company-website's
+  "Checking you are human…" becoming "Confirm you are human" ends as
+  person-only. The failure (`actionNeedsPerson` in `results.ts`) says the
+  press was made.
+
+Every failure record leads its `actual` with the closed word `captcha:` and
+never quotes the check.
 
 Action commands, recorded action events, and action results may also carry a
 `visualTarget` object. This object is the editor-facing reference to the state

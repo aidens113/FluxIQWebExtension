@@ -93,3 +93,17 @@ test("nothing the overlay adds of its own is a raw id: fallback headlines, step 
     for (const text of [view?.headline ?? "", view?.detail ?? "", view?.step ?? ""]) assert.doesNotMatch(text, rawId, String(outcome));
   }
 });
+
+test("a build waiting at a robot check shows Core's ask as its sentence, under 'Waiting for you', and stays up", () => {
+  // Core's person-needed ask (t197) arrives as phase `waiting_permission` with
+  // the ask's text as its label; the pacer makes that the display's detail.
+  const ask = "FluxIQ needs you: complete the check on this page, then press Continue.";
+  const view = activityOverlayView(display({
+    activityId: "build:b", subjectKind: "build", phase: "waiting_permission", headline: "Waiting for you",
+    detail: ask, step: null, working: false, outcome: "waiting"
+  }), "expanded");
+  assert.equal(view?.headline, "Waiting for you");
+  assert.equal(view?.detail, ask, "the whole ask fits the line: nothing is cut");
+  assert.equal(view?.mark, "attention");
+  assert.equal(view?.settled, false, "waiting for the person does not fade");
+});

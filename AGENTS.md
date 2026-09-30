@@ -295,16 +295,19 @@ The senior supervisor agent picks the tier when it writes the brief:
   tree someone else is editing reports false failures and invites a worker to
   "fix" a file another worker is still writing.
 
-**A worktree isolates the files, not the machine, so only one live Lab run may
-be in flight at a time.** Two live runs compete for browsers, loopback ports and
-CPU, and the loser does not fail cleanly: it stalls, exhausts a wait, and is
-recorded as a product failure. On 2026-09-23 this cost three separate
-measurements — a build that had already done its work was failed
-`performance.budget` after a ten-minute wait, and a worker spent hours blaming
-its own tooling, then the campaign wrapper, then the machine's memory, for runs
-that were simply being starved. Before starting a live run, check whether one is
-already going; if the supervisor has a campaign in flight, ask it rather than
-starting one, and say so in your report instead of theorising about the cause.
+**Up to four live Lab runs may be in flight at once, one per live lane** (user,
+2026-09-29). Each live lane owns one of `lab-slots/slot-1` to `slot-4` for the
+whole of its work, so no lane waits on another; the slot directory only says
+who is running. Ports are allocated per run and Lab instances are labelled per
+lane, so four runs do not share state. A live-run failure is a product or Lab
+defect, never the machine: the stalls and crashes once blamed on load and
+memory were a Lab defect (the network guard crashing the extension's service
+worker as it started). Trace the failing step and the regression behind it.
+The Lab itself refuses a live run after an empty balance, in a relaunch loop,
+without a debug of the previous run, or on unchanged source after a failure;
+there is no spending limit, and the spend ledger records each run's cost for
+reporting. Overrides are files only the user creates
+(`docs/architecture/testing-facility.md`, "Live-run waste guards").
 
 Authoring worktrees live under `fxwork/` beside the checkout
 (`C:/Users/osrs_/FluxStuff/fxwork/` here), never under `fxlab/`, which holds the

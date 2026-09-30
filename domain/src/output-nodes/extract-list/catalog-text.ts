@@ -192,10 +192,26 @@ export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
  *   the same default in the words the clause before it already set up.
  *
  * At 698 of 700 there are two characters left.
+ *
+ * **The fourth is `badge: is: "present"`, fitted on 2026-09-29.** An icon badge
+ * -- the everything store's `<i role="img" aria-label="Brightaisle Plus">` --
+ * is now a detected column labelled by its constant accessible name
+ * (`apps/extension/src/content/extraction/badge-name.ts`), and the column holds
+ * the name where the badge is and `null` where it is not, so the one thing a
+ * condition can say about it is whether it is there. The shape showed only
+ * `is: "absent"`, the advertisement mark, and "Brightaisle Plus eligible" is the
+ * other direction. What paid for its 22 characters, none of them a rule:
+ *
+ * - `Detected: ` before the handle form, which the handle itself says and the
+ *   literal branch's `Or` still sets apart;
+ * - `All hold; `, which the detect tool's description says in full ("Every
+ *   condition must hold") to the same build (`runtime/llm-evidence/tools.ts`).
+ *
+ * At 700 of 700 there is nothing left.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  `Detected: {handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false};`,
-  "where is optional: omit it, keep every item, narrow later. All hold; atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts.",
+  `{handle: "extraction.N", fields?: {yourKey: "colKey"|"colKey@href"}, where?: [{field: "colKey", is: "absent"}, {field: "yourKey", atLeast: 4, lessThan: 50}], paginate?: false};`,
+  "where is optional: omit it, keep every item, narrow later. atMost/greaterThan/equals, contains/startsWith/endsWith/matches (text); list = any; not: true inverts; badge: is: \"present\".",
   "link=absolute URL, @href=raw href.",
   "Or {item: css, fields: {key: css|css@attribute|column:<header>}}.",
   `paginate?: {mode: ${WEB_AUTOMATION_EXTRACT_PAGINATION_MODES.join("|")}, next|control|pages, maxPages|maxScrolls<=${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}: pages to read, not pages present; one page unless asked.`,

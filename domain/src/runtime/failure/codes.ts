@@ -73,6 +73,24 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
    */
   BLOCKED_BY_DIALOG: "web.action.blocked_by_dialog",
   /**
+   * The page refused a press for going too fast, and said so: a notice the press
+   * itself opened -- "You're going too fast ... try again in 12 seconds" -- with
+   * nothing confirmed. Produced by `content/actions/click.ts` from what
+   * `content/action-runtime/rate-limit-notice.ts` saw.
+   *
+   * The only row that states the act did not happen (`effect: "unacted"`), and
+   * that is what it is for. A press is a mutating act, and Core refuses to repeat
+   * one whose failure may already have landed; the page's own notice is the
+   * evidence that nothing landed, so the node's own re-run -- after the wait the
+   * page named, which rides on the record as `retryAfterMs` -- does the act. The
+   * notice's "Try again" is never pressed on the page's initiative.
+   *
+   * Until 2026-09-30 the press reported success on its hit test, so a Flow
+   * confirming four friend requests on social-network-feed read three of four
+   * as accepted and one as done.
+   */
+  RATE_LIMITED: "web.action.rate_limited",
+  /**
    * The browser refused the action because this extension may not touch that
    * page: a host the manifest does not request, a `chrome://` or gallery URL, or
    * an enterprise policy that forbids scripting it.
@@ -144,12 +162,26 @@ export type WebAutomationFailureCode = (typeof WEB_AUTOMATION_FAILURE_CODES)[key
  */
 export type WebAutomationFailureRecord = Omit<AutomationStudioFailureRecord, "code"> & { code: WebAutomationFailureCode };
 
-/** What a code always means: its Core category, whether retrying it unchanged can work, and where it was decided. */
+/**
+ * What a code always means: its Core category, whether retrying it unchanged
+ * can work, where it was decided, and -- on the one row whose producer can
+ * prove it -- that the act did not happen.
+ */
 export type WebAutomationFailureCodeDefinition = {
   readonly category: AutomationStudioAdaptiveFailureClass;
   readonly retryable: boolean;
   readonly stage: AutomationStudioFailureStage;
+  readonly effect?: NonNullable<AutomationStudioFailureRecord["effect"]>;
 };
+
+/**
+ * The longest wait a record may carry: Core's
+ * `AUTOMATION_STUDIO_FAILURE_RECORD_LIMITS.retryAfterMsMax`, restated as a
+ * number for the reason `WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH` is -- the
+ * content script must not import Core's runtime, and Core's parser drops a
+ * record whose wait exceeds it. `tests/codes.test.ts` asserts the two agree.
+ */
+export const WEB_AUTOMATION_RETRY_AFTER_MAX_MS = 3_600_000;
 
 /**
  * The code table. Each row is fixed, which is what lets a producer name a code
@@ -180,6 +212,9 @@ export const WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS: Readonly<Record<WebAutomat
   "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.blocked_by_dialog": { category: "unexpected_state", retryable: false, stage: "execution" },
+  // The page's own notice says the press confirmed nothing, so the act did not
+  // happen and making it again after the named wait is not a second act.
+  "web.action.rate_limited": { category: "action_failed", retryable: true, stage: "execution", effect: "unacted" },
   // A page this extension may not touch answers the same way however many times
   // it is asked, so the row says so: `dispatch`, because the browser refused
   // before the verb was reached, and not retryable.
@@ -201,6 +236,8 @@ export type WebAutomationFailureComparison = {
   actual?: string | undefined;
   /** Lowercase SHA-256 hex digest of the failure-evidence packet. */
   evidenceDigest?: string | undefined;
+  /** The wait the page asked for before the same act is made again, in milliseconds. Kept only on a retryable code. */
+  retryAfterMs?: number | undefined;
 };
 
 /** True when a string is one of the closed set's codes. */
@@ -218,13 +255,16 @@ export function isWebAutomationFailureCode(value: unknown): value is WebAutomati
  * parser rejects an empty string, and an unbounded one would take the whole
  * record with it. A digest that is not a lowercase SHA-256 hex string is
  * dropped for the same reason -- losing one optional field beats losing the
- * failure.
+ * failure. So is a wait on a code that is not retryable, which Core's parser
+ * calls a contradiction; a readable wait is rounded to whole milliseconds and
+ * held to Core's bound instead. The effect is the row's, never the caller's.
  */
 export function webAutomationFailureRecord(code: WebAutomationFailureCode, comparison: WebAutomationFailureComparison = {}): WebAutomationFailureRecord {
   const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
   const expected = boundedText(comparison.expected);
   const actual = boundedText(comparison.actual);
   const evidenceDigest = comparison.evidenceDigest !== undefined && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : undefined;
+  const retryAfterMs = definition.retryable ? boundedWait(comparison.retryAfterMs) : undefined;
   return {
     category: definition.category,
     code,
@@ -232,11 +272,18 @@ export function webAutomationFailureRecord(code: WebAutomationFailureCode, compa
     stage: definition.stage,
     ...(expected === undefined ? {} : { expected }),
     ...(actual === undefined ? {} : { actual }),
-    ...(evidenceDigest === undefined ? {} : { evidenceDigest })
+    ...(evidenceDigest === undefined ? {} : { evidenceDigest }),
+    ...(definition.effect === undefined ? {} : { effect: definition.effect }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs })
   };
 }
 
 const EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+
+function boundedWait(value: number | undefined): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.min(Math.round(value), WEB_AUTOMATION_RETRY_AFTER_MAX_MS);
+}
 
 function boundedText(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;

@@ -50,8 +50,10 @@ import {
 import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
+import { webLlmSnapshotStates } from "../state-digest";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
-import { recoverable, rejectionDetail } from "../tool-rejection";
+import { webActionNeedsPerson } from "../action-failure";
+import { recoverable, RecoverableToolRejection, rejectionDetail } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
@@ -67,6 +69,16 @@ export type WebLlmStructureDetectionContext = {
   /** The last packet this Flow's authoring was shown, which is what a target handle is bound through. */
   returned: WebLlmSnapshotBinding | undefined;
   handles: WebLlmExtractionHandles;
+  /**
+   * Told the one whole-page capture this detection read the page's state in,
+   * as soon as it has it, so the caller can report that state on the result
+   * or on a refusal thrown after it (`../capture.ts`, `withCallStates`). That
+   * is the capture that binds the target when one was named, and otherwise
+   * the page-wide detection itself; a detection in a frame reads the frame's
+   * own document, which is not the page, so it is never the one. Absent, as on
+   * the recovery path, nobody is told.
+   */
+  observed?: (page: WebLlmSnapshotBinding) => void;
 };
 
 /**
@@ -82,8 +94,11 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   }
 
   const current = target === undefined ? undefined : await captureEvidence(gateway, sessionId, request, request.signal);
+  if (current !== undefined) context.observed?.(current);
   const element = current === undefined || target === undefined ? undefined : boundTarget(context.returned, current, target);
   let { detection, page } = await capturedDetection(context, element?.selector, element?.frameId, current, target);
+  // With no target the detection is page-wide and is itself the page's state.
+  if (current === undefined) context.observed?.(page);
   let searchedPage = false;
   // Nothing around the target: the page is asked once more, as a whole, before
   // anything is refused (see the header). A page-wide answer names no target.
@@ -127,15 +142,29 @@ async function capturedDetection(
   const parameters: JsonObject = frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: frameId };
   const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
   assertActive(request.signal);
+  // A detection that met a robot check is the person's, as a look's is (`../capture.ts`).
+  if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true);
   if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === undefined ? undefined : new URL(current.evidence.location).origin;
-  const page = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
+  const sanitized = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     budget: "exploration",
     maxEvidenceBytes: undefined,
     expectedOrigin,
     failedAction: undefined
   }));
+  // Digested and projected only where the capture is of the page: a frame's
+  // detection describes the frame's own document (`observed` above), which is
+  // neither the page's state nor the route state `observeRouteState` reads.
+  const states = frameId === undefined ? webLlmSnapshotStates(payload.snapshot, sanitized, undefined) : undefined;
+  const page = present<WebLlmSnapshotBinding>({
+    evidence: sanitized.evidence,
+    selectors: sanitized.selectors,
+    records: sanitized.records,
+    shadowHosts: sanitized.shadowHosts,
+    stateDigest: states?.stateDigest,
+    routeState: states?.routeState
+  });
   // A top-frame detection must describe the page the target was bound on; a
   // frame's own document has its own location, and its origin is held above.
   if (current !== undefined && frameId === undefined && page.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));

@@ -19,8 +19,18 @@
 // all, kept or let go, so the plan resolver can tell a literal extraction the
 // model wrote with a detected list in hand -- a guess -- from one it wrote
 // before any detection. It forgets a let-go handle once the stale memory does.
+//
+// `ownList` answers the question that rule has to ask second: whether a literal
+// is not a guess at all, but the Flow's own list written down resolved. A Flow
+// keeps the resolved request, not the handle, so a step read back out of it --
+// the re-author's draft (`AS/runtime/llm/node-tools/draft-from-flow.ts`) -- is a
+// literal whose item is a detected list's item. What a list answers to is kept
+// by item selector and frame, for as long as the scope's lists are remembered
+// rather than as long as one handle is: each detected column under its detected
+// key, and each column under every key a plan wrote it under (`wrote`), because
+// the Flow keeps the plan's keys and the draft shows the model those.
 
-import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
+import type { WebAutomationExtractField, WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { present } from "../present";
 
 /** How many handles are retained at once. A convenience for one authoring session, not a store. */
@@ -73,12 +83,44 @@ export type WebLlmExtractionHandles = {
   resolve(scope: WebLlmExtractionHandleScope, handle: unknown): WebLlmExtractionHandleResolution;
   /** Whether any handle this store still knows of, kept or let go, was issued for this project and Flow. */
   issuedFor(scope: WebLlmExtractionHandleScope): boolean;
+  /** That a plan of this project and Flow wrote a handle's list into a step as `request`, in `frameId`. */
+  wrote(scope: WebLlmExtractionHandleScope, request: WebAutomationExtractListRequest, frameId: number | undefined): void;
+  /**
+   * What a list this project and Flow was shown answers to, by its item
+   * selector and frame (`undefined` for the top one): each field under every key
+   * it was detected or written under. Nothing when no list here reads from that
+   * item, which is the answer for every literal a model wrote itself.
+   */
+  ownList(scope: WebLlmExtractionHandleScope, item: string, frameId: number | undefined): Record<string, WebAutomationExtractField> | undefined;
 };
+
+/** How many (project, Flow, frame, item) lists are remembered, and how many keys one list keeps. */
+const REMEMBERED_LISTS = 64;
+const REMEMBERED_LIST_KEYS = 64;
 
 export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
   let reserved = 0;
   const retained = new Map<string, { scope: string; binding: WebLlmExtractionBinding }>();
   const letGo = new Map<string, string>();
+  const lists = new Map<string, Map<string, WebAutomationExtractField>>();
+  const listKey = (scope: WebLlmExtractionHandleScope, item: string, frameId: number | undefined): string => `${scopeKey(scope)}\0${frameId ?? 0}\0${item}`;
+  const answersTo = (key: string, fields: Record<string, WebAutomationExtractField>): void => {
+    const list = lists.get(key) ?? new Map<string, WebAutomationExtractField>();
+    lists.delete(key);
+    lists.set(key, list);
+    for (const [name, field] of Object.entries(fields)) {
+      list.delete(name);
+      list.set(name, structuredClone(field));
+    }
+    for (const oldest of list.keys()) {
+      if (list.size <= REMEMBERED_LIST_KEYS) break;
+      list.delete(oldest);
+    }
+    for (const oldest of lists.keys()) {
+      if (lists.size <= REMEMBERED_LISTS) break;
+      lists.delete(oldest);
+    }
+  };
   const forget = (handle: string, scope: string): void => {
     retained.delete(handle);
     letGo.set(handle, scope);
@@ -95,6 +137,7 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
     retain(scope, binding) {
       if (!HANDLE_PATTERN.test(binding.handle) || retained.has(binding.handle)) throw new Error("extraction handle was not reserved for this binding");
       retained.set(binding.handle, { scope: scopeKey(scope), binding: copyBinding(binding) });
+      answersTo(listKey(scope, binding.extractList.item, binding.frameId), binding.extractList.fields);
       for (const [oldest, entry] of retained) {
         if (retained.size <= RETAINED_EXTRACTION_HANDLES) break;
         forget(oldest, entry.scope);
@@ -110,6 +153,13 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
     issuedFor(scope) {
       const key = scopeKey(scope);
       return [...retained.values()].some((entry) => entry.scope === key) || [...letGo.values()].includes(key);
+    },
+    wrote(scope, request, frameId) {
+      answersTo(listKey(scope, request.item, frameId), request.fields);
+    },
+    ownList(scope, item, frameId) {
+      const list = lists.get(listKey(scope, item, frameId));
+      return list === undefined ? undefined : structuredClone(Object.fromEntries(list));
     },
   };
 }

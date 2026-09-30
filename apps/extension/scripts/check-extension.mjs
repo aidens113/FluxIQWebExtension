@@ -34,9 +34,13 @@ import { EXTENSION_ENTRY_NAMES, bundleExtensionEntry } from "./build-extension.m
 
 const tsc = createRequire(import.meta.url).resolve("typescript/bin/tsc");
 
+// Incremental, into ignored space the build cache owns: tsc re-checks only
+// what changed since the last run, and its build info records every file's
+// content hash, so a warm check is exactly as strict as a cold one.
+const buildInfo = (name) => path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "node_modules", ".cache", "fluxiq-build", `${name}.tsbuildinfo`);
 const projects = [
-  { project: "tsconfig.json", args: ["--noEmit"] },
-  { project: "tsconfig.test.json", args: [] }
+  { project: "tsconfig.json", args: ["--noEmit", "--incremental", "--tsBuildInfoFile", buildInfo("check-src")] },
+  { project: "tsconfig.test.json", args: ["--incremental", "--tsBuildInfoFile", buildInfo("check-test")] }
 ];
 
 let failed = false;

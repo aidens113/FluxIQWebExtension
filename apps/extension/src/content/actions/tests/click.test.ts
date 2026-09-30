@@ -16,7 +16,8 @@
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import type { InPlaceEffect, InPlaceEffectWatch } from "../../action-runtime";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import type { InPlaceEffect, InPlaceEffectWatch, RateLimitNotice, RobotCheckSighting } from "../../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../types";
 import { clickAction } from "../click";
 import type { ContentActionDependencies } from "../types";
@@ -96,14 +97,91 @@ function fakeWatch(effect: InPlaceEffect | undefined, events: string[]): { make:
   };
 }
 
+type NoticeRecord = { made: number; settledWith: number[]; stopped: number; refusedWith: RateLimitNotice[] };
+
+/** A rate-limit watch that reports `notice` when settled, and records how the verb used it. */
+function fakeNoticeWatch(notice: RateLimitNotice | undefined, events: string[]): { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord } {
+  const record: NoticeRecord = { made: 0, settledWith: [], stopped: 0, refusedWith: [] };
+  return {
+    record,
+    make: () => {
+      events.push("notice-watch");
+      record.made += 1;
+      return {
+        settle: async (windowMs) => {
+          record.settledWith.push(windowMs);
+          return notice;
+        },
+        stop: () => {
+          record.stopped += 1;
+        }
+      };
+    }
+  };
+}
+
+type CheckRecord = { made: number; settledWith: Array<[number, number]>; stopped: number; handedOver: RobotCheckSighting[] };
+
+/** A robot-check watch that reports `sighting` when settled, and records how the verb used it. */
+function fakeCheckWatch(sighting: RobotCheckSighting | undefined, events: string[]): { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord } {
+  const record: CheckRecord = { made: 0, settledWith: [], stopped: 0, handedOver: [] };
+  return {
+    record,
+    make: () => {
+      events.push("check-watch");
+      record.made += 1;
+      return {
+        settle: async (windowMs, waitMs) => {
+          record.settledWith.push([windowMs, waitMs]);
+          return sighting;
+        },
+        stop: () => {
+          record.stopped += 1;
+        }
+      };
+    }
+  };
+}
+
 /** The dependencies the click verb reads, with a result builder that keeps only the verdict. Anything else it reaches for throws. */
-function dependencies(element: Element, watchInPlaceEffect: ContentActionDependencies["watchInPlaceEffect"]): ContentActionDependencies {
+function dependencies(
+  element: Element,
+  watchInPlaceEffect: ContentActionDependencies["watchInPlaceEffect"],
+  notices: { make: ContentActionDependencies["watchRateLimitNotice"]; record: NoticeRecord },
+  checks: { make: ContentActionDependencies["watchRobotCheck"]; record: CheckRecord }
+): ContentActionDependencies {
   const provided: Partial<ContentActionDependencies> = {
     resolveTarget: () => ({ element, resolution: {} as ReturnType<ContentActionDependencies["resolveTarget"]>["resolution"] }),
     checkActionability: () => ({ actionable: true, point: { x: 10, y: 20 }, detail: "the point 10,20 landed on the target" }),
     describeElement: () => ({}) as ReturnType<ContentActionDependencies["describeElement"]>,
     captureSnapshot: () => ({}) as ReturnType<ContentActionDependencies["captureSnapshot"]>,
     watchInPlaceEffect,
+    watchRateLimitNotice: notices.make,
+    watchRobotCheck: checks.make,
+    needsPerson: (action: BrowserActionCommand, startedAt: number, sighting: RobotCheckSighting): BrowserActionResult => {
+      checks.record.handedOver.push(sighting);
+      return {
+        commandId: action.commandId,
+        actionType: action.actionType,
+        status: "failed",
+        validation: { status: "failed", expected: "the page answers the press", actual: "a robot check" },
+        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, { actual: "captcha: a robot check" }),
+        startedAt,
+        finishedAt: startedAt
+      };
+    },
+    rateLimited: (action: BrowserActionCommand, startedAt: number, notice: RateLimitNotice): BrowserActionResult => {
+      notices.record.refusedWith.push(notice);
+      return {
+        commandId: action.commandId,
+        actionType: action.actionType,
+        status: "failed",
+        validation: { status: "failed", expected: "the page accepts the press", actual: "refused" },
+        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { retryAfterMs: notice.retryAfterMs }),
+        startedAt,
+        finishedAt: startedAt
+      };
+    },
     success: (action: BrowserActionCommand, startedAt: number, message: string, validation: BrowserActionValidation): BrowserActionResult => ({
       commandId: action.commandId,
       actionType: action.actionType,
@@ -123,12 +201,22 @@ function dependencies(element: Element, watchInPlaceEffect: ContentActionDepende
   });
 }
 
-async function click(t: TestContext, behaviour: PageBehaviour, effect: InPlaceEffect | undefined, action: BrowserActionCommand = CLICK) {
+async function click(
+  t: TestContext,
+  behaviour: PageBehaviour,
+  effect: InPlaceEffect | undefined,
+  action: BrowserActionCommand = CLICK,
+  notice?: RateLimitNotice,
+  sighting?: RobotCheckSighting,
+  startedAt = 1_000
+) {
   installMouseEvent(t);
   const page = fakePage(behaviour);
   const watch = fakeWatch(effect, page.events);
-  const result = await clickAction(action, dependencies(page.element, watch.make), 1_000);
-  return { result, events: page.events, watch: watch.record };
+  const notices = fakeNoticeWatch(notice, page.events);
+  const checks = fakeCheckWatch(sighting, page.events);
+  const result = await clickAction(action, dependencies(page.element, watch.make, notices, checks), startedAt);
+  return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record };
 }
 
 test("a link the page cancelled and then answered by changing its content passes, and says so", async (t) => {
@@ -200,4 +288,89 @@ test("a button is still held to the hit test alone, with no in-place watch, even
     actual: "the point 10,20 landed on the target; the page prevented the click's default action"
   });
   assert.equal(watch.made, 0);
+});
+
+// The press the page refused as "too fast" (lane t195, social-network-feed's
+// fourth Confirm inside its window). It landed on the target, so the hit test
+// alone passed it and the Flow read the refused request as confirmed.
+test("a button the page answers with a going-too-fast notice fails as rate limited, carrying the wait the notice named", async (t) => {
+  const { result, notices } = await click(t, { link: false, prevent: false }, undefined, CLICK, { afterMs: 3, retryAfterMs: 12_500 });
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.action.rate_limited");
+  assert.equal(result.failure?.retryable, true);
+  assert.equal(result.failure?.effect, "unacted");
+  assert.equal(result.failure?.retryAfterMs, 12_500);
+  assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [{ afterMs: 3, retryAfterMs: 12_500 }] });
+});
+
+test("a button with no such notice still passes on its hit test, after the rate-limit window", async (t) => {
+  const { result, notices } = await click(t, { link: false, prevent: false }, undefined);
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(notices, { made: 1, settledWith: [500], stopped: 1, refusedWith: [] });
+});
+
+test("the rate-limit and robot-check watches start between the hover and the press, so what was already there is never the press's answer", async (t) => {
+  const { events } = await click(t, { link: false, prevent: false }, undefined);
+  assert.deepEqual(events, ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "mousedown", "mouseup", "click"]);
+});
+
+test("a command's own timeout shortens the rate-limit window, and never lengthens it", async (t) => {
+  const shorter = await click(t, { link: false, prevent: false }, undefined, { ...CLICK, timeoutMs: 200 });
+  assert.deepEqual(shorter.notices.settledWith, [200]);
+  const longer = await click(t, { link: false, prevent: false }, undefined, { ...CLICK, timeoutMs: 60_000 });
+  assert.deepEqual(longer.notices.settledWith, [500]);
+});
+
+test("a link is never watched for a rate-limit notice: its own post-condition decides it", async (t) => {
+  const { notices } = await click(t, { link: true, prevent: false }, undefined);
+  assert.equal(notices.made, 0);
+});
+
+// A press the page answers with a robot check drawn in place, no navigation:
+// company-website's "Send request" puts up "Checking you are human..." and,
+// 2.2 s later, a "Confirm you are human" box. It landed on its target, so the
+// hit test alone passed it, and the next step met a page only a person could
+// answer. What the watch reads is `robot-check-watch.test.ts`'s.
+
+test("a button whose press puts up a robot check only a person can answer fails as needing a person, not as a success", async (t) => {
+  const sighting: RobotCheckSighting = { outcome: "person_only", afterMs: 2_210, waitedMs: 2_200 };
+  const { result, checks } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, sighting);
+  assert.equal(result.status, "failed");
+  assert.equal(result.failure?.code, "web.intervention.required");
+  assert.deepEqual(checks.handedOver, [sighting]);
+  assert.equal(checks.stopped, 1);
+});
+
+test("a robot check that said it would clear by itself and did not is handed to the person too", async (t) => {
+  const sighting: RobotCheckSighting = { outcome: "not_cleared", afterMs: 10, waitedMs: 15_000 };
+  const { result, checks } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, sighting);
+  assert.equal(result.failure?.code, "web.intervention.required");
+  assert.deepEqual(checks.handedOver, [sighting]);
+});
+
+test("a robot check that cleared by itself was waited out untouched, and the press passes and says so", async (t) => {
+  const { result, checks } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, { outcome: "cleared", afterMs: 4, waitedMs: 2_600 });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(checks.handedOver, []);
+  const validation = result.validation;
+  assert.match(validation.status === "passed" ? validation.actual : "", /robot check that cleared by itself 2600 ms later, untouched/u);
+});
+
+test("a press that puts no check up is watched only through the rate-limit window, with a 15 s wait kept for a check that appears", async (t) => {
+  const { result, checks } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, Date.now());
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(checks.settledWith, [[500, 15_000]]);
+  assert.equal(checks.stopped, 1);
+});
+
+test("a command's own timeout holds the wait on a robot check within what is left of it", async (t) => {
+  const { checks } = await click(t, { link: false, prevent: false }, undefined, { ...CLICK, timeoutMs: 6_000 }, undefined, undefined, Date.now());
+  const [[windowMs, waitMs] = [0, 0]] = checks.settledWith;
+  assert.equal(windowMs, 500);
+  assert.ok(waitMs <= 5_000 && waitMs >= 4_900, `waited at most ${waitMs} ms`);
+});
+
+test("a link is never watched for a robot check: where it lands is the worker's to judge", async (t) => {
+  const { checks } = await click(t, { link: true, prevent: false }, undefined);
+  assert.equal(checks.made, 0);
 });

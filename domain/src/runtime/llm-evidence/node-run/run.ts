@@ -30,6 +30,11 @@
 // so whatever got in the way has a handle the model can act on next, and
 // carrying the record of the step under the node's own name with
 // `proposes: false` so a step that did not work cannot reach the Flow.
+//
+// **Except a robot check, which is not the model's.** A call that meets one
+// (`USER_INTERVENTION_REQUIRED`) is marked `personNeeded`, and its draft
+// statement is the step as it stands once the person has cleared the check
+// (`personDraft`): Core asks the person and never shows the model the refusal.
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { webActionFailureRefusal } from "../action-failure";
@@ -40,6 +45,8 @@ import {
   pageRefusal,
   toolExecution,
   toolMetadata,
+  withCallStates,
+  withPersonNeeded,
   type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
@@ -91,6 +98,12 @@ const LOOK_ENVELOPE_BYTES = 128;
  * arriving here costs nothing that shows: the model simply reasons with less
  * (`../present.ts`).
  */
+/** The press node, by the id the catalog gives it. */
+const PRESS_NODE_ID = "web.output.dom-click";
+
+/** What a press that left the page looking the same is told, beside `pageChanged: false`. */
+const PRESS_AGAIN = "The press landed and the page did not change. Some pages take the first press after they load only as a wake-up: press the same control once more before trying anything else, and keep both presses, since the Flow will need them too.";
+
 export type WebNodeOutcome = {
   ok: true;
   /** The node that ran, as the catalog names it. */
@@ -99,6 +112,14 @@ export type WebNodeOutcome = {
   status: string;
   /** Whether the page looked different afterwards. Absent where it was not compared. */
   pageChanged?: boolean;
+  /**
+   * Said beside `pageChanged: false` after a press, and nowhere else
+   * (`PRESS_AGAIN`): some pages take the first press after they load only as a
+   * wake-up. Lane t195's run `run-munuxns5-833f4313` pressed bigbox's Add to cart,
+   * saw nothing change, navigated away and back, and did it again for forty
+   * decisions without ever pressing twice in a row.
+   */
+  unchangedPress?: string;
   /**
    * The node ran and the page it left could not be read, however long it was
    * waited for (`../capture.ts`, `captureAfterAction`). The packet then has no
@@ -136,6 +157,30 @@ type WebNodeCallRecord = {
   parameters?: JsonObject;
   status?: string;
   assumed?: WebLlmNameAssumption[] | undefined;
+  /**
+   * The page as the call found it, once it has been read: the state a refusal
+   * says it found (`stateDigests.before`), and, for a refusal raised before the
+   * node's command went out, the state it left as well.
+   */
+  found?: WebLlmSnapshotBinding | undefined;
+  /**
+   * The node's command has gone to the page. From here a refusal cannot say
+   * the page is as it was found; only a page captured afterwards says what the
+   * call left.
+   */
+  acted?: true;
+  /**
+   * The step as a succeeded call of this node would have stated it, written
+   * just before its command goes out: what the model may be shown (`input`),
+   * what the Flow keeps (`ranWith`), and what a replay needs (`replay`).
+   *
+   * Read only when the command met a robot check (`personNeeded`). Core then
+   * asks the person, and on Continue the call stands with this statement --
+   * the navigation or press did happen, and the person cleared what stood
+   * behind it -- so it is the same statement a success would have made
+   * (`personDraft`).
+   */
+  standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement };
 };
 
 export type WebNodeRun = {
@@ -205,8 +250,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // model's first paid decision is made knowing where it is meant to be.
       if (!looked) return notThereYet(run, record);
       run.shown(looked);
-      return toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
+      // One capture, which is both the state the look found and the one it left.
+      return withCallStates(toolExecution(
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -217,9 +263,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
         // reader of a failed run is trying to tell apart from another. It named
         // nothing either, so it assumed nothing.
         { resultReason: undefined, nodeId: undefined, assumed: undefined }
-      );
+      ), looked, looked);
     }
     current = await currentPage(run, run.request);
+    // Absent from nowhere, which leaves the state this call found unsaid.
+    record.found = current;
     // From nowhere, the only call that runs is the one that goes to the start
     // location. Everything else is refused with where to go, rather than with
     // `page_unreadable`, which says what happened and not what to do about it.
@@ -301,6 +349,14 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
     }
+    // What this step is, should it meet a robot check: the statement a success
+    // would make, less what only the page it left can say.
+    record.standing = {
+      input: safeCall(value, written),
+      ranWith: nodeCall(value, flowParameters(written, ran)),
+      replay: webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: undefined, reads: false })
+    };
+    record.acted = true;
     const result = await run.gateway.executeAction(run.sessionId, { actionType: node.actionType, parameters: ran, metadata: toolMetadata(run.request) });
     assertActive(run.request.signal);
     if (result.status !== "succeeded") {
@@ -317,8 +373,11 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       const refused = webActionFailureRefusal(result);
       throw current
         ? await pageRefusal(run.gateway, run.sessionId, run.request, current, refused, run.request.signal)
-        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""));
+        : new RecoverableToolRejection(refused.code, webStartLocationRefusal(run.request.startLocation ?? ""), undefined, refused.personNeeded);
     }
+    // The command worked. Should the look after it meet a robot check, the step
+    // stands with what it read, as a success's statement would say.
+    record.standing.replay = webNodeReplayStatement({ location: foundAt(current, run.request.startLocation, undefined), payload: result.payload as JsonValue | undefined, reads: node.proposes });
     // The move that goes there has now gone there: from here on the page is an
     // ordinary page (`./arrival.ts`).
     if (run.request.startLocation !== undefined && webMovesThePage(node)) run.arrivals.arrive(buildOf(run));
@@ -356,12 +415,15 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Said, never inferred: a press that left the page looking the same may
       // still have been the right step, and a model that is told so can decide.
       pageChanged: changed,
+      unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
       control: control.name,
       read,
       inFlow: node.proposes
     });
-    return toolExecution(
+    // The state the node found is the read before it acted, and the state it
+    // left is the read after -- unsaid where the page could not be read in time.
+    return withCallStates(toolExecution(
       // No page, no packet: the outcome alone, which says why.
       after === undefined ? outcome as unknown as JsonValue : bounded(nodeEvidence(after.evidence, outcome), budget, after.evidence, outcome),
       // The node ran and the command succeeded, so this step worked -- which is
@@ -413,7 +475,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // `actionId`. What the resolution had to assume is said, because this is
       // the call the Flow's step is made of and the guess is in it.
       { resultReason: undefined, nodeId: undefined, assumed }
-    );
+    ), current, after);
   } catch (error) {
     if (error instanceof RecoverableToolRejection) {
       // Only a refusal the page caused carries the page, and only the page the
@@ -423,7 +485,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // refused (`../tool-rejection.ts`).
       const page = error.page ? run.restamp(error.page) : undefined;
       if (page) run.shown(page);
-      return refusal(page, error.code, error.detail, run.request.maxEvidenceBytes, record);
+      const refused = refusal(page, error.code, error.detail, run.request.maxEvidenceBytes, record);
+      // A robot check is the person's. The refusal is kept as the run's record
+      // says it, and Core puts the check to the person rather than to the model.
+      return error.personNeeded ? withPersonNeeded(refused, personDraft(record)) : refused;
     }
     throw error;
   }
@@ -457,7 +522,13 @@ function refusal(
   // allowed, envelope included (`pageRefusal`), so the only question left is
   // whether the refusal as a whole fits.
   const value = serializedBytes(withPage) <= budget ? withPage : bare;
-  return toolExecution(value as unknown as JsonValue, false, webLlmToolRejectionResultCode(code), undefined, present<WebNodeDraftStatement>({
+  // What the refusal found is the page the call read before doing anything.
+  // What it left is that same page when nothing was sent to it, and otherwise
+  // only a page captured after the attempt: a command that failed may still
+  // have moved something, and a state nobody read is not said. The page is
+  // digested even when it is too large to go back with the refusal.
+  const left = page ?? (record.acted ? undefined : record.found);
+  return withCallStates(toolExecution(value as unknown as JsonValue, false, webLlmToolRejectionResultCode(code), undefined, present<WebNodeDraftStatement>({
     actionId: record.actionId,
     effect: record.effect,
     // `input` is always given, even for a refusal, because the loop would
@@ -485,6 +556,32 @@ function refusal(
     // for every refusal before it, which is the honest answer: nothing had been
     // resolved, so nothing was guessed at.
     assumed: record.assumed
+  }), record.found, left);
+}
+
+/**
+ * The step as it stands once the person has cleared the robot check it met.
+ *
+ * A call whose command went out -- a navigation that landed on a check, a press
+ * behind which one appeared -- did what it was asked, and the check was what
+ * stood behind it: it stands as the step a success would have stated, proposing
+ * whatever the node proposes, with the location a replay starts from. A call
+ * that met the check before anything went out -- a look, or the read an action
+ * takes before acting -- changed nothing, so it stands as a look and proposes
+ * nothing; the model, shown the page fresh, makes its call again.
+ */
+function personDraft(record: WebNodeCallRecord): WebNodeDraftStatement {
+  const input = record.standing?.input ?? safeCall(record.call ?? {}, record.parameters ?? {});
+  if (!record.acted || record.standing === undefined) {
+    return present<WebNodeDraftStatement>({ actionId: record.actionId, effect: "observe", input, ranWith: undefined, proposes: false, replay: undefined });
+  }
+  return present<WebNodeDraftStatement>({
+    actionId: record.actionId,
+    effect: record.effect,
+    input,
+    ranWith: record.standing.ranWith,
+    proposes: record.proposes,
+    replay: record.standing.replay
   });
 }
 
@@ -499,7 +596,7 @@ function bounded(evidence: JsonValue, budget: number, page: WebLlmPageEvidence, 
   if (serializedBytes(evidence) <= budget) return evidence;
   return nodeEvidence(page, present<WebNodeOutcome>({
     ok: outcome.ok, node: outcome.node, status: outcome.status,
-    pageChanged: undefined, pageUnreadable: outcome.pageUnreadable, control: undefined, read: undefined, inFlow: outcome.inFlow
+    pageChanged: undefined, unchangedPress: undefined, pageUnreadable: outcome.pageUnreadable, control: undefined, read: undefined, inFlow: outcome.inFlow
   }));
 }
 

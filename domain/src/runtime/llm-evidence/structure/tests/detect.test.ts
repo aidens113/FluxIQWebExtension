@@ -103,13 +103,23 @@ function proposalOf(structure: WebAutomationStructureDetection) {
 }
 
 let callCount = 0;
+/**
+ * One detection, without the states it saw. Those are a digest and a route
+ * state of each fixture page, held to their own contracts in
+ * `../../state-digest/tests/call-state-digests.test.ts` and
+ * `../../tests/call-route-states.test.ts`; restating them for every fixture
+ * here would test nothing about detection.
+ */
 async function detect(runtime: WebAutomationLlmEvidenceRuntime, value: JsonObject = {}, options: { maxEvidenceBytes?: number; scope?: typeof SCOPE } = {}) {
   callCount += 1;
   const scope = options.scope ?? SCOPE;
   const callId = `call.detect.${callCount}`;
-  return await runtime.executeTool(options.maxEvidenceBytes === undefined
+  const result = await runtime.executeTool(options.maxEvidenceBytes === undefined
     ? { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value }
     : { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value, maxEvidenceBytes: options.maxEvidenceBytes });
+  delete result.stateDigests;
+  delete result.routeState;
+  return result;
 }
 
 /**

@@ -55,6 +55,23 @@ const extensionEntries = {
 /** Every entry's name, in build order: what `check-extension.mjs` bundles to prove the browser graph. */
 export const EXTENSION_ENTRY_NAMES = Object.freeze(Object.keys(extensionEntries));
 
+/**
+ * The files every bundle is made from that no tsconfig names: each entry's
+ * source, and the file each aliased workspace specifier resolves to. The build
+ * cache holds these against the extension steps' fingerprints
+ * (scripts/build-cache/tests/registry.test.mjs), because esbuild reads them
+ * whatever the projects say. The alias plugin below reads its targets from
+ * here, so the two cannot drift.
+ */
+export const EXTENSION_BUNDLE_SOURCES = Object.freeze({
+  entries: Object.freeze(Object.values(extensionEntries).map((entry) => path.join(root, entry.source))),
+  aliases: Object.freeze({
+    "@fluxiq-web-extension/domain/client": webAutomationDomainClient,
+    "fluxiq/client-gateway": fluxiqClientGatewayContracts,
+    "fluxiq/automation-studio/fingerprinting": fluxiqFingerprinting
+  })
+});
+
 // Everything a target is made from besides the bundles' own inputs: the build
 // code that shapes it and the static files it copies. Hashed into each target's
 // build stamp (scripts/release/build-info.mjs) with the bundle inputs.
@@ -260,13 +277,13 @@ function browserSafeWorkspacePlugin() {
     name: "browser-safe-workspace-imports",
     setup(buildContext) {
       buildContext.onResolve({ filter: /^@fluxiq-web-extension\/domain\/client$/ }, () => ({
-        path: webAutomationDomainClient
+        path: EXTENSION_BUNDLE_SOURCES.aliases["@fluxiq-web-extension/domain/client"]
       }));
       buildContext.onResolve({ filter: /^fluxiq\/client-gateway$/ }, () => ({
-        path: fluxiqClientGatewayContracts
+        path: EXTENSION_BUNDLE_SOURCES.aliases["fluxiq/client-gateway"]
       }));
       buildContext.onResolve({ filter: /^fluxiq\/automation-studio\/fingerprinting$/ }, () => ({
-        path: fluxiqFingerprinting
+        path: EXTENSION_BUNDLE_SOURCES.aliases["fluxiq/automation-studio/fingerprinting"]
       }));
     }
   };

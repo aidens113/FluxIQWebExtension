@@ -974,7 +974,7 @@ Three reproduce larger application pages and carry no Week 1 corpus row:
 | `storefront-checkout` | Store checkout with a consent dialog that owns every click until answered, a promotion, a late address lookup and delivery estimate, and payment inside a card iframe, whose fields are marked the way real card fields are, including a security code that is not marked. | Primary, variant `declined-card`. Declares five replay secrets. |
 | `admin-console` | CRM console with a virtualised customer list that scrolls inside its own pane, client-side routing, inline editing of a record, and a settings switch inside a web component's shadow root. | Primary, variant `read-only`; `extract-customer-list`, variant `short-book`; `browse-to-customer`; `switch-settings-tab`, variant `light-dom-toggle`. |
 | `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
-| `everything-store` | An everything store (fictional Brightaisle) with class names and ids generated per seed, a consent banner, a delayed app banner and notifications modal, a shadow-DOM chat that opens over the buy box, placeholder results, a results tail that loads on scroll, sponsored cards and a sponsored carousel among results, results repeated across pages, a broken Next, prices written twice, `div` pickers, a buy box dead until hydrated, a Save for later that fails once, and a checkout preset to the store's preferences with a payment iframe. Its defences are a search-form honeypot, a 429 rate limit with `Retry-After`, a soft browser check, and a canvas robot check only a person can pass. | Primary (buy a kettle, the playback goal); `add-to-cart`, variant `redesigned-header` (repair); `first-page-earbuds`, variants `deal-wheel` (new popup) and `robot-check` (expected `user_intervention_required`); `plus-under-fifty`, judged only in the created-Flow lane because no recording can pass it. |
+| `everything-store` | An everything store (fictional Brightaisle) with class names and ids generated per seed, a consent banner, a delayed app banner and notifications modal, a shadow-DOM chat that opens over the buy box, placeholder results, a results tail that loads on scroll, sponsored cards and a sponsored carousel among results, results repeated across pages, a broken Next, prices written twice, `div` pickers, a buy box dead until hydrated, a Save for later that fails once, and a checkout preset to the store's preferences with a payment iframe. Its defences are a search-form honeypot, a 429 rate limit with `Retry-After`, a soft browser check, and a canvas robot check only a person can pass. | Primary (buy a kettle, the playback goal); `add-to-cart`, variant `redesigned-header` (repair); `first-page-earbuds`, variants `deal-wheel` (new popup) and `robot-check` (a hand-off to the person the Lab plays, required, then the workflow's own table; see [the Lab plays the person at a check](#the-lab-plays-the-person-at-a-check)); `plus-under-fifty`, judged only in the created-Flow lane because no recording can pass it. |
 | `crossborder-marketplace` | Cross-border marketplace (a signed-in buyer in Germany; 50 listings, 19 sellers, four warehouses): consent banner, delayed welcome coupons, notification prompt and flash-deal popup, a chat pill over Add to cart, results drawn as skeletons with lazy cards, paid placements mixed in and results repeated across pages, a broken Next, a "verify you are human" check on every third results page, items opening in a new tab, div-built option pickers, a shadow-root store coupon whose first claim fails, framed description and payment picker, a checkout honeypot, a rate-limited feed, per-seed class hashes, per-load ids, and locale-formatted prices and dates. | Primary (three hubs and a coupon in the cart, judged by playback goal), variants `basket-redesign` (repair task) and `flash-deal`; `spain-hubs` (13-record extraction), variant `list-layout`; `place-order` (consequential purchase that must end in a permission request unless the run is permitted to move money). |
 | `bigbox-retail` | ValueRidge, a fictional big-box retailer: consent dialog, delayed email offer with a honeypot field, support widget and store picker in shadow roots lying over the buttons that matter, per-seed generated classes and ids, ads that repeat listings and ignore filters, prices drawn in pieces, a bot check on the third results page cleared by press-and-hold or waiting, a Next arrow that drops the filters, an Add to cart whose first press only wakes the page, a stale cart badge, a sign-in wall, rate-limited pickup times whose spinner clears only on retry, a cross-origin card frame, and new-tab links. | Primary (pickup cart for another store, playback goal), variant `redesigned-buy-box` (repair); `pickup-towels` (nine listings over two filtered pages), variant `list-layout` (existing-Flow edge case); `pickup-order` (consequential guest order). |
 | `job-board` | Job board (Rolefinch) whose Apply hands off to an applicant-tracking site (Talentloom): a shadow-DOM consent wall, a delayed job-alert offer, a chat panel that opens over the job pane, a sign-in wall from the fourth job opened, sponsored cards that ignore filters and repeat real results, a fresh posting that shifts pagination between pages, a broken Next, a rate limiter with retry-after, a first save that fails, a pane that stalls until Retry, a stale badge, salaries in several formats and currencies, seed-rotated classes and ids, and a cross-origin application form in a new tab with a US-first location lookup, a pre-ticked talent pool, a honeypot and a person check. Only four oracle read-outs carry test ids. | Primary (save a week of one employer's jobs), variant `overflow-save`; `remote-rust-roles`, variant `no-exact-matches`; `apply-remote-rust-role`, variant `posting-closed` (expected failure `target_not_found`). |
@@ -1379,6 +1379,92 @@ top-level `adaptation.instructedConsequences` this facility read until
 `permissionRequest` — under `metadata.bootstrap`. Every build measured before
 that date therefore reported an empty declaration while the stored proposal
 held a full one.
+
+### The Lab plays the person at a check
+
+A check that asks "are you a robot" is asking the person, so FluxIQ never
+presses, types into or reloads one. When a build or a run meets a check only a
+person may pass, Core puts one question in the Flow's thread — a `choice` ask
+with `control.kind: "person_check"` and the options `person_done` (Continue)
+and `person_stop` (Stop) — and waits where it stands, for up to 300 s: a build
+on the Flow's thread (subject `flow`), a run on its own (subject `run`). Until
+2026-09-30 the harness answered no ask, so every run that met such a check sat
+out the five minutes and ended `user_intervention_required`, which read as
+FluxIQ failing when it had done the right thing.
+
+The Lab now plays that person (`packages/test-runner/src/person-simulation/`).
+For the whole of a Flow lane — the created Flow's build, its run and any
+replays, or a recorded Flow's run — it reads the project's threads once a
+second through `list-conversations` and `get-conversation`, and answers each
+person-needed ask once through `answer-ask` (`kind: "choice"`, the option as
+`value`). Every other ask, a permission above all, is left for its own answer.
+For each one it:
+
+1. finds the scenario tab showing a check the fixture's person module knows,
+   among the tabs on the scenario's origin, newest first, looking for up to
+   8 s because a check raised by a click can take seconds to draw;
+2. brings that tab to the front and does what a person does there;
+3. waits for the check to go — for a check that leaves by loading a new
+   document, only once that load has happened, because crossborder's box
+   turns into "Checking your browser…" two seconds before its reload;
+4. answers Continue if the check went, and Stop otherwise.
+
+What a person does at each check is data beside the fixture, in
+`apps/scenario-lab/src/scenarios/<scenario>/person-check.ts`, exported as
+`PERSON_CHECKS` through the scenario's barrel and loaded from the scenario lab
+build the run uses, as a scenario's `repair.js` is. The scenario lab carries no
+browser library, so a module says what the check shows and what the person
+does (`click`, `press-and-hold`, `type-answer`, `press`), and the runner does it
+with Playwright. The typed shape is `ScenarioPersonChecks` in
+`packages/test-contracts/src/scenario.ts`.
+
+| Scenario | Check the Lab recognises | What the person does |
+| --- | --- | --- |
+| `everything-store` | "Enter the characters you see below" | Reads the characters from the store's state (`robotCode(challengeSeed, guard.robot.image)`, from `/__control/final-state` with the controller token), types them into "Type characters" and presses Continue shopping. Never "Try different image". |
+| `crossborder-marketplace` | "I'm not a robot" | Presses the box and waits for the reload. |
+| `company-website` | "Confirm you are human" | Presses the box, which submits the quote. |
+| `bigbox-retail` | "Robot or human?" | Holds Press & Hold for 2.5 s. The check also passes itself for an automation that waits, so only a hand-off FluxIQ raised anyway reaches it. |
+
+The person answers Stop, and says why, when no tab shows a check the Lab knows
+(`no-check-visible`: FluxIQ asked a person for nothing), when the check stayed
+(`could-not-clear`), when the row says the person declines (`declined`), and
+when the check already shows the automation's hand on it — the everything
+store's wrong answer or a later image (`declined-tampered`).
+
+**Every hand-off is in the run's evidence.** `snapshots/person-hand-offs.json`
+holds, for each: the ask id, the stage (`build` or `run`, from the thread's
+subject), the scenario, the check found, what the person did, whether it
+cleared, the answer, and the seconds FluxIQ waited from the ask to the answer,
+with the Lab's own reason for anything but a clear — never page text. Each is
+also a `runtime.settle` event on the run's timeline at the moment it was
+answered, and the campaign row carries the same record as `personHandOffs`.
+
+**A hand-off at a real check is correct.** The evaluation's
+`person-hand-off` invariant (`run-evaluation/person-hand-off-invariant.ts`),
+applied by both `lab run` and the bench from the same file, passes a run that
+handed off at a check the Lab found and then went on, whether or not the row
+declared one. It fails a hand-off where no check stood, a check already
+tampered with, a hand-off the Lab could not play, and a row that requires a
+hand-off and got none; a failed invariant fails a run the runner passed, as
+`runtime.behavior`.
+
+**Where a hand-off is expected is declared, not inferred.** The declaration is
+`ExpectedPersonHandOff`: `person` (`completes`, or `declines`, whose row then
+declares `expected.failure: user_intervention_required`), `required` (whether a
+run with no hand-off fails), and one sentence of `because`. A row declares it in
+its scenario's person module (`handOffs`); a live instruction task declares it
+as `personCheck`, which wins over the row's. It is not an `expected` field,
+because `ScenarioExpected`'s validator is closed.
+
+| Declared on | Expectation | Why |
+| --- | --- | --- |
+| `everything-store` `first-page-earbuds/robot-check` | completes, required | The store answers every page with its check until a person passes it. The row then expects the workflow's own sixteen records and a page the check has left, and repair task `everything-store-refuse-robot-check` is `expect: "hand-off"`: it passes on a hand-off at the check, no patch around it, and the final state after the person's pass. |
+| `crossborder-marketplace` `spain-hubs` (and `list-layout`), tasks `-spain-hubs` and `-spain-hubs-list-layout` | completes, not required | The filters the honest path narrows by are the third results load, which the traffic screen replaces; a Flow that reaches the filtered results in fewer loads never meets it. |
+| `company-website` primary (and `redesigned-quote-submit`), both quote-request tasks | completes, not required | Sending the quote form raises the human check. |
+
+A task whose honest path meets no check, such as `crossborder-marketplace-hub-to-cart`,
+declares nothing. A hand-off there at a real check still passes the invariant
+and is named as undeclared; one where no check stood still fails.
 
 ### What a build's reported calls are
 
@@ -2432,3 +2518,53 @@ Runtime target adaptations remain opaque in Core. When Core applies an `edit_act
 
 The certification run removes the recorded target on the loopback Scenario Lab, requires that deterministic action failure to precede exactly one `diagnosis` intervention, and validates the trusted Core budget ledger reports exactly one provider call. It rejects any patch/suggestion/proposal kind, adaptation or change-proposal ID, unexpected provider/model/prompt version, invalid or excessive usage, or nonterminal outcome. It then restores the fixture and runs the same Flow through the real UI in No LLM mode; that replay must succeed with zero interventions and zero Core-accounted provider calls. The fixed retained schema contains only run IDs/statuses, bounded invocation provenance/usage, evaluation, call counts, and aggregate leak-attestation totals. It excludes prompt/response bodies, key references, passwords, PINs, action messages, and raw metadata.
 Post-run provider-secret attestation is a separate bounded gate. A caller supplies one in-memory literal and exact approved relative paths beneath a canonical workspace. The scanner never follows reparse points or path escapes, reads SQLite databases with their `-wal`, `-shm` and `-journal` files byte for byte and cell by cell, skips only other known binary formats, limits files and bytes, and fails closed when approved text or a store is unreadable or oversized. Reports contain counts, categories, and sanitized relative paths only; they never include matching content or the literal. Live-lane composition must explicitly select run evidence, logs, manifests, workspace metadata, and cache metadata after UI provisioning and every provider-backed test.
+
+### Live-run waste guards
+
+`scripts/lab/run-lab.mjs` asks `scripts/lab/live-guards/` whether a live run
+may start before it does anything else: before Core is waited on, before the
+build and before any provider call, so a refusal costs nothing. Every
+`--live-llm` invocation is guarded except `--dry-run`, which makes no provider
+call. On 2026-09-30 launcher loops with no agent watching spent $4.25 on 47 runs
+that fixed nothing and then fired about 1,050 more against an empty balance;
+these rules exist because notes asking agents not to do that did not stop it.
+They stop unattended loops that waste credits; they set no spending limit.
+
+The state is one machine-wide directory, `~/FluxStuff/lab-slots/`, shared by
+every checkout and worktree. Its location is fixed; no flag or environment
+variable moves it.
+
+| Rule | Refuses when | Satisfied by |
+| --- | --- | --- |
+| `balance` | `STOP-balance` exists | The user topping the account up and deleting the file; no override |
+| `loop` | The instance already started 3 live runs in the last 30 minutes | Waiting, with the relaunch loop stopped; `OVERRIDE-loop` |
+| `debug` | The instance's previous live run has no `docs/working/language-driven-flow-loop-plan/debugs/<runId>.md` in the tree it runs from | Writing that debug; `OVERRIDE-debug` |
+| `unchanged` | The previous live run of the same instance and task did not pass and the source fingerprint is unchanged | Changing the source; `OVERRIDE-unchanged` |
+
+A refusal names every rule that refused and how to satisfy it, and ends with a
+`{"status":"failed","category":"lab.live-guard",...}` line, which the live
+campaign reads as a run that never started. An override is only ever a file,
+`lab-slots/OVERRIDE-<rule>`, that the user creates; it is honoured while it
+exists, and each run it admits records it in the ledger's `overridden` field.
+A guard that cannot read its inputs (a corrupt ledger line, a tree git cannot
+list) refuses the run rather than guessing.
+
+`spend-ledger.jsonl` is append-only. A `start` line is written immediately
+before the runner is spawned, with the instance, the task
+(`<scenario>/<instruction task or llm task>[/workflow=..][/variant=..]`), the
+pid and the source fingerprint; a `finish` line is written for each run the
+launch produced, with its runId, verdict and `snapshots/live-llm.json`
+`observed.totalEstimatedCostUsd`, so the ledger records spend for reporting;
+no rule limits it. The loop rule counts starts, so a crashed run still counts. A start whose launcher died, or
+that is older than six hours, is closed from its run directory
+(`"reconciled": true`) before the next admission. When a finished run's
+`provider-failures.local.json` shows an empty balance or exhausted quota
+(provider HTTP 402, or text such as DeepSeek's `Insufficient Balance` or
+`insufficient_quota`), the Lab writes `STOP-balance` with the reason. A plain
+429 rate limit is not a balance failure.
+
+The fingerprint is a SHA-256 over every file `git ls-files --cached --others
+--exclude-standard` lists in this repository and in the FluxIQ Core beside it,
+read from the working tree, leaving out `docs/`, Markdown, and build and run
+output. Writing a debug does not change it; editing source in either
+repository does.

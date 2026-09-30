@@ -2,6 +2,7 @@ import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApi
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
 import {
+  navigationChallengeFailure,
   navigationUnexpectedFailure,
   workerActionFailedFailure,
   workerActionResult,
@@ -24,6 +25,14 @@ import { sendClickCheckingLanding } from "./click-landing";
 import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
 import { chooseFrame } from "./frame-address";
 import { sendExtractListAcrossDocuments } from "./extract-list-continuation";
+import { readLandedPage, type LandedPageReading } from "./landed-challenge";
+import {
+  checkWaitBudgetMs,
+  settleLandedReading,
+  standingCheckWords,
+  type LandedCheckWait,
+  type LandedTabAccess
+} from "./landed-check-wait";
 import { compareNavigatedUrl, judgeTabMovement } from "./navigation-outcome";
 import { navigationTargetTab } from "./navigation-target";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
@@ -45,6 +54,9 @@ export type BrowserActionRunResult = {
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
 const TOP_FRAME_ID = 0;
+
+/** How a landing's robot check is read and waited out: the runner's own sender and settling wait. */
+const LANDED_TAB_ACCESS: LandedTabAccess = { send: sendToTab, settle: waitForTabReady };
 
 export async function runBrowserActionCommand(request: BrowserActionRunRequest): Promise<BrowserActionRunResult> {
   const action = request.action;
@@ -82,9 +94,15 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     // resolveAutomationTab has already waited for the tab to settle, so the URL
     // read here is where the browser actually committed the navigation -- and
     // the top frame says whether what it committed was the page or Chrome's
-    // own error page, which keeps the requested URL in the address bar.
+    // own error page, which keeps the requested URL in the address bar. A page
+    // that did load is asked whether it is a robot check; Chrome's error page
+    // runs no content script and is no challenge.
     const loadFailed = (await allTabFrames(tabId)).some((frame) => frame.frameId === TOP_FRAME_ID && frame.errorOccurred);
-    const landing = { landed: await readTabUrl(tabId), title: await readTabTitle(tabId), loadFailed, drive };
+    const firstReading = loadFailed ? undefined : await readLandedPage(tabId, sendToTab);
+    // A check that clears by itself is waited out where it stands, before the
+    // landing is judged: what the navigation reached is the page behind it.
+    const { reading, checkWait } = await settleLandedReading(firstReading, tabId, LANDED_TAB_ACCESS, checkWaitBudgetMs(action, startedAt));
+    const landing = { landed: await readTabUrl(tabId), title: await readTabTitle(tabId), loadFailed, reading, checkWait, drive };
     return withTarget(navigationResult(action, startedAt, action.url, landing), tabId, frameId);
   }
 
@@ -138,6 +156,9 @@ async function tabRequestFor(
   const namedTabId = tabIdForAction(action);
   if (isNavigation && action.url) {
     tabRequest.initialUrl = action.url;
+    // Asked only before a tab already at the URL would be reloaded: a robot
+    // check there is waited out or handed over, never reloaded.
+    tabRequest.holdsRobotCheck = async (tabId) => (await readLandedPage(tabId, sendToTab)).kind === "robot_check";
     if (opensNewTab(action)) tabRequest.forceNew = true;
     else if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
     else {
@@ -172,13 +193,32 @@ type NavigationLanding = {
   landed: string | undefined;
   title: string | undefined;
   loadFailed: boolean;
+  /**
+   * What the landed page's top frame said it is (`landed-challenge.ts`), after
+   * any self-clearing check on it was waited out; absent when the page did not
+   * load.
+   */
+  reading: LandedPageReading | undefined;
+  /** The wait on a self-clearing check, when the landed page first read as one (`landed-check-wait.ts`). */
+  checkWait: LandedCheckWait | undefined;
   drive: TabDriveRecord | undefined;
 };
 
 /**
- * A navigation's post-condition, in two halves.
+ * A navigation's post-condition, in two halves, after one question that
+ * overrides both.
  *
- * The destination is judged first, because landing somewhere else explains
+ * A landed page that is a robot check is the person's, wherever it is and
+ * whatever the drive did: it fails USER_INTERVENTION_REQUIRED and is never a
+ * success. Reported as one, it sent the model on into the check again and
+ * again (live runs 15 and 17 on the crossborder marketplace); reported as
+ * NAVIGATION_UNEXPECTED, a check a site redirects to would read as a page the
+ * model could navigate away from. A check that clears by itself has already
+ * been waited out by then, so the check still standing here is one a person
+ * must answer, or one that did not clear in time; one that did clear leaves
+ * the page behind it to be judged, and the validation says it was waited out.
+ *
+ * Then the destination is judged, because landing somewhere else explains
  * everything after it. Then the movement: a navigation that left the tab on
  * the document it already held did nothing, however right its address reads,
  * and reporting that as success is how a Flow carried on against a page it
@@ -195,6 +235,19 @@ function navigationResult(
 ): BrowserActionResult {
   const { landed, title, loadFailed } = landing;
   const page = { ...(landed !== undefined ? { url: landed } : {}), ...(title ? { title } : {}) };
+  if (landing.reading?.kind === "robot_check") {
+    const expected = `the page at ${requested}`;
+    const seen = standingCheckWords("the page the browser landed on", landing.checkWait);
+    return workerActionResult(action, startedAt, {
+      status: "failed",
+      message: landing.checkWait === undefined
+        ? "Navigation landed on a robot check, which only a person can answer."
+        : "Navigation landed on a robot check that did not clear by itself, so only a person can answer it.",
+      validation: { status: "failed", expected, actual: "a robot check" },
+      failure: navigationChallengeFailure(expected, seen),
+      ...page
+    });
+  }
   const comparison = compareNavigatedUrl(requested, landed, loadFailed);
   if (!comparison.matched) {
     return workerActionResult(action, startedAt, {
@@ -217,10 +270,14 @@ function navigationResult(
       ...page
     });
   }
+  const unread = landing.reading?.kind === "unread" ? `; whether the page is a robot check went unread: ${landing.reading.why}` : "";
+  const waited = landing.checkWait?.outcome === "cleared"
+    ? `; a robot check stood on the page and cleared by itself after ${landing.checkWait.waitedMs} ms, untouched`
+    : "";
   return workerActionResult(action, startedAt, {
     status: "succeeded",
     message: "Navigation completed.",
-    validation: { status: "passed", expected: comparison.expected, actual: `${comparison.actual}: ${movement.detail}` },
+    validation: { status: "passed", expected: comparison.expected, actual: `${comparison.actual}: ${movement.detail}${waited}${unread}` },
     ...page
   });
 }
@@ -259,7 +316,8 @@ function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number,
  *
  * An action that names no frame runs in the top frame, which is the frame a
  * Flow means when it says nothing. A click is also judged by where its tab
- * landed: one the server refused fails it (`click-landing.ts`).
+ * landed: a robot check that does not clear by itself, or a page the server
+ * refused, fails it (`click-landing.ts`).
  *
  * A child frame is checked twice before anything is sent: that the tab still
  * has it, and that something in it is listening. The second check is not
@@ -306,7 +364,7 @@ async function runActionInFrame(
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
   const send = () => sendAction(action, tabId, message, targetFrameId);
-  return withTarget(await sendClickCheckingLanding(action, tabId, send), tabId, targetFrameId);
+  return withTarget(await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS), tabId, targetFrameId);
 }
 
 /**

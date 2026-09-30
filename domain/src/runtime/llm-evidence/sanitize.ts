@@ -47,6 +47,7 @@
 // positional ones, a packet at its budget could leave the tool over the room
 // Core gave the call, which ends the build `evidence_limit`.
 
+import type { JsonObject } from "fluxiq/core";
 import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
 import { frontLayerFirst, openDialogNameOf } from "./front-layer";
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
@@ -126,6 +127,23 @@ export type WebLlmSnapshotBinding = {
    * Optional because a binding built before it existed, or by hand, has none.
    */
   shadowHosts?: Map<string, readonly string[]>;
+  /**
+   * The page's state digest, taken from the capture this binding was sanitized
+   * from, at the bound `captureStateDigest` digests at rather than this
+   * packet's own (`state-digest/snapshot-states.ts`). It is how a call reports the
+   * state it found and left without another capture. Like the maps it never
+   * leaves the domain inside a packet; it leaves only on the call's
+   * `stateDigests`. Absent on a binding no capture produced -- a failure packet,
+   * one built by hand -- and on a page too large to digest.
+   */
+  stateDigest?: string;
+  /**
+   * The page's route state, exactly as the host's `observeRouteState` would
+   * read it from the same capture (`state-digest/snapshot-states.ts`), taken at the same
+   * moment and bound as `stateDigest` and absent in the same cases. It leaves
+   * only on the call's `routeState`, and only for the page the call left.
+   */
+  routeState?: JsonObject;
 };
 
 export type WebLlmSanitizeOptions = {

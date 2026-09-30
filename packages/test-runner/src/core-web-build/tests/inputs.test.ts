@@ -1,5 +1,6 @@
 // Collecting a Core checkout's build inputs: every file a build depends on
-// moves the key, and the files a staged workspace leaves out do not.
+// moves the key, and the files a staged workspace leaves out do not -- nor
+// does a Core commit that touches only files outside those inputs.
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -9,8 +10,12 @@ import { RunnerFailure } from "../../failure.js";
 import { collectCoreWebBuildInputs } from "../inputs.js";
 import { coreWebBuildKey } from "../key.js";
 
+const manifest = JSON.stringify({ exports: { ".": "./dist/index.js" } });
 const checkout: Readonly<Record<string, string>> = {
   "tsconfig.base.json": "{}\n",
+  "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+  "package.json": JSON.stringify({ name: "fluxiq-root" }),
+  "docs/architecture/overview.md": "# Overview\n",
   "apps/web/package.json": "{}\n",
   "apps/web/src/app/page.tsx": "export default function Page() { return null; }\n",
   "apps/web/next.config.ts": "export default {};\n",
@@ -18,11 +23,15 @@ const checkout: Readonly<Record<string, string>> = {
   "apps/web/test-results/result.txt": "an earlier result\n",
   "apps/web/node_modules/next/package.json": JSON.stringify({ version: "15.5.23" }),
   "apps/web/node_modules/react/index.js": "react\n",
+  "packages/client-gateway-websocket/package.json": manifest,
   "packages/client-gateway-websocket/dist/index.js": "gateway\n",
+  "packages/contracts/package.json": manifest,
   "packages/contracts/dist/index.js": "contracts\n",
+  "packages/fluxiq/package.json": manifest,
   "packages/fluxiq/dist/index.js": "fluxiq\n",
+  "packages/fluxiq/src/index.ts": "export const fluxiq = 1;\n",
+  "packages/fluxiq/src/tests/index.test.ts": "test('fluxiq', () => {});\n",
 };
-const head = "a".repeat(40);
 
 async function withCheckout<T>(overrides: Record<string, string>, run: (root: string) => Promise<T>): Promise<T> {
   const root = await mkdtemp(path.join(os.tmpdir(), "core-web-build-inputs-"));
@@ -38,15 +47,16 @@ async function withCheckout<T>(overrides: Record<string, string>, run: (root: st
   }
 }
 
-function keyOf(overrides: Record<string, string> = {}, coreHead = head): Promise<string> {
-  return withCheckout(overrides, async root => coreWebBuildKey((await collectCoreWebBuildInputs(root, async () => coreHead)).inputs));
+function keyOf(overrides: Record<string, string> = {}): Promise<string> {
+  return withCheckout(overrides, async root => coreWebBuildKey((await collectCoreWebBuildInputs(root)).inputs));
 }
 
-test("every file a build depends on, and Core's HEAD, changes the key", async () => {
+test("every file a build depends on changes the key", async () => {
   const baseline = await keyOf();
   assert.equal(await keyOf(), baseline, "the same checkout has the same key");
-  const changes: Array<[string, Record<string, string>, string?]> = [
-    ["Core HEAD", {}, "b".repeat(40)],
+  const changes: Array<[string, Record<string, string>]> = [
+    ["Core's lockfile", { "pnpm-lock.yaml": "lockfileVersion: '9.0'\nimporters: {}\n" }],
+    ["a built package's manifest", { "packages/fluxiq/package.json": JSON.stringify({ exports: { ".": "./dist/other.js" } }) }],
     ["client-gateway-websocket dist", { "packages/client-gateway-websocket/dist/index.js": "gateway changed\n" }],
     ["contracts dist", { "packages/contracts/dist/index.js": "contracts changed\n" }],
     ["fluxiq dist", { "packages/fluxiq/dist/index.js": "fluxiq changed\n" }],
@@ -55,7 +65,7 @@ test("every file a build depends on, and Core's HEAD, changes the key", async ()
     ["tsconfig.base.json", { "tsconfig.base.json": "{ \"compilerOptions\": { \"strict\": true } }\n" }],
     ["Next version", { "apps/web/node_modules/next/package.json": JSON.stringify({ version: "15.5.24" }) }],
   ];
-  for (const [name, overrides, coreHead] of changes) assert.notEqual(await keyOf(overrides, coreHead), baseline, name);
+  for (const [name, overrides] of changes) assert.notEqual(await keyOf(overrides), baseline, name);
 });
 
 test("files the staged workspace leaves out do not change the key", async () => {
@@ -69,10 +79,40 @@ test("files the staged workspace leaves out do not change the key", async () => 
   for (const [name, overrides] of ignored) assert.equal(await keyOf(overrides), baseline, name);
 });
 
+test("two Core commits that differ only outside the build's inputs share one key", async () => {
+  // What a docs-only or tests-only Core commit changes. The key reads no git
+  // state, so Core's HEAD moving with such a commit does not reach it: the
+  // checkout here is not even a git repository.
+  const baseline = await keyOf();
+  const outsideInputs = {
+    "docs/architecture/overview.md": "# Overview\n\nRewritten.\n",
+    "docs/working/new-plan.md": "# A new plan\n",
+    "packages/fluxiq/src/tests/index.test.ts": "test('fluxiq changed', () => {});\n",
+    "packages/fluxiq/src/index.ts": "export const fluxiq = 2;\n",
+    "package.json": JSON.stringify({ name: "fluxiq-root", scripts: { check: "tsc" } }),
+  };
+  assert.equal(await keyOf(outsideInputs), baseline);
+  // The same commit with a lockfile change is a different build.
+  assert.notEqual(await keyOf({ ...outsideInputs, "pnpm-lock.yaml": "lockfileVersion: '9.0'\n# react 19.3\n" }), baseline);
+});
+
+test("a Core checkout missing its lockfile or a package manifest fails as environment.missing", async () => {
+  for (const missing of ["pnpm-lock.yaml", "packages/contracts/package.json"]) {
+    await withCheckout({}, async root => {
+      await rm(path.join(root, ...missing.split("/")), { force: true });
+      await assert.rejects(collectCoreWebBuildInputs(root), (error: unknown) => {
+        assert.ok(error instanceof RunnerFailure);
+        assert.equal(error.category, "environment.missing", missing);
+        return true;
+      });
+    });
+  }
+});
+
 test("a Core checkout missing a built package fails as environment.missing", async () => {
   await withCheckout({}, async root => {
     await rm(path.join(root, "packages", "contracts", "dist"), { recursive: true, force: true });
-    await assert.rejects(collectCoreWebBuildInputs(root, async () => head), (error: unknown) => {
+    await assert.rejects(collectCoreWebBuildInputs(root), (error: unknown) => {
       assert.ok(error instanceof RunnerFailure);
       assert.equal(error.category, "environment.missing");
       assert.match(error.message, /packages[\\/]contracts[\\/]dist/u);

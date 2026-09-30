@@ -2,6 +2,7 @@ export { CATALOG, EARBUDS, HOUSEHOLD, STORE_PATHS, TIDEWELL_KETTLES } from "./ca
 export { STORE_TIMINGS } from "./client/index.js";
 export { EVERYTHING_STORE_LIVE_TASKS } from "./live-tasks.js";
 export { everythingStoreManifest } from "./manifest.js";
+export { PERSON_CHECKS as EVERYTHING_STORE_PERSON_CHECKS } from "./person-check.js";
 export { EVERYTHING_STORE_REPAIR_TASKS } from "./repair-tasks.js";
 export { routeStore } from "./route.js";
 export { everythingStoreScenario } from "./scenario.js";

@@ -6,6 +6,7 @@ import { WebPanelAuthSessionCache } from "./auth-session.js";
 import { benchDirectory, buildCampaignCompatibility, compareBenchCloseoutCommand, compareBenchCommand, createResumableBench, createShardedBench, findBenchCorpus, loadCampaignManifest, resumeBench, resumeShardedBench, type RunBenchOutcome } from "./bench/index.js";
 import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
+import { inspectCoreWebBuild } from "./core-web-build/index.js";
 import { classifyRunnerFailure } from "./failure.js";
 import { describeCreatedFlowRequest, loadCreatedFlowRequest } from "./flow-lane/index.js";
 import { inspectRun } from "./inspect.js";
@@ -100,7 +101,10 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
       if (command.dryRun) {
         // Everything a live build would check before it starts, and nothing after: no topology, no browser, no provider call.
-        process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "created-flow", target: target.mode, request: creation ? describeCreatedFlowRequest(creation) : null, live: live?.describe() ?? null })}\n`);
+        // A target that owns its Core also reports the Core web build it would serve -- its key, and whether that build is
+        // already published -- read without building, locking or creating anything; an existing target serves no build.
+        const coreWeb = target.mode === "existing" ? null : await inspectCoreWebBuild(fluxiqRepositoryRoot, env);
+        process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "created-flow", target: target.mode, request: creation ? describeCreatedFlowRequest(creation) : null, live: live?.describe() ?? null, coreWeb })}\n`);
         return 0;
       }
       const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };

@@ -17,9 +17,9 @@ import { markBuildComplete, publishBuildAttempt } from "../publication.js";
 import type { CoreWebBuildInputs } from "../types.js";
 
 const inputs: CoreWebBuildInputs = {
-  coreHead: "a".repeat(40),
+  lockfileHash: "a".repeat(64),
   webSourceHash: "b".repeat(64),
-  packageDistHashes: { fluxiq: "c".repeat(64) },
+  packageHashes: { fluxiq: "c".repeat(64) },
   nextConfig: "export default {};\n",
   nextVersion: "15.5.23",
 };

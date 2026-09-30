@@ -18,7 +18,11 @@ import type {
   FileInputOutcome,
   InPlaceEffectWatch,
   KeyboardCapability,
+  RateLimitNotice,
+  RateLimitWatch,
   ResolvedTarget,
+  RobotCheckSighting,
+  RobotCheckWatch,
   WaitConditionOutcome,
   WaitConditionRequest
 } from "../action-runtime";
@@ -86,6 +90,18 @@ export type ContentActionDependencies = {
    * changed content. Made just before the press; `settle` reads the answer.
    */
   watchInPlaceEffect(link: Element): InPlaceEffectWatch;
+  /**
+   * Starts watching, from just before a press on `pressed`, for a notice the
+   * press opens saying the page refused it for going too fast. Made between the
+   * hover and the press; `settle` reads the answer.
+   */
+  watchRateLimitNotice(pressed: Element): RateLimitWatch;
+  /**
+   * Starts watching, from just before a press on `pressed`, for a robot check
+   * the press puts up on the page, and follows one that says it clears by
+   * itself. Made between the hover and the press; `settle` reads the answer.
+   */
+  watchRobotCheck(pressed: Element): RobotCheckWatch;
 
   /** Succeeds, or fails with `output_not_observed` when the validation did not hold. */
   success(
@@ -103,6 +119,23 @@ export type ContentActionDependencies = {
     code: string,
     expected: string,
     actual: string,
+    evidence?: ActionResultEvidence
+  ): BrowserActionResult;
+  /** The page refused a press for going too fast: RATE_LIMITED, retryable, unacted, carrying the wait it named. */
+  rateLimited(
+    action: BrowserActionCommand,
+    startedAt: number,
+    notice: RateLimitNotice,
+    evidence?: ActionResultEvidence
+  ): BrowserActionResult;
+  /**
+   * A press the page answered with a robot check a person must answer:
+   * USER_INTERVENTION_REQUIRED, saying the press itself was made.
+   */
+  needsPerson(
+    action: BrowserActionCommand,
+    startedAt: number,
+    sighting: RobotCheckSighting,
     evidence?: ActionResultEvidence
   ): BrowserActionResult;
   /** Ran out of time: status `timed_out`, never flattened to `failed`. */

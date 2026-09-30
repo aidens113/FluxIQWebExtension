@@ -209,3 +209,86 @@ test("the extraction node's own throw is caught the same way, and reports the no
   assert.equal(result.status, "failed");
   assert.deepEqual(result.outputs, { error: { code: "output_node.implementation_threw", outputId: "web.dom.extract_list" } });
 });
+
+// t195: a For Each pass hands a body node its row on the `item` input. A node
+// whose recorded element sat in a repeated record is dispatched scoped to that
+// row's values; everything else is dispatched as it was recorded.
+
+async function executeOnRow(outputId: WebAutomationActionType, parameters: Record<string, JsonValue>, item: JsonValue | undefined): Promise<Record<string, JsonValue>> {
+  const implementation = bundle.implementations[outputId];
+  if (!implementation) throw new Error(`No trusted-local implementation is bound for ${outputId}.`);
+  const inputs = item === undefined ? {} : { item };
+  const context = { inputs, parameters, log: () => undefined } as unknown as AutomationStudioNativeNodeContext;
+  const payload = dispatchedPayload(await implementation(context));
+  return payload.parameters as Record<string, JsonValue>;
+}
+
+const cardControl = {
+  selector: "li.result:nth-of-type(1) button.add",
+  element: {
+    tagName: "BUTTON",
+    visibleText: "Add to cart",
+    context: { landmark: "main", record: { text: "Blue Kettle $24.99 Add to cart" } }
+  }
+};
+
+test("a click in a recorded record on a loop's row is scoped to that row's values", async () => {
+  const row = {
+    title: "  Red   Toaster ",
+    price: "$39.99",
+    link: "https://shop.test/p/red-toaster",
+    again: "$39.99",
+    blank: "   ",
+    count: 3,
+    note: null
+  } as unknown as JsonValue;
+  const parameters = await executeOnRow("web.dom.click", cardControl, row);
+  assert.equal(parameters.selector, cardControl.selector);
+  assert.deepEqual(parameters.element, {
+    tagName: "BUTTON",
+    visibleText: "Add to cart",
+    context: { landmark: "main", record: { values: ["Red Toaster", "$39.99", "https://shop.test/p/red-toaster"] } }
+  });
+});
+
+test("a row's values are bounded: at most eight, each at most 200 characters", async () => {
+  const row = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`f${index}`, `${index}-${"x".repeat(300)}`]));
+  const parameters = await executeOnRow("web.dom.click", cardControl, row);
+  const values = ((parameters.element as { context: { record: { values: string[] } } }).context.record.values);
+  assert.equal(values.length, 8);
+  assert.ok(values.every((value) => value.length === 200));
+  assert.equal(values[0]?.startsWith("0-"), true);
+});
+
+test("without a row the recorded record is dispatched unchanged", async () => {
+  const parameters = await executeOnRow("web.dom.click", cardControl, undefined);
+  assert.deepEqual(parameters, cardControl);
+});
+
+test("a row that is not an object, or holds no string, leaves the recorded record alone", async () => {
+  for (const item of [["a", "b"], "Red Toaster", null, { count: 3, blank: "  " }] as JsonValue[]) {
+    assert.deepEqual(await executeOnRow("web.dom.click", cardControl, item), cardControl, JSON.stringify(item));
+  }
+});
+
+test("a control the build recorded in no record -- a dialog's Close -- is dispatched untouched on a loop's row", async () => {
+  const close = { selector: "dialog button.close", element: { tagName: "BUTTON", visibleText: "Close", context: { landmark: "dialog" } } };
+  assert.deepEqual(await executeOnRow("web.dom.click", close, { title: "Red Toaster" }), close);
+  const bare = { selector: "#save" };
+  assert.deepEqual(await executeOnRow("web.dom.click", bare, { title: "Red Toaster" }), bare);
+});
+
+// A Flow the model built names its control through a snapshot handle, and that
+// element carries its list position and no record (live run
+// `run-munnop9n-5475d593`: Confirm at `listPosition 1 of 8`, nothing else).
+test("a control a built Flow found in a list, with no recorded record, is scoped to the row too", async () => {
+  const confirm = { selector: "div[role=listitem]:nth-of-type(1) [aria-label=Confirm]", element: { tagName: "DIV", accessibleName: "Confirm", context: { listPosition: { index: 1, total: 8 } } } };
+  const parameters = await executeOnRow("web.dom.click", confirm, { name: "Amara Osei", mutualFriends: "23 mutual friends" });
+  assert.deepEqual(parameters.element, { tagName: "DIV", accessibleName: "Confirm", context: { listPosition: { index: 1, total: 8 }, record: { values: ["Amara Osei", "23 mutual friends"] } } });
+});
+
+test("a typed value in a row's field is scoped the same way as a click", async () => {
+  const field = { selector: "li.result input.qty", text: "2", element: { tagName: "INPUT", context: { record: { keyAttribute: "data-id", key: "p1" } } } };
+  const parameters = await executeOnRow("web.dom.type", field, { id: "p7", title: "Red Toaster" });
+  assert.deepEqual(parameters, { ...field, element: { tagName: "INPUT", context: { record: { values: ["p7", "Red Toaster"] } } } });
+});

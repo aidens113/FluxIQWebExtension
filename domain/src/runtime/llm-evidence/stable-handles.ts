@@ -46,6 +46,7 @@
 // numbers, exactly as the packet store keys them.
 
 import { createHash } from "node:crypto";
+import { present } from "./present";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 
 /**
@@ -190,5 +191,8 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
   });
   const evidence: WebLlmPageEvidence = { ...binding.evidence, elements };
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;
-  return { evidence, selectors, records, shadowHosts };
+  // The digest and the route state are of the page, and renumbering does not
+  // touch the page (`state-digest/state-digest.ts` leaves `target` out, and the route state
+  // reads no handle), so both travel as they were taken.
+  return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: binding.stateDigest, routeState: binding.routeState });
 }

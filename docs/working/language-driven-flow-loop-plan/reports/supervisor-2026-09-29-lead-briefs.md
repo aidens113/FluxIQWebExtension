@@ -76,3 +76,30 @@ lead resolves conflicts in a merge the supervisor started and stages them.
   Evidence: `reports/t174-w3-bigbox-refusals.md` in `fxwork/t174`.
 - Owns Core `runtime/flow-bootstrap/reachability/**` and
   `runtime/flow-bootstrap/instructed-acts/**`, and the domain click post-condition.
+
+## Four live lanes (user: "4 live lab slots, no locks", later that evening)
+
+Each lane owns one Lab slot for all its runs and tests an equally important part
+of the loop. Each copies t174's `live-run.sh` with its own slot and instance
+(`t1NN-slot-N`), stays headed with the $0.25 cap on `deepseek-flash`, runs the
+full debug including the screenshot UI review, and hands back `Ready to commit`
+per validated fix set. Before fixing a cause it reads the other three lanes'
+reports; the first to record a cause owns its fix.
+
+- **A create & run, t174, slot-1:** crossborder hub-to-cart, bigbox pickup-cart,
+  everything-store kettle-to-cart, company-website quote-request.
+- **B self-repair, t193, slot-2:** the `variantArmedAfterBuild` tasks (bigbox
+  cart redesigned, company-website quote redesigned, job-board Halvard
+  redesigned, social-feed group-post regrouped). Judged on the repaired,
+  persisted, zero-provider replay.
+- **C judge its own answer, t194, slot-3:** the expected-dataset tasks from
+  `everything-store-plus-earbuds-under-50` (rung 1), then local-classifieds bike
+  search, auction kestrel, crossborder spain-hubs, professional-network data
+  engineers.
+- **D control flow and consequential acts, t195, slot-4:** social-feed
+  confirm-requests, professional-network withdraw-stale-requests, bigbox
+  pickup-order, job-board apply-quillmark, photo-social moon-jar.
+
+Also: **t191** (t185's lead) rebuilds the extension chat to ChatGPT quality and
+fixes the overlay's visibility and flicker, with provider-free UI runs in
+`lab-slots/ui-1`. **t192** (t187's lead) cuts Core's own build and check.

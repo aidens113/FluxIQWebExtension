@@ -24,6 +24,14 @@
 // number in it fails every numeric comparison, because a row with no price is
 // not a row under $50.
 //
+// One count is written differently: a named one and "N others". "Aisha Khan
+// and 4 other mutual friends" is five mutual friends, and "Liked by Sam and 12
+// others" is thirteen likes, so a value that names someone before any digit
+// and then says "and N other(s)" states N + 1. Until 2026-09-30 it read as N,
+// and a Flow told to confirm every request with at least five mutual friends
+// left out exactly the one written that way (social-network-feed's requests,
+// lane t195). A digit before the "and" means the value is not written this way.
+//
 // A textual comparison reads the value with runs of whitespace collapsed to one
 // space -- a card's title is laid out for a screen, not for a comparison -- and
 // ignores case unless the author asked for case to matter.
@@ -184,8 +192,16 @@ export function webAutomationExtractConditionPattern(written: string): RegExp | 
   }
 }
 
+/** Someone named, with no digit before them, then "and N other(s)": a count of N + 1. */
+const NAMED_AND_OTHERS = /^[^\d]*\p{L}[^\d]*?\s+and\s+(\d[\d,]*)\s+others?\b/iu;
+
 /** The number a value states, or `undefined` for a value that states none. */
 export function webAutomationExtractConditionNumber(value: string): number | undefined {
+  const named = NAMED_AND_OTHERS.exec(value);
+  if (named !== null) {
+    const others = Number(named[1]!.replaceAll(",", ""));
+    if (Number.isFinite(others)) return others + 1;
+  }
   const found = NUMBER.exec(value);
   if (found === null) return undefined;
   const number = Number(found[0].replaceAll(",", ""));

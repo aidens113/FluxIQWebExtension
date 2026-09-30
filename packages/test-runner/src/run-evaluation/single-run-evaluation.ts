@@ -1,8 +1,10 @@
 import type { LlmUsage, RunEvaluation, RunManifest } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import type { FlowLanePermissionStop } from "../lane-rules/index.js";
 import { flowLaneAdaptationMeasurements } from "./adaptation/index.js";
 import { flowLaneEvidenceSizes } from "./flow-lane-evidence-sizes.js";
 import { evaluateObservedRun } from "./observed-run-evaluation.js";
+import { personHandOffEvidence } from "./person-hand-off-evidence.js";
 import { runOutcome } from "./run-outcome.js";
 
 /** One evidence event, as far as an evaluation cares: which trigger closed the run, and at what sequence. */
@@ -41,6 +43,8 @@ export type SingleRunInput = {
   bundlePath?: string;
   /** The provider usage the run observed; absent or undefined for a provider-free run. */
   llm?: LlmUsage | undefined;
+  /** The build stopped to ask at the task's declared permission point; the run's verdict is then `stopped_for_permission`, never `passed`. */
+  permissionStop?: FlowLanePermissionStop | undefined;
 };
 
 /**
@@ -92,7 +96,10 @@ export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
     observation: input.observation,
     ...(evidence ? { evidence } : {}),
     ...(input.llm ? { llm: input.llm } : {}),
+    ...(input.permissionStop ? { permissionStop: input.permissionStop } : {}),
     ...(flowBundle !== undefined ? { adaptation: flowLaneAdaptationMeasurements(flowBundle) } : {}),
+    // Read from any bundle: the file is written only by a run the Lab played the person on.
+    ...(input.bundlePath !== undefined ? { personHandOffs: personHandOffEvidence(input.bundlePath) } : {}),
   });
 }
 

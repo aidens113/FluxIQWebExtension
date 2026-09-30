@@ -9,7 +9,7 @@ import path from "node:path";
  * found an empty cache of their own, each took their own lock -- locks in four
  * different directories cannot see one another -- and each started a full
  * `next build` of the same Core at the same time. The cache's key is Core's
- * HEAD, Core's `apps/web` source and the hashes of Core's built packages
+ * lockfile, Core's `apps/web` source and the hashes of Core's built packages
  * (`inputs.ts`), so its identity was always the Core's. Beside that Core, the
  * existing create-only lock does across worktrees what it already did within
  * one: exactly one builder, and the rest wait for its publication.

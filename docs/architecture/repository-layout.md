@@ -87,7 +87,7 @@ owning scripts.
 | `.fluxiq/` | No | Local configuration, caches, databases, recordings, project artifacts, and other runtime state. |
 | `apps/extension/build/` | No | Intermediate bundles, untracked since 2026-09-17. Regenerate with `pnpm --filter @fluxiq-web-extension/extension build`. |
 | `apps/extension/dist/` | No | Loadable `chrome`, `firefox` and `e2e-chromium` targets, each stamped with `build-info.json`, and the store ZIPs under `dist/store/` ([Release Packaging](release-packaging.md)). |
-| `domain/dist/` | No | Domain build output, including the web panel host module (`domain/package.json` `fluxiqHostModule`, today `dist/host/web-panel-host.mjs`), rebuilt by `host:build`, `pnpm dev`, and every isolated Testing Lab run. The build also runs `scripts/clean-dist.mjs` and `scripts/rewrite-dist-specifiers.mjs`: `tsc` overwrites but never deletes, so a module split can leave a stale sibling behind that a later import resolves to, and `tsc` never rewrites a specifier, so the extensionless relative specifiers `moduleResolution: "Bundler"` allows in `domain/src` have to be given explicit paths in the output. The clean step deliberately preserves `dist/host/web-panel-host.mjs`, which `pnpm lab:interactive` builds before the workspace build reaches this package. A Lab instance runs from its own copy of that bundle, so a sibling instance's build cannot rewrite the file a running Core is about to import. |
+| `domain/dist/` | No | Domain build output, including the web panel host module (`domain/package.json` `fluxiqHostModule`, today `dist/host/web-panel-host.mjs`), built by `host:build` and by an interactive or instanced Testing Lab run, both through the [build cache](#build-and-check-cache), which reuses it when its inputs are unchanged, and rebuilt unconditionally by `pnpm dev`, which runs `domain/scripts/build-web-panel-host.mjs` directly. The build also runs `scripts/clean-dist.mjs` and `scripts/rewrite-dist-specifiers.mjs`: `tsc` overwrites but never deletes, so a module split can leave a stale sibling behind that a later import resolves to, and `tsc` never rewrites a specifier, so the extensionless relative specifiers `moduleResolution: "Bundler"` allows in `domain/src` have to be given explicit paths in the output. The clean step deliberately preserves `dist/host/web-panel-host.mjs`, which `pnpm lab:interactive` builds before the workspace build reaches this package. A Lab instance runs from its own copy of that bundle, so a sibling instance's build cannot rewrite the file a running Core is about to import. |
 | `domain/.test-build/` | No | Generated domain-test artifacts, untracked since 2026-09-17. Regenerate with an unlabelled `pnpm --filter @fluxiq-web-extension/domain test` ([Test Build Labels](#test-build-labels)). |
 | `apps/extension/.test-build-scratch/<label>/`, `domain/.test-build-scratch/<label>/` | No | One labelled unit-test run's bundles ([Test Build Labels](#test-build-labels)). Cleared when that label runs again, and otherwise by `pnpm task prune` ([Reclaiming Disposable Build Output](#reclaiming-disposable-build-output)). |
 | `apps/extension/e2e/content/.harness-build/` | No | One content-harness run's own bundles, removed when that run ends ([Content Harness](#content-harness)). |
@@ -288,8 +288,10 @@ would be the working Core checkout. Otherwise it:
   target lockfile differs from the one last installed there;
 - rebuilds Core's `contracts`, `fluxiq` and `client-gateway-websocket`
   packages whenever they were last built at another commit (`--build-core`
-  forces it), because the Lab reads their `dist`. The Lab builds the
-  extension side and Core's web panel itself on every run;
+  forces it), because the Lab reads their `dist`; the build goes through the
+  [build cache](#build-and-check-cache), so a Core another tree already built
+  is restored rather than recompiled. The Lab builds the extension side and
+  Core's web panel itself, reusing each when its inputs are unchanged;
 - confirms `domain/node_modules/fluxiq` resolves into the pair's Core.
 
 What it last installed and built is recorded in marker files in each
@@ -402,7 +404,104 @@ pnpm --filter @fluxiq-web-extension/extension build
 The extension build writes unpacked targets to `apps/extension/dist/chrome`
 and `apps/extension/dist/firefox`, or under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT`
 when a Lab instance owns the build. `pnpm lab:test` runs the launcher's own
-tests and is part of `pnpm check`.
+tests on their own. `pnpm check` does not call it: it opens with one combined
+`node --test` over the structure-audit, Lab, task, worktree and build-cache
+tests, then runs `node scripts/structure-audit.mjs`, then `pnpm -r check`.
+Tests are never cached; only the package builds and checks behind them are.
+
+### Build And Check Cache
+
+`scripts/build-cache/` is a content-fingerprinted stamp-and-skip cache for
+every package's `build` and `check`. Each such script runs
+`node <path-to>/scripts/build-cache/cli.mjs <step> -- "<command>"`, where
+`<step>` is a name in the registry `scripts/build-cache/steps.mjs`
+(`domain:build`, `extension:check`, `test-runner:build` and so on). The CLI
+refuses a command that differs from the registry's, so the script and the
+registry cannot drift apart, and prints one line per step:
+`{"build-cache":"reuse"|"build","step":…,"reason":…,"ms":…,"source":"stamp"|"store"|"command"}`.
+
+A step is reused only when all of these hold (`decide-step.mjs`):
+
+- its stamp exists and has the current `STAMP_VERSION`;
+- its fingerprint equals one taken now: a sha256 over every input file's
+  bytes and the step metadata — command, `process.version`, platform, the
+  environment variables the registry names, and the output locations. The
+  inputs are the package directory (minus what it generates), every transitive
+  workspace dependency whole with its outputs, the linked Core packages, the
+  repository and Core lockfiles and root configs, and the cache's own sources;
+- every required output file exists;
+- the outputs' digest equals the one stamped.
+
+Anything else is a build, and the reason names the first condition that
+failed (`no stamp`, `inputs changed: domain`, `required output missing: …`,
+`outputs changed since they were stamped`). A build removes the stamp before
+it runs, and writes it only when the command succeeded, every required file
+exists, and the inputs did not change while it ran. A check has no outputs,
+so it is stamped only when it passed. A reuse moves the outputs' timestamps to
+now, so mtime-based staleness guards agree with the cache.
+
+**Where things live.**
+
+| What | Where |
+| --- | --- |
+| Stamps | `<package>/node_modules/.cache/fluxiq-build/<what follows the colon in the step name>.json`, for example `build.json`, `check.json`, `host-build.json` (a step whose output an environment variable moves gets a `-<sha12 of the location>` suffix) |
+| Stat cache | `<repository>/node_modules/.cache/fluxiq-build/stat-cache.json` |
+| Incremental `tsc` state | `<package>/node_modules/.cache/fluxiq-build/*.tsbuildinfo` |
+| Shared store | `%LOCALAPPDATA%/fluxiq-build-cache` on Windows, otherwise `$XDG_CACHE_HOME/fluxiq-build-cache` or `~/.cache/fluxiq-build-cache` |
+
+The store is one per user and machine, outside every checkout, and is shared by
+every worktree: entries are keyed by the path-independent fingerprint under
+`<store>/v1/<fingerprint>/`, so a new worktree restores what another tree
+built, and a restore is verified against the stored digest. An output that
+embeds its tree's absolute path, in any spelling, is refused by the store. A
+per-step lock (`<stamp>.lock`) stops two processes building one step in one
+tree at once; the waiter decides again and normally reuses. The store prunes
+itself after every write: entries unused for 14 days, then least recently used
+entries while it holds more than 5 GB.
+
+**Forcing and switching off.**
+
+```bash
+FLUXIQ_BUILD_FORCE=1 pnpm build          # rebuild every step; the store is not consulted
+FLUXIQ_BUILD_CACHE_DIR=<dir> pnpm build  # use another store directory
+FLUXIQ_BUILD_CACHE_DIR=off pnpm build    # no store: stamps only, per tree
+```
+
+**Who else uses it.**
+
+- **The Lab prelude** (`scripts/lab/prelude/build-phase.mjs`, called from
+  `scripts/lab/run-lab.mjs` under the build lock) runs the steps in-process
+  through `runStep` and spawns no `pnpm`: the scenario lab and its
+  dependencies, the web panel host (`domain:host-build`) for an interactive or
+  instanced run, the domain and extension, then the test runner. With nothing
+  changed it builds nothing. An edited domain is rebuilt rather than refused as
+  stale, because the repository staleness guard runs after the build phase.
+- **`pnpm task start`** runs `pnpm build` in the new worktree, so every step
+  whose inputs another tree has already built is restored from the store, and
+  `scripts/worktree/core-build.mjs` builds Core's `contracts`, `fluxiq` and
+  `client-gateway-websocket` libraries through the same fingerprint and store
+  (`@fluxiq/web` is not cached). **`pnpm task finish`** runs `pnpm check`, whose
+  package checks are likewise reused from the store; the tests still run.
+- **The Lab's Core web build** is cached separately
+  (`packages/test-runner/src/core-web-build/`). Its key covers Core's
+  `apps/web` tree, the generated `next.config.mjs`, the Next version, the
+  `dist` and `package.json` of the three libraries, and Core's
+  `pnpm-lock.yaml`. It no longer includes `coreHead`, so a Core commit that
+  changes only docs, tests or unbuilt sources reuses the published build;
+  `BUILD_LAYOUT_VERSION` 2 marks that change. `--dry-run` reports
+  `coreWeb: {key, cached}` without building.
+
+**The coverage proof.** `pnpm build-cache:prove`
+(`node scripts/build-cache/prove-inputs.mjs [--json] [step ...]`) asks the
+tools what they actually read — `tsc -p <config> --listFilesOnly` for every
+project a step names, and esbuild's metafile, written nowhere, for every
+extension entry of a step that bundles — and fails, naming the step and the
+file, when any file lies outside that step's fingerprinted roots and outside a
+`node_modules` a fingerprinted lockfile covers. It is too slow for
+`pnpm check`, whose cheap static counterpart is
+`scripts/build-cache/tests/registry.test.mjs`; run the proof whenever the
+registry or a project's import shape changes. A package read by relative path
+without a `package.json` dependency is declared in the step's `reads`.
 
 ### Documentation Links
 

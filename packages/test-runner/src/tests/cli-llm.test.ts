@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.js";
+import { collectCoreWebBuildInputs, coreWebBuildKey, markBuildComplete, newBuildAttemptName, publishBuildAttempt } from "../core-web-build/index.js";
 import { catalogScenario, datasetTask } from "../flow-lane/creation/tests/scenario-fixture.js";
 import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
@@ -74,7 +75,21 @@ async function stubLab(t: test.TestContext): Promise<{ root: string; env: NodeJS
   await mkdir(path.join(dist, "scenarios"), { recursive: true });
   await writeFile(path.join(dist, "registry.js"), `export function listScenarioManifests() { return [${JSON.stringify(catalogScenario)}]; }\n`);
   await writeFile(path.join(dist, "scenarios", "live-instructions.js"), `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify([datasetTask(), datasetTask({ id: "catalog-reworded", variantId: "text-variant" })])};\n`);
-  return { root, env: { FLUXIQ_WEB_EXTENSION_ROOT: root, FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(dist, "server.js") } };
+  // A stub Core holding only what a Core web build's key is computed from, so a dry run can report that build's key.
+  const core = path.join(root, "core");
+  const coreFiles: Record<string, string> = {
+    "tsconfig.base.json": "{}\n",
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "apps/web/package.json": "{}\n",
+    "apps/web/node_modules/next/package.json": JSON.stringify({ version: "15.5.24" }),
+    ...Object.fromEntries(["client-gateway-websocket", "contracts", "fluxiq"].flatMap(name => [[`packages/${name}/package.json`, "{}\n"], [`packages/${name}/dist/index.js`, `${name}\n`]])),
+  };
+  for (const [relative, content] of Object.entries(coreFiles)) {
+    const file = path.join(core, ...relative.split("/"));
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, content);
+  }
+  return { root, env: { FLUXIQ_WEB_EXTENSION_ROOT: root, FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(dist, "server.js"), FLUXIQ_CORE_ROOT: core } };
 }
 
 async function captureCli(argv: readonly string[], env: NodeJS.ProcessEnv): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -135,6 +150,41 @@ test("a create-flow dry run resolves the task, plans the build and starts nothin
   assert.match(wrongVariant.stderr, /names variant text-variant, not --variant broken/u);
   const unknownTask = await captureCli(["run", "product-catalog", ...CREATE_FLOW, "--instruction-task", "no-such-task", "--dry-run"], env);
   assert.match(unknownTask.stderr, /"category":"fixture.invalid".*Unknown live instruction task: no-such-task/u);
+});
+
+test("a dry run reports the Core web build it would serve, and whether it is cached, without building or creating anything", async (t) => {
+  const lab = await stubLab(t);
+  const env = { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY };
+  const core = lab.env.FLUXIQ_CORE_ROOT!;
+  const argv = ["run", "product-catalog", ...CREATE_FLOW, "--instruction-task", "catalog-first-page", "--dry-run"];
+  const cacheRoot = path.join(core, ".tmp", "core-web-build");
+  const expectedKey = coreWebBuildKey((await collectCoreWebBuildInputs(core)).inputs);
+
+  const cold = await captureCli(argv, env);
+  assert.equal(cold.code, 0, cold.stderr);
+  const coldPrinted = JSON.parse(cold.stdout) as Record<string, any>;
+  assert.equal(coldPrinted.providerCallCount, 0);
+  assert.deepEqual(coldPrinted.coreWeb, { key: expectedKey, cached: false });
+  await assert.rejects(access(cacheRoot), "a dry run created no cache directory, lock or build");
+  await assert.rejects(access(path.join(lab.root, "test-runs")), "a dry run wrote no run");
+
+  // A complete, published build for that key is reported as cached, and the dry run still builds nothing.
+  const keyDirectory = path.join(cacheRoot, expectedKey);
+  const attempt = newBuildAttemptName();
+  await mkdir(path.join(keyDirectory, attempt, "apps", "web", ".next"), { recursive: true });
+  await writeFile(path.join(keyDirectory, attempt, "apps", "web", ".next", "BUILD_ID"), "stub-build\n");
+  await markBuildComplete(path.join(keyDirectory, attempt), expectedKey, "stub-build");
+  await publishBuildAttempt(keyDirectory, expectedKey, attempt);
+  const warm = await captureCli(argv, env);
+  assert.equal(warm.code, 0, warm.stderr);
+  assert.deepEqual((JSON.parse(warm.stdout) as Record<string, any>).coreWeb, { key: expectedKey, cached: true });
+
+  // A Core missing a build input refuses the dry run exactly as it would refuse the run.
+  await rm(path.join(core, "pnpm-lock.yaml"));
+  const missing = await captureCli(argv, env);
+  assert.equal(missing.code, 1);
+  assert.equal(missing.stdout, "");
+  assert.match(missing.stderr, /"category":"environment.missing".*pnpm-lock\.yaml/u);
 });
 
 test("CLI creation and resume discriminate serial from saved logical-shard authority without overrides", async () => {

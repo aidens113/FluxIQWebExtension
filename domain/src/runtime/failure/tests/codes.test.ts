@@ -19,6 +19,7 @@ import { WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH } from "../../../actions/type
 import {
   WEB_AUTOMATION_FAILURE_CODES,
   WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS,
+  WEB_AUTOMATION_RETRY_AFTER_MAX_MS,
   isWebAutomationFailureCode,
   webAutomationFailureRecord,
   type WebAutomationFailureCode,
@@ -38,6 +39,9 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   ["AUTH_REQUIRED", "web.auth.required", "auth_required", false, "confirmation"],
   ["USER_INTERVENTION_REQUIRED", "web.intervention.required", "user_intervention_required", false, "execution"],
   ["BLOCKED_BY_DIALOG", "web.action.blocked_by_dialog", "unexpected_state", false, "execution"],
+  // t195: a press the page refused as "too fast" and said so. Retryable, and the
+  // one row that states the act did not happen (`UNACTED` below).
+  ["RATE_LIMITED", "web.action.rate_limited", "action_failed", true, "execution"],
   // t163's finding 2. A manifest-permission refusal reported as the retryable
   // `web.action.failed` cost run-muht9lpw-a39aa056 three attempts and then the
   // run, so the refusal has its own non-retryable row and the dead channel it
@@ -50,6 +54,14 @@ const CODE_TABLE: ReadonlyArray<readonly [string, string, string, boolean, strin
   ["ACTION_FAILED", "web.action.failed", "action_failed", true, "execution"],
   ["UNKNOWN", "web.action.unknown", "ambiguous_or_unknown", false, "execution"]
 ];
+
+/** The rows whose producer can prove the act did not happen, which carry `effect: "unacted"`. Every other row states nothing. */
+const UNACTED: ReadonlySet<string> = new Set(["RATE_LIMITED"]);
+
+/** A row's effect, spread onto the record the row builds. */
+function effectOf(name: string): { effect?: "unacted" } {
+  return UNACTED.has(name) ? { effect: "unacted" } : {};
+}
 
 const CODES = Object.values(WEB_AUTOMATION_FAILURE_CODES) as WebAutomationFailureCode[];
 
@@ -65,7 +77,7 @@ test("the closed set is exactly the table the briefs quote, by vocabulary name a
 test("each code carries the category, retryable flag and stage its row names", () => {
   for (const [name, code, category, retryable, stage] of CODE_TABLE) {
     const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code as WebAutomationFailureCode];
-    assert.deepEqual(definition, { category, retryable, stage }, name);
+    assert.deepEqual(definition, { category, retryable, stage, ...effectOf(name) }, name);
     assert.equal(AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES.includes(definition.category), true, `${name} names a Core category`);
   }
 });
@@ -73,11 +85,11 @@ test("each code carries the category, retryable flag and stage its row names", (
 test("every code builds a record Core's parser accepts unchanged, bare and with descriptions", () => {
   for (const [name, code, category, retryable, stage] of CODE_TABLE) {
     const bare = webAutomationFailureRecord(code as WebAutomationFailureCode);
-    assert.deepEqual(bare, { category, code, retryable, stage }, name);
+    assert.deepEqual(bare, { category, code, retryable, stage, ...effectOf(name) }, name);
     assert.deepEqual(parseAutomationStudioFailureRecord(bare), bare, `${name} survives Core's parser`);
 
     const described = webAutomationFailureRecord(code as WebAutomationFailureCode, { expected: "the saved banner", actual: "the form is still open" });
-    assert.deepEqual(described, { category, code, retryable, stage, expected: "the saved banner", actual: "the form is still open" }, name);
+    assert.deepEqual(described, { category, code, retryable, stage, expected: "the saved banner", actual: "the form is still open", ...effectOf(name) }, name);
     assert.deepEqual(parseAutomationStudioFailureRecord(described), described, `${name} survives Core's parser with descriptions`);
   }
 });
@@ -107,6 +119,38 @@ test("an evidence digest is kept only in the shape Core accepts", () => {
   const dropped = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, { evidenceDigest: "NOT-A-DIGEST" });
   assert.equal("evidenceDigest" in dropped, false, "one lost optional field beats a record Core discards whole");
   assert.deepEqual(parseAutomationStudioFailureRecord(dropped), dropped);
+});
+
+test("a press the page refused as too fast maps to a retryable, unacted record carrying the page's wait, and Core keeps all of it", () => {
+  const record = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, {
+    expected: "the page accepts the press",
+    actual: "the page answered the press with a notice that it was refused for going too fast",
+    retryAfterMs: 12_500.4
+  });
+  assert.deepEqual(record, {
+    category: "action_failed",
+    code: "web.action.rate_limited",
+    retryable: true,
+    stage: "execution",
+    expected: "the page accepts the press",
+    actual: "the page answered the press with a notice that it was refused for going too fast",
+    effect: "unacted",
+    retryAfterMs: 12_500
+  });
+  assert.deepEqual(parseAutomationStudioFailureRecord(record), record, "Core's parser keeps the effect and the wait");
+});
+
+test("a wait is kept only where Core accepts one: on a retryable code, readable, and within Core's bound", () => {
+  assert.equal(WEB_AUTOMATION_RETRY_AFTER_MAX_MS, AUTOMATION_STUDIO_FAILURE_RECORD_LIMITS.retryAfterMsMax);
+  const refused = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG, { retryAfterMs: 5_000 });
+  assert.equal("retryAfterMs" in refused, false, "a wait on a code that is not retryable would make Core drop the record");
+  assert.deepEqual(parseAutomationStudioFailureRecord(refused), refused);
+  for (const unreadable of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal("retryAfterMs" in webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { retryAfterMs: unreadable }), false, String(unreadable));
+  }
+  const held = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { retryAfterMs: 10 * WEB_AUTOMATION_RETRY_AFTER_MAX_MS });
+  assert.equal(held.retryAfterMs, WEB_AUTOMATION_RETRY_AFTER_MAX_MS);
+  assert.deepEqual(parseAutomationStudioFailureRecord(held), held);
 });
 
 test("a record written out by hand with a code outside the set does not compile", () => {

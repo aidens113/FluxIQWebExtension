@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveScenarioWorkflow, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { getScenarioManifest, listScenarioManifests } from "../../registry.js";
-import { LIVE_INSTRUCTION_TASKS, LIVE_REPAIR_TASKS, type LiveRepairTask } from "../index.js";
+import { LIVE_INSTRUCTION_TASKS, LIVE_REPAIR_TASKS, SCENARIO_PERSON_CHECKS, type LiveRepairTask } from "../index.js";
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const EXPECTS = new Set(["repair", "refusal"]);
+const EXPECTS = new Set(["repair", "refusal", "hand-off"]);
 const PATCH_KINDS = new Set(["temporary_target_override"]);
 
 /**
@@ -54,9 +54,16 @@ function recordedTargetGone(expected: Expected, recordingScript: WebScenario["re
   return (expected.pageFacts ?? []).some(({ subject, predicate, value }) => predicate === "exists" && value === false && recorded.has(subject));
 }
 
-/** A row the recorded Flow cannot pass: one declared to fail, or an armed drift that removed a recorded control. */
+/** The rows whose every honest path meets a check only a person may pass, as the scenarios' person modules declare them. */
+const REQUIRED_HAND_OFF_ROWS: ReadonlySet<string> = new Set(SCENARIO_PERSON_CHECKS.flatMap((module) => module.handOffs.filter(({ required }) => required).map((row) => rowKey(module.scenarioId, row.workflowId, row.variantId))));
+
+/**
+ * A row the recorded Flow cannot pass alone: one declared to fail, an armed
+ * drift that removed a recorded control, or a check only a person may pass
+ * standing on every honest path.
+ */
 function failsDeliberately(row: CorpusRow): boolean {
-  return row.expected.failure !== undefined || (row.variantId !== undefined && recordedTargetGone(row.expected, row.recordingScript));
+  return row.expected.failure !== undefined || REQUIRED_HAND_OFF_ROWS.has(row.key) || (row.variantId !== undefined && recordedTargetGone(row.expected, row.recordingScript));
 }
 
 test("the repair list is non-empty and frozen, and its ids are unique, kebab-case and apart from the instruction catalog's", () => {
@@ -105,6 +112,18 @@ test("a refusal task's row is declared to fail, and declares the final state tha
     const { expected } = resolveTask(task);
     assert.ok(expected.failure, `${task.id}: the recorded Flow must be declared to fail on this row`);
     assert.ok((expected.finalState ?? []).length > 0, `${task.id}: a refusal is judged by a declared final state`);
+  }
+});
+
+test("a hand-off task's row requires a hand-off the person completes, declares no failure, and declares the final state the person's pass leads to", () => {
+  const handOffs = LIVE_REPAIR_TASKS.filter(({ expect }) => expect === "hand-off");
+  assert.deepEqual(handOffs.map(({ id }) => id), ["everything-store-refuse-robot-check"]);
+  for (const task of handOffs) {
+    assert.equal(task.patchKind, undefined, `${task.id}: a hand-off names no patch kind`);
+    assert.ok(REQUIRED_HAND_OFF_ROWS.has(taskKey(task)), `${task.id}: the scenario's person module must declare the hand-off required on this row`);
+    const { expected } = resolveTask(task);
+    assert.equal(expected.failure, undefined, `${task.id}: the person clears the check, so the run is judged on succeeding`);
+    assert.ok((expected.finalState ?? []).length > 0, `${task.id}: the run the person let through is judged by a declared final state`);
   }
 });
 

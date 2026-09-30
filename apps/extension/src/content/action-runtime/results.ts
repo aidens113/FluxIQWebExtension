@@ -59,6 +59,8 @@ import type {
 } from "../types";
 import { blockingDialog } from "./blocking-dialog";
 import { challengeIn } from "./challenge-evidence";
+import type { RateLimitNotice } from "./rate-limit-notice";
+import type { RobotCheckSighting } from "./robot-check";
 import { boundValidation, statusForValidation } from "./validation-outcome";
 
 type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
@@ -228,6 +230,62 @@ export function actionRejected(
   }, evidence);
 }
 
+/**
+ * A press the page refused for going too fast, and said so
+ * (`rate-limit-notice.ts`). RATE_LIMITED is retryable and states the act did not
+ * happen, and it carries the wait the notice named as `retryAfterMs`, so Core
+ * re-runs the node after that wait instead of refusing to repeat a press or
+ * reading the refusal as done. The texts say what was concluded, never what the
+ * notice wrote.
+ */
+export function actionRateLimited(
+  action: BrowserActionCommand,
+  startedAt: number,
+  notice: RateLimitNotice,
+  evidence: ActionResultEvidence = {}
+): BrowserActionResult {
+  const expected = "the page accepts the press";
+  const wait = notice.retryAfterMs === undefined
+    ? "it named no wait"
+    : `it asked for a wait, so the press may be made again after ${notice.retryAfterMs} ms`;
+  const actual = `the page answered the press ${notice.afterMs} ms after it with a notice that it was refused for going too fast, and confirmed nothing; ${wait}`;
+  const validation = boundValidation({ status: "failed", expected, actual });
+  return buildResult(action, startedAt, {
+    status: "failed",
+    validation,
+    message: `Action refused by the page for going too fast; ${wait}.`,
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs: notice.retryAfterMs })
+  }, evidence);
+}
+
+/**
+ * A press the page answered with a robot check a person must answer: one only
+ * a person can, or one that said it would clear by itself and had not within
+ * the wait (`robot-check/robot-check-watch.ts`). USER_INTERVENTION_REQUIRED
+ * hands the page to the person. The press was made -- the check is its answer
+ * -- so the record says so, and the step stands once the person has answered.
+ * The closed word `captcha` leads `actual`, as the worker's landing records
+ * do; the texts say what was concluded, never what the check wrote.
+ */
+export function actionNeedsPerson(
+  action: BrowserActionCommand,
+  startedAt: number,
+  sighting: RobotCheckSighting,
+  evidence: ActionResultEvidence = {}
+): BrowserActionResult {
+  const expected = "the page answers the press";
+  const check = sighting.outcome === "not_cleared"
+    ? `a robot check that said it would clear by itself and had not after ${sighting.waitedMs} ms`
+    : "a robot check that only a person can answer";
+  const actual = `the press was made, and ${sighting.afterMs} ms after it the page put up ${check}`;
+  return buildResult(action, startedAt, {
+    status: "failed",
+    validation: boundValidation({ status: "failed", expected, actual }),
+    message: "The press was made and the page put up a robot check, which only a person can answer.",
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, { expected, actual: `captcha: ${actual}` })
+  }, evidence);
+}
+
 /** A wait or an action that ran out of time. The status is `timed_out`, never flattened to `failed`. */
 export function actionTimedOut(
   action: BrowserActionCommand,
@@ -340,9 +398,12 @@ function namedUrlClaim(action: BrowserActionCommand): boolean {
  * resolver's own verdict: a Flow's target need not be a CSS selector, and when
  * the resolver found nothing, nothing was found whatever the selector's syntax.
  * The page is read only for a robot check or a code prompt, and only in what it
- * declares or states in its headings (`challenge-evidence.ts`): a card field on
- * a checkout page, or a captcha mentioned in passing, does not make a missing
- * target the person's.
+ * declares or states in its headings -- or, on a page small enough to be
+ * nothing but an interstitial, in all its words (`challenge-evidence.ts`): a
+ * card field on a checkout page, or a captcha mentioned in passing, does not
+ * make a missing target the person's. A navigation that lands on a robot check
+ * is reported by the worker, which asks this frame the same question
+ * (`runtime/landed-challenge.ts`).
  */
 function challengeGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
   const sought = soughtSelector(action);

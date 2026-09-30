@@ -13,7 +13,7 @@ stage it always carries.
 
 ## The Closed Set
 
-`WEB_AUTOMATION_FAILURE_CODES` names eighteen codes. Read a code from that
+`WEB_AUTOMATION_FAILURE_CODES` names nineteen codes. Read a code from that
 object rather than writing its string: the key is the name source code and
 this page use, and the value is the code Core stores and a scenario manifest's
 expected failure names.
@@ -31,6 +31,7 @@ expected failure names.
 | `AUTH_REQUIRED` | `web.auth.required` | `auth_required` | no | `confirmation` |
 | `USER_INTERVENTION_REQUIRED` | `web.intervention.required` | `user_intervention_required` | no | `execution` |
 | `BLOCKED_BY_DIALOG` | `web.action.blocked_by_dialog` | `unexpected_state` | no | `execution` |
+| `RATE_LIMITED` | `web.action.rate_limited` | `action_failed` | yes | `execution` |
 | `BROWSER_PERMISSION_DENIED` | `web.browser.permission_denied` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `TRANSPORT_TRANSIENT` | `web.transport.transient` | `action_failed` | yes | `execution` |
 | `UNSUPPORTED_TYPE` | `web.action.unsupported_type` | `blocked_by_capability_or_policy` | no | `dispatch` |
@@ -68,6 +69,19 @@ repeated. `BLOCKED_BY_DIALOG` is a stable page state that needs a different
 action, not a retry. `BROWSER_PERMISSION_DENIED` is a browser capability/policy
 refusal that must be resolved before dispatch, unlike `ACTION_REJECTED`, which
 is the actionability decision about a particular target on a drivable page.
+
+`RATE_LIMITED` is the one row that states the act did not happen: its record
+carries `effect: "unacted"`, a field Core's record gained for it. The click verb
+reports it when a press that is not a link opens a notice whose own words say
+the page refused it for going too fast
+(`apps/extension/src/content/action-runtime/rate-limit-notice.ts`), and the
+record also carries the wait the notice named, plus half a second and held to a
+minute, as `retryAfterMs`. The page-side loop never retries it, because the wait
+outlasts its five-second budget; Core's defensive executor reads `unacted` as
+licence to repeat even a mutating node and waits the hinted time first, bounded
+by its own 30-second per-wait cap. The notice's OK is pressed by the
+interference defence only on a layer whose text is such a notice; its "Try
+again" is never pressed.
 
 ## Why The Binding Matters
 
@@ -175,9 +189,11 @@ identity across bundles, and is compiler-checked at the throw.
   sent once more before that, so only its second refusal is reported),
   `runtime/click-landing.ts`
   (`NAVIGATION_UNEXPECTED` for a replayed click whose own tab landed on a page
-  the server answered with 400 or above), and `runtime/action-results.ts`
-  (`NAVIGATION_UNEXPECTED`, the record every worker-side navigation check
-  builds).
+  the server answered with 400 or above, and `USER_INTERVENTION_REQUIRED` for
+  one that landed on a robot check that did not clear by itself), and
+  `runtime/action-results.ts` (`NAVIGATION_UNEXPECTED`, the record every
+  worker-side navigation check builds, and `USER_INTERVENTION_REQUIRED` for a
+  navigation or click that landed on a robot check).
 - **The expectation seam** (`domain/src/runtime/expectation/evaluate.ts`):
   `STATE_MISMATCH` and `TIMEOUT`, except where the client reported a code from
   the same set — it stood nearest the page and keeps its own record.
@@ -191,13 +207,29 @@ transport failure. They are not collapsed into `ACTION_FAILED`.
 
 Two rows of the table have producers the list above names only in part, or not
 at all.
-`USER_INTERVENTION_REQUIRED` has three: `content/action-runtime/results.ts`
-(`blockedByModal`), for a target refused as covered or inert while a page's
-modal dialog stands over it, which is the condition the code was named for;
-`domain/src/client/gateway-mapping.ts`, for a command still asking for a value
-the run never supplied, refused before dispatch; and
-`domain/src/runtime/adapter.ts`, when no single paired web-automation client
-can be chosen for a state capture. `PAGE_CHANGED` has one:
+`USER_INTERVENTION_REQUIRED` has these producers.
+
+- `content/action-runtime/results.ts`:
+  - `blockedByModal`, for a target refused as covered or inert while a page's
+    modal dialog stands over it, which is the condition the code was named
+    for;
+  - `challengeGateFailure`, for a missing target on a page that is a robot
+    check or a code prompt;
+  - `actionNeedsPerson`, for a press that put a robot check up in place, one
+    only a person can answer or one that did not clear by itself within
+    15 s.
+- `runtime/action-runner.ts` and `runtime/click-landing.ts`, for a navigation
+  or a click that landed on such a check.
+- `domain/src/client/gateway-mapping.ts`, for a command still asking for a
+  value the run never supplied, refused before dispatch.
+- `domain/src/runtime/adapter.ts`, when no single paired web-automation client
+  can be chosen for a state capture.
+
+A robot check that clears by itself is waited out and produces no failure;
+[robot checks](extension-client.md#robot-checks) says how each is told apart.
+Every robot-check record leads `actual` with `captcha:`. For a press or a
+click, it also says the act itself was made, so the step stands once the
+person has answered. `PAGE_CHANGED` has one:
 `content/actions/page-identity.ts`, for a verb that failed while the document
 it started against was replaced or routed away under it. Beyond the code
 table's own tests they are covered by
@@ -208,6 +240,41 @@ table's own tests they are covered by
 `ACTION_REJECTED` is one code, not a family: the capability's own reason
 (`disabled`, `hidden`, `covered`, and the rest) is carried in the record's
 `actual`, not in the code.
+
+## A Robot Check Parks, It Does Not End
+
+`USER_INTERVENTION_REQUIRED` is never retryable, and it no longer ends the
+build or the run that meets it. It parks them on the one person-needed ask
+(Core `runtime/parking/person-needed-ask.ts`): "FluxIQ needs you: complete the
+check on this page, then press Continue", with the choices Continue and Stop.
+
+- **Self-clearing checks never reach this code.** The extension reads a check
+  as person-only or self-clearing, and waits a self-clearing one out in place —
+  no reload, at most about fifteen seconds. One that does not clear in that time
+  is treated as person-only. A navigation or a press that lands on a person-only
+  check reports `USER_INTERVENTION_REQUIRED`, never success.
+- **Building a Flow.** The domain marks the call's execution result
+  `personNeeded: true` (`domain/src/runtime/llm-evidence/node-run/run.ts`,
+  `personDraft`) and keeps its `needs_person` code and reason for the run's own
+  record. Core never shows that result to the model, which would otherwise keep
+  trying the check until the site locked it out (`run-munp80f5-c31ea417`). On
+  Continue the call stands with the draft statement the domain gave it. A
+  navigation or press whose command went out stands as the step it would have
+  been, and proposes itself, with the same `ranWith` and replay location a
+  success records. A look, or an action whose look before acting met the check,
+  changed nothing, so it proposes nothing. The model is then shown a fresh look.
+  Stop, a timeout, or nobody to ask ends the build
+  `flow_bootstrap.user_intervention_required`. A replayed step or reset that
+  lands on a check keeps Core's replay code (`core.replay.failed` or
+  `core.replay.reset_failed`) and carries `personNeeded` as well.
+- **Running a Flow.** A node attempt that fails in the
+  `user_intervention_required` category, and raised no ask of its own, gets the
+  person-needed ask as its ask effect. Continue goes down `success`, and the
+  next node reads the page fresh. Stop or a timeout goes down `failed`, with a
+  clear person-needed ending.
+
+`AUTH_REQUIRED` shares the model-facing `needs_person` refusal and not this
+parking: a sign-in is not something a Continue press clears.
 
 ## When Nobody Named A Failure
 
