@@ -20,13 +20,13 @@ and its own `fxwork/<id>` tree:
 
 | Lane | Lead | Owns |
 | --- | --- | --- |
-| t174 live lane | `lead-xhigh` | slot-1; the throw after a tool call, then one live run at a time |
-| t186 remove call grants | `lead` | finishes grant removal; t174's grant-naming work is dropped when t186 lands |
+| t174 live lane | `lead-xhigh` | slot-1; throw fixed (`befca2f`); extension-start failure root-caused as a product defect, then live runs |
+| t186 remove call grants | merged | Core `91262bd`, downstream `bfb7f8eb`; t174 drops its grant work at its next merge |
 | t187 build and Lab startup speed | `lead` | why builds are slow, and cutting them (Lab prelude, `task start`/`finish`, `pnpm check`/`build`) |
-| t188 node limits | `lead` | no 16-node cap; 100 nodes per Subflow by default, set in the UI |
+| t188 node limits | merged | Core `c961f4a`, downstream `37379fe3` |
 | t189 decision context | `lead-xhigh` | why the model repeats itself, and the context fix |
-| t185 live activity + chat | `lead` | the on-page overlay and the extension chat |
-| t190 instructed acts | `lead` | bigbox run 6 causes 1 (domain half), 3, 4, 5: reachability/, instructed-acts/, click across a reload |
+| t185 live activity + chat | merged | Core `a28815c`, downstream `6818da22`; first browser proof is t174's next run |
+| t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
 **Machine rules for every lane (binding).**
 - **Lab slots** (`C:/Users/osrs_/FluxStuff/lab-slots/`): `slot-1` is the only live run, held by t174. `slot-2` is one
@@ -37,8 +37,8 @@ and its own `fxwork/<id>` tree:
   only while `lab-slots/slot-1` is absent, and releases only its own. Never `mkdir` or `rm` a build slot by hand
   (a hand-written `rm` deleted another lane's claim on 2026-09-29). One test file, or one test directory at
   `--maxWorkers=2 --minWorkers=1` / `--test-concurrency=2`, needs no slot.
-- **While slot-1 is held**, `build-slots/priority-governor.ps1` (started by the supervisor) lowers every other lane's
-  build and test process to BelowNormal; live runs 11 and 12 died pairing at 100% CPU. Benchmarks pause.
+- **A live-run failure is a product or Lab defect, never machine load** (user, 2026-09-29): trace the failing step and
+  its regression. The CPU priority governor was stopped as a non-fix. Benchmarks still pause while slot-1 is held.
 - Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
   validation, and the supervisor commits and continues it.
 
@@ -754,6 +754,9 @@ debug and partitioned so neither touches the other's files:
 - t188 (a Flow's size is one setting, 100 nodes per Subflow by default, changed in Flow Settings) merged and pushed in both repositories. Supervisor check in the t188 Core tree: vitest flow-size end-to-end + `flow-bootstrap/plan` + `model/flow-size` -> `12 passed (12)`, `121 passed (121)`. Downstream `pnpm task finish t188` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, `37379fe3`; Core `pnpm task finish t188` -> the same, `c961f4a`. Lead's run: affected Core suites 1191 tests passed, web settings 59 passed. Not exercised in a browser or live.
 - The live slot sat idle for over an hour after the restart (the live lane was briefed to finish full validation first, and t187's bench held a build slot); the user noticed. Corrected: the first live run since the restart claimed slot-1 at 19:30:58 (`crossborder-marketplace-hub-to-cart`), Chromium up at 19:35:43, 4 min 45 s of Lab prelude builds. Benchmarks pause while slot-1 is held.
 - Live runs 11 (`run-munhpy2m-036e9572`) and 12 (`run-muni3pdr-80225d3f`) died before pairing, with 0 provider calls: the first `fluxiq.connect` went unanswered for 15 s, then `ERR_ABORTED` loading the side panel after 11 s, at 100% CPU from other lanes' tests. The extension start has failed in 6 of 9 launches. A CPU priority governor now runs during live runs. t174's throw fix (`befca2f`: `draft-shown.ts` rejected t175's `did_not_work` rows; supervisor re-run 2 files / 24 tests passed) and source-mapped Lab frames (`259b0df2`) are committed, and dev with t188 is merged into both t174 trees; the fix is not yet live-proven.
+- Merged and pushed in both repositories, each through `pnpm task finish` whose `pnpm check` printed `"passed":true` on both sides: t185 (live activity overlay, extension chat, Lab live panel; supervisor re-run Core api + client-gateway 126/126 on a verbose re-run), t186 (no model call needs a grant; supervisor: session-key-provider + repair-replay-chain 5/5, runtime-patches 3/3, grant symbols left only in absence assertions), t190 (instructed acts name their act, one act per object, arrival step, navigating actions report applied; supervisor: instructed-acts + reachability 77/77, domain 900/900).
+- The user found `$0.001` as a cost ceiling. It was only the `runtime-patches.test.ts` fixture, which the grant's $0.25 used to override; the fixture now uses the product's $0.25 (the lane had used $0.15). Every product default is $0.25.
+- The user rejected machine load as the cause of the extension-start failures. The priority governor was stopped, and the lane is root-causing the start as a product defect: probe `t174-w7`, ten headed starts, which is the Chromium window the user sees opening and closing.
 - Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
 - Outcome: In progress. Pass streak 0.
 
