@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @fluxiq-web-extension/test-contracts build && node scripts/build-scenario-lab.mjs",
-    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json",
+    "build": "node ../../scripts/build-cache/cli.mjs test-contracts:build && node ../../scripts/build-cache/cli.mjs scenario-lab:build -- \"node scripts/build-scenario-lab.mjs\"",
+    "check": "node ../../scripts/build-cache/cli.mjs scenario-lab:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check-src.tsbuildinfo && tsc -p tsconfig.e2e.json --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check-e2e.tsbuildinfo\"",
     "start": "node dist/server.js",
-    "test": "pnpm build && node --test dist/**/*.test.js",
-    "test:e2e": "pnpm --filter @fluxiq-web-extension/test-contracts build && playwright test -c e2e/playwright.config.ts"
+    "test": "node ../../scripts/build-cache/cli.mjs test-contracts:build && node ../../scripts/build-cache/cli.mjs scenario-lab:build && node --test dist/**/*.test.js",
+    "test:e2e": "node ../../scripts/build-cache/cli.mjs test-contracts:build && playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@fluxiq-web-extension/test-contracts": "workspace:*"

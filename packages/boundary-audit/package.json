@@ -8,10 +8,10 @@
   },
   "exports": "./dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build && node --test dist/**/*.test.js",
-    "audit": "pnpm build && node dist/cli.js"
+    "build": "node ../../scripts/build-cache/cli.mjs boundary-audit:build -- \"tsc -p tsconfig.json\"",
+    "check": "node ../../scripts/build-cache/cli.mjs boundary-audit:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
+    "test": "node ../../scripts/build-cache/cli.mjs boundary-audit:build && node --test dist/**/*.test.js",
+    "audit": "node ../../scripts/build-cache/cli.mjs boundary-audit:build && node dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

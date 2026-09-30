@@ -12,11 +12,13 @@
   "bin": {
     "fluxiq-agent-orchestrator": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test tests/*.test.mjs"
+    "build": "node ../../scripts/build-cache/cli.mjs agent-orchestrator:build -- \"tsc -p tsconfig.json\"",
+    "check": "node ../../scripts/build-cache/cli.mjs agent-orchestrator:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
+    "test": "node ../../scripts/build-cache/cli.mjs agent-orchestrator:build && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@fluxiq-web-extension/test-contracts": "workspace:*"

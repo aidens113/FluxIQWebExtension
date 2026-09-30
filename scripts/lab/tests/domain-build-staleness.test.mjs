@@ -62,9 +62,39 @@ test("a build with no output at all is absence, not staleness", async () => {
 });
 
 test("the first stale build is reported, and both of a run's builds are asked", async () => {
-  const roots = repositoryBuilds("/repo", "/repo/apps/extension/dist/e2e-chromium");
+  const repo = path.resolve("/repo");
+  const roots = repositoryBuilds(repo, path.join(repo, "apps", "extension", ".lab-instances", "one"));
   assert.deepEqual(roots.map((entry) => entry.name), ["domain", "extension"]);
-  // The extension's output root is passed in rather than assumed: a run against
-  // one build label must not be failed by another label's output.
-  assert.equal(roots[1].outputRoot, "/repo/apps/extension/dist/e2e-chromium");
+  // The extension's build root is passed in rather than assumed: a run against
+  // one Lab instance must not be failed by another instance's output. Its
+  // output root is the bundle the browser loads under that build root.
+  assert.equal(roots[1].outputRoot, path.join(repo, "apps", "extension", ".lab-instances", "one", "dist", "e2e-chromium"));
+});
+
+test("an extension edited after its bundle was built is stale without an instance", async () => {
+  // Without an instance the build root is `apps/extension` itself, which holds
+  // `src`. When that root was also the output root the newest "output" was the
+  // newest source, so this guard could never fire for the extension.
+  const repo = await mkdtemp(path.join(os.tmpdir(), "fluxiq-stale-"));
+  const now = Date.now();
+  const files = {
+    "domain/src/a.ts": now - 10 * 60_000,
+    "domain/dist/a.js": now - 5 * 60_000,
+    "apps/extension/src/b.ts": now,
+    "apps/extension/dist/e2e-chromium/background/index.js": now - 5 * 60_000
+  };
+  try {
+    for (const [relative, ms] of Object.entries(files)) {
+      const file = path.join(repo, relative);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, "export {};\n", "utf8");
+      await utimes(file, new Date(ms), new Date(ms));
+    }
+    const builds = repositoryBuilds(repo, path.join(repo, "apps", "extension"));
+    assert.equal(builds[1].outputRoot, path.join(repo, "apps", "extension", "dist", "e2e-chromium"));
+    const stale = await staleRepositoryBuild(builds);
+    assert.ok(stale, "a source newer than the bundle the browser loads is staleness");
+    assert.equal(stale.name, "extension");
+    assert.match(stale.message, /b\.ts is newer than anything in its output/u);
+  } finally { await rm(repo, { recursive: true, force: true }); }
 });
