@@ -153,9 +153,20 @@ test("the redaction attestation scans once Core has stopped and its logs are in 
   assert.match(source, /await createRunManifest\(\{[^}]*\bredaction\b[^}]*\}\)/u, "the manifest derives redactionState from the attestation");
   assert.ok(source.includes('bundle.writeStructured("snapshots/redaction-attestation.json", redaction)'), "the result is a bundle artifact");
   assert.ok(source.includes('failureCategory = "security.redaction"'), "a finding fails the run as security.redaction");
+  // t182 (38acbc05) added the extension's storage in the run's own browser
+  // profile as a third scope, bounded by the same instant as the workspace.
   assert.ok(
-    source.includes('runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined })'),
+    source.includes('const writtenSince = target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined;'),
+    "only a persistent-isolated target outlives the run, so only it is bounded to what this run wrote since it started",
+  );
+  assert.ok(
+    source.includes("runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: writtenSince, extensionStorage })"),
     "a persistent-isolated workspace is bounded to what this run wrote since it started, and every other target's workspace is scanned whole",
+  );
+  assert.ok(source.includes("const profileDir = topology?.allocation.browserProfileDir;"), "the extension storage scanned is the run allocation's own profile, never a user's");
+  assert.ok(
+    source.includes("{ profileDir, dirs: await chromiumExtensionStorageDirs(profileDir), writtenSince }"),
+    "the extension storage is bounded exactly as the workspace is",
   );
 });
 
