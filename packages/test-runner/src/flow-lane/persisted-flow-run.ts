@@ -428,8 +428,10 @@ export async function executeRecordedFlowRun(
   // Core answers a live run only once it is written whole, recovery
   // included, so this should already be the finished run. Should a failed run
   // come back without its recovery record, it is read until the record is in,
-  // rather than taken as finished while Core is still repairing it.
-  if (input.llmExecution && pendingWork(detail, { awaitRecovery: settlement.awaitRecovery === true }) === "recovery") {
+  // rather than taken as finished while Core is still repairing it -- and so is
+  // one whose wrong answer Core is still re-authoring or re-running.
+  const owed = input.llmExecution ? pendingWork(detail, settlement) : undefined;
+  if (owed === "recovery" || owed === "repair") {
     const early = new RunnerFailure("runtime.behavior", "Core answered the live run before its detail was terminal");
     const settled = await awaitTerminalRunDetail((timeoutMs) => readRunDetail(control, input.projectId, runId, { timeoutMs }, input.actionTypes ?? new Map()), early, { timeoutMs: LIVE_LLM_RUN_WAIT_MS, intervalMs: READ_BACK_POLL_MS, ...settlement, ...terminalWait });
     detail = settled.detail;

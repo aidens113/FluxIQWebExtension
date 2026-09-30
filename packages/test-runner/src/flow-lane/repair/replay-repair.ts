@@ -15,6 +15,7 @@ import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { classifyRunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl } from "../persisted-flow-run.js";
+import type { FlowRunDataset } from "../run-datasets.js";
 
 /** One replay of the applied Flow. */
 export type RepairReplay = Readonly<{
@@ -35,6 +36,12 @@ export type RepairReplay = Readonly<{
   goalPassed: boolean;
   /** Whether Core's own run and every action attempt succeeded. */
   flowSucceeded: boolean;
+  /**
+   * Whether the replay stored exactly the datasets the judged run stored, row
+   * for row. `null` when the lane gave no datasets to reproduce: a page-state
+   * repair is judged by the fixture's final state alone.
+   */
+  datasetsReproduced: boolean | null;
 }>;
 
 /**
@@ -66,6 +73,13 @@ export type RepairReplayInput = {
   prepare: () => Promise<void>;
   /** The fixture oracle, consulted after each replay. */
   checkGoal: () => Promise<boolean>;
+  /**
+   * The datasets the lane's own run stored and was judged right on, which each
+   * replay must store exactly. A wrong-answer repair is a change to the answer,
+   * and the fixture's page state says nothing about an answer: a replay that
+   * returned other rows on the same page would otherwise pass.
+   */
+  expectedDatasets?: readonly FlowRunDataset[];
 };
 
 /**
@@ -115,13 +129,20 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       modelCalled: providerCalls > 0 || run.harnessActivations > 0,
       goalPassed,
       flowSucceeded: run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded"),
+      datasetsReproduced: input.expectedDatasets ? sameDatasets(input.expectedDatasets, run.extracted) : null,
     };
   } catch (error) {
     // The category, never the message: a replay that broke on a read must not
     // put whatever that read said into the bundle.
     const status: RunnerFailureCategory = classifyRunnerFailure(error);
-    return { index, outcome: "unreachable", runId, status, providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false };
+    return { index, outcome: "unreachable", runId, status, providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false, datasetsReproduced: input.expectedDatasets ? false : null };
   }
+}
+
+/** The same datasets by id, each with the same rows in the same order. */
+function sameDatasets(expected: readonly FlowRunDataset[], actual: readonly FlowRunDataset[]): boolean {
+  const rows = (datasets: readonly FlowRunDataset[]) => JSON.stringify([...datasets].sort((a, b) => a.datasetId.localeCompare(b.datasetId)).map((dataset) => [dataset.datasetId, dataset.records]));
+  return rows(expected) === rows(actual);
 }
 
 /**

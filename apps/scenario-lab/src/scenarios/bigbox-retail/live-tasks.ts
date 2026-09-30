@@ -26,5 +26,5 @@ export const BIGBOX_RETAIL_LIVE_TASKS: readonly LiveInstructionTask[] = [
   { id: "bigbox-retail-pickup-towels-list-layout-after-creation", scenarioId: "bigbox-retail", variantId: "list-layout", variantArmedAfterBuild: true, kind: "navigate-and-extract", instruction: PICKUP_TOWELS, judgeBy: "expected-dataset", expectedDatasetId: "extract-pickup-towels" },
   { id: "bigbox-retail-pickup-cart", scenarioId: "bigbox-retail", kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
   { id: "bigbox-retail-pickup-cart-redesigned-after-creation", scenarioId: "bigbox-retail", variantId: "redesigned-buy-box", variantArmedAfterBuild: true, kind: "form", instruction: PICKUP_CART, judgeBy: "playback-goal" },
-  { id: "bigbox-retail-pickup-order", scenarioId: "bigbox-retail", kind: "navigate-and-extract", instruction: PICKUP_ORDER, judgeBy: "expected-dataset", expectedDatasetId: "extract-order" },
+  { id: "bigbox-retail-pickup-order", scenarioId: "bigbox-retail", kind: "navigate-and-extract", instruction: PICKUP_ORDER, judgeBy: "expected-dataset", expectedDatasetId: "extract-order", permissionPoint: { consequence: "move_money", control: "Place order" } },
 ];

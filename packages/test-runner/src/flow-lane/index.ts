@@ -2,6 +2,7 @@
 // API, and that Flow is run and judged on the isolated target. The lane itself
 // configures no provider; a run that asked for one hands it an authorization
 // through `authorizeLiveLlm`, and the lane only decides when to use it.
+export * from "./adaptation-snapshot.js";
 export * from "./declared-secrets.js";
 export * from "./expectations.js";
 export * from "./extraction-read.js";

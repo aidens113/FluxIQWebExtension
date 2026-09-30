@@ -29,21 +29,31 @@ const REFUSED: RunHarnessRecovery = {
   changeProposalIds: [],
 };
 
+/** The edit Core's re-author built and applied inside the run, as the run records it. */
+const REAUTHORED = "adaptation.bootstrap.reauthored";
+const RESULT_REPAIRED: RunHarnessRecovery = {
+  attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [],
+  resultReauthor: { routed: true, refusal: null, adaptationId: REAUTHORED, applied: true, code: null },
+} as unknown as RunHarnessRecovery;
+const JUDGED_ROWS = [{ name: "Alpha" }, { name: "Gamma" }];
+const JUDGED = [{ datasetId: "products", nodeIds: ["node.one"], recordCount: 2, storeTruncated: false, invalidCount: 0, records: JUDGED_ROWS, nonStringValues: 0, pages: 1 }];
+
 const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.click", order: 0, status: "succeeded", startedAt: 1_000, finishedAt: 1_030 };
 
 /** What the recovery's proposal pointed at, as Core's adaptation stores it: the page's one submit control. */
 const APPLY_CHANGES = { tagName: "button", accessibleName: "Apply changes", metadata: { controlType: "submit" } };
 
-function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyRefused?: boolean; providerCalls?: number; goal?: boolean; target?: Record<string, unknown>; nodes?: unknown[] } = {}) {
+function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyRefused?: boolean; providerCalls?: number; goal?: boolean; target?: Record<string, unknown>; nodes?: unknown[]; replayRows?: (replay: number) => Record<string, unknown>[] } = {}) {
   const endpoints: string[] = [];
   const written: Array<{ path: string; value: any }> = [];
   const published: Record<string, unknown>[] = [];
   const reset: number[] = [];
   let applied = false;
+  let replaysRun = 0;
   const control = {
     selectExistingContext: async () => undefined,
     startPersistedFlow: async () => ({ runId: "run.replay" }),
-    runPersistedFlow: async () => ({ session: { runId: "run.replay", status: "succeeded" } }),
+    runPersistedFlow: async () => { replaysRun += 1; return { session: { runId: "run.replay", status: "succeeded" } }; },
     getRunDetail: async () => ({
       summary: { runId: "run.replay", projectId: "project-1", flowId: "flow-1", status: "succeeded", routeDecisionCount: 0, subflowEntryCount: 0, actionAttemptCount: 1, updatedAt: 1 },
       routeDecisions: [], subflows: [], actionAttempts: [], interventions: [],
@@ -53,6 +63,8 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
       endpoints.push(endpoint + (payload.action ? `:${String(payload.action)}` : ""));
       if (endpoint === "get-flow") return { flow: { nodes: options.nodes ?? [] } };
       if (endpoint === "list-flow-subflows") return { subflows: [] };
+      if (endpoint === "get-flow-adaptation" && payload.adaptationId === REAUTHORED) return { adaptation: { adaptationId: REAUTHORED, status: "applied" } };
+      if (endpoint === "get-run-dataset-page") { const rows = options.replayRows?.(replaysRun) ?? []; return { dataset: { schema: { fields: [{ id: "name" }] }, rows, nextCursor: null } }; }
       if (endpoint === "get-flow-adaptation") return { adaptation: { adaptationId: "adaptation-1", status: applied ? "applied" : "proposed", proposalId: "proposal-1", patch: [{ kind: "edit_action_target", after: options.target ?? APPLY_CHANGES }] } };
       if (endpoint === "review-flow-adaptation") {
         if (payload.action === "apply") {
@@ -61,7 +73,8 @@ function lane(options: { recovery?: RunHarnessRecovery; replays?: number; applyR
         }
         return { adaptation: { adaptationId: "adaptation-1" } };
       }
-      return { runDetail: { summary: { runId: "run.replay", status: "succeeded" }, actionAttempts: [attempt], interventions: [] } };
+      const rows = options.replayRows?.(replaysRun);
+      return { runDetail: { summary: { runId: "run.replay", status: "succeeded" }, actionAttempts: [attempt], interventions: [], ...(rows ? { datasets: [{ datasetId: "products", nodeIds: ["node.one"], recordCount: rows.length, truncated: false, invalidCount: 0 }] } : {}) } };
     },
   } as unknown as ProveLiveRepairControl;
   const input: LiveRepairLaneInput = {
@@ -226,4 +239,31 @@ test("a created Flow's run inputs are rebuilt by the rule its caller hands in, h
   const recorded = lane({ replays: 1, nodes: [uploading] });
   t.after(recorded.restore);
   assert.equal((await runLiveRepairLane(recorded.control, recorded.input))?.application.outcome, "applied");
+});
+
+// A wrong answer Core repaired inside the run: its re-author built an edit,
+// applied it, re-ran the same run and had the answer judged again. There is no
+// proposal to approve, so the lane used to find none, replay nothing and pass.
+test("a wrong-answer repair applied in the run is replayed without the model, and each replay must return the judged rows", async (t) => {
+  const fake = lane({ replays: 2, recovery: RESULT_REPAIRED, replayRows: () => JUDGED_ROWS });
+  t.after(fake.restore);
+  const proof = await runLiveRepairLane(fake.control, { ...fake.input, expectation: DECLARED, lane: { flowId: "flow-1", run: { harnessRecovery: RESULT_REPAIRED, extracted: JUDGED } } });
+  assert.ok(proof);
+  assert.deepEqual(proof.adaptationIds, [REAUTHORED]);
+  assert.equal(proof.application.outcome, "applied");
+  assert.deepEqual(proof.replays.map((replay) => [replay.outcome, replay.providerCalls, replay.datasetsReproduced]), [["ran", 0, true], ["ran", 0, true]]);
+  // Nothing was approved or applied again, and the step repair it declares was not judged against an answer.
+  assert.equal(fake.endpoints.filter((endpoint) => endpoint.startsWith("review-flow-adaptation")).length, 0);
+  assert.equal(fake.written[0]?.value.declaredRepair, undefined);
+  assert.equal(fake.published[0]?.repair, "result_reauthor");
+});
+
+test("a wrong-answer repair whose replay returns other rows is not deterministic, and fails the run", async (t) => {
+  const fake = lane({ replays: 2, recovery: RESULT_REPAIRED, replayRows: (replay) => replay === 2 ? [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }] : JUDGED_ROWS });
+  t.after(fake.restore);
+  await assert.rejects(
+    runLiveRepairLane(fake.control, { ...fake.input, lane: { flowId: "flow-1", run: { harnessRecovery: RESULT_REPAIRED, extracted: JUDGED } } }),
+    (error: unknown) => error instanceof RunnerFailure && /not deterministic: 1 of 2 replay\(s\) stored other rows than the run that was judged right/u.test(error.message),
+  );
+  assert.deepEqual(fake.written[0]?.value.replays.map((replay: { datasetsReproduced: boolean | null }) => replay.datasetsReproduced), [true, false]);
 });

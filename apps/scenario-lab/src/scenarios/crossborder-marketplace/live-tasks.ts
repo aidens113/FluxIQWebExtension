@@ -65,5 +65,6 @@ export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] 
     instruction: BUY_HUB,
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-order",
+    permissionPoint: { consequence: "move_money", control: "Place order" },
   },
 ];
