@@ -129,6 +129,9 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in t
 - withdraw-stale-requests declares `permissionPoint: delete @ Withdraw`, never `--llm-permit`.
 - Declined: keeping SQLite pools open while idle, which would change the product for the sake of test speed.
 - The Click node's description keeps no site-specific "click again" advice (reverted).
+- Lane C F14 (the judge sees the value a condition read): Core's run record keeps up to 60 characters of page text per
+  condition, because the judge needs it; it is screened wherever it leaves Core (run bundles, logs), per w15's projection
+  change. A recorded click from Core's recording fallback gets the same check allowance, closed in the domain mapper (t203).
 
 **Waiting on the user.**
 - Decided 2026-09-30: the user accepted t198's security change. Offered, not built: requiring confirmation in the Core panel
@@ -145,6 +148,40 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in t
 4. Audits A1-A4, then fix workers partitioned by file on the merged dev; validate; then live runs resume, supervised.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
+
+---
+
+## The 2026-09-30 Audit And Its Fixes
+
+Four read-only audits (worker-high), from about 54 debugs, the lane reports and the run bundles, after the user stopped all
+Labs "to get this over the line". Reports:
+[A1 exploration and decisions](./language-driven-flow-loop-plan/audit-2026-09-30/a1-exploration-decisions.md),
+[A2 draft and execution](./language-driven-flow-loop-plan/audit-2026-09-30/a2-draft-and-execution.md),
+[A3 judgement and repair](./language-driven-flow-loop-plan/audit-2026-09-30/a3-judgement-and-repair.md),
+[A4 page and harness](./language-driven-flow-loop-plan/audit-2026-09-30/a4-page-and-harness.md). Each names file:line on
+dev, run ids, and a fix partitioned by file. A1: 57 of 117 live builds ended with no Flow.
+
+| Cause (audit) | Runs | Owner, status |
+| --- | --- | --- |
+| The model is never shown the instructed acts until a refusal; claims name ids it cannot see (A1-1) | last refusal in 35 of 57 | t196, in progress |
+| A landed press or navigation counts as progress, so the no-progress guard never fires (A1-2) | 24 of 57 hit the 64-decision limit | t196, in progress |
+| Every completion replays the draft from the start (A1-3) | 6 killed | t196, done `77b269a2` |
+| A build that cannot finish just ends: no test, repair or "not doable" (A3-1) | 30 | t196 (the lifecycle), in progress |
+| The loop keeps every executed step in the draft; the user wants an authored Flow (t196's gap) | - | t196, in progress |
+| A click that reloads its own page is reported failed and dropped from the Flow (A2-1) | 13 | t202, extension `click-landing.ts` |
+| A model-built click gets no robot-check allowance (5 s) where recorded clicks do (A4-2) | 8 (checks) | new task, Core `nodes/policy/action.ts` + domain `web-panel-host.ts` |
+| A failed playback step can only be patched; the re-author is wired only to a refuted answer (A3-2) | 12 | after t200 merges (it owns `recovery/`) |
+| A permission ask ends the build (A3-3) | 14 | lane D w14 on its branch; 5 tasks lack a permission point, after D |
+| The completion check accepts Flows whose steps do not do the instructed act's object (A2-2) | 13 accepted Flows | quantity/size on lane A's branch; object binding open, after t196 |
+| A press is swallowed after a page load but counts as success (A2-3) | 4 playbacks, 7 builds | lane D F20 on its branch; fail a twice-ignored press, open |
+| Corner page-assistant cards and walls hiding a target (A4-1, A2-4) | 14 + 7 | lane D R1/R2 on its branch |
+| The test runs on the build's own site state and resets by navigation only (A2-5) | 6 killed | open, after t196 |
+| `pnpm check` bundles the extension against a stale Core build; `node:` imports can reach the browser (A4) | t197's defect | new task (check hardening), Core + downstream |
+| Lab bookkeeping: product failures labelled facility, a 300 s idle after a failed repair, re-author spend unreported, no in-page account of a blocked call (A4) | 12 debugs | after lane D (it edits `run-scenario.ts`) |
+| The whole page to the model, including child iframes; keep covering-dialog flags without reordering (t200, A4) | - | t200, in progress |
+
+Merge order (from the audits' conflict sections): lanes A-D and t197/t201 first, then t200, then t196 (both edit
+`R/flow-draft/**`; `entry.ts` will conflict), then the fix tasks that wait on them.
 
 ---
 
