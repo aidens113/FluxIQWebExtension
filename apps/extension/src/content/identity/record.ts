@@ -55,7 +55,7 @@
 //    of several the recording meant. Robust: it survives a restyle, a re-order
 //    and a re-render, which is what makes an identity-keyed table safer to
 //    replay than a positional one.
-// 2. **The record's own text**, bounded, and only when the record was one of
+// 2. **The record's own text**, whole, and only when the record was one of
 //    several like it at capture time -- where there was nothing to confuse it
 //    with, there is nothing to check. Text is the weaker signal and it is a
 //    fallback, not a supplement: a keyed record carries no text, so the
@@ -83,14 +83,21 @@
 // automation loop, which can look at the page and repair it. A wrong click
 // reaches nobody, because it reports success.
 //
-// Nothing here is memoized. Every lookup is bounded by depth, by node count and
-// by text length, and the key path -- the common one on a table worth
-// protecting -- short-circuits before any text is read.
+// Nothing here is memoized. Every lookup is bounded by depth and by node count,
+// and the key path -- the common one on a table worth protecting --
+// short-circuits before any text is read.
+//
+// Neither the key nor the text is cut any more (t200). `context.record` rides
+// on every descriptor the model is shown, and a record's words cut at 160
+// characters were a fragment of the row. A recording made before then carries
+// the cut form, so the comparison still accepts a record whose whole words
+// begin with it (`sameAsRecorded`).
 
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
+import { normalizedText } from "./normalized-text";
 
 /**
  * The record a recorded element sat in, as it travels on the wire. Declared by
@@ -101,10 +108,12 @@ export type RecordIdentity = NonNullable<DomElementContext["record"]>;
 
 /** How far up the tree a record may be. A control sits inside its own row's cell, not ten levels above it. */
 const MAX_RECORD_DEPTH = 12;
-/** Characters of a record's text kept as its identity. Long enough to separate rows, short enough to be a signal and not a copy of the page. */
-const MAX_RECORD_TEXT = 160;
-/** Characters of a key. An identifier longer than this is not one. */
-const MAX_RECORD_KEY = 120;
+/**
+ * Where a recording made before t200 cut a record's text, and its key. Only
+ * read to recognise such a recording: nothing is cut here any more.
+ */
+const LEGACY_RECORD_TEXT_CUT = 160;
+const LEGACY_RECORD_KEY_CUT = 120;
 /** Nodes walked while reading a record's text. A record is a row, not a document. */
 const MAX_RECORD_NODES = 400;
 
@@ -163,11 +172,23 @@ export function agreesWithRecordedRecord(recorded: RecordIdentity | undefined, e
   if (!record) return false;
   if (recorded.key) {
     const found = recorded.keyAttribute
-      ? boundedText(record.getAttribute(recorded.keyAttribute), MAX_RECORD_KEY)
+      ? normalizedText(record.getAttribute(recorded.keyAttribute))
       : recordKey(record)?.key;
-    return found === recorded.key;
+    return sameAsRecorded(found, recorded.key, LEGACY_RECORD_KEY_CUT);
   }
-  return recordText(record) === recorded.text;
+  return sameAsRecorded(recordText(record), recorded.text, LEGACY_RECORD_TEXT_CUT);
+}
+
+/**
+ * Whether what the candidate's record says is what the recording said. Equal,
+ * or -- for a recording made while keys and text were still cut -- a recorded
+ * value exactly as long as that cut which the candidate's whole value begins
+ * with, which is the only reading that cut value can have had.
+ */
+function sameAsRecorded(found: string | undefined, recorded: string | undefined, legacyCut: number): boolean {
+  if (found === undefined || recorded === undefined) return false;
+  if (found === recorded) return true;
+  return recorded.length === legacyCut && found.length > legacyCut && found.slice(0, legacyCut) === recorded;
 }
 
 /** Characters of a record's text searched for a row's values. A card, however long its description, says which it is well before this. */
@@ -282,9 +303,9 @@ function resolvedHref(element: Element): string | undefined {
  * Whether the element is one instance of a repeated thing by the rule above:
  * record-shaped markup or ARIA, or a per-instance identifier attribute.
  *
- * Exported for the snapshot's ranking (`../repeat-exemplars.ts`), which asks
- * the same question for a different reason -- which controls are one per row --
- * and must not answer it by a second rule.
+ * Exported for the snapshot's repeat annotation (`../repeat-exemplars.ts`),
+ * which asks the same question for a different reason -- which controls are
+ * one per row -- and must not answer it by a second rule.
  */
 export function isRecordElement(element: Element): boolean {
   return matchesSelector(element, RECORD_SELECTOR) || recordKey(element) !== undefined;
@@ -304,7 +325,7 @@ function enclosingRecord(element: Element): Element | undefined {
 function recordKey(element: Element): RecordIdentity | undefined {
   for (const name of attributeNames(element)) {
     if (!RECORD_KEY_ATTRIBUTE.test(name)) continue;
-    const key = boundedText(element.getAttribute(name), MAX_RECORD_KEY);
+    const key = normalizedText(element.getAttribute(name));
     if (key) return { keyAttribute: name, key };
   }
   return undefined;
@@ -345,7 +366,7 @@ function recordText(record: Element): string | undefined {
     if (isSensitiveFormControl(child) || matchesSelector(child, STATEFUL_SUBTREE)) continue;
     for (const grandchild of childrenInReverse(child)) pending.push(grandchild);
   }
-  return boundedText(text, MAX_RECORD_TEXT);
+  return normalizedText(text);
 }
 
 /** A node's children, last first, so a stack walks them in document order. */

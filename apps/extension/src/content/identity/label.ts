@@ -17,14 +17,17 @@
 // nested control, a label that sits inside one gives nothing
 // (`isWithinSensitiveControl`), and the text beside an unlabelled control is
 // read through `textOutsideSensitiveControls` (both `../sensitive-text.ts`).
+//
+// The label is whole (t200). It was cut to 200 characters, and the text beside
+// an unlabelled control to 80, so the model read the head of a sentence as the
+// control's label. The bounds that remain -- four associated labels, four
+// preceding siblings, forty text parts eight levels deep -- bound the search
+// for a label, not the label found.
 
 import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
-import { boundedText } from "./bounded-text";
+import { normalizedText } from "./normalized-text";
 
-const MAX_LABEL_LENGTH = 200;
-/** A nearby label is short by nature; longer text beside a control is prose, not a label. */
-const MAX_NEARBY_LABEL_LENGTH = 80;
 const MAX_ASSOCIATED_LABELS = 4;
 const MAX_NEARBY_SIBLINGS = 4;
 const NEARBY_LABEL_TAGS = new Set(["label", "span", "div", "p", "dt", "strong", "b", "legend", "th"]);
@@ -33,7 +36,7 @@ const NESTED_CONTROL_SELECTOR = "input,select,textarea,button";
 /** The text of every `<label>` the page associates with `element`, in document order. */
 export function associatedLabel(element: Element): string | undefined {
   const texts = associatedLabelElements(element).map((label) => labelElementText(label, element));
-  return boundedText(texts.filter(Boolean).join(" "), MAX_LABEL_LENGTH);
+  return normalizedText(texts.filter(Boolean).join(" "));
 }
 
 /**
@@ -113,7 +116,7 @@ function labelBeforeSiblings(element: Element): string | undefined {
 function nearbyLabelText(candidate: Element): string | undefined {
   if (!NEARBY_LABEL_TAGS.has(candidate.tagName.toLowerCase())) return undefined;
   if (candidate.querySelector(NESTED_CONTROL_SELECTOR)) return undefined;
-  return boundedText(textOutsideSensitiveControls(candidate), MAX_NEARBY_LABEL_LENGTH);
+  return normalizedText(textOutsideSensitiveControls(candidate));
 }
 
 function isLabelableControl(element: Element): boolean {

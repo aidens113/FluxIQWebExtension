@@ -18,6 +18,7 @@ import type {
   BrowserActionCommand,
   BrowserActionResult,
   ClientGatewayServerMessage,
+  DomSnapshot,
   FluxIQSession,
   FluxIQSettings,
   JsonObject,
@@ -26,10 +27,12 @@ import type {
   ServerCommandPayload
 } from "../../shared/protocol";
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
+import { allTabFrames, sendToTab } from "../tabs";
 import { ExtensionRuntimeCommandRouter, gatewayActionResultFromBrowserResult } from "../../runtime";
 import type { ActivePage } from "./active-page";
 import type { ActiveRecording } from "./active-recording";
 import type { ContentAttachment } from "./content-attachment";
+import { captureMergedTabSnapshot, type DomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
@@ -43,6 +46,9 @@ import {
 import { compactObject } from "./value-readers";
 
 type SessionReadyMessage = Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>;
+
+/** The id the browser always gives a tab's main frame. */
+const TOP_FRAME_ID = 0;
 
 export type ServerCommandChannelDeps = {
   readonly send: GatewayMessageSender;
@@ -193,7 +199,17 @@ export class ServerCommandChannel {
       ownOrigins: () => [this.deps.settings().coreApiUrl || DEFAULT_CORE_API_URL],
       attachTabForRecording: (tabId) => this.deps.attachment.attachTabForRecording(tabId),
       captureActiveSnapshot: (label) => this.deps.evidence.captureActiveSnapshot(label),
-      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
+      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId),
+      // The look takes in every frame (t200), merged exactly as a recorded
+      // event's snapshot is, around the top frame's own capture.
+      mergeFrameSnapshots: async (tabId, topSnapshot, waitMs) =>
+        await captureMergedTabSnapshot(
+          { sendToTab, allTabFrames },
+          tabId,
+          topSnapshot as DomSnapshotPayload,
+          TOP_FRAME_ID,
+          waitMs === undefined ? {} : { waitMs }
+        ) as DomSnapshot | undefined
     });
   }
 

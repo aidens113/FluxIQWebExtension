@@ -48,7 +48,7 @@ const SELECTORS = [
  * The row's words reach it once, as the example's `within`, which is what
  * says the example is the gift-wrap note's and not every note's
  * (`../look-alikes.ts`) -- description, in the packet's one field for a row's
- * words, cut to the placement bound, and never the record address.
+ * words, whole, and never the record address.
  */
 const ROW_KEY = ["data-line-id", "line_7d3c9d"];
 const ROW_WORDS = "Gift wrap requested for the second parcel";
@@ -68,25 +68,31 @@ const ALLOWED_ELEMENT_KEYS = new Set([
   // The words of the row an example sits in, so it does not read as every
   // row's control (`../look-alikes.ts`).
   "within",
+  // What the page says of the element beyond its name (t200): its markup's
+  // implied role, its label, every attribute as [name, value] pairs -- pairs,
+  // never keys, so an attribute name can never become a key here -- its
+  // click listener, its box and whether it is on screen, and what a
+  // non-sensitive field holds or a box is ticked.
+  "implicitRole", "label", "attributes", "hasClickHandler", "box", "onViewport", "value", "checked",
 ]);
 
 /** Every key the whole packet may carry, at any depth. */
 const ALLOWED_PACKET_KEYS = new Set([
   ...ALLOWED_ELEMENT_KEYS,
   // The packet itself.
-  "schemaVersion", "trust", "location", "title", "elements", "elementTotal",
-  "truncated", "captureTruncated", "elementsTruncated", "budgetTruncated",
+  "schemaVersion", "trust", "location", "title", "elements",
+  "truncated", "captureTruncated",
   // A failure packet's statements about the failed action: which control it
   // addressed, and which parameters a repair fills (`element`, the one every
   // repairable action has).
   "failedTarget", "failedTargetMissing", "failedTargetUnknown", "repairParameters", "element",
   "repairCandidates", "status", "action", "parameter", "candidates", "target", "match", "roles", "refusals", "category", "count",
   // Page context.
-  "frame", "isTop", "childFrameIds", "loading", "readyState", "busy", "spinner",
-  "pendingNavigation", "navigation", "type", "redirects", "referrer", "dialogs",
+  "frame", "isTop", "childFrameIds", "unansweredFrameIds", "loading", "readyState", "busy", "indicators", "kind",
+  "pendingNavigation", "navigation", "url", "type", "redirects", "referrer", "dialogs",
   "modal", "blockedBy", "blocks", "selectedText",
   // Nested values on an element.
-  "value", "label", "index", "total", "row", "column", "header",
+  "value", "label", "index", "total", "row", "column", "header", "x", "y", "width", "height",
 ]);
 
 function realisticSnapshot(): Record<string, unknown> {
@@ -142,7 +148,7 @@ function realisticSnapshot(): Record<string, unknown> {
 }
 
 test("no selector from a realistic page survives into the packet", () => {
-  const evidence = sanitizeWebLlmSnapshot(realisticSnapshot(), { maxEvidenceBytes: 12_000 });
+  const evidence = sanitizeWebLlmSnapshot(realisticSnapshot());
   const serialized = JSON.stringify(evidence);
 
   // The packet is worth reading: it did not pass by describing nothing.
@@ -171,7 +177,6 @@ test("no selector from a realistic page survives into the packet", () => {
 
 test("a failure packet, marked and naming its repair parameters, still carries no selector", () => {
   const evidence = sanitizeWebLlmSnapshot(realisticSnapshot(), {
-    maxEvidenceBytes: 12_000,
     failedAction: { selector: "#place-order", repairParameters: webFailureRepairParameters({ definitionId: "builtin.policy.action" }) },
   });
   const serialized = JSON.stringify(evidence);
@@ -199,7 +204,7 @@ function packetKeys(value: unknown, found = new Set<string>()): Set<string> {
 }
 
 test("every element is named by an opaque handle, and by nothing else that could address it", () => {
-  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot(), { maxEvidenceBytes: 12_000 });
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot());
 
   for (const element of evidence.elements) {
     assert.match(element.target, /^target\.[1-9][0-9]?$/u, element.target);
@@ -221,7 +226,7 @@ test("every element is named by an opaque handle, and by nothing else that could
 });
 
 test("the rows two repeated controls sit in are kept on the domain's side, beside their selectors", () => {
-  const { evidence, records } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot(), { maxEvidenceBytes: 12_000 });
+  const { evidence, records } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot());
   const handleOf = (name: string): string => evidence.elements.find((element) => element.name === name)?.target ?? "";
   // Only the two controls that sit in a row have a record, and each keeps its own.
   assert.deepEqual([...records.keys()], [handleOf("Line actions"), handleOf("Dismiss note")]);

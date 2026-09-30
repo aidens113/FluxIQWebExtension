@@ -13,6 +13,10 @@
 // dropped from both halves outright, as the evidence packet drops a sensitive
 // element rather than describing it. A run with nothing else is refused as
 // `sensitive_value` by the caller.
+//
+// Every other field is listed, with its label whole (t200). Until 2026-09-30
+// fields were popped from the end until the packet fit the call's byte budget,
+// and the handle named only the fields that were left.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -21,10 +25,8 @@ import {
   type WebAutomationExtractListPagination
 } from "../../../actions/extraction";
 import type { WebAutomationStructureDetection } from "../../../extraction";
-import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "../limits";
 import { present } from "../present";
-import { recoverable } from "../tool-rejection";
-import { boundedText } from "../untrusted-json";
+import { screenedPageText } from "../withheld";
 import type { WebLlmExtractionBinding } from "./handles";
 
 export const WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1" as const;
@@ -68,8 +70,6 @@ export type WebLlmRepeatingStructure = {
   pagination: WebLlmStructurePaginationMode;
   /** How sure the detection is, from 0 to 1. */
   confidence: number;
-  /** The byte budget cut fields from the end; the handle names only the fields listed. */
-  fieldsTruncated?: true;
 };
 
 /** A detection split into what the model sees and what the handle keeps. */
@@ -86,14 +86,12 @@ export type WebLlmStructurePacketInput = {
   location: string;
   target: string | undefined;
   frameId: number | undefined;
-  maxEvidenceBytes: number | undefined;
 };
 
 /**
  * The packet and the binding, or `undefined` when no field is left once the
- * sensitive ones are dropped. Over budget, fields are cut from the end, from
- * both halves together, and the packet says so; a packet that cannot fit even
- * one field is refused `evidence_budget_exhausted`, as `sanitize.ts` refuses a page.
+ * sensitive ones are dropped. Both halves are cut from the same list, so the
+ * handle names exactly the fields the model was shown.
  */
 export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLlmStructureSplit | undefined {
   const proposal = input.detection.proposal;
@@ -111,19 +109,9 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     itemCount: proposal.itemCount,
     fields: readable.map((field) => field.shown),
     pagination: paginationMode(proposal.pagination, input.detection.infiniteScroll === true),
-    confidence: proposal.confidence,
-    // Written by the trim below if and only if it removed a field.
-    fieldsTruncated: undefined
+    confidence: proposal.confidence
   });
-  const limit = evidenceByteLimit(input.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
-  while (serializedBytes(packet) > limit) {
-    // As for a page packet (`sanitize.ts`): the budget left cannot hold one field.
-    if (packet.fields.length <= 1) recoverable("evidence_budget_exhausted");
-    packet.fields.pop();
-    packet.fieldsTruncated = true;
-  }
 
-  const kept = readable.slice(0, packet.fields.length);
   const paginate = boundPagination(proposal.pagination, input.detection.infiniteScroll === true);
   const binding = present<WebLlmExtractionBinding>({
     handle: input.handle,
@@ -132,7 +120,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
     extractList: present<WebLlmExtractionBinding["extractList"]>({
       item: proposal.item,
       itemElement: undefined,
-      fields: Object.fromEntries(kept.map((field) => [field.key, readableSpec(field.spec)])),
+      fields: Object.fromEntries(readable.map((field) => [field.key, readableSpec(field.spec)])),
       paginate,
       maxItems: undefined,
       minItems: undefined,
@@ -151,9 +139,9 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
 function shownField(key: string, label: string, kind: WebAutomationExtractFieldKind, coverage: number): WebLlmStructureField {
   return {
     key,
-    // A label is page structure, but it is still page text: one line, bounded,
-    // and the key when nothing readable is left of it.
-    label: boundedText(label, WEB_LLM_EVIDENCE_BOUNDS.placement) ?? key,
+    // A label is page structure, but it is still page text: one line,
+    // screened, and the key when nothing readable is left of it.
+    label: screenedPageText(label) ?? key,
     kind,
     coverage: Math.round(coverage * 100) / 100
   };

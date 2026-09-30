@@ -242,7 +242,6 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
       callId: execution.callId,
       toolId: execution.optionId,
       value: execution.value,
-      maxEvidenceBytes: execution.maxEvidenceBytes,
       signal: execution.signal,
       // These options explore a Flow that is already running and already
       // somewhere. A start location belongs to a build that has not started

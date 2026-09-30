@@ -2,7 +2,6 @@ import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, t
 import type { RunLaneObservation } from "../flow-lane/index.js";
 import type { FlowLanePermissionStop } from "../lane-rules/index.js";
 import { declaredFailureOutcome } from "./declared-failure-verdict.js";
-import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
 import type { FlowLaneEvidence } from "./flow-lane-evidence-sizes.js";
 import type { PersonHandOffEvidence } from "./person-hand-off-evidence.js";
 import { permissionStopInvariant } from "./permission-stop/index.js";
@@ -43,8 +42,8 @@ export type ObservedRun = {
    * them, read by `flowLaneEvidenceSizes` from the bundle's
    * `snapshots/flow-lane.json`: the bench's (`bench/evaluate-run.ts`) and a
    * single `lab run` (`single-run-evaluation.ts`). A recording-lane run
-   * contributes none: absent, both lists are empty, the truncation count is 0,
-   * and no budget invariant is added.
+   * contributes none: absent, both lists are empty and the truncation count
+   * is 0.
    */
   evidence?: FlowLaneEvidence;
   /**
@@ -92,9 +91,10 @@ export type ObservedRun = {
  * them from the run bundle through `flowLaneEvidenceSizes`. See
  * `bench/evaluate-run.ts`.
  *
- * Measured packets are also judged against their budget here
- * (`evidenceBudgetInvariant`), so a packet over it fails the run and its bench
- * row alike.
+ * Measured packets are recorded, never judged against a size: no evidence
+ * byte budget exists. On 2026-09-30 the user ordered that no limit hide page
+ * information from the model, and the domain's budgets were deleted, so the
+ * `evidence-packet-budget` invariant that failed a run over one went with them.
  *
  * A run whose scenario or variant declares the failure it must report is
  * judged by whether it reported exactly that failure rather than by whether it
@@ -104,9 +104,7 @@ export type ObservedRun = {
  */
 export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   const { identity, outcome, observation, evidence } = input;
-  // The declaration first, the evidence budget on top of it: a run judged by
-  // the failure it declared is still a run, and a packet over the budget fails
-  // it as `performance.budget` exactly as it fails any other.
+  // The declaration first, then the invariants that sit on top of it.
   const declared = declaredFailureOutcome({
     expected: identity.expectedFailure,
     reported: observation.automationFailureReported,
@@ -121,7 +119,7 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   // A permission stop sits on top of the declaration as well: a declared
   // failure never turns a build that stopped to ask into a pass.
   const stopped = withInvariant(handedOff, input.permissionStop ? permissionStopInvariant(input.permissionStop, outcome.invariants.find((invariant) => invariant.id === RUNNER_VERDICT_INVARIANT)?.evidenceSequences) : undefined, "runtime.behavior");
-  const judged = withEvidenceBudget(stopped, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
+  const judged = stopped;
   const evaluation: RunEvaluation = {
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     runId: outcome.runId,
@@ -180,17 +178,6 @@ function adaptationMeasurements(input: ObservedRun): RunAdaptationMeasurements {
   const live = input.llm?.mode === "live";
   if ((!live && counts.some((calls) => calls > 0)) || new Set(counts).size > 1) return { ...measured, adaptationReuse: null, adaptationCost: null };
   return { adaptationCost: measured.adaptationCost, adaptationValidation: measured.adaptationValidation, adaptationPersistence: measured.adaptationPersistence, adaptationReuse: measured.adaptationReuse };
-}
-
-/**
- * The run-as-a-test judgement with the evidence budget's invariant added, when
- * there is one. A breach fails a run the runner passed, as `performance.budget`,
- * because the contract refuses a passed verdict beside a failed invariant. A run
- * the runner already failed, or could not judge, keeps its verdict and category
- * and still records the breach.
- */
-function withEvidenceBudget(outcome: Pick<RunOutcome, "verdict" | "failureCategory" | "invariants">, budget: InvariantResult | undefined): Pick<RunOutcome, "verdict" | "failureCategory" | "invariants"> {
-  return withInvariant(outcome, budget, "performance.budget");
 }
 
 /**

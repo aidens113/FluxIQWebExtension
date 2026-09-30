@@ -10,16 +10,24 @@
 // The spinner heuristic is a heuristic, so it is bounded on both sides: an
 // element qualifies only if its own class, id or test id names it as one *and*
 // it is actually painted, which keeps the permanently-present-but-empty
-// progress container of a fixture or a real page out of the evidence.
+// progress container of a fixture or a real page out of the evidence. That is
+// a rule about what counts as a loading signal, not a bound on the page: every
+// element, painted or not, is in the snapshot's element list.
+//
+// Every indicator and every busy region is reported, in composed document
+// order, open shadow roots included (t200): there was a cap of eight of each,
+// and a label cut to 120 characters. The words of a live region -- asked
+// whether they say it is loading, and read as an indicator's label -- are read
+// through `textOutsideSensitiveControls` (`../sensitive-text.ts`), so a status
+// message holding a sensitive control's contents does not quote them.
 
 import { selectorFor } from "../selector";
-import { accessibleNameFor, boundedText } from "../identity";
+import { accessibleNameFor, normalizedText } from "../identity";
+import { textOutsideSensitiveControls } from "../sensitive-text";
+import { composedClosest, queryComposedInOrder } from "../shadow-dom";
 import { present } from "../../shared/present";
 import type { LoadingEvidence, LoadingIndicator } from "./types";
 
-const MAX_INDICATORS = 8;
-const MAX_BUSY_REGIONS = 8;
-const MAX_LABEL_LENGTH = 120;
 const BUSY_SELECTOR = "[aria-busy='true']";
 const PROGRESS_SELECTOR = "progress,[role='progressbar']";
 const SPINNER_SELECTOR = "[class*='spinner'],[class*='loader'],[class*='loading'],[class*='skeleton'],[id*='spinner'],[id*='loading'],[data-testid*='spinner'],[data-testid*='loading']";
@@ -28,7 +36,7 @@ const LOADING_WORDS = /\b(loading|saving|submitting|processing|uploading|refresh
 
 export function loadingEvidence(): LoadingEvidence {
   const documentState = document.readyState;
-  const busyRegions = selectors(BUSY_SELECTOR, MAX_BUSY_REGIONS);
+  const busyRegions = queryComposedInOrder(BUSY_SELECTOR).filter(isPainted).map((element) => selectorFor(element));
   const indicators = loadingIndicators();
   const pendingNavigation = documentState !== "complete";
   return present<LoadingEvidence>({
@@ -40,43 +48,37 @@ export function loadingEvidence(): LoadingEvidence {
   });
 }
 
+/** Every painted indicator, in document order, each named by the first kind that claims it. */
 function loadingIndicators(): LoadingIndicator[] {
-  const found = new Map<Element, LoadingIndicator>();
-  for (const element of document.querySelectorAll(PROGRESS_SELECTOR)) {
-    if (isPainted(element)) found.set(element, indicator(element, "progressbar"));
+  const indicators: LoadingIndicator[] = [];
+  for (const element of queryComposedInOrder(`${PROGRESS_SELECTOR},${STATUS_SELECTOR},${SPINNER_SELECTOR}`)) {
+    if (!isPainted(element)) continue;
+    const kind = indicatorKind(element);
+    if (kind) indicators.push(indicator(element, kind));
   }
-  // A live region whose words say it is loading is the author telling a reader
-  // directly, so it is read before the class-name heuristic can call the same
-  // element a spinner.
-  for (const element of document.querySelectorAll(STATUS_SELECTOR)) {
-    if (found.has(element) || !isPainted(element)) continue;
-    if (!LOADING_WORDS.test(element.textContent ?? "")) continue;
-    found.set(element, indicator(element, "status"));
-  }
-  for (const element of document.querySelectorAll(SPINNER_SELECTOR)) {
-    if (!found.has(element) && isPainted(element)) found.set(element, indicator(element, "spinner"));
-  }
-  return [...found.values()].slice(0, MAX_INDICATORS);
+  return indicators;
+}
+
+/**
+ * A progress bar is one by markup. A live region whose words say it is loading
+ * is the author telling a reader directly, so it is asked before the class-name
+ * heuristic can call the same element a spinner; a live region that says
+ * nothing of the kind may still be one.
+ */
+function indicatorKind(element: Element): LoadingIndicator["kind"] | undefined {
+  if (element.matches(PROGRESS_SELECTOR)) return "progressbar";
+  if (element.matches(STATUS_SELECTOR) && LOADING_WORDS.test(textOutsideSensitiveControls(element))) return "status";
+  return element.matches(SPINNER_SELECTOR) ? "spinner" : undefined;
 }
 
 function indicator(element: Element, kind: LoadingIndicator["kind"]): LoadingIndicator {
-  const label = accessibleNameFor(element) ?? boundedText(element.textContent, MAX_LABEL_LENGTH);
+  const label = accessibleNameFor(element) ?? normalizedText(textOutsideSensitiveControls(element));
   return present<LoadingIndicator>({ selector: selectorFor(element), kind, label: label || undefined });
-}
-
-function selectors(selector: string, max: number): string[] {
-  const found: string[] = [];
-  for (const element of document.querySelectorAll(selector)) {
-    if (!isPainted(element)) continue;
-    found.push(selectorFor(element));
-    if (found.length >= max) break;
-  }
-  return found;
 }
 
 /** On screen in the sense that matters here: rendered, not hidden, and occupying space. */
 function isPainted(element: Element): boolean {
-  if (element.closest("[hidden],[aria-hidden='true']")) return false;
+  if (composedClosest(element, "[hidden],[aria-hidden='true']")) return false;
   const style = getComputedStyle(element);
   if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
   const rect = element.getBoundingClientRect();

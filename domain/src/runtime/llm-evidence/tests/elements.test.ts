@@ -103,8 +103,10 @@ test("a run's size reaches the packet as `repeats`, and a count that says nothin
   }, CONTEXT)?.element.repeats;
   assert.equal(exemplar(280), 280);
   assert.equal(exemplar(2), 2);
-  // One is not a run, and a count the page could not have taken is not a count.
-  for (const nothing of [undefined, 1, 0, -3, 2.5, "280", 1_000_000]) assert.equal(exemplar(nothing), undefined, String(nothing));
+  // However large, a count is a count (t200: it was capped at 100,000).
+  assert.equal(exemplar(1_000_000), 1_000_000);
+  // One is not a run, and a value that is not a count is not one.
+  for (const nothing of [undefined, 1, 0, -3, 2.5, "280"]) assert.equal(exemplar(nothing), undefined, String(nothing));
 });
 
 // The record is half of a row control's address, and it stays on the domain's

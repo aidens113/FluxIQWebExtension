@@ -81,8 +81,9 @@ test("live LLM CLI takes a run token budget only when one is typed", () => {
   const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
   const untyped = parseLabCommand(["run", "basic-form", ...adapt]);
   assert.equal(untyped.command === "run" && untyped.llm ? "maxTotalTokensPerRun" in untyped.llm.budget : true, false);
-  const typed = parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", "150000"]);
-  assert.equal(typed.command === "run" ? typed.llm?.budget.maxTotalTokensPerRun : undefined, 150_000);
+  const runTokens = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 2;
+  const typed = parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", String(runTokens)]);
+  assert.equal(typed.command === "run" ? typed.llm?.budget.maxTotalTokensPerRun : undefined, runTokens);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", "9999"]), /maxTotalTokensPerRun.*at least one maxTotalTokensPerRequest/su);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", "many"]), /--llm-max-run-tokens must be an integer/u);
   assert.throws(() => parseLabCommand(["run", "basic-form", "--llm-max-run-tokens", "150000"]), /explicit --live-llm/u);

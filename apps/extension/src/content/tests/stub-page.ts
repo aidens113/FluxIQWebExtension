@@ -71,6 +71,11 @@ class StubElement extends StubNode {
     return this.attributeValues.get(name) ?? null;
   }
 
+  /** `Element.attributes`: every attribute, in the order the page wrote them. */
+  get attributes(): Array<{ name: string; value: string }> {
+    return [...this.attributeValues].map(([name, value]) => ({ name, value }));
+  }
+
   querySelectorAll(selector: string): StubElement[] {
     if (selector !== "*") throw new Error(`the stub page answers only "*", not ${selector}`);
     return this.childNodes.flatMap((node) => node instanceof StubElement ? [node, ...node.querySelectorAll("*")] : []);
@@ -78,8 +83,8 @@ class StubElement extends StubNode {
 }
 
 class StubInput extends StubElement {
-  constructor(public type: string, public value: string) {
-    super("input", {}, []);
+  constructor(public type: string, public value: string, attributes: Record<string, string> = {}) {
+    super("input", attributes, []);
   }
 }
 
@@ -114,9 +119,9 @@ export function element(tagName: string, attributes: Record<string, string> = {}
   return new Kind(tagName, attributes, children) as unknown as Element;
 }
 
-/** An `<input>` of `type` holding the live `value`. */
-export function input(type: string, value: string): Element {
-  return new StubInput(type, value) as unknown as Element;
+/** An `<input>` of `type` holding the live `value`, carrying `attributes` as written markup. */
+export function input(type: string, value: string, attributes: Record<string, string> = {}): Element {
+  return new StubInput(type, value, attributes) as unknown as Element;
 }
 
 /** Loads the module under test with the stub globals installed, runs `body`, and puts every global back. */

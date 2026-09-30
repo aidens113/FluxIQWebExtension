@@ -38,6 +38,7 @@ export type {
   WebAutomationDocumentReadyState,
   WebAutomationDocumentVisibility,
   WebAutomationEvidenceRect,
+  WebAutomationLayerKind,
   WebAutomationFormControlEvidence,
   WebAutomationFormEvidence,
   WebAutomationLoadingEvidence,

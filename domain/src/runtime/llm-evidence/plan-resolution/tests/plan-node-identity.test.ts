@@ -28,7 +28,7 @@ import type { JsonObject } from "fluxiq/core";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import { webAutomationActionFromGatewayCommand } from "../../../../client";
 import { elementFingerprint, outputTargetFromPayload, webAutomationOutputNodeId } from "../../../../output-nodes";
-import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_INSPECT_TOOL_ID, type WebAutomationLlmEvidenceRuntime,
+import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID, type WebAutomationLlmEvidenceRuntime,
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
@@ -143,7 +143,7 @@ test("the identity stops Core reading the typed text as the element's visible te
   assert.equal(JSON.stringify(element).includes("Ada"), false, "no typed word reaches the identity");
 });
 
-test("no value reaches the identity: not a control's contents, not a cut name, nothing from a secret control", async () => {
+test("no value reaches the identity: not a control's contents, not a withheld name, nothing from a secret control", async () => {
   const notes: JsonObject = { tagName: "textarea", selector: "#notes", visibleText: "Prefilled private note", accessibleName: "Notes" };
   const plan: JsonObject = {
     tagName: "select",
@@ -153,15 +153,17 @@ test("no value reaches the identity: not a control's contents, not a cut name, n
     selectedValue: "team",
     options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }]
   };
-  const long = "L".repeat(WEB_LLM_EVIDENCE_BOUNDS.text + 40);
-  const card: JsonObject = { tagName: "a", selector: "#card", accessibleName: long, visibleText: `${long} more`, href: "/p/card" };
+  // A name shaped like a secret is withheld, and the marker is nobody's name.
+  // A long text arrives whole, and is the card's.
+  const long = "L".repeat(340);
+  const card: JsonObject = { tagName: "a", selector: "#card", accessibleName: "Open sk-live0123456789abcdefghijKLMN", visibleText: `${long} more`, href: "/p/card" };
   const password: JsonObject = { tagName: "input", selector: "#password", inputType: "password", accessibleName: "Password" };
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [notes, plan, card, password] }));
   await inspect(runtime);
 
   assert.deepEqual((await resolvedParameters(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "x" })).element, { tagName: "textarea", accessibleName: "Notes", selector: "#notes" });
   assert.deepEqual((await resolvedParameters(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "team" })).element, { tagName: "select", accessibleName: "Plan", selector: "#plan" });
-  assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.3" } })).element, { tagName: "a", selector: "#card" });
+  assert.deepEqual((await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.3" } })).element, { tagName: "a", visibleText: `${long} more`, selector: "#card" });
   // The sanitizer never describes the password field, so no handle names it.
   assert.deepEqual(
     await runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "target.4" } }, declaredConsequences: NOTHING_LASTING }),

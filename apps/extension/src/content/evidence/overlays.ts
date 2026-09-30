@@ -7,12 +7,15 @@
 // victims looking perfectly actionable. The only honest answer is the one the
 // browser gives: hit-test the point an action would click and see who answers.
 //
-// The test costs a layout flush per candidate, so it runs over the
-// highest-ranked interactive candidates only, in the order the snapshot already
-// put them, and stops at a fixed cap. The blocker reported is not the element
-// the hit-test named but the outermost ancestor of it that still excludes the
-// target -- the banner rather than the word inside it -- because that is the
-// thing a reader has to deal with.
+// Every interactive element of the snapshot with a box on screen is tested, in
+// document order, and every blocker and every control it covers is reported
+// (t200). The test used to run over the forty highest-ranked candidates only
+// and report the five most-blocking layers and five of each one's victims, so a
+// wall covering the rest of the page went unreported past the cut. The layout
+// is flushed once; each hit test after it reads the same layout. The blocker
+// reported is not the element the hit-test named but the outermost ancestor of
+// it that still excludes the target -- the banner rather than the word inside
+// it -- because that is the thing a reader has to deal with.
 //
 // The hit test descends into open shadow roots, and containment and the
 // ancestor walk cross them (`../shadow-dom`). A control inside a widget's root
@@ -20,29 +23,30 @@
 // `Node.contains` it was answered by its own host and reported as blocked by
 // the widget that holds it: a chat launcher in an empty corner became a
 // blocker, and a consent wall counted its own buttons among what it covered.
+//
+// Each blocker carries what it is, when the interference classifiers recognise
+// it -- a consent banner, a rate-limit notice, a robot check -- as `kind`
+// (`action-runtime/interference/layer-kind.ts`), because the blockers are no
+// longer sorted most-blocking first and the model no longer meets the layer
+// before what it covers.
 
 import { isExtensionUiNode } from "../picker-host";
 import { deepElementFromPoint, selectorFor } from "../selector";
-import { composedContains, composedParent } from "../shadow-dom";
+import { composedContains, composedDocumentOrder, composedParent } from "../shadow-dom";
 import { isInteractableUiElement } from "../element-traits";
 import { accessibleNameFor } from "../identity";
 import { visualViewportBounds } from "../visual-bounds";
+import { layerKind } from "../action-runtime/interference";
 import { present } from "../../shared/present";
 import type { OverlayEvidence, OverlayEvidenceItem } from "./types";
 
-const MAX_HIT_TESTED = 40;
-const MAX_BLOCKERS = 5;
-const MAX_BLOCKED_PER_BLOCKER = 5;
-const MAX_BLOCKER_ANCESTOR_WALK = 12;
-
-/** Which of the ranked candidates are covered, and by what. `undefined` when nothing is. */
+/** Which of the snapshot's elements are covered, and by what. `undefined` when nothing is. */
 export function overlayEvidence(candidates: readonly Element[]): OverlayEvidence | undefined {
   const blockers = new Map<Element, Element[]>();
   let tested = 0;
   let blockedCount = 0;
 
   for (const candidate of candidates) {
-    if (tested >= MAX_HIT_TESTED) break;
     if (!isInteractableUiElement(candidate)) continue;
     const point = hitPointFor(candidate);
     if (!point) continue;
@@ -56,13 +60,19 @@ export function overlayEvidence(candidates: readonly Element[]): OverlayEvidence
   }
 
   if (!blockedCount) return undefined;
-  return present<OverlayEvidence>({ tested, blockedCount, blockers: rankBlockers(blockers) });
+  return present<OverlayEvidence>({ tested, blockedCount, blockers: blockersInDocumentOrder(blockers) });
 }
 
-/** The point an action would aim at: the centre of the candidate, clamped into the viewport. */
+/**
+ * The point an action would aim at: the centre of the candidate, clamped into
+ * the viewport. A candidate with no area, or none on screen, has no such point
+ * -- nothing can be asked about a place that is not painted -- but a small one
+ * does: a visually hidden input a page styles over is exactly what a click
+ * lands on something else for.
+ */
 function hitPointFor(element: Element): { x: number; y: number } | undefined {
   const rect = element.getBoundingClientRect();
-  if (rect.width < 2 || rect.height < 2) return undefined;
+  if (!(rect.width > 0) || !(rect.height > 0)) return undefined;
   const width = window.innerWidth;
   const height = window.innerHeight;
   if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= height || rect.left >= width) return undefined;
@@ -89,7 +99,7 @@ function blockerAt(candidate: Element, point: { x: number; y: number }): Element
 /** The outermost ancestor of the hit that still does not contain the candidate. */
 function overlayRoot(hit: Element, candidate: Element): Element {
   let root = hit;
-  for (let depth = 0; depth < MAX_BLOCKER_ANCESTOR_WALK; depth += 1) {
+  for (;;) {
     const parent: Element | null = composedParent(root);
     if (!parent || parent === document.documentElement || parent === document.body) break;
     if (composedContains(parent, candidate)) break;
@@ -98,11 +108,10 @@ function overlayRoot(hit: Element, candidate: Element): Element {
   return root;
 }
 
-/** Most-blocking first, so the top-most obstruction is the first thing read. */
-function rankBlockers(blockers: ReadonlyMap<Element, Element[]>): OverlayEvidenceItem[] {
+/** Every blocker, in the order the page holds them, each with every control it covers. */
+function blockersInDocumentOrder(blockers: ReadonlyMap<Element, Element[]>): OverlayEvidenceItem[] {
   return [...blockers.entries()]
-    .sort(([, left], [, right]) => right.length - left.length)
-    .slice(0, MAX_BLOCKERS)
+    .sort(([left], [right]) => composedDocumentOrder(left, right))
     .map(([element, covered]) => describeBlocker(element, covered));
 }
 
@@ -116,6 +125,7 @@ function describeBlocker(element: Element, covered: readonly Element[]): Overlay
     label: label || undefined,
     bounds,
     blocks: covered.length,
-    blocked: covered.slice(0, MAX_BLOCKED_PER_BLOCKER).map((target) => selectorFor(target))
+    blocked: covered.map((target) => selectorFor(target)),
+    kind: layerKind(element)
   });
 }

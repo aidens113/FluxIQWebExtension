@@ -1,6 +1,16 @@
 // One example per repeating control.
 //
-// ## The defect this closes
+// ## What this does now (t200)
+//
+// It annotates and nothing else. The snapshot lists every rendered element in
+// composed document order and no longer ranks or cuts that list, so a run's
+// followers stay where the page put them. What survives is the count: each
+// folded run's exemplar carries `repeatCount`, so a reader can say "one of 280
+// rows" without counting. `followers` is still computed and no caller orders
+// anything by it. The history below is why the fold exists; the ranking it
+// describes is gone.
+//
+// ## The defect this closed
 //
 // The snapshot is a ranked list, and what reads it reads its head: the LLM
 // evidence packet describes at most forty elements and a few thousand bytes of
@@ -110,17 +120,15 @@ const KIND_SEPARATOR = String.fromCharCode(31);
 export type RepeatExemplars = {
   /** Each run's exemplar, with how many elements the run holds, the exemplar included. Only folded runs: two or more of anything but controls, more than `MAX_LISTED_CHOICES` of controls. */
   counts: ReadonlyMap<Element, number>;
-  /** Every other member of a run, which the snapshot ranks after every element that is not one. */
+  /** Every other member of a run. Nothing is ordered by it any more (t200); it says which members the exemplar stands beside. */
   followers: ReadonlySet<Element>;
 };
 
 /**
- * The runs among `elements`, which are the snapshot's included elements in the
- * order they were gathered. That order is document order within each kind --
- * every member of a kind shares its tag, so one sweep found them all -- with
- * the elements a recorded event reached gathered first, which makes the
- * exemplar the first row's unless a recording touched another. A member in
- * `touched` is never a follower, whichever member is the exemplar.
+ * The runs among `elements`, which are the snapshot's elements in composed
+ * document order, so the exemplar is the first row's unless a recording or an
+ * action touched another. A member in `touched` is never a follower, whichever
+ * member is the exemplar.
  */
 export function repeatExemplars(elements: readonly Element[], touched: ReadonlySet<Element>): RepeatExemplars {
   const reader = createRunReader();

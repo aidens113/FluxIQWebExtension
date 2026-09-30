@@ -86,30 +86,36 @@ class StubForm extends StubElement {
   }
 }
 
-const BROWSER_GLOBALS = ["document", "CSS", "HTMLElement", "HTMLInputElement", "HTMLButtonElement", "HTMLSelectElement", "HTMLTextAreaElement"] as const;
+const BROWSER_GLOBALS = ["document", "CSS", "HTMLElement", "HTMLFormElement", "HTMLInputElement", "HTMLButtonElement", "HTMLSelectElement", "HTMLTextAreaElement"] as const;
 
 /**
- * Runs `read` with a one-form document in place and puts the globals back.
+ * Runs `read` with a document of `forms` in place and puts the globals back.
+ * The producer asks the document for its forms by selector, across open shadow
+ * roots (`queryComposedInOrder`); this document has no shadow roots, so every
+ * other selector finds nothing.
  *
  * Every test file in this package is imported into one Node process, so a
  * global left behind here would reach another file's tests. Install and restore
  * are synchronous around a synchronous call, so nothing can interleave between
  * them.
  */
-function withStubbedPage<T>(controls: Element[], read: () => T): T {
+function withStubbedPage<T>(controls: Element[], read: () => T, formCount = 1): T {
   const globals = globalThis as unknown as MutableGlobal;
   const saved = new Map(BROWSER_GLOBALS.map((name) => [name, globals[name]]));
+  const forms = Array.from({ length: formCount }, (_unused, index) =>
+    new StubForm(index === 0 ? "pay" : `form-${index}`, { "aria-label": "Payment" }, index === 0 ? controls : []));
   globals.HTMLElement = StubElement;
+  globals.HTMLFormElement = StubForm;
   globals.HTMLInputElement = StubInput;
   globals.HTMLButtonElement = class StubButton {};
   globals.HTMLSelectElement = class StubSelect {};
   globals.HTMLTextAreaElement = class StubTextArea {};
   globals.CSS = { escape: (value: string) => value };
   globals.document = {
-    forms: [new StubForm("pay", { "aria-label": "Payment" }, controls)],
+    forms,
     documentElement: null,
     getElementById: () => null,
-    querySelectorAll: () => []
+    querySelectorAll: (selector: string) => (selector === "form" ? forms : [])
   };
   try {
     return read();
@@ -182,7 +188,7 @@ test("a card field whose producer verdict never arrives is still withheld, becau
 test("the deciding token survives a page that buries it past every text bound", () => {
   const padding = Array.from({ length: 4 }, (_, index) => `section-${String(index).repeat(50)}`).join(" ");
   const buried = `${padding} ${CARD_AUTOCOMPLETE}`;
-  assert.ok(buried.length > 250, "the row is pointless unless the token sits past the 200-character text bound");
+  assert.ok(buried.length > 250, "the row is pointless unless the token sits past the 200-character bound text once had");
   const described = producedControl(textInput({ autocomplete: buried }));
   assert.equal(described.autocomplete, buried, "no token may be cut, and none may be dropped");
   assert.equal(project(withoutProducerVerdict(described)).control.sensitive, true);
@@ -212,4 +218,16 @@ test("what the control holds never leaves the page, on either side of the wire",
   const described = producedControl(textInput({ autocomplete: CARD_AUTOCOMPLETE }));
   assert.equal(JSON.stringify(described).includes(CONTROL_CONTENTS), false);
   assert.equal(project(described).serialized.includes(CONTROL_CONTENTS), false);
+});
+
+// Every form and every control it owns is reported (t200); there was a cap of
+// eight forms and thirty controls a form.
+test("every form on the page is reported, with every control it owns", () => {
+  const controls = Array.from({ length: 45 }, (_unused, index) =>
+    new StubInput(`field-${index}`, { "aria-label": `Field ${index}`, name: `field-${index}` }, "") as unknown as Element);
+  const forms = withStubbedPage(controls, () => formEvidence(), 12) ?? [];
+  assert.equal(forms.length, 12, "forms were cut");
+  assert.equal(forms[0]?.controlCount, 45);
+  assert.equal(forms[0]?.controls.length, 45, "a form's controls were cut");
+  assert.equal(forms[0]?.controls[44]?.name, "field-44");
 });

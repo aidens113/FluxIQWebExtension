@@ -1,13 +1,18 @@
-// Taking one bounded, sanitized look at the page, and acting on it first when
-// the look needs an action to be worth taking.
+// Taking one sanitized look at the whole page, and acting on it first when the
+// look needs an action to be worth taking.
 //
 // Every evidence tool in this repository ends up here: the authoring tools that
 // help build a Flow, and the runtime harness options that explore a failure.
 // They differ in what they are allowed to do and in who may offer them, and not
 // at all in how a page becomes a packet -- so the capture lives in one module
 // rather than once per caller. A second copy is how the two would come to
-// sanitize to different budgets, or mark a failed target in one and not the
-// other, without anybody deciding that they should.
+// sanitize differently, or mark a failed target in one and not the other,
+// without anybody deciding that they should.
+//
+// No look is sized to a budget (t200). A call used to carry Core's
+// `maxEvidenceBytes`, and every packet, refusal and read was trimmed to fit it;
+// the packet is now the whole page whatever the call, and Core no longer sends
+// the number.
 
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
@@ -30,13 +35,6 @@ type ClientActionResult = WebFailedActionResult & {
   payload?: JsonObject;
   error?: string;
 };
-
-/**
- * Room kept for a page refusal's own envelope -- its schema version, `ok`,
- * code and the `page` key -- so the packet inside it and the refusal around
- * it together stay within what the call was allowed.
- */
-const PAGE_REFUSAL_ENVELOPE_BYTES = 128;
 
 export type WebLlmEvidenceGateway = {
   eligibleSessionIds(): string[];
@@ -194,7 +192,6 @@ export type WebLlmEvidenceToolRequest = {
   callId: string;
   toolId: string;
   value: JsonObject;
-  maxEvidenceBytes?: number;
   signal?: AbortSignal;
   /**
    * Where the Flow this build is writing starts, when the build was told
@@ -405,7 +402,7 @@ export function assertActive(signal?: AbortSignal): void {
   if (signal?.aborted) throw signal.reason ?? new Error("web evidence operation was cancelled");
 }
 
-/** One capture, sanitized to the exploration budget, with its selectors kept behind. */
+/** One capture of the whole page, sanitized, with its selectors kept behind. */
 export async function captureEvidence(
   gateway: WebLlmEvidenceGateway,
   sessionId: string,
@@ -427,27 +424,24 @@ export async function captureEvidence(
   // condition the model can wait out or work around, not a fault.
   if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web evidence action payload");
-  const bounded = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
-    budget: "exploration",
-    maxEvidenceBytes: request.maxEvidenceBytes,
+  const sanitized = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     expectedOrigin,
     // An exploration packet is an observation, not a failure, so it marks no
     // target at all -- neither a handle nor a "the target is gone".
     failedAction: undefined,
   }));
-  // Digested and projected now, before any caller writes on the packet, and at
-  // the bound `captureStateDigest` and `observeRouteState` use rather than this
-  // call's, so a call's own capture answers for the state it saw
+  // Digested and projected now, before any caller writes on the packet, so a
+  // call's own capture answers for the state it saw
   // (`./state-digest/snapshot-states.ts`).
-  const states = webLlmSnapshotStates(payload.snapshot, bounded, request.maxEvidenceBytes);
+  const states = webLlmSnapshotStates(sanitized);
   return present<WebLlmSnapshotBinding>({
-    evidence: bounded.evidence,
-    selectors: bounded.selectors,
-    records: bounded.records,
-    shadowHosts: bounded.shadowHosts,
+    evidence: sanitized.evidence,
+    selectors: sanitized.selectors,
+    records: sanitized.records,
+    shadowHosts: sanitized.shadowHosts,
     stateDigest: states.stateDigest,
     routeState: states.routeState,
-    pageQuery: bounded.pageQuery
+    pageQuery: sanitized.pageQuery
   });
 }
 
@@ -577,8 +571,8 @@ export async function actAndCapture(
  * The refusal for an action the page did not let happen, carrying the page as
  * it now stands: whatever got in the way -- a dialog, a banner -- is on it,
  * with a handle the model can press. Captured on the origin the action started
- * from and within the call's budget; a page that cannot be captured leaves the
- * refusal without one. Cancellation still ends the call.
+ * from, whole; a page that cannot be captured leaves the refusal without one.
+ * Cancellation still ends the call.
  *
  * It takes the whole refusal rather than its code, and that is the point of the
  * signature. Until 2026-09-28 it took a code and wrote `detail: undefined`
@@ -595,10 +589,8 @@ export async function pageRefusal(
   refusal: WebActionRefusal,
   signal?: AbortSignal
 ): Promise<RecoverableToolRejection> {
-  const budget = request.maxEvidenceBytes === undefined ? undefined : request.maxEvidenceBytes - PAGE_REFUSAL_ENVELOPE_BYTES;
-  if (budget !== undefined && budget < 1) return new RecoverableToolRejection(refusal.code, refusal.detail, undefined, refusal.personNeeded);
   try {
-    const page = await captureEvidence(gateway, sessionId, budget === undefined ? request : { ...request, maxEvidenceBytes: budget }, signal, new URL(current.evidence.location).origin);
+    const page = await captureEvidence(gateway, sessionId, request, signal, new URL(current.evidence.location).origin);
     return new RecoverableToolRejection(refusal.code, refusal.detail, page, refusal.personNeeded);
   } catch (error) {
     if (signal?.aborted) throw error;

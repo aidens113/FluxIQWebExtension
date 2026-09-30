@@ -1,8 +1,13 @@
 // Readers for the untrusted JSON a page snapshot arrives as. Every value the
 // packet carries passes through one of these, so a hostile or merely broken
-// page cannot put an unbounded string, a deep object, or a non-JSON value into
-// something an LLM will read. A value that fails a reader is dropped, not
-// repaired: losing one optional field beats shipping an unbounded one.
+// page cannot put a non-string where a string belongs, a non-JSON value, or a
+// negative count into something an LLM will read. A value that fails a reader
+// is dropped, not repaired.
+//
+// None of them cuts anything (t200). Until 2026-09-30 every string was sliced
+// to a per-field bound and every count checked against a ceiling, which is how
+// a page's words and its long lists reached the model shortened. What a reader
+// still refuses is a value of the wrong kind, never a value that is too large.
 
 export function isJsonRecord(input: unknown): input is Record<string, unknown> {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
@@ -14,11 +19,11 @@ export function jsonRecord(input: unknown, name: string): Record<string, unknown
   return input;
 }
 
-/** A string collapsed to one line, trimmed, cut to `maximum`; `undefined` when nothing is left. */
-export function boundedText(input: unknown, maximum: number): string | undefined {
+/** A string collapsed to one line and trimmed, whole; `undefined` when nothing is left. */
+export function pageText(input: unknown): string | undefined {
   if (typeof input !== "string") return undefined;
   const value = input.replace(/\s+/gu, " ").trim();
-  return value ? value.slice(0, maximum) : undefined;
+  return value || undefined;
 }
 
 /** A bounded identifier. Unlike the readers above this throws: an identifier is never optional. */
@@ -36,7 +41,7 @@ export function trueFlag(input: unknown): true | undefined {
 }
 
 /** A non-negative safe integer, or `undefined`. */
-export function boundedCount(input: unknown, maximum: number): number | undefined {
-  if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0 || input > maximum) return undefined;
+export function countValue(input: unknown): number | undefined {
+  if (typeof input !== "number" || !Number.isSafeInteger(input) || input < 0) return undefined;
   return input;
 }

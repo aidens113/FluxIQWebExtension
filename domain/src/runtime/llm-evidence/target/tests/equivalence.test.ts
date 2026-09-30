@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateWebRuntimeTargetOverrideEvidence } from "../..";
+import { validateWebRuntimeTargetOverrideEvidence, WEB_LLM_WITHHELD_TEXT } from "../..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../../sanitize";
 import type { WebLlmPageEvidence } from "../../sanitize";
 import type { AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
@@ -265,11 +265,18 @@ test("a node that was repaired is judged against its repair, not its recording",
   assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), repaired, selectors).status, "resolved");
 });
 
-test("a name the packet cut at its bound is not compared as the whole name", () => {
+test("a long name arrives whole, and is compared as the whole name it is", () => {
   const long = `Save ${"x".repeat(400)}`;
   const { evidence, selectors } = page("/settings", [button("save", long, { landmark: "main" })]);
-  assert.equal(evidence.elements[0]?.name?.length, 300);
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), click(button("save", long, { landmark: "main" })), selectors), refused("absent", "target_unanchored"));
+  assert.equal(evidence.elements[0]?.name, long);
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), click(button("save", long, { landmark: "main" })), selectors).status, "resolved");
+});
+
+test("a name the packet withheld as a secret is not compared as a name", () => {
+  const secret = "Save sk-live0123456789abcdefghijKLMN";
+  const { evidence, selectors } = page("/settings", [button("save", secret, { landmark: "main" })]);
+  assert.equal(evidence.elements[0]?.name, WEB_LLM_WITHHELD_TEXT);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), click(button("save", secret, { landmark: "main" })), selectors), refused("absent", "target_unanchored"));
 });
 
 test("refuses every repair when nothing says what the failed action addressed", () => {

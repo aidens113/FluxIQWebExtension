@@ -132,7 +132,7 @@ let callSequence = 0;
 async function run(registry: AutomationStudioHarnessOptionRegistry, optionId: string, value: JsonObject): Promise<unknown> {
   callSequence += 1;
   return await registry.execute(
-    { projectId: "project.one", flowId: "flow.one", callId: `call.${callSequence}`, optionId, value, maxEvidenceBytes: 64_000 },
+    { projectId: "project.one", flowId: "flow.one", callId: `call.${callSequence}`, optionId, value },
     resolution()
   );
 }

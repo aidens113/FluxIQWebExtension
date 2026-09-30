@@ -110,13 +110,13 @@ test("create-flow plans the web panel's iterating build_and_adapt, with the oper
   // so the cost cap and the stall guard bind before tokens do.
   assert.equal(byDefault.maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
   assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
-  // The campaigns' 600,000 at ~16k input tokens a decision capped real builds
-  // at ~34 decisions, so an untyped build budget outlasts every decision ...
+  // A typed campaign budget once capped real builds at ~34 decisions, so an
+  // untyped build budget outlasts every decision ...
   const campaign = planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48 }));
   assert.equal(campaign.maxTotalTokensPerRun, PER_REQUEST * 48);
   assert.ok(Math.floor(campaign.maxTotalTokensPerRun / 16_000) >= 48, "tokens must outlast every authorized decision");
   // ... but a budget the operator typed is theirs, and binds a build as it binds everything else,
-  assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: 600_000 })).maxTotalTokensPerRun, 600_000);
+  assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
   // ... while the operator's cost cap stays exactly theirs,
   const cheap = planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.01 }));
   assert.equal(cheap.maxEstimatedCostUsd, 0.01);
@@ -125,7 +125,7 @@ test("create-flow plans the web panel's iterating build_and_adapt, with the oper
   assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 20, maxEstimatedCostUsd: 0.01 })).maxTotalEstimatedCostUsd, 0.2);
   // ... a typed budget is still validated, and every other intent still honours it.
   assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), /--llm-max-run-tokens .* must be a whole number of at least/u);
-  assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: 600_000 })).maxTotalTokensPerRun, 600_000);
+  assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: PER_REQUEST * 2 })).maxTotalTokensPerRun, PER_REQUEST * 2);
   // A build intent is never one a Flow run carries: the Flow lane's type has no room for it.
   const runPurposes: ReadonlyArray<PersistedFlowLlmExecution["intent"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
   assert.equal((runPurposes as readonly string[]).includes(byDefault.purpose), false);
@@ -140,8 +140,8 @@ test("without --llm-max-run-tokens the run token budget is every authorized call
 });
 
 test("a run token budget only moves down: held to what the authorized calls could use, refused below one request", () => {
-  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: 300_000 })).maxTotalTokensPerRun, 300_000);
-  const held = planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 2, maxTotalTokensPerRun: 500_000 }));
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST * 3 })).maxTotalTokensPerRun, PER_REQUEST * 3);
+  const held = planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 2, maxTotalTokensPerRun: PER_REQUEST * 5 }));
   assert.equal(held.maxTotalTokensPerRun, PER_REQUEST * 2);
   // A diagnosis makes one call however high the typed budget, so one request is all it can spend.
   const diagnosis = planLiveLlmExecution(profile({}, { maxCallsPerRun: 64, maxInputTokens: 40_000, maxOutputTokens: 10_000, maxTotalTokensPerRequest: 50_000, maxTotalTokensPerRun: 3_000_000 }));
@@ -211,8 +211,8 @@ test("an unsupported provider, model, task or retry count is refused", () => {
 });
 
 test("token limits are held inside Core's ceiling and must add up", () => {
-  // One token past Core's own per-request ceiling, which is 64k
-  // context. The number comes from the contract rather than being written down,
+  // One token past the per-request ceiling, which is the model's own
+  // 1,000,000-token context window. The number comes from the contract rather than being written down,
   // so a plan that stopped agreeing with it fails here instead of passing.
   const overCeiling = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST + 1;
   assert.throws(() => planLiveLlmExecution(profile({}, { maxInputTokens: overCeiling })), new RegExp(`--llm-max-input-tokens ${overCeiling} must be a whole number between 1 and ${LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST}`, "u"));

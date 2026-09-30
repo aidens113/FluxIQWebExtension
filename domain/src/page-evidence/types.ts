@@ -92,7 +92,17 @@ export type WebAutomationDialogEvidenceItem = {
   native: boolean;
   label?: string | undefined;
   bounds?: WebAutomationEvidenceRect | undefined;
+  /** What the layer is, when the extension's interference vocabulary recognises it (t200). */
+  kind?: WebAutomationLayerKind | undefined;
 };
+
+/**
+ * What a dialog or covering layer is, as the extension's interference
+ * vocabulary names it. Carried so the model reads a consent wall or a robot
+ * check as such on the element that is one, now that nothing is ordered to the
+ * front of the packet (t200).
+ */
+export type WebAutomationLayerKind = "consent" | "rate_limit" | "robot_check" | "promotion" | "assistant";
 
 /** A native `alert`, `confirm` or `prompt` the page-world override answered. */
 export type WebAutomationNativeDialogEvidence = {
@@ -130,8 +140,10 @@ export type WebAutomationOverlayEvidenceItem = {
   bounds?: WebAutomationEvidenceRect | undefined;
   /** Interactive candidates whose centre this element takes the hit for. */
   blocks: number;
-  /** Selectors of the covered controls, capped. */
+  /** Selectors of every covered control. */
   blocked: string[];
+  /** What the layer is, when the extension's interference vocabulary recognises it (t200). */
+  kind?: WebAutomationLayerKind | undefined;
 };
 
 export type WebAutomationOverlayEvidence = {
@@ -139,7 +151,7 @@ export type WebAutomationOverlayEvidence = {
   tested: number;
   /** How many of them something else answered for. */
   blockedCount: number;
-  /** The blockers, most-blocking first; the first is the top-most. */
+  /** Every blocker, in composed document order (t200: no longer sorted most-blocking first). */
   blockers: WebAutomationOverlayEvidenceItem[];
 };
 
@@ -291,8 +303,9 @@ export type WebAutomationSnapshotElementTotals = {
  * so they can be joined to the merged element list. `navigation` and
  * `loading.documentState` stay the top frame's, because each describes one
  * document and there is no honest merge of two: a merged snapshot can therefore
- * read `complete` and still be `busy`. The action path is top-frame only unless
- * a frame is addressed, where the two agree.
+ * read `complete` and still be `busy`. The look (`web.dom.capture_snapshot`)
+ * takes the same merged snapshot unless one frame is addressed, because a robot
+ * check or a consent wall is often a child frame (t200).
  */
 export type WebAutomationPageEvidence = {
   elements: WebAutomationSnapshotElementTotals;
@@ -303,4 +316,10 @@ export type WebAutomationPageEvidence = {
   regions?: WebAutomationRegionEvidence[] | undefined;
   repeating?: WebAutomationRepeatingStructureEvidence[] | undefined;
   forms?: WebAutomationFormEvidence[] | undefined;
+  /**
+   * Child frames the merge asked for a snapshot and got no answer from before
+   * its wait ended, so their elements are absent. Named rather than dropped
+   * silently: a frame that did not answer is often the one that matters (t200).
+   */
+  unansweredFrameIds?: number[] | undefined;
 };

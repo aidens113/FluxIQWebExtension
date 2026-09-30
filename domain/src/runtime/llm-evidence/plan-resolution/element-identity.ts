@@ -25,8 +25,9 @@
 //
 // - a text control's or a select's text is its contents or its options, not
 //   its identity, and is left out;
-// - a name or text the packet cut at its bound is not the element's, and is
-//   left out rather than compared as though it were;
+// - a name or text the packet withheld as shaped like a secret
+//   (`../withheld.ts`) is not the element's, and is left out rather than
+//   compared as though it were;
 // - a control whose signature says it holds a secret carries no name or text
 //   at all, should one ever reach here.
 //
@@ -54,7 +55,8 @@
 // exactly the elements a record tells apart -- the look-alikes, and the example
 // of a control every row repeats (`../look-alikes.ts`) -- which are the
 // elements the gate exists for. Like a name, they are carried only when the
-// packet's bound did not cut them, because the page compares them whole. A
+// packet did not withhold them, because the page compares them whole. The
+// packet no longer cuts any string (t200), so a whole name is every name. A
 // record the page *keyed* (`data-id` and the like) publishes no words and so
 // travels no record from here; its key lives in the binding's `records`, which
 // only the call site (`target-packets.ts`) holds.
@@ -62,8 +64,8 @@
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
 import type { WebLlmEvidenceElement } from "../elements";
-import { WEB_LLM_EVIDENCE_BOUNDS } from "../limits";
 import { present } from "../present";
+import { isWithheldText } from "../withheld";
 
 /** The recorded fingerprint fields a handle's element can honestly fill. */
 export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint, "tagName" | "role" | "accessibleName" | "visibleText" | "selector" | "inputType"> & {
@@ -87,7 +89,7 @@ const CONTENT_TAGS: ReadonlySet<string> = new Set(["input", "textarea", "select"
 export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector: string, shadowHosts?: readonly string[]): WebPlanElementIdentity {
   const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
   const context = present<WebPlanElementContext>({
-    formId: uncut(element.form, WEB_LLM_EVIDENCE_BOUNDS.placement),
+    formId: whole(element.form),
     listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
     shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],
     record: recordOf(element)
@@ -95,8 +97,8 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
   return present<WebPlanElementIdentity>({
     tagName: element.tag,
     role: element.role,
-    accessibleName: secret ? undefined : uncut(element.name, WEB_LLM_EVIDENCE_BOUNDS.text),
-    visibleText: secret || CONTENT_TAGS.has(element.tag) ? undefined : uncut(element.text, WEB_LLM_EVIDENCE_BOUNDS.text),
+    accessibleName: secret ? undefined : whole(element.name),
+    visibleText: secret || CONTENT_TAGS.has(element.tag) ? undefined : whole(element.text),
     selector,
     inputType: element.inputType,
     context: Object.keys(context).length > 0 ? context : undefined
@@ -105,11 +107,11 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
 
 /** The record the packet named the element's row or card by, when it named one whole. */
 function recordOf(element: WebLlmEvidenceElement): WebPlanElementContext["record"] {
-  const text = uncut(element.within, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const text = whole(element.within);
   return text === undefined ? undefined : { text };
 }
 
-/** A packet string the bound did not reach, which is the only kind that is the element's whole value. */
-function uncut(value: string | undefined, bound: number): string | undefined {
-  return value !== undefined && value.length < bound ? value : undefined;
+/** A packet string that is the element's own, rather than the marker the secret screen put in its place. */
+function whole(value: string | undefined): string | undefined {
+  return value === undefined || isWithheldText(value) ? undefined : value;
 }

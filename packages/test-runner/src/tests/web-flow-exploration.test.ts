@@ -55,6 +55,47 @@ test("uses Core to select bounded same-origin pages then requests one proposal",
   assert.equal(JSON.stringify(result).includes("Open B"), false);
 });
 
+test("sends every element of a large page to Core whole, with no count or text cuts", async () => {
+  // Nothing trims exploration evidence any more: no byte budget, no per-page
+  // element cap (formerly 80, max 150) and no text cuts (formerly 300
+  // characters on text, names and titles, 500 on selectors, 80 on roles). The
+  // only bound on a model request is the model's context window, enforced by Core.
+  const longSelector = (index: number) => `#control-${index}-${"s".repeat(900)}`;
+  const longText = (index: number) => `Control ${index} ${"t".repeat(1_200)}`;
+  const longName = (index: number) => `Name ${index} ${"n".repeat(1_200)}`;
+  const longRole = `role-${"r".repeat(200)}`;
+  const longTitle = `Title ${"x".repeat(1_000)}`;
+  const elements = Array.from({ length: 400 }, (_, index) => ({ tagName: "button", selector: longSelector(index), visibleText: longText(index), name: longName(index), role: longRole }));
+  const browser: WebFlowExplorationBrowser = { navigate: async () => undefined, captureSnapshot: async () => ({ ...(snapshot("https://example.test/", elements) as object), title: longTitle }) };
+  let sent: any;
+  const result = await exploreWebsiteAndProposeFlow({ projectId: "project.one", flowId: "flow.one", instruction: "Inspect", startUrl: "https://example.test/", allowedOrigins: ["https://example.test"], limits: { maxPages: 1 } }, { browser, core: {
+    selectExplorationPages: async () => ({ locations: [] }),
+    proposeFlowBootstrap: async input => { sent = input.explorationEvidence; return { adaptationId: "a", status: "proposed" }; },
+  } });
+  assert.ok(Buffer.byteLength(JSON.stringify(sent), "utf8") > 1_000_000);
+  assert.equal(sent.pages[0].elements.length, 400);
+  assert.equal(sent.pages[0].title, longTitle);
+  const last = sent.pages[0].elements[399];
+  assert.deepEqual(last, { tag: "button", selector: longSelector(399), role: longRole, name: longName(399), text: longText(399) });
+  assert.equal(result.elementsCaptured, 400);
+  assert.equal(result.evidenceTruncated, false);
+});
+
+test("still screens secrets out of a page with no element cap", () => {
+  const elements = [
+    ...Array.from({ length: 200 }, (_, index) => ({ tagName: "button", selector: `#b${index}`, visibleText: `B${index}` })),
+    { tagName: "input", selector: "#pw", name: "Password", value: "hunter2", inputType: "password" },
+    { tagName: "input", selector: "#otp", name: "Code", value: "123456", attributes: { autocomplete: "one-time-code" } },
+    { tagName: "input", selector: "#card", name: "Card", value: "4111", attributes: { autocomplete: "cc-number" } },
+    { tagName: "input", selector: "#flagged", name: "Flagged", attributes: { "data-sensitive": "true" } },
+    { tagName: "input", selector: "#last", name: "Last", value: "kept-out", inputType: "text" },
+  ];
+  const page = sanitizeWebExplorationSnapshot(snapshot("https://example.test/", elements), ["https://example.test"]);
+  assert.equal(page.elements.length, 201);
+  assert.deepEqual(page.elements.at(-1), { tag: "input", selector: "#last", name: "Last", inputType: "text" });
+  assert.doesNotMatch(JSON.stringify(page), /hunter2|123456|4111|kept-out|#pw|#otp|#card|#flagged/u);
+});
+
 test("fails closed before Core for out-of-scope navigation and non-reviewable output", async () => {
   const browser: WebFlowExplorationBrowser = { navigate: async () => undefined, captureSnapshot: async () => snapshot("https://outside.test/", []) };
   let coreCalls = 0;

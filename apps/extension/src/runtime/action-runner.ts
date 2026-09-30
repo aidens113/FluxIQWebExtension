@@ -34,6 +34,8 @@ import {
   type LandedCheckWait,
   type LandedTabAccess
 } from "./landed-check-wait";
+import { lookAcrossFrames, type MergeFrameSnapshots } from "./look-across-frames";
+import { metNavigatingPage } from "./navigating-page";
 import { compareNavigatedUrl, judgeTabMovement } from "./navigation-outcome";
 import { navigationTargetTab } from "./navigation-target";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
@@ -53,6 +55,12 @@ export type BrowserActionRunRequest = {
    */
   pace?: OriginPace | undefined;
   attachTabForRecording(tabId: number): Promise<void>;
+  /**
+   * Every frame of the tab merged around the top frame's snapshot, which a look
+   * that names no frame answers with (`look-across-frames.ts`). Absent, the
+   * look is the top frame's alone.
+   */
+  mergeFrameSnapshots?: MergeFrameSnapshots;
 };
 
 export type BrowserActionRunResult = {
@@ -120,7 +128,9 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
 
   if (!await consumeSnapshotReadiness(tabId)) await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
-  const run = await runActionInFrame(action, startedAt, tabId, frameId, request.pace);
+  const addressed = frameId !== undefined || frameUrlPathForAction(action) !== undefined;
+  const inFrame = await runActionInFrame(action, startedAt, tabId, frameId, request.pace);
+  const run = await lookAcrossFrames(action, inFrame, addressed, startedAt, request.mergeFrameSnapshots);
   if (action.actionType === "web.dom.capture_snapshot" && run.result.status === "succeeded") {
     await noteSnapshotReadiness(tabId, run.result.snapshot?.url ?? await readTabUrl(tabId));
   }
@@ -327,7 +337,9 @@ function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number,
  * still send it.
  *
  * An action that names no frame runs in the top frame, which is the frame a
- * Flow means when it says nothing. A click is also judged by where its tab
+ * Flow means when it says nothing. The look is the exception to what it
+ * *reports*: it runs in the top frame and then takes in every frame of the tab
+ * (`look-across-frames.ts`). A click is also judged by where its tab
  * landed: a robot check that does not clear by itself, or a page the server
  * refused, fails it (`click-landing.ts`).
  *
@@ -381,13 +393,6 @@ async function runActionInFrame(
 }
 
 /**
- * Chrome's words for a send that found no listener, and for a document that
- * unloaded before it answered: `executeAction` answers asynchronously
- * (`content/message-handler.ts`), so a navigation mid-action closes the channel.
- */
-const NAVIGATING_PAGE_ERRORS = [/Receiving end does not exist/i, /message (port|channel) closed before a response was received/i];
-
-/**
  * The actions sent once more when their first send met a navigating page:
  * those that only read it, so a second send cannot act twice.
  *
@@ -435,10 +440,6 @@ async function sendAction(
     await waitForTabReady(tabId);
     return await sendToTab<BrowserActionResult>(tabId, message, frameId);
   }
-}
-
-function metNavigatingPage(error: unknown): boolean {
-  return error instanceof Error && NAVIGATING_PAGE_ERRORS.some((pattern) => pattern.test(error.message));
 }
 
 /**

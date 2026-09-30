@@ -30,8 +30,8 @@
 // Nothing here reads a value, a selector or a word of the page. What it reads
 // is the packet the model was *already shown*, and it reports counts of it:
 // how many records the packet's controls sit in, the most copies any one of
-// them has (`elements[].repeats`, a published field), and how many controls
-// the page offered (`elementTotal`, likewise). A count says how many and never
+// them has (`elements[].repeats`, a published field), and how many of the
+// packet's elements are controls (`actionableEvidenceElement`). A count says how many and never
 // what, and every one of these numbers the model could have counted itself
 // from the packet in front of it.
 //
@@ -46,8 +46,8 @@
 //
 // **A refusal says where lists are.** A count tells the model the page repeats;
 // it does not tell it where. So a `no_repeating_structure` refusal also names,
-// in `instead`, up to `MAX_LIST_HINTS` target handles from the packet the model
-// was already shown, each one an element sitting in a different repeating
+// in `instead`, every target handle from the packet the model was already
+// shown that is the first element of a different repeating
 // record or drawn several times over -- the elements a next detection can be
 // aimed at. A handle is the model's own vocabulary, never a word or a selector
 // of the page, so this adds an address to the refusal and no content.
@@ -58,6 +58,7 @@
 // is about the page, not about the target, so it takes the page-wide reasons.
 // The target word remains for a caller that could not search the page.
 
+import { actionableEvidenceElement } from "../elements";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { recoverable, rejectionDetail, type WebLlmToolRejectionReason } from "../tool-rejection";
 import type { WebAutomationStructureDetectionRefusal } from "../../../extraction";
@@ -73,16 +74,13 @@ const INTERSTITIAL_CONTROLS = 3;
 /** Two of anything is a run; one is not (`elements.ts` says the same of `repeats`). */
 const A_RUN = 2;
 
-/** At most this many handles a refusal names as places where the page repeats. */
-const MAX_LIST_HINTS = 3;
-
 /** What the capture says about repetition, in numbers a refusal may carry. */
 type PageCounts = {
   /** Distinct records -- rows, cards, list items -- the capture's controls sit in. */
   groups: number;
   /** The most copies any one control has: the largest repeating run the capture saw. */
   rows: number;
-  /** How many controls the page offered, before the packet's own bounds cut it. */
+  /** How many of the packet's elements are controls: the packet carries every rendered element, most of which are not. */
   controls: number;
 };
 
@@ -158,20 +156,19 @@ function whyNothingRepeats(evidence: WebLlmPageEvidence, counts: PageCounts, tar
  */
 function pageIsNotTheContent(evidence: WebLlmPageEvidence, counts: PageCounts): boolean {
   if (evidence.dialogs?.some((dialog) => dialog.modal === true) === true) return true;
-  if (evidence.blockedBy !== undefined) return true;
+  if (evidence.blockedBy !== undefined && evidence.blockedBy.length > 0) return true;
   return counts.controls <= INTERSTITIAL_CONTROLS;
 }
 
 /**
  * Where the page repeats, as handles the model was shown: the first element of
  * each distinct record, then any element the page drew several times, in packet
- * order, at most `MAX_LIST_HINTS`. Empty on a page nothing repeats on.
+ * order, every one of them. Empty on a page nothing repeats on.
  */
 function listHints(page: WebLlmSnapshotBinding): string[] {
   const hints: string[] = [];
   const recordsSeen = new Set<string>();
   for (const element of page.evidence.elements) {
-    if (hints.length >= MAX_LIST_HINTS) break;
     const record = page.records.get(element.target);
     if (record !== undefined && !recordsSeen.has(record)) {
       recordsSeen.add(record);
@@ -188,14 +185,15 @@ function listHints(page: WebLlmSnapshotBinding): string[] {
  *
  * `groups` comes from the binding's record addresses rather than the packet,
  * because the address itself never leaves the domain -- only how many distinct
- * ones there were. `controls` prefers the page's own pre-filter total, so a
- * packet the byte budget trimmed to one element does not read as a bare page.
+ * ones there were. `controls` counts the elements a click means something on,
+ * because the packet now carries every rendered element (t200) and a page of
+ * text is not a page of controls.
  */
 function pageCounts(page: WebLlmSnapshotBinding): PageCounts {
   const evidence = page.evidence;
   return {
     groups: new Set(page.records.values()).size,
     rows: evidence.elements.reduce((most, element) => Math.max(most, element.repeats ?? 0), 0),
-    controls: Math.max(evidence.elementTotal ?? 0, evidence.elements.length)
+    controls: evidence.elements.filter(actionableEvidenceElement).length
   };
 }

@@ -19,7 +19,7 @@ import type { WebLlmEvidenceDialog } from "../page-evidence";
 import { present } from "../present";
 
 const dialog = (): WebLlmEvidenceDialog =>
-  present<WebLlmEvidenceDialog>({ role: "dialog", name: undefined, modal: true });
+  present<WebLlmEvidenceDialog>({ role: "dialog", name: undefined, modal: true, target: undefined, kind: undefined });
 
 test("an optional field given undefined is absent, not present-and-undefined", () => {
   const value = dialog();
@@ -30,17 +30,20 @@ test("an optional field given undefined is absent, not present-and-undefined", (
 
 test("false, 0 and the empty string are values and survive", () => {
   const element = present<WebLlmEvidenceElement>({
-    target: "target.1", tag: "input", frameId: 0, role: "", name: undefined, text: undefined,
-    inputType: undefined, controlType: undefined, hasValue: false, selectedValue: "", href: undefined,
+    target: "target.1", tag: "input", frameId: 0, role: "", implicitRole: undefined, name: undefined, label: undefined, text: undefined,
+    attributes: undefined, inputType: undefined, controlType: undefined, hasValue: false, value: undefined, checked: false,
+    selectedValue: "", href: undefined, hasClickHandler: undefined, box: undefined, onViewport: false,
     options: undefined, revealKind: undefined, expanded: false, focused: undefined, recent: undefined,
     changed: undefined, form: undefined, landmark: undefined, heading: undefined, item: undefined, cell: undefined,
-    repeats: undefined, dialog: undefined, within: undefined, alike: undefined
+    repeats: undefined, dialog: undefined, within: undefined, alike: undefined,
+    isDialog: undefined, inDialog: undefined, covers: undefined, coversCount: undefined, kind: undefined, coveredBy: undefined,
+    frontLayer: undefined, statement: undefined
   });
-  assert.deepEqual(element, { target: "target.1", tag: "input", frameId: 0, role: "", hasValue: false, selectedValue: "", expanded: false });
+  assert.deepEqual(element, { target: "target.1", tag: "input", frameId: 0, role: "", hasValue: false, checked: false, selectedValue: "", onViewport: false, expanded: false });
 });
 
 test("key order is the literal's, so the serialized bytes are the writer's own", () => {
-  const value = present<WebLlmEvidenceDialog>({ modal: undefined, name: "Name", role: "dialog" });
+  const value = present<WebLlmEvidenceDialog>({ modal: undefined, name: "Name", role: "dialog", target: undefined, kind: undefined });
   assert.equal(JSON.stringify(value), '{"name":"Name","role":"dialog"}');
 });
 
@@ -58,10 +61,10 @@ test("the compile-time rows above and below are the real assertions", () => {
   present({ role: "dialog", name: undefined, modal: undefined });
 
   // @ts-expect-error 'roel' is not a field of WebLlmEvidenceDialog
-  present<WebLlmEvidenceDialog>({ roel: "dialog", name: undefined, modal: undefined });
+  present<WebLlmEvidenceDialog>({ roel: "dialog", name: undefined, modal: undefined, target: undefined, kind: undefined });
 
   // @ts-expect-error 'modal' was deleted, which is how an optional field silently leaves the packet
-  present<WebLlmEvidenceDialog>({ role: "dialog", name: undefined });
+  present<WebLlmEvidenceDialog>({ role: "dialog", name: undefined, target: undefined, kind: undefined });
 
   present<WebLlmEvidenceElement>({
     // @ts-expect-error a required field may not be undefined: present would strip it and the returned type would be a lie
@@ -76,5 +79,5 @@ test("the compile-time rows above and below are the real assertions", () => {
   // No directive, and there must never be one: every optional field of the
   // packet stays optional. If this line starts failing, the fix made fields
   // mandatory on the wire.
-  assert.deepEqual(present<WebLlmEvidenceDialog>({ role: undefined, name: undefined, modal: undefined }), {});
+  assert.deepEqual(present<WebLlmEvidenceDialog>({ role: undefined, name: undefined, modal: undefined, target: undefined, kind: undefined }), {});
 });

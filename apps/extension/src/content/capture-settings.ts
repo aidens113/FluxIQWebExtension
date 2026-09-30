@@ -22,8 +22,8 @@
  *   as an empty string. Turn it off to record only *that* a field changed;
  *   presence still travels as the descriptor's `hasValue`, which is not a value
  *   and is never withheld.
- * - `snapshots` (default **on**) -- a ranked state snapshot attached to
- *   recorded events and action results.
+ * - `snapshots` (default **on**) -- a state snapshot of every rendered element
+ *   attached to recorded events and action results.
  */
 export const captureSettings = {
   mutations: true,

@@ -30,13 +30,14 @@ const liveProfile = {
 };
 
 test("exports conservative defaults and a non-overridable request ceiling", () => {
-  // Sized to Core's own 64k per-request ceiling rather than to a number chosen
-  // here. At 8,000 input tokens a real page could not be described at all:
-  // measured across thirty-six live creation tasks, the guard fired before the
-  // request was ever sent on every realistic page in the corpus.
-  assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 64_000);
+  // The only bound on a request is the model's own context window, 1,000,000
+  // tokens for both configured DeepSeek models (Core's
+  // AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS). At 8,000 and then 48,000 input
+  // tokens a real page could not be described: the guard fired before the
+  // request was ever sent.
+  assert.equal(LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, 1_000_000);
   assert.deepEqual(DEFAULT_LLM_LAB_BUDGET, {
-    maxInputTokens: 48_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 56_000,
+    maxInputTokens: 992_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 1_000_000,
     maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   // The default request must fit under the ceiling, which is the relationship
@@ -55,7 +56,7 @@ test("validates an explicit loopback-only live profile", () => {
   assert.equal(validateLlmExecutionProfile(liveProfile).valid, true);
   assert.equal(validateLlmExecutionProfile({ ...liveProfile, budget: { ...liveProfile.budget, maxEstimatedCostUsd: 0.1 } }).valid, true);
   for (const mutation of [
-    { budget: { ...liveProfile.budget, maxTotalTokensPerRequest: 50_001 } },
+    { budget: { ...liveProfile.budget, maxTotalTokensPerRequest: 1_000_001 } },
     { budget: { ...liveProfile.budget, maxInputTokens: 9_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 } },
     { scenarioNetworkPolicy: "allowlisted-real-site" },
     { providerEgressPolicy: "flow-configured-endpoint" },
@@ -88,7 +89,7 @@ test("the call ceiling is Core's runaway backstop, not a per-task count", () => 
 
 test("a run token budget is optional, covers one request, and fits the calls declared", () => {
   // The per-request triple is set together. Overriding only the total while
-  // inheriting the default's 48,000 input would make every case below invalid
+  // inheriting the default's 992,000 input would make every case below invalid
   // for an unrelated reason -- input plus output may not exceed the total.
   const budget = { ...liveProfile.budget, maxCallsPerRun: 26, maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 };
   for (const maxTotalTokensPerRun of [10_000, 100_000, 100_001, 260_000]) {

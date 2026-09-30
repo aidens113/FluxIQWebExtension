@@ -9,7 +9,6 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { captureEvidence, toolExecution, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
-import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
@@ -111,16 +110,15 @@ export async function webNodeReplayPage(run: WebNodeRun): Promise<WebLlmSnapshot
  * the page the correction has to be made from and the model has no free look
  * to spend on it.
  *
- * A page that could not be taken, or that will not fit, leaves the line alone:
- * a verdict without its page is still a verdict, and a packet over budget would
- * cost the model the evidence it already has.
+ * A page that could not be taken leaves the line alone: a verdict without its
+ * page is still a verdict. A page that can be taken always goes with it, whole
+ * (t200).
  */
 export function webNodeReplayAnswerOnPage(
   run: WebNodeRun,
   page: WebLlmSnapshotBinding | undefined,
   answer: { code: string; said: string; acted: boolean; about?: WebNodeReplayFacts | undefined; found?: WebNodeVerifyFinding | undefined; ok?: boolean }
 ): WebLlmEvidenceToolExecution {
-  const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
   const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: answer.ok ?? false, code: answer.code, said: answer.said, found: answer.found }) as unknown as JsonObject;
   if (page) {
     // The page, with what the replay made of this step written on the same
@@ -128,7 +126,7 @@ export function webNodeReplayAnswerOnPage(
     // typed value rather than a literal, so the fields are still checked.
     const packet: JsonObject = page.evidence as unknown as JsonObject;
     const value = { ...packet, ...verdict } as unknown as JsonValue;
-    if (serializedBytes(value) <= budget) return replayStates(toolExecution(value, false, answer.code, undefined, undefined, answer.about), page, answer.acted);
+    return replayStates(toolExecution(value, false, answer.code, undefined, undefined, answer.about), page, answer.acted);
   }
   return replayStates(toolExecution(verdict as unknown as JsonValue, false, answer.code, undefined, undefined, answer.about), page, answer.acted);
 }

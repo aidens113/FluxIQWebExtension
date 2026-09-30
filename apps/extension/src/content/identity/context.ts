@@ -7,8 +7,11 @@
 // only the name separates them (B5).
 //
 // Every lookup is bounded. The context is computed for every described
-// element, and a snapshot describes up to two thousand of them, so no rule
-// here may walk the whole document.
+// element, and a snapshot describes every rendered element of the page (t200),
+// so no rule here may walk the whole document. The bounds are on the search --
+// how far up a landmark is looked for, how many siblings a heading is looked
+// among -- never on the text found: a legend, heading, landmark name or form
+// attribute is carried whole, where it used to be cut to 200 characters.
 //
 // The value is written through `present<DomElementContext>` rather than
 // assembled by spreads, and that matters more here than anywhere else this
@@ -33,10 +36,9 @@ import { present } from "../../shared/present";
 import { shadowHostChain } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import type { DomElementContext } from "../types";
-import { boundedText } from "./bounded-text";
+import { normalizedText } from "./normalized-text";
 import { recordIdentity } from "./record";
 
-const MAX_CONTEXT_TEXT = 200;
 const HEADING_SELECTOR = "h1,h2,h3,h4,h5,h6,[role='heading']";
 const LIST_ITEM_SELECTOR = "li,[role='listitem'],[role='option'],[role='treeitem']";
 const MAX_LANDMARK_DEPTH = 30;
@@ -99,9 +101,9 @@ function owningForm(element: Element): Element | null {
   return owned ?? element.closest("form");
 }
 
-/** One bounded attribute of the owning form, or `undefined` when there is no form. */
+/** One attribute of the owning form, or `undefined` when there is no form. */
 function formAttribute(form: Element | null, name: string): string | undefined {
-  return form ? boundedText(form.getAttribute(name), MAX_CONTEXT_TEXT) : undefined;
+  return form ? normalizedText(form.getAttribute(name)) : undefined;
 }
 
 function fieldsetLegend(element: Element): string | undefined {
@@ -109,9 +111,9 @@ function fieldsetLegend(element: Element): string | undefined {
   return legend ? contextText(legend) : undefined;
 }
 
-/** An element's bounded text, less every sensitive control's contents, and none for one inside a sensitive control. */
+/** An element's text, less every sensitive control's contents, and none for one inside a sensitive control. */
 function contextText(element: Element): string | undefined {
-  return boundedText(textOutsideSensitiveControls(element), MAX_CONTEXT_TEXT);
+  return normalizedText(textOutsideSensitiveControls(element));
 }
 
 /** The nearest landmark at or above the element, with its role. */
@@ -146,8 +148,8 @@ function nearestLandmark(element: Element): Landmark | undefined {
  */
 function landmarkName(landmark: Element): string | undefined {
   return labelledByText(landmark)
-    ?? boundedText(landmark.getAttribute("aria-label"), MAX_CONTEXT_TEXT)
-    ?? boundedText(landmark.getAttribute("title"), MAX_CONTEXT_TEXT);
+    ?? normalizedText(landmark.getAttribute("aria-label"))
+    ?? normalizedText(landmark.getAttribute("title"));
 }
 
 /** The text of the elements `aria-labelledby` lists, in its order, looked up in the landmark's own document. */
@@ -159,7 +161,7 @@ function labelledByText(landmark: Element): string | undefined {
     const text = contextText(target);
     return text ? [text] : [];
   });
-  return boundedText(parts.join(" "), MAX_CONTEXT_TEXT);
+  return normalizedText(parts.join(" "));
 }
 
 /** Whether an element's text is what a person put in it: a form control, or an editable region. */

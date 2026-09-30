@@ -1,11 +1,12 @@
-// `web-llm-evidence.v2`: the bounded, value-free packet that is the only page
-// data an LLM ever sees, the three tools that produce it, and the check that
-// keeps a target the model proposes inside what the model was actually shown.
+// `web-llm-evidence.v2`: the secret-screened packet that is the only page data
+// an LLM ever sees -- every element the capture sent, in document order,
+// uncut (t200) -- the tools that produce it, and the check that keeps a target
+// the model proposes inside what the model was actually shown.
 //
-// The surface is deliberate rather than a re-export of everything: the bounded
-// readers, the trim ladder and the target-handle bindings are how the packet
-// is built, not part of its contract, and a consumer that reached for them
-// would be building a second packet shape by hand.
+// The surface is deliberate rather than a re-export of everything: the
+// readers, the screens and the target-handle bindings are how the packet is
+// built, not part of its contract, and a consumer that reached for them would
+// be building a second packet shape by hand.
 
 export type {
   WebLlmEvidenceGateway,
@@ -22,7 +23,11 @@ export * from "./harness-options";
 // second, drifting copy of this list there is precisely the failure the single
 // declaration exists to prevent.
 export { WEB_LLM_DENIED_EVIDENCE_KEYS, webLlmEvidenceKey } from "./denied-keys";
-export { WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
+// What a published string says instead of itself when it is shaped like a
+// credential, so a reader can tell a withheld string from the page's own.
+export { WEB_LLM_WITHHELD_TEXT, screenedText as screenedWebLlmText } from "./withheld";
+// A URL as the packet spells one: query and fragment kept, secrets withheld.
+export { screenedEvidenceUrl } from "./location";
 // A name this domain read as something other than what was written, which a
 // call reports on its execution result. Part of the contract rather than of the
 // making of it: whoever carries the result onwards -- Core, and then a run
@@ -34,8 +39,13 @@ export {
   type WebLlmNameAssumption,
   type WebLlmNameAssumptionHow
 } from "./name-assumption";
-export type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
-export type { WebLlmEvidenceDialog, WebLlmEvidenceFrame, WebLlmPageContext } from "./page-evidence";
+// Whether a click means something on an element: the packet carries every
+// rendered element (t200), and a reader that wants the controls asks this.
+export { actionableEvidenceElement, type ResolvedWebLlmEvidenceElement, type WebLlmEvidenceElement } from "./elements";
+export type { WebLlmEvidenceBlocker, WebLlmEvidenceDialog, WebLlmEvidenceFrame, WebLlmEvidenceLoadingIndicator, WebLlmPageContext } from "./page-evidence";
+// What stands in front of the page, marked on the element it is about rather
+// than by moving it (t200, `./layers.ts`).
+export type { WebLlmLayerMarks } from "./layer-marks";
 export {
   sanitizeWebLlmSnapshot,
   WEB_LLM_EVIDENCE_SCHEMA_VERSION,
@@ -70,7 +80,7 @@ export {
   type WebLlmStructurePaginationMode
 } from "./structure";
 export { webLlmStateDigest } from "./state-digest";
-export { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence, WEB_REPAIR_CANDIDATE_LIMIT, type WebRepairCandidateMatch, type WebRepairCandidateProjection, type WebRepairCandidateRefusal } from "./target";
+export { projectWebRepairCandidates, validateWebRuntimeTargetOverrideEvidence, type WebRepairCandidateMatch, type WebRepairCandidateProjection, type WebRepairCandidateRefusal } from "./target";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,
   WEB_LLM_TOOL_REJECTION_REASONS,

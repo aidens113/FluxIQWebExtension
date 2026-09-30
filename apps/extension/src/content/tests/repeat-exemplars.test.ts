@@ -109,8 +109,10 @@ type Flyout = { buttons: Array<{ store: string; button: Element }>; cards: Eleme
 
 /**
  * The open flyout, shaped as `bigbox-retail/shell/store-picker.ts` renders it,
- * with the shopper's store first. `included` is the order the snapshot gathers
- * elements in: controls first, then list items, then the rest.
+ * with the shopper's store first. `included` lists the controls first, then
+ * the list items, then the rest -- the order the snapshot gathered elements in
+ * before it listed them in document order (t200); the folding rule must not
+ * depend on which.
  */
 function storeFlyout(current: string): Flyout {
   const buttons: Flyout["buttons"] = [];

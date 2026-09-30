@@ -22,7 +22,7 @@ import type { WebLlmEvidenceGateway } from "../capture";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
 import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 
-const BASE = { projectId: "project.store", flowId: "flow.cart", maxEvidenceBytes: 16_000 } as const;
+const BASE = { projectId: "project.store", flowId: "flow.cart" } as const;
 const EXTRACT_NODE = "web.output.dom-extract_list";
 
 const CART = {
