@@ -81,3 +81,12 @@ test("an address that is not a URL is unreachable rather than a throw", async (t
   });
   assert.equal(requests.length, 0);
 });
+
+test("a call that runs out of time says so, rather than that FluxIQ could not be reached", async (t) => {
+  stubFetch(t, () => { throw new DOMException(`The operation timed out for Bearer ${TOKEN}`, "TimeoutError"); });
+  const reply = await callCoreProgram(credentials, "append-turn", { text: "hello" });
+  assert.equal(reply.ok, false);
+  assert.equal(!reply.ok && reply.code, "timed_out");
+  assert.match(!reply.ok ? reply.error : "", /may still be working/);
+  assert.ok(!JSON.stringify(reply).includes(TOKEN));
+});

@@ -332,29 +332,69 @@ evidence packet.
 - **Core keeps each key and withholds each value at rest** (fluxiq 0.4.0):
   - a runtime session's `metadata.inputs`, and the `inputs` of the run-summary
     envelope in the run's event stream, read `[withheld]`;
-  - the persisted run trace withholds each supplied input, and each value the
-    run resolved out of a state binding;
-  - a saved command attempt withholds resolved values in `command.parameters`,
-    `result.message`, `result.error` and the attempt's `message`.
+  - the persisted run trace withholds each supplied input at its own position,
+    and each supplied input and each value the run resolved out of a state
+    binding by value, wherever a copy of one appears under a data key -- so an
+    input a node copies into an output under another key is withheld at the
+    copy too;
+  - a saved command attempt withholds those values in `command.parameters`,
+    `command.target`, `command.metadata`, `result.message`, `result.error`,
+    `result.payload` (or the whole payload when the caller withholds it),
+    `result.target`, `result.metadata`, the `expected` and `actual` prose of
+    `result.failure`, and the attempt's `message`
+    (`packages/fluxiq/src/runtime/attempt-withholding.ts` in Core).
 
   The run itself executes with the real value. Core states the rules in its own
   `docs/architecture/automation-studio.md` and `package-boundaries.md`.
 
 What Core does not withhold, and a supplier must allow for:
 
-- **A saved attempt's `command.metadata`, `result.payload`, `result.failure`
-  and `result.metadata`.** An action result's page snapshot is in
-  `result.payload`, which is why page text is a route of its own (see "Not a
-  rule about page text" below).
-- **A copy.** An input no binding reads, which a node copies into an output
-  under another key, stays in clear at that copy. A supplier should give only
-  the inputs a binding asks for.
-- **Records saved before 0.4.0,** which are not rewritten.
+- **Page text that echoes nothing supplied.** An action result's page snapshot
+  is in `result.payload`; it is withheld only where it contains a supplied or
+  resolved value. Page text is a route of its own (see "Not a rule about page
+  text" below).
+- **A declared default.** An input still equal to the default the Flow's
+  published interface declares for it is authored -- the Flow holds it -- so it
+  is withheld at its own position but not by value.
+- **Records saved before this change,** which are not rewritten.
+
+The by-value rule has a cost: a value the run computed that equals a supplied
+input (`5 + 0` with an input of `5`) also reads `[withheld]` in the saved trace
+and attempts, because a copy cannot be told from a computation by value. The
+executed trace a Call Flow parent or a rerun is handed keeps the real value.
 
 In the Lab, the Flow lane supplies each declared secret once, under the path
 its node asks for, paired with its declaration by control one to one; a
 pairing that fails stops the run before the Flow starts
 ([declared replay secrets](testing-facility.md#declared-replay-secrets)).
+
+## At Rest In The Browser, And What The Lab Checks
+
+The extension keeps its pairing token, session, offline event queue (recorded
+events, which can carry page data) and extraction sessions in
+`chrome.storage.local`. None of it leaves the background worker in a status, a
+log or a problem report (below). The Lab's run leak check scans that storage on
+disk -- the profile's `Local Extension Settings`, `Sync Extension Settings` and
+extension `IndexedDB` LevelDB files -- for every declared secret, best effort
+for compressed tables ([testing facility](testing-facility.md#the-run-leak-check)).
+It does not cover the panel's `localStorage` draft of unsaved Connection
+settings, nor Firefox.
+
+## Problem Reports
+
+"Report a problem" (the Advanced view's Connection tab) asks the background for
+a bundle built by allowlist in `background/diagnostics/`: versions, browser
+name and major version, connection state and address origins, client, session
+and project ids, recording and runtime state, activity kinds, recent run ids
+and states, and the last 30 recorded failures. Every failure's text is
+redacted when it is written (`redactDiagnosticText`): the pairing token and code
+wherever they appear, URLs cut to their origin, bearer credentials, secret-named
+assignments, quoted text, e-mail addresses and long digit runs. The bundle
+never holds the token, cookies, page addresses beyond an origin, page text,
+recorded events, typed or extracted values, or activity labels, and its
+`withheld` list says so. Core's Problems view has its own "Report problem",
+which copies problem codes and ids and never a problem's message or an
+object's name.
 
 ## What These Guards Are Not
 

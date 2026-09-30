@@ -4,3 +4,4 @@ export { mountConnectionTab } from "./connection-tab";
 export { CONNECTION_DRAFT_KEY, parseConnectionDraft } from "./draft-store";
 export { savePlan, type SavePlan } from "./save-plan";
 export { SETTING_FIELDS, type AddressKey, type SettingField, type ToggleKey } from "./settings-fields";
+export { PROBLEM_REPORT_COPIED, PROBLEM_REPORT_SAVE_ONLY, problemReportOutcome, type ProblemReportOutcome } from "./problem-report-plan";
