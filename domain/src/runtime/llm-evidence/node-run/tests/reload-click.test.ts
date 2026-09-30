@@ -128,6 +128,40 @@ test("a click whose reload is over before the look after it is applied, with the
   assert.equal(evidence.elements!.some((element) => element.text === NEW_STORE), true);
 });
 
+// Audit A2, cause 1: the extension now answers a click whose page navigated
+// before it could reply as `succeeded`, with a note that says so and no
+// payload of the frame's own, where it used to rethrow the lost reply as a
+// failure the domain read as a refusal. The step must be applied from that answer.
+test("a click answered only by the note that it navigated its page before answering is applied, with the page after the reload", async () => {
+  const page = storePage(1);
+  const navigatedBeforeAnswering: WebLlmEvidenceGateway = {
+    eligibleSessionIds: page.gateway.eligibleSessionIds,
+    executeAction: async (sessionId, command) => {
+      const answer = await page.gateway.executeAction(sessionId, command);
+      if (command.actionType !== "web.dom.click") return answer;
+      return {
+        status: "succeeded",
+        message: "The click navigated its page before it could answer.",
+        payload: {
+          validation: {
+            status: "passed",
+            expected: "the page the click leads to loads",
+            actual: "the click navigated its page before it could answer, and the page it landed on loaded"
+          }
+        }
+      };
+    }
+  };
+  const picked = await pickStore(navigatedBeforeAnswering);
+  assertAppliedStep(picked);
+  assert.notEqual(picked.draft?.replay, undefined);
+  const evidence = picked.evidence as Packet;
+  assert.equal(evidence.pageChanged, true);
+  assert.equal(evidence.pageUnreadable, undefined);
+  assert.equal(evidence.elements!.some((element) => element.text === NEW_STORE), true);
+  assert.equal(evidence.elements!.some((element) => element.text === "Set as my store"), false);
+});
+
 test("a click whose page never comes back is still applied, and says the page could not be read", async () => {
   const page = storePage(Number.POSITIVE_INFINITY);
   const startedAt = Date.now();
