@@ -127,55 +127,21 @@
 }
 .chat-answer .turn-answer:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-/* Folded work: one quiet "Worked for 2m · 46 steps" per answer. */
-.chat-work-slot { display: grid; gap: 4px; }
-.chat-work-slot:empty { display: none; }
-.chat-work > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  max-width: 100%;
-  margin-left: -6px;
-  border-radius: 8px;
-  padding: 3px 6px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 20px;
-  list-style: none;
-  user-select: none;
-}
-.chat-work > summary::-webkit-details-marker { display: none; }
-.chat-work > summary::after {
-  content: "";
-  flex: 0 0 auto;
-  width: 5px;
-  height: 5px;
-  margin: 0 2px 2px 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-}
-.chat-work[open] > summary::after { margin-bottom: 4px; transform: rotate(45deg); }
-.chat-work > summary:hover { background: var(--hover); color: var(--text); }
-.chat-work > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.chat-work[data-state="failed"] > summary { color: var(--danger-text); }
-.chat-work-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-steps {
-  display: grid;
-  gap: 7px;
-  margin: 6px 0 6px 2px;
-  border-left: 1.5px solid var(--divider);
-  padding: 2px 0 2px 14px;
-  list-style: none;
-}
-.chat-step { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
-.chat-step[data-counted="false"] { opacity: .8; }
-.chat-step-mark { font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
-.chat-step[data-status="succeeded"] .chat-step-mark { color: var(--success); }
-.chat-step[data-status="failed"] .chat-step-mark { color: var(--danger); }
-.chat-step[data-status="started"] { color: var(--text); }
-.chat-step[data-status="started"] .chat-step-mark::before {
+/* FluxIQ's steps: each one its own message on FluxIQ's side, what it did in
+   bold and why after a dash, and a quiet line saying how the action went. */
+.chat-step-msg { display: grid; gap: 3px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.chat-step-msg + .chat-step-msg { margin-top: -10px; }
+.chat-step-line { margin: 0; color: var(--text); }
+.chat-step-title { font-weight: 650; }
+.chat-step-text { color: var(--text); }
+.chat-step-msg[data-kind="check"] .chat-step-title,
+.chat-step-msg[data-kind="step"] .chat-step-title { font-weight: 600; }
+.chat-step-outcome { display: flex; align-items: baseline; gap: 6px; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.chat-step-mark { flex: 0 0 auto; width: 12px; font-size: 11px; font-weight: 700; text-align: center; }
+.chat-step-outcome[data-state="succeeded"] .chat-step-mark { color: var(--success); }
+.chat-step-outcome[data-state="failed"] .chat-step-mark { color: var(--danger); }
+.chat-step-outcome[data-state="failed"] { color: var(--danger-text); }
+.chat-step-outcome[data-state="working"] .chat-step-mark::before {
   content: "";
   display: inline-block;
   width: 7px;
@@ -184,16 +150,6 @@
   border-right-color: transparent;
   border-radius: 50%;
   vertical-align: -1px;
-}
-.chat-step-copy { display: grid; gap: 1px; min-width: 0; }
-.chat-step-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-step-text {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  opacity: .85;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 /* The live line: what FluxIQ is doing now, updated in place. */
@@ -205,9 +161,25 @@
 .chat-live-headline { font-weight: 600; }
 .chat-live-step { color: var(--muted); font-size: 12px; }
 .chat-live-detail { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-.chat-live .chat-work-slot { margin-left: 19px; }
 .chat-live[data-state="waiting"] .chat-live-dot { background: var(--warning); }
 .chat-live[data-state="waiting"] .chat-live-detail { color: var(--text); }
+/* The one action while the question waits in a thread not on screen: open it. */
+.chat-live-action {
+  justify-self: start;
+  min-height: 32px;
+  margin-top: 6px;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 4px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-live-action:hover { background: var(--hover); }
+.chat-live-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* Empty: an invitation, centred, with example prompts that fill the composer. */
 .chat-empty { display: grid; flex: 1 1 auto; align-content: center; justify-items: center; gap: 8px; padding: 24px 4px; text-align: center; }
@@ -343,8 +315,7 @@
     color: transparent;
     animation: chat-shimmer 2.4s linear infinite;
   }
-  .chat-step[data-status="started"] .chat-step-mark::before { animation: chat-spin .9s linear infinite; }
-  .chat-work > summary::after { transition: transform .15s ease; }
+  .chat-step-outcome[data-state="working"] .chat-step-mark::before { animation: chat-spin .9s linear infinite; }
 }
 @keyframes chat-breathe { 0%, 100% { opacity: .45; transform: scale(.72); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes chat-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }

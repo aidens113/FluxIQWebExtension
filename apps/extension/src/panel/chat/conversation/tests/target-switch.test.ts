@@ -128,3 +128,29 @@ test("the same automation under a new name keeps the thread on screen", async ()
   assert.deepEqual(texts(controller), ["Price tracker is ready."]);
   assert.equal(core.sent.length, reads, "nothing is read again");
 });
+
+test("a question's thread is found by the subject Core asked in, and a message there says which Flow or run is on screen", () => {
+  const run = { kind: "question", activityId: "run:r1", subjectKind: "run", subjectId: "r1", title: "The run's question" } as const;
+  const build = { kind: "question", activityId: "build:b1", subjectKind: "flow", subjectId: "flow-7", title: "The build's question" } as const;
+  assert.deepEqual(threadListRequest(run), { type: RUNTIME_MESSAGES.panelConversationRead, kind: "list", status: "open", limit: 1, subjectKind: "run", subjectId: "r1" });
+  assert.equal(threadListRequest(build).subjectKind, "flow");
+  assert.equal(threadListRequest(build).subjectId, "flow-7");
+  const shown = threadSendRequest(run, { conversationId: "c", projectId: "p" }, "Done, carry on");
+  assert.equal(shown.subjectKind, undefined, "an open thread needs no subject");
+  assert.deepEqual(shown.onScreen, { runId: "r1" });
+  assert.deepEqual(threadSendRequest(build, undefined, "hi").onScreen, { flowId: "flow-7" });
+  assert.equal(threadSendRequest(build, undefined, "hi").subjectId, "flow-7");
+});
+
+test("a question from the same Flow's thread keeps what is on screen; one from another subject reads its own", async () => {
+  const core = twoThreads();
+  const controller = await connected(core);
+  controller.setTarget({ kind: "question", activityId: "build:b1", subjectKind: "flow", subjectId: "flow-7", title: "The build's question" });
+  await controller.refresh();
+  assert.deepEqual(texts(controller), ["Price tracker is ready."]);
+  const reads = core.sent.length;
+  controller.setTarget({ kind: "question", activityId: "build:b2", subjectKind: "flow", subjectId: "flow-7", title: "The build's question" });
+  assert.equal(core.sent.length, reads, "the same thread: nothing is read again");
+  controller.setTarget({ kind: "question", activityId: "run:r1", subjectKind: "run", subjectId: "r1", title: "The run's question" });
+  assert.deepEqual(texts(controller), [], "another thread: the last one's turns are gone at once");
+});

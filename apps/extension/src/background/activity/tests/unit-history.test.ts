@@ -1,0 +1,65 @@
+// Coverage of unit-history.ts: which events tell a unit's story, the order
+// they are kept in, and the two bounds -- events per unit (the newest kept)
+// and units (the one heard from longest ago dropped first).
+
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import type { ClientGatewayActivity } from "../../../shared/activity/index";
+import { UnitHistory } from "../unit-history";
+
+type Detail = NonNullable<ClientGatewayActivity["detail"]>;
+
+let sequence = 0;
+function event(unit: string, detail?: Detail, fields: Partial<ClientGatewayActivity> = {}): ClientGatewayActivity {
+  sequence += 1;
+  return {
+    activityId: `build:${unit}`,
+    sequence,
+    subject: { kind: "build", id: unit, projectId: "p" },
+    phase: "exploring",
+    label: "Working",
+    at: "2026-09-30T12:00:00.000Z",
+    ...(detail === undefined ? {} : { detail }),
+    ...fields
+  };
+}
+
+const titles = (history: UnitHistory) => history.events().map((kept) => kept.detail?.title ?? `(${kept.phase})`);
+
+test("a unit's story: explained decisions, actions, checks, repairs, steps and its end; not status changes, unexplained decisions or bookkeeping", () => {
+  const history = new UnitHistory();
+  const kept = [
+    history.accept(event("b", undefined)),
+    history.accept(event("b", { kind: "thought", title: "Deciding the next step", status: "started" })),
+    history.accept(event("b", { kind: "thought", title: "Clicking “Get a quote”", text: "The form is behind it.", status: "succeeded" })),
+    history.accept(event("b", { kind: "tool", title: "Clicking “Get a quote”", ref: "core.run_node", status: "started" })),
+    history.accept(event("b", { kind: "tool", title: "Using core.state_digest", ref: "core.state_digest", status: "succeeded" })),
+    history.accept(event("b", { kind: "tool", title: "Clicking “Get a quote”", ref: "core.run_node", status: "succeeded" })),
+    history.accept(event("b", { kind: "thought", title: "Fixing the click", text: "The button moved.", status: "succeeded" }, { phase: "repairing" })),
+    history.accept(event("b", { kind: "check", title: "Completion check", text: "The quote form is open.", status: "succeeded" }, { phase: "verifying" })),
+    history.accept(event("b", undefined, { phase: "done", final: true }))
+  ];
+  assert.deepEqual(kept, [false, false, true, true, false, true, true, true, true]);
+  assert.deepEqual(titles(history), ["Clicking “Get a quote”", "Clicking “Get a quote”", "Clicking “Get a quote”", "Fixing the click", "Completion check", "(done)"]);
+});
+
+test("each unit keeps at most its newest events, and events stay in the order they came, across units", () => {
+  const history = new UnitHistory({ units: 5, eventsPerUnit: 3 });
+  for (let index = 1; index <= 5; index += 1) history.accept(event("a", { kind: "note", title: `a${index}` }));
+  history.accept(event("r", { kind: "note", title: "r1" }));
+  history.accept(event("a", { kind: "note", title: "a6" }));
+  assert.deepEqual(titles(history), ["a4", "a5", "r1", "a6"]);
+});
+
+test("past the unit bound, the unit heard from longest ago goes first", () => {
+  const history = new UnitHistory({ units: 2, eventsPerUnit: 10 });
+  history.accept(event("one", { kind: "note", title: "one" }));
+  history.accept(event("two", { kind: "note", title: "two" }));
+  history.accept(event("one", { kind: "note", title: "one again" }));
+  history.accept(event("three", { kind: "note", title: "three" }));
+  assert.deepEqual(titles(history), ["one", "one again", "three"]);
+  const copy = history.events();
+  copy.pop();
+  assert.equal(history.events().length, 3, "the caller's copy is its own");
+});

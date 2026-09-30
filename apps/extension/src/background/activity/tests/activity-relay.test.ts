@@ -141,6 +141,27 @@ test("recent keeps the newest events, oldest first, up to the limit", async () =
   assert.equal(recent.at(-1), total);
 });
 
+test("history keeps a whole unit's story past the recent window, and the display is paced from every event as before", async () => {
+  const h = harness();
+  const thought = (sequence: number) => activity(sequence, {
+    activityId: "build:b1",
+    subject: { kind: "build", id: "b1", projectId: "project-1" },
+    phase: "exploring",
+    label: "Clicking",
+    detail: { kind: "thought", title: `Clicking button ${sequence}`, text: `Reason ${sequence}.`, status: "succeeded" }
+  });
+  const total = ACTIVITY_RECENT_LIMIT * 2;
+  for (let sequence = 1; sequence <= total; sequence += 1) {
+    await h.relay.accept(activity(sequence * 2 - 1, { activityId: "build:b1", subject: { kind: "build", id: "b1", projectId: "project-1" }, phase: "thinking", label: "Deciding" }));
+    await h.relay.accept(thought(sequence * 2));
+  }
+  const state = h.relay.state();
+  assert.equal(state.recent.length, ACTIVITY_RECENT_LIMIT);
+  assert.equal(state.history?.length, total, "every explained decision, none of the pure status changes");
+  assert.equal(state.history?.[0]?.detail?.title, "Clicking button 2");
+  assert.equal(state.display?.headline, "Building your Flow");
+});
+
 test("the overlay preference defaults to expanded, is read from storage once, and a set one is stored and sent", async () => {
   const fresh = harness();
   assert.equal((await fresh.relay.read()).overlay, "expanded");

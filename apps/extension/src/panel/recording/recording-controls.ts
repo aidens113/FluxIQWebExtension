@@ -33,6 +33,8 @@ export type RecordingControls = {
   readonly bar: HTMLElement;
   readonly newAutomation: HTMLElement;
   render(status: ExtensionStatus): void;
+  /** Whether FluxIQ is working, held steady by the shell; redraws when it changes. */
+  setWorking(working: boolean): void;
 };
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -43,6 +45,7 @@ export function createRecordingControls(context: PanelContext): RecordingControl
   const error = createStickyError<ExtensionStatus>();
   let latest: ExtensionStatus | undefined;
   let sending = false;
+  let working = false;
 
   // "Start recording" is the exact name the Lab presses; the id is kept from the single-file popup.
   const recordButton = createElement("button", {
@@ -125,7 +128,7 @@ export function createRecordingControls(context: PanelContext): RecordingControl
   function render(status: ExtensionStatus): void {
     latest = status;
     const recording = status.recordingState === "recording" || status.recordingState === "paused";
-    const record = recordControl(status);
+    const record = recordControl(status, working);
     const connected = status.connectionState === "connected";
     recordButton.hidden = record.hidden || !connected;
     recordButton.disabled = record.disabled || sending;
@@ -133,7 +136,7 @@ export function createRecordingControls(context: PanelContext): RecordingControl
     recordNew.disabled = record.disabled || record.hidden || sending;
     recordLine.textContent = record.hidden ? "Recording now. Stop it from the bar at the top." : record.reason ?? "Do the job once while FluxIQ records the steps.";
 
-    const extract = extractControl(status);
+    const extract = extractControl(status, working);
     extraction.setAvailable(!extract.disabled, extract.line);
     extractLine.textContent = extract.line;
     extractLine.hidden = recording;
@@ -156,7 +159,13 @@ export function createRecordingControls(context: PanelContext): RecordingControl
     bar.hidden = !recording && refusal === undefined && shown === undefined;
   }
 
-  return { recordButton, bar, newAutomation, render };
+  function setWorking(next: boolean): void {
+    if (next === working) return;
+    working = next;
+    rerender();
+  }
+
+  return { recordButton, bar, newAutomation, render, setWorking };
 }
 
 function recordIcon(): SVGSVGElement {

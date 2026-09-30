@@ -6,22 +6,38 @@
 //   context   a slim line naming the automation, only in an automation's chat,
 //             with the way back to the latest chat
 //   stream    the scrolling conversation. The person's turns are bubbles on
-//             the right; FluxIQ's are full-width formatted text, with the work
-//             that led to each folded above it ("Worked for 2m · 46 steps");
-//             while FluxIQ works, a live line at the end says what it is
-//             doing, updated in place
+//             the right; FluxIQ's are full-width formatted text. Every step
+//             of FluxIQ's work is its own message on FluxIQ's side, in order:
+//             what it did and why ("**Clicking “Get a free quote”** — The
+//             quote form is behind this button, so I'm opening it."), with a
+//             quiet line saying how the action went. No folds, no counts.
+//             While FluxIQ works, a live line at the end says what it is
+//             doing now ("Thinking about the next step"), updated in place
 //   composer  pinned at the bottom: a growing box and a round send button
 //
 // Which thread (`open`): the latest -- the project's own open thread -- or one
-// automation's thread. Sending goes to the thread on screen.
+// automation's thread, or the thread a build or a run put its question in.
+// Sending goes to the thread on screen.
+//
+// A question is never left where nobody sees it. Core asks in the thread of
+// the work's own subject (a build in its Flow's, a run in its own), which is
+// often not the thread on screen: a run started from the automations tab asks
+// in a thread no chat shows. So while the paced display says the work waits
+// for the person, every chat shows the waiting live line, and when the
+// question is in another thread the line's one button, "Show the question",
+// opens that thread here (`stream/ask-thread.ts`), where its Continue and
+// Stop (or its other answers) are the thread's own ask controls, answered
+// through the same relay as any other. "‹ Latest chat" goes back.
 //
 // What is on screen comes from two owners and is merged only for display:
 // the thread from `createConversationController` (Core's, read on a 4 s poll
 // and 300 ms after an activity event that names a conversation or ends the
 // work), and the activity from `createActivityFeed` (the background relay's,
 // read on start and pushed after). Neither is written here. The live line
-// renders the relay's paced `display` only; the folds read every event in
-// `recent`, less Core's internal reads, in words.
+// renders the relay's paced `display` only; the step messages come from the
+// relay's `history`, which holds each recent unit of work whole, so a long
+// build's first decisions are still there after it settles, placed by time
+// among the thread's turns.
 //
 // A read that fails is retried quietly; only one that keeps failing shows the
 // read notice, naming what failed, with a Retry (`conversation/read-notice.ts`).
@@ -38,7 +54,8 @@ import type { PanelStore } from "../state";
 import type { ExtensionStatus } from "../../shared/protocol";
 import { createComposer, createConversationController, createReadNotice, type ConversationState, type CoreTurn } from "./conversation";
 import { createActivityFeed, listenToRuntime, threadRefreshWanted } from "./feed";
-import { activityForTarget, buildChatStream, buildChatThread, createTurnClock } from "./stream";
+import { sameThread } from "./same-thread";
+import { activityForTarget, buildChatStream, createTurnClock, type QuestionTarget } from "./stream";
 import type { ChatTarget } from "./target";
 import {
   createContextLine,
@@ -103,7 +120,11 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   let clock = createTurnClock();
 
   const context = createContextLine(() => open({ kind: "latest" }));
-  const thread = createThreadView(() => follower.recheck());
+  // The thread holding the question the work waits on, while it is not the one on screen.
+  let answerIn: QuestionTarget | null = null;
+  const thread = createThreadView(() => {
+    if (answerIn !== null) open(answerIn);
+  });
   const empty = createEmptyState((text) => composer.fill(text));
   const readNotice = createReadNotice(() => void controller.retry());
   const column = createElement("div", { className: "chat-column" }, [empty.element, thread.element, readNotice.element]);
@@ -144,9 +165,8 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   let debounce: ReturnType<typeof setTimeout> | undefined;
 
   function open(next: ChatTarget): void {
-    const same = next.kind === shownTarget.kind && (next.kind === "latest" || (shownTarget.kind === "automation" && next.flowId === shownTarget.flowId && next.name === shownTarget.name));
-    if (same) return;
-    const threadChanges = next.kind !== shownTarget.kind || next.kind === "latest" || (shownTarget.kind === "automation" && next.flowId !== shownTarget.flowId);
+    if (sameTarget(next, shownTarget)) return;
+    const threadChanges = !sameThread(next, shownTarget);
     shownTarget = next;
     if (threadChanges) {
       // Another thread: its first read is history again, and nothing of the last one stays.
@@ -180,6 +200,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   function renderAll(): void {
     const state = controller.state();
     const activity = activityForTarget(feed.snapshot().state, shownTarget, state.conversationId);
+    answerIn = activity.answerIn;
     const fallbackShown = state.mode === "fallback";
     if (fallback.hidden === fallbackShown) fallback.hidden = !fallbackShown;
     if (main.hidden !== fallbackShown) main.hidden = fallbackShown;
@@ -187,11 +208,16 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     readNotice.render(state);
     composer.render(state);
 
-    // The first read's turns are history: they sort before every activity row.
+    // The first read's unstamped turns are history: they sort before every step message.
     const stamped = clock.stamp(state.turns, historyTaken ? Date.now() : Number.NEGATIVE_INFINITY);
     if (state.mode === "thread" || state.mode === "empty") historyTaken = true;
-    const chat = buildChatThread(buildChatStream(stamped, activity.recent), activity.display?.working === true);
-    const anything = thread.render(chat, liveLineModel(activity.display, state.sending), (turn) => turnControls(turn, state));
+    const working = activity.display?.working === true ? activity.display.activityId : null;
+    const anything = thread.render(
+      buildChatStream(stamped, activity.events),
+      liveLineModel(activity.display, state.sending, answerIn !== null),
+      (turn) => turnControls(turn, state),
+      working
+    );
     empty.update(emptyStateModel(state.mode, shownTarget), anything);
     turnOpeners = turnOpeners.filter((opener) => opener.element.isConnected);
     follower.contentChanged();
@@ -279,4 +305,12 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       return () => targetListeners.delete(listener);
     }
   };
+}
+
+/** True when `a` and `b` are the same target: the same thread, under the same name, about the same work. */
+function sameTarget(a: ChatTarget, b: ChatTarget): boolean {
+  if (!sameThread(a, b)) return false;
+  if (a.kind === "automation" && b.kind === "automation") return a.name === b.name;
+  if (a.kind === "question" && b.kind === "question") return a.activityId === b.activityId && a.title === b.title;
+  return true;
 }

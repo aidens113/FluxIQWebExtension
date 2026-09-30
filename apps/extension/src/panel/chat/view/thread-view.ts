@@ -1,17 +1,18 @@
-// The chat's message list: every turn, every stand-alone fold of work, and
-// the live line last. Reconciled, never rebuilt: each turn, fold and the
-// live line keep their element for as long as they exist, and move only when
-// they are out of place (`placeChildren`), so nothing on screen flickers,
-// loses focus or closes while pushes and polls arrive.
+// The chat's message list: every turn and every one of FluxIQ's step
+// messages, in time order, and the live line last. Reconciled, never rebuilt:
+// each turn, step message and the live line keep their element for as long
+// as they exist, and move only when they are out of place (`placeChildren`),
+// so nothing on screen flickers, loses focus or jumps while pushes and polls
+// arrive. A step message is updated in place as its action starts and ends.
 
 import { createElement } from "../../dom";
 import type { AskControlsContext, CoreTurn } from "../conversation";
-import type { ChatThread, WorkFold } from "../stream";
+import type { ChatStream } from "../stream";
 import { createLiveLine } from "./live-line";
 import type { LiveLineModel } from "./live-line-model";
 import { createMessageView, type MessageView } from "./message-view";
 import { placeChildren } from "./place-children";
-import { createWorkDisclosure, type WorkDisclosure } from "./work-disclosure";
+import { createStepMessageView, type StepMessageView } from "./step-message-view";
 
 /** What a turn's controls are given, and what makes them change. */
 export type TurnControls = { ask: AskControlsContext; state: string };
@@ -19,72 +20,57 @@ export type TurnControls = { ask: AskControlsContext; state: string };
 /** The mounted list. */
 export type ThreadView = {
   readonly element: HTMLElement;
-  /** Shows `thread`, and `live` as the live line (null hides it). Answers whether anything shows. */
-  render(thread: ChatThread, live: LiveLineModel | null, controls: (turn: CoreTurn) => TurnControls): boolean;
-  /** Forgets every turn and fold, for a thread that replaces this one. */
+  /**
+   * Shows `stream`, and `live` as the live line (null hides it). `working` is
+   * the unit of work still running, if any, so only its newest action says it
+   * is under way. Answers whether anything shows.
+   */
+  render(stream: ChatStream, live: LiveLineModel | null, controls: (turn: CoreTurn) => TurnControls, working?: string | null): boolean;
+  /** Forgets every turn and step message, for a thread that replaces this one. */
   clear(): void;
 };
 
-/** Creates the list; `onToggle` hears the person open or close a fold. */
-export function createThreadView(onToggle: () => void): ThreadView {
-  const liveLine = createLiveLine();
+/** Creates the list; `onLiveAction` hears the live line's button. */
+export function createThreadView(onLiveAction: () => void = () => undefined): ThreadView {
+  const liveLine = createLiveLine(onLiveAction);
   const element = createElement("ol", { className: "chat-stream", attrs: { "aria-label": "Conversation with FluxIQ" } }, [liveLine.element]);
-  const messages = new Map<string, MessageView>();
-  const folds = new Map<string, WorkDisclosure>();
-  const standing = new Map<string, HTMLElement>();
-
-  function fold(work: WorkFold | null, working: boolean, seen: Set<string>): HTMLElement[] {
-    if (work === null) return [];
-    seen.add(work.key);
-    let made = folds.get(work.key);
-    if (made === undefined) {
-      made = createWorkDisclosure(onToggle);
-      folds.set(work.key, made);
-    }
-    made.update(work, working);
-    return [made.element];
-  }
+  const turns = new Map<string, MessageView>();
+  const steps = new Map<string, StepMessageView>();
 
   return {
     element,
-    render(thread, live, controls) {
-      const seenFolds = new Set<string>();
-      const seenEntries = new Set<string>();
-      const nodes = thread.entries.map((entry) => {
-        seenEntries.add(entry.key);
-        if (entry.kind === "work") {
-          let holder = standing.get(entry.key);
-          if (holder === undefined) {
-            holder = createElement("li", { className: "chat-entry chat-work-entry" });
-            standing.set(entry.key, holder);
+    render(stream, live, controls, working = null) {
+      const seen = new Set<string>();
+      const nodes = stream.items.map((item) => {
+        seen.add(item.key);
+        if (item.kind === "step") {
+          let view = steps.get(item.key);
+          if (view === undefined) {
+            view = createStepMessageView();
+            steps.set(item.key, view);
           }
-          placeChildren(holder, fold(entry.fold, false, seenFolds));
-          return holder;
+          view.update(item.message, working !== null && item.message.activityId === working);
+          return view.element;
         }
-        let view = messages.get(entry.key);
+        let view = turns.get(item.key);
         if (view === undefined) {
-          view = createMessageView(entry.turn.author);
-          messages.set(entry.key, view);
+          view = createMessageView(item.turn.author);
+          turns.set(item.key, view);
         }
-        const given = controls(entry.turn);
-        view.update(entry.turn, signature(entry.turn, given.state), given.ask);
-        placeChildren(view.workSlot, fold(entry.work, false, seenFolds));
+        const given = controls(item.turn);
+        view.update(item.turn, signature(item.turn, given.state), given.ask);
         return view.element;
       });
       liveLine.update(live);
-      placeChildren(liveLine.workSlot, live === null ? [] : fold(thread.live, true, seenFolds));
       placeChildren(element, [...nodes, liveLine.element]);
-      for (const key of [...messages.keys()]) if (!seenEntries.has(key)) messages.delete(key);
-      for (const key of [...standing.keys()]) if (!seenEntries.has(key)) standing.delete(key);
-      for (const key of [...folds.keys()]) if (!seenFolds.has(key)) folds.delete(key);
+      for (const key of [...turns.keys()]) if (!seen.has(key)) turns.delete(key);
+      for (const key of [...steps.keys()]) if (!seen.has(key)) steps.delete(key);
       return nodes.length > 0 || live !== null;
     },
     clear() {
-      messages.clear();
-      folds.clear();
-      standing.clear();
+      turns.clear();
+      steps.clear();
       liveLine.update(null);
-      placeChildren(liveLine.workSlot, []);
       placeChildren(element, [liveLine.element]);
     }
   };

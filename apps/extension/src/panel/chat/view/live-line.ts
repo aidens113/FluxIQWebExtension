@@ -1,9 +1,11 @@
 // The live line: the last entry of the chat while FluxIQ works, a pulsing
-// dot, the headline, the step and Core's latest sentence, with the work so
-// far folded under it. It is one element for the chat's whole life, updated
+// dot, the headline, the step and Core's latest sentence ("Thinking about the
+// next step" while Core decides). The steps themselves are messages above it.
+// It is one element for the chat's whole life, updated
 // in place and hidden between units of work, so the status never remounts or
 // flickers; a turn that arrives is placed before it, which is how the turn
-// takes its place.
+// takes its place. While the work waits on a question held in another thread,
+// one button under the words opens that thread (`onAction`).
 
 import { createElement } from "../../dom";
 import type { LiveLineModel } from "./live-line-model";
@@ -11,30 +13,28 @@ import type { LiveLineModel } from "./live-line-model";
 /** The mounted live line. */
 export type LiveLine = {
   readonly element: HTMLElement;
-  /** Where the work under way is folded. */
-  readonly workSlot: HTMLElement;
   update(model: LiveLineModel | null): void;
 };
 
-/** Creates the live line, hidden. */
-export function createLiveLine(): LiveLine {
+/** Creates the live line, hidden; `onAction` hears its button. */
+export function createLiveLine(onAction: () => void = () => undefined): LiveLine {
   const headline = createElement("span", { className: "chat-live-headline" });
   const step = createElement("span", { className: "chat-live-step" });
   const detail = createElement("span", { className: "chat-live-detail" });
-  const workSlot = createElement("div", { className: "chat-work-slot" });
+  const action = createElement("button", { className: "chat-live-action", hidden: true, attrs: { type: "button" } });
+  action.addEventListener("click", () => onAction());
   const element = createElement("li", { className: "chat-entry chat-live", hidden: true, attrs: { "aria-live": "polite", "aria-atomic": "false" } }, [
     createElement("div", { className: "chat-live-status" }, [
       createElement("span", { className: "chat-live-dot", attrs: { "aria-hidden": "true" } }),
       createElement("div", { className: "chat-live-copy" }, [
         createElement("div", { className: "chat-live-head" }, [headline, step]),
-        detail
+        detail,
+        action
       ])
-    ]),
-    workSlot
+    ])
   ]);
   return {
     element,
-    workSlot,
     update(model) {
       const hidden = model === null;
       if (element.hidden !== hidden) element.hidden = hidden;
@@ -46,6 +46,8 @@ export function createLiveLine(): LiveLine {
       setText(detail, model.detail);
       if (step.hidden !== (model.step === "")) step.hidden = model.step === "";
       if (detail.hidden !== (model.detail === "")) detail.hidden = model.detail === "";
+      setText(action, model.action);
+      if (action.hidden !== (model.action === "")) action.hidden = model.action === "";
     }
   };
 }

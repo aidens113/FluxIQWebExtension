@@ -16,6 +16,11 @@
 //               is the same thread here. Every message also says the Flow is on
 //               screen (`onScreen.flowId`), which is what makes Core read "run
 //               it" or "change the price column" as about this automation.
+//   question    the open thread a build or a run asked the person in: the
+//               target's own subject (`flow` and the Flow's id for a build,
+//               `run` and the run's id for a run), which is where Core's
+//               parking port writes the ask. A message there says which Flow
+//               or run is on screen.
 //
 // The background relay passes these fields to Core unchanged, apart from the
 // project thread's subject id (`background/panel/conversation-relay.ts`).
@@ -38,6 +43,9 @@ export function threadListRequest(target: ChatTarget): PanelMessage {
   if (target.kind === "automation") {
     request.subjectKind = FLOW_SUBJECT;
     request.subjectId = target.flowId;
+  } else if (target.kind === "question") {
+    request.subjectKind = target.subjectKind;
+    request.subjectId = target.subjectId;
   } else {
     request.subjectKind = PROJECT_SUBJECT;
   }
@@ -53,6 +61,12 @@ export function threadSendRequest(target: ChatTarget, shown: ShownThread | undef
       request.subjectKind = FLOW_SUBJECT;
       request.subjectId = target.flowId;
       request.title = target.name;
+    }
+  } else if (target.kind === "question") {
+    request.onScreen = target.subjectKind === FLOW_SUBJECT ? { flowId: target.subjectId } : { runId: target.subjectId };
+    if (shown === undefined) {
+      request.subjectKind = target.subjectKind;
+      request.subjectId = target.subjectId;
     }
   }
   return request;

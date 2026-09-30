@@ -42,6 +42,7 @@
 import { RUNTIME_MESSAGES } from "../../../shared/constants";
 import type { PanelResult, PanelStore } from "../../state";
 import type { ChatTarget } from "../target";
+import { sameThread } from "../same-thread";
 import { parseConversation, type CoreTurn } from "./core-thread";
 import { READ_RETRY, readFailureNotice, UNREADABLE_CODE, type ConversationClock, type ThreadReadStep } from "./read";
 import { threadListRequest, threadSendRequest } from "./thread-requests";
@@ -334,9 +335,4 @@ export function createConversationController(request: PanelStore["request"], onC
     }
   };
   return controller;
-}
-
-function sameThread(a: ChatTarget, b: ChatTarget): boolean {
-  if (a.kind === "latest" || b.kind === "latest") return a.kind === b.kind;
-  return a.flowId === b.flowId;
 }

@@ -4,6 +4,10 @@
 // "Record a new automation" (audit F2).
 //
 // "Start recording" keeps its exact name: the Lab presses it by that name.
+//
+// `working` is the shell's held "FluxIQ is working" (`panel/shell/working-hold.ts`),
+// never `status.runtime.state`: that flips for every internal page read, so
+// keying on it made the button flicker during a build.
 
 import type { ExtensionStatus } from "../../shared/protocol";
 
@@ -16,12 +20,12 @@ export type RecordControl = {
   reason?: string;
 };
 
-/** "Start recording" for `status`. */
-export function recordControl(status: ExtensionStatus): RecordControl {
+/** "Start recording" for `status`, while FluxIQ is `working` or not. */
+export function recordControl(status: ExtensionStatus, working: boolean): RecordControl {
   if (status.recordingState === "recording") return { hidden: true, disabled: true };
   const reason = status.connectionState !== "connected" ? "Connect to FluxIQ to record."
     : status.unsupportedPage !== undefined ? "FluxIQ can't record this page."
-      : status.runtime?.state === "running" ? "Wait for FluxIQ to finish."
+      : working ? "Wait for FluxIQ to finish."
         : undefined;
   return reason === undefined ? { hidden: false, disabled: false } : { hidden: false, disabled: true, reason };
 }

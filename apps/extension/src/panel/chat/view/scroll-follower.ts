@@ -19,7 +19,7 @@ export type ScrollFollower = {
   contentChanged(): void;
   /** Goes to the bottom and follows from there (a send, or "Jump to latest"). */
   followNow(): void;
-  /** Re-reads the position after something the person did changed the height (an opened fold). */
+  /** Re-reads the position after something the person did changed the height. */
   recheck(): void;
   following(): boolean;
 };

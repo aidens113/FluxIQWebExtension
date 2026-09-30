@@ -1,12 +1,13 @@
-// The message list is reconciled, not rebuilt: turns keep their elements
-// across re-reads, the person's turn is a bubble and FluxIQ's is formatted,
-// and a fold the person opened stays the same open element when it moves
-// from the live line to the turn that answered.
+// The message list is reconciled, not rebuilt: turns and step messages keep
+// their elements across re-reads, the person's turn is a bubble and FluxIQ's
+// is formatted, every step is its own message with its reason (no folds, no
+// counts), and a step message is updated in place as its action ends.
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ClientGatewayActivity } from "../../../../shared/activity/index";
 import type { AskControlsContext, CoreTurn } from "../../conversation";
-import { buildChatStream, buildChatThread } from "../../stream";
+import { buildChatStream } from "../../stream";
 import { activityEvent, eventTime } from "../../tests/activity-fixture";
 import { fake, withFakeDocument } from "../../tests/fake-dom";
 import { createThreadView, type TurnControls } from "../thread-view";
@@ -18,34 +19,39 @@ function turn(turnId: string, author: string, text = turnId): CoreTurn {
   return { turnId, author, text, ask: null, attachment: false };
 }
 
-const LIVE = { headline: "Building your Flow", detail: "Reading the page", step: "", waiting: false };
+const QUOTE = "Clicking “Get a free quote”";
+const WHY = "The quote form is behind this button, so I'm opening it.";
+const thought = (sequence: number) => activityEvent(sequence, { phase: "exploring", detail: { kind: "thought", title: QUOTE, text: WHY, status: "succeeded" } });
+const click = (sequence: number, status: "started" | "succeeded" | "failed") => activityEvent(sequence, { phase: "exploring", detail: { kind: "tool", title: QUOTE, ref: "core.run_node", status } });
 
-test("the person's turn is a bubble; FluxIQ's is formatted text with its work folded above", async () => {
+test("the person's turn is a bubble; each step is FluxIQ's own message with its reason; the answer is formatted text", async () => {
   await withFakeDocument(() => {
-    const view = createThreadView(() => undefined);
-    const recent = [activityEvent(1, { detail: { kind: "tool", title: "Read the page", ref: "web.dom.extract", status: "succeeded" } })];
-    const items = buildChatStream([
-      { turn: turn("t1", "person", "Find the cheapest lamp"), at: eventTime(0) },
-      { turn: turn("t2", "automation", "Found it:\n- **Lamp** for `$12`"), at: eventTime(5) }
-    ], recent);
-    view.render(buildChatThread(items, false), null, controls);
+    const view = createThreadView();
+    const stream = buildChatStream([
+      { turn: turn("t1", "person", "Get me a quote"), at: eventTime(0) },
+      { turn: turn("t2", "automation", "Found it:\n- **Quote** for `$12`"), at: eventTime(5) }
+    ], [thought(1), click(2, "started"), click(3, "succeeded")]);
+    view.render(stream, null, controls);
     const list = fake(view.element);
-    const [person, answer, live] = list.children;
+    const [person, step, answer, live] = list.children;
     assert.equal(person!.getAttribute("data-author"), "person");
-    assert.equal(person!.byClass("chat-bubble")[0]!.textContent, "Find the cheapest lamp");
+    assert.equal(person!.byClass("chat-bubble")[0]!.textContent, "Get me a quote");
+    assert.equal(step!.getAttribute("data-kind"), "decision");
+    assert.equal(step!.byClass("chat-step-title")[0]!.textContent, QUOTE);
+    assert.equal(step!.byClass("chat-step-text")[0]!.textContent, ` — ${WHY}`);
+    assert.equal(step!.byClass("chat-step-outcome")[0]!.hidden, false);
+    assert.equal(step!.byClass("chat-step-outcome-label")[0]!.textContent, "Done");
     assert.equal(answer!.getAttribute("data-author"), "fluxiq");
     assert.deepEqual(answer!.byClass("chat-answer")[0]!.children.map((node) => node.tagName), ["P", "UL"]);
-    assert.equal(answer!.byClass("chat-work-label")[0]!.textContent, "Worked for 1s · 1 step");
-    assert.equal(answer!.byClass("chat-step-title")[0]!.textContent, "Read the page");
-    assert.equal(answer!.byClass("chat-step-ref").length, 0, "no tool id is shown");
+    assert.equal(list.byClass("chat-work").length + list.byClass("chat-work-label").length, 0, "no fold, no count");
     assert.equal(live!.hidden, true, "no live line when nothing is working");
   });
 });
 
 test("an equal turn from a re-read keeps its element; a changed one keeps it too, with new words", async () => {
   await withFakeDocument(() => {
-    const view = createThreadView(() => undefined);
-    const render = (text: string) => view.render(buildChatThread(buildChatStream([{ turn: turn("t1", "automation", text), at: eventTime(0) }], []), false), null, controls);
+    const view = createThreadView();
+    const render = (text: string) => view.render(buildChatStream([{ turn: turn("t1", "automation", text), at: eventTime(0) }], []), null, controls);
     render("Working on it");
     const first = fake(view.element).children[0]!;
     const words = first.byClass("chat-p")[0]!;
@@ -58,28 +64,29 @@ test("an equal turn from a re-read keeps its element; a changed one keeps it too
   });
 });
 
-test("an opened fold under the live line is the same open element under the turn that answered", async () => {
+test("a step message is the same element from its decision to its outcome and after the answer arrives; nothing reorders", async () => {
   await withFakeDocument(() => {
-    const view = createThreadView(() => undefined);
-    const recent = [
-      activityEvent(1, { detail: { kind: "tool", title: "Open page", ref: "a", status: "succeeded" } }),
-      activityEvent(2, { detail: { kind: "tool", title: "Click", ref: "b", status: "started" } })
-    ];
+    const view = createThreadView();
     const ask = { turn: turn("t1", "person"), at: eventTime(0) };
-    view.render(buildChatThread(buildChatStream([ask], recent), true), LIVE, controls);
+    const events: ClientGatewayActivity[] = [thought(1), click(2, "started")];
+    const live = { headline: "Building your Flow", detail: "Thinking about the next step", step: "", waiting: false, action: "" };
+    view.render(buildChatStream([ask], events), live, controls, "build-1");
     const list = fake(view.element);
-    const live = list.children[list.children.length - 1]!;
-    const fold = live.byClass("chat-work")[0]!;
-    assert.equal(live.hidden, false);
-    assert.equal(fold.byClass("chat-work-label")[0]!.textContent, "2 steps so far");
-    fold.open = true;
+    const step = list.children[1]!;
+    const nodes = [step, ...step.descendants()];
+    assert.equal(step.byClass("chat-step-outcome-label")[0]!.textContent, "Working on it");
+    assert.equal(list.children[2]!.hidden, false, "the live line is last");
 
-    view.render(buildChatThread(buildChatStream([ask, { turn: turn("t2", "automation", "All done"), at: eventTime(3) }], recent), false), null, controls);
-    const answer = list.children[1]!;
-    assert.equal(answer.byClass("chat-work")[0], fold);
-    assert.equal(fold.open, true);
-    assert.equal(fold.byClass("chat-work-label")[0]!.textContent, "Worked for 1s · 2 steps");
-    assert.equal(list.children[list.children.length - 1]!.hidden, true);
-    assert.equal(list.children.length, 3);
+    events.push(click(3, "failed"));
+    view.render(buildChatStream([ask], events), live, controls, "build-1");
+    assert.equal(list.children[1], step);
+    assert.deepEqual([step, ...step.descendants()], nodes, "updated in place, nothing remounted");
+    assert.equal(step.getAttribute("data-outcome"), "failed");
+    assert.equal(step.byClass("chat-step-outcome-label")[0]!.textContent, "Didn't work");
+
+    view.render(buildChatStream([ask, { turn: turn("t2", "automation", "All done"), at: eventTime(4) }], events), null, controls);
+    assert.deepEqual(list.children.slice(0, 3).map((child) => child.getAttribute("data-author") ?? child.getAttribute("data-kind")), ["person", "decision", "fluxiq"]);
+    assert.equal(list.children[1], step, "the message stays once the work settled");
+    assert.equal(list.children[3]!.hidden, true);
   });
 });

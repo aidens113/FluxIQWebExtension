@@ -11,6 +11,8 @@
 //
 // "Extract Data From This Page" keeps its exact name: the Lab presses it by that
 // name (packages/test-runner/src/ui-e2e/journeys/extraction.ts).
+//
+// `working` is the shell's held "FluxIQ is working", as in `record-control.ts`.
 
 import type { ExtensionStatus } from "../../shared/protocol";
 
@@ -23,12 +25,12 @@ export type ExtractControl = {
   line: string;
 };
 
-/** The extraction entry for `status`. */
-export function extractControl(status: ExtensionStatus): ExtractControl {
+/** The extraction entry for `status`, while FluxIQ is `working` or not. */
+export function extractControl(status: ExtensionStatus, working: boolean): ExtractControl {
   const recording = status.recordingState === "recording";
   const reason = status.connectionState !== "connected" ? "Connect to FluxIQ to extract data."
     : status.unsupportedPage !== undefined ? "FluxIQ can't read this page."
-      : !recording && status.runtime?.state === "running" ? "Wait for FluxIQ to finish."
+      : !recording && working ? "Wait for FluxIQ to finish."
         : undefined;
   if (reason !== undefined) return { disabled: true, startsRecording: false, line: reason };
   return recording

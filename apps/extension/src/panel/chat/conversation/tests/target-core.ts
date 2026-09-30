@@ -3,13 +3,15 @@
 // otherwise answers the most recently touched thread (a `project` subject with
 // no id is the project's own thread, the id the relay fills in); a first message with
 // a subject continues that subject's open thread or opens one, as Core's
-// `open-conversation` does. It records every message it was sent, and can
-// hold back its answers until a test lets them go.
+// `open-conversation` does. A turn may carry a question (`ask`, Core's shape);
+// an answer to it settles it, as Core's `answer-ask` does. It records every
+// message it was sent, and can hold back its answers until a test lets them go.
 
 import { RUNTIME_MESSAGES } from "../../../../shared/constants";
 import type { PanelMessage, PanelResult } from "../../../state";
 
-type Thread = { conversationId: string; subjectKind: string; subjectId: string; revision: number; touched: number; turns: Array<{ turnId: string; author: string; text: string }> };
+type FakeAsk = { askId: string; kind: string; status: string; options?: Array<{ id: string; label: string }>; answer?: { kind: string; value: string | null } };
+type Thread = { conversationId: string; subjectKind: string; subjectId: string; revision: number; touched: number; turns: Array<{ turnId: string; author: string; text: string; ask?: FakeAsk; createdAt?: number }> };
 
 export type TargetCore = {
   sent: PanelMessage[];
@@ -56,7 +58,7 @@ export function targetCore(threads: Array<Omit<Thread, "revision" | "touched">>)
     if (message.type === RUNTIME_MESSAGES.panelConversationRead) {
       const thread = core.thread(String(message.conversationId));
       if (!thread) return { conversation: null };
-      return { conversation: { conversation: record(thread), turns: thread.turns.map((turn) => ({ ...turn, attachment: null, ask: null })), hasMore: false } };
+      return { conversation: { conversation: record(thread), turns: thread.turns.map((turn) => ({ ...turn, attachment: null, ask: turn.ask ?? null })), hasMore: false } };
     }
     if (message.type === RUNTIME_MESSAGES.panelConversationSend) {
       let thread = typeof message.conversationId === "string" ? core.thread(message.conversationId) : undefined;
@@ -75,6 +77,15 @@ export function targetCore(threads: Array<Omit<Thread, "revision" | "touched">>)
       thread.revision += 1;
       thread.touched = clock += 1;
       return opened ? { conversation: record(thread) } : {};
+    }
+    if (message.type === RUNTIME_MESSAGES.panelConversationAnswer) {
+      for (const thread of core.threads) {
+        const turn = thread.turns.find((candidate) => candidate.ask?.askId === message.askId);
+        if (!turn?.ask) continue;
+        turn.ask = { ...turn.ask, status: "answered", answer: { kind: String(message.kind), value: typeof message.value === "string" ? message.value : null } };
+        thread.revision += 1;
+        return { ask: turn.ask };
+      }
     }
     return {};
   }

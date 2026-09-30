@@ -52,16 +52,18 @@ export type AutomationsState = {
   readError?: { sentence: string; detail?: string | undefined } | undefined;
   /** A run is in flight from this panel, so every Run waits. */
   runInFlight: boolean;
-  /** FluxIQ is running something already (`status.runtime`), so Run waits. */
-  runtimeBusy: boolean;
+  /** FluxIQ is working already (the shell's held signal, not `status.runtime`), so Run waits. */
+  working: boolean;
 };
 
 export type ExportFormat = "csv" | "json";
 
 export type AutomationsController = {
   state(): AutomationsState;
-  /** Reads connection and runtime from the status. Answers true when it just became connected. */
+  /** Reads the connection from the status. Answers true when it just became connected. */
   observe(status: ExtensionStatus): boolean;
+  /** Whether FluxIQ is working, held steady by the shell; `status.runtime` flips for every page read, so it is not read here. */
+  setWorking(working: boolean): void;
   /** Reads the list, then the opened automation's run detail when it still needs it. Does nothing offline or after `fallback`. */
   refresh(): Promise<void>;
   /** The automation the person opened, whose last run's detail is read; undefined for none. */
@@ -81,7 +83,7 @@ export function createAutomationsController(
   hooks: { onChange(): void; download: SaveFile }
 ): AutomationsController {
   let connected = false;
-  let runtimeBusy = false;
+  let working = false;
   let listUnsupported = false;
   let runUnsupported = false;
   let detailUnsupported = false;
@@ -199,16 +201,18 @@ export function createAutomationsController(
       rows: (rows ?? []).map(rowView),
       readError: listUnsupported ? undefined : readError,
       runInFlight: runningFlowId !== undefined,
-      runtimeBusy
+      working
     }),
     observe(status) {
       const was = connected;
-      const busy = status.runtime?.state === "running";
       connected = status.connectionState === "connected";
-      const changed = was !== connected || busy !== runtimeBusy;
-      runtimeBusy = busy;
-      if (changed) hooks.onChange();
+      if (was !== connected) hooks.onChange();
       return connected && !was;
+    },
+    setWorking(next) {
+      if (next === working) return;
+      working = next;
+      hooks.onChange();
     },
     refresh,
     async focus(flowId) {
@@ -216,7 +220,7 @@ export function createAutomationsController(
       if (connected && !listUnsupported) await loadFocusedDetail();
     },
     async run(flowId) {
-      if (runningFlowId !== undefined || runtimeBusy || !connected) return;
+      if (runningFlowId !== undefined || working || !connected) return;
       if (runUnsupported) {
         notices.set(flowId, { sentence: "Run it in FluxIQ.", openFluxIQ: true });
         hooks.onChange();

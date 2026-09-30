@@ -6,6 +6,7 @@ export { ACTIVITY_FAN_OUT_INTERVAL_MS, FanOutGate } from "./fan-out-gate";
 export { isActivityOverlayPreference } from "./is-activity-overlay-preference";
 export { OverlayTarget, type OverlayTabCandidate, type OverlayTargetDeps } from "./overlay-target";
 export { overlayPreferenceStorage } from "./overlay-preference-storage";
+export { UnitHistory } from "./unit-history";
 export { UnitSituation, type UnitState } from "./unit-situation";
 // The wording is shared with the panel's chat rows, so it lives in `shared/activity/`.
 export { activityWording, type ActivityWording } from "../../shared/activity/index";

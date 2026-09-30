@@ -128,6 +128,7 @@ function isActivityState(value: unknown): value is ExtensionActivityState {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Partial<ExtensionActivityState>;
   return Array.isArray(candidate.recent)
+    && (candidate.history === undefined || Array.isArray(candidate.history))
     && (candidate.current === null || (typeof candidate.current === "object" && candidate.current !== undefined))
     && (candidate.overlay === "expanded" || candidate.overlay === "collapsed" || candidate.overlay === "hidden")
     && typeof candidate.live === "boolean";
