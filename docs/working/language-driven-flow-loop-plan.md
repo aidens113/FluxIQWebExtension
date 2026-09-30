@@ -26,6 +26,7 @@ and its own `fxwork/<id>` tree:
 | t188 node limits | `lead` | no 16-node cap; 100 nodes per Subflow by default, set in the UI |
 | t189 decision context | `lead-xhigh` | why the model repeats itself, and the context fix |
 | t185 live activity + chat | `lead` | the on-page overlay and the extension chat |
+| t190 instructed acts | `lead` | bigbox run 6 causes 1 (domain half), 3, 4, 5: reachability/, instructed-acts/, click across a reload |
 
 **Machine rules for every lane (binding).**
 - **Lab slots** (`C:/Users/osrs_/FluxStuff/lab-slots/`): `slot-1` is the only live run, held by t174. `slot-2` is one
