@@ -1,0 +1,75 @@
+/* The getting-started screen (panel/getting-started): a centred column of
+   numbered steps, like a tutorial. Colours come from panel/theme/tokens.css;
+   buttons, notices and .link-button from panel/shell/shell.css. */
+
+.start-screen { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 28px var(--space-4) var(--space-4); }
+.start-column { display: grid; gap: var(--space-3); width: 100%; max-width: 420px; margin: 0 auto; }
+.start-brand {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 800;
+}
+.start-title { font-size: 20px; line-height: 1.25; font-weight: 750; }
+.start-line { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+.start-steps { display: grid; gap: 0; margin: var(--space-2) 0 0; padding: 0; list-style: none; }
+.start-step { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--space-3); padding-bottom: var(--space-4); }
+.start-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 30px;
+  bottom: 2px;
+  left: 13px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--divider);
+}
+.start-step[data-state="done"]:not(:last-child)::before { background: var(--success); }
+.start-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--divider);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.start-step[data-state="done"] .start-mark { border-color: var(--success); background: var(--success); color: #ffffff; }
+.start-step[data-state="current"] .start-mark,
+.start-step[data-state="waiting"] .start-mark { border-color: var(--accent); color: var(--accent-text); }
+.start-step[data-state="problem"] .start-mark { border-color: var(--danger); color: var(--danger-text); }
+
+.start-step-body { display: grid; gap: 6px; min-width: 0; padding-top: 3px; }
+.start-step-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--space-2); }
+.start-step-title { font-size: 14px; font-weight: 700; }
+.start-step[data-state="done"] .start-step-title { color: var(--muted); font-weight: 600; }
+.start-state { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.start-step[data-state="done"] .start-state { color: var(--success); }
+.start-step[data-state="problem"] .start-state { color: var(--danger-text); }
+.start-step[data-state="waiting"] .start-state { color: var(--accent-text); }
+.start-step-line { color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.start-step[data-state="done"] .start-actions,
+.start-step[data-state="done"] .start-approve { display: none; }
+
+.start-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.start-approve { display: grid; gap: var(--space-2); }
+.pairing-code {
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  padding: 10px 8px;
+  font-size: 28px;
+  font-weight: 850;
+  letter-spacing: 5px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

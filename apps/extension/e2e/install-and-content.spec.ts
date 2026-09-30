@@ -11,60 +11,50 @@ test("loads the current MV3 artifact and its extension page", async ({ extension
   expect(runtimeManifest.name).toBe(metadata.name);
   expect(runtimeManifest.version).toBe(metadata.version);
   await expect(extensionPage).toHaveURL(`chrome-extension://${metadata.id}/sidepanel/index.html`);
-  // The shared panel shell's header (panel/shell/header.ts). Exact, because the
-  // status card's sentences also contain "FluxIQ".
+  // The shared panel's top bar (panel/shell/top-bar.ts). Exact, because the
+  // getting-started heading also contains "FluxIQ".
   await expect(extensionPage.getByRole("heading", { name: "FluxIQ", exact: true })).toBeVisible();
-  await expect(extensionPage.getByRole("radiogroup", { name: "View" })).toBeVisible();
+  await expect(extensionPage.getByRole("tablist", { name: "FluxIQ" })).toBeVisible();
   await expect(extensionPage.getByRole("button", { name: "Settings" })).toBeVisible();
 });
 
-test("mounts the shared panel: status card, record control, and a remembered view switch", async ({ extensionSession }) => {
+test("mounts the shared panel: getting-started steps until connected, and settings in place", async ({ extensionSession }) => {
   const page = extensionSession.extensionPage;
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.reload();
 
-  // A fresh profile has never paired, so the status card asks to connect and
-  // the record control says why it is disabled instead of being silently off.
-  await expect(page.getByText("FluxIQ isn't connected", { exact: true })).toBeVisible();
+  // A fresh profile has never paired, so numbered steps replace the chat, with
+  // Connect as the button the Lab presses; the chat and the record button wait.
+  const start = page.getByRole("region", { name: "Get started" });
+  await expect(start).toBeVisible();
+  await expect(start.getByRole("heading", { name: "Get started with FluxIQ" })).toBeVisible();
   await expect(page.getByText("Connect this browser so FluxIQ can work in it.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeEnabled();
-  const record = page.getByRole("button", { name: "Start recording" });
-  await expect(record).toBeDisabled();
-  await expect(page.getByText("Connect to FluxIQ to record.", { exact: true })).toBeVisible();
-  // Simple Mode's start card offers extraction whether or not a recording runs
-  // (it starts one when pressed); unconnected, it says why it is off. The sheet is built but closed.
-  await expect(page.getByRole("button", { name: "Extract Data From This Page", exact: true })).toBeDisabled();
-  await expect(page.getByText("Connect to FluxIQ to extract data.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tabpanel", { name: "Chat" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Start recording" })).toBeHidden();
   await expect(page.locator("#extractionPanel")).toBeHidden();
-  // The first-run checklist (plan 4.2) and the three ways in (plan 3.1).
-  await expect(page.getByRole("region", { name: "Get set up" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Describe an automation", exact: true })).toBeVisible();
-  // Recent automations (plan 3.1, 3.9) says why it is empty rather than showing nothing;
-  // the recording steps and review appear only around a recording.
-  await expect(page.getByText("Connect to FluxIQ to see your automations.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Recorded steps" })).toBeHidden();
-  await expect(page.getByRole("region", { name: "Recording review" })).toBeHidden();
+  // Picking a tab while not connected keeps the steps on screen.
+  await page.getByRole("tab", { name: "Automations" }).click();
+  await expect(start).toBeVisible();
 
-  const view = page.getByRole("radiogroup", { name: "View" });
-  await expect(view.getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");
+  // The gear opens settings in place, carrying the labels the Lab's session
+  // setup fills (packages/test-runner/src/demo-workspace/browser-session.ts).
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(view.getByRole("radio", { name: "Advanced" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("region", { name: "Advanced" })).toBeVisible();
-  await expect(record).toBeHidden();
-  // The gear opens Advanced on its Connection tab, carrying the settings under the
-  // labels the Lab's session setup fills (packages/test-runner/src/demo-workspace/browser-session.ts).
+  await expect(page.getByRole("region", { name: "Settings" })).toBeVisible();
+  await expect(start).toBeHidden();
   for (const label of ["FluxIQ connection address", "FluxIQ web address", "Reconnect automatically", "Record page changes", "Record what I type", "Record page snapshots"]) {
     await expect(page.getByLabel(label, { exact: true })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Forget this pairing", exact: true })).toBeVisible();
 
-  // The choice survives closing and reopening the panel, and Simple returns to it.
-  await page.reload();
-  await expect(page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Advanced" })).toHaveAttribute("aria-checked", "true");
-  await page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Simple" }).click();
-  await expect(page.getByRole("radiogroup", { name: "View" }).getByRole("radio", { name: "Simple" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("button", { name: "Start recording" })).toBeVisible();
+  // Closing settings, or picking a tab, goes back to the steps.
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(start).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Chat" }).click();
+  await expect(start).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

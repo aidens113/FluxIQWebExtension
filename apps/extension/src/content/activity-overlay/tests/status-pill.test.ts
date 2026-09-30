@@ -20,7 +20,7 @@ function view(overrides: Partial<ActivityOverlayView> = {}): ActivityOverlayView
     headline: "Building your Flow",
     detail: "Deciding the next step",
     step: "",
-    settled: false,
+    fades: false,
     ...overrides
   };
 }
@@ -67,7 +67,7 @@ test("an unchanged update writes no text at all", () => {
   });
 });
 
-test("each mode has a fixed box, so no text can resize the pill", () => {
+test("each mode has a fixed box, so no text can resize the pill, and the text is sized to be read at a glance", () => {
   withFakeDom(() => {
     const surface = new StatusPill();
     surface.update(view({ detail: "short" }));
@@ -75,9 +75,13 @@ test("each mode has a fixed box, so no text can resize the pill", () => {
     const expanded = [surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")];
     surface.update(view({ detail: "a much longer sentence ".repeat(8) }));
     assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], expanded);
-    assert.deepEqual(expanded, ["300px", "54px"]);
+    assert.deepEqual(expanded, ["384px", "66px"]);
+    const fonts = hostOf(surface).descendants().map((node) => node.style.getPropertyValue("font")).filter(Boolean);
+    assert.ok(fonts.some((font) => font.startsWith("600 14px")), "a 14-pixel headline");
+    assert.ok(fonts.some((font) => font.startsWith("400 13px")), "a 13-pixel detail");
+    assert.ok(fonts.every((font) => Number(/ (\d+(?:\.\d+)?)px/u.exec(font)?.[1]) >= 12.5), "no text under 12.5 pixels");
     surface.update(view({ mode: "collapsed" }));
-    assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["196px", "32px"]);
+    assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["300px", "36px"]);
     assert.equal(hostOf(surface).shadow!.children[0], surfaceNode, "switching mode reuses the pill");
   });
 });
@@ -127,7 +131,7 @@ test("null takes the overlay out of the page, and a stale host a superseded scri
   });
 });
 
-test("a settled status fades after its display time; a new status before then cancels the fade", () => {
+test("done fades after its display time; a new status before then cancels the fade; a failure never fades", () => {
   const globals = globalThis as unknown as { setTimeout: unknown; clearTimeout: unknown };
   const saved = { setTimeout: globals.setTimeout, clearTimeout: globals.clearTimeout };
   const timers = new Map<number, { callback: () => void; delay: number }>();
@@ -140,12 +144,14 @@ test("a settled status fades after its display time; a new status before then ca
   try {
     withFakeDom(() => {
       const surface = new StatusPill();
-      surface.update(view({ mark: "check", headline: "Flow ready", settled: true }));
+      surface.update(view({ mark: "cross", headline: "Build failed", fades: false }));
+      assert.equal(timers.size, 0, "a failure stays on the page until new work starts or the person hides it");
+      surface.update(view({ mark: "check", headline: "Flow ready", fades: true }));
       assert.equal(timers.size, 1);
       assert.equal([...timers.values()][0]!.delay, 6_000);
       surface.update(view());
       assert.equal(timers.size, 0, "working again: no fade");
-      surface.update(view({ mark: "check", headline: "Flow ready", settled: true }));
+      surface.update(view({ mark: "check", headline: "Flow ready", fades: true }));
       const host = hostOf(surface);
       [...timers.values()][0]!.callback();
       assert.equal(host.animations.length, 1, "the fade runs");
@@ -173,5 +179,57 @@ test("the mark shows one glyph at a time, recoloured in place, and pauses its pu
     assert.equal(visible(), 1);
     assert.equal(ring.animations[0]?.playState, "paused");
     assert.equal(groups[2]!.children[0]!.getAttribute("stroke"), "#fa8a8a");
+  });
+});
+
+/** Gives the fake document a 1280 by 720 viewport whose every point lies on `cover` ("fixed": a fixed box; null: nothing). */
+function withLayout(dom: unknown, cover: () => "fixed" | null): () => void {
+  const document = dom as { documentElement: Record<string, unknown>; elementFromPoint?: unknown };
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const saved = globals["getComputedStyle"];
+  const banner = {
+    tagName: "DIV",
+    parentElement: null,
+    parentNode: null,
+    shadowRoot: null,
+    matches: () => false,
+    hasAttribute: () => false,
+    getAttribute: () => null,
+    getRootNode: () => document,
+    getBoundingClientRect: () => ({ width: 1280, height: 160 })
+  };
+  document.documentElement["clientWidth"] = 1280;
+  document.documentElement["clientHeight"] = 720;
+  document.elementFromPoint = () => (cover() === "fixed" ? banner : null);
+  globals["getComputedStyle"] = () => ({ position: "fixed" });
+  return () => {
+    globals["getComputedStyle"] = saved;
+  };
+}
+
+test("a page with no clear corner gets a dot, drawn with the same nodes, and the pill comes back when a corner clears", () => {
+  withFakeDom((dom) => {
+    let busy = true;
+    const restore = withLayout(dom, () => (busy ? "fixed" : null));
+    try {
+      const surface = new StatusPill();
+      surface.update(view({ step: "Step 1 of 3" }));
+      const host = hostOf(surface);
+      const surfaceNode = host.shadow!.children[0]!;
+      const nodes = host.descendants();
+      const created = dom.created;
+      assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["30px", "30px"], "a dot");
+      const hidden = nodes.filter((node) => node.style.getPropertyValue("display") === "none" && ["Building your Flow", "Step 1 of 3", "Deciding the next step"].includes(node.textContent));
+      assert.equal(hidden.length, 3, "no text in a dot, though every line is kept up to date");
+      assert.equal(host.style.getPropertyValue("pointer-events"), "none");
+      busy = false;
+      surface.update(view({ mode: "collapsed", step: "Step 1 of 3" }));
+      assert.deepEqual([surfaceNode.style.getPropertyValue("width"), surfaceNode.style.getPropertyValue("height")], ["300px", "36px"], "the pill again, once a corner is clear");
+      assert.deepEqual([host.style.getPropertyValue("left"), host.style.getPropertyValue("bottom")], ["16px", "16px"]);
+      assert.equal(dom.created, created, "no node was created to change shape");
+      assert.equal(hostOf(surface), host);
+    } finally {
+      restore();
+    }
   });
 });

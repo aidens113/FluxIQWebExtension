@@ -63,6 +63,27 @@ test("a list with no project known anywhere asks across every project", async ()
   assert.deepEqual(c.calls, [{ endpoint: "list-conversations", payload: { projectId: null } }]);
 });
 
+test("the project's own thread: a project subject with no id is given the project's id, which Core needs whole", async () => {
+  const c = context();
+  await relayConversation({ type: read, kind: "list", status: "open", limit: 1, subjectKind: "project" }, c.value);
+  await relayConversation({ type: read, kind: "list", projectId: "project-2", subjectKind: "project" }, c.value);
+  await relayConversation({ type: read, kind: "list", subjectKind: "project", subjectId: "project-9" }, c.value);
+  assert.deepEqual(c.calls, [
+    { endpoint: "list-conversations", payload: { projectId: "project-session", status: "open", subjectKind: "project", subjectId: "project-session", limit: 1 } },
+    { endpoint: "list-conversations", payload: { projectId: "project-2", subjectKind: "project", subjectId: "project-2" } },
+    { endpoint: "list-conversations", payload: { projectId: "project-session", subjectKind: "project", subjectId: "project-9" } }
+  ]);
+});
+
+test("the project's own thread with no project known is refused before Core is called, never widened to every thread", async () => {
+  const noProject = { ok: false, code: "no_project", error: "FluxIQ has not said which project this browser belongs to yet. Connect, then try again." };
+  const c = context({}, null);
+  assert.deepEqual(await relayConversation({ type: read, kind: "list", subjectKind: "project" }, c.value), noProject);
+  const d = context();
+  assert.deepEqual(await relayConversation({ type: read, kind: "list", projectId: null, subjectKind: "project" }, d.value), noProject);
+  assert.deepEqual([...c.calls, ...d.calls], []);
+});
+
 test("a get reads one thread, from a turn when given", async () => {
   const c = context();
   const reply = await relayConversation({ type: read, kind: "get", conversationId: "c-1", sinceTurnId: "t-9", limit: 20 }, c.value);

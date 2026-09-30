@@ -1,7 +1,9 @@
 // What the overlay says for a paced display, without a DOM: the headline, the
 // detail and the step as the background paced them, a mark and colour that
 // follow the unit of work rather than Core's phase, and which preference
-// shows what.
+// shows what. Every word comes from the display, which the background words
+// (`shared/activity/wording.ts`); the real build is checked end to end
+// in `background/activity/tests/activity-replay.test.ts`.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -32,7 +34,7 @@ test("an expanded view carries the headline, Core's sentence and the step", () =
     headline: "Running your Flow",
     detail: "Running step 2 of 5: Open the cart",
     step: "Step 2 of 5",
-    settled: false
+    fades: false
   });
 });
 
@@ -44,13 +46,25 @@ test("the mark and colour follow the unit of work, not Core's phase of the momen
   }
 });
 
-test("settled displays: done and failed fade, waiting for the person does not", () => {
+test("only done fades: a failure stays on the page, and so does waiting for the person", () => {
   const done = activityOverlayView(display({ working: false, outcome: "done", headline: "Run finished", step: null }), "expanded");
-  assert.deepEqual([done?.mark, done?.accent, done?.settled], ["check", ACTIVITY_PHASE_APPEARANCE.done.accent, true]);
+  assert.deepEqual([done?.mark, done?.accent, done?.fades], ["check", ACTIVITY_PHASE_APPEARANCE.done.accent, true]);
   const failed = activityOverlayView(display({ working: false, outcome: "failed", headline: "Run failed" }), "expanded");
-  assert.deepEqual([failed?.mark, failed?.settled, failed?.step], ["cross", true, ""], "a settled view shows no step");
-  const waiting = activityOverlayView(display({ working: false, outcome: "waiting", headline: "Waiting for you" }), "expanded");
-  assert.deepEqual([waiting?.mark, waiting?.accent, waiting?.settled], ["attention", ACTIVITY_PHASE_APPEARANCE.waiting_permission.accent, false]);
+  assert.deepEqual([failed?.mark, failed?.fades, failed?.step], ["cross", false, ""], "a failure does not fade, and a settled view shows no step");
+  const waiting = activityOverlayView(display({ working: false, outcome: "waiting", headline: "Waiting for you: finish the check on the page" }), "expanded");
+  assert.deepEqual([waiting?.mark, waiting?.accent, waiting?.fades], ["attention", ACTIVITY_PHASE_APPEARANCE.waiting_permission.accent, false]);
+});
+
+test("the headline is never drawn again as the detail line", () => {
+  const echoes: Array<[string, string]> = [
+    ["Run finished", "Run finished"],
+    ["Building your Flow", "Building the Flow"],
+    ["Waiting for you: finish the check on the page", "Waiting for you"],
+    ["Build failed", "build failed."]
+  ];
+  for (const [headline, detail] of echoes) assert.equal(activityOverlayView(display({ headline, detail }), "expanded")?.detail, "", detail);
+  const adds = activityOverlayView(display({ headline: "Build failed", detail: "Build failed: no list was found" }), "expanded");
+  assert.equal(adds?.detail, "Build failed: no list was found", "a detail that adds something stays");
 });
 
 test("a step past the flow's count is said plainly", () => {
@@ -71,6 +85,15 @@ test("no detail is an empty line, and a misbehaving sender's long text is bounde
   assert.equal(activityOverlayView(display({ headline: "   " }), "expanded")?.headline, ACTIVITY_PHASE_APPEARANCE.running.name);
 });
 
+test("nothing the overlay adds of its own is a raw id: fallback headlines, step counts", () => {
+  const rawId = /\b[a-z]+\.[a-z_]+/u;
+  for (const [phase, appearance] of Object.entries(ACTIVITY_PHASE_APPEARANCE)) assert.doesNotMatch(appearance.name, rawId, phase);
+  for (const outcome of ["done", "failed", "waiting", null] as const) {
+    const view = activityOverlayView(display({ headline: "", detail: null, outcome, working: outcome === null }), "expanded");
+    for (const text of [view?.headline ?? "", view?.detail ?? "", view?.step ?? ""]) assert.doesNotMatch(text, rawId, String(outcome));
+  }
+});
+
 test("a build waiting at a robot check shows Core's ask as its sentence, under 'Waiting for you', and stays up", () => {
   // Core's person-needed ask (t197) arrives as phase `waiting_permission` with
   // the ask's text as its label; the pacer makes that the display's detail.
@@ -82,5 +105,5 @@ test("a build waiting at a robot check shows Core's ask as its sentence, under '
   assert.equal(view?.headline, "Waiting for you");
   assert.equal(view?.detail, ask, "the whole ask fits the line: nothing is cut");
   assert.equal(view?.mark, "attention");
-  assert.equal(view?.settled, false, "waiting for the person does not fade");
+  assert.equal(view?.fades, false, "waiting for the person does not fade");
 });

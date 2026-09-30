@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CoreTurn } from "../../../simple/conversation";
+import type { CoreTurn } from "../../conversation";
 import { createTurnClock } from "../turn-clock";
 
 function turn(turnId: string): CoreTurn {

@@ -2,7 +2,8 @@
 // draws the background's paced display, in place, and it is inert -- page CSS
 // cannot reach it, hit tests and real clicks pass through it, the recorder
 // does not see it, and a snapshot does not describe it (decision D5 of the
-// live-activity plan).
+// live-activity plan) -- and it keeps off the page's fixed parts: a banner
+// across the bottom moves it, and a page with no clear corner gets a dot.
 //
 // The page is company-website, one of the ten realistic scenarios, the only
 // fixtures browser runs may use.
@@ -109,14 +110,28 @@ function sameTaggedNodes(page: Page) {
   }, [ROOTS_GLOBAL] as const);
 }
 
-/** A page button fixed under the overlay's corner, counting the clicks it receives. */
+/**
+ * Takes company-website's cookie consent off the page, so the bottom-left
+ * corner is clear (its sticky header keeps the top corners busy, and its chat
+ * launcher the bottom-right) and the overlay's box can be asserted there.
+ */
+async function clearConsent(page: Page): Promise<void> {
+  await page.evaluate(() => document.querySelector('[data-testid="cookie-consent"]')?.remove());
+}
+
+/**
+ * A page button under the overlay's corner, counting the clicks it receives.
+ * It is in the page's flow (absolutely placed, not fixed), and placed after
+ * the overlay is up: a fixed one would be an obstacle the overlay moves off.
+ */
 async function placeButtonUnderOverlay(page: Page): Promise<void> {
   await page.evaluate(() => {
     const button = document.createElement("button");
     button.id = "under-overlay";
     button.textContent = "Under the overlay";
     button.dataset.clicks = "0";
-    Object.assign(button.style, { position: "fixed", left: "0", bottom: "0", width: "420px", height: "200px", zIndex: "10" });
+    const top = window.scrollY + document.documentElement.clientHeight - 200;
+    Object.assign(button.style, { position: "absolute", left: "0", top: `${top}px`, width: "420px", height: "200px", zIndex: "10" });
     button.addEventListener("click", () => {
       button.dataset.clicks = String(Number(button.dataset.clicks) + 1);
     });
@@ -127,6 +142,7 @@ async function placeButtonUnderOverlay(page: Page): Promise<void> {
 test("the overlay draws the paced display: headline, Core's sentence and the step, bottom-left", async ({ openHarness, page }) => {
   await captureOverlayRoots(page);
   const harness = await openHarness(SCENARIO);
+  await clearConsent(page);
   await show(harness, display());
   const overlay = await readOverlay(page);
   expect(overlay).not.toBeNull();
@@ -142,7 +158,7 @@ test("the overlay draws the paced display: headline, Core's sentence and the ste
   const viewport = page.viewportSize()!;
   expect(overlay!.rect.x).toBeCloseTo(16, 0);
   expect(overlay!.rect.y + overlay!.rect.height).toBeCloseTo(viewport.height - 16, 0);
-  expect(overlay!.surface).toMatchObject({ display: "flex", width: "300px", height: "54px", borderRadius: "14px" });
+  expect(overlay!.surface).toMatchObject({ display: "flex", width: "384px", height: "66px", borderRadius: "14px" });
 
   // Collapsed is the small pill with the headline only; hidden and null take it down.
   await show(harness, display({ sequence: 2, phase: "verifying", detail: "Checking the result", step: null }), "collapsed");
@@ -161,6 +177,7 @@ test("the overlay draws the paced display: headline, Core's sentence and the ste
 test("updates happen in place: the same nodes and the same box after twenty new sentences", async ({ openHarness, page }) => {
   await captureOverlayRoots(page);
   const harness = await openHarness(SCENARIO);
+  await clearConsent(page);
   await show(harness, display());
   const before = await readOverlay(page);
   const count = await tagOverlayNodes(page);
@@ -177,6 +194,7 @@ test("updates happen in place: the same nodes and the same box after twenty new 
 test("page CSS does not change the overlay: `* { all: unset }` and `div { display: none }` leave it as it was", async ({ openHarness, page }) => {
   await captureOverlayRoots(page);
   const harness = await openHarness(SCENARIO);
+  await clearConsent(page);
   await show(harness, display());
   const before = await readOverlay(page);
   expect(before!.rect.width).toBeGreaterThan(100);
@@ -191,8 +209,9 @@ test("page CSS does not change the overlay: `* { all: unset }` and `div { displa
 test("hit tests and a real click at the overlay's position reach the page element beneath it", async ({ openHarness, page }) => {
   await captureOverlayRoots(page);
   const harness = await openHarness(SCENARIO);
-  await placeButtonUnderOverlay(page);
+  await clearConsent(page);
   await show(harness, display());
+  await placeButtonUnderOverlay(page);
   const overlay = await readOverlay(page);
   const x = overlay!.rect.x + overlay!.rect.width / 2;
   const y = overlay!.rect.y + overlay!.rect.height / 2;
@@ -229,7 +248,7 @@ test("a snapshot does not include the overlay", async ({ openHarness }) => {
   expect(withOverlay.interactiveElements.length).toBe(without.interactiveElements.length);
 });
 
-test("a settled display fades after its display time; a later display is what changes the status", async ({ openHarness, page }) => {
+test("done fades after its display time; a later display is what changes the status", async ({ openHarness, page }) => {
   test.setTimeout(20_000);
   await captureOverlayRoots(page);
   const harness = await openHarness(SCENARIO);
@@ -242,4 +261,36 @@ test("a settled display fades after its display time; a later display is what ch
   await show(harness, display({ activityId: "build:b-2", subjectKind: "build", sequence: 9, phase: "thinking", headline: "Building your Flow", detail: "Deciding the next step", step: null }));
   await page.waitForTimeout(6_800);
   expect((await readOverlay(page))!.text).toContain("Deciding the next step");
+});
+
+test("a failure stays on the page: it does not fade", async ({ openHarness, page }) => {
+  test.setTimeout(20_000);
+  await captureOverlayRoots(page);
+  const harness = await openHarness(SCENARIO);
+  await show(harness, display({ phase: "failed", headline: "Run failed", detail: "Run cancelled", working: false, outcome: "failed", step: null }));
+  await page.waitForTimeout(7_500);
+  expect((await readOverlay(page))!.text).toContain("Run failed");
+});
+
+test("a fixed banner across the bottom moves the overlay off it; with every corner busy it is a dot", async ({ openHarness, page }) => {
+  await captureOverlayRoots(page);
+  const harness = await openHarness(SCENARIO);
+  await clearConsent(page);
+  await show(harness, display());
+  const before = await readOverlay(page);
+  await page.evaluate(() => {
+    const banner = document.createElement("div");
+    banner.id = "e2e-bottom-banner";
+    banner.textContent = "A banner across the bottom";
+    Object.assign(banner.style, { position: "fixed", left: "0", right: "0", bottom: "0", height: "180px", background: "#fff", zIndex: "50" });
+    document.body.append(banner);
+  });
+  // The overlay re-checks at most once every 800 ms.
+  await expect.poll(async () => (await readOverlay(page))!.rect.y, { timeout: 3_000 }).not.toBe(before!.rect.y);
+  const after = await readOverlay(page);
+  const banner = await page.evaluate(() => document.getElementById("e2e-bottom-banner")!.getBoundingClientRect().toJSON() as { top: number });
+  expect(after!.rect.y + after!.rect.height, "clear of the banner").toBeLessThanOrEqual(banner.top);
+  expect(after!.surface, "the sticky header and the chat launcher leave no clear corner: a dot").toMatchObject({ width: "30px", height: "30px" });
+  expect(after!.text, "the text is kept up to date inside the dot").toContain(HEADLINE);
+  expect(after!.inertNodes).toBe(after!.nodes);
 });

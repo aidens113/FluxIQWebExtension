@@ -1,0 +1,86 @@
+import { randomUUID } from "node:crypto";
+import { createServer } from "node:net";
+import { firefox, type BrowserContext } from "@playwright/test";
+import { withoutProviderSecrets } from "../../environment.js";
+import { installDeterministicNetworkGuard, type DeterministicNetworkGuard, type DeterministicNetworkPolicy } from "../../network-guard.js";
+import { installTemporaryAddon } from "./install-temporary-addon.js";
+
+/** The gecko id `apps/extension/manifest.firefox.json` declares. */
+const GECKO_ID = "fluxiq-web-automation@example.local";
+
+export type LaunchedFirefox = {
+  context: BrowserContext;
+  /** `moz-extension://<uuid>`, fixed before the add-on was installed so its pages can be opened by address. */
+  extensionOrigin: string;
+  /** What Firefox reported installing. */
+  addonId: string;
+  /** The profile Firefox runs on, which names its process for a window capture. */
+  profileDir: string;
+  /** The route-level network guard, installed before this returns, so no page is ever opened outside it. */
+  guard: DeterministicNetworkGuard;
+};
+
+/**
+ * A headed Playwright Firefox with the extension's Firefox build installed as
+ * a temporary add-on.
+ *
+ * Playwright cannot load an extension into Firefox itself, so Firefox is
+ * started with its debugger server listening on a free loopback port and the
+ * add-on is installed through the remote debugging protocol
+ * (`installTemporaryAddon`), the technique `playwright-webextext` uses. The
+ * add-on's internal UUID is pinned through `extensions.webextensions.uuids`
+ * before the install, so its popup is at a known `moz-extension://` address.
+ *
+ * `extensions.openPopupWithoutUserGesture.enabled` lets `action.openPopup()`
+ * run from a script, so the real toolbar popup can be opened without a click.
+ *
+ * The deterministic network guard (`policy`) is installed on the context
+ * before the add-on is installed and before this returns, as
+ * `launchGuardedPersistentContext` does for Chromium. Two limits of Firefox:
+ * Chromium's `networkContainmentArgs` switches have no Firefox equivalent, so
+ * containment is the route guard alone; and the add-on's background page is
+ * not a service worker, so the guard's service-worker proof has nothing to
+ * prove there and Playwright is not known to route the background's own
+ * requests. What the popup page and the scenario page request is guarded.
+ */
+export async function launchFirefoxWithExtension(input: { profileDir: string; addonPath: string; policy: DeterministicNetworkPolicy }): Promise<LaunchedFirefox> {
+  const uuid = randomUUID();
+  const port = await freePort();
+  const context = await firefox.launchPersistentContext(input.profileDir, {
+    headless: false,
+    env: withoutProviderSecrets(process.env),
+    locale: "en-US",
+    timezoneId: "UTC",
+    viewport: { width: 1280, height: 720 },
+    colorScheme: "light",
+    args: ["-start-debugger-server", String(port)],
+    firefoxUserPrefs: {
+      "devtools.debugger.remote-enabled": true,
+      "devtools.debugger.prompt-connection": false,
+      "devtools.chrome.enabled": true,
+      "extensions.webextensions.uuids": JSON.stringify({ [GECKO_ID]: uuid }),
+      "extensions.openPopupWithoutUserGesture.enabled": true,
+      "browser.shell.checkDefaultBrowser": false,
+    },
+  });
+  try {
+    const guard = await installDeterministicNetworkGuard(context, input.policy);
+    const { id } = await installTemporaryAddon(port, input.addonPath);
+    return { context, extensionOrigin: `moz-extension://${uuid}`, addonId: id, profileDir: input.profileDir, guard };
+  } catch (error) {
+    await context.close().catch(/* best-effort: the failed guard or install is the error worth reporting */ () => undefined);
+    throw error;
+  }
+}
+
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolve(port));
+    });
+  });
+}

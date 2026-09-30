@@ -13,7 +13,7 @@
 //   - a turn keeps its time on every later read, and turns that left the
 //     thread's window are forgotten.
 
-import type { CoreTurn } from "../../simple/conversation";
+import type { CoreTurn } from "../conversation";
 
 /** A turn and the time it takes on the chat's timeline, in ms. */
 export type StampedTurn = { turn: CoreTurn; at: number };

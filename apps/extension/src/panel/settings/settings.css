@@ -1,0 +1,35 @@
+/* Settings (panel/settings), shown by the gear in place of the chat. Colours
+   come from panel/theme/tokens.css; buttons, notices, fields and .dot from
+   panel/shell/shell.css. */
+
+.settings-screen { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4) var(--space-4); }
+.settings-column { display: grid; gap: var(--space-3); width: 100%; max-width: 520px; margin: 0 auto; }
+.settings-head { display: flex; align-items: center; gap: var(--space-2); }
+.settings-head .settings-back { border-color: transparent; background: transparent; font-size: 16px; }
+.settings-title { font-size: 17px; font-weight: 750; }
+
+.settings-group { display: grid; gap: var(--space-2); border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); padding: var(--space-3); }
+.settings-group-title { margin: 0; font-size: 13px; font-weight: 750; }
+.settings-state { display: flex; align-items: center; gap: var(--space-2); }
+.settings-state-text { font-size: 13px; }
+.settings-more { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+
+.settings-form { display: grid; gap: var(--space-3); }
+.settings-form input[type="url"] { width: 100%; min-height: 36px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); color: var(--text); padding: 7px 9px; }
+.settings-form input[aria-invalid="true"] { border-color: var(--danger); }
+.field-hint { color: var(--muted); font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
+.settings-form .toggles { display: grid; gap: 10px; padding-top: var(--space-2); border-top: 1px solid var(--divider); font-size: 12px; }
+.settings-form .toggle { display: grid; gap: 2px; }
+.settings-form .toggle label { display: flex; align-items: center; gap: 8px; font-weight: 650; }
+.settings-form .toggle .field-hint { padding-left: 24px; }
+
+.success-line { color: var(--success); font-weight: 650; }
+.notice-detail { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+
+
+.problem-report { display: grid; gap: var(--space-2); }
+.problem-report .card-title { font-size: 13px; }
+.forget-pairing { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--divider); }
+.forget-pairing > .small-button { justify-self: start; }
+.confirm { display: grid; gap: var(--space-2); border-left: 3px solid var(--danger); border-radius: 4px; background: var(--danger-soft); padding: 8px 10px; }
+.danger-button { border-color: var(--danger); background: var(--danger-soft); color: var(--danger-text); }

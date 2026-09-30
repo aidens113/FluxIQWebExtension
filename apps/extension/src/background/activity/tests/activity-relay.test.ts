@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTIVITY_DONE_VISIBLE_MS,
   ACTIVITY_MESSAGES,
   ACTIVITY_RECENT_LIMIT,
   type ActivityContentMessage,
@@ -17,7 +18,7 @@ import {
   type ClientGatewayActivity,
   type ExtensionActivityState
 } from "../../../shared/activity/index";
-import { ActivityRelay, type ActivityRelayDeps } from "../activity-relay";
+import { ActivityRelay, PAGE_SEND_TIMEOUT_MS, type ActivityRelayDeps } from "../activity-relay";
 import { OverlayTarget } from "../overlay-target";
 import { FakeClock } from "./fake-clock";
 
@@ -275,11 +276,86 @@ test("a top frame that reports ready on the automation tab gets the current disp
   assert.equal(h.delivered[0]?.message.display?.detail, "Running step 1");
 });
 
+test("a navigation's new document gets the display at once: not paced by the page gate, not queued behind a send to the old document", async () => {
+  const sends: Array<{ at: number; detail: string | null }> = [];
+  let hangFirst = true;
+  const h = harness({
+    deliver: async (_tabId, message) => {
+      sends.push({ at: h.clock.now(), detail: message.display?.detail ?? null });
+      if (hangFirst) {
+        hangFirst = false;
+        await new Promise<void>(() => {
+          /* the old document went away mid-send: this send never settles */
+        });
+      }
+    }
+  });
+  await h.relay.accept(activity(1));
+  await settle();
+  h.clock.advance(10);
+  await h.relay.accept(activity(2, { label: "Running step 2" }));
+  await settle();
+  // The page gate sent at 0, so a paced send could go no sooner than 250 ms;
+  // the send at 0 has not settled, so a queued one could go no sooner than its timeout.
+  h.clock.advance(20);
+  await h.relay.noteContentReady(7, 0);
+  assert.deepEqual(sends.map((send) => send.at), [0, 30], "the ready document is answered at 30 ms, the moment it asks");
+  assert.equal(sends[1]?.detail, "Running step 1", "with what the person was already reading: the pacer still holds step 2");
+});
+
+test("a page send that never settles is given up, so the next display still reaches the page", async () => {
+  const seen: Array<string | null> = [];
+  const h = harness({
+    deliver: async (_tabId, message) => {
+      seen.push(message.display?.detail ?? null);
+      if (seen.length === 1) await new Promise<void>(() => {
+        /* never settles */
+      });
+    }
+  });
+  await h.relay.accept(activity(1));
+  await settle();
+  h.clock.advance(1_300);
+  await h.relay.accept(activity(2));
+  await settle();
+  assert.deepEqual(seen, ["Running step 1"], "held while the first send is in flight");
+  h.clock.advance(PAGE_SEND_TIMEOUT_MS);
+  await settle();
+  assert.deepEqual(seen, ["Running step 1", "Running step 2"]);
+  assert.equal(h.clock.pending(), 0, "no timer is left behind");
+});
+
+test("a finished status is re-drawn on a new page while it is still showing, not after it has faded", async () => {
+  const h = harness();
+  await h.relay.accept(activity(1));
+  await h.relay.accept(activity(2, { phase: "done", label: "Run finished", final: true }));
+  h.clock.advance(300);
+  await settle();
+  assert.equal(h.delivered.at(-1)?.message.display?.outcome, "done");
+  h.delivered.length = 0;
+  h.clock.advance(ACTIVITY_DONE_VISIBLE_MS - 1_300);
+  await h.relay.noteContentReady(7, 0);
+  assert.equal(h.delivered.at(-1)?.message.display?.headline, "Run finished");
+  h.clock.advance(2_000);
+  await h.relay.noteContentReady(7, 0);
+  assert.equal(h.delivered.length, 1, "the person already saw it go");
+});
+
+test("a failure is re-drawn on every new page, however long ago it came", async () => {
+  const h = harness();
+  await h.relay.accept(activity(1, { phase: "failed", label: "Run failed", final: true }));
+  await settle();
+  h.delivered.length = 0;
+  h.clock.advance(60_000);
+  await h.relay.noteContentReady(7, 0);
+  assert.equal(h.delivered.at(-1)?.message.display?.outcome, "failed");
+});
+
 test("the bound: forty events in one second give at most four panel sends, four page sends and one detail change after the first", async () => {
   const h = harness();
   for (let index = 0; index < 40; index += 1) {
     h.clock.advanceTo(index * 25);
-    await h.relay.accept(activity(index + 1, { phase: index % 2 ? "thinking" : "exploring", label: `Sentence ${index + 1}` }));
+    await h.relay.accept(activity(index + 1, { phase: index % 2 ? "verifying" : "exploring", label: `Sentence ${index + 1}` }));
     await settle();
   }
   assert.ok(h.broadcasts.length <= 4, `panel sends: ${h.broadcasts.length}`);

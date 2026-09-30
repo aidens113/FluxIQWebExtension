@@ -382,7 +382,7 @@ settings, nor Firefox.
 
 ## Problem Reports
 
-"Report a problem" (the Advanced view's Connection tab) asks the background for
+"Report a problem" (in the panel's settings) asks the background for
 a bundle built by allowlist in `background/diagnostics/`: versions, browser
 name and major version, connection state and address origins, client, session
 and project ids, recording and runtime state, activity kinds, recent run ids
