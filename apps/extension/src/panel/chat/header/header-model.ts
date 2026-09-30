@@ -3,7 +3,11 @@
 //
 //   status    the paced display's headline (`ExtensionActivityState.display`),
 //             never a raw event, so it moves only as fast as the background's
-//             pacer lets it; empty before the first unit of work
+//             pacer lets it; empty before the first unit of work. While the
+//             work waits for the person it is what Core asks of them -- "FluxIQ
+//             needs you: complete the check on this page, then press
+//             Continue." -- because "Waiting for you" says nothing of what to
+//             do, and this one line is all the header shows
 //   tone      the headline's colour: accent while working, then the outcome's
 //   live      the dot: green while a gateway session is ready and the relay
 //             answers, grey otherwise, with the reason in words
@@ -45,7 +49,7 @@ export function chatHeaderModel(feed: ActivityFeedSnapshot, connected: boolean):
   const live = feed.reach === "ready" && feed.state.live && connected;
   const disabled = feed.reach !== "ready" || feed.overlaySaving;
   return {
-    status: display?.headline.trim() ?? "",
+    status: display ? statusOf(display) : "",
     tone: displayTone(display),
     working: display?.working === true,
     live,
@@ -56,6 +60,12 @@ export function chatHeaderModel(feed: ActivityFeedSnapshot, connected: boolean):
       error: feed.overlayError
     }
   };
+}
+
+/** The headline, or, while the work waits for the person, what Core asked of them when it said. */
+function statusOf(display: ActivityDisplay): string {
+  const asked = display.outcome === "waiting" ? display.detail?.trim() : undefined;
+  return asked ? asked : display.headline.trim();
 }
 
 function displayTone(display: ActivityDisplay | null): ChatTone {

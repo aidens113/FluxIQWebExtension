@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { TIDEWELL_KETTLES } from "../catalog/index.js";
+import { PERSON_CHECKS } from "../person-check.js";
 import { everythingStoreScenario as scenario } from "../scenario.js";
 import { BROWSER_KIT as kit } from "./browser-kit.js";
 
@@ -113,14 +114,16 @@ describe("a naive shopper fails", { concurrency: true }, () => {
     } finally { await session.close(); }
   });
 
-  it("types a guess into the robot check, which leaves the challenge standing and marks the attempt", async () => {
+  it("types a guess into the robot check, which leaves the challenge standing and marks the attempt the Lab's person will not cover for", async () => {
     const session = await kit.openStore("robot-check");
     try {
       const { page } = session;
       await page.getByLabel("Type characters").fill("ABCDEF");
       await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Continue shopping" }).click()]);
+      assert.ok(await page.getByTestId("robot-check-error").isVisible(), "the store says the characters did not match");
       const finalState = resolveScenarioWorkflow(manifest, { workflowId: "first-page-earbuds", variantId: "robot-check" }).expected.finalState ?? [];
-      assert.deepEqual(await kit.factFailures(page, finalState), ["no-guess-made: expected false, found true"]);
+      assert.ok((await kit.factFailures(page, finalState)).some((failure) => failure.startsWith("challenge-passed:")), "the row does not pass with the check standing");
+      assert.match(PERSON_CHECKS.tampered?.(await kit.storeState(session.lab)) ?? "", /wrong answer/u, "and the person the Lab plays sees the guess on the check and declines");
     } finally { await session.close(); }
   });
 });

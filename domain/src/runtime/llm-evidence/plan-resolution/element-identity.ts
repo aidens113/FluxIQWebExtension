@@ -36,6 +36,28 @@
 // element's own aria-label, title or alt -- each of which the computed name
 // reads too. So on a real page the two agree, and the page compares like with
 // like.
+//
+// **The record the control sat in rides too, as `context.record`** -- the key
+// a recorded node already carries, which the page's record gate reads
+// (`apps/extension/src/content/identity/record.ts`). Until t193 a created node
+// dropped it, and a control a page repeats in every card was replayed by its
+// position and its label alone: the bigbox store chooser's four cards hold one
+// identical "Set as my store" each, the draft's step named Millbrook's by
+// `li:nth-of-type(3) > button`, and when a dry run met the chooser with
+// Millbrook already chosen -- its card then holds "Your store" and no button --
+// the step read the other stores' buttons as one ambiguous target
+// (`run-munri5gr-94d7f8a0`, step 8, `core.replay.failed`). With the record, a
+// card that is gone reads as gone, and another card's button is never pressed.
+//
+// The source is the packet's own `within`: the record's words, less its
+// controls' (`../elements.ts` `recordWords`). The packet publishes them on
+// exactly the elements a record tells apart -- the look-alikes, and the example
+// of a control every row repeats (`../look-alikes.ts`) -- which are the
+// elements the gate exists for. Like a name, they are carried only when the
+// packet's bound did not cut them, because the page compares them whole. A
+// record the page *keyed* (`data-id` and the like) publishes no words and so
+// travels no record from here; its key lives in the binding's `records`, which
+// only the call site (`target-packets.ts`) holds.
 
 import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../../actions/types";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
@@ -48,7 +70,7 @@ export type WebPlanElementIdentity = Pick<WebAutomationElementFingerprint, "tagN
   context?: WebPlanElementContext | undefined;
 };
 
-type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "listPosition" | "shadowHosts">;
+type WebPlanElementContext = Pick<WebAutomationElementContext, "formId" | "listPosition" | "shadowHosts" | "record">;
 
 /** Controls whose text is what they hold rather than what they are called. */
 const CONTENT_TAGS: ReadonlySet<string> = new Set(["input", "textarea", "select"]);
@@ -67,7 +89,8 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
   const context = present<WebPlanElementContext>({
     formId: uncut(element.form, WEB_LLM_EVIDENCE_BOUNDS.placement),
     listPosition: element.item === undefined ? undefined : { index: element.item.index, total: element.item.total },
-    shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts]
+    shadowHosts: shadowHosts === undefined || shadowHosts.length === 0 ? undefined : [...shadowHosts],
+    record: recordOf(element)
   });
   return present<WebPlanElementIdentity>({
     tagName: element.tag,
@@ -78,6 +101,12 @@ export function webPlanElementIdentity(element: WebLlmEvidenceElement, selector:
     inputType: element.inputType,
     context: Object.keys(context).length > 0 ? context : undefined
   });
+}
+
+/** The record the packet named the element's row or card by, when it named one whole. */
+function recordOf(element: WebLlmEvidenceElement): WebPlanElementContext["record"] {
+  const text = uncut(element.within, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  return text === undefined ? undefined : { text };
 }
 
 /** A packet string the bound did not reach, which is the only kind that is the element's whole value. */

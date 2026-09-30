@@ -4,6 +4,7 @@ import { resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { HOUSEHOLD, TIDEWELL_KETTLES } from "../catalog/index.js";
 import { STORE_TIMINGS } from "../client/index.js";
 import { robotCode } from "../state/index.js";
+import { PERSON_CHECKS } from "../person-check.js";
 import { everythingStoreScenario as scenario } from "../scenario.js";
 import { BROWSER_KIT as kit, type ReadCard } from "./browser-kit.js";
 
@@ -144,7 +145,12 @@ describe("an honest shopper passes every oracle", { concurrency: true }, () => {
     try {
       const { page } = session;
       assert.deepEqual(await kit.factFailures(page, expectedOf("first-page-earbuds", "robot-check").pageFacts ?? []), []);
-      await page.getByLabel("Type characters").fill(robotCode(241, 0));
+      // What the Lab's person module reads off the image is what the store drew.
+      const state = await kit.storeState(session.lab);
+      assert.equal(PERSON_CHECKS.tampered?.(state), null, "nothing has touched the check yet");
+      const answer = PERSON_CHECKS.answer?.(state);
+      assert.equal(answer, robotCode(241, 0));
+      await page.getByLabel("Type characters").fill(answer ?? "");
       await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Continue shopping" }).click()]);
       await page.getByTestId("cart-count").waitFor();
       assert.equal(await page.getByTestId("robot-check").count(), 0);

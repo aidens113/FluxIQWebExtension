@@ -1,6 +1,7 @@
 # t196 — state-digest cost and ignored redirects
 
-Lane lead t196, 2026-09-30. **Status: ready for the next integration round.** No live or Lab run (brief).
+Lane lead t196, 2026-09-30. **Status: route-state follow-up done, ready for the next integration round.** No live or
+Lab run (brief).
 Trees: Core `C:/Users/osrs_/FluxStuff/fxwork/t196/!FluxIQ` and extension
 `C:/Users/osrs_/FluxStuff/fxwork/t196/!FluxIQWebExtension`, both `task/t196-state-digest-cost` (Core from `f0dbbd6`).
 Evidence: `C:/Users/osrs_/FluxStuff/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/reports/looking-at-page-repeat.md`
@@ -8,6 +9,96 @@ and the t193/t194/t195 bundles named below. Worker reports beside this file: `t1
 `t196-wL-loop.md` (Core loop).
 
 ## Fix log
+
+### Follow-up after merge (Core 204119b / downstream cccd1e96): the route-state captures
+
+The walkthrough (`flow-builder-walkthrough.md` §3, and §7 bullet 3) found that build routing still asked the host
+for a full page capture in two places: at build start (`route-state.ts` `startAutomationStudioBuildRouting`), and
+before every decision whose shown entries had grown (`observing`). A fresh `git status` showed both trees clean, with
+dev merged in (Core `f0cdcfc`, downstream `aa8efb52`: t174, t191, t193).
+
+6. **Contract (lead).**
+   - An execution result may carry `routeState`: the route state of the page the call left, projected from the call's
+     own capture exactly as the host's `observeRouteState` projects a fresh one (`llm/evidence-loop/tool-execution.ts`).
+   - The loop accepts the key and never reads it (`evidence-loop-decision.ts`).
+7. **Domain (wD2).**
+   - Every result that holds a page reports `routeState` from the capture the call already took: a look's capture,
+     an action's capture after acting, a refusal's page, a detection's capture, or a replay step that captured.
+   - It uses `domain/src/runtime/llm-evidence/snapshot-states.ts`, which replaces `snapshot-state-digest.ts` and
+     computes both the digests and the route state.
+   - No command was added: captures per decision are unchanged.
+   - A test shows each value deep-equals `observeRouteState` on the same page, including trimmed packets and pages
+     with a blocker. A mutation run failed 4 of its 15 tests.
+   - One existing test, "no refusal carries a word of the page", now excludes `routeState`:
+     - `routeState` holds page words by design;
+     - the loop never reads it and no trace logs it;
+     - the routing context used to get the same value from its own capture.
+     I accepted the change.
+8. **Core routing (wL2).**
+   - `route-state.ts` was split into `route-state/{observe,router-state,build-routing,index}.ts`, with tests in
+     `route-state/tests/`.
+   - `build-routing.ts` records the `routeState` of every call through a `recording(executeTool)` wrapper, dry-run
+     replay steps included. Before a decision it records the newest call's state when a call ran since the last
+     decision.
+   - It captures only when the newest call carried none.
+   - The trigger is now "a call ran", not "the shown count grew". The old rule stopped firing once the window was
+     full, so it missed 8–28 post-call states per recorded build.
+   - An evidence-guided build takes its start state from the free first look, and captures it right after the look
+     only when the look carried none. The one-reply path still captures eagerly.
+   - `service.ts`: 3 lines (the import, `start: evidenceGuided ? "first_look" : "now"`, and
+     `executeTool: routing.recording(permissions.executeTool)`).
+9. **Lead.**
+   - Fixed the stale path in `tool-execution.ts`.
+   - Docs: Core `docs/architecture/automation-studio.md` (route state from calls) and the extension's
+     `docs/architecture/web-capabilities.md`. Reference docs regenerated.
+   - Rebuilt the stale `client-gateway-websocket` dist from merged dev source. The extension check needed it for
+     t191's `FluxIQClientGatewayOpenError`; this is unrelated to this lane.
+
+**Route-state captures, per decision (build-routing tests) and per replayed build.** "Before" is the old rule.
+"Calls report" is the web binding now. "None reports" is a binding without `routeState`.
+
+| Decision | Before | Calls report | None reports |
+| --- | --- | --- | --- |
+| Build start | 1 | 0 | 0 |
+| Free first look | 1 | 0 | 1 (the start, right after the look) |
+| Look / action / first re-ask | 1 each (when the shown count grew) | 0 | 1 |
+| Answered from memory / amendment | 0 | 0 | 0 |
+| Call with no route state (e.g. a replay step that did not capture) | 0 | 1 | 1 |
+| Completion with a dry run | 1 | 0 | 1 |
+
+| Build (replayed) | Decisions | Before | After, web binding |
+| --- | --- | --- | --- |
+| bigbox-run6 | 37 | 7 | 0 |
+| crossborder | 22 | 5 | 0 |
+| everything-store-run4 | 48 | 6 | 0 |
+| run-munneauy (rebuilt) | 15 | 12 | 0 |
+
+In a Lab build, the free first look is refused (`not_at_start_location`) and has no page, so the start still costs
+one capture; so does a decision after a dry run whose last replay step did not capture.
+
+**Validation (lead, final code).**
+- Core dist rebuilt: `heavy.sh "t196 core build 4"` → exit 0.
+- Domain tests against the rebuilt dist: all `llm-evidence/**/tests` plus `runtime/tests/host-runtime.test.ts`, 50
+  files through the narrow runner → `# tests 383 # pass 383 # fail 0`.
+- Core `heavy.sh npx vitest run …/runtime/route-state …/runtime/llm …/runtime/flow-bootstrap --maxWorkers=2
+  --minWorkers=1` → `Test Files 110 passed (110)`, `Tests 1443 passed (1443)`.
+- Core `heavy.sh pnpm check` → exit 0, `structure-audit: passed (195 warning(s), 354 baselined)`, and all four
+  packages `check: Done`.
+- `pnpm docs:check` → current.
+- Extension `heavy.sh pnpm -r check` → exit 0, all packages `Done`. It failed once until the gateway dist was rebuilt.
+- Extension structure audit → `passed (124 warning(s), 120 baselined)`.
+
+**Pre-existing, not this lane.** Six tests in `runtime/tests/service-bootstrap/tests/rejections.test.ts` fail
+(reported by wL2; I reran the file myself: 6 failed, the rest passed).
+- Each fails because the pre-provider rejection diagnostic now carries `issueCodes: ["thrown.Error",
+  "thrown.at:…field-readings.ts:6"]`.
+- Those codes come from the throw-account work in dev (`80e0ce99`).
+- The throw happens in command-field validation, before routing starts, in files this lane never touched.
+- `runtime/tests` as a whole also times out at the 15 s default under load. It passes with `--testTimeout=120000`,
+  apart from those six.
+- The supervisor still needs to run `pnpm structure:baseline` (one entry can be lowered).
+
+### First round (merged)
 
 1. **Core contract (lead).**
    - An execution result may carry `stateDigests: { before?, after? }` from the call's own captures

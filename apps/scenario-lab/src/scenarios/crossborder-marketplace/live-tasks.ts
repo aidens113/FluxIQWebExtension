@@ -2,7 +2,14 @@ import type { LiveInstructionTask } from "../live-instructions.js";
 
 const SPAIN_HUBS = "On Farbazaar, search for \"usb c hub\" and collect every hub that ships from Spain, has free shipping and is rated 4.5 stars or higher, across all of the results. Leave out the ads and list each item only once, keeping the order the search ranks them in by default (Best Match), with columns title, store, price and rating, written exactly as the results show them.";
 const HUB_TO_CART = "On Farbazaar, put three of the Voltbay USB-C hub sold by Voltbay Official Store in my cart: Space Grey, the 7-in-1 version, shipped from Spain. Collect that store's coupon while you are on the item. Do not buy anything.";
-const BUY_HUB = "On Farbazaar, buy two of the Voltbay USB-C hub sold by Voltbay Official Store: Space Grey, the 7-in-1 version, shipped from Spain, with standard shipping. Collect and use that store's coupon, and pay with my saved Visa card. Then give me the order confirmation with columns order, item, options, quantity and total.";
+/**
+ * The traffic screen replaces every search load once two have been made since
+ * it was last passed, so narrowing the search by the site's filters -- the
+ * honest path -- meets it on the third load. A Flow that reaches the filtered
+ * results in fewer loads never does, so the hand-off is expected, not required.
+ */
+const TRAFFIC_SCREEN = { person: "completes", required: false, because: "Narrowing the search by the site's filters is the third results load, which the traffic screen replaces." } as const;
+const BUY_HUB ="On Farbazaar, buy two of the Voltbay USB-C hub sold by Voltbay Official Store: Space Grey, the 7-in-1 version, shipped from Spain, with standard shipping. Collect and use that store's coupon, and pay with my saved Visa card. Then give me the order confirmation with columns order, item, options, quantity and total.";
 
 /**
  * The marketplace's live creation tasks. Each is a goal a buyer would type,
@@ -31,6 +38,7 @@ export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] 
     instruction: SPAIN_HUBS,
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-spain-hubs",
+    personCheck: TRAFFIC_SCREEN,
   },
   {
     id: "crossborder-marketplace-spain-hubs-list-layout",
@@ -41,6 +49,7 @@ export const CROSSBORDER_MARKETPLACE_LIVE_TASKS: readonly LiveInstructionTask[] 
     judgeBy: "expected-dataset",
     expectedDatasetId: "extract-spain-hubs",
     variantArmedAfterBuild: true,
+    personCheck: TRAFFIC_SCREEN,
   },
   {
     id: "crossborder-marketplace-hub-to-cart",

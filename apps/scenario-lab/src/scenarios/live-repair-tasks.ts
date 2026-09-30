@@ -32,9 +32,17 @@ import { PROFESSIONAL_NETWORK_REPAIR_TASKS } from "./professional-network/index.
  *   accepted or executed, no proposal or adaptation created, and the declared
  *   final state (which says nothing was pressed or changed) still true. The
  *   variant declares the failure the recorded Flow ends with.
+ * - `expect: "hand-off"`: no fix exists because the page is a check only a
+ *   person may pass. Success is FluxIQ handing the check to a person (Core's
+ *   person-needed ask, which the Lab answers as the person, recorded in the
+ *   run's `snapshots/person-hand-offs.json`), no patch accepted or executed,
+ *   and then the row's own final state, since the person cleared the check.
+ *   The scenario's person module declares the hand-off `required` on the row
+ *   (`<scenario>/person-check.ts`), and the variant declares no failure.
  *
- * `tests/live-repair-tasks.test.ts` holds both shapes, and requires every
- * deliberately failing row in the corpus to be either a task here or an
+ * `tests/live-repair-tasks.test.ts` holds all three shapes, and requires every
+ * row the recorded Flow cannot pass alone -- declared to fail, drifted, or
+ * behind a check only a person may pass -- to be either a task here or an
  * exclusion with its reason.
  */
 export type LiveRepairTask = {
@@ -45,7 +53,7 @@ export type LiveRepairTask = {
   /** Absent only when the workflow itself declares the failure. */
   variantId?: string;
   kind: "repair";
-  expect: "repair" | "refusal";
+  expect: "repair" | "refusal" | "hand-off";
   /** The runtime patch a correct repair uses; only on `expect: "repair"`. */
   patchKind?: "temporary_target_override";
   /** What broke, and what the model must do about it, in plain English. */

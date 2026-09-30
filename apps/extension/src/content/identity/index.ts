@@ -39,6 +39,13 @@
 // before acting on it: something that says which control this is -- the text,
 // the name, the label, the id or the test id -- must agree exactly, because a
 // partial agreement is what a different action with a similar label looks like.
+//
+// `stable-name.ts` is the one exception that rule leaves room for, and it is
+// narrow: a control whose name *is* its state -- a chip naming the chosen store
+// -- is read by the part of its name that does not change, a whole text run
+// replaced and the rest kept, so the same rules can be put to that part. The
+// resolver acts on the reading only for an exact strategy's one answer, and
+// only when nothing else in the scope reads the same way.
 
 export { accessibleNameFor, authoredNameAttribute } from "./accessible-name";
 export { boundedText } from "./bounded-text";
@@ -49,10 +56,12 @@ export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
 export { agreesWithRecordedRecord, isRecordElement, recordIdentity } from "./record";
 export { reportableText } from "./reportable-text";
+export { stableNameReading } from "./stable-name";
 export { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidate, scoreTargetCandidates } from "./score";
 export { TARGET_VETO_FLOOR, vetoCandidate, vetoExactMatch } from "./veto";
 
 export type { CandidateFamily, TargetCandidate, TargetCandidatePool } from "./candidates";
 export type { RecordIdentity } from "./record";
 export type { CandidateSelection, RecordedIdentity, ScoredCandidate } from "./score";
+export type { StableNameReading } from "./stable-name";
 export type { ExactMatchVerdict, TargetMeasurement, TargetVerdict, TargetVetoReason } from "./veto";

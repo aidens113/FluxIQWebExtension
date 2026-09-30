@@ -158,6 +158,14 @@ test("an amendment's refusals travel with their reasons and nodes, as records an
   });
 });
 
+// Core's closed set, in full (lane t195): four of these reasons were missing
+// here, and a step that reported any of them lost its whole refusal list.
+test("every reason Core's draft refuses an amendment with travels", () => {
+  for (const reason of ["no_such_step", "already_so", "no_such_position", "run_by_the_loop", "no_step_before_it", "over_not_before", "not_a_kept_step", "did_not_work", "already_in_flow", "already_out"]) {
+    assert.deepEqual(publishableStepFields({ amendmentsRefused: [{ step: 3, reason }], amendmentRefusals: [`3:${reason}`] }), { amendmentsRefused: [{ step: 3, reason }], amendmentRefusals: [`3:${reason}`] }, reason);
+  }
+});
+
 test("a refusal list holding anything but positions, closed reasons and node ids is refused whole", () => {
   const refused = (amendmentsRefused: unknown, amendmentRefusals: unknown) => publishableStepFields({ amendmentsRefused, amendmentRefusals });
   assert.deepEqual(refused([{ step: 1, reason: "made_up" }], ["1:made_up"]), {});

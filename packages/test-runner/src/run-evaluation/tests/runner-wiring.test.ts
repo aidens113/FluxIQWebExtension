@@ -218,7 +218,7 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
  */
 test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the Core action probe, and the final-state facts", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl \} from "\.\/lane-rules\/index\.js";/u);
+  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl, type FlowLanePermissionStop, type FlowLaneStoppedForPermission \} from "\.\/lane-rules\/index\.js";/u);
   // L1: the probe reads a mark it planted on the start page, which no overlay can refuse, instead of typing into a
   // field in a fresh tab that restarted the site's load-timed overlays. It lives in its own module and is tested there.
   assert.match(source, /import \{ proveCoreActionRoundTrip \} from "\.\/core-action-probe\/index\.js";/u);
@@ -228,7 +228,7 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
   const at = {
     flowLane: source.indexOf("await runFlowLane({"),
-    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });'),
+    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });'),
     passed: source.indexOf('verdict = "passed";'),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
@@ -428,4 +428,11 @@ test("the runner tells the created-Flow lane where the Flow starts, using the ad
   // the guarantee is that the two addresses come from one expression, so it is
   // checked wherever that expression is written.
   assert.match(await runnerModuleSource("run-scenario", "open-scenario-start.ts"), /await page\.goto\(scenarioStartUrl\(scenarioOrigin, scenario\)\);/u);
+});
+
+test("the runner hands a permission stop to the evaluation and the printed result, and never passes it", async () => {
+  const source = await runnerSource();
+  assert.equal(source.includes("stoppedToAsk"), false, "no permission-stop exemption is left in the runner");
+  assert.ok(source.includes("llm: live?.usage, bundlePath: bundle.stagingPath, permissionStop })"), "evaluation.json records the stop");
+  assert.ok(source.includes('...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {})'), "the printed result names the verdict");
 });
