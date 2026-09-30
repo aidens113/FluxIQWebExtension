@@ -64,3 +64,36 @@ Build-time runs (`run.ts`, `replay.ts`) send the model's parameters straight to 
 3. **Possible merge conflicts:** `tools.ts` and `node-run/tests/replay.test.ts` are also touched by t200, `task/t174-live-lane` and `task/t196-state-digest-cost` (per audit A4). The changes here are small and local: an import, `withCheckWait`, and two assertions.
 
 Ready to commit: apps/extension/src/runtime/tests/landed-check-wait.test.ts, docs/architecture/failure-taxonomy.md, domain/src/actions/check-wait.ts, domain/src/actions/tests/check-wait.test.ts, domain/src/output-nodes/native-runtime.ts, domain/src/output-nodes/tests/native-runtime.test.ts, domain/src/runtime/llm-evidence/node-run/tests/replay.test.ts, domain/src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts, domain/src/runtime/llm-evidence/plan-resolution/tests/resolve-plan-node.test.ts, domain/src/runtime/llm-evidence/tools.ts, domain/src/tests/domain.test.ts, domain/src/web-panel-host.ts, docs/working/language-driven-flow-loop-plan/reports/t203-robot-check-allowance.md; validation: `node scripts/test-domain.mjs` -> 991/991 pass, exit 0; `node scripts/test-extension.mjs` -> 1490/1490 pass, exit 0; domain, extension and Core tsc clean; structure-audit passed in both.
+
+## Follow-up: closing the Core-fallback gap (supervisor's call, after commit 9e3b398d)
+
+**Outcome:** Done. Open question 1 is closed in the domain mapper, with no Core change.
+
+**What changed:**
+- `domain/src/web-panel-host.ts`: `linkedClickEntry` is now `recordedActionEntry`. Every recorded `web.dom.click` or `web.browser.navigate` `action` entry that Core's fallback would propose (`policyEligible` not false), linked or unlinked, is now proposed by the mapper.
+  - It has the same fields as `recordingActionEntryCandidate`: output, parameters, source input, confirmation, confidence 0.95, and the `readableTokenValue` label. The labels are in `FALLBACK_LABELS`.
+  - It goes through the one rule, `webAutomationCheckWaitNode`: `checkWaitMs` 15000 and node `timeoutMs` 20000.
+  - A click whose landing names its event id also gets the landing claim.
+  - Other action entries, and refused ones, still map to `null`, so Core's fallback handles them.
+- The comments in `domain/src/actions/check-wait.ts` and the mapper's doc comment are updated. `docs/architecture/failure-taxonomy.md` no longer names the gap.
+
+**Tests** (`domain/src/tests/domain.test.ts`):
+- W25/t203: an unlinked recorded click (`lateClickEntry`, nothing after it) maps to Core's fallback candidate plus the allowance. It used to map to `null`.
+- D1b/t203: two more unlinked cases get the allowance and no landing claim:
+  - `signInEntry` with no following entries;
+  - an entry whose landing names another click.
+- t203: a navigation action entry gets the allowance with the label "Web Browser Navigate".
+- Through Core (`createRecordingFlowProposals`):
+  - Core's own fallback candidate has no `timeoutMs`;
+  - the `web` mapper proposes the linked click with its landing claim and the allowance, and the unlinked click with the allowance.
+
+**Commands run and observed results:**
+- Domain `tsc -p tsconfig.test.json` and `tsc -p tsconfig.json`: no output.
+- `DOMAIN_TEST_BUILD_LABEL=t203 node scripts/test-domain.mjs`: exit 0, 991/991 pass, no entry failed to load, smoke test passed.
+- Extension `tsc`: clean. `node scripts/test-extension.mjs`: exit 0, 1490/1490 pass.
+- `structure-audit` downstream: passed (131 warnings, 120 baselined).
+- Core `tsc -p packages/fluxiq/tsconfig.json --noEmit`: clean. Core `structure-audit`: passed. The Core tree is unchanged.
+
+**Not verified:** no live run. The navigate label is hard-coded to match `readableTokenValue`; only the click label is checked against Core's own fallback through Core.
+
+Ready to commit: domain/src/web-panel-host.ts, domain/src/tests/domain.test.ts, domain/src/actions/check-wait.ts, docs/architecture/failure-taxonomy.md, docs/working/language-driven-flow-loop-plan/reports/t203-robot-check-allowance.md; validation: `node scripts/test-domain.mjs` -> 991/991 pass, exit 0; `node scripts/test-extension.mjs` -> 1490/1490 pass, exit 0; tsc clean (domain, extension, Core); structure-audit passed in both.

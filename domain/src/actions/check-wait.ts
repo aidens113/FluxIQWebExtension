@@ -22,7 +22,8 @@
 // each is given the allowance here rather than by a rule of its own:
 //
 // - a recorded node, on its node timeout (`web-panel-host.ts`: the candidate
-//   the domain maps, and the linked click it proposes for Core's fallback);
+//   the domain maps, and every click or navigation `action` entry, which it
+//   proposes in place of Core's fallback so none runs on Core's bare default);
 // - a Run Output node a model wrote, the same way
 //   (`runtime/llm-evidence/plan-resolution/resolve-plan-node.ts`);
 // - a web output node -- the node a model's build appends -- on the parameters

@@ -263,9 +263,9 @@ check on this page, then press Continue", with the choices Continue and Stop.
   where a built press met the same check and failed). A recorded node and a
   Run Output node carry it on the node's timeout; a web output node adds it to
   the parameters it dispatches, in `output-nodes/native-runtime.ts` and in the
-  build's gateway (`runtime/llm-evidence/tools.ts`). A click Core's own
-  recording fallback proposes, with no landing the domain links to it, does
-  not carry it yet.
+  build's gateway (`runtime/llm-evidence/tools.ts`). A click or navigation
+  recorded as Core's `action` entry is proposed by the domain's mapper rather
+  than left to Core's fallback, which would give it Core's bare 5 s default.
 - **Building a Flow.** The domain marks the call's execution result
   `personNeeded: true` (`domain/src/runtime/llm-evidence/node-run/run.ts`,
   `personDraft`) and keeps its `needs_person` code and reason for the run's own

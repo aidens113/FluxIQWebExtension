@@ -79,7 +79,9 @@ const mutationObservation = (added: number) => ({ observationId: `observation.mu
 assert.deepEqual(mapWebRecordingObservation(mutationObservation(1), { following: [lateClickEntry] }), { outputId: "web.dom.wait_for_selector", parameters: { selector: "#late-action", wait: { condition: "present" } }, confidence: 0.9, label: "Wait for element" }, "W25: a mutation that added nodes proposes waiting for the next click's target");
 assert.equal(mapWebRecordingObservation(mutationObservation(0), { following: [lateClickEntry] }), null, "W25: a batch that added nothing proposes nothing");
 assert.equal(mapWebRecordingObservation(mutationObservation(1)), null, "W25: a mutation mapped with no following entries proposes nothing");
-assert.equal(mapWebRecordingObservation(lateClickEntry, { following: [] }), null, "W25: a click's action entry still maps to null, so Core's fallback click survives");
+// t203: a click's action entry is proposed as Core's fallback would propose it, with the check allowance Core's fallback does not give (`actions/check-wait.ts`).
+const unlinkedClick = (entry: typeof lateClickEntry) => ({ outputId: "web.dom.click", parameters: { ...entry.payload.parameters, checkWaitMs: 15_000 }, timeoutMs: 20_000, sourceInputIds: [WEB_AUTOMATION_INPUT_IDS.elementClicked], expectedConfirmation: { inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, timeoutMs: 5_000 }, confidence: 0.95, label: "Web Dom Click" });
+assert.deepEqual(mapWebRecordingObservation(lateClickEntry, { following: [] }), unlinkedClick(lateClickEntry), "W25/t203: a click's action entry with nothing after it is Core's fallback click, with the check allowance");
 
 // W19 (D1b): a click recorded through its action input reaches the mapper as Core's `action` entry, and its landing as Core's `domain_event`, which keeps
 // the event's own payload under `{ payload }`. A landing naming the event id Core stored on the entry gives Core's fallback candidate for it, plus the claim.
@@ -88,8 +90,11 @@ const coreLanding = (wire: typeof signInLanding) => ({ observationId: wire.event
 const signInEntry = coreClickEntry(signInClick);
 const accountClaim = { conditions: [{ assert: { kind: "url", expected: "/scenarios/auth-gate/account" } }], mode: "all", timeoutMs: 5_000 };
 assert.deepEqual(mapWebRecordingObservation(signInEntry, { following: [coreLanding(signInLanding)] }), { outputId: "web.dom.click", parameters: { ...signInEntry.payload.parameters, checkWaitMs: 15_000 }, timeoutMs: 20_000, sourceInputIds: [WEB_AUTOMATION_INPUT_IDS.elementClicked], expectedConfirmation: { inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, timeoutMs: 5_000 }, expectedState: accountClaim, confidence: 0.95, label: "Web Dom Click" }, "D1b: a linked click's action entry gives Core's fallback candidate plus the claim, and the check allowance every click has (`actions/check-wait.ts`)");
-assert.equal(mapWebRecordingObservation(signInEntry, { following: [] }), null, "D1b: an unlinked click's action entry maps to null, so Core's fallback stands");
-assert.equal(mapWebRecordingObservation(coreClickEntry(signInClick, { eventId: lateClickWire.eventId ?? "" }), { following: [coreLanding(signInLanding)] }), null, "D1b: a landing naming another click's event id links nothing");
+assert.deepEqual(mapWebRecordingObservation(signInEntry, { following: [] }), unlinkedClick(signInEntry), "D1b/t203: an unlinked click's action entry claims no landing, and still carries the check allowance");
+const otherEntry = coreClickEntry(signInClick, { eventId: lateClickWire.eventId ?? "" });
+assert.deepEqual(mapWebRecordingObservation(otherEntry, { following: [coreLanding(signInLanding)] }), unlinkedClick(otherEntry), "D1b: a landing naming another click's event id links nothing");
+const navigateEntry = { ...lateClickEntry, payload: { ...lateClickEntry.payload, actionType: "web.browser.navigate", outputId: "web.browser.navigate", parameters: { url: "https://example.test/next" } } };
+assert.deepEqual(mapWebRecordingObservation(navigateEntry, { following: [] }), { ...unlinkedClick(navigateEntry), outputId: "web.browser.navigate", label: "Web Browser Navigate" }, "t203: a navigation's action entry carries the check allowance too");
 assert.equal(mapWebRecordingObservation(coreClickEntry(signInClick, { policyEligible: false }), { following: [coreLanding(signInLanding)] }), null, "D1b: an entry Core's fallback refuses is not proposed either");
 assert.equal(mapWebRecordingObservation({ ...signInEntry, payload: { ...signInEntry.payload, actionType: "web.dom.type", outputId: "web.dom.type" } }, { following: [coreLanding(signInLanding)] }), null, "D1b: only a click's action entry claims its landing");
 // ...and recorded through Core: its IO recorder writes each click's action entry and the bridge's domain-event call the landing. A mapper proposing nothing leaves Core's fallback.
@@ -111,8 +116,11 @@ try {
   await recordClick(createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 5, url: "https://example.test/scenarios/auth-gate/account", title: "Account", eventTimestampMs: 1_400, element: { selector: "#sign-out", tagName: "button", text: "Sign out" } }), 3);
   const { proposals } = await proposalService.createRecordingFlowProposals({ projectId, recordingId });
   const candidatesOf = (mapperId: string) => (proposals.find((proposal) => proposal.mapper.id === mapperId)?.candidates ?? []).map(({ candidateId: _candidateId, ...candidate }) => candidate);
-  const linked = candidatesOf("none")[0]!;
-  assert.deepEqual(candidatesOf("web"), [{ ...linked, parameters: { ...linked.parameters, checkWaitMs: 15_000 }, timeoutMs: 20_000, expectedState: accountClaim }, candidatesOf("none")[1]], "D1b: through Core, a linked click gives Core's fallback candidate plus the claim and the check allowance, and an unlinked one Core's fallback");
+  // t203: the unlinked click is Core's fallback candidate with the check allowance, so no recorded click reaches Core's bare 5 s default.
+  const allowed = (fallback: ReturnType<typeof candidatesOf>[number] | undefined) => ({ ...fallback!, parameters: { ...fallback!.parameters, checkWaitMs: 15_000 }, timeoutMs: 20_000 });
+  const [linked, unlinked] = candidatesOf("none");
+  assert.equal(linked?.timeoutMs, undefined, "Core's fallback gives a recorded click no allowance of its own");
+  assert.deepEqual(candidatesOf("web"), [{ ...allowed(linked), expectedState: accountClaim }, allowed(unlinked)], "D1b: through Core, a linked click gives Core's fallback candidate plus the claim and the check allowance, and an unlinked one Core's fallback candidate with the allowance");
 } finally {
   await proposalService.close();
   await rm(proposalDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 });
