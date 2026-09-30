@@ -261,6 +261,13 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
     targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
     addresses.saw({ projectId: input.projectId, flowId: input.flowId, sessionId }, snapshot);
   };
+  // The look a node run takes before it acts, which the model is not shown. Cut
+  // short, its controls join the page's handles without forgetting any the
+  // model was shown; it is never the packet a detection binds its handles through.
+  const looked = (input: WebLlmEvidenceToolRequest, sessionId: string, snapshot: WebLlmSnapshotBinding): void => {
+    targetPackets.rememberLook({ projectId: input.projectId, flowId: input.flowId }, snapshot);
+    addresses.saw({ projectId: input.projectId, flowId: input.flowId, sessionId }, snapshot);
+  };
   // Keyed by the packet itself, because Core hands the packet back to
   // `validateTargetOverrideEvidence` without the project or flow it came from.
   const failureSelectors = new Map<string, Map<string, string>>();
@@ -351,6 +358,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
             stores: { targets: targetPackets, extractions: extractionHandles },
             restamp: (binding) => retain(stable(input, binding)),
             shown: (binding) => shown(input, sessionId, binding),
+            looked: (binding) => looked(input, sessionId, binding),
             arrivals,
             addresses
           }));

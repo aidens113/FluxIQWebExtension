@@ -30,6 +30,18 @@
 // handle's selector but describe its element differently still resolve, since
 // they name one address, but with only the identity fields they agree on.
 //
+// A look the model is not shown -- the one a node run takes before it acts --
+// is remembered too, and when it was cut short it is only added: its handles
+// join the page's and none the page already had is forgotten. A look describes
+// forty controls, and one taken after a notice appeared above the results
+// sidebar ended before the "Voltbay" filter the packet just shown had ended on.
+// Remembered as the page's packet, it forgot that filter's handle, and four
+// presses on it were refused `handle_not_in_packet`, two straight after a
+// packet that showed it (`run-muohbi3e-e5847e5a`). Handles are numbered for the
+// whole Flow, so a handle kept this way still names the one control it was
+// given for. A look that described the whole page replaces, as a shown packet
+// does: a control missing from it has left the page.
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
@@ -53,6 +65,8 @@ export type WebLlmTargetResolution =
 export type WebLlmTargetPackets = {
   /** Remember a packet the model was just shown, as the newest view of its page. */
   remember(scope: WebLlmTargetScope, binding: WebLlmSnapshotBinding): void;
+  /** Remember a look the model was not shown: as `remember` when it describes the whole page, else its handles only join the page's. */
+  rememberLook(scope: WebLlmTargetScope, binding: WebLlmSnapshotBinding): void;
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined): WebLlmTargetResolution;
 };
 
@@ -62,40 +76,36 @@ type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string> };
 
 export function createWebLlmTargetPackets(): WebLlmTargetPackets {
   const flows = new Map<string, FlowPages>();
+  /** The Flow's pages, made the newest Flow remembered. */
+  const flowOf = (scope: WebLlmTargetScope): FlowPages => {
+    const key = scopeKey(scope);
+    const flow = flows.get(key) ?? { pages: new Map<string, PageTargets>(), letGo: new Set<string>() };
+    flows.delete(key);
+    flows.set(key, flow);
+    for (const oldest of flows.keys()) {
+      if (flows.size <= RETAINED_FLOWS) break;
+      flows.delete(oldest);
+    }
+    return flow;
+  };
   return {
     remember(scope, binding) {
-      const key = scopeKey(scope);
-      const flow = flows.get(key) ?? { pages: new Map<string, PageTargets>(), letGo: new Set<string>() };
-      flows.delete(key);
-      flows.set(key, flow);
-      for (const oldest of flows.keys()) {
-        if (flows.size <= RETAINED_FLOWS) break;
-        flows.delete(oldest);
-      }
+      keep(flowOf(scope), binding.evidence.location, targetsOf(binding));
+    },
+    rememberLook(scope, binding) {
+      const flow = flowOf(scope);
       const location = binding.evidence.location;
-      const targets: PageTargets = new Map();
-      const uses = new Map<string, number>();
-      for (const element of binding.evidence.elements) {
-        const selector = binding.selectors.get(element.target);
-        if (selector === undefined) continue;
-        const target: PageTarget = { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target)), shared: false };
-        const address = addressOf(target);
-        uses.set(address, (uses.get(address) ?? 0) + 1);
-        targets.set(element.target, target);
+      const seen = targetsOf(binding);
+      // A look that described every control says which have gone, as a shown
+      // packet does; one cut short -- forty controls, the capture, the bytes --
+      // cannot, so it only adds.
+      if (!binding.evidence.truncated) {
+        keep(flow, location, seen);
+        return;
       }
-      for (const target of targets.values()) target.shared = (uses.get(addressOf(target)) ?? 0) > 1;
-      flow.pages.delete(location);
-      flow.pages.set(location, targets);
-      flow.letGo.delete(location);
-      for (const oldest of flow.pages.keys()) {
-        if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
-        flow.pages.delete(oldest);
-        flow.letGo.add(oldest);
-      }
-      for (const oldest of flow.letGo) {
-        if (flow.letGo.size <= REMEMBERED_STALE_PAGES) break;
-        flow.letGo.delete(oldest);
-      }
+      const targets = new Map(flow.pages.get(location) ?? []);
+      for (const [handle, target] of seen) targets.set(handle, target);
+      keep(flow, location, targets);
     },
     resolve(scope, handle, location) {
       const flow = flows.get(scopeKey(scope));
@@ -130,6 +140,38 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
     },
   };
+}
+
+/** Each described element's target in one capture, marked shared where the capture gave its address to several. */
+function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
+  const targets: PageTargets = new Map();
+  const uses = new Map<string, number>();
+  for (const element of binding.evidence.elements) {
+    const selector = binding.selectors.get(element.target);
+    if (selector === undefined) continue;
+    const target: PageTarget = { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target)), shared: false };
+    const address = addressOf(target);
+    uses.set(address, (uses.get(address) ?? 0) + 1);
+    targets.set(element.target, target);
+  }
+  for (const target of targets.values()) target.shared = (uses.get(addressOf(target)) ?? 0) > 1;
+  return targets;
+}
+
+/** Keep `targets` as the newest view of the page at `location`, letting the oldest page go past the bound. */
+function keep(flow: FlowPages, location: string, targets: PageTargets): void {
+  flow.pages.delete(location);
+  flow.pages.set(location, targets);
+  flow.letGo.delete(location);
+  for (const oldest of flow.pages.keys()) {
+    if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
+    flow.pages.delete(oldest);
+    flow.letGo.add(oldest);
+  }
+  for (const oldest of flow.letGo) {
+    if (flow.letGo.size <= REMEMBERED_STALE_PAGES) break;
+    flow.letGo.delete(oldest);
+  }
 }
 
 /**

@@ -22,6 +22,12 @@ export type WebNodeRun = {
   /** Remember a packet the model has now been shown. */
   shown: (binding: WebLlmSnapshotBinding) => void;
   /**
+   * Remember the look a call takes before it acts, which the model is not
+   * shown: its controls become pressable, and a look cut short at its forty
+   * controls forgets none the model was shown (`../plan-resolution/target-packets.ts`).
+   */
+  looked: (binding: WebLlmSnapshotBinding) => void;
+  /**
    * Whether this build has reached its start location, held by the runtime for
    * the life of the process (`./arrival.ts`). Read only for a build told a
    * start location.

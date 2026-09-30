@@ -64,6 +64,7 @@ import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
 import type { WebNodeRun } from "./context";
+import { webObservedControl } from "./observed-control";
 import { webNodeReadResult } from "./read-result";
 import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
@@ -256,7 +257,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // location. Everything else is refused with where to go, rather than with
     // `page_unreadable`, which says what happened and not what to do about it.
     if (!current && !webMovesThePage(node)) return notThereYet(run, record);
-    if (current) run.shown(current);
+    // Not shown to the model, so a look cut short adds handles and forgets none:
+    // remembered as shown, a notice that pushed a shown filter past this look's
+    // forty controls took the filter's handle with it (`run-muohbi3e-e5847e5a`).
+    if (current) run.looked(current);
     // A handle written bare -- `selector: target.3` -- is the shape the Flow
     // script writes and the shape a model reaches for, and the resolver only
     // knows `{handle}`. Left alone it is not a handle at all: it goes to the
@@ -296,7 +300,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const ran = resolved.status === "resolved" ? resolved.parameters : written;
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
-    const control = current ? observedControl(current.evidence, written) : { name: undefined, kind: "step" };
+    const control = current ? webObservedControl(current.evidence, firstHandle(written), ran) : { name: undefined, kind: "step" };
     // A node that acts must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -335,6 +339,8 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     }
     // And only to an address this build was shown, with the page back so the link that goes there can be pressed.
     if (run.addresses.refuses(buildOf(run), node, ran, { location: current?.evidence.location, startLocation: run.request.startLocation })) {
+      // This refusal hands the look back, so from here it is a packet shown.
+      if (current) run.shown(current);
       return refusal(current, "address_not_shown", webUnshownAddressRefusal(run.request.startLocation), run.request.maxEvidenceBytes, record);
     }
     // What this step is, should it meet a robot check: the statement a success
@@ -613,15 +619,6 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
     missing: undefined,
     requestId: undefined
   });
-}
-
-/** The control a call acts on, as the person being asked would name it. */
-function observedControl(evidence: WebLlmPageEvidence, parameters: JsonObject): { name: string | undefined; kind: string } {
-  const handle = firstHandle(parameters);
-  const element = handle === undefined ? undefined : evidence.elements.find((candidate) => candidate.target === handle);
-  if (!element) return { name: undefined, kind: "step" };
-  const kind = element.role && /^[a-z]+$/u.test(element.role) ? element.role : element.tag === "a" ? "link" : /^[a-z]+$/u.test(element.tag) ? element.tag : "control";
-  return { name: element.name ?? element.text, kind };
 }
 
 /** The first target handle a call's parameters name, wherever it wrote it. */
