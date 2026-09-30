@@ -1,8 +1,9 @@
 # t196 — state-digest cost and ignored redirects
 
-Lane lead t196, 2026-09-30. **Status: the dry run (N1 + D1 + wH) and the build lifecycle's replay boundary are done
-and validated by unit tests; ready to commit (see "Ready to commit" at the end of the first section).** No live or Lab
-run (brief; all Labs stopped by the user).
+Lane lead t196, 2026-09-30. **Status: the authored draft, the acts checklist (A1 cause 1), progress as the Flow
+advancing (A1 cause 2) and continuation from the live page (G1) are done and validated by unit tests; ready to commit
+(see "Ready to commit" at the end of the first section).** The dry run and replay boundary before it were committed as
+`77b269a2`. No live or Lab run (all Labs stopped by the user).
 Trees: Core `C:/Users/osrs_/FluxStuff/fxwork/t196/!FluxIQ` and extension
 `C:/Users/osrs_/FluxStuff/fxwork/t196/!FluxIQWebExtension`, both `task/t196-state-digest-cost` (Core from `f0dbbd6`).
 Evidence: `C:/Users/osrs_/FluxStuff/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/reports/looking-at-page-repeat.md`
@@ -10,6 +11,160 @@ and the t193/t194/t195 bundles named below. Worker reports beside this file: `t1
 `t196-wL-loop.md` (Core loop).
 
 ## Fix log
+
+### The authored draft, the acts checklist, progress, and continuation (worker, 2026-09-30, after `77b269a2`)
+
+`R` = `packages/fluxiq/src/programs/automation-studio/runtime` (Core). Every file is in the Core tree; nothing
+downstream changed in this round (the page-evidence code is t200's and was not touched).
+
+**Orders (supervisor, user's words):**
+1. G2: "IT SHOULD NOT JUST BLINDLY ADD EACH STEP THAT IT TOOK ONE BY ONE IN ORDER. IT SHOULD ONLY ADD STEPS IN A WAY
+   THAT MAKE AN INTELLIGENT FLOW!" Executed steps are evidence; the model authors the draft; promoting a step costs few
+   calls.
+2. G1: a continued build in a new process is forced back to the start. Remove that.
+3. A1 cause 1: show the instructed acts from the first decision as the model's checklist; claims name what the model
+   sees; complete only when every act is covered by an authored step.
+4. A1 cause 2: progress is the draft advancing toward the acts, not a landed action; the guard names what is missing.
+
+#### Inventory: what keeps an executed step, and what changes (before → after)
+
+| Where | Before | After |
+| --- | --- | --- |
+| `R/llm/evidence-loop.ts` `draftRecord` (was :256-261) | every executed call appended `kept` (the loop decided) | appended `taken`; `kept` only if the call carried `add` (or `act`) and worked. `draftAuthoring: "transcript"` keeps the old rule for recorded replays |
+| `R/llm/evidence-loop.ts` tool-call site (was :700) | recorded the call's step | passes the call's `add`/`act`; computes authored progress |
+| `R/flow-draft/step.ts` disposition | `kept`/`dropped`/`exploratory` | adds `taken`; step gains `acts?: string[]` |
+| `R/flow-draft/amendment.ts` | `keep` puts back a withdrawn step | new `add` (with `to` to place it, `act` to name the act); `keep` also takes `act` |
+| `R/llm/evidence-loop-decision.ts` | tool_call had no draft fields | tool_call may carry `add` and `act` (offered only when authoring; `act` implies `add`); amendments may carry `act`; standing instruction says a Flow is ready only when every act is done, and a revisited state is not progress |
+| `R/llm/evidence-loop/rerun-replacement.ts` | rerun appended kept at the end; replaced step dropped; routing naming it orphaned (A1 5a) | under authoring the rerun takes the replaced step's position, membership, acts and routing, and every routing reference is renamed |
+| `R/flow-draft/entry.ts` | transcript guidance; entry absent until a step exists | authored guidance (three lengths); `acts` checklist carried whole on every entry, and shown from the first decision with `steps: []` |
+| `R/flow-bootstrap/reachability/start-step.ts` | restores a *withdrawn* arrival | also restores a *taken* arrival (Core still puts the required start step first; `withdrawnAs: "taken"`) |
+| `R/flow-bootstrap/incomplete-draft/parse.ts` | — | validates stored `acts` ids. (`kept.ts` already stores only steps in the Flow, so a continuation continues the authored Flow.) |
+| `R/llm/node-tools/draft-from-flow.ts` (extend seed) | existing Flow nodes seeded `kept` | unchanged: an existing Flow is authored already |
+| `R/recording-flow-proposal.ts` (recorded chain) | a person's recording becomes a proposal | unchanged: not the LLM build |
+| `R/llm/decision-handlers/failed-call.ts:36`, `answered-request.ts:58` | recorded not-proposable steps | unchanged (they record `taken` now) |
+
+**The acts checklist (A1 cause 1).**
+- New `R/flow-bootstrap/instructed-acts/checklist.ts`: each act (`id`, `verb`, `quote`, `plural`) with `done: <step
+  number>` or `todo: <reason>` (`no_step_added`, or the check's own fault). Computed by the same rule the completion
+  check uses: `check.ts` now exports `automationStudioInstructedActStepFault`, so an act shown done is one a completion
+  accepts.
+- `check.ts` reads a kept step's `acts` as the model's claims (`automationStudioInstructedActDraftClaims`), so an
+  authored step needs no claim written again; its refusal text now tells the model to add with `act`.
+- New `R/llm/harness-options/draft-acts.ts` gives the loop `draft.acts` and `draft.actsMissing`; `R/service.ts` passes
+  them on every build. `R/llm/loop-configuration.ts` declares both.
+- Claims name what the model sees: `R/flow-bootstrap/plan/evidence-schema.ts` describes a claim's step as the step
+  number the draft shows (the check already accepted numbers).
+
+**Progress (A1 cause 2).**
+- `R/llm/evidence-loop/no-progress.ts`: an applied call whose post-call digest is a state already visited (for the life
+  of the loop, across tools) is a step without progress; a call with no digest is judged as before. New
+  `refusedAgain(signature, issueSet)`: a completion refused for the same issues over the same proposed steps counts even
+  after calls between.
+- New `R/llm/evidence-loop/authored-progress.ts`: the authored draft advancing (a step entering the Flow for the first
+  time, or fewer acts undone than ever) clears the guard, at a call or at an amendment
+  (`R/llm/decision-handlers/amendment.ts`). High-water marks, so toggling a step out and in is not progress: the
+  existing laundering test (`R/flow-draft/tests/accrual.test.ts`) caught a first version that counted any landed edit.
+- `R/llm/evidence-loop/stall-redirect.ts`: the redirect carries `actsMissing` and leads with "Your next step is the one
+  that does aN: run it and add it with act aN"; it no longer says "complete now" while acts are owed.
+
+**G1.** `R/service.ts`: the incomplete draft is read before the harness registry is built; when the build continues it
+(`automationStudioFlowBootstrapIncompleteDraftContinuation`), the registry, and the state-digest hook, get no
+`startLocation`. The completion check still gets it, so the carried start step is still required.
+
+**Other files.** `R/llm/evidence-loop/decision.ts`, `R/llm/harness/provider-result.ts`,
+`R/llm/harness/structured-response.ts` (the call's `add`/`act`); `R/llm/deepseek/preflight.ts` (accepts the schema
+with and without the authoring fields); `R/llm/decision-context/shown.ts` (passes `authored`/`acts`);
+`R/llm/evidence-loop/draft-shown.ts` (`taken` is a shown disposition); `R/llm/evidence-loop/progress-trace.ts`
+(`add=1 act=aN` on a call); `R/llm/evidence-loop/completion-check.ts`, `R/flow-bootstrap/evidence-loop-steps.ts`
+(`withdrawnAs: "taken"`); `R/llm/decision-handlers/types.ts`; `R/llm/evidence-loop/index.ts`,
+`R/flow-bootstrap/instructed-acts/index.ts`, `R/llm/harness-options/index.ts` (barrels);
+`R/llm/harness-options/bootstrap-completion.ts` (script note); `R/llm/node-tools/run-node.ts` (description, still
+under the 2,000-character provider limit); docs `docs/architecture/automation-studio/llm-flow-bootstrap.md` and the
+regenerated reference (2,780 declarations).
+
+**Tests.**
+- New: `R/llm/evidence-loop/tests/authored-draft.test.ts` (taken by default; `add`/`act` on a call; `add` amendment
+  with `to`/`act`; transcript rule; grammar offered only when authoring; checklist shown at decision 1; a
+  `run-munwmfrs`-shaped revisit loop stops at call 5 of 20 with `actsMissing` in the redirect; an added step clears;
+  toggles are not progress), `R/llm/evidence-loop/tests/no-progress.test.ts`,
+  `R/flow-bootstrap/instructed-acts/tests/checklist.test.ts`, and a service test in
+  `R/tests/service-bootstrap/tests/incomplete-draft.test.ts` (build 1's calls carry the start location; the continued
+  build's carry none).
+- `R/llm/evidence-loop/tests/rerun-replacement.test.ts`: rewritten for the rerun taking the replaced step's place, plus
+  a routing-rename case and a transcript case.
+- Recorded replays run under `draftAuthoring: "transcript"` (the rule they were recorded under):
+  `R/llm/decision-context/tests/recorded-runs.ts`, `R/route-state/tests/build-routing.test.ts`,
+  `R/llm/evidence-loop/tests/stalled-amendments-replay.test.ts`.
+- Tests of other behaviour now author their Flow steps with `add: true`: `flow-draft/tests/{dry-run,accrual}.test.ts`,
+  `llm/tests/{evidence-loop,evidence-loop-seeded-draft,draft-amendment-feedback}.test.ts`,
+  `llm/evidence-loop/tests/progress.test.ts`, `llm/decision-handlers/tests/{completion,decision-context-wiring}.test.ts`,
+  `llm/node-tools/tests/replay-draft-verify.test.ts`, `flow-bootstrap/tests/person-needed-replay.test.ts`,
+  `flow-bootstrap/incomplete-draft/tests/continuation-loop.test.ts`, and the service tests
+  `tests/service-bootstrap/tests/{extend,incomplete-draft,permission}.test.ts`; `generation.test.ts` now expects the
+  draft entry (checklist) at decision 1.
+
+**Gaps and notes.**
+- `tests/service-bootstrap/tests/permission.test.ts` "goes ahead with nothing permitted, and keeps what the instruction
+  asked for": fails on `flow_bootstrap.permission_required` for `move_money` before any draft logic. The gate changed
+  in `05266957` (lane D: "money, delete and send always ask") after that test was last edited, and this round touches
+  nothing in `action-permissions`. Attributed from history; not re-run on the pre-change tree.
+- The act reader reads "Create a deterministic Start to End Flow" (the service fixtures' instruction) as a `create`
+  act. The checklist now shows it from decision 1. Owner: whoever owns `instruction-acts.ts`.
+- Early give-up (`bootstrap.cannot_answer_instruction`) is unchanged; the no-progress stop still ends a build with no
+  "not doable, with reason" path (A3's top cause). Not in this change.
+- `maxDraftAmendments` (16 in the service) now also bounds `add` amendments; `add` on the call costs none.
+- The domain's arrival comment (`domain/src/runtime/llm-evidence/node-run/arrival.ts`) still says a resumed build starts
+  not arrived; that holds only when a start location is sent, which a continuation no longer gets. Not edited.
+
+#### Commands run and observed results
+
+- `npx tsc -p packages/fluxiq/tsconfig.json --noEmit` → exit 0, no output.
+- `heavy.sh "t196 core final" npx vitest run R/llm R/flow-draft R/flow-bootstrap R/route-state R/tests/service-bootstrap
+  R/conversations --maxWorkers=2 --minWorkers=1 --testTimeout=120000` → `Test Files 2 failed | 155 passed (157)`,
+  `Tests 2 failed | 1761 passed (1763)`. The two failures are the permission rule's:
+  - `service-bootstrap/tests/permission.test.ts`, the test named in "Gaps and notes" above;
+  - `conversations/commands/tests/execute.test.ts` "never grants a delete by typing", which matches dev's PIN change
+    `3bbee17d`.
+  Neither file touches the draft, loop or acts code.
+- Whole `src/programs/automation-studio` suite (before the last three test edits) → `Test Files 6 failed | 452 passed
+  (458)`, `Tests 12 failed | 4353 passed | 1 skipped`.
+  - `extension-chat.test.ts` (3) was mine and is fixed: its mock build now adds its step, and the file passes 7/7.
+  - The other failures do not reference the changed modules: the two permission tests; `native-node-runtime.test.ts`
+    (a graph value is NaN); `scale-pages.test.ts`; and `storage/project/tests/runtime-stream-store.test.ts` (SQLite
+    `EBUSY` and a 60 s timeout).
+- Core `pnpm --filter fluxiq build` → exit 0.
+- Domain: all `domain/src/runtime/llm-evidence/**/tests` plus `runtime/tests/host-runtime.test.ts` against the rebuilt
+  dist, through the narrow runner → `# tests 410 # pass 410 # fail 0`.
+- `pnpm --filter @fluxiq-web-extension/domain check` → exit 0.
+- Core `node scripts/structure-audit.mjs` → `passed (199 warning(s), 354 baselined)`. It briefly showed 200 because
+  `loop-configuration.ts` reached 408 lines; the comments were compressed to 394.
+- `node scripts/docs-reference.mjs` → 2,780 declarations. `pnpm docs:check` → `Deterministic framework reference is
+  current.`
+
+#### Not verified
+
+- No Lab, browser or live run (all stopped by the user). It is therefore not checked whether a real model:
+  - uses `add`/`act` on calls;
+  - reads the checklist;
+  - stops circling.
+- Revisit detection depends on the web binding's post-call state digests. A domain without digests falls back to the
+  old rule.
+- The permission-rule failures are attributed from git history. I did not re-run them on the tree before this change.
+
+**Ready to commit:** Core `C:/Users/osrs_/FluxStuff/fxwork/t196/!FluxIQ`, 53 modified files and 6 new ones.
+- New:
+  - `R/flow-bootstrap/instructed-acts/checklist.ts` and its test `tests/checklist.test.ts`;
+  - `R/llm/evidence-loop/authored-progress.ts`;
+  - `R/llm/evidence-loop/tests/authored-draft.test.ts` and `tests/no-progress.test.ts`;
+  - `R/llm/harness-options/draft-acts.ts`.
+- Modified, beyond the files listed in the tables and paragraphs above:
+  - `R/conversations/commands/tests/extension-chat.test.ts`;
+  - `R/tests/service-bootstrap/tests/{extend,generation,incomplete-draft,permission}.test.ts`;
+  - the docs and the regenerated reference (`docs/reference/framework-reference.md` and
+    `packages/fluxiq/docs/reference/framework-reference.md`).
+- Downstream: this report only.
+- Validation: the affected Core suites → 1761 passed and 2 failed, both from the earlier permission rule; domain →
+  `# pass 410 # fail 0`.
 
 ### The dry run and the build lifecycle (worker, 2026-09-30, after the WIP commits 0645df78 / 66c77aea)
 
