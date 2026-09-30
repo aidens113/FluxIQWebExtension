@@ -445,19 +445,44 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
 - **Every step is its own FluxIQ message**, in order, with its reason
   (`stream/step/messages.ts`, `view/step-message-view.ts`): each explained
   decision reads "**Clicking “Get a free quote”** — The quote form is behind
-  this button, so I'm opening it.", each repair gives its diagnosis, and each
-  result check its verdict. The action Core took for a decision (the `tool`
-  events after its `thought`) is that message's quiet outcome line: "Working
-  on it" while it runs, then "Done" or "Didn't work", with Core's sentence
-  when it has one in words; a check reads "Passed" or "Didn't pass". A run's
-  steps are messages too. An action with no decision before it is its own
-  message, in words. There are no folds, disclosures or step counts, and no
+  this button, so I'm opening it.", and each repair gives its diagnosis. A
+  note is words only. There are no folds, disclosures or step counts, and no
   raw tool or node id is shown (`stream/step/words.ts`).
-- Messages are keyed by the event that opened them (`activityId#sequence`)
-  and updated in place, never remounted; each keeps the time of that event,
-  so nothing reorders. They come from the relay's `history`, so a whole build
-  stays in the chat after it settles, placed by time among the thread's turns
-  (timed by Core's own `createdAt`), before the answer it led to.
+- **Every action is a card** (`stream/step/action-card.ts`,
+  `view/action-card-view.ts`). The actions Core took for a decision (the
+  `tool` events after its `thought`, until something else opens a message)
+  are that message's cards, in order. An action with no decision before it, a
+  result check, a question to the person and a run's step are each a message
+  that is only its card. Core's shared classifier reads each event
+  (`activityActionOf`, `ACTIVITY_ACTION_ICONS` and `ACTIVITY_ACTION_NAMES` from
+  `fluxiq/ui`), so the extension and Core's web panel draw the same card:
+  - **Mark.** The icon Core pins for the kind, drawn from lucide's node data
+    by `panel/icons/` (`lucideIcon`, inline SVG in the current colour), in a
+    28 px round mark. The mark is tinted by the outcome: accent while
+    working, success when done, danger when failed, warning while waiting,
+    and neutral once settled.
+  - **Head line.** The kind's name and what it acted on: "Click · Get a free
+    quote". An action on the page that named no control says "the page"; a
+    test run, an edit to the Flow, a wait, a robot check or a permission
+    names no target.
+  - **Outcome line** (`stream/step/card-words.ts`). "Done"; "Didn't work: it
+    wasn't on the page" (Core's reason, else its sentence in words); a check
+    reads "Passed" or "Didn't pass" with its verdict. "Working on it" and
+    "Waiting for you" show only on the action of the moment, which is the
+    newest card of the unit of work that is running or waiting on the person.
+    An action that never said it ended shows no outcome once the work moved
+    on.
+  - **Accessibility.** The card is a labelled group ("Click, Get a free
+    quote: Done"), and its icon is `aria-hidden`.
+  - **Styling.** The panel's tokens only, so light and dark follow them: the
+    getting-started step's mark and body in `.card`'s chrome (`chat.css`).
+- Messages are keyed by the event that opened them (`step:activityId#sequence`)
+  and cards by theirs (`action:activityId#sequence`). Both are updated in
+  place, never remounted. A new card goes after the others, and each message
+  keeps the time of its event, so nothing reorders. They come from the relay's
+  `history`, so a whole build stays in the chat after it settles, placed by
+  time among the thread's turns (timed by Core's own `createdAt`), before the
+  answer it led to.
 - The live line is always last. It shows the paced display only: the
   headline, the step, and Core's latest sentence ("Thinking about the next
   step" while Core decides, which adds no message). While the work waits for

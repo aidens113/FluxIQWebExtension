@@ -211,7 +211,10 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     // The first read's unstamped turns are history: they sort before every step message.
     const stamped = clock.stamp(state.turns, historyTaken ? Date.now() : Number.NEGATIVE_INFINITY);
     if (state.mode === "thread" || state.mode === "empty") historyTaken = true;
-    const working = activity.display?.working === true ? activity.display.activityId : null;
+    // The unit of work of the moment: running, or waiting on the person, whose
+    // newest action card says "Working on it" or "Waiting for you".
+    const display = activity.display;
+    const working = display && (display.working || display.outcome === "waiting") ? display.activityId : null;
     const anything = thread.render(
       buildChatStream(stamped, activity.events),
       liveLineModel(activity.display, state.sending, answerIn !== null),

@@ -127,6 +127,54 @@
   9. The false "Add an AI model key: To do": the Simple checklist is deleted, and a test pins that the panel has no
      model-key step.
 
+- **Round 4, action cards with icons (2026-09-30, lead).** The user said: "regarding actions in the chat, it should
+  show proper cards with icons", reusing "the same card/icon styles as defined by the importing repo or core". The
+  dev merge needed nothing: both branches were fast-forwarded to 1b2c6d79 and Core 2ee48b69.
+  - **Defined once** (WS, `t191-r4-ws-action-kinds.md`): Core `packages/fluxiq/src/ui/activity-action/` holds
+    everything both surfaces import from `fluxiq/ui`:
+    - the `ActivityActionKind` values: click, type, navigate, read, look, wait, person_check, permission, draft, test,
+      repair and other;
+    - `ACTIVITY_ACTION_ICONS` (lucide names) and `ACTIVITY_ACTION_NAMES`;
+    - `activityActionOf(event)`, which returns `{kind, target, outcome, why}` using Core's tool ids and generic verbs
+      only.
+
+    Core's activity wording now uses the same verb table. The lead added `packages/fluxiq/src/ui/index.ts` to Core's
+    `scripts/structure-audit/config.mjs` `browserBundles.entries`, so the audit keeps it browser-safe.
+  - **Extension** (WE, `t191-r4-we-extension-cards.md`):
+    - each reasoning message carries the cards for the actions it led to;
+    - a card shows the lucide icon in a round mark tinted by outcome, the kind name and target, and the outcome in
+      words ("Done", "Didn't work: it wasn't on the page", "Waiting for you");
+    - the cards use the panel tokens and the getting-started step layout;
+    - the icons come from one module, `panel/icons/`, holding lucide path data under the ISC licence.
+  - **Core panel** (WW, `t191-r4-ww-core-panel-cards.md`): the same cards through `lucide-react` (one lookup keyed by
+    kind), `fluxiqStatusTone` and existing tokens, in `components/action-card/`.
+  - Differences left open:
+    - once the work moves past a robot-check or permission card, the extension shows no outcome (Core sends no
+      "answered" event), while the Core panel marks it Done;
+    - the Core panel can show a robot check as two cards (the ask and the tool);
+    - "Step N" is no longer shown on run steps on either surface.
+  - Ready to commit:
+    - downstream: every `git status` path under `apps/extension/src/panel/{chat,icons}`,
+      `docs/architecture/extension-client.md` and this report folder. Use `git add -A`, because WE staged the deletion
+      of `stream/step/outcome.ts`.
+    - Core: every `git status` path under `packages/fluxiq/src/{ui,programs/automation-studio/runtime/activity/wording}`,
+      `scripts/structure-audit/config.mjs` and `apps/web/src/features/automation-studio/{conversation,styles/conversation}`.
+  - Validation:
+    - `heavy.sh "t191 verify we"` -> `check=0 test=0 build=0`, `# tests 1624 # pass 1624 # fail 0`. The build was
+      restored from the build cache's stamp ("inputs and outputs match the stamp"); WE's run of the same inputs printed
+      "verified 22 files" for chrome, firefox and e2e-chromium. Chrome and Firefox side-panel and popup bundles contain
+      the card code;
+    - repository structure audit -> `passed (133 warning(s), 120 baselined)`;
+    - `heavy.sh "t191 verify ww"`:
+      - web `tsc` -> 0;
+      - vitest over conversation and styles, without core-contract -> `28 passed (28)`, `205 passed (205)`;
+      - fluxiq vitest over `src/ui` and `runtime/activity` -> `16 passed (16)`, `176 passed (176)`;
+    - Core structure audit -> `passed (202 warning(s), 354 baselined)`.
+  - Not verified:
+    - No screenshots. Neither repository has a jsdom or Storybook render harness, and a Playwright render of the
+      panel would be a browser run outside the ten scenarios while Labs are stopped.
+    - Real Core events.
+
 ## The user's verdict on t185, after watching live runs (2026-09-29)
 
 1. The extension's UI is "not at all like chatgpt styled chat area".

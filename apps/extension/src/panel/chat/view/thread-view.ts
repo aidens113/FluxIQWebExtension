@@ -3,7 +3,8 @@
 // each turn, step message and the live line keep their element for as long
 // as they exist, and move only when they are out of place (`placeChildren`),
 // so nothing on screen flickers, loses focus or jumps while pushes and polls
-// arrive. A step message is updated in place as its action starts and ends.
+// arrive. A step message and its action cards are updated in place as each
+// action starts and ends.
 
 import { createElement } from "../../dom";
 import type { AskControlsContext, CoreTurn } from "../conversation";
@@ -22,8 +23,9 @@ export type ThreadView = {
   readonly element: HTMLElement;
   /**
    * Shows `stream`, and `live` as the live line (null hides it). `working` is
-   * the unit of work still running, if any, so only its newest action says it
-   * is under way. Answers whether anything shows.
+   * the unit of work still under way or waiting on the person, if any, so only
+   * its newest action says it is working or waiting for you. Answers whether
+   * anything shows.
    */
   render(stream: ChatStream, live: LiveLineModel | null, controls: (turn: CoreTurn) => TurnControls, working?: string | null): boolean;
   /** Forgets every turn and step message, for a thread that replaces this one. */
