@@ -25,6 +25,7 @@ and its own `fxwork/<id>` tree:
 | t193 live B self-repair | `lead-xhigh`, slot-2 | after-creation variants: fail, diagnose, repair, persist, zero-provider replay |
 | t194 live C judge answer | `lead-xhigh`, slot-3 | expected-dataset tasks from rung 1; exact answer, self-judgement, refute and re-author |
 | t195 live D control flow | `lead-xhigh`, slot-4 | routing, retry, loops; permission only for money, delete, send |
+| t196 page-capture cost | `lead` (t189's) | ~39 full captures per build from digests; ignored redirects must bite |
 | t192 Core build speed | `lead` (t187's) | Core `build`/`check` from about 162 s to seconds, provably safe |
 | t191 chat UI + overlay | `lead` (t185's) | user verdict: chat not ChatGPT-like, overlay not visible on the site, status flickers; screenshot-driven fix |
 
