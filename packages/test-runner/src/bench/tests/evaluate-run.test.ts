@@ -7,6 +7,7 @@ import type { RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import type { RunLaneObservation } from "../../flow-lane/index.js";
 import { evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type FlowRunInput, type RecordingRunInput } from "../evaluate-run.js";
+import { honestRunVerdict, PERMISSION_STOP_INVARIANT } from "../../run-evaluation/index.js";
 
 type ActionStatus = NonNullable<RunManifest["actions"]>[number]["status"];
 const identity = { scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, expectedFailure: null };
@@ -220,4 +221,22 @@ test("a recording-lane bundle adds no evidence sizes, even when its directory ho
   // runScenario's result carries the bundle path on either lane; only the Flow lane's evaluation reads it.
   const result = { runId: "run-recording", verdict: "passed" as const, path: bundleWith(t, TWO_PACKETS) };
   assert.deepEqual(evaluateRecordingRun(input({ result })).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+});
+
+// Overnight on 2026-09-30 lane D recorded 12 "passes" that were each a build
+// stopping to ask for permission (commit f2f80024). A bench row reads the same
+// runner result, so it carries the same invariant and can never count a stop.
+test("a Flow-lane bench run whose build stopped for permission fails the stopped-for-permission invariant and is never a pass", () => {
+  const stop = { verdict: "stopped_for_permission" as const, consequence: "purchase", control: "matched" as const };
+  const stopped = evaluateFlowRun(flowInput({ result: { runId: "run-a", verdict: "passed", path: NO_BUNDLE, observation: { ...createdFlow, flowCreated: false, oracleVerdict: null, reportedVerdict: null, actions: [] }, permissionStop: stop } }));
+  assert.equal(stopped.verdict, "failed", "a runner result that claims passed does not survive the stop");
+  assert.equal(honestRunVerdict(stopped), "stopped_for_permission");
+  const invariant = stopped.invariants.find((each) => each.id === PERMISSION_STOP_INVARIANT);
+  assert.ok(invariant && invariant.passed === false);
+  assert.match(invariant.actual, /^stopped_for_permission: asked permission to purchase at the task's declared control/u);
+  assert.equal(stopped.flowCreated, false);
+
+  const unstopped = evaluateFlowRun(flowInput({ result: { runId: "run-a", verdict: "passed", path: NO_BUNDLE, observation: createdFlow } }));
+  assert.equal(unstopped.verdict, "passed");
+  assert.equal(unstopped.invariants.some((each) => each.id === PERMISSION_STOP_INVARIANT), false);
 });

@@ -49,7 +49,7 @@ test("a campaign runs tasks one at a time, retries only RAM faults, and writes i
   assert.equal(summary.tasks[2].failureCategory, "ram-fault: segmentation fault");
   assert.equal(summary.tasks[3].failureCategory, "environment.missing");
   assert.equal(summary.tasks[3].runnerMessage, "Unknown option --instruction-task");
-  assert.deepEqual(summary.totals, { tasks: 4, passed: 1, succeeded: 1, failed: 1, noResult: 2, judgementsPassed: 1, built: 0, permissionRequired: 0, providerCalls: 2, reportedTokens: 15, reportedCostUsd: 0.75 });
+  assert.deepEqual(summary.totals, { tasks: 4, passed: 1, succeeded: 1, failed: 1, stoppedForPermission: 0, noResult: 2, judgementsPassed: 1, built: 0, permissionRequired: 0, providerCalls: 2, reportedTokens: 15, reportedCostUsd: 0.75 });
   assert.ok(summary.finishedAt);
   assert.ok(lines.some((line) => line.includes("retrying")) && lines.some((line) => line.includes("no attempts left")));
 
@@ -60,6 +60,43 @@ test("a campaign runs tasks one at a time, retries only RAM faults, and writes i
   assert.match(markdown, /\*\*1 of 4 runs passed\*\*/u);
   assert.match(markdown, /\| form-goal \| instruction-only-form \| form \| run-ok \| passed \| — \| yes \| — \| — \| web\.dom\.type \| playback goal \| yes \| — \| 2 \| 15 \| 0\.75 \| — \| — \| 2 \(exit 3221225477 \(access violation\)\) \|/u);
   assert.match(markdown, /\| table-read-reordered \| data-table \/ column-reorder \|/u);
+}));
+
+// Overnight on 2026-09-30, lane D's bigbox pickup-order recorded 12 "passes"
+// that were each a build stopping to ask for permission with no Flow built.
+// A stop is its own verdict in every row, count, log line and table.
+test("a campaign reports a build that stopped for permission as its own verdict, never a pass or a success", () => withTemp(async (directory) => {
+  const paths = Object.fromEntries(["form-goal", "table-read", "table-read-reordered"].map((id) => [id, path.join(directory, id)]));
+  const stopInvariant = { id: "stopped-for-permission", passed: false, expected: "a created Flow that did the task", actual: "stopped_for_permission: asked permission to purchase", evidenceSequences: [] };
+  const bundles = {
+    [paths["form-goal"]]: { evaluation: { verdict: "passed", flowCreated: true, oracleVerdict: "passed", actions: [], extraction: null, invariants: [] }, run: null, flowLane: null, liveLlm: null },
+    [paths["table-read"]]: { evaluation: { verdict: "failed", flowCreated: false, oracleVerdict: null, actions: [], extraction: null, invariants: [stopInvariant] }, run: null, flowLane: null, liveLlm: null },
+    // An evaluation that still read `passed` beside its failed stop invariant is read by the invariant.
+    [paths["table-read-reordered"]]: { evaluation: { verdict: "passed", flowCreated: false, oracleVerdict: "passed", actions: [], extraction: null, invariants: [stopInvariant] }, run: null, flowLane: null, liveLlm: null },
+  };
+  const printed = {
+    "form-goal": resultLine({ runId: "run-form-goal", path: paths["form-goal"] }),
+    "table-read": resultLine({ runId: "run-table-read", verdict: "failed", failureCategory: "runtime.behavior", path: paths["table-read"], permissionStop: { verdict: "stopped_for_permission", consequence: "purchase", control: "matched" } }),
+    "table-read-reordered": resultLine({ runId: "run-table-read-reordered", verdict: "passed", path: paths["table-read-reordered"] }),
+  };
+  const execute = async ({ taskId }) => attempt({ code: taskId === "form-goal" ? 0 : 1, stdout: printed[taskId] });
+  const outputDir = path.join(directory, "campaigns", "stops");
+  const lines = [];
+  const summary = await runCampaign({ tasks: CATALOG.slice(0, 3), options: { ...parseCampaignArgs(["--all"]) }, outputDir, execute, readBundle: async (target) => bundles[target], log: (line) => lines.push(line) });
+
+  assert.deepEqual(summary.tasks.map((row) => [row.taskId, row.verdict, row.succeeded]), [
+    ["form-goal", "passed", true],
+    ["table-read", "stopped_for_permission", false],
+    ["table-read-reordered", "stopped_for_permission", false],
+  ]);
+  assert.deepEqual(summary.tasks[1].permissionStop, { consequence: "purchase", control: "matched" });
+  assert.deepEqual(summary.tasks[2].permissionStop, { consequence: null, control: null });
+  assert.deepEqual([summary.totals.passed, summary.totals.succeeded, summary.totals.failed, summary.totals.stoppedForPermission], [1, 1, 0, 2]);
+  assert.ok(lines.some((line) => line.startsWith("[campaign] table-read: stopped_for_permission (run-table-read)")));
+  const markdown = await readFile(path.join(outputDir, "summary.md"), "utf8");
+  assert.match(markdown, /\*\*1 of 3 runs passed\*\* \(0 failed, 2 stopped for permission and built no Flow, 0 produced no result\)/u);
+  assert.match(markdown, /\*\*1 of 3 tasks succeeded\*\*/u);
+  assert.match(markdown, /\| table-read \| [^\n]*\| stopped_for_permission \|[^\n]*stopped for permission to purchase \(control matched\); no Flow was built, so this is not a pass/u);
 }));
 
 test("a campaign with repair tasks counts a repair as succeeded on its judgement, and renders it in its own table", () => withTemp(async (directory) => {

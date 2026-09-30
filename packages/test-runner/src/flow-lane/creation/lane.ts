@@ -148,7 +148,10 @@ export type CreatedFlowLaneEvidence = Readonly<{
  * A consequential task's right ending when its act is not permitted: the build
  * stopped to ask a person at the task's declared permission point
  * (`permission-point.ts`), so no Flow was applied or run, and none should be.
- * Returned rather than thrown, because it is the pass.
+ * Returned rather than thrown, because it is the right behaviour and not a
+ * lane fault. It is still not a pass: no Flow was built, so nothing did the
+ * task, and the run's verdict is `stopped_for_permission`
+ * (`../../lane-rules/built-flow.ts`).
  */
 export type CreatedFlowLanePermissionStop = Readonly<{
   request: CreatedFlowRequest;
@@ -172,7 +175,7 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   lane: "created-flow";
   complete: false;
   stoppedAt: CreatedFlowLaneStage;
-  /** `null` only for a build that stopped to ask at the task's declared permission point, which is the pass (`permissionStop`). */
+  /** `null` only for a build that stopped to ask at the task's declared permission point: no lane fault, and a `stopped_for_permission` run rather than a pass (`permissionStop`). */
   failure: { category: RunnerFailureCategory | null; message: string } | null;
   permissionStop?: CreatedFlowLanePermissionStop["permissionStop"];
   task: ReturnType<typeof describeCreatedFlowRequest>;
@@ -269,7 +272,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     await input.recordIncompleteEvidence?.({ ...incompleteCreatedFlowLaneEvidence(input, progress, undefined), permissionStop: stop });
     return stopped;
   }
-  // A task whose instruction says to ask first has no passing ending but the stop above: a Flow built without asking is wrong however right its records, and is never applied.
+  // A task whose instruction says to ask first has no right ending but the stop above, which is `stopped_for_permission` and not a pass: a Flow built without asking is wrong however right its records, and is never applied.
   if (request.task.permissionPoint?.askFirst && build.outcome === "proposed") {
     throw new RunnerFailure("runtime.behavior", "The task says to ask before its lasting act, and FluxIQ built a Flow without asking", { details: { permissionPoint: "not_asked", consequence: request.task.permissionPoint.consequence, adaptationId: build.adaptationId } });
   }
