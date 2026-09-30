@@ -25,7 +25,7 @@ for (const surface of ["popup", "sidepanel"]) {
     if (!page.includes(needle)) throw new Error(`src/${surface}/index.html must contain ${needle}.`);
   }
   const entry = await readFile(path.join(root, "src", surface, "index.ts"), "utf8");
-  if (!entry.includes(`mountPanel(root, "${surface}",`)) throw new Error(`src/${surface}/index.ts must mount the panel for "${surface}".`);
+  if (!entry.includes(`mountPanel(root, "${surface}")`)) throw new Error(`src/${surface}/index.ts must mount the panel for "${surface}".`);
 }
 
 console.log("Extension smoke test passed.");

@@ -1,6 +1,6 @@
 // Raw error text to the sentence a person reads, from the table in the UI audit,
-// section 4 ("Error sentences"). The raw text is not lost: a view keeps it for
-// Advanced, Activity, and shows this sentence in the card the error belongs to.
+// section 4 ("Error sentences"). The raw text is not lost: a screen keeps it as
+// the tooltip, and shows this sentence where the error belongs.
 //
 // `undefined` means the background gave no answer at all -- the service worker
 // was torn down (audit defect E2) -- so a caller passes it only for a missing

@@ -7,7 +7,10 @@
 // Core's payload comes back as Core sent it. The one addition is a first
 // message's reply, which carries the `conversation` its thread was opened as,
 // beside `append-turn`'s own `turn` and `response`, because the panel has no
-// other way to learn the new thread's ID.
+// other way to learn the new thread's ID. The other is filling in a list's
+// `subjectId` when it asks for the project's own thread (`subjectKind:
+// "project"` alone): that id is the project id, which the panel does not know
+// before its first read.
 //
 // The message shapes are `PanelConversation*Request` in `shared/protocol.ts`.
 
@@ -22,6 +25,9 @@ import type { PanelRelayContext } from "./relay-context";
 import { relayFailure } from "./relay-failure";
 
 type ConversationMessage = { readonly type?: string; readonly [key: string]: unknown };
+
+/** Core's subject kind for a thread about the project itself; its subject id is the project id. */
+const PROJECT_SUBJECT = "project";
 
 /** Relays one of the three conversation messages. Undefined for any other message type. */
 export async function relayConversation(message: ConversationMessage, context: PanelRelayContext): Promise<PanelRelayResponse | undefined> {
@@ -43,11 +49,19 @@ async function read(message: Partial<PanelConversationReadRequest> & { conversat
   const list = message as Partial<Extract<PanelConversationReadRequest, { kind: "list" }>>;
   // An explicit null asks across every project; left out, the session's project.
   const projectId = list.projectId === null ? null : projectFor(list.projectId, context) ?? null;
+  const subjectKind = text(list.subjectKind);
+  let subjectId = text(list.subjectId);
+  if (subjectKind === PROJECT_SUBJECT && subjectId === undefined) {
+    // The project's own thread: its subject id is the project id, which only
+    // this side knows before the first read. Core takes a subject only whole.
+    if (!projectId) return relayFailure("no_project");
+    subjectId = projectId;
+  }
   return context.call("list-conversations", defined({
     projectId,
     status: text(list.status),
-    subjectKind: text(list.subjectKind),
-    subjectId: text(list.subjectId),
+    subjectKind,
+    subjectId,
     limit: whole(list.limit)
   }));
 }

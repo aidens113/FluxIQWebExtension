@@ -22,7 +22,7 @@ authorization, and long-running work. The extension owns browser presence.
 The extension:
 
 - connects to a local or hosted FluxIQ gateway URL;
-- stores that URL in the panel's settings (the Advanced view's Connection tab);
+- stores that URL in the panel's settings (the gear);
 - displays the server-provided reference code while the user approves pairing
   in the FluxIQ web panel;
 - presents one panel UI, mounted by the Chrome/Edge side panel and the Firefox
@@ -63,29 +63,73 @@ but the generic websocket package remains domain-neutral.
 
 The popup and the side panel are one UI. Both `popup/index.html` and
 `sidepanel/index.html` are the same stub -- a `<div id="app">`, a link to
-`index.css`, and `index.js` -- and each entry calls
-`mountPanel(root, surface, views)` from
-[`panel/`](../../apps/extension/src/panel/index.ts). The surface name only sets
-`data-surface` on the page, which sizes the popup to 380px and lets the side
-panel fill its column; nothing else differs, so a change to the panel lands in
-both browsers at once.
+`index.css`, and `index.js` -- and each entry calls `mountPanel(root, surface)`
+from [`panel/`](../../apps/extension/src/panel/index.ts). The surface name only
+sets `data-surface` on the page, which sizes the popup to 380 by 580 px and lets
+the side panel fill its column; nothing else differs, so a change to the panel
+lands in both browsers at once.
+
+There are no modes. The panel is laid out like a chat app: a slim top bar
+(FluxIQ, the Chat and Automations tabs, the record button, the connection dot,
+the gear and Open FluxIQ) and, under it, exactly one screen
+(`panel/shell/screen-state.ts`):
+
+- **Chat**, the default, with the whole panel. While it shows one automation's
+  thread, a slim strip above it gives that automation's last run, Run, the
+  run's data to export and Open in FluxIQ.
+- **Automations**, the person's saved automations, newest first. Choosing one
+  calls `chat.open({ kind: "automation", flowId, name })` and shows the chat.
+  Below the list, "New automation" offers "Record a new automation" and
+  "Extract Data From This Page"; a recording that just ended is reviewed at the
+  top (analyze, preview, test, save), and the panel switches to this tab when
+  a recording stops.
+- **Settings**, opened by the gear in place of everything else: the two
+  addresses and four switches with an explicit Save, Disconnect, the on-page
+  status (Full, Small, Off), Report a problem, Forget this pairing, and Open
+  FluxIQ. Picking a tab or "Close settings" goes back.
+- **Getting started**, which replaces the chat and the automations tab while
+  the browser is not connected -- never connected, connecting, waiting for
+  approval, lost, or unable to reach FluxIQ -- or when the background does not
+  answer: numbered steps (1 Open FluxIQ, 2 Connect this browser, 3 Approve this
+  browser in FluxIQ), each marked done, under way, a problem or still to do,
+  with their buttons and the approval code. Settings still open over it,
+  because the connection address is there.
+
+While a recording runs, a bar under the top bar on every screen shows its step
+count, "Extract Data From This Page" and "Stop recording". It also holds a
+recording refusal (with OK) and any failed recording request. Nothing in the
+panel lists the steps of a run; what FluxIQ decides and does is the chat's to
+show, and internal page reads are never shown as steps. Flow editing, run logs
+and everything richer are in FluxIQ, one Open FluxIQ away.
 
 | Directory under `apps/extension/src/panel/` | Owns |
 | --- | --- |
-| `shell/` | `mountPanel`, the header (the name, the Simple / Advanced radiogroup "View", the "Settings" gear), routing between the two views, and the viewer's remembered route (`fluxiq.ui.mode`, `fluxiq.ui.advancedTab` in `chrome.storage.local`). Also the pinned seam types in `contracts.ts` and, until the real views land, `placeholderViews`. |
-| `state/` | The one `PanelStore`: a single `getStatus` on mount plus the `statusChanged` subscription, and `request`, which never throws. Every failure comes back as a `PanelResult` sentence, including a service worker that did not answer. |
-| `copy/` | Every sentence about the connection, a step and an error, as pure functions of the status. The simple view shows no selectors, ids or URLs other than a hostname. |
-| `dom/` | `createElement`. Views build their own DOM through `textContent`; nothing parses HTML. |
+| `shell/` | `mountPanel`, the top bar, the one `PanelStore`, and which screen shows (`screen-state.ts`, pure). |
+| `state/` | The one `PanelStore`: a single `getStatus` on mount plus the `statusChanged` subscription, and `request`, which never throws. Every failure comes back as a `PanelResult` sentence, including a service worker that did not answer. Also the sticky error every screen uses. |
+| `getting-started/` | The numbered steps as data (`startGuide`, pure) and their screen. |
+| `settings/` | The settings screen, the connection form, its unsaved draft (`fluxiq.ui.connectionDraft`), Save's plan, Report a problem and Forget this pairing. The on-page status choice is the chat's (`chat/settings/`), mounted here. |
+| `automations/` | The automations tab, the open automation's strip, and the controller and readers behind them. |
+| `recording/` | The record button, the recording bar, the "New automation" section and the review after a recording. |
+| `open-fluxiq/` | The Open FluxIQ button and its failure line. |
+| `chat/` | The chat ([Live Activity](#live-activity)). |
+| `copy/` | Every sentence about the connection, a step and an error, as pure functions of the status. The panel shows no selectors, ids or URLs other than a hostname. |
+| `dom/` | `createElement`. Screens build their own DOM through `textContent`; nothing parses HTML. |
 | `theme/tokens.css` | The light and dark colour tokens. Every stylesheet reads colours from them. |
 | `extraction/` | The extraction sheet ([Defining An Extraction](#defining-an-extraction)). `mountExtractionPanel(host)` builds the entry button and the sheet into a host, keeping every `#extraction*` id the Lab drives. |
-| `simple/`, `advanced/` | The two views (workstreams B and C of the UI rebuild). Until they land, both surfaces mount the shell's placeholders (`shell/placeholder/`): a status card with Connect or Cancel and the pairing code, Start/Stop recording, and the extraction entry; and, as Advanced, the old settings drawer's controls under their old labels ("Gateway URL", "Reset Session", "Close", ...), because the Lab's session setup fills them. |
 
-Each view imports its own stylesheet, and the build emits one `index.css` per
-page entry beside its `index.js` (`scripts/build-extension.mjs`, which fails if a
-page's stylesheet is missing). No two views share a markup file, a stylesheet
-or a controller, so they can be changed in parallel.
+Each screen imports its own stylesheet, and the build emits one `index.css`
+per page entry beside its `index.js` (`scripts/build-extension.mjs`, which
+fails if a page's stylesheet is missing).
 
-A failed request's sentence stays in the card that sent it until the viewer acts
+The names the Lab presses are kept: the gear's "Settings", the settings labels,
+"Save" and "Saved.", "Forget this pairing" and "Forget", the getting-started
+"Connect" / "Try again" / "Try now" (`#connectButton`) and the approval code
+(`#pairingReferenceCode`), the top bar's "Start recording" (`#recordButton`),
+the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
+Data From This Page". The old way back from settings, the "Simple" radio, is
+gone with the modes.
+
+A failed request's sentence stays where it was sent until the person acts
 again; a status update never wipes it. Earlier, a refused command's error was
 hidden in the same tick it was shown, because the re-render after every command
 ended by drawing `lastError`, which the background had usually not set.
@@ -133,13 +177,13 @@ than `unreachable`, so the panel does not invite a retry that does it twice.
 pages only) answers `{ ok: true, report }` with a `ProblemReport`
 (`shared/protocol.ts`) built by allowlist in `background/diagnostics/`. It is
 made even when FluxIQ cannot be reached, and then says why its recent-runs part
-is missing. The Advanced view's Connection tab shows it as "Report a problem":
+is missing. The panel's settings show it as "Report a problem":
 it copies the report and offers it as a file. What it holds and withholds is in
 [sensitive values](sensitive-values.md#problem-reports).
 
-## Simple Mode Relays
+## Panel Relays
 
-Simple Mode's requests (`SIMPLE_PANEL_MESSAGES` in `shared/protocol.ts`, the
+The panel's automation and recording requests (`SIMPLE_PANEL_MESSAGES` in `shared/protocol.ts`, the
 strings in `RUNTIME_MESSAGES`) are relayed by `background/simple-panel/` with
 the pairing token, and each sends Core only the fields named here, never the
 panel's message:
@@ -244,12 +288,19 @@ relay:
   topFrameOnly: true }` to the top frame of the automation's tab
   (`OverlayTarget`, below) through `ensureContentScript` then `sendToTab`, when
   the display or the preference changed. Sends go one at a time, and changes
-  that arrive during a send collapse into one send of the latest state. When
-  the target moves to another tab, the tab it left is sent `display: null`, so
-  no stale status stays up there;
-- re-sends the current display when that tab's top frame reports
-  `contentReady`, because a navigation replaced the document the overlay was
-  drawn in.
+  that arrive during a send collapse into one send of the latest state. A send
+  that has not settled after `PAGE_SEND_TIMEOUT_MS` (3 s) -- a document torn
+  down mid-send -- is given up, so it cannot hold back the next one. When the
+  target moves to another tab, the tab it left is sent `display: null`, so no
+  stale status stays up there;
+- answers `contentReady` from that tab's top frame at once with the current
+  display, because a navigation replaced the document the overlay was drawn in:
+  outside the rate gate and outside the one-at-a-time queue, whose send in
+  flight is to the document that went away. A "done" display older than
+  `ACTIVITY_DONE_VISIBLE_MS` (6 s) is not re-drawn, since the person already
+  saw it fade; a failure is re-drawn on every page. The content script ignores
+  a display older than the one it drew for the same unit of work, so the two
+  sends cannot cross.
 
 Each audience has its own rate gate (`FanOutGate`): at most one send per
 250 ms, the first change after a quiet interval at once and the last change of
@@ -266,18 +317,34 @@ t185 overlay's heading changed 103 times and its sentence 188 times over t174's
 200-second crossborder-marketplace build, up to 4 times in one second. The
 pacer keeps what Core says and changes how often it is said:
 
-- `headline` names the unit of work and changes only when the work or its
-  outcome does: "Building your Flow" or "Running your Flow" while it works,
-  then "Flow ready", "Build failed", "Run finished", "Run failed" or "Waiting
-  for you". Those changes show at once;
-- `detail` is Core's latest sentence, changed at most once per 1,200 ms. The
+- `headline` names the unit of work and changes only when the work, its
+  situation or its outcome does (`background/activity/headline.ts`): "Building
+  your Flow" or "Running your Flow" while it works; "Fixing your Flow" from
+  Core's first `repairing` event (for a run, until it reports its next step;
+  for a build, until it settles) and "Couldn't fix your Flow" if it then fails;
+  "Waiting for you: finish the check on the page" while a page action's result
+  is `web.intervention.required` (a robot check or code prompt only a person
+  can answer), until a later page action succeeds; "Waiting for you: answer in
+  the FluxIQ panel" for Core's `waiting_permission`; then "Flow ready", "Build
+  failed", "Run finished" or "Run failed". Every headline change shows at once,
+  however recently the detail changed. The repair and check situations span
+  many events, so `UnitSituation` folds every event in, shown or not. Core
+  sends no event of its own for a robot check: the result code on the build's
+  tool event is the only signal, and a run's step that meets one reports only
+  a failed step;
+- `detail` is Core's latest sentence in a person's words
+  (`shared/activity/wording.ts`), changed at most once per 1,200 ms. The
   first change after a quiet interval shows at once; later ones wait for the
-  interval's end, where only the newest shows, so no stale sentence is left up;
+  interval's end, where only the newest shows, so no stale sentence is left up.
+  A sentence that only repeats the headline ("Run finished" under "Run
+  finished", "Building the Flow" under "Building your Flow") is null instead
+  (`isHeadlineEcho`);
 - `phase` and `step` belong to the event the detail came from, so they change
   no faster than it does. A run's step is kept between its step events and
   cleared when it settles;
-- a `final`, `failed` or `waiting_permission` event, a new unit of work, and
-  work resuming after a wait skip the interval.
+- a `final`, `failed` or `waiting_permission` event, a new unit of work, a
+  repair or check beginning or ending, and work resuming after a wait change
+  the headline or the outcome, so they skip the interval.
 
 Replayed at its real timing, the same t174 build gives 2 headline changes and
 128 detail changes, never two working sentences less than 1.2 s apart
@@ -303,27 +370,53 @@ what is drawn on it. An unknown preference is refused as `invalid_request`.
 
 **The on-page overlay** (`content/activity-overlay/`) draws the paced display
 in the top frame of that tab, never the raw event: a `<fluxiq-activity-overlay>`
-host on `document.documentElement`, fixed bottom-left, with a closed shadow
-root styled through the CSSOM and no `innerHTML`. `expanded` is a 300 by 54
-pixel pill: a mark, the headline, "Step N of M" (just "Step N" when N passes M)
-while a run works, and the detail as one muted line. `collapsed` is a 196 by 32
+host on `document.documentElement` with a closed shadow root styled through the
+CSSOM and no `innerHTML`. `expanded` is a 384 by 66 pixel card: a mark, a
+14-pixel headline, "Step N of M" (just "Step N" when N passes M) while a run
+works, and the detail as one 13-pixel line; the text is white and near-white
+(`#d8dde6`) on a near-black card of its own, with a light hairline inside for
+dark pages and a dark ring outside for light ones. `collapsed` is a 300 by 36
 pixel pill with the mark and the headline; `hidden` removes the host. The mark
 and its colour follow the unit of work (amber for a build, blue for a run) and
 its outcome (a check, a cross, or an attention mark), not Core's phase of the
 moment. It is built once and updated in place: the same host and nodes, only
-their text and attributes changing, a fixed box per mode so nothing shifts, and
-a 220 ms fade-in when the detail changes. Bottom-left because
-bottom-right is where nobody saw it: the Lab emulates a 1280-pixel viewport and
-the side panel covers its right 400 pixels without narrowing the page, so the
-t185 overlay was drawn, in the right tab, under the panel (t191 probe). That
-corner is also where pages put chat launchers, "back to top", cart bars and
-cookie-banner buttons. The overlay
-never takes input: every element is `pointer-events: none`, `inert` and
-`aria-hidden`, so hit-testing and the automation's own clicks reach the page.
-Its `data-fluxiq-activity` marker keeps it out of the recorder, DOM snapshots,
-evidence blockers and the interference checks (`isExtensionUiNode`). A display
-that settled as done or failed fades after 6 s; waiting for the person does
-not fade. That fade is the only timer and it changes nothing but the display.
+their text and attributes changing, a fixed box per shape so nothing shifts,
+and a 220 ms fade-in when the detail changes. It has no entry animation, so a
+page loaded mid-work gets it back at full strength.
+
+**Where it sits** (`content/activity-overlay/placement/`): in a corner where it
+covers no part of the page that stays over the content. `choosePlacement`
+samples the pill's box at each corner, one point about every 36 pixels, and
+`pageProbe` says what is under each point by hit test (`elementFromPoint`,
+stepping into open shadow roots): a `fixed` or `sticky` box or a dialog makes
+the corner busy -- a cookie banner, a chat widget, a sticky header, a cart bar
+-- while a fixed box covering 60% or more of the viewport is a modal's backdrop
+and hides nothing the person needs, and ordinary links and buttons only break
+ties. Corners are tried bottom-left, top-left, bottom-right, top-right (the
+side panel covers the right of the Lab's emulated viewport without narrowing
+it, t191 round 1), and a corner the overlay holds is kept while it stays
+clear. When every corner is busy it shrinks to a 30-pixel dot, carrying only
+the mark, at whichever corner or side midpoint covers least. `PlacementKeeper`
+re-checks on resize, scroll and page DOM changes (its own UI's mutations are
+skipped), at most once per 800 ms; a check only reads, and the host moves --
+one write -- only when the answer changes. A page whose banner lives in a
+closed shadow root, or draws a bar with a canvas, cannot be seen this way.
+
+The overlay never takes input: every element is `pointer-events: none`,
+`inert` and `aria-hidden`, so hit-testing and the automation's own clicks
+reach the page. Its `data-fluxiq-activity` marker keeps it out of the recorder,
+DOM snapshots, evidence blockers and the interference checks
+(`isExtensionUiNode`). Only "done" fades, after `ACTIVITY_DONE_VISIBLE_MS`
+(6 s): a failure stays until new work starts or the person hides the overlay,
+and waiting for the person never fades. That fade is the only timer and it
+changes nothing but the display.
+
+Measured in a headed Chromium on company-website (t191-overlay2 probe, fake
+gateway, no Core): after the automation navigated, the new document's overlay
+host was in the page 65 ms after the old page hid and before the new page's
+first paint (104 ms), and a 200 ms sampler across the navigation saw 16 of 16
+samples present. An earlier run of the same probe saw 1 absent sample of 16
+in a 121 ms gap, again ending before first paint.
 
 **The panel's chat** (`panel/chat/`) replaces Simple Mode's conversation card.
 Its header shows the current phase, Core's sentence, the step, a live/offline

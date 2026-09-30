@@ -222,9 +222,9 @@ export async function connectExtension(
     await evidence.step("panel", "select-project-context", "Select the Flow as the active FluxIQ recording context", () => control.selectExistingContext(projectId, undefined, {}, flowId));
     facts.contextSelected = true;
 
-    // The gear opens the panel's Advanced view on its Connection tab. The labels
+    // The gear opens the panel's settings in place of the chat. The labels
     // below are that tab's (extension UI audit, section 4): settings are stored by
-    // its explicit Save, not by Connect, and the way back is the header's "Simple".
+    // its explicit Save, not by Connect, and the way back is the "Chat" tab.
     await checkpoint("settings-open", "extension");
     await evidence.step("extension", "settings-open", "Open extension settings", () => page.getByRole("button", { name: "Settings" }).click());
     facts.settingsOpened = true;
@@ -252,7 +252,7 @@ export async function connectExtension(
     facts.settingsSaved = true;
 
     await checkpoint("view-simple", "extension");
-    await evidence.step("extension", "view-simple", "Return to the simple view", () => page.getByRole("radio", { name: "Simple", exact: true }).click());
+    await evidence.step("extension", "view-simple", "Return to the chat", () => page.getByRole("tab", { name: "Chat", exact: true }).click());
     facts.simpleViewShown = true;
 
     // Save reconnects by itself when the address changed on a live connection,

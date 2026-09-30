@@ -5,7 +5,7 @@
 // first activity it says the message is on its way. No DOM.
 
 import type { ActivityDisplay } from "../../../shared/activity/index";
-import { stepText } from "../header";
+import { stepText } from "./step-text";
 
 /** The live line's words; null hides it. */
 export type LiveLineModel = { headline: string; detail: string; step: string };

@@ -8,29 +8,38 @@
 // and changes how often it is said:
 //
 // - `headline` names the unit of work ("Building your Flow", "Running your
-//   Flow") and changes only when the work changes or settles ("Flow ready",
-//   "Build failed", "Waiting for you"). Those changes show at once.
-// - `detail` is Core's latest sentence. It changes at most once per
+//   Flow", "Fixing your Flow") and changes only when the work changes,
+//   settles ("Flow ready", "Build failed") or needs the person ("Waiting for
+//   you: finish the check on the page"). Those changes show at once, however
+//   recently the detail changed (`headline.ts`, `unit-situation.ts`).
+// - `detail` is Core's latest event in a person's words (`activityWording`:
+//   no tool id or result code ever reaches it). It changes at most once per
 //   `detailIntervalMs`: the first change in a quiet period shows at once, and
 //   any that arrive before the period ends wait for its end, where only the
 //   newest is shown. Nothing is dropped for good -- the last sentence always
-//   reaches the screen -- so a stale one is never left showing.
+//   reaches the screen -- so a stale one is never left showing. A sentence
+//   that only repeats the headline is dropped (`isHeadlineEcho`).
 // - `phase` and `step` move with `detail`, so the colour, the mark and the
 //   step count cannot change faster than the words beside them.
-// - A settling event -- `final`, `failed` or waiting for the person -- skips
-//   the wait and replaces anything still waiting.
+// - A settling event -- `final`, `failed` or waiting for the person -- changes
+//   the headline or the outcome, so it skips the wait and replaces anything
+//   still waiting.
 //
 // Pure apart from the injected clock: no browser API, no network.
 
-import type { ActivityDisplay, ClientGatewayActivity } from "../../shared/activity/index";
+import { activityWording, isHeadlineEcho, type ActivityDisplay, type ClientGatewayActivity } from "../../shared/activity/index";
 import type { ActivityClock, ActivityTimer } from "./clock";
 import { activityHeadline } from "./headline";
+import { UnitSituation, type UnitState } from "./unit-situation";
 
 /** The shortest time between two changes of `detail`. */
 export const ACTIVITY_DETAIL_INTERVAL_MS = 1_200;
 
 /** The most characters of Core's sentence kept. Core already truncates; this bounds a misbehaving sender. */
 const MAX_DETAIL = 160;
+
+/** The detail under "Waiting for you: finish the check on the page", in place of the page action's own outcome. */
+const CHECK_DETAIL = "Only a person can get past this page";
 
 export type ActivityPacerOptions = {
   readonly clock: ActivityClock;
@@ -41,7 +50,8 @@ export type ActivityPacerOptions = {
 
 export class ActivityPacer {
   private shown: ActivityDisplay | null = null;
-  private pending: ClientGatewayActivity | undefined;
+  private pending: ActivityDisplay | undefined;
+  private readonly situation = new UnitSituation();
   private timer: ActivityTimer | undefined;
   private detailChangedAt = Number.NEGATIVE_INFINITY;
   private readonly intervalMs: number;
@@ -58,12 +68,13 @@ export class ActivityPacer {
   /** Takes one event, already known to be newer than every one before it. */
   accept(event: ClientGatewayActivity): void {
     const now = this.options.clock.now();
-    if (this.showsAtOnce(event) || now - this.detailChangedAt >= this.intervalMs) {
+    const next = displayFor(event, this.shown, this.situation.observe(event));
+    if (this.showsAtOnce(next) || now - this.detailChangedAt >= this.intervalMs) {
       this.cancelPending();
-      this.show(event, now);
+      this.show(next, now);
       return;
     }
-    this.pending = event;
+    this.pending = next;
     this.timer ??= this.options.clock.setTimeout(() => this.showPending(), this.detailChangedAt + this.intervalMs - now);
   }
 
@@ -72,19 +83,17 @@ export class ActivityPacer {
     this.cancelPending();
   }
 
-  /** A new unit of work, a settling event, or work resuming after it settled: the headline changes, so it shows now. */
-  private showsAtOnce(event: ClientGatewayActivity): boolean {
+  /** A new unit of work, or a new headline or outcome for this one (a repair, a check, settling, resuming): it shows now. */
+  private showsAtOnce(next: ActivityDisplay): boolean {
     const shown = this.shown;
-    if (shown === null || shown.activityId !== event.activityId) return true;
-    if (outcomeOf(event) !== null) return true;
-    return !shown.working;
+    return shown === null || shown.activityId !== next.activityId || shown.headline !== next.headline || shown.outcome !== next.outcome;
   }
 
   private showPending(): void {
     this.timer = undefined;
-    const event = this.pending;
+    const next = this.pending;
     this.pending = undefined;
-    if (event) this.show(event, this.options.clock.now());
+    if (next) this.show(next, this.options.clock.now());
   }
 
   private cancelPending(): void {
@@ -93,19 +102,25 @@ export class ActivityPacer {
     this.pending = undefined;
   }
 
-  private show(event: ClientGatewayActivity, now: number): void {
+  private show(next: ActivityDisplay, now: number): void {
     const previous = this.shown;
-    const next = displayFor(event, previous);
     this.shown = next;
     if (previous === null || next.detail !== previous.detail) this.detailChangedAt = now;
     if (previous === null || visiblyDiffers(previous, next)) this.options.onChange(next);
   }
 }
 
-function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null): ActivityDisplay {
+function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | null, unit: UnitState): ActivityDisplay {
   const subjectKind = subjectKindOf(event);
-  const outcome = outcomeOf(event);
+  // A check only the person can answer holds the work until the page lets it
+  // through; Core's own settling and waiting events still say what they say.
+  const outcome = outcomeOf(event) ?? (unit.check ? "waiting" : null);
   const working = outcome === null;
+  const headline = activityHeadline(subjectKind, outcome, {
+    repairing: unit.repairing,
+    waitingOn: event.phase === "waiting_permission" ? "answer" : "check"
+  });
+  const detail = bounded(unit.checkReportedNow ? CHECK_DETAIL : activityWording(event).sentence);
   const sameUnit = previous !== null && previous.activityId === event.activityId;
   // A run's step events carry the step; the events between them ("Run
   // started", a note) keep the step last said, so the count does not blink out.
@@ -114,8 +129,8 @@ function displayFor(event: ClientGatewayActivity, previous: ActivityDisplay | nu
     activityId: event.activityId,
     subjectKind,
     phase: event.phase,
-    headline: activityHeadline(subjectKind, outcome),
-    detail: bounded(event.label),
+    headline,
+    detail: isHeadlineEcho(headline, detail) ? null : detail,
     step,
     working,
     outcome,

@@ -1,0 +1,213 @@
+// What one of Core's raw activity events says, in a person's words.
+//
+// Core speaks in its own terms: "Using core.run_node: web.action.rejected.
+// not_at_start_location". Those ids are exact and belong in the record (the
+// event's `detail.ref` and `detail.text`, for a row a person chooses to
+// expand), never in the words a person reads at a glance. This module is
+// the only place that turns an event into those words, so the overlay, the
+// chat header and the chat rows cannot drift apart:
+//
+// - a tool is named by what it does to the page ("Looking for the list of
+//   items"), a model decision by what it is for ("Thinking about the next
+//   step"), the completion check by what it checks;
+// - a tool's result code becomes a short outcome ("done", "couldn't find it
+//   on the page", "that didn't work, trying another way");
+// - Core's own sentence is kept when it is already human ("Running step 2 of
+//   5: Open search", "Saved 12 records"), and replaced by the phase's plain
+//   wording when it carries an id.
+//
+// Core names what a tool call does from the call's own input (its
+// `detail.title`, e.g. "Clicking “Get a free quote”"), marks a dry run's calls
+// `verifying` ("Trying the Flow from the start: …") and its own bookkeeping
+// calls as `note` rows. Those words are used as they come; the rules above are
+// the fallback for a Core that sends only the tool id.
+//
+// Pure: no browser API, no clock. Nothing here matches `RAW_ID`.
+
+import type { ClientGatewayActivity, ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocket";
+
+export type ActivityWording = {
+  /** What is being done: "Opening the page", "Thinking about the next step". */
+  action: string;
+  /** How it ended, when the event says it ended: "done", "couldn't find it on the page". Null while under way. */
+  outcome: string | null;
+  /** The one line a person reads: the action, and its outcome after a dash when there is one. */
+  sentence: string;
+  /**
+   * True for Core's own bookkeeping calls (the opening look, a dry run putting
+   * the page back): accurate, but not a step of the person's work, so a
+   * reader may leave them out of what it shows.
+   */
+  internal: boolean;
+};
+
+/** A dotted id such as `core.run_node` or `web.action.succeeded`: never shown to a person. */
+const RAW_ID = /\b[a-z]+\.[a-z_]+/iu;
+
+const DRAFT_TOOL_ID = "core.flow_draft";
+const RUN_NODE_TOOL_ID = "core.run_node";
+
+/** Tools whose purpose alone names them. */
+const TOOL_ACTIONS: Readonly<Record<string, string>> = Object.freeze({
+  [DRAFT_TOOL_ID]: "Updating the Flow",
+  "web.detect_repeating_structure": "Looking for the list of items"
+});
+
+const OUTCOME_DONE = "done";
+const OUTCOME_NOT_FOUND = "couldn't find it on the page";
+const OUTCOME_RETRY = "that didn't work, trying another way";
+const OUTCOME_NOT_REPEATED = "it didn't work the same way again";
+/** Core's words for a passed completion check: the plan is sound, and the dry run that follows can still refuse it. */
+const OUTCOME_PLAN_OK = "the plan checks out, it still has to run cleanly";
+
+/** What a page step does, told by words in its node id or label. First match wins. */
+const NODE_ACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/nav|open|visit|goto|go[-_ ]to|load|back/iu, "Opening the page"],
+  [/click|press|tap|select|choose/iu, "Clicking on the page"],
+  [/extract|read|list|collect|scrape|record|rows/iu, "Reading the list"],
+  [/type|fill|enter|input|search|write/iu, "Typing into the page"],
+  [/scroll/iu, "Scrolling the page"],
+  [/wait/iu, "Waiting for the page"],
+  [/snap|inspect|look|observe|screenshot|view/iu, "Looking at the page"]
+];
+
+/** What a page step did, told by the family of its result code, when nothing else says. */
+const RESULT_ACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^web\.inspect\./u, "Looking at the page"],
+  [/^web\.(extract|records?)\./u, "Reading the list"],
+  [/^core\.replay\./u, "Trying the Flow out"]
+];
+
+/** The plain wording of each phase, for an event whose own sentence carries an id. */
+const PHASE_ACTIONS: Readonly<Record<ClientGatewayActivityPhase, string>> = Object.freeze({
+  thinking: "Thinking about the next step",
+  exploring: "Working on the page",
+  building: "Building the Flow",
+  running: "Running the Flow",
+  extracting: "Saving what was found",
+  verifying: "Checking the Flow does what you asked",
+  repairing: "Fixing a step that didn't work",
+  waiting_permission: "Waiting for your answer",
+  done: "Done",
+  failed: "That didn't work"
+});
+
+/** The words a person reads for `event`. */
+export function activityWording(event: ClientGatewayActivity): ActivityWording {
+  const [action, outcome] = wordsOf(event);
+  return { action, outcome, sentence: outcome ? `${action} — ${outcome}` : action, internal: isBookkeeping(event) };
+}
+
+/** A tool call Core made for itself, which it sends as a `note` row with the tool's id. */
+function isBookkeeping(event: ClientGatewayActivity): boolean {
+  return event.detail?.kind === "note" && Boolean(event.detail.ref) && (event.phase === "exploring" || event.phase === "verifying");
+}
+
+function wordsOf(event: ClientGatewayActivity): readonly [string, string | null] {
+  const detail = event.detail;
+  const toolId = toolIdOf(event);
+  if (toolId !== undefined) {
+    const code = resultCodeOf(event);
+    // A row's status says whether the call ended; only an older Core's bare "Using X: code" sentence is read for it.
+    const ended = detail?.status ? detail.status !== "started" : code !== undefined;
+    return [toolAction(toolId, event, code), ended ? toolOutcome(detail?.status, code) : null];
+  }
+  if (event.phase === "thinking" || detail?.kind === "thought") return [PHASE_ACTIONS.thinking, null];
+  if (detail?.title === "Completion check" || /^(Checking the proposed (result|Flow)|The proposed (result|Flow))/u.test(event.label)) {
+    const status = detail?.status ?? (/passed|checks out/u.test(event.label) ? "succeeded" : /refused|sent back/u.test(event.label) ? "failed" : "started");
+    // Core's newer sentence says only the plan passed; the older "passed its check" is kept as it was read.
+    const passed = /checks out/u.test(event.label) ? OUTCOME_PLAN_OK : OUTCOME_DONE;
+    return [PHASE_ACTIONS.verifying, status === "succeeded" ? passed : status === "failed" ? "not yet, trying another way" : null];
+  }
+  if (event.step && event.phase === "running") {
+    const said = humanOr(event.label, "");
+    // Core's sentence names the step's action ("Running step 2 of 7: Clicking “Search”"); without one, it is rebuilt from `step`.
+    return [/^Running step \d+( of \d+)?: \S/u.test(said) ? said : runStepSentence(event.step), null];
+  }
+  return [humanOr(event.label, PHASE_ACTIONS[event.phase] ?? PHASE_ACTIONS.exploring), null];
+}
+
+/** The tool an event reports on: its `detail.ref` for a tool row, or the id in Core's "Using X" sentence. */
+function toolIdOf(event: ClientGatewayActivity): string | undefined {
+  if (event.detail?.kind === "tool" || isBookkeeping(event)) return event.detail?.ref || /^Using (\S+?):?(?:\s|$)/u.exec(event.detail?.title ?? "")?.[1] || "";
+  if (event.detail) return undefined;
+  if (/^Amending the draft Flow/u.test(event.label)) return DRAFT_TOOL_ID;
+  return /^Using (\S+?):?(?:\s|$)/u.exec(event.label)?.[1];
+}
+
+/** The result code, from `detail.text` ("Result: X") or from Core's sentence ("Using T: X"). */
+function resultCodeOf(event: ClientGatewayActivity): string | undefined {
+  const fromText = /^Result:\s*([^\s·]+)/u.exec(event.detail?.text ?? "")?.[1];
+  if (fromText) return fromText;
+  const fromLabel = /^Using \S+?:\s*(\S+)\s*$/u.exec(event.label)?.[1];
+  return fromLabel && fromLabel !== "done" && fromLabel !== "failed" ? fromLabel : undefined;
+}
+
+function toolAction(toolId: string, event: ClientGatewayActivity, code: string | undefined): string {
+  const named = TOOL_ACTIONS[toolId];
+  if (named) return named;
+  const said = coreAction(event);
+  if (said) return said;
+  if (toolId !== RUN_NODE_TOOL_ID) return "Working on the page";
+  const label = event.step?.label?.trim();
+  // The leading word of an id or label is usually its verb ("click.search-result",
+  // "Open the shop"), so it is read before the whole text.
+  const hints = [label, event.step?.nodeId]
+    .filter((hint): hint is string => typeof hint === "string" && hint.length > 0)
+    .flatMap((hint) => [hint.split(/[\s._-]/u)[0] ?? "", hint]);
+  for (const hint of hints) {
+    for (const [pattern, action] of NODE_ACTIONS) {
+      if (!pattern.test(hint)) continue;
+      const name = label ? plainName(label) : "";
+      if (action === "Clicking on the page" && name && !RAW_ID.test(name)) return /^(click|press|tap)\b/iu.test(name) ? capitalised(name) : `Clicking “${name}”`;
+      return action;
+    }
+  }
+  if (code) for (const [pattern, action] of RESULT_ACTIONS) if (pattern.test(code)) return action;
+  return "Trying a step on the page";
+}
+
+/**
+ * The action as Core already said it for a person: the status sentence up to
+ * its outcome (a dry run's "Trying the Flow from the start: clicking “X”"),
+ * else the row's title. Nothing when Core sent only an id ("Using X").
+ */
+function coreAction(event: ClientGatewayActivity): string | undefined {
+  for (const text of [event.label.split(" — ")[0] ?? "", event.detail?.title ?? ""]) {
+    const said = humanOr(text, "");
+    if (said && !/^Using\b/u.test(said)) return said;
+  }
+  return undefined;
+}
+
+/** A name as it is put in quotes: one space between words, and no quotes of its own. */
+function plainName(text: string): string {
+  return text.replace(/\s+/gu, " ").trim().replace(/^["'“”‘’]+|["'“”‘’]+$/gu, "").trim();
+}
+
+function toolOutcome(status: "started" | "succeeded" | "failed" | undefined, code: string | undefined): string {
+  if (code) {
+    if (/^core\.replay\.(changed|unreproducible)/u.test(code)) return OUTCOME_NOT_REPEATED;
+    if (/not_found|unobserved|missing|no_match|not_visible|absent|not_detected|none_found|empty/u.test(code)) return OUTCOME_NOT_FOUND;
+    if (/rejected|failed|error|timeout|timed_out|refused|denied|invalid|blocked|aborted/u.test(code)) return OUTCOME_RETRY;
+    return OUTCOME_DONE;
+  }
+  return status === "failed" ? OUTCOME_RETRY : OUTCOME_DONE;
+}
+
+/** "Running step N of M: label", said as Core says it; the label only when it is an authored one, not a node id. */
+function runStepSentence(step: NonNullable<ClientGatewayActivity["step"]>): string {
+  const index = Math.floor(step.index);
+  const counted = Number.isFinite(step.count) && step.count >= 1 && index <= step.count ? `step ${index} of ${Math.floor(step.count)}` : `step ${index}`;
+  const label = step.label?.trim();
+  return `Running ${counted}${label && !RAW_ID.test(label) ? `: ${label}` : ""}`;
+}
+
+function humanOr(sentence: string, fallback: string): string {
+  const collapsed = sentence.replace(/\s+/gu, " ").trim();
+  return collapsed && !RAW_ID.test(collapsed) ? collapsed : fallback;
+}
+
+function capitalised(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

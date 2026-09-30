@@ -11,7 +11,7 @@
 // and focus across every poll; the work slot is filled by the thread view.
 
 import { createElement } from "../../dom";
-import { askControls, type AskControlsContext, type CoreTurn } from "../../simple/conversation";
+import { askControls, type AskControlsContext, type CoreTurn } from "../conversation";
 import { parseAssistantText, renderTextBlocks } from "../format";
 import { placeChildren } from "./place-children";
 

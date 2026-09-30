@@ -18,7 +18,17 @@
 // that is not open, a page the content script cannot reach, or a tab that
 // closed mid-send loses one frame of a status display and nothing else: none
 // of those failures reaches Core or the gateway, and a panel send that fails
-// or never settles cannot hold back the page.
+// or never settles cannot hold back the page. A page send that never settles
+// -- a document torn down by a navigation mid-send -- is given up after
+// `PAGE_SEND_TIMEOUT_MS`, so it cannot hold back the next one either.
+//
+// A navigation replaces the document the overlay was drawn in (U7 of the t174
+// live lane's UI review: the overlay dropped out on every navigation). The new
+// document's content script announces itself at `document_start`, and the
+// relay answers it at once with the current display: not through the page
+// gate, and not behind a delivery still in flight to the old document. The
+// overlay then draws without an entry animation (`status-pill.ts`), so the
+// only gap a person or the Lab's sampler sees is the browser's own reload.
 
 import {
   ACTIVITY_MESSAGES,
@@ -26,7 +36,8 @@ import {
   type ActivityContentMessage,
   type ActivityOverlayPreference,
   type ClientGatewayActivity,
-  type ExtensionActivityState
+  type ExtensionActivityState,
+  ACTIVITY_DONE_VISIBLE_MS
 } from "../../shared/activity/index";
 import { systemActivityClock, type ActivityClock } from "./clock";
 import { ActivityPacer } from "./pacer";
@@ -34,6 +45,9 @@ import { FanOutGate } from "./fan-out-gate";
 
 /** The top frame's id in every tab; the overlay lives only there. */
 const TOP_FRAME_ID = 0;
+
+/** The longest one page send is waited for before the next may go. */
+export const PAGE_SEND_TIMEOUT_MS = 3_000;
 
 /** What the relay reaches storage, the panel pages, and the page through. */
 export type ActivityRelayDeps = {
@@ -72,10 +86,20 @@ export class ActivityRelay {
   private redeliver = false;
   /** The tab the overlay was last sent to, so it is taken down there when the target moves. */
   private drawnIn: number | undefined;
+  /** When the display last changed, so a finished status that has had its time is not drawn again on a new page. */
+  private displayChangedAt = Number.NEGATIVE_INFINITY;
+  private readonly clock: ActivityClock;
 
   constructor(private readonly deps: ActivityRelayDeps) {
     const clock = deps.clock ?? systemActivityClock;
-    this.pacer = new ActivityPacer({ clock, onChange: () => this.displayChanged() });
+    this.clock = clock;
+    this.pacer = new ActivityPacer({
+      clock,
+      onChange: () => {
+        this.displayChangedAt = clock.now();
+        this.displayChanged();
+      }
+    });
     this.panelGate = new FanOutGate(clock, () => this.broadcastIfStale());
     this.pageGate = new FanOutGate(clock, () => void this.deliver());
   }
@@ -132,14 +156,27 @@ export class ActivityRelay {
   /**
    * A content script announced itself. When it is the automation tab's top
    * frame -- a navigation replaced the document the overlay was drawn in --
-   * it gets the current display again, outside the rate bound: it is one
-   * message per document.
+   * it gets the current display again at once: outside the rate bound, since
+   * it is one message per document, and outside the delivery queue, since a
+   * send still in flight is to the document that just went away. A finished
+   * status that has already had its time on screen is not drawn again.
    */
   async noteContentReady(tabId: number | undefined, frameId: number | undefined): Promise<void> {
     if (tabId === undefined || (frameId ?? TOP_FRAME_ID) !== TOP_FRAME_ID) return;
-    if (this.pacer.display() === null) return;
+    const display = this.pacer.display();
+    if (display === null) return;
+    if (display.outcome === "done" && this.clock.now() - this.displayChangedAt >= ACTIVITY_DONE_VISIBLE_MS) return;
     await this.load();
-    await this.deliver(tabId);
+    let target: number | undefined;
+    try {
+      target = await this.deps.automationTabId();
+    } catch {
+      /* best-effort: the tab list could not be read, so the new page stays without the overlay until the next change */
+      return;
+    }
+    if (target !== tabId) return;
+    this.drawnIn = tabId;
+    await this.send(tabId, this.contentMessage());
   }
 
   /** What the page draws changed: the display, or the overlay preference. The panels show both too. */
@@ -163,26 +200,24 @@ export class ActivityRelay {
     }
   }
 
-  /** Sends the display to the automation tab; with `onlyTo`, only when that tab is the automation tab. */
-  private async deliver(onlyTo?: number): Promise<void> {
+  /** Sends the display to the automation tab. */
+  private async deliver(): Promise<void> {
     if (this.delivering) {
       this.redeliver = true;
       return;
     }
     this.delivering = true;
     try {
-      let only = onlyTo;
       do {
         this.redeliver = false;
-        await this.deliverOnce(only);
-        only = undefined;
+        await this.deliverOnce();
       } while (this.redeliver);
     } finally {
       this.delivering = false;
     }
   }
 
-  private async deliverOnce(onlyTo: number | undefined): Promise<void> {
+  private async deliverOnce(): Promise<void> {
     let tabId: number | undefined;
     try {
       tabId = await this.deps.automationTabId();
@@ -190,14 +225,7 @@ export class ActivityRelay {
       /* best-effort: the tab list could not be read, so this frame of the status is drawn nowhere */
       return;
     }
-    if (onlyTo !== undefined && onlyTo !== tabId) return;
-    const message: ActivityContentMessage = {
-      type: ACTIVITY_MESSAGES.content,
-      activity: this.current,
-      display: this.pacer.display(),
-      overlay: this.overlay,
-      topFrameOnly: true
-    };
+    const message = this.contentMessage();
     const previous = this.drawnIn;
     this.drawnIn = tabId;
     // The automation moved to another tab: the status left there would go stale.
@@ -205,11 +233,27 @@ export class ActivityRelay {
     if (tabId !== undefined) await this.send(tabId, message);
   }
 
+  private contentMessage(): ActivityContentMessage {
+    return {
+      type: ACTIVITY_MESSAGES.content,
+      activity: this.current,
+      display: this.pacer.display(),
+      overlay: this.overlay,
+      topFrameOnly: true
+    };
+  }
+
   private async send(tabId: number, message: ActivityContentMessage): Promise<void> {
+    let timer: unknown;
+    const givenUp = new Promise<void>((resolve) => {
+      timer = this.clock.setTimeout(resolve, PAGE_SEND_TIMEOUT_MS);
+    });
     try {
-      await this.deps.deliverToTab(tabId, message);
+      await Promise.race([this.deps.deliverToTab(tabId, message), givenUp]);
     } catch {
       /* best-effort: the page cannot host the overlay (closed, restricted, or navigating); contentReady re-sends */
+    } finally {
+      this.clock.clearTimeout(timer);
     }
   }
 
