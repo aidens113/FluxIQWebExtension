@@ -76,9 +76,12 @@ then commit or discard.
    - the previous run has no debug file;
    - one instance made more than 3 runs in 30 minutes.
    Overrides are user-created files only. Validate with `pnpm lab:test` (or the package.json lab test) and the structure audit.
-2. **Honest pass verdict** (test-runner `lane-rules/**`, `run-scenario.ts`, `run-evaluation/**`): a permission stop becomes
-   `stopped_for_permission`, never a pass or part of a streak. The `scripts/lab/live-campaign/row/**` consumers may still need
-   updating.
+2. **Honest pass verdict: done and committed, `f2f80024`** (supervisor re-ran built-flow and permission-stop, 8/8). A permission
+   stop is now `stopped_for_permission`, never a pass or part of a streak. Still to do, in `scripts/lab`, after the guards worker:
+   `live-campaign/row/summarize-task.mjs` reads the verdict from `result.permissionStop` or the `stopped-for-permission`
+   invariant; `summary/totals.mjs` and `summary/markdown.mjs` get a separate "stopped for permission" count; any pass streak in
+   `live-campaign/runner.mjs` ends at a stop; and the comments in `flow-lane/creation/lane.ts` that call a stop "the pass" are
+   reworded. `bench/evaluate-run.ts` carries no stop invariant yet.
 
 **Uncommitted, unvalidated lane work (agents died mid-edit).** Downstream and Core changed-file counts; each lane's report has a
 fix log saying what is in progress. Triage each: validate and commit, or discard.
