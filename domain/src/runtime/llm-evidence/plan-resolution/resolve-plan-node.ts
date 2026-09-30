@@ -42,7 +42,9 @@
 // as resolved -- with one exception: once this Flow's exploration was shown a
 // detected list, a literal `extractList` can only be a guess at selectors the
 // model was never shown, and live every one of them read no field
-// (`run-mu4wwkbc-df6cfe60`), so it is refused as `extraction_required`. A
+// (`run-mu4wwkbc-df6cfe60`), so it is refused as `extraction_required` --
+// unless its item is a list this Flow detected, which makes it the Flow's own
+// step written down resolved rather than a guess (`own-extraction-list.ts`). A
 // handle anywhere else, of the wrong kind for its slot, in the wrong shape,
 // unknown to this project and Flow, let go by the bounded store, naming
 // different controls on different pages or in the node's slots, or whose
@@ -67,6 +69,7 @@
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
@@ -76,6 +79,7 @@ import { isJsonRecord } from "../untrusted-json";
 import { resolveWebExtractionSlot } from "./extraction";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
+import { webPlanOwnExtractionList } from "./own-extraction-list";
 import { webPlanStepPermission, type WebPlanStepIssueCode } from "./step-permission";
 import type { WebLlmTargetPackets } from "./target-packets";
 
@@ -359,6 +363,9 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
       const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
       if (slot.status === "resolved") {
         replaced.set(key, { value: slot.request, frameId: slot.frameId, element: undefined });
+        // The Flow keeps this request under the plan's keys, and a draft read
+        // back out of it shows the model those keys (`own-extraction-list.ts`).
+        stores.extractions.wrote(scope, slot.request as unknown as WebAutomationExtractListRequest, slot.frameId);
         // Written member by member rather than spread, because a spread carries
         // no excess-property check and this value is on its way to the wire
         // (`../present.ts`, and the `contract-spread` rule that holds this
@@ -368,7 +375,12 @@ function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Sc
           assumed.push({ path: [key, ...entry.path], written: entry.written, field: entry.field, how: entry.how, score: entry.score });
         }
       } else if (slot.status === "refused") refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path] });
-      else if (stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
+      else {
+        const frameId = declaredFrame(parameters.browserFrameId);
+        const own = webPlanOwnExtractionList(value, frameId, scope, stores.extractions);
+        if (own !== undefined && own !== value) replaced.set(key, { value: own, frameId, element: undefined });
+        else if (own === undefined && stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
+      }
       continue;
     }
     if (isTargetSlot(key, nodeDefinitionId) && isHandleObject(value)) {

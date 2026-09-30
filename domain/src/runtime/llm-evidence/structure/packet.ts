@@ -42,7 +42,12 @@ export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION
 export type WebLlmStructureField = {
   /** The record field key the handle's extraction writes this column under (D16). */
   key: string;
-  /** What the column is called: a test id, a column header, an attribute name. Page structure, never a value read inside an item. */
+  /**
+   * What the column is called: a test id, a column header, an attribute name,
+   * or an icon badge's accessible name when every item that has the badge gives
+   * it the same one (`apps/extension/src/content/extraction/badge-name.ts`).
+   * Page structure, never a value read inside an item.
+   */
   label: string;
   kind: WebAutomationExtractFieldKind;
   /** The share of items that have the field, from 0 to 1. Below 1, a record without it carries `null`. */

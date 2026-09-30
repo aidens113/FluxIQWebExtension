@@ -311,13 +311,16 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       boundedIdentifier(input.flowId, "flowId");
       boundedIdentifier(input.callId, "callId");
       const sessionId = selectSession(gateway.eligibleSessionIds());
+      // A new exploration's model has been told nothing yet, so no answer it
+      // gets repeats one an earlier exploration's model got (`./repeated-refusal.ts`).
+      if (opensExploration(input)) repeatedRefusals.startedOver(evidenceScope(input, sessionId));
       // Every way out of this call goes through here, because a refusal is
       // returned on one path and thrown on another: `node-run/run.ts` catches
       // its own and answers with it, while a detection and the resolver throw
       // past to the block below. A repeat that was only noticed on one of the
       // two would miss whichever half the next build spent itself on.
       const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution =>
-        repeatedRefusals.answered(`${evidenceScope(input, sessionId)}\u0000${input.toolId}`, answer);
+        repeatedRefusals.answered(evidenceScope(input, sessionId), input.toolId, answer);
       try {
         if (input.toolId === WEB_LLM_RUN_NODE_TOOL_ID) {
           return answered(await runWebOutputNode({
@@ -513,6 +516,25 @@ function packetKey(evidence: WebLlmPageEvidence): string {
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {
   return `${sessionId}\0${input.projectId}\0${input.flowId}`;
+}
+
+/**
+ * The call id Core files a loop's free first look under: `initial.<toolId>`,
+ * once per evidence loop and before any decision (`AS/runtime/llm/evidence-loop.ts`).
+ * This domain's first look is always its run-node tool (`runsNodes.initial`).
+ */
+const OPENING_LOOK_CALL_ID = `initial.${WEB_LLM_RUN_NODE_TOOL_ID}`;
+
+/**
+ * Whether this call is the look a new Core evidence loop opens with.
+ *
+ * A model cannot borrow the id inside a loop that took its look: Core files a
+ * reused id under `<id>.2` (`AS/runtime/llm/evidence-loop/call-id.ts`). Where a
+ * loop took no look the id is the model's to spend, and the only cost of
+ * reading it as an opening is one repeat left unsaid.
+ */
+function opensExploration(input: WebLlmEvidenceToolRequest): boolean {
+  return input.toolId === WEB_LLM_RUN_NODE_TOOL_ID && input.callId === OPENING_LOOK_CALL_ID;
 }
 
 function requestedUrl(input: unknown): URL {

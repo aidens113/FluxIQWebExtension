@@ -357,6 +357,45 @@ test("a build that outlives its request is found by polling for its proposal, wi
   assert.equal(unfinished.core.calls.filter((call) => call === "list-adaptations").length, 5);
 });
 
+test("the build request is held open, as a long request, until the build's own deadline", async () => {
+  const core = fakeCreationCore();
+  const bounds: unknown[] = [];
+  const original = core.control.generateFlowBootstrapAdaptation;
+  core.control.generateFlowBootstrapAdaptation = async (input, requestBounds) => { bounds.push(requestBounds); return original(input); };
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) });
+  assert.equal(record.outcome, "proposed");
+  // Core answers only when the build is over: 60 s claim, 600 s run lease, 15 s reply.
+  assert.deepEqual(bounds, [{ timeoutMs: 675_000, longRequest: true }]);
+});
+
+test("a build that fails after the ordinary request cap is recorded with Core's own diagnostic", async () => {
+  const diagnostic = { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", retryable: true, providerInvocation: "attempted", providerResponse: "received" };
+  const core = fakeCreationCore({ generation: { kind: "refused", status: 400, payload: { diagnostic } } });
+  let clock = 0;
+  const original = core.control.generateFlowBootstrapAdaptation;
+  // Answered 8 minutes in, as run-munaiz76-7026748c's build was; a request held
+  // only for the ordinary 300 s cap never sees it.
+  core.control.generateFlowBootstrapAdaptation = async (input, requestBounds) => {
+    if (!requestBounds?.longRequest || (requestBounds.timeoutMs ?? 0) <= 300_000) throw new RunnerFailure("runtime.behavior", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "control.request", timeoutMs: requestBounds?.timeoutMs } });
+    clock += 488_000;
+    return original(input);
+  };
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; } });
+  assert.deepEqual(record.failure, { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 });
+  assert.equal(record.durationMs, 488_000);
+});
+
+test("a build request that times out at the deadline still looks once for a proposal", async () => {
+  const core = fakeCreationCore({ generation: { kind: "timeout", proposalAfterPolls: 1 } });
+  let clock = 0;
+  const original = core.control.generateFlowBootstrapAdaptation;
+  core.control.generateFlowBootstrapAdaptation = async (input) => { clock = 5_000; return original(input); };
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, deadlineMs: 5_000 });
+  assert.equal(record.outcome, "proposed");
+  assert.equal(record.recoveredAfterTimeout, true);
+  assert.equal(core.calls.filter((call) => call === "list-adaptations").length, 1);
+});
+
 test("a transport failure that is not a bounded wait is not mistaken for a build still running", async () => {
   await assert.rejects(build({ generation: { kind: "transport" } }), (error: unknown) => error instanceof RunnerFailure && /transport failed/u.test(error.message));
 });
