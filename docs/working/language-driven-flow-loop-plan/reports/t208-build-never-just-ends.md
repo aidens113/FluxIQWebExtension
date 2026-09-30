@@ -6,6 +6,63 @@ run and no model call. Nothing was committed.
 
 `R/` below means `packages/fluxiq/src/programs/automation-studio/runtime/`.
 
+## Round 2: an empty draft never ends the build (supervisor, after commit `29792da5`)
+
+The supervisor merged dev into the branch (`7358f6d6`, clean). I then replaced the round-1 choice "a draft with nothing in its
+Flow keeps its old ending". Audit A1 found that 57 of 117 live builds ended with no Flow, so the empty draft is the main
+case.
+
+- **While budget remains, an empty draft never ends the build** (`R/flow-bootstrap/unfinished-build/phases.ts`).
+  - The round is judged from the checklist. There is nothing to test.
+  - The next round starts live from the page as it stands, with an empty seed.
+  - That round is told plainly that nothing is in the Flow yet. The resume entry carries code
+    `llm_evidence_loop.explore_again`, a new instruction in `R/llm/evidence-loop/resume.ts`, and a judgement with
+    `stepsInFlow: 0`, every act and choice in `actsTodo`, and `lastRefusedFor`.
+  - The chat gets an "Exploring again" row (`exploring` phase).
+  - An empty round never counts as a repair, and it never leads to `not_doable`.
+- **Budget runs out with nothing authored: `evidence_budget_exhausted`.**
+  - The bound can be `cost`, `tokens`, `duration` or `calls`, or the new far backstop `rounds`
+    (`AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_ROUNDS = 6` live rounds in all).
+  - The budget message now also says:
+    - what was tried: "I explored live N times over D decisions";
+    - how far it got: "0 of the 3 things you asked are done; still to do: ...", and "No step I found belonged in the Flow.";
+    - what blocked it: "and what held it up was that ...". This comes from the last refusals the model saw
+      (`automationStudioFlowBootstrapBlockedSaid` in `not-done.ts`), or failing that from why the round stopped.
+- **`not_doable` is unchanged.** It still needs a repair of a judged, non-empty Flow that got no further.
+- **No bare `evidence_unusable_decision` or `evidence_iteration_limit` ending is left on the evidence-guided path.**
+  - Every round that stops short is explored again, repaired, or ended with a message.
+  - The service's pass-through for a stall is gone, and so is the keeper's `stalledEnding`.
+- **A question put to the person still ends the build as that question.**
+  - The new coordinator hook `callerEnding` (in the service: `permissions.endedOnRequest ?? personNeeded.endedOnIntervention`)
+    is read before exploring again or repairing.
+  - Without it, the three permission tests lost their `permissionRequest`: the build explored on to its call budget
+    instead of waiting on the person.
+- **Test updates for the new ending.** These service tests used to see a bare ending and now see
+  `evidence_budget_exhausted` with bound `calls`, carrying the same last refusal `issueCodes`:
+  - plan-parameters: 4 tests;
+  - rejections: 5 tests;
+  - flow-call-limit: 1 test.
+
+  In rejections, `retryable` goes from false to true.
+- **New tests.**
+  - `phases.test.ts`, 3 cases:
+    - an empty draft with budget left explores again;
+    - repeated empty rounds end at `rounds`, never `not_doable`;
+    - an empty draft at the cost ceiling ends as a budget hit with the full message.
+  - `unfinished-build.test.ts`, 2 service cases:
+    - an empty round is told "Nothing is in the Flow yet", explores on, and its Flow is proposed;
+    - an empty draft at a 12-call budget ends `evidence_budget_exhausted` with the message.
+  - `resume.test.ts`, 1 case: the explore-again entry.
+
+Round-2 validation:
+- `npx tsc --noEmit -p tsconfig.json` -> exit 0.
+- `node scripts/structure-audit.mjs` -> `passed (202 warning(s), 354 baselined)`.
+- The full brief vitest set's result is under Ready to commit below.
+
+Residual: when a round's reply is unreadable because a completion is not yet offered, the loop's `invalid_decision`
+ending still passes through as it did before. The supervisor did not name that ending, and a live web build always
+gets a free first look, so completion is offered.
+
 ## Outcome
 
 Done, with one open item: a timing-only test failure that predates this work (see "Not verified").
@@ -175,7 +232,7 @@ The supervisor asked for one more change mid-task, and it is done. `R/llm/eviden
    such repairs.
    - `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_REPAIR_ROUNDS = 2` caps repairs that are still getting further. Reaching the
      cap is reported as a budget (`repair_rounds`), not as "not doable".
-2. **An exploration that stops with nothing in its Flow keeps its old ending.** This follows the brief's "with a draft that
+2. **(Superseded in round 2)** An exploration that stops with nothing in its Flow kept its old ending. This follows the brief's "with a draft that
    covers some acts".
    - I entered repair for any draft with at least one step in the Flow, even when that step does no act yet. This is
      broader than the brief's wording.
@@ -241,3 +298,30 @@ Validation:
   loop-limits> --maxWorkers=2 --minWorkers=1` -> 2476/2477 passed. The one failure is the `adaptation.test.ts`
   15 s timeout on the untouched single-call path, which passes in 19.7 s with a longer timeout.
 - The new `unfinished-build.test.ts` -> 2/2 passed.
+
+## Ready to commit (round 2)
+
+This is in the Core tree `fxwork/t208/!FluxIQ`, on top of `7358f6d6` (the supervisor's dev merge). None of it is staged.
+- `R/flow-bootstrap/unfinished-build/phases.ts`
+- `R/flow-bootstrap/unfinished-build/budget-exhausted.ts`
+- `R/flow-bootstrap/unfinished-build/not-done.ts`
+- `R/flow-bootstrap/unfinished-build/tests/phases.test.ts`
+- `R/flow-bootstrap/generation-failure/build-ending.ts`
+- `R/flow-bootstrap/incomplete-draft/keeper.ts`
+- `R/llm/evidence-loop/resume.ts`
+- `R/llm/evidence-loop/tests/resume.test.ts`
+- `R/service.ts`
+- `R/tests/service-bootstrap/tests/unfinished-build.test.ts`
+- `R/tests/service-bootstrap/tests/plan-parameters.test.ts`
+- `R/tests/service-bootstrap/tests/rejections.test.ts`
+- `R/tests/service-bootstrap/tests/flow-call-limit.test.ts`
+
+Downstream, this report.
+
+Validation:
+- `npx tsc --noEmit -p tsconfig.json` -> exit 0.
+- `node scripts/structure-audit.mjs` -> `passed (202 warning(s), 354 baselined)`.
+- `npx vitest run <llm, flow-bootstrap, recovery, result-verification, service-bootstrap, activity, conversations,
+  loop-limits> --maxWorkers=2 --minWorkers=1` -> `Test Files 218 passed (218)`, `Tests 2505 passed (2505)`.
+
+The `adaptation.test.ts` timeout from round 1 no longer fails after the dev merge.
