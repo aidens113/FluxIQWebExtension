@@ -15,7 +15,12 @@
 //   - this repository's `package.json`, `pnpm-workspace.yaml`,
 //     `pnpm-lock.yaml`, `tsconfig.base.json` and `node_modules/.pnpm/lock.yaml`;
 //   - the build-cache sources themselves, so a change to how a fingerprint is
-//     taken invalidates every stamp taken the old way.
+//     taken invalidates every stamp taken the old way;
+//   - for a step marked `structureAudit`, the structure audit's configuration
+//     and rules (`scripts/structure-audit/`, minus its tests) in this
+//     repository and in every Core it links. `extension:check` holds the
+//     browser-imports rule's entry lists in both `config.mjs` files to the
+//     bundle, so an edit to either alone has to rerun it.
 // Installed packages are not walked; the two lockfiles stand for them, which
 // is what `pnpm install --frozen-lockfile` guarantees.
 //
@@ -42,6 +47,8 @@ import { readWorkspacePackages } from "./workspace-packages.mjs";
 
 const REPOSITORY_FILES = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "tsconfig.base.json", "node_modules/.pnpm/lock.yaml"];
 const CORE_ROOT_FILES = ["package.json", "pnpm-lock.yaml", "node_modules/.pnpm/lock.yaml"];
+const STRUCTURE_AUDIT = ["scripts", "structure-audit"];
+const STRUCTURE_AUDIT_TESTS = [["tests"], ["rules", "tests"]];
 const TSCONFIG = /^tsconfig.*\.json$/u;
 const CACHE_DIRECTORY = path.join("node_modules", ".cache", "fluxiq-build");
 const STAT_CACHE_FILE = "stat-cache.json";
@@ -101,6 +108,10 @@ export function resolveStep(stepName, options = {}) {
     }
   }
   for (const file of REPOSITORY_FILES) roots.push({ label: file, path: path.join(repoRoot, file), exclude: [] });
+  if (step.structureAudit === true) {
+    roots.push(structureAuditRoot(repoRoot, ""));
+    for (const coreRoot of [...coreRoots].sort()) roots.push(structureAuditRoot(coreRoot, "core:"));
+  }
   const cacheSources = path.join(repoRoot, "scripts", "build-cache");
   roots.push({ label: label(repoRoot, cacheSources), path: cacheSources, exclude: [path.join(cacheSources, "tests")] });
 
@@ -177,6 +188,12 @@ function transitiveDependencies(own, packages, reads) {
     pending.push(...dependency.workspaceDeps);
   }
   return [...found.values()].sort((left, right) => (left.dir < right.dir ? -1 : left.dir > right.dir ? 1 : 0));
+}
+
+/** A root's structure-audit sources: configuration, rules and their helpers, not their tests. */
+function structureAuditRoot(root, prefix) {
+  const dir = path.join(root, ...STRUCTURE_AUDIT);
+  return { label: `${prefix}${STRUCTURE_AUDIT.join("/")}`, path: dir, exclude: STRUCTURE_AUDIT_TESTS.map((parts) => path.join(dir, ...parts)) };
 }
 
 function tsconfigsIn(dir) {

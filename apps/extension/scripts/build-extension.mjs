@@ -119,9 +119,12 @@ async function bundleExtension() {
  * @param {"background" | "content" | "page-world" | "popup" | "sidepanel"} name
  * @param {string} outputDir
  * `inputs`, when given, receives the absolute path of every file the bundle
- * read (esbuild's metafile), which is what the build stamp hashes.
+ * read (esbuild's metafile), which is what the build stamp hashes. `metafiles`,
+ * when given, receives the metafile itself, whose import edges
+ * `check-extension.mjs` reads to hold the browser-imports rule's entries to
+ * the real bundle.
  *
- * @param {{ logLevel?: import("esbuild").LogLevel, write?: boolean, inputs?: Set<string> }} [options]
+ * @param {{ logLevel?: import("esbuild").LogLevel, write?: boolean, inputs?: Set<string>, metafiles?: import("esbuild").Metafile[] }} [options]
  * @returns {Promise<string>}
  */
 export async function bundleExtensionEntry(name, outputDir, options = {}) {
@@ -132,7 +135,7 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
   const outfile = path.join(outputDir, entry.outfile);
   const result = await build({
     bundle: true,
-    metafile: options.inputs !== undefined,
+    metafile: options.inputs !== undefined || options.metafiles !== undefined,
     platform: "browser",
     target: ["chrome109", "firefox109"],
     sourcemap: true,
@@ -146,6 +149,7 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
     outfile,
     format: entry.format
   });
+  if (options.metafiles && result.metafile) options.metafiles.push(result.metafile);
   if (options.inputs && result.metafile) {
     for (const input of Object.keys(result.metafile.inputs)) {
       const file = path.resolve(input);
