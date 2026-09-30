@@ -310,3 +310,16 @@ test("every read reaches the bundle on its own attempt, including one no step ju
   // neither did the stop word this facility could not name.
   for (const secret of MUST_NOT_TRAVEL) assert.equal(written.includes(secret), false, secret);
 });
+
+// How a paginated read ended. Live run `run-munnhi5q-4867dabe` stopped on the
+// everything store's 429 page after four of five results pages; Core projected
+// `paginationStop` onto the attempt and this reader dropped it, so the bundle
+// could not say the read had lost its list rather than finished it.
+test("a paginated read's stop reaches the bundle beside truncated, and a word this reader does not know is unknown", () => {
+  const lost: RunExtractionRead = { ...FOUND, pagesRead: 4, truncated: true, paginationStop: "list_vanished" };
+  assert.deepEqual(extractionReadOf(attemptWith(lost)), lost);
+  assert.equal(extractionReadOf(attemptWith({ ...lost, paginationStop: "rate_limited" }))?.paginationStop, "rate_limited");
+  assert.equal(extractionReadOf(attemptWith({ ...lost, paginationStop: "a newer word" }))?.paginationStop, "unknown");
+  assert.equal(extractionReadOf(attemptWith({ ...lost, paginationStop: 7 })), undefined, "a member that is not a word drops the read");
+  assert.equal("paginationStop" in (extractionReadOf(attemptWith(FOUND)) ?? {}), false);
+});

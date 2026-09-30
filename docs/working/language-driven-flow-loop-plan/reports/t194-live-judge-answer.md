@@ -64,3 +64,11 @@ All t194 edits are validated; nothing is in progress in the trees. Combined chec
 **Mixed files (F0 plus t194 lines):** downstream `packages/test-runner/src/run-scenario.ts` (t194: `keepsRunState` in the import and at the `finally`, line 679), `packages/test-runner/src/run-scenario/index.ts` (t194: one export line); Core `runtime/llm/harness-options/bootstrap-completion.ts` (t194: the `inheritedNodeRefs` import and two call sites, t174's summary lines unchanged).
 
 **t194 files that dev has also changed since `defcbe2d`/`f0dbbd6` (true merges):** downstream `apps/extension/src/content/extraction/pagination.ts` (t195/t174 load-more Retry vs t194 F6 429 reload), `domain/src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts` and `domain/src/runtime/llm-evidence/tools.ts` (F3), `docs/architecture/web-capabilities.md`; Core `runtime/flow-bootstrap/authoring/draft-routing.ts` (F2) and `runtime/llm/harness-options/bootstrap-completion.ts`.
+
+## Merge of dev after round 1 (2026-09-30)
+
+The supervisor committed round 1 (Core `c4c469de`, downstream `31be444b`) and merged dev (t174, t193, t195, t196, t191 round 1) into both trees; the lead resolved the conflicts and the supervisor committed the merge (Core `b75459d8`, downstream `8b5fcb9b`).
+- Conflicts: Core `llm/harness-options/bootstrap-completion.ts` (dev's side plus `inheritedNodeRefs`); `domain/src/runtime/llm-evidence/tools.ts` (the `repeatedRefusals.answered(scope, toolId, answer)` call F3 needs, beside t196's `observed` state-digest binding); `packages/test-runner/src/run-scenario.ts` and `run-scenario/index.ts` (dev's `uiReview`, `periodicCapture`, `createRunScreenshotAdapter`, plus `keepsRunState` in the import, at line 670 and as one export). Every F0 file resolved to dev's version.
+- First checks failed on a stale Core `dist` (4 domain tests on failure records; extension check on `effect`/`retryAfterMs`), not on the merge: Core rebuilt, then all green.
+- Validation: Core fluxiq tsc rc 0, Core vitest (harness-options, flow-bootstrap/authoring, recovery, draft-shown) 672/672; domain check rc 0, suite 948/948; extension check rc 0, suite 1348/1348; test-runner check and build rc 0, lane node tests 87/87; both structure audits passed.
+- The Lab now takes its own screenshots (t174's `ui-review`, t193's `periodicCapture`); this lane's OS capture stays as a cross-check.

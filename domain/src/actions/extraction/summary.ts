@@ -7,10 +7,12 @@
 // way, so the copy below admits nothing else: a string that is not a
 // well-formed field key, a word outside its set, or a missing field that is not
 // one of the read's own fields, drops the whole summary rather than letting
-// page text ride on a field nothing redacts.
+// page text ride on a field nothing redacts. The one exception, `rejectedSamples`,
+// exists only when an exploring model's node run asks (`./rejected-samples.ts`).
 
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
+import { webAutomationExtractionRejectedSamplesValue, type WebAutomationExtractionRejectedRow } from "./rejected-samples";
 
 export type WebAutomationExtractionSummary = {
   /** Records returned, across every page read. */
@@ -65,6 +67,8 @@ export type WebAutomationExtractionSummary = {
   listWait?: WebAutomationExtractionListWait | undefined;
   /** What `where` did, or absent for a read whose request named no conditions. */
   conditions?: WebAutomationExtractionConditionReport | undefined;
+  /** A few rows each condition rejected, one list per condition; only when asked for (`./rejected-samples.ts`). */
+  rejectedSamples?: WebAutomationExtractionRejectedRow[][] | undefined;
   /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;
   /** What `dedupe` and `sort` did, or absent for a read whose request named neither. */
@@ -90,6 +94,12 @@ export type WebAutomationExtractionSummary = {
  *   page after the current one), `scrolled_to_end`, and `list_vanished` (the page
  *   a control led to showed no item of the list at all, and nothing to go on
  *   with);
+ * - the server: `rate_limited` (the page a control led to was refused as too
+ *   many requests, and still refused after the read waited and reloaded it, or
+ *   the read could not afford to). Either of these two words beside
+ *   `truncated: true` is a read cut short, never a complete one: live run
+ *   `run-munnhi5q-4867dabe` read four of five results pages, stopped on the
+ *   everything store's 429 page and answered `truncated: false`;
  * - the request's bounds: `page_limit` (`maxPages` or `maxScrolls`),
  *   `item_limit` (`maxItems`), and `deadline` (the command's `timeoutMs`);
  * - the page misbehaving: `list_unchanged` (the control was followed, and then
@@ -108,6 +118,7 @@ export type WebAutomationExtractionPaginationStop =
   | "no_following_page"
   | "scrolled_to_end"
   | "list_vanished"
+  | "rate_limited"
   | "page_limit"
   | "item_limit"
   | "deadline"
@@ -123,6 +134,7 @@ const PAGINATION_STOPS: readonly WebAutomationExtractionPaginationStop[] = [
   "no_following_page",
   "scrolled_to_end",
   "list_vanished",
+  "rate_limited",
   "page_limit",
   "item_limit",
   "deadline",
@@ -266,6 +278,9 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // arriving as a report that says something the read did not do.
   const conditions = summary.conditions === undefined ? undefined : conditionReportValue(summary.conditions);
   if (summary.conditions !== undefined && conditions === undefined) return undefined;
+  // Only beside the counts, cut to their bounds whatever the page sent; malformed drops the summary.
+  const rejectedSamples = summary.rejectedSamples === undefined ? undefined : webAutomationExtractionRejectedSamplesValue(summary.rejectedSamples, conditions?.rejected.length ?? -1, fieldNames);
+  if (summary.rejectedSamples !== undefined && rejectedSamples === undefined) return undefined;
   // Optional, and held to the same rule: a word this side does not know is a
   // producer saying something about the read that this contract cannot read
   // back, so it drops the summary rather than arriving as a half-understood
@@ -317,6 +332,7 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
     ...(listPresence !== undefined ? { listPresence } : {}),
     ...(listWait !== undefined ? { listWait } : {}),
     ...(conditions !== undefined ? { conditions } : {}),
+    ...(rejectedSamples !== undefined ? { rejectedSamples } : {}),
     ...(paginationStop !== undefined ? { paginationStop } : {}),
     ...(order !== undefined ? { order } : {})
   };

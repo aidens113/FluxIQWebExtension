@@ -114,3 +114,13 @@ test("a count that is not a count, and a member nothing declared, are both refus
   assert.deepEqual(issuesOf({ ...read, itemSelector: ".product-card" }), ["$.itemSelector unknown property"], "the selector is the one thing this record must never hold");
   assert.deepEqual(issuesOf(null), ["$ must be an object"]);
 });
+
+// How a paginated read ended (`run-munnhi5q-4867dabe`: the everything store's
+// 429 page mid-pagination, answered as a complete read and unexplained in the bundle).
+test("a paginated read says how it ended, in one word from the set, unknown included", () => {
+  assert.deepEqual(issuesOf({ ...read, pagesRead: 4, truncated: true, paginationStop: "list_vanished" }), []);
+  assert.deepEqual(issuesOf({ ...read, pagesRead: 4, truncated: true, paginationStop: "rate_limited" }), []);
+  assert.deepEqual(issuesOf({ ...read, paginationStop: "unknown" }), []);
+  assert.ok(contracts.RUN_EXTRACTION_PAGINATION_STOP.includes("control_absent"));
+  assert.deepEqual(issuesOf({ ...read, paginationStop: "went for lunch" }).map((issue) => issue.split(" must")[0]), ["$.paginationStop"]);
+});

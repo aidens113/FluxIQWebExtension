@@ -142,7 +142,7 @@ test("a 429 that never clears ends the read truncated, named, with every record 
     assert.deepEqual(outcome.records, FOUR_PAGES.records, "the records already read are the answer");
     assert.equal(outcome.truncated, true);
     assert.equal(outcome.refusedStatus, 429);
-    assert.equal(outcome.paginationStop, "list_vanished", "the domain's word until it admits rate_limited");
+    assert.equal(outcome.paginationStop, "rate_limited");
     assert.equal(outcome.pageRetries, 1);
     assert.equal(outcome.pagesRead, 4);
     assert.equal(outcome.itemsSeen, 8);

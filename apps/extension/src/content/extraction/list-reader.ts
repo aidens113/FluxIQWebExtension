@@ -121,6 +121,7 @@ import { filteredListAnswer, type ListExtractionConditionReport } from "./filter
 import { itemFilterFor } from "./item-filter";
 import { awaitListComplete } from "./list-wait";
 import { listRowOrderFor, type ListExtractionOrderReport } from "./order-rows";
+import { rejectedSamplesFor } from "./rejected-samples";
 import { awaitListPresent, awaitPageRendered, type ListPresence, type ListWait } from "./page-render";
 import {
   advancePage,
@@ -219,6 +220,8 @@ export type ListExtractionOutcome = {
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
   conditions?: ListExtractionConditionReport | undefined;
+  /** Up to three rows each condition rejected, one list per condition, only for a read asked for them (`rejected-samples.ts`). */
+  rejectedSamples?: ExtractedListRecord[][] | undefined;
   /**
    * Why a read that pages stopped paging, or absent for a read that did not page.
    *
@@ -252,6 +255,8 @@ export type ListExtractionOptions = {
   checkpoint?: ((progress: ExtractionCheckpoint) => Promise<void>) | undefined;
   /** How the document says how it was served, and is waited on and reloaded: the browser's own unless a test stands it in. */
   pageHost?: RefusedPageHost | undefined;
+  /** Keep a few rows each condition rejected, for the exploring model's own node run only (`rejected-samples.ts`). */
+  sampleRejected?: boolean | undefined;
 };
 
 type FieldReaders = ReadonlyArray<readonly [name: string, reader: ExtractFieldReader]>;
@@ -332,6 +337,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
         filtered,
         ...(seen === undefined ? {} : { itemsSeen: seen }),
         ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach] } }),
+        ...(samples === undefined ? {} : { rejectedSamples: samples.rows() }),
         ...(spent.retries + spent.rateLimits === 0 ? {} : { refusals: { ...spent } })
       });
     };
@@ -368,6 +374,8 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
   let applied = carried.applied;
   let kept = carried.kept;
   const rejectedEach = [...carried.rejected];
+  // A few of the rows each condition rejected, carried across documents like the counts.
+  const samples = rejectedSamplesFor(options.sampleRejected === true, rejects === undefined ? 0 : rejectedEach.length, resume?.rejectedSamples);
 
   // Items the selector named, counted once each, whichever page or scroll named
   // them: a set rather than a running sum, because a `loadMore` or `scroll` read
@@ -414,6 +422,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
       ...(listPresence === undefined ? {} : { listPresence }),
       ...(listWait === undefined ? {} : { listWait }),
       ...(rejects === undefined ? {} : { conditions: { applied, kept, rejected: [...rejectedEach], unfiltered: answer.unfiltered } }),
+      ...(samples === undefined ? {} : { rejectedSamples: samples.rows() }),
       ...(paginate === undefined || paginationStop === undefined ? {} : { paginationStop }),
       ...(spent.retries === 0 ? {} : { pageRetries: spent.retries }),
       ...(refusedStatus === undefined ? {} : { refusedStatus }),
@@ -545,6 +554,7 @@ export async function extractList(request: WebAutomationExtractListRequest, opti
               // was sized from, so the fallback is for the compiler rather than
               // for a case that happens.
               for (const index of rejectedBy) rejectedEach[index] = (rejectedEach[index] ?? 0) + 1;
+              samples?.note(rejectedBy, itemRead.record);
               rememberRejected(rejectedRows, itemRead, fields, earlierPages !== undefined, order ? WEB_AUTOMATION_EXTRACT_MAX_ITEMS : maxItems);
             }
             read.set(element, key);

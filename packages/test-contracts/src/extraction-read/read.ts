@@ -88,7 +88,28 @@ export type RunExtractionRead = {
   listWait?: RunExtractionListWait;
   /** What the read's `where` did to it, or absent for a read whose request named no conditions. */
   conditions?: RunExtractionConditionReport;
+  /**
+   * Why a read that paged stopped paging, in one closed word, or absent for a
+   * read that did not page. `truncated` beside it says whether the stop cut the
+   * read short: `list_vanished` and `rate_limited` are a page advance that lost
+   * the list, which live run `run-munnhi5q-4867dabe` answered as a complete read
+   * of four of five pages -- and a bundle could not say how that read ended.
+   */
+  paginationStop?: RunExtractionPaginationStop;
 };
+
+/**
+ * Why a paginated read stopped paging: the domain's closed set
+ * (`WebAutomationExtractionPaginationStop`), `rate_limited` ahead of it, and
+ * `unknown` for a word this contract has not been told about, on the rule
+ * `RUN_EXTRACTION_WAIT_STOP` states. Core's projection already publishes a word
+ * it does not know as `unknown`.
+ */
+export const RUN_EXTRACTION_PAGINATION_STOP = [
+  "control_absent", "control_disabled", "no_following_page", "scrolled_to_end", "list_vanished", "rate_limited",
+  "page_limit", "item_limit", "deadline", "list_unchanged", "page_repeated", "control_not_clickable", "page_fault", "unknown"
+] as const;
+export type RunExtractionPaginationStop = (typeof RUN_EXTRACTION_PAGINATION_STOP)[number];
 
 /** The two words a read uses for whether its `item` selector ever named an element on the page. */
 export const RUN_EXTRACTION_LIST_PRESENCE = ["appeared", "never_appeared"] as const;

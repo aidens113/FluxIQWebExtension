@@ -13,7 +13,7 @@ import { webAutomationExtractionSummaryValue } from "../summary";
 const SUMMARY = { recordCount: 12, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["title", "link"] };
 
 test("every stop word is copied as sent", () => {
-  const words = ["control_absent", "control_disabled", "no_following_page", "scrolled_to_end", "list_vanished", "page_limit", "item_limit", "deadline", "list_unchanged", "page_repeated", "control_not_clickable", "page_fault"];
+  const words = ["control_absent", "control_disabled", "no_following_page", "scrolled_to_end", "list_vanished", "rate_limited", "page_limit", "item_limit", "deadline", "list_unchanged", "page_repeated", "control_not_clickable", "page_fault"];
   for (const paginationStop of words) {
     assert.deepEqual(webAutomationExtractionSummaryValue({ ...SUMMARY, paginationStop }), { ...SUMMARY, paginationStop }, paginationStop);
   }

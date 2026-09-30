@@ -85,3 +85,16 @@ test("what a read spent on refused pages crosses the document boundary, and unre
     assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, refusals }), undefined, JSON.stringify(refusals));
   }
 });
+
+test("the rows each condition rejected cross the document boundary, and unreadable samples refuse the checkpoint", () => {
+  // A multi-page read would otherwise show only its last document's samples
+  // (`content/extraction/rejected-samples.ts`).
+  const sampled = { ...CHECKPOINT, rejectedSamples: [[{ name: "Pro Earbuds Wireless Charging Case", price: null }], []] };
+  const read = readExtractionCheckpoint(sampled);
+  assert.deepEqual(read, sampled);
+  assert.notEqual(read?.rejectedSamples?.[0]?.[0], sampled.rejectedSamples[0]?.[0]);
+  assert.equal("rejectedSamples" in (readExtractionCheckpoint(CHECKPOINT) ?? {}), false);
+  for (const rejectedSamples of [null, "rows", [{ name: "a" }], [[{ name: 3 }]], [["a"]]]) {
+    assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, rejectedSamples }), undefined, JSON.stringify(rejectedSamples));
+  }
+});
