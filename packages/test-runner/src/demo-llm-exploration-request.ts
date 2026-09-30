@@ -43,8 +43,8 @@ export type DemoLlmExplorationRequestReadiness = Readonly<{
     /** The whole run's token budget. There is no call count: exploration iterates and Core picks the backstop. */
     maxTotalTokensPerRun: number;
     timeoutSeconds: number;
-    /** How long a claimed grant may keep calling, Core's run lease. */
-    runLeaseSeconds: number;
+    /** How long the run may keep calling: its deadline. */
+    runDeadlineSeconds: number;
     maxEstimatedCostUsd: number;
     maxTotalEstimatedCostUsd: number;
     providerRetries: number;
@@ -101,7 +101,7 @@ export function inspectDemoLlmExplorationRequestReadiness(request: DemoLlmExplor
       maxTotalTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens,
       maxTotalTokensPerRun: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun,
       timeoutSeconds: EVIDENCE_GUIDED_CREATION_LIMITS.timeoutSeconds,
-      runLeaseSeconds: EVIDENCE_GUIDED_CREATION_LIMITS.runLeaseSeconds,
+      runDeadlineSeconds: EVIDENCE_GUIDED_CREATION_LIMITS.runDeadlineSeconds,
       maxEstimatedCostUsd: EVIDENCE_GUIDED_CREATION_LIMITS.maxEstimatedCostUsd,
       maxTotalEstimatedCostUsd: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd,
       providerRetries: EVIDENCE_GUIDED_CREATION_LIMITS.providerRetries,

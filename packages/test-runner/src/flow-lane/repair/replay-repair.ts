@@ -2,14 +2,14 @@
 //
 // A repair that only works while a provider is being paid is not a repair; it
 // is an expensive retry. The proof is deterministic reuse: run the applied Flow
-// again against the same broken page, with no execution grant at all, and check
+// again against the same broken page, with no model (no `runIntent`), and check
 // two things -- that Core called no provider, and that the fixture's own goal
 // still holds afterwards.
 //
 // The run carries no `llmExecution`, so Core has nothing to spend a call
 // against. The check is still made from Core's own accounting rather than from
 // that argument: a replay that somehow reached a provider has to be able to say
-// so, and "we did not pass a grant" is an intention, not a measurement.
+// so, and "we did not ask for a model" is an intention, not a measurement.
 
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { classifyRunnerFailure, type RunnerFailureCategory } from "../../failure.js";
@@ -116,7 +116,7 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       onRunIdentified: (identified) => { runId = identified; },
     }, bounds);
     runId = run.runId;
-    // Read from Core's own accounting, not from the absence of a grant.
+    // Read from Core's own accounting, not from the absence of a `runIntent`.
     const providerCalls = countedProviderCalls(await control.getRunDetail(input.projectId, run.runId, bounds));
     const goalPassed = await input.checkGoal();
     return {
@@ -147,7 +147,7 @@ function sameDatasets(expected: readonly FlowRunDataset[], actual: readonly Flow
 
 /**
  * Provider calls Core counted for a run, from its own accounting and never
- * from the runner's belief about the grant it did not pass.
+ * from the runner's belief about the model it did not ask for.
  *
  * Deliberately the narrow question. `live-llm` builds a whole usage record for
  * a run that was authorized to spend; a replay was authorized to spend nothing,

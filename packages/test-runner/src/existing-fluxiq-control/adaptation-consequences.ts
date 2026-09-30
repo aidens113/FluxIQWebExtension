@@ -71,7 +71,7 @@ export type ExistingAdaptationConsequences = {
   crossCheck?: ExistingAdaptationConsequenceCrossCheck;
   /**
    * The question the build carries out to a person, present exactly when the
-   * gate raised one that nobody granted -- a granted request is forgotten by
+   * gate raised one that nobody allowed -- an allowed request is forgotten by
    * the gate, so what survives here is an unanswered one. Core refuses to
    * approve or apply such a proposal (`FLOW_BOOTSTRAP_PERMISSION_REQUIRED`),
    * so a reader that sees this knows the build parked.

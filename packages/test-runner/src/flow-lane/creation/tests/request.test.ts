@@ -11,7 +11,7 @@ import { catalogScenario, datasetTask, goalTask } from "./scenario-fixture.js";
 
 /**
  * What a created-Flow run builds and how it is judged is decided before any
- * topology or grant exists. The catalog task has no workflow id, so the
+ * topology or Core exists. The catalog task has no workflow id, so the
  * workflow is the one that extracts the task's dataset; a variant is the
  * task's own; and a task the scenario cannot judge is a fixture defect.
  */

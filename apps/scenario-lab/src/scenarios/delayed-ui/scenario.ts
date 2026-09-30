@@ -93,7 +93,7 @@ export const delayedUiScenario = defineScenario<DelayedUiState>({
         finalState: [{ id: "late-visible", subject: "late-action", predicate: "visible", value: true }],
         providerCalls: {
           count: 0,
-          because: "The runtime's own second attempt at the wait catches the late content, so the grant a live run takes out must go unspent.",
+          because: "The runtime's own second attempt at the wait catches the late content, so a live run must make no provider call.",
         },
         recovery: {
           absorbedBy: "retry_node",

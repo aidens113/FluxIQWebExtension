@@ -183,7 +183,7 @@ test("a replay whose goal did not hold fails the run, naming the replays that mi
 
 /**
  * A Flow FluxIQ built from an instruction: its playback ran under the
- * proposal-only repair grant, so its repair is the same kind of proposal, and
+ * model taking part, so its repair is the same kind of proposal, and
  * its own lane judged no declared repair, so this lane judges it first.
  */
 const DECLARED = { patchKind: "temporary_target_override", target: { tagName: "button", accessibleName: "Apply changes", controlType: "submit" } } as const;
@@ -198,7 +198,7 @@ function createdLane(options: Parameters<typeof lane>[0] = {}) {
   return { ...fake, input };
 }
 
-test("a created Flow's proposal is judged against the declared repair, then applied and replayed under the grant that made it", async (t) => {
+test("a created Flow's proposal is judged against the declared repair, then applied and replayed under the intent that made it", async (t) => {
   const fake = createdLane({ replays: 1 });
   t.after(fake.restore);
   const proof = await runLiveRepairLane(fake.control, fake.input);

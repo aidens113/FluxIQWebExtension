@@ -523,6 +523,20 @@ for (const refusal of [CONNECTION_ERROR, PORT_CLOSED_ERROR, CHANNEL_CLOSED_ERROR
   });
 }
 
+// The look the domain takes straight after a click whose page saves and then
+// reloads (bigbox "Set as my store", `run-muncqlr0-3348202b`): the old document
+// can go while the look is in it. It only reads, so it is sent again once the
+// tab has settled, and answers from the new document instead of failing.
+for (const refusal of [CONNECTION_ERROR, PORT_CLOSED_ERROR, CHANNEL_CLOSED_ERROR]) {
+  test(`a snapshot that meets a navigating page is sent once more after the tab settles: "${refusal}"`, async () => {
+    const action: BrowserActionCommand = { commandId: "c-look", actionType: "web.dom.capture_snapshot", tabId: TAB_ID };
+    const { outcome, sent, timeline } = await runAgainstRefusals(action, [refusal]);
+    assert.deepEqual(timeline, ["wait", "send", "wait", "send"]);
+    assert.deepEqual(sent[1], sent[0]);
+    assert.deepEqual(outcome, { result: FRAME_REPLY, tabId: TAB_ID, frameId: 0 });
+  });
+}
+
 for (const actionType of ["web.dom.click", "web.dom.type", "web.dom.extract", "web.dom.wait_for_selector"] as const) {
   test(`a ${actionType} that meets a navigating page the same way is sent once`, async () => {
     const action: BrowserActionCommand = { commandId: "c-once", actionType, selector: "#sign-in", tabId: TAB_ID };

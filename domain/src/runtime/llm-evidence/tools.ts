@@ -29,7 +29,7 @@
 // already shows (`./tool-rejection.ts`). Nothing is refused on FluxIQ's own
 // judgement of what a control looks like: the model declares what its own call
 // would lastingly do and Core's gate answers from the person's instruction and
-// grant (`./permission.ts`).
+// permission (`./permission.ts`).
 
 import type { FluxIQ } from "fluxiq";
 import type {
@@ -61,7 +61,7 @@ import {
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
-import { runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
+import { createWebNodeArrivals, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
 import {
   createWebLlmTargetPackets,
   resolveWebPlanNodeParameters,
@@ -235,6 +235,10 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   // an answer that repeats says so instead of arriving as a new one
   // (`./repeated-refusal.ts`).
   const repeatedRefusals = createWebLlmRepeatedRefusals();
+  // Whether each (project, flow, session) build told a start location has
+  // navigated there yet, so a tab that was already open does not count as
+  // arrival (`./node-run/arrival.ts`).
+  const arrivals = createWebNodeArrivals();
   const stable = (request: WebLlmEvidenceToolRequest, binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding =>
     stableHandles.restamp({ projectId: request.projectId, flowId: request.flowId }, binding);
   // Every packet an authoring tool shows the model: kept for the next repair
@@ -322,7 +326,8 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
             request: input,
             stores: { targets: targetPackets, extractions: extractionHandles },
             restamp: (binding) => retain(stable(input, binding)),
-            shown: (binding) => shown(input, sessionId, binding)
+            shown: (binding) => shown(input, sessionId, binding),
+            arrivals
           }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {

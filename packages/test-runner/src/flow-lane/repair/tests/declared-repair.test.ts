@@ -77,7 +77,7 @@ test("every other run is left exactly as it came, with nothing to judge", async 
   const dist = await labDist(t, moduleExporting([declaration]));
   const declared = resolveScenarioWorkflow(scenario, { variantId: "renamed-redesign" });
   const cases = [
-    ["a provider-free run, or one whose grant executes", declared, { flowLane: true, proposalOnly: false }],
+    ["a provider-free run, or one whose intent executes", declared, { flowLane: true, proposalOnly: false }],
     ["a run off the Flow lane", declared, { flowLane: false, proposalOnly: true }],
     ["a run with no variant", resolveScenarioWorkflow(scenario), { flowLane: true, proposalOnly: true }],
     ["a variant with no declaration", resolveScenarioWorkflow(scenario, { variantId: "selector-only" }), { flowLane: true, proposalOnly: true }],

@@ -1,20 +1,21 @@
 // One live provider run, from the parsed command line to the attested result.
 //
-// The runner owns a scenario run; it should not also own Core's grant
-// vocabulary, the credential's provenance, or the arithmetic of a budget. All
-// of that lives here, behind three moments the runner does understand: begin
-// one before anything starts, authorize the Flow the lane just built (or is
-// about to build), and settle the accounting once the provider work is done.
+// The runner owns a scenario run; it should not also own the Flow's LLM
+// settings, the credential's provenance, or the arithmetic of a budget. All of
+// that lives here, behind three moments the runner does understand: begin one
+// before anything starts, ready the Flow the lane just built (or is about to
+// build) for the model, and settle the accounting once the provider work is
+// done. A model call needs no grant; the only thing a run carries is its
+// intent and the consequences the operator permitted (`--llm-permit`).
 
-import type { LlmExecutionProfile, LlmUsage } from "@fluxiq-web-extension/test-contracts";
+import type { LlmActionConsequence, LlmExecutionProfile, LlmUsage } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
-import type { CreatedFlowBuild, PersistedFlowLlmExecution } from "../flow-lane/index.js";
-import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorization, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
+import type { CreatedFlowBuild, CreatedFlowBuildLlm, PersistedFlowLlmExecution } from "../flow-lane/index.js";
+import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld } from "./budget.js";
 import { assertProviderCallsAsDeclared, type DeclaredProviderCalls } from "./declared-provider-calls.js";
 import { liveLlmBuildUsage } from "./build-usage.js";
-import type { LiveLlmExecutionGrant } from "./execution-grant.js";
 import { readLiveLlmExploration, type LiveLlmExplorationControl, type LiveLlmExplorationRecord } from "./exploration-record.js";
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
@@ -61,25 +62,17 @@ export async function beginLiveLlmRun(input: {
 }
 
 /**
- * The purpose a created Flow's repair grant carries: `explore_and_adapt`, which
+ * The intent a created Flow's playback runs with: `explore_and_adapt`, which
  * explores the page and tries its repair live.
  *
  * It was `diagnose_and_adapt` -- which only ever proposes a target override and
- * never executes one -- because `explore_and_adapt` could not serve: a granted
- * run was refused any external side effect, so an override on a Save button
- * died at preflight (`runtime_patch.side_effect_not_authorized`,
- * run-mu7gfuph-a57c6b18) and nothing was proposed at all. That refusal is gone:
- * the permission gate no longer treats creating or sending as something to
- * refuse, so a permitted patch now carries `sideEffectPermission: "permitted"`
- * and the policy's side-effect lines are skipped.
- *
- * The narrow purpose had become the thing blocking every repair. The route that
- * takes a wrong answer back into exploration accepts `explore_and_adapt` only,
- * so under `diagnose_and_adapt` a run that answered wrongly was diagnosed and
- * then refused `llm.runtime_patch_grant_scope_refused` -- three times in
+ * never executes one. The narrow intent had become the thing blocking every
+ * repair: the route that takes a wrong answer back into exploration accepts
+ * `explore_and_adapt` only, so under `diagnose_and_adapt` a run that answered
+ * wrongly was diagnosed and then refused -- three times in
  * run-mug2h8ur-8aa317b6, with 15 of its 26 calls and $1.99 of its $2 unspent.
  */
-const CREATED_FLOW_REPAIR_PURPOSE = "explore_and_adapt" satisfies PersistedFlowLlmExecution["purpose"];
+const CREATED_FLOW_REPAIR_PURPOSE = "explore_and_adapt" satisfies PersistedFlowLlmExecution["intent"];
 
 /**
  * What Core's result verification did on one run, as `snapshots/live-llm.json`
@@ -131,16 +124,16 @@ const NO_VERIFICATION: LiveLlmVerificationRecord = { source: "absent", status: n
 
 export class LiveLlmRun {
   private observed: LiveLlmObservedUsage | undefined;
-  /** The grant Core issued for this run, and what its request sent; `undefined` before that. */
-  private grant: LiveLlmExecutionGrant | undefined;
+  /** Whether the plan's own Flow (or build) was readied for the model; a run never readied spent nothing to settle. */
+  private prepared = false;
   /** What the bounded exploration did, read at settlement; `undefined` before that. */
   private exploration: LiveLlmExplorationRecord | undefined;
   /** What Core's result verification did on the settled run; `undefined` before that. */
   private verification: LiveLlmVerificationRecord | undefined;
   /** A created Flow's build record, kept so the repair's settlement rewrites the snapshot with it. */
   private buildRecord: CreatedFlowBuild | undefined;
-  /** The repair grant a created Flow's playback ran under, and what that run spent; `undefined` before each. */
-  private repairGrant: LiveLlmExecutionGrant | undefined;
+  /** Whether a created Flow's playback was readied for the model, and what that run spent; `undefined` before it settled. */
+  private repairPrepared = false;
   private repairObserved: LiveLlmObservedUsage | undefined;
   /** What the run's scenario declares about provider calls; `null` until the runner reads the resolved workflow, and for a scenario that declares nothing. */
   private declaredCalls: DeclaredProviderCalls | null = null;
@@ -153,40 +146,38 @@ export class LiveLlmRun {
   }
 
   /**
-   * Whether the grant this run's Flow runs under lets Core propose a repair
+   * Whether the intent this run's Flow runs with lets Core propose a repair
    * and never apply it: `diagnose_and_adapt`, whose target override is a
    * proposal and whose failed action is not retried. Such a run cannot end the
    * way a repaired one would, so a scenario may hold it to what it declares
-   * instead. A `create-flow` run qualifies: its build grant only builds, and
-   * the Flow it built runs under `repairPlan`, which has this purpose.
+   * instead.
    */
   get proposesRepairOnly(): boolean {
     return this.repairPurpose === "diagnose_and_adapt";
   }
 
   /**
-   * Whether this run's grant repairs a Flow that failed, and so whether the
-   * repair it produced can be approved, applied and replayed: `adapt`, which
-   * proposes one target override, `repair`, which explores first and whose
-   * patch Core may execute, and `create-flow`, whose built Flow runs under the
-   * proposal-only grant `repairAuthorizer` issues. A diagnosis changes
-   * nothing, so it does not qualify.
+   * Whether this run repairs a Flow that failed, and so whether the repair it
+   * produced can be approved, applied and replayed: `adapt`, which proposes one
+   * target override, `repair`, which explores first and whose patch Core may
+   * execute, and `create-flow`, whose built Flow's playback runs with
+   * `explore_and_adapt`. A diagnosis changes nothing, so it does not qualify.
    */
   get repairsFlow(): boolean {
     return this.repairPurpose === "diagnose_and_adapt" || this.repairPurpose === "explore_and_adapt";
   }
 
   /**
-   * The task that produced a repair, and the purpose of the grant it was
-   * produced under, for the repair lane's record. A `create-flow` run's repair
-   * comes from its playback's grant, not its build's, so `describe()`'s
-   * `build_and_adapt` would name the wrong grant.
+   * The task that produced a repair, and the intent it was produced under, for
+   * the repair lane's record. A `create-flow` run's repair comes from its
+   * playback, not its build, so `describe()`'s `build_and_adapt` would name the
+   * wrong one.
    */
   describeRepair(): { task: string; purpose: string } {
     return { task: this.plan.task, purpose: this.repairPurpose };
   }
 
-  /** The purpose of the grant this run's Flow runs under: the plan's own, or a created Flow's playback grant. */
+  /** The intent this run's Flow runs with: the plan's own, or a created Flow's playback intent. */
   private get repairPurpose(): LiveLlmPlan["purpose"] {
     return this.createsFlow ? CREATED_FLOW_REPAIR_PURPOSE : this.plan.purpose;
   }
@@ -230,13 +221,9 @@ export class LiveLlmRun {
   }
 
   /**
-   * The grant a created Flow's playback runs under: this run's own bounds,
-   * with `diagnose_and_adapt` in place of the build's purpose. That purpose
-   * may gather evidence from the live page and propose one target override,
-   * which Core holds as a proposal awaiting approval and never executes (its
-   * policy's `proposalMode` is `manual` under this grant, and a granted run is
-   * never retried on an applied patch). The operator's caps bind it exactly as
-   * they bind the build, so asking for the repair widens no limit.
+   * The plan a created Flow's playback runs under: this run's own bounds, with
+   * the playback's intent in place of the build's. The operator's caps bind it
+   * exactly as they bind the build, so asking for the repair widens no limit.
    */
   private get repairPlan(): LiveLlmPlan {
     return { ...this.plan, task: "repair", purpose: CREATED_FLOW_REPAIR_PURPOSE };
@@ -284,59 +271,53 @@ export class LiveLlmRun {
         maxEstimatedCostUsd: plan.maxEstimatedCostUsd,
         maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd,
       },
-      highTokenConfirmation: plan.highTokenConfirmation,
+      permittedConsequences: [...plan.permittedConsequences],
       credentialSource: { name: this.credential.name, from: this.credential.source },
     };
   }
 
   /**
-   * The Flow lane's authorization hook. Called after the Flow exists and just
-   * before it runs, because Core issues the grant against that Flow's saved
-   * settings and expires it within the minute.
+   * The Flow lane's hook: installs the key and saves the Flow's LLM settings
+   * and spend ceiling, after the Flow exists and before it runs, and answers
+   * with the run's intent and the consequences the operator permitted.
    */
   authorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
     return async (flowId: string) => {
       const { purpose } = this.plan;
-      if (purpose === "build_and_adapt") throw new RunnerFailure("fixture.invalid", "A build_and_adapt grant authorizes a Flow build, never a Flow run");
-      const authorization = await this.authorize(control, core, flowId, this.plan);
-      this.grant = authorization.grant;
-      return { grantId: authorization.grant.grantId, purpose };
+      if (purpose === "build_and_adapt") throw new RunnerFailure("fixture.invalid", "A build_and_adapt run builds a Flow; it never runs one");
+      await this.authorize(control, core, flowId, this.plan);
+      this.prepared = true;
+      return { intent: purpose, permittedConsequences: this.plan.permittedConsequences };
     };
   }
 
   /**
-   * The created-Flow lane's authorization hook. Called once the blank Flow
-   * exists and its instruction is saved, just before the build, because Core
-   * binds the grant to the Flow as it then stands.
+   * The created-Flow lane's build hook. Called once the blank Flow exists and
+   * its instruction is saved, just before the build, and answers with the
+   * consequences the operator permitted the build.
    */
-  buildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<{ grantId: string }> {
+  buildAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<CreatedFlowBuildLlm> {
     return async (flowId: string) => {
-      if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} grant cannot authorize a Flow build`);
-      const authorization = await this.authorize(control, core, flowId, this.plan);
-      this.grant = authorization.grant;
-      return { grantId: authorization.grant.grantId };
+      if (this.plan.purpose !== "build_and_adapt") throw new RunnerFailure("fixture.invalid", `A ${this.plan.purpose} run cannot build a Flow`);
+      await this.authorize(control, core, flowId, this.plan);
+      this.prepared = true;
+      return { permittedConsequences: this.plan.permittedConsequences };
     };
   }
 
   /**
-   * The created-Flow lane's repair hook: the grant its playback runs under, so
-   * a created Flow that fails is diagnosed and repaired like any other rather
-   * than refused for want of a model. Called once the review has applied the
-   * build and just before the run, because Core binds a grant to the Flow as
-   * it then stands and expires it within the minute.
-   *
-   * The same grant is what lets the run's result be judged: `diagnose_and_adapt`
-   * covers Core's `loop_verification`, so a created Flow's playback needs no
-   * separate `verify_result` grant. Only a `create-flow` run has one. A replay
-   * issues no grant, so it stays exactly as deterministic as before.
+   * The created-Flow lane's repair hook: readies its playback for the model,
+   * so a created Flow that fails is diagnosed and repaired like any other
+   * rather than refused for want of a model, and its result is judged. Called
+   * once the review has applied the build and just before the run. A replay
+   * carries no model, so it stays exactly as deterministic as before.
    */
   repairAuthorizer(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials): (flowId: string) => Promise<PersistedFlowLlmExecution> {
     return async (flowId: string) => {
-      if (!this.createsFlow) throw new RunnerFailure("fixture.invalid", `Only a create-flow run repairs the Flow it built; a ${this.plan.task} run authorizes its Flow through the Flow lane`);
-      const plan = this.repairPlan;
-      const authorization = await this.authorize(control, core, flowId, plan);
-      this.repairGrant = authorization.grant;
-      return { grantId: authorization.grant.grantId, purpose: CREATED_FLOW_REPAIR_PURPOSE };
+      if (!this.createsFlow) throw new RunnerFailure("fixture.invalid", `Only a create-flow run repairs the Flow it built; a ${this.plan.task} run readies its Flow through the Flow lane`);
+      await this.authorize(control, core, flowId, this.repairPlan);
+      this.repairPrepared = true;
+      return { intent: CREATED_FLOW_REPAIR_PURPOSE, permittedConsequences: this.plan.permittedConsequences };
     };
   }
 
@@ -379,7 +360,7 @@ export class LiveLlmRun {
    * whose Flow still failed -- the ordinary case -- is accounted all the same.
    *
    * The snapshot keeps it beside the build, never folded into it: `repair`
-   * holds the purpose, what Core granted and the run's own per-call record,
+   * holds the intent, the bounds it ran under and the run's own per-call record,
    * and the campaign sums the two only where it reports a row's spend. A run
    * detail that cannot be read is recorded as such and raises nothing; an
    * overspend is raised, as it is for every live run. Reaching no provider is
@@ -387,9 +368,8 @@ export class LiveLlmRun {
    * and says why in the run's recovery record.
    */
   async settleRepair(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<void> {
-    if (!this.repairGrant || this.repairObserved) return;
+    if (!this.repairPrepared || this.repairObserved) return;
     const plan = this.repairPlan;
-    const grant = this.repairGrant;
     let observed: LiveLlmObservedUsage | undefined;
     try {
       if (input.runId) observed = liveLlmObservedUsage(await control.getRunDetail(input.projectId, input.runId));
@@ -400,7 +380,7 @@ export class LiveLlmRun {
     const repair = {
       purpose: plan.purpose,
       runId: input.runId ?? null,
-      granted: { maxCalls: grant.maxCalls, maxTotalTokensPerRun: grant.maxTotalTokensPerRun, maxEstimatedCostUsd: grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: grant.maxTotalEstimatedCostUsd, timeoutMs: grant.timeoutMs },
+      authorized: { maxCalls: plan.maxCalls, maxTotalTokensPerRun: plan.maxTotalTokensPerRun, maxEstimatedCostUsd: plan.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd, timeoutMs: plan.timeoutMs },
       observed: observed ?? null,
       ...(observed ? {} : { settlement: input.runId ? "run_detail_unreadable" : "run_not_identified" }),
     };
@@ -411,10 +391,10 @@ export class LiveLlmRun {
     assertLiveLlmBudgetHeld(plan, observed);
   }
 
-  private async authorize(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials, flowId: string, plan: LiveLlmPlan): Promise<LiveLlmAuthorization> {
+  private async authorize(control: LiveLlmAuthorizationControl, core: LiveLlmRunCredentials, flowId: string, plan: LiveLlmPlan): Promise<void> {
     if (!core.projectId) throw new RunnerFailure("environment.missing", "A live LLM run needs the project its Core created, and this topology published none");
     if (!core.authorizationPassword) throw new RunnerFailure("environment.missing", "A live LLM run needs the account password its Core was bootstrapped with, and this topology published none");
-    const authorization = await authorizeFlowLiveLlmExecution(control, {
+    await authorizeFlowLiveLlmExecution(control, {
       projectId: core.projectId,
       flowId,
       plan,
@@ -422,10 +402,6 @@ export class LiveLlmRun {
       authorizationPassword: core.authorizationPassword,
       ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}),
     });
-    // Never sets `this.grant`: the build's grant is recorded by the authorizer
-    // that issued it, and a created Flow's repair grant goes to `repairGrant`,
-    // so the grant the snapshot reports is never replaced by a later one.
-    return authorization;
   }
 
   /**
@@ -435,7 +411,7 @@ export class LiveLlmRun {
    * failed expectation, a read that broke -- used to leave no
    * `snapshots/live-llm.json` at all, so the calls a provider was paid for
    * were never itemized (`run-mu4rpka7-845d919a`). This writes the same
-   * snapshot from the same run detail, whenever a grant was issued, and
+   * snapshot from the same run detail, whenever the Flow was readied, and
    * publishes the same summary.
    *
    * It raises nothing itself. A budget breach is returned for the caller to
@@ -444,10 +420,10 @@ export class LiveLlmRun {
    * provider is not, because the lane's own failure is the better
    * explanation. A run with no run id, or whose detail cannot be read, still
    * gets a snapshot, which says so and carries no usage. A run already
-   * settled, or never granted, is left alone.
+   * settled, or never readied, is left alone.
    */
   async settleUnfinished(control: LiveLlmRunDetailReader, input: { projectId: string; runId: string | undefined }, bundle: LiveLlmRunBundle, publish: LiveLlmPublish): Promise<RunnerFailure | undefined> {
-    if (this.observed || !this.grant) return undefined;
+    if (this.observed || !this.prepared) return undefined;
     let observed: LiveLlmObservedUsage | undefined;
     try {
       if (input.runId) observed = liveLlmObservedUsage(await control.getRunDetail(input.projectId, input.runId));
@@ -496,7 +472,7 @@ export class LiveLlmRun {
     assertProviderCallsAsDeclared(this.plan, observed, declared);
   }
 
-  /** `snapshots/live-llm.json`: what was authorized, what Core granted, and what the run spent, or `null` where that could not be read. */
+  /** `snapshots/live-llm.json`: what was authorized, what the run permitted, and what it spent, or `null` where that could not be read. */
   private async writeSnapshot(bundle: LiveLlmRunBundle, observed: LiveLlmObservedUsage | null, extra: Record<string, unknown>): Promise<void> {
     await bundle.writeStructured("snapshots/live-llm.json", {
       schemaVersion: "0.1",
@@ -514,20 +490,9 @@ export class LiveLlmRun {
         maxEstimatedCostUsd: this.plan.maxEstimatedCostUsd,
         maxTotalEstimatedCostUsd: this.plan.maxTotalEstimatedCostUsd,
       },
-      // What Core actually issued, where it said. `null` for a run token budget
-      // Core did not report.
-      granted: this.grant
-        ? { maxCalls: this.grant.maxCalls, maxTotalTokensPerRun: this.grant.maxTotalTokensPerRun, maxEstimatedCostUsd: this.grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: this.grant.maxTotalEstimatedCostUsd, timeoutMs: this.grant.timeoutMs, permittedConsequences: [...this.grant.permittedConsequences] }
-        : null,
-      // Whether this run confirmed Core's high-token exposure on its own
-      // behalf, and why: a confirmation nobody can see afterwards is consent
-      // nobody can check.
-      highTokenConfirmation: {
-        sent: this.grant?.highTokenConfirmationSent === true,
-        authorizedTokens: this.plan.highTokenConfirmation.authorizedTokens,
-        threshold: this.plan.highTokenConfirmation.threshold,
-        reason: this.plan.highTokenConfirmation.reason,
-      },
+      // The consequences the operator permitted (`--llm-permit`), exactly as
+      // sent with the build or the run; empty permits none.
+      permittedConsequences: [...this.plan.permittedConsequences] as LlmActionConsequence[],
       declared: this.plan.declared,
       // What the scenario or variant declared this run may spend, when it
       // declared anything: written on every snapshot, spent or not, so that a

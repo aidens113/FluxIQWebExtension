@@ -2,7 +2,7 @@
 // the expectations a Flow-lane run is held to because of it.
 //
 // A variant's `expected` has one shape for every run, but what a live run can
-// show depends on its grant. Under the Lab's `--llm-task adapt` grant
+// show depends on its intent. Under the Lab's `--llm-task adapt`
 // (`diagnose_and_adapt`) Core only proposes a repair and never retries the
 // action, so a run that repairs perfectly still ends with the action failed.
 // `renamed-redesign` declared the repaired run's save, so every such run was
@@ -20,7 +20,7 @@ import { pathToFileURL } from "node:url";
 import { validateWebScenario, type ResolvedScenarioWorkflow, type ScenarioExpected, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 
-/** The patch kinds a declared repair may name. Core's proposal-only grant proposes only this one. */
+/** The patch kinds a declared repair may name. Core's proposal-only intent proposes only this one. */
 export const FLOW_REPAIR_PATCH_KINDS = ["temporary_target_override"] as const;
 /** The fingerprint fields a declared target may name, compared exactly with the proposal's. */
 export const FLOW_REPAIR_TARGET_FIELDS = ["tagName", "accessibleName", "controlType"] as const;
@@ -50,7 +50,7 @@ const MAX_TARGET_TEXT = 200;
 /**
  * The workflow a Flow-lane run is held to, and the repair it is judged on.
  *
- * Only a Flow-lane run of a variant, under a grant that may only propose a
+ * Only a Flow-lane run of a variant, under an intent that may only propose a
  * repair, of a variant the scenario declared a repair for, changes: its
  * `expected` takes the declaration's `proposalOnlyOutcome` over the variant's
  * own fields, and the declared proposal is returned to be judged. Every other

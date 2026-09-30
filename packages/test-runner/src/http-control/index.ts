@@ -78,8 +78,8 @@ export class FluxIQControlClient {
    *
    * A FluxIQ session carries a Secret Keys unlock that is computed at login,
    * from the keys that existed then. A key created later is not in it, and
-   * every operation that needs the key's plaintext -- an LLM execution grant,
-   * for one -- is refused on that session however recently it authenticated.
+   * every operation that needs the key's plaintext -- a model call, for
+   * one -- is refused on that session however recently it authenticated.
    * Logging in again is how a caller that just installed a key can use it.
    */
   async reauthenticate(bounds: FluxIQHttpOptions = {}): Promise<void> {
@@ -164,7 +164,7 @@ export class FluxIQControlClient {
     const payload = await response.json().catch(() => undefined);
     if (!response.ok) {
       // Core answers a refusal with `{ ok: false, error }`. Discarding it left a
-      // refused grant reading as a bare "(400)", so a live run that failed
+      // refused request reading as a bare "(400)", so a live run that failed
       // before its first provider call could not say why. The reason is kept,
       // bounded, and travels with the failure; the run's redaction attestation
       // still scans everything a failure writes.

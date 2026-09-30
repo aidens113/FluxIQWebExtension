@@ -57,7 +57,7 @@ test("the run id is reported the moment Core names it, before anything reads the
 
   identified.length = 0;
   const live = control(unreadable);
-  await assert.rejects(executeRecordedFlowRun(live.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" }, onRunIdentified: (runId) => identified.push(runId) }), /run detail unavailable/u);
+  await assert.rejects(executeRecordedFlowRun(live.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { intent: "diagnose_and_adapt", permittedConsequences: [] }, onRunIdentified: (runId) => identified.push(runId) }), /run detail unavailable/u);
   // A live run names the session it is about to create, so its id is known
   // before the run starts, and before the request that runs it can fail.
   assert.equal(identified.length, 2);
@@ -66,11 +66,11 @@ test("the run id is reported the moment Core names it, before anything reads the
   assert.deepEqual(live.calls, ["select"]);
 });
 
-// 2026-09-18: a created Flow's playback carries a verify_result grant, so one
+// 2026-09-18: a created Flow's playback is judged by the model, so one
 // request runs the Flow and waits for the model's verdict. It outlasted the
 // 30-second bound in four units; the id came only in the reply, so nothing
 // could be read back and every one failed as environment.missing.
-test("a granted run whose request timed out is read back by the id it named, and only once its verdict is recorded", async () => {
+test("a live run whose request timed out is read back by the id it named, and only once its verdict is recorded", async () => {
   const timeout = new RunnerFailure("environment.missing", "FluxIQ HTTP operation timed out", { details: { bounded: "timeout", operationStage: "control.request", timeoutMs: 30_000 } });
   const sent: Record<string, unknown>[] = [];
   const reads: string[] = [];
@@ -93,15 +93,17 @@ test("a granted run whose request timed out is read back by the id it named, and
   const clock = { value: 0 };
   const outcome = await executeRecordedFlowRun(
     client,
-    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "verify_result" } },
+    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { intent: "verify_result", permittedConsequences: ["send_or_publish"] } },
     {},
     { now: () => clock.value, sleep: async ms => { clock.value += ms; } },
   );
-  // The request named a fresh session and carried the grant, and nothing a grant is refused.
+  // The request named a fresh session and carried the intent and the
+  // permitted consequences, no grant id, and nothing a live run is refused.
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.newRunId, named);
   assert.equal(sent[0]!.runId, undefined);
-  assert.equal(sent[0]!.llmExecutionGrantId, "llm-grant:test");
+  assert.equal("llmExecutionGrantId" in sent[0]!, false);
+  assert.deepEqual(sent[0]!.permittedConsequences, ["send_or_publish"]);
   assert.equal(sent[0]!.runIntent, "verify_result");
   assert.equal(sent[0]!.idempotencyKey, undefined);
   assert.equal(sent[0]!.authorizedDomainIds, undefined);
@@ -113,7 +115,7 @@ test("a granted run whose request timed out is read back by the id it named, and
   assert.equal(outcome.status, "failed");
 });
 
-test("a deterministic run's timeout still ends at its first terminal read, and a granted abort keeps the short window", async () => {
+test("a deterministic run's timeout still ends at its first terminal read, and a live run's abort keeps the short window", async () => {
   const abort = new RunnerFailure("runtime.behavior", "FluxIQ HTTP operation was interrupted", { details: { bounded: "abort" } });
   const { client } = control({
     automationStudioCall: async (endpoint: string) => {
@@ -126,7 +128,7 @@ test("a deterministic run's timeout still ends at its first terminal read, and a
   // wait runs to its deadline; what is measured is how long that deadline is.
   await assert.rejects(executeRecordedFlowRun(
     client,
-    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "verify_result" } },
+    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { intent: "verify_result", permittedConsequences: [] } },
     {},
     { now: () => clock.value, sleep: async ms => { clock.value += ms; } },
   ), /interrupted/u);

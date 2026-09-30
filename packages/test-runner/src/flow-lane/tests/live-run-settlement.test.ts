@@ -1,4 +1,4 @@
-// A granted Flow run is finished only when Core has finished with it. A
+// A live Flow run is finished only when Core has finished with it. A
 // recovery runs after the failed status is saved, so a run read at that moment
 // is not the finished run, and tearing Core down then ends the recovery before
 // it has recorded anything: every `--flow` repair run on 2026-09-21 reported no
@@ -17,14 +17,14 @@ const recovering = { summary: { status: "failed" }, actionAttempts: [failedAttem
 const recovered = { ...recovering, metadata: { llmGate: { invoked: true, patchSkippedCode: "llm.runtime_patch_permission_required" }, recoveryTrace: { stages: [] } } };
 
 type Script = {
-  purpose: PersistedFlowLlmExecution["purpose"];
+  intent: PersistedFlowLlmExecution["intent"];
   /** What the one request that runs the Flow does: answer, or time out. */
   request: "answers" | "times out";
   /** The details Core serves, one per read; the last is served from then on. */
   details: Array<Record<string, unknown>>;
 };
 
-function granted(script: Script) {
+function live(script: Script) {
   const requestBounds: FluxIQHttpOptions[] = [];
   let reads = 0;
   let named = "";
@@ -46,15 +46,15 @@ function granted(script: Script) {
   } as unknown as PersistedFlowRunControl;
   const run = () => executeRecordedFlowRun(
     client,
-    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: script.purpose } },
+    { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { intent: script.intent, permittedConsequences: [] } },
     {},
     { now: () => clock.value, sleep: async (ms) => { clock.value += ms; } },
   );
   return { run, requestBounds, reads: () => reads, clock };
 }
 
-test("the request that runs a granted Flow is held as long as one request may be, never the client's 30-second default", async () => {
-  const lab = granted({ purpose: "explore_and_adapt", request: "answers", details: [recovered] });
+test("the request that runs a live Flow is held as long as one request may be, never the client's 30-second default", async () => {
+  const lab = live({ intent: "explore_and_adapt", request: "answers", details: [recovered] });
   await lab.run();
 
   assert.equal(lab.requestBounds.length, 1);
@@ -63,7 +63,7 @@ test("the request that runs a granted Flow is held as long as one request may be
 
 test("a failed repair run whose request timed out is read until Core's recovery has recorded how it ended", async () => {
   const running = { summary: { status: "running" }, actionAttempts: [], interventions: [] };
-  const lab = granted({ purpose: "explore_and_adapt", request: "times out", details: [running, recovering, recovering, recovering, recovered] });
+  const lab = live({ intent: "explore_and_adapt", request: "times out", details: [running, recovering, recovering, recovering, recovered] });
   const outcome = await lab.run();
 
   // A failed status with the ladder's placeholder beside it is not the
@@ -74,7 +74,7 @@ test("a failed repair run whose request timed out is read until Core's recovery 
 });
 
 test("an answered request is still read until the recovery is in, should Core ever answer early", async () => {
-  const lab = granted({ purpose: "diagnose_and_adapt", request: "answers", details: [recovering, recovered] });
+  const lab = live({ intent: "diagnose_and_adapt", request: "answers", details: [recovering, recovered] });
   const outcome = await lab.run();
 
   assert.equal(lab.reads(), 2);
@@ -87,14 +87,14 @@ test("a run left with a failed attempt waits the full recovery record wait, and 
   // for its absence threw away a complete product result and reported
   // `performance.budget` instead -- a verdict about the harness
   // (`run-mudslg9p-c59266aa`). The run is reported, and the absence with it.
-  const lab = granted({ purpose: "explore_and_adapt", request: "times out", details: [recovering] });
+  const lab = live({ intent: "explore_and_adapt", request: "times out", details: [recovering] });
   const outcome = await lab.run();
 
   assert.equal(outcome.status, "failed");
   assert.equal(outcome.unsettled, "recovery");
   assert.equal(outcome.actions.length, 1);
   // Bounded by the recovery record's own wait, measured from the first
-  // terminal read, rather than by the grant's whole run lease.
+  // terminal read, rather than by the live run's whole deadline.
   assert.ok(lab.clock.value >= 300_000 && lab.clock.value <= 301_000, `waited ${lab.clock.value} ms`);
 });
 
@@ -109,7 +109,7 @@ test("a run left with a failed attempt waits the full recovery record wait, and 
 test("a failed run that left no failed attempt has no recovery to wait for, so it settles instead of spending five minutes", async () => {
   const succeeded = { ...failedAttempt, status: "succeeded" };
   const cleanRun = { summary: { status: "failed" }, actionAttempts: [succeeded], interventions: [ladderPlaceholder] };
-  const lab = granted({ purpose: "explore_and_adapt", request: "times out", details: [cleanRun] });
+  const lab = live({ intent: "explore_and_adapt", request: "times out", details: [cleanRun] });
   const outcome = await lab.run();
 
   assert.equal(outcome.status, "failed");
@@ -121,13 +121,13 @@ test("a failed run that left no failed attempt has no recovery to wait for, so i
   // The same run, with the ladder having recovered the one fault it met, is
   // still a run with nothing left to diagnose.
   const recoveredRun = { ...cleanRun, actionAttempts: [failedAttempt, { ...failedAttempt, attemptId: "attempt.two", order: 1, status: "succeeded" }] };
-  const absorbed = granted({ purpose: "explore_and_adapt", request: "times out", details: [recoveredRun] });
+  const absorbed = live({ intent: "explore_and_adapt", request: "times out", details: [recoveredRun] });
   assert.equal((await absorbed.run()).unsettled, "recovery");
   assert.ok(absorbed.clock.value <= 6_000, `waited ${absorbed.clock.value} ms`);
 
   // And the record is still read when it does arrive inside the grace, because
   // the rule is about what Core can plan from, not about what it has written.
-  const late = granted({ purpose: "explore_and_adapt", request: "times out", details: [cleanRun, cleanRun, { ...recovered, actionAttempts: [succeeded] }] });
+  const late = live({ intent: "explore_and_adapt", request: "times out", details: [cleanRun, cleanRun, { ...recovered, actionAttempts: [succeeded] }] });
   const settled = await late.run();
   assert.equal(settled.unsettled, undefined);
   assert.equal(late.reads(), 3);
@@ -135,21 +135,21 @@ test("a failed run that left no failed attempt has no recovery to wait for, so i
 
 test("a run still missing its verdict when the wait runs out fails, because reading it would report a pass the verdict may take away", async () => {
   const unjudged = { summary: { status: "succeeded" }, actionAttempts: [{ ...failedAttempt, status: "succeeded" }], interventions: [] };
-  const lab = granted({ purpose: "verify_result", request: "times out", details: [unjudged] });
+  const lab = live({ intent: "verify_result", request: "times out", details: [unjudged] });
 
   await assert.rejects(lab.run(), (error: unknown) => {
     assert.ok(error instanceof RunnerFailure);
     assert.equal(error.category, "performance.budget");
-    assert.equal(error.details?.code, "flow_lane.granted_run_unsettled");
+    assert.equal(error.details?.code, "flow_lane.live_run_unsettled");
     assert.equal(error.details?.pending, "verdict");
     return true;
   });
-  // The verdict keeps the grant's own run lease: it decides the run's outcome.
+  // The verdict keeps the live run's own deadline: it decides the run's outcome.
   assert.ok(lab.clock.value >= 600_000 && lab.clock.value <= 601_000, `waited ${lab.clock.value} ms`);
 });
 
 test("a verify_result run buys no recovery, so its failure is final as soon as it is written", async () => {
-  const lab = granted({ purpose: "verify_result", request: "times out", details: [recovering] });
+  const lab = live({ intent: "verify_result", request: "times out", details: [recovering] });
   const outcome = await lab.run();
 
   assert.equal(lab.reads(), 1);

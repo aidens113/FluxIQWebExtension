@@ -5,7 +5,7 @@
  * (`observedCalls: []`); a Flow run keeps one record per call. Never Core's
  * `observed.accounting`, which includes reservations for a run.
  *
- * A created Flow whose playback ran under a repair grant also keeps that run's
+ * A created Flow whose playback ran with the model taking part also keeps that run's
  * per-call record beside the build, as `repair.observed`, never folded into
  * it. The two are summed here, where a row reports its spend, and the source
  * reads `build+repair` only when the repair called a provider: a repair Core

@@ -34,7 +34,7 @@ async function build(options: FakeCreationCoreOptions = {}, wait: { deadlineMs?:
     projectId: PROJECT_ID,
     flowId: FLOW_ID,
     instruction: INSTRUCTION,
-    authorize: async (flowId) => { core.calls.push("authorize"); authorized.push(flowId); return { grantId: "llm-grant:build" }; },
+    authorize: async (flowId) => { core.calls.push("authorize"); authorized.push(flowId); return { permittedConsequences: [] }; },
   }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, pollMs: 1_000, ...(wait.deadlineMs === undefined ? {} : { deadlineMs: wait.deadlineMs }) });
   return { core, authorized, record };
 }
@@ -46,7 +46,7 @@ test("the build saves the instruction, then authorizes, selects the context and 
   assert.deepEqual(authorized, [FLOW_ID]);
   // No start location was named, so the request carries none and Core builds
   // from whatever is in front of it, exactly as it did before t103.
-  assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, llmExecutionGrantId: "llm-grant:build", evidenceGuided: true }]);
+  assert.deepEqual(core.generationRequests, [{ projectId: PROJECT_ID, flowId: FLOW_ID, evidenceGuided: true }]);
   assert.deepEqual(record, {
     outcome: "proposed",
     adaptationId: ADAPTATION_ID,
@@ -203,7 +203,7 @@ test("the tools a build called include Core's own node runner, and never its dec
   assert.deepEqual(refusal.record.evidenceLoop?.steps?.map((step) => step.toolId), ["core.run_node", "core.decision_unusable", "web.inspect_current_page"]);
 });
 
-test("an instruction Core did not activate refuses before any grant is taken", async () => {
+test("an instruction Core did not activate refuses before the Flow is readied for the model", async () => {
   await assert.rejects(build({ instructionStatus: "draft" }), /Core did not make the task's instruction the Flow's active instruction/u);
 });
 
@@ -341,11 +341,11 @@ test("a refusal Core's parser does not accept keeps only its HTTP status, and a 
   const core = fakeCreationCore();
   const original = core.control.generateFlowBootstrapAdaptation;
   core.control.generateFlowBootstrapAdaptation = async (input) => { await original(input); return { status: 200, ok: true, payload: { adaptation: { projectId: PROJECT_ID, flowId: "another.flow", adaptationId: ADAPTATION_ID, status: "proposed" } } }; };
-  const escaped = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ grantId: "llm-grant:build" }) });
+  const escaped = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) });
   assert.deepEqual(escaped.failure, { code: "lab.generation_answer_invalid", stage: null, httpStatus: 200 });
 });
 
-test("a build that outlives its request is found by polling for its proposal, within the run lease and no longer", async () => {
+test("a build that outlives its request is found by polling for its proposal, within the build's deadline and no longer", async () => {
   const recovered = await build({ generation: { kind: "timeout", proposalAfterPolls: 3 } });
   assert.equal(recovered.record.outcome, "proposed");
   assert.equal(recovered.record.recoveredAfterTimeout, true);
@@ -362,7 +362,7 @@ test("the build request is held open, as a long request, until the build's own d
   const bounds: unknown[] = [];
   const original = core.control.generateFlowBootstrapAdaptation;
   core.control.generateFlowBootstrapAdaptation = async (input, requestBounds) => { bounds.push(requestBounds); return original(input); };
-  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ grantId: "llm-grant:build" }) });
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) });
   assert.equal(record.outcome, "proposed");
   // Core answers only when the build is over: 60 s claim, 600 s run lease, 15 s reply.
   assert.deepEqual(bounds, [{ timeoutMs: 675_000, longRequest: true }]);
@@ -380,7 +380,7 @@ test("a build that fails after the ordinary request cap is recorded with Core's 
     clock += 488_000;
     return original(input);
   };
-  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ grantId: "llm-grant:build" }) }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; } });
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; } });
   assert.deepEqual(record.failure, { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", httpStatus: 400 });
   assert.equal(record.durationMs, 488_000);
 });
@@ -390,7 +390,7 @@ test("a build request that times out at the deadline still looks once for a prop
   let clock = 0;
   const original = core.control.generateFlowBootstrapAdaptation;
   core.control.generateFlowBootstrapAdaptation = async (input) => { clock = 5_000; return original(input); };
-  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ grantId: "llm-grant:build" }) }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, deadlineMs: 5_000 });
+  const record = await buildCreatedFlowProposal(core.control, { projectId: PROJECT_ID, flowId: FLOW_ID, instruction: INSTRUCTION, authorize: async () => ({ permittedConsequences: [] }) }, {}, { now: () => clock, sleep: async (ms) => { clock += ms; }, deadlineMs: 5_000 });
   assert.equal(record.outcome, "proposed");
   assert.equal(record.recoveredAfterTimeout, true);
   assert.equal(core.calls.filter((call) => call === "list-adaptations").length, 1);
@@ -451,7 +451,7 @@ test("a build's declarations and Core's cross-check are read from where Core put
 test("a build's reported calls are every call it made, with the loop's own beside them", async () => {
   // Core spends provider calls outside the evidence loop -- reading what the
   // person's instruction already asks for -- and publishes them separately, so
-  // a reader taking the loop count alone under-reports what the grant paid for.
+  // a reader taking the loop count alone under-reports what the build paid for.
   const { record } = await build({
     evidenceLoop: { providerCallCount: 17, decisionCount: 17, additionalProviderCallCount: 1, totalProviderCallCount: 18, traceStepCount: 18, iterationCount: 18, toolCallCount: 9, evidenceBytes: 18_000, toolIds: ["web.recovery.inspect"] },
   });
@@ -477,14 +477,16 @@ test("the build tells Core where the Flow starts, when the run named a start loc
     flowId: FLOW_ID,
     instruction: INSTRUCTION,
     startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
-    authorize: async () => ({ grantId: "llm-grant:build" }),
+    authorize: async () => ({ permittedConsequences: ["send_or_publish"] }),
   }, {}, { now: () => 0, sleep: async () => {} });
 
   assert.deepEqual(core.generationRequests, [{
     projectId: PROJECT_ID,
     flowId: FLOW_ID,
-    llmExecutionGrantId: "llm-grant:build",
     evidenceGuided: true,
     startLocation: "http://127.0.0.1:53017/scenarios/everything-store/",
+    // The operator's permit travels with the build, and only because it
+    // permits something.
+    permittedConsequences: ["send_or_publish"],
   }]);
 });

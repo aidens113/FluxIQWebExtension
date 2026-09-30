@@ -317,13 +317,26 @@ async function runActionInFrame(
 const NAVIGATING_PAGE_ERRORS = [/Receiving end does not exist/i, /message (port|channel) closed before a response was received/i];
 
 /**
- * Sends the action, and a `web.dom.assert` once more when the first send met a
- * page that was navigating: `waitForTabReady` wants only a second of URL
- * stability, so a navigation a click started late can take the old document
- * away under the assert, which the router would report as a false
- * `web.action.failed`. Only the assert is re-sent, because it only reads: a
- * click or a type may already have acted before the channel closed, and sending
- * it again would act twice. A second refusal is reported as the first would be.
+ * The actions sent once more when their first send met a navigating page:
+ * those that only read it, so a second send cannot act twice.
+ *
+ * `web.dom.capture_snapshot` is here beside the assert because it is the look
+ * the domain takes straight after every action it runs for a Flow build. A
+ * click whose page saves and then reloads -- bigbox's "Set as my store"
+ * (`run-muncqlr0-3348202b`) -- can take the old document away while that look
+ * is in it, and a failed look is read by the domain as a page it could not
+ * read rather than as the page the click produced.
+ */
+const RESENT_ACROSS_NAVIGATION: ReadonlySet<string> = new Set(["web.dom.assert", "web.dom.capture_snapshot"]);
+
+/**
+ * Sends the action, and a read-only one (`RESENT_ACROSS_NAVIGATION`) once more
+ * when the first send met a page that was navigating: `waitForTabReady` wants
+ * only a second of URL stability, so a navigation a click started late can
+ * take the old document away under the assert or the look, which the router
+ * would report as a false `web.action.failed`. Only a read is re-sent: a click
+ * or a type may already have acted before the channel closed, and sending it
+ * again would act twice. A second refusal is reported as the first would be.
  *
  * A paginated `web.dom.extract_list` presses controls and reads, so it is
  * neither case: it is carried into each document its pagination loads by
@@ -342,7 +355,7 @@ async function sendAction(
   try {
     return await sendToTab<BrowserActionResult>(tabId, message, frameId);
   } catch (error) {
-    if (action.actionType !== "web.dom.assert" || !metNavigatingPage(error)) throw error;
+    if (!RESENT_ACROSS_NAVIGATION.has(action.actionType) || !metNavigatingPage(error)) throw error;
     await waitForTabReady(tabId);
     return await sendToTab<BrowserActionResult>(tabId, message, frameId);
   }

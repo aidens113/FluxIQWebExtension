@@ -58,7 +58,7 @@ export type WebFlowExplorationBrowser = {
 
 /**
  * Implemented by the Core-facing transport. Provider selection, secrets,
- * budgets, grants, model calls, parsing, and proposal persistence stay in the
+ * budgets, model calls, parsing, and proposal persistence stay in the
  * global Core LLM harness; this repository supplies only web evidence.
  */
 export type CoreFlowBootstrapExplorationGateway = {

@@ -4,7 +4,7 @@
 // press it is about to make while exploring, or the step it writes into the
 // Flow. They are never FluxIQ's reading of what a control looks like: the user's
 // rule is that nothing is refused on FluxIQ's own judgement of a control, and
-// the one thing that gates a lasting act is his instruction or his grant. Core
+// the one thing that gates a lasting act is his instruction or his permission. Core
 // holds both (`AS/runtime/action-permissions/`), reads the instruction for what
 // it asks for, and answers; when the answer is no it has already raised the
 // request that goes to the person, so this module only reports the refusal.

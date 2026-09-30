@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { RunnerFailure } from "../../failure.js";
 import type { CreatedFlowBuild } from "../../flow-lane/index.js";
@@ -12,14 +11,11 @@ import { planLiveLlmExecution } from "../live-llm-plan.js";
 import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
 /**
- * A run that confirms Core's high-token exposure on the operator's behalf must
- * say so where the run's evidence is kept, with the reason, and a run that did
- * not must say that too. These drive one run end to end against a fake Core:
- * authorize, settle, and read back `snapshots/live-llm.json`.
+ * One live run end to end against a fake Core: ready the Flow, settle, and
+ * read back `snapshots/live-llm.json`. The fake answers only the endpoints a
+ * live run uses; any other request fails the test.
  */
 
-/** Core's own threshold and the shared per-request budget, imported rather than copied. */
-const CORE_THRESHOLD = AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 
 const CREDENTIAL = { name: "DEEPSEEK_API_KEY", source: "test", value: "test-provider-credential-value" };
@@ -44,10 +40,10 @@ function profile(budget: Partial<LlmExecutionProfile["budget"]>): LlmExecutionPr
 }
 
 function fakeCore() {
-  const issueRequests: Record<string, unknown>[] = [];
+  const settingsRequests: Array<Record<string, any>> = [];
   let metadata: unknown;
   return {
-    issueRequests,
+    settingsRequests,
     control: {
       async reauthenticate(): Promise<void> {},
       async secretKeysCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
@@ -56,25 +52,12 @@ function fakeCore() {
       },
       async automationStudioCall(endpoint: string, payload: Record<string, unknown>): Promise<unknown> {
         if (endpoint === "update-flow-settings") {
+          settingsRequests.push(payload);
           metadata = (payload.flow as { metadata: unknown }).metadata;
           return {};
         }
         if (endpoint === "get-flow") return { flow: { metadata } };
-        if (endpoint === "preflight-llm-execution") return { preflight: {} };
-        issueRequests.push(payload);
-        const maxCalls = payload.maxCalls as number;
-        return {
-          grant: {
-            grantId: "llm-grant:test",
-            purpose: payload.purpose,
-            maxCalls,
-            maxTotalTokensPerRun: payload.maxTotalTokensPerRun,
-            maxEstimatedCostUsd: payload.maxEstimatedCostUsd,
-            maxTotalEstimatedCostUsd: Math.min(2, (payload.maxEstimatedCostUsd as number) * maxCalls),
-            timeoutMs: payload.timeoutMs,
-            providerRetryCount: 0,
-          },
-        };
+        throw new Error(`unexpected endpoint ${endpoint}`);
       },
     },
   };
@@ -114,32 +97,30 @@ async function runOnce(budget: Partial<LlmExecutionProfile["budget"]>) {
   return { core, run, execution, snapshot };
 }
 
-test("a default adapt run records that it sent no high-token confirmation, and why", async () => {
+test("an adapt run readies its Flow with its spend ceiling, carries its intent and permitted consequences, and records what it spent", async () => {
   const { core, run, execution, snapshot } = await runOnce({});
-  assert.deepEqual(execution, { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" });
-  assert.equal("highTokenConfirmation" in (core.issueRequests[0] ?? {}), false);
+  assert.deepEqual(execution, { intent: "diagnose_and_adapt", permittedConsequences: [] });
+  // The run's spend ceiling is a Flow setting now, saved with the rest.
+  const saved = core.settingsRequests[0]?.flow.metadata;
+  assert.deepEqual(saved.adaptationPolicySettings, { maxEstimatedCostUsdPerRun: 2 });
+  assert.equal(saved.llmModel, DEFAULT_LLM_MODEL);
   assert.equal(snapshot.authorized.maxCalls, 26);
-  assert.equal(snapshot.authorized.maxTotalTokensPerRun, CORE_THRESHOLD);
-  assert.equal(snapshot.granted.maxTotalTokensPerRun, CORE_THRESHOLD);
-  assert.equal(snapshot.highTokenConfirmation.sent, false);
-  assert.equal(snapshot.highTokenConfirmation.authorizedTokens, CORE_THRESHOLD);
-  assert.equal(snapshot.highTokenConfirmation.threshold, CORE_THRESHOLD);
-  assert.match(snapshot.highTokenConfirmation.reason, new RegExp(`within Core's ${CORE_THRESHOLD}-token confirmation threshold; no confirmation is needed`, "u"));
+  assert.equal(snapshot.authorized.maxTotalTokensPerRun, PER_REQUEST * 26);
+  assert.equal(snapshot.authorized.maxTotalEstimatedCostUsd, 2);
+  assert.deepEqual(snapshot.permittedConsequences, []);
   assert.equal(snapshot.exploration.source, "absent");
   assert.equal(snapshot.exploration.counts.actions, null, "an unexplored run must not read as an exploration that did nothing");
   assert.deepEqual(snapshot.verification, { source: "absent", status: null, basis: null, code: null, verdicts: [], recordedCalls: null, calls: 0, interventions: [], totalEstimatedCostUsd: 0 });
   assert.equal(run.usage.calls, 3);
 });
 
-test("a run whose typed token budget is above the threshold records that it sent the confirmation, and why", async () => {
-  // One full request past Core's threshold, so the confirmation is required.
-  const aboveThreshold = CORE_THRESHOLD + PER_REQUEST;
-  const { core, snapshot } = await runOnce({ maxTotalTokensPerRun: aboveThreshold });
-  assert.equal(core.issueRequests[0]?.highTokenConfirmation, true);
-  assert.equal(snapshot.highTokenConfirmation.sent, true);
-  assert.equal(snapshot.highTokenConfirmation.authorizedTokens, aboveThreshold);
-  assert.match(snapshot.highTokenConfirmation.reason, new RegExp(`--llm-max-run-tokens ${aboveThreshold}\\) is above Core's ${CORE_THRESHOLD}-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation`, "u"));
-  assert.equal(snapshot.declared.maxTotalTokensPerRun, aboveThreshold);
+test("a run's --llm-permit travels with its intent and is recorded, and a typed token budget is kept", async () => {
+  const core = fakeCore();
+  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxTotalTokensPerRun: 300_000 }), task: "repair", permittedConsequences: ["create_new", "send_or_publish"] }), CREDENTIAL);
+  const execution = await run.authorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  assert.deepEqual(execution, { intent: "explore_and_adapt", permittedConsequences: ["send_or_publish", "create_new"] });
+  assert.deepEqual(run.describe().permittedConsequences, ["send_or_publish", "create_new"]);
+  assert.equal(run.describe().authorized.maxTotalTokensPerRun, 300_000);
 });
 
 async function noKeyRepository(t: test.TestContext): Promise<string> {
@@ -177,13 +158,13 @@ test("a create-flow run fits only a scenario run that carries an instruction tas
   assert.equal(JSON.stringify(described).includes(CREDENTIAL.value), false);
 });
 
-test("a create-flow run's Flow repairs under the exploring grant, so its repair can be tried, applied and replayed", () => {
+test("a create-flow run's Flow repairs with the exploring intent, so its repair can be tried, applied and replayed", () => {
   const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
   // `explore_and_adapt` tries its repair rather than only proposing one, which
-  // is what the wrong-answer route requires: under the narrow grant a run that
-  // answered wrongly was refused `llm.runtime_patch_grant_scope_refused`.
+  // is what the wrong-answer route requires: under the narrow intent a run that
+  // answered wrongly was refused.
   assert.deepEqual([create.repairsFlow, create.proposesRepairOnly], [true, false]);
-  // The repair lane names the playback's grant; the dry run still describes the build's.
+  // The repair lane names the playback's intent; the dry run still describes the build's.
   assert.deepEqual(create.describeRepair(), { task: "create-flow", purpose: "explore_and_adapt" });
   assert.equal(create.describe().purpose, "build_and_adapt");
   const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
@@ -195,11 +176,11 @@ test("a create-flow run's Flow repairs under the exploring grant, so its repair 
   assert.deepEqual([diagnose.repairsFlow, diagnose.proposesRepairOnly], [false, false]);
 });
 
-test("a build grant authorizes only a build, and a run grant only a run", async () => {
+test("a build run readies only a build, and a Flow run only a run", async () => {
   const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
-  await assert.rejects(create.authorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A build_and_adapt grant authorizes a Flow build, never a Flow run/u);
+  await assert.rejects(create.authorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A build_and_adapt run builds a Flow; it never runs one/u);
   const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
-  await assert.rejects(adapt.buildAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A diagnose_and_adapt grant cannot authorize a Flow build/u);
+  await assert.rejects(adapt.buildAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A diagnose_and_adapt run cannot build a Flow/u);
 });
 
 const proposedBuild: CreatedFlowBuild = {
@@ -225,19 +206,18 @@ async function settleBuildOnce(build: CreatedFlowBuild) {
   // output and total limits left the input limit at the default, and input plus
   // output may not exceed the total, so every build below was refused unrun.
   const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
-  const grant = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const prepared = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
   const written: Array<{ path: string; value: unknown }> = [];
   const published: Record<string, unknown>[] = [];
   const settle = () => run.settleBuild(build, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
-  return { core, run, grant, written, published, settle };
+  return { core, run, prepared, written, published, settle };
 }
 
-test("a create-flow run authorizes a build_and_adapt grant and records the build it settled", async () => {
-  const { core, run, grant, written, published, settle } = await settleBuildOnce(proposedBuild);
+test("a create-flow run readies its build with its permitted consequences and records the build it settled", async () => {
+  const { core, run, prepared, written, published, settle } = await settleBuildOnce(proposedBuild);
   await settle();
-  assert.deepEqual(grant, { grantId: "llm-grant:test" });
-  assert.equal(core.issueRequests[0]?.purpose, "build_and_adapt");
-  assert.equal(core.issueRequests[0]?.maxCalls, 26);
+  assert.deepEqual(prepared, { permittedConsequences: [] });
+  assert.equal(core.settingsRequests[0]?.flow.metadata.llmExecutionSettings.maxCalls, 26);
   const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
   assert.equal(snapshot.purpose, "build_and_adapt");
   assert.deepEqual(snapshot.build, proposedBuild);
@@ -292,7 +272,6 @@ test("a build over its run budget, over its call count, or run on another model 
   // authorized call at the per-request limit, so cost and the stall guard bind
   // before tokens do (`runTokenBudget` in live-llm-plan.ts).
   const buildBudget = PER_REQUEST * DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
-  assert.ok(buildBudget > CORE_THRESHOLD, "a build's token budget is no longer held to Core's confirmation threshold");
   const overspend = buildBudget + PER_REQUEST;
   const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: overspend } });
   await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && new RegExp(`the run used ${overspend} total tokens against its run token budget of ${buildBudget}(?! \\()`, "u").test(error.message));
@@ -302,24 +281,24 @@ test("a build over its run budget, over its call count, or run on another model 
   await assert.rejects(otherModel.settle(), /Core's Flow build ran on deepseek\/deepseek-reasoner, not the authorized deepseek\/deepseek-flash/u);
 });
 
-// A created Flow's playback runs under its own grant, so a Flow that fails is
-// repaired rather than refused for want of a model. The grant explores and
+// A created Flow's playback is readied for the model too, so a Flow that
+// fails is repaired rather than refused for want of a model. It explores and
 // tries its repair, and is bound by the same caps as the build; its spend is
 // settled beside the build's, never folded into it.
-test("a create-flow run repairs the Flow it built under an explore_and_adapt grant, and settles that spend beside the build", async () => {
+test("a create-flow run repairs the Flow it built with explore_and_adapt, and settles that spend beside the build", async () => {
   const { core, run, written, published, settle } = await settleBuildOnce(proposedBuild);
   await settle();
   const execution = await run.repairAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
-  assert.deepEqual(execution, { grantId: "llm-grant:test", purpose: "explore_and_adapt" });
-  const request = core.issueRequests[1];
-  assert.equal(request?.purpose, "explore_and_adapt");
-  for (const cap of ["maxCalls", "maxTotalTokensPerRun", "maxEstimatedCostUsd", "timeoutMs"]) assert.equal(request?.[cap], core.issueRequests[0]?.[cap], `the repair asks for no more ${cap} than the build`);
+  assert.deepEqual(execution, { intent: "explore_and_adapt", permittedConsequences: [] });
+  // The playback's settings are the build's own: asking for the repair widens no limit.
+  assert.deepEqual(core.settingsRequests[1]?.flow.metadata, core.settingsRequests[0]?.flow.metadata);
 
   await run.settleRepair({ getRunDetail: async () => detail, automationStudioCall: async () => ({ runDetail: { metadata: {} } }) }, { projectId: "project-1", runId: "run-1" }, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
   const snapshot = written.filter(entry => entry.path === "snapshots/live-llm.json").at(-1)?.value as Record<string, any>;
   assert.deepEqual(snapshot.build, proposedBuild, "the build stays as settled");
   assert.equal(snapshot.observed.accounting.totalTokens, 23_000, "and its totals are not folded into the repair's");
   assert.equal(snapshot.repair.purpose, "explore_and_adapt");
+  assert.equal(snapshot.repair.authorized.maxTotalEstimatedCostUsd, 2);
   assert.equal(snapshot.repair.runId, "run-1");
   assert.equal(snapshot.repair.observed.calls, 3);
   assert.equal(snapshot.repair.observed.observedCalls.length, 3);
@@ -396,7 +375,7 @@ test("a verification record that cannot be read says so, and settles the run all
   assert.equal(snapshot.repair.observed.calls, 3);
 });
 
-test("only a create-flow run has a repair grant, and a repair that cannot be read back is recorded, not raised", async () => {
+test("only a create-flow run readies a repair of the Flow it built, and a repair that cannot be read back is recorded, not raised", async () => {
   const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
   await assert.rejects(adapt.repairAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /Only a create-flow run repairs the Flow it built/u);
 

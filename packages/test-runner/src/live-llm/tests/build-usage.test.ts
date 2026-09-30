@@ -71,7 +71,7 @@ test("a build's provider calls are itemized from the decision rows that record t
     ["evidence.2", 10_000, 10_400, 0.007],
     ["evidence.3", 11_000, 11_400, 0.007],
   ]);
-  // The build ran under one grant bound to one provider and model, and those are what its calls carry.
+  // The build ran on the one provider and model its Flow's settings name, and those are what its calls carry.
   assert.deepEqual([...new Set(usage.observedCalls.map((call) => `${call.provider}/${call.model}`))], [`deepseek/${DEFAULT_LLM_MODEL}`]);
   assert.deepEqual(liveLlmBudgetBreaches(plan, usage), []);
 });

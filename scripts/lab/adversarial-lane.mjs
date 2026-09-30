@@ -9,12 +9,12 @@
 // other half: fixtures armed with the faults a deterministic runtime is
 // supposed to survive, and a number per fault saying whether it did.
 //
-// Each condition runs with no provider grant at all. That is the design, not a
-// saving. A run with a grant that went unspent shows the model was not needed
-// this time; a run with no grant shows that whatever finished it was the
-// deterministic runtime, because nothing else was available. The
+// Each condition runs with no model at all (no `--live-llm`). That is the
+// design, not a saving. A live run that spent nothing shows the model was not
+// needed this time; a run with no model shows that whatever finished it was
+// the deterministic runtime, because nothing else was available. The
 // `expected.providerCalls` declarations on the same rows are the guard for the
-// live case, when the campaign runs them with a grant.
+// live case, when the campaign runs them with `--live-llm`.
 //
 // Usage:
 //   node scripts/lab/adversarial-lane.mjs [--only <condition-id>]... [--list] [-- <extra lab args>]

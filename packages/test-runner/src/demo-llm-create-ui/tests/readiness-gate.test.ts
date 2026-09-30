@@ -48,7 +48,7 @@ test("provider-free readiness parser accepts only the exact live dynamic contrac
   const body = (readiness: unknown, extra: Record<string, unknown> = {}) => JSON.stringify({ ok: true, payload: { readiness }, ...extra });
   const ready = structuredClone(AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS);
   assert.equal((await readProviderFreeGenerationReadiness(response(200, body(ready)))).compatible, true);
-  for (const runtimeKey of ["llmExecutionGrantsConfigured", "providerResolverConfigured", "nativeNodeRegistryConfigured"] as const) {
+  for (const runtimeKey of ["providerResolverConfigured", "nativeNodeRegistryConfigured"] as const) {
     const unwired = structuredClone(ready);
     unwired.supported = false;
     unwired.runtime[runtimeKey] = false;
@@ -109,7 +109,6 @@ test("readiness GET is the sole request and blocks the production UI/auth/genera
     responseBytes: diagnosticFacts?.responseBytes,
     responseParsed: true,
     supported: false,
-    llmExecutionGrantsConfigured: true,
     providerResolverConfigured: false,
     nativeNodeRegistryConfigured: true,
   }]);
@@ -117,6 +116,6 @@ test("readiness GET is the sole request and blocks the production UI/auth/genera
   assert.equal(calls[0]!.method, "GET");
   assert.deepEqual(cookies, [{ name: "fluxiq_session", value: "current-session", url: "http://127.0.0.1:4310" }]);
   assert.match(calls[0]!.url, /get-flow-bootstrap-generation-readiness\?domainId=web-automation$/u);
-  assert.doesNotMatch(calls[0]!.url, /preflight-llm-execution|issue-llm-execution-grant|generate-flow-bootstrap-adaptation/u);
+  assert.doesNotMatch(calls[0]!.url, /generate-flow-bootstrap-adaptation/u);
   assert.deepEqual(calls[0]!.options, { failOnStatusCode: false, timeout: 10_000 });
 });
