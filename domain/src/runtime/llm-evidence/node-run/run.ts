@@ -98,6 +98,12 @@ const LOOK_ENVELOPE_BYTES = 128;
  * arriving here costs nothing that shows: the model simply reasons with less
  * (`../present.ts`).
  */
+/** The press node, by the id the catalog gives it. */
+const PRESS_NODE_ID = "web.output.dom-click";
+
+/** What a press that left the page looking the same is told, beside `pageChanged: false`. */
+const PRESS_AGAIN = "The press landed and the page did not change. Some pages take the first press after they load only as a wake-up: press the same control once more before trying anything else, and keep both presses, since the Flow will need them too.";
+
 export type WebNodeOutcome = {
   ok: true;
   /** The node that ran, as the catalog names it. */
@@ -106,6 +112,14 @@ export type WebNodeOutcome = {
   status: string;
   /** Whether the page looked different afterwards. Absent where it was not compared. */
   pageChanged?: boolean;
+  /**
+   * Said beside `pageChanged: false` after a press, and nowhere else
+   * (`PRESS_AGAIN`): some pages take the first press after they load only as a
+   * wake-up. Lane t195's run `run-munuxns5-833f4313` pressed bigbox's Add to cart,
+   * saw nothing change, navigated away and back, and did it again for forty
+   * decisions without ever pressing twice in a row.
+   */
+  unchangedPress?: string;
   /**
    * The node ran and the page it left could not be read, however long it was
    * waited for (`../capture.ts`, `captureAfterAction`). The packet then has no
@@ -238,7 +252,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       run.shown(looked);
       // One capture, which is both the state the look found and the one it left.
       return withCallStates(toolExecution(
-        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
+        nodeEvidence(looked.evidence, present<WebNodeOutcome>({ ok: true, node: node.definitionId, status: "succeeded", pageChanged: false, unchangedPress: undefined, pageUnreadable: undefined, control: undefined, read: undefined, inFlow: false })),
         false,
         WEB_LLM_INSPECT_RESULT_CODE,
         undefined,
@@ -401,6 +415,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       // Said, never inferred: a press that left the page looking the same may
       // still have been the right step, and a model that is told so can decide.
       pageChanged: changed,
+      unchangedPress: changed === false && node.definitionId === PRESS_NODE_ID ? PRESS_AGAIN : undefined,
       pageUnreadable: after === undefined ? true : undefined,
       control: control.name,
       read,
@@ -581,7 +596,7 @@ function bounded(evidence: JsonValue, budget: number, page: WebLlmPageEvidence, 
   if (serializedBytes(evidence) <= budget) return evidence;
   return nodeEvidence(page, present<WebNodeOutcome>({
     ok: outcome.ok, node: outcome.node, status: outcome.status,
-    pageChanged: undefined, pageUnreadable: outcome.pageUnreadable, control: undefined, read: undefined, inFlow: outcome.inFlow
+    pageChanged: undefined, unchangedPress: undefined, pageUnreadable: outcome.pageUnreadable, control: undefined, read: undefined, inFlow: outcome.inFlow
   }));
 }
 

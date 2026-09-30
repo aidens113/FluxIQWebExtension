@@ -87,12 +87,12 @@ export async function webActionPermission(input: {
   if (!Array.isArray(input.declared) || input.declared.length > 10 || !input.declared.every(isAutomationStudioActionConsequence)) return { kind: "invalid" };
   const declared: readonly AutomationStudioActionConsequence[] = input.declared;
   // Nobody to ask, so only what nobody could have allowed is missing -- and
-  // that is the destructive part of the declaration and nothing else. Core's own
-  // no-run check answers exactly this way (`automationStudioActionPermissionDenied`),
-  // and until t166 this line did not: it refused the whole declaration, so an
-  // action that honestly said it would create something new or send what the
-  // instruction said to send was stopped here while the same action under a run
-  // sailed through, because Core does not gate those classes at all
+  // that is the gated part of the declaration (moving money, deleting, sending
+  // or publishing) and nothing else. Core's own no-run check answers exactly
+  // this way (`automationStudioActionPermissionDenied`), and until t166 this line
+  // did not: it refused the whole declaration, so an action that honestly said it
+  // would create something new was stopped here while the same action under a
+  // run went through, because Core never gates creating or editing
   // (`action-permissions/destructive.ts`). A read is never refused either:
   // nothing it named could outlast it.
   if (input.check === undefined) {
