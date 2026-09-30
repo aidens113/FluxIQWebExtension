@@ -1,6 +1,7 @@
 export { BOOKING_INPUT, BOOKING_RECORD, EXPECTED_QUOTE, GAS_ENGINEER_RECORDS, PRICE_LIST_RECORDS, QUOTE_INPUT, SITE_PATHS } from "./expectations.js";
 export { COMPANY_WEBSITE_LIVE_TASKS } from "./live-tasks.js";
 export { companyWebsiteManifest } from "./manifest.js";
+export { PERSON_CHECKS as COMPANY_WEBSITE_PERSON_CHECKS } from "./person-check.js";
 export { COMPANY_WEBSITE_REPAIR_TASKS } from "./repair-tasks.js";
 export { routeCompanyWebsite } from "./route.js";
 export { companyWebsiteScenario } from "./scenario.js";

@@ -52,7 +52,8 @@ import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmSnapshotStates } from "../snapshot-states";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
-import { recoverable, rejectionDetail } from "../tool-rejection";
+import { webActionNeedsPerson } from "../action-failure";
+import { recoverable, RecoverableToolRejection, rejectionDetail } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
@@ -141,6 +142,8 @@ async function capturedDetection(
   const parameters: JsonObject = frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: frameId };
   const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
   assertActive(request.signal);
+  // A detection that met a robot check is the person's, as a look's is (`../capture.ts`).
+  if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true);
   if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web structure detection payload");
   const expectedOrigin = current === undefined ? undefined : new URL(current.evidence.location).origin;

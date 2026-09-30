@@ -1,7 +1,7 @@
 import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { classifyRunnerFailure } from "../failure.js";
 import type { RunLaneObservation } from "../flow-lane/index.js";
-import { evaluateObservedRun, flowLaneAdaptationMeasurements, flowLaneEvidenceSizes, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
+import { evaluateObservedRun, flowLaneAdaptationMeasurements, flowLaneEvidenceSizes, personHandOffEvidence, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
 
 /**
  * Where each recording-lane measurement comes from. The bench writes these
@@ -118,6 +118,7 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
     },
     evidence: flowLaneEvidenceSizes(input.result.path),
     adaptation: flowLaneAdaptationMeasurements(input.result.path),
+    personHandOffs: personHandOffEvidence(input.result.path),
   });
 }
 

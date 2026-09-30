@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveScenarioWorkflow, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { getScenarioManifest, listScenarioManifests } from "../../registry.js";
-import { LIVE_INSTRUCTION_TASKS, type LiveInstructionTask } from "../index.js";
+import { LIVE_INSTRUCTION_TASKS, SCENARIO_PERSON_CHECKS, type LiveInstructionTask } from "../index.js";
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const KINDS = new Set(["form", "navigate", "extract", "navigate-and-extract"]);
@@ -161,4 +161,22 @@ test("every consequential task declares its permission point, as a closed class 
     "social-network-feed-move-open-day": { consequence: "delete", control: "Move" },
     "company-website-book-service": { consequence: "move_money", control: "Confirm and pay £30.00" },
   });
+});
+
+// A task whose honest path meets a check only a person may pass says so, and
+// the Lab has to know that check to play the person at it (t197). A task is
+// judged on succeeding, so the person it declares always completes the check.
+test("every task that expects a hand-off is on a scenario whose person module knows its check", () => {
+  const declared = Object.fromEntries(LIVE_INSTRUCTION_TASKS.filter((task) => task.personCheck).map((task) => [task.id, `${task.personCheck!.person}:${task.personCheck!.required}`]));
+  assert.deepEqual(declared, {
+    "crossborder-marketplace-spain-hubs": "completes:false",
+    "crossborder-marketplace-spain-hubs-list-layout": "completes:false",
+    "company-website-quote-request": "completes:false",
+    "company-website-quote-request-redesigned-after-creation": "completes:false",
+  });
+  for (const task of LIVE_INSTRUCTION_TASKS.filter(({ personCheck }) => personCheck)) {
+    const module = SCENARIO_PERSON_CHECKS.find(({ scenarioId }) => scenarioId === task.scenarioId);
+    assert.ok(module && module.checks.length > 0, `${task.id}: ${task.scenarioId} has no person module, so the Lab could not play the person`);
+    assert.ok(task.personCheck!.because.trim().length > 20 && task.personCheck!.because.length <= 200, `${task.id}: one sentence saying which check the honest path meets`);
+  }
 });

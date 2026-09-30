@@ -60,6 +60,7 @@ import type {
 import { blockingDialog } from "./blocking-dialog";
 import { challengeIn } from "./challenge-evidence";
 import type { RateLimitNotice } from "./rate-limit-notice";
+import type { RobotCheckSighting } from "./robot-check";
 import { boundValidation, statusForValidation } from "./validation-outcome";
 
 type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
@@ -254,6 +255,34 @@ export function actionRateLimited(
     validation,
     message: `Action refused by the page for going too fast; ${wait}.`,
     failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs: notice.retryAfterMs })
+  }, evidence);
+}
+
+/**
+ * A press the page answered with a robot check a person must answer: one only
+ * a person can, or one that said it would clear by itself and had not within
+ * the wait (`robot-check/robot-check-watch.ts`). USER_INTERVENTION_REQUIRED
+ * hands the page to the person. The press was made -- the check is its answer
+ * -- so the record says so, and the step stands once the person has answered.
+ * The closed word `captcha` leads `actual`, as the worker's landing records
+ * do; the texts say what was concluded, never what the check wrote.
+ */
+export function actionNeedsPerson(
+  action: BrowserActionCommand,
+  startedAt: number,
+  sighting: RobotCheckSighting,
+  evidence: ActionResultEvidence = {}
+): BrowserActionResult {
+  const expected = "the page answers the press";
+  const check = sighting.outcome === "not_cleared"
+    ? `a robot check that said it would clear by itself and had not after ${sighting.waitedMs} ms`
+    : "a robot check that only a person can answer";
+  const actual = `the press was made, and ${sighting.afterMs} ms after it the page put up ${check}`;
+  return buildResult(action, startedAt, {
+    status: "failed",
+    validation: boundValidation({ status: "failed", expected, actual }),
+    message: "The press was made and the page put up a robot check, which only a person can answer.",
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, { expected, actual: `captcha: ${actual}` })
   }, evidence);
 }
 

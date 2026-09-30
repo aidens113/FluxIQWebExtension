@@ -1,3 +1,4 @@
+import type { ExpectedPersonHandOff } from "@fluxiq-web-extension/test-contracts";
 import { REPLY_TICKET, TRIAGE_AGENT } from "./support-desk/index.js";
 import { LINE_ITEM_ORDER, REFUND_ORDER } from "./order-operations/index.js";
 import { REALISTIC_SITE_LIVE_TASKS } from "./realistic-site-live-tasks.js";
@@ -50,6 +51,14 @@ export type LiveInstructionTask = {
     /** The instruction says to ask before the act, so the stop is the only right ending, whatever the run was permitted. */
     askFirst?: true;
   };
+  /**
+   * The honest path to this task's goal meets a check only a person may pass,
+   * so FluxIQ handing it to a person is expected, and the Lab plays that
+   * person (`<scenario>/person-check.ts`, which must know the check). A task
+   * whose honest path meets no check declares none: a hand-off at a real check
+   * is still correct there, and one where no check stood still fails.
+   */
+  personCheck?: ExpectedPersonHandOff;
 };
 
 const PRODUCT_COLUMNS = "with columns name, price, rating and url";

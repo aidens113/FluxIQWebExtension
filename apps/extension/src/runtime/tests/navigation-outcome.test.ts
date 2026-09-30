@@ -150,3 +150,19 @@ test("evidence the browser would not give is unknown, never a no-op", () => {
     assert.equal(judged.known, false, label);
   }
 });
+
+test("a drive held back because the tab already showed the address behind a robot check is no no-op", () => {
+  // The same address and the same document, which is a no-op for any other
+  // page -- but FluxIQ declined to reload a check on purpose, and the check is
+  // judged by the navigation instead (`action-runner.ts`).
+  const held = judgeTabMovement(drive({
+    urlBefore: "https://example.test/search?q=towels",
+    urlAfter: "https://example.test/search?q=towels",
+    documentBefore: "document.one",
+    documentAfter: "document.one",
+    heldForCheck: true
+  }));
+  assert.equal(held.moved, true);
+  assert.equal(held.known, true);
+  assert.match(held.detail, /behind a robot check, so it was not loaded again/u);
+});

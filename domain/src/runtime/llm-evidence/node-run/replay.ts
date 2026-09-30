@@ -33,8 +33,8 @@
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
-import { webActionFailureRefusal } from "../action-failure";
-import { assertActive, captureEvidence, toolExecution, toolMetadata, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
+import { webActionFailureRefusal, webActionNeedsPerson } from "../action-failure";
+import { assertActive, captureEvidence, toolExecution, toolMetadata, withCallStates, withPersonNeeded, type WebLlmEvidenceToolExecution } from "../capture";
 import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
@@ -126,9 +126,12 @@ async function resetPage(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> 
   }
   const result = await run.gateway.executeAction(run.sessionId, { actionType: RESET_ACTION, parameters: { url: location }, metadata: toolMetadata(run.request) });
   assertActive(run.request.signal);
-  return result.status === "succeeded"
-    ? answer(REPLAY_RESULT_CODES.replayed, "the page was put back", true)
-    : answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back");
+  if (result.status === "succeeded") return answer(REPLAY_RESULT_CODES.replayed, "the page was put back", true);
+  const failed = answer(REPLAY_RESULT_CODES.resetFailed, "the page could not be put back");
+  // A reset that landed on a robot check is the person's to clear, exactly as
+  // the step that first went there was (`./run.ts`). The replay code stays
+  // Core's own; `personNeeded` says why, and proposes nothing.
+  return webActionNeedsPerson(result) ? withPersonNeeded(failed, undefined) : failed;
 }
 
 /**
@@ -216,11 +219,17 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // because its read came back empty was recorded identically to one that
     // failed because the browser would not script the page. The node's id still
     // says which step of the draft it was.
-    return await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, true, {
+    const answered = await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, true, {
       resultReason: refused.detail?.reason,
       nodeId: node.definitionId,
       assumed
     });
+    // A replayed step that landed on a robot check did not fail on its own
+    // account: a person has to clear the check. Still `core.replay.failed`,
+    // which is Core's closed vocabulary, and marked so Core can ask rather than
+    // judge the draft on it. A replay answer is Core's to read, not the model's,
+    // so it carries no draft statement.
+    return refused.personNeeded ? withPersonNeeded(answered, undefined) : answered;
   }
   const produced = isJsonRecord(value.produced) ? value.produced : undefined;
   const before = typeof produced?.records === "number" ? produced.records : undefined;
