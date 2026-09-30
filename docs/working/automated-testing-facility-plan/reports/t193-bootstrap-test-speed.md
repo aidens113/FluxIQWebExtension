@@ -1,7 +1,9 @@
 # t193 Core service-bootstrap test speed: lane report
 
-Status: **Round 1: ready.** The work is in the Core tree `C:/Users/osrs_/FluxStuff/fxwork/t192/!FluxIQ`, at dev
-`fb05385a`, and is uncommitted. The next step needs a decision; it is in section 4.
+Status: **Round 2 (shared fixtures): ready to commit, partial.** Round 1 and the Round 2 WIP were committed by the
+supervisor as Core `3c501999` and merged with dev (`590580b3`); Round 2's remaining edits are uncommitted in the
+Core tree `C:/Users/osrs_/FluxStuff/fxwork/t192/!FluxIQ`. Timeouts are fewer but not gone; see section 6. Option A
+in section 4 was declined by the user and is not pursued.
 
 ## 1. Why each test costs 10-15 s (diagnosis, with evidence)
 
@@ -133,3 +135,69 @@ Two things are not options:
 - **An idle-machine measurement.** Every run shared the machine with 2-5 live Lab lanes.
 - **Whether any endpoint test asserts `sqlQueryCount`,** which would now be lower for DDL and PRAGMAs. None failed in
   the suites I ran.
+
+## 6. Round 2: shared fixtures (2026-09-30)
+
+**Triage of the WIP commit `3c501999`.** Besides Round 1 it held the start of fixture sharing:
+`service-bootstrap/tests/fixtures.ts` gained `seedDataDir`, `copyDataDirSeed` and `blankFixturesPerService`, and
+accounting, catalog, generation, rejections, permission-ask, state-digest-and-trace, flow-call-limit and
+incomplete-draft build their blank project once per file (in `beforeAll`, from a service that is then closed) and
+copy it into each case's own data directory before that case's service starts. Every converted file was complete
+(no `blankFixture` call left in a case), tsc was clean and the directory ran with no new failure, so it is kept.
+
+**Finished in this round** (same pattern, one `example`-domain seed per file): `permission.test.ts` (10 cases),
+`plan-parameters.test.ts` (9), `person-needed.test.ts` (4). Not converted: `cost-ceiling` (1 case, nothing to share),
+`adaptation` (already seeds on dev), `extend`, `apply-graph-index`, `older-record-apply` (their setup is an applied
+Flow bound to a native runtime; the cost there is the apply itself).
+
+**Measured**, the service-bootstrap directory, `vitest run --maxWorkers=2 --minWorkers=1` through `heavy.sh`, beside
+live Lab lanes, runs in this order. "Before" is dev `f4feb028` (the 13 WIP files and the three above checked out
+from dev, then restored).
+
+| Run | Tree | Wall | Timeouts | Other failures |
+| --- | --- | --- | --- | --- |
+| after1 | WIP only | 216 s | 0 | 1 (permission, below) |
+| before1 | dev | 341 s | 5 | 1 (same) |
+| after2 | final | 521 s | 3 | 1 (same) |
+| before2 | dev | 399 s | 5 | 1 (same) |
+| after3 | final | 380 s | 3 | 1 (same) |
+
+Per-file time in seconds, before1 / before2 versus after2 / after3:
+
+| File | Before | After |
+| --- | --- | --- |
+| accounting | 74.6 / 53.4 | 23.1 / 43.9 |
+| generation | 38.3 / 40.2 | 12.2 / 36.3 |
+| rejections | 37.7 / 103.9 | 82.6 / 69.0 |
+| catalog | 9.5 / 15.6 | 5.8 / 6.3 |
+| permission-ask | 10.0 / 27.0 | 21.8 / 4.9 |
+| permission | 73.2 / 63.8 | 49.4 / 63.6 |
+| plan-parameters | 76.7 / 41.2 | 26.8 / 38.6 |
+| person-needed | 14.5 / 24.1 | 11.1 / 4.3 |
+| adaptation (unchanged) | 82.9 / 68.9 | 69.7 / 80.0 |
+| extend (unchanged) | 43.8 / 66.2 | 134.7 / 88.4 |
+
+Load moved a lot between runs (the unchanged `extend` ranged 44-135 s), so only the direction is reliable:
+timeouts fell from 5 per run to 3, and the converted files are mostly faster.
+
+**What still times out.** Both "after" runs: `adaptation` "bridges a generated proposal ID ..." and one of its
+revert cases (these already used a seed on dev; the time is approve, apply and revert themselves), plus one of
+`rejections` "rejects a second pending proposal" or `permission` "never reads the instruction for a build with no
+lasting consequence" (a full generation each). Test-side sharing cannot remove more from these; what remains is the
+product's per-operation storage cost (section 4, B and C; A declined).
+
+**Pre-existing failure on dev, not caused here.** `permission.test.ts` "the same build, when the instruction itself
+asks for it > goes ahead with nothing permitted, and keeps what the instruction asked for with the proposal and the
+Flow" throws `flow_bootstrap.permission_required` on every run, before and after, with that file untouched in
+before1. It likely follows dev's live lane D change "money, delete and send always ask" (`05266957`); not
+investigated.
+
+**Checks.** Core `npx tsc -p packages/fluxiq/tsconfig.json --noEmit` (through `heavy.sh`) -> no output, both on the
+WIP and after this round's edits. Core `node scripts/structure-audit.mjs` -> `structure-audit: passed (200
+warning(s), 354 baselined).`
+
+Ready to commit: `packages/fluxiq/src/programs/automation-studio/runtime/tests/service-bootstrap/tests/permission.test.ts`,
+`.../tests/plan-parameters.test.ts`, `.../tests/person-needed.test.ts` (Core, CRLF kept; the WIP files are already
+in `3c501999`); validation: `vitest run src/programs/automation-studio/runtime/tests/service-bootstrap
+--maxWorkers=2` -> after2 `Tests 4 failed | 92 passed (96)`, 521 s; after3 `Tests 4 failed | 92 passed (96)`, 380
+s; each run 3 timeouts plus the pre-existing permission assertion; dev before1/before2 5 timeouts plus the same.
