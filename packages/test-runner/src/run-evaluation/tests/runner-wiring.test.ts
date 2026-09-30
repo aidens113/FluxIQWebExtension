@@ -228,7 +228,7 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
   const at = {
     flowLane: source.indexOf("await runFlowLane({"),
-    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });'),
+    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, stoppedToAsk });'),
     passed: source.indexOf('verdict = "passed";'),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
