@@ -111,3 +111,35 @@ function summaryOf(tasks) {
     totals: totalsOf(tasks), tasks,
   };
 }
+
+// Overnight on 2026-09-30 lane D recorded 12 "passes" that were each a build
+// stopping to ask for permission, with `flowCreated: false` (commit f2f80024).
+test("a build that stopped to ask for permission reads stopped_for_permission, never passed, from either signal", () => {
+  const empty = { evaluation: null, run: null, liveLlm: null, flowLane: null };
+  const stopInvariant = { id: "stopped-for-permission", passed: false, expected: "a created Flow that did the task", actual: "stopped_for_permission", evidenceSequences: [] };
+  const printedStop = { verdict: "stopped_for_permission", consequence: "purchase", control: "matched" };
+
+  const printed = summarizeTask(CATALOG[0], [], attempt({ code: 1, stdout: resultLine({ verdict: "failed", failureCategory: "runtime.behavior", permissionStop: printedStop }) }), empty);
+  assert.equal(printed.verdict, "stopped_for_permission");
+  assert.equal(printed.succeeded, false);
+  assert.deepEqual(printed.permissionStop, { consequence: "purchase", control: "matched" });
+  assert.equal(printed.runnerMessage, "stopped for permission to purchase (control matched); no Flow was built, so this is not a pass");
+
+  const evaluated = { ...empty, evaluation: { verdict: "failed", flowCreated: false, oracleVerdict: null, actions: [], extraction: null, invariants: [stopInvariant] } };
+  const byInvariant = summarizeTask(CATALOG[0], [], attempt({ code: 1, stdout: resultLine({ verdict: "failed" }) }), evaluated);
+  assert.equal(byInvariant.verdict, "stopped_for_permission");
+  assert.deepEqual(byInvariant.permissionStop, { consequence: null, control: null });
+  assert.equal(byInvariant.runnerMessage, "stopped for permission; no Flow was built, so this is not a pass");
+
+  // Even an evaluation or printed result that says `passed` does not survive the stop.
+  const claimedPass = summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({ permissionStop: printedStop }) }), { ...empty, evaluation: { ...evaluated.evaluation, verdict: "passed", oracleVerdict: "passed" } });
+  assert.deepEqual([claimedPass.verdict, claimedPass.succeeded], ["stopped_for_permission", false]);
+  const repairStop = summarizeTask({ ...CATALOG[0], kind: "repair", expect: "repair" }, [], attempt({ stdout: resultLine({ permissionStop: printedStop }) }), empty);
+  assert.equal(repairStop.succeeded, false, "a repair task that stopped for permission did not succeed either");
+
+  // A passed invariant of the same id, or none, leaves the verdict alone.
+  const passedInvariant = summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({}) }), { ...empty, evaluation: { ...evaluated.evaluation, verdict: "passed", invariants: [{ ...stopInvariant, passed: true }] } });
+  assert.deepEqual([passedInvariant.verdict, passedInvariant.permissionStop], ["passed", null]);
+  const noResult = summarizeTask(CATALOG[0], [], attempt({ code: 1 }), evaluated);
+  assert.equal(noResult.verdict, "no-result", "a run with no printed result stays no-result");
+});
