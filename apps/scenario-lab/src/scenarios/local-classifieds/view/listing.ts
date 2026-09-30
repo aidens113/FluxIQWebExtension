@@ -1,7 +1,7 @@
 import { escapeHtml } from "../../../html.js";
 import { placeById, sellerById, type Listing } from "../catalog/index.js";
 import { conditionLabel, listedOn, listedText, priceText } from "../format/index.js";
-import { latestOffer, offerReceiptText } from "../readouts.js";
+import { conversationText, latestOffer, offerReceiptText } from "../readouts.js";
 import { CLASSIFIEDS_ROOT } from "../root.js";
 import type { ClassifiedsState } from "../types.js";
 import type { ClassSheet, IdName } from "./classes.js";
@@ -57,6 +57,8 @@ export function listingPanelMarkup(sheet: ClassSheet, ids: Record<IdName, string
   const hidden = state.hidden.includes(listing.id) ? `<div class="${c.receipt}">You've hidden this listing. It won't appear in your feed.</div>` : "";
   const offer = latestOffer(state, listing.id);
   const receipt = offer ? `<div class="${c.receipt}" data-testid="marketplace_offer_receipt">${escapeHtml(offerReceiptText(offer))}</div>` : "";
+  const sent = conversationText(state, listing.id);
+  const conversation = sent === null ? "" : `<div class="${c.receipt}" data-testid="marketplace_conversation">${escapeHtml(sent)}</div>`;
   const initials = seller.name.split(" ").map((part) => part[0]).join("");
   const contact = listing.sold ? `<div class="${c.receipt}">This item has been sold.</div>` : `<span class="${c.messageLabel}">Send seller a message</span>
   <div class="${c.messageBox}">
@@ -97,6 +99,7 @@ export function listingPanelMarkup(sheet: ClassSheet, ids: Record<IdName, string
 <div class="${c.stickyBar}">
   ${contact}
   ${receipt}
+  ${conversation}
 </div>`;
 }
 

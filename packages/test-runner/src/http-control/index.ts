@@ -1,4 +1,5 @@
 import { RunnerFailure, type RunnerFailureCategory } from "../failure.js";
+import { longRequestFetch } from "./long-request.js";
 import { cookieExpiry, type AuthSessionStatus, type CachedAuthSession, type CookieValidationHook, type WebPanelAuthSessionCache } from "../auth-session.js";
 
 const TOPOLOGY_READINESS_STAGES = ["scenario.health", "core.health"] as const;
@@ -30,9 +31,21 @@ export async function waitForHttp(url: string, options: { headers?: HeadersInit;
 }
 
 export type FluxIQCredentials = { username: string; password: string; totp?: string; pin?: string };
-export type FluxIQHttpOptions = { signal?: AbortSignal; timeoutMs?: number };
+/**
+ * `longRequest` holds one request open past `FLUXIQ_HTTP_MAX_TIMEOUT_MS`, up to
+ * `LONG_REQUEST_MAX_TIMEOUT_MS`, on `node:http` rather than `fetch` (see
+ * `long-request.ts`). It is for a request whose answer only exists once a long
+ * operation is over -- a Flow build -- and is honoured on an authenticated
+ * control request only; a re-login it triggers is an ordinary request.
+ */
+export type FluxIQHttpOptions = { signal?: AbortSignal; timeoutMs?: number; longRequest?: boolean };
 /** The longest one request may be held open. A caller that must wait longer holds the request this long and reads the result back after it. */
 export const FLUXIQ_HTTP_MAX_TIMEOUT_MS = 300_000;
+/** The longest a `longRequest` may be held open: a Flow build's whole run lease and reply fit inside it. */
+const LONG_REQUEST_MAX_TIMEOUT_MS = 900_000;
+/** The two caps above. A test passes shorter ones to the client's constructor, so a request past the ordinary cap takes milliseconds, not minutes. */
+type FluxIQHttpLimits = { maxTimeoutMs: number; longRequestMaxTimeoutMs: number };
+const DEFAULT_LIMITS: FluxIQHttpLimits = { maxTimeoutMs: FLUXIQ_HTTP_MAX_TIMEOUT_MS, longRequestMaxTimeoutMs: LONG_REQUEST_MAX_TIMEOUT_MS };
 const HTTP_OPERATION_STAGES = ["auth.login", "auth.session.validate", "project.create", "project.select", "control.request"] as const;
 type FluxIQHttpOperationStage = typeof HTTP_OPERATION_STAGES[number];
 export type FluxIQLoginOptions = FluxIQHttpOptions & {
@@ -45,7 +58,7 @@ export class FluxIQControlClient {
   private cookie: string | undefined;
   private credentials: FluxIQCredentials | undefined;
   private loginOptions: FluxIQLoginOptions = {};
-  constructor(readonly origin: string) {}
+  constructor(readonly origin: string, private readonly limits: FluxIQHttpLimits = DEFAULT_LIMITS) {}
 
   async login(credentials: FluxIQCredentials, options: FluxIQLoginOptions = {}): Promise<"cache" | "login"> {
     this.credentials = credentials;
@@ -92,7 +105,7 @@ export class FluxIQControlClient {
   }
 
   private async freshLogin(credentials: FluxIQCredentials, sessionCache?: WebPanelAuthSessionCache, bounds: FluxIQHttpOptions = {}): Promise<void> {
-    const response = await boundedFetch("auth.login", "environment.missing", bounds, signal => fetch(`${this.origin}/api/auth/login`, {
+    const response = await boundedFetch("auth.login", "environment.missing", ordinary(bounds), this.limits, signal => fetch(`${this.origin}/api/auth/login`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: credentials.username, password: credentials.password, ...(credentials.totp ? { totp: credentials.totp } : {}) }), signal,
     }));
     if (!response.ok) throw new RunnerFailure("environment.missing", `FluxIQ authentication failed (${response.status})`);
@@ -164,12 +177,13 @@ export class FluxIQControlClient {
   protected async authenticatedResponse(path: string, body?: unknown, method = "POST", bounds: FluxIQHttpOptions = {}, category: RunnerFailureCategory = "process.startup", retryAuthentication = true, operationStage: FluxIQHttpOperationStage = "control.request"): Promise<Response> {
     if (!this.cookie) throw new RunnerFailure("environment.missing", "FluxIQ control client is not authenticated");
     const cookie = this.cookie;
-    const response = await boundedFetch(operationStage, category, bounds, signal => fetch(`${this.origin}${path}`, {
+    const init = {
       method,
       headers: { cookie, ...(body === undefined ? {} : { "content-type": "application/json" }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal,
-    }), path);
+    };
+    const url = `${this.origin}${path}`;
+    const response = await boundedFetch(operationStage, category, bounds, this.limits, signal => bounds.longRequest ? longRequestFetch(url, { ...init, signal }) : fetch(url, { ...init, signal }), path);
     if ((response.status === 401 || response.status === 403) && retryAuthentication && this.credentials) {
       await this.freshLogin(this.credentials, this.loginOptions.sessionCache, bounds);
       return this.authenticatedResponse(path, body, method, bounds, category, false, operationStage);
@@ -178,7 +192,7 @@ export class FluxIQControlClient {
   }
 
   protected async validateCookie(session: Readonly<CachedAuthSession>): Promise<boolean> {
-    const response = await boundedFetch("auth.session.validate", "environment.missing", this.loginOptions, signal => fetch(`${this.origin}/api/client-gateway/snapshot`, { method: "GET", headers: { cookie: session.cookie }, signal }));
+    const response = await boundedFetch("auth.session.validate", "environment.missing", ordinary(this.loginOptions), this.limits, signal => fetch(`${this.origin}/api/client-gateway/snapshot`, { method: "GET", headers: { cookie: session.cookie }, signal }));
     return response.ok;
   }
 }
@@ -194,8 +208,8 @@ export function isBoundedHttpFailure(error: unknown): boolean {
  * created Flow's playback failed "FluxIQ HTTP operation timed out" twice and
  * nothing recorded which of six requests it was.
  */
-async function boundedFetch(operationStage: FluxIQHttpOperationStage, category: RunnerFailureCategory, options: FluxIQHttpOptions, operation: (signal: AbortSignal) => Promise<Response>, path?: string): Promise<Response> {
-  const timeoutMs = boundedTimeout(options.timeoutMs);
+async function boundedFetch(operationStage: FluxIQHttpOperationStage, category: RunnerFailureCategory, options: FluxIQHttpOptions, limits: FluxIQHttpLimits, operation: (signal: AbortSignal) => Promise<Response>, path?: string): Promise<Response> {
+  const timeoutMs = boundedTimeout(options.timeoutMs, options.longRequest ? limits.longRequestMaxTimeoutMs : limits.maxTimeoutMs);
   const controller = new AbortController();
   // The route only: a query string can carry a caller's value, and a route cannot.
   const where = path === undefined ? {} : { path: path.split("?")[0]! };
@@ -267,10 +281,15 @@ function boundedTransportCode(error: unknown): string | undefined {
   return undefined;
 }
 
-function boundedTimeout(value: number | undefined): number {
+function boundedTimeout(value: number | undefined, maxTimeoutMs: number): number {
   const resolved = value ?? 30_000;
-  if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > FLUXIQ_HTTP_MAX_TIMEOUT_MS) throw new Error(`FluxIQ HTTP timeout must be between 1 and ${FLUXIQ_HTTP_MAX_TIMEOUT_MS} milliseconds`);
+  if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > maxTimeoutMs) throw new Error(`FluxIQ HTTP timeout must be between 1 and ${maxTimeoutMs} milliseconds`);
   return resolved;
+}
+
+/** The same bounds as an ordinary request: a login is never held open, whatever the request that prompted it. */
+function ordinary(options: FluxIQHttpOptions): FluxIQHttpOptions {
+  return options.longRequest ? { ...(options.signal ? { signal: options.signal } : {}) } : options;
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }

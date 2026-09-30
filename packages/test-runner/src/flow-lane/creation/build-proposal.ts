@@ -14,8 +14,6 @@ import { publishableStepFields, type PublishableStepValue } from "../../existing
 import { RunnerFailure } from "../../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../../http-control/index.js";
 
-/** The longest one control request may wait (`http-control`'s own bound). */
-const GENERATION_REQUEST_TIMEOUT_MS = 300_000;
 /**
  * How long a build may still be running after it was dispatched: the grant's
  * claim window, Core's run lease once it is claimed
@@ -23,10 +21,21 @@ const GENERATION_REQUEST_TIMEOUT_MS = 300_000;
  * wait the web panel gives the same request (`WEBSITE_EXPLORATION_OVERALL_TIMEOUT_MS`).
  */
 const GENERATION_DEADLINE_MS = 60_000 + 600_000 + 15_000;
+/*
+ * The build request itself is held open until that deadline, as a long request
+ * (`http-control/long-request.ts`). Until 2026-09-29 it was held for the
+ * ordinary 300 s cap and then only a *proposal* was polled for, so a build that
+ * ran eight minutes and failed with a named diagnostic was recorded as
+ * `lab.generation_unfinished` (run-munaiz76-7026748c). Core's answer, success
+ * or refusal, is now what the record is read from; the poll is left for a
+ * request that still times out.
+ */
 const PROPOSAL_POLL_MS = 1_000;
 /** The shape of a Core or domain identifier, such as `web.recovery.inspect` or `web.action.rejected.no_progress`. */
 const VOCABULARY_ID = /^[a-z][a-z0-9_-]*(?:[.:][a-z0-9_-]+)*$/u;
 const MAX_VOCABULARY_ID_LENGTH = 96;
+/** An error's class or system code (`TypeError`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`): no whitespace, so no sentence. */
+const THROW_CODE = /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/u;
 /**
  * Core's own names for the decisions that called no tool
  * (`AUTOMATION_STUDIO_FLOW_BOOTSTRAP_DECISION_STEP_IDS`): a refused plan is
@@ -122,7 +131,12 @@ export type CreatedFlowBuildStep = Readonly<{
   answerability?: Readonly<{ recordsRequested: boolean; recordProducerPresent: boolean; recordStorePresent: boolean; issueCode?: "bootstrap.cannot_answer_instruction" }>;
   [field: string]: CreatedFlowBuildStepValue | undefined;
 }>;
-export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null }>;
+/**
+ * `incompleteDraft` is Core's note that a build which ran out kept its draft as
+ * an incomplete record the next build continues from: the revision written and
+ * how many proposable steps it holds. Two counts; absent when nothing was kept.
+ */
+export type CreatedFlowBuildEvidenceLoop = Readonly<{ decisionCount: number | null; toolCallCount: number; evidenceBytes: number; toolIds: readonly string[]; steps: readonly CreatedFlowBuildStep[] | null; incompleteDraft?: Readonly<{ revision: number; steps: number }> }>;
 
 /**
  * - `outcome`: `proposed` when Core left a pending proposal nothing is waiting
@@ -196,7 +210,13 @@ export type CreatedFlowBuild = Readonly<{
   providerInvocation: "attempted" | "not_attempted" | "unknown";
   accounting: CreatedFlowBuildAccounting | null;
   evidenceLoop: CreatedFlowBuildEvidenceLoop | null;
-  failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[] }> | null;
+  /**
+   * `providerThrow` is what an unnamed provider throw was, beside
+   * `flow_bootstrap.provider_transport_unknown`: the error's and its cause's
+   * class and code, never its message, which stays in the local
+   * `provider-failures.local.json`.
+   */
+  failure: Readonly<{ code: string; stage: string | null; httpStatus: number | null; issueCodes?: readonly string[]; providerThrow?: Readonly<{ errorClass?: string; errorCode?: string; causeClass?: string; causeCode?: string }> }> | null;
   recoveredAfterTimeout: boolean;
   durationMs: number;
   instructedConsequences: ReadonlyArray<Readonly<{ consequence: string; quote: string }>> | null;
@@ -281,7 +301,7 @@ export async function buildCreatedFlowProposal(
       // to reach the page itself before it may explore it
       // (`AS/runtime/flow-bootstrap/start-location.ts`).
       { projectId: input.projectId, flowId: input.flowId, llmExecutionGrantId: grantId, evidenceGuided: true, ...(input.startLocation === undefined ? {} : { startLocation: input.startLocation }) },
-      { timeoutMs: wait.requestTimeoutMs ?? GENERATION_REQUEST_TIMEOUT_MS, ...(bounds.signal ? { signal: bounds.signal } : {}) },
+      { timeoutMs: wait.requestTimeoutMs ?? wait.deadlineMs ?? GENERATION_DEADLINE_MS, longRequest: true, ...(bounds.signal ? { signal: bounds.signal } : {}) },
     );
   } catch (error) {
     // Core keeps building after the client has stopped waiting, and persists
@@ -303,12 +323,15 @@ async function awaitProposal(control: CreatedFlowBuildControl, input: { projectI
   const now = wait.now ?? Date.now;
   const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const deadline = startedAt + (wait.deadlineMs ?? GENERATION_DEADLINE_MS);
-  while (now() < deadline) {
+  // At least one look: the request is held to the deadline itself, so it can
+  // time out with no time left, just as Core saves a proposal.
+  do {
     const pending = await control.listFlowAdaptations(input.projectId, input.flowId, "proposed");
     if (pending.length > 1) throw new RunnerFailure("runtime.behavior", "Core left more than one pending proposal on the Flow a single build was asked for", { details: { pending: pending.length } });
     if (pending[0]) return pending[0].adaptationId;
+    if (now() >= deadline) break;
     await sleep(Math.min(wait.pollMs ?? PROPOSAL_POLL_MS, Math.max(0, deadline - now())));
-  }
+  } while (now() < deadline);
   return undefined;
 }
 
@@ -422,8 +445,8 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     loopProviderCalls: diagnostic.providerInvocation === "not_attempted" ? 0 : loop?.decisionCount ?? null,
     providerInvocation: diagnostic.providerInvocation,
     accounting: diagnostic.accounting ? accountingOf(diagnostic.accounting) : null,
-    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null } : null,
-    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}) },
+    evidenceLoop: loop ? { decisionCount: loop.decisionCount, toolCallCount: loop.toolCallCount, evidenceBytes: loop.evidenceBytes, toolIds: vocabulary((steps ?? []).map((step) => step.toolId)), steps: steps ?? null, ...(loop.incompleteDraft ? { incompleteDraft: Object.freeze({ revision: loop.incompleteDraft.revision, steps: loop.incompleteDraft.steps }) } : {}) } : null,
+    failure: { code: diagnostic.code, stage: diagnostic.stage, httpStatus: envelope.status, ...(issueCodes.length ? { issueCodes } : {}), ...providerThrowCodes(diagnostic.providerThrow) },
     recoveredAfterTimeout: false,
     durationMs,
     instructedConsequences: null,
@@ -434,6 +457,16 @@ function refused(envelope: FlowBootstrapGenerationEnvelope, durationMs: number):
     consequenceCrossCheck: null,
     permissionRequest: diagnostic.permissionRequest ? permissionRequestOf(diagnostic.permissionRequest) : null,
   });
+}
+
+/** The codes of Core's account of an unnamed throw, each held to a code's shape; its message is not published. */
+function providerThrowCodes(thrown: { errorClass?: string; errorCode?: string; causeClass?: string; causeCode?: string } | undefined): { providerThrow?: NonNullable<NonNullable<CreatedFlowBuild["failure"]>["providerThrow"]> } {
+  if (!thrown) return {};
+  const codes = Object.fromEntries((["errorClass", "errorCode", "causeClass", "causeCode"] as const).flatMap((field) => {
+    const value = thrown[field];
+    return typeof value === "string" && THROW_CODE.test(value) ? [[field, value]] : [];
+  }));
+  return Object.keys(codes).length === 0 ? {} : { providerThrow: Object.freeze(codes) };
 }
 
 function failed(failure: NonNullable<CreatedFlowBuild["failure"]>, providerInvocation: CreatedFlowBuild["providerInvocation"], durationMs: number): CreatedFlowBuild {

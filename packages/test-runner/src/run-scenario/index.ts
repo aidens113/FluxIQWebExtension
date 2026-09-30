@@ -15,9 +15,11 @@
 export * from "./browser-session/index.js";
 export * from "./clone-target/index.js";
 export * from "./core-round-trip/index.js";
+export * from "./decision-trace/index.js";
 export * from "./persisted-flow-target/index.js";
 export * from "./workflow/index.js";
 export { configuredCredentials, type ConfiguredCredentials } from "./configured-credentials.js";
 export { evidenceEvent, type EvidenceEventTrigger } from "./evidence-event.js";
+export { openExtensionControlPage, type ExtensionControlPageOpen } from "./extension-control-page.js";
 export { openScenarioStart } from "./open-scenario-start.js";
 export { resolveRunSecrets, type RunSecrets, type RunSecretsInput } from "./resolve-run-secrets.js";
