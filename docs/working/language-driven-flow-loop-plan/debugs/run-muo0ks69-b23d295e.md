@@ -31,7 +31,7 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s1 `web.browser.navigate` (address withheld)
   - s2 `web.dom.click` button "Accept all"
   - s3 `web.dom.click` button "Pickup or delivery?Carden Falls Supercenter" (in a shadow root)
-  - s4 `web.dom.click` button "+ Add" (list 1/?)
+  - s4 `web.dom.click` button "+ Add" (list 1/8)
   - s5 `web.dom.click` a "Options"
   - s6 `web.dom.click` div "12 Double Rolls$16.47"
   - s7 `web.browser.navigate` (address withheld)
@@ -42,7 +42,7 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s12 `web.browser.navigate` (address withheld)
   - s13 `web.browser.navigate` (address withheld)
   - s14 `web.browser.navigate` (address withheld)
-  - s15 `web.dom.click` a "Options" (list 1/?)
+  - s15 `web.dom.click` a "Options" (list 1/5)
 - Divergences from Stage 1: s5 "Options" matched 1 of 46 candidates on a rail listed for Carden Falls, so the Flow opened the wrong product; s6 then clicks the towel swatch on the napkins page.
 
 ## Stage 4 — replay

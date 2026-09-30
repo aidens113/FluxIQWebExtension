@@ -30,9 +30,9 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
 - 5 nodes as authored (selectors and addresses withheld by the bundle):
   - s1 `web.browser.navigate` (address withheld)
   - s2 `web.dom.click` button "Pickup or delivery?Carden Falls Supercenter" (in a shadow root)
-  - s3 `web.dom.click` button "+ Add" (list 1/?)
-  - s4 `web.dom.click` button "+ Add" (list 4/?)
-  - s5 `web.dom.click` button "+ Add" (list 1/?)
+  - s3 `web.dom.click` button "+ Add" (list 1/8)
+  - s4 `web.dom.click` button "+ Add" (list 4/4)
+  - s5 `web.dom.click` button "+ Add" (list 1/8)
 - Divergences from Stage 1: No store step; the "+ Add" presses are chosen by list position, not by the named products.
 
 ## Stage 4 — replay

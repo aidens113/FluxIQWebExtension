@@ -32,8 +32,8 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s2 `web.dom.click` button "Accept all"
   - s4 `web.dom.wait_for_text` text "null"
   - s5 `web.dom.click` button "Pickup or delivery?Carden Falls Supercenter" (in a shadow root)
-  - s6 `web.dom.click` button "+ Add" (list 1/?)
-  - s7 `web.dom.click` a "Options" (list 3/?)
+  - s6 `web.dom.click` button "+ Add" (list 1/8)
+  - s7 `web.dom.click` a "Options" (list 3/8)
   - s8 `web.dom.click` div "250 Count$6.48"
   - s9 `web.dom.click` div "×" (in a shadow root)
   - s11 `web.dom.click` button "Add to cart"

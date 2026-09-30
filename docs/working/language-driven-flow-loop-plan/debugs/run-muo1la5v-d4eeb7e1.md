@@ -35,7 +35,7 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s5 `web.browser.navigate` (address withheld)
   - s6 `web.dom.click` div "×" (in a shadow root)
   - s8 `web.dom.click` button "Add to cart"
-  - s9 `web.dom.click` button "+ Add" (list 3/?)
+  - s9 `web.dom.click` button "+ Add" (list 3/3)
   - s10 `web.browser.navigate` (address withheld)
 - Divergences from Stage 1: No store step; generic adds.
 

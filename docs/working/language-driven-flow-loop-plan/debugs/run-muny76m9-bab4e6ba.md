@@ -31,8 +31,8 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s1 `web.browser.navigate` (address withheld)
   - s2 `web.dom.click` button "Accept all"
   - s3 `web.dom.click` button "Pickup or delivery?Carden Falls Supercenter" (in a shadow root)
-  - s4 `web.dom.click` button "Added" (list 1/?)
-  - s5 `web.dom.click` a "Options" (list 3/?)
+  - s4 `web.dom.click` button "Added" (list 1/8)
+  - s5 `web.dom.click` a "Options" (list 3/8)
 - Divergences from Stage 1: s4 targets the home rail's button under its post-press label "Added" (list 1 of 8); nothing before it presses it, so at playback it reads "+ Add". No store switch (row 3).
 
 ## Stage 4 — replay

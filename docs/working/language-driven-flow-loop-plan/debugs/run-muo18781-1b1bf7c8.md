@@ -44,7 +44,7 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s24 `web.dom.click` button "Add to cart"
   - s25 `web.dom.click` button "Add to cart"
   - s26 `web.browser.navigate` (address withheld)
-  - s27 `web.dom.click` button "+ Add" (list 2/?)
+  - s27 `web.dom.click` button "+ Add" (list 2/4)
 - Divergences from Stage 1: s18 (and s20 after s19) press the chip under its post-switch name; the "Set as my store" press is missing.
 
 ## Stage 4 — replay

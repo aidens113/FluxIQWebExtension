@@ -31,7 +31,7 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s1 `web.browser.navigate` (address withheld)
   - s2 `web.dom.click` button "Pickup or delivery?Millbrook Crossing Supercenter" (in a shadow root)
   - s3 `web.dom.type` input "Search"
-  - s4 `web.dom.click` a "Loftwell Ultra Strong Paper Towels, 6 Double Rolls" (list 1/?)
+  - s4 `web.dom.click` a "Loftwell Ultra Strong Paper Towels, 6 Double Rolls" (list 1/8)
   - s5 `web.dom.click` button "Add to cart"
   - s6 `web.dom.type` input "Search"
   - s7 `web.dom.click` button "Add to cart"

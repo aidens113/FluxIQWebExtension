@@ -35,9 +35,9 @@ As in the lane report's Stage 1 section for this task (`reports/t193-live-self-r
   - s6 `web.dom.type` input "Search"
   - s7 `web.dom.click` button "Pickup or delivery?Millbrook Crossing Supercenter" (in a shadow root)
   - s8 `web.dom.click` button "Pickup or delivery?Millbrook Crossing Neighborhood Market" (in a shadow root)
-  - s9 `web.dom.click` button "+ Add" (list 3/?)
+  - s9 `web.dom.click` button "+ Add" (list 3/4)
   - s10 `web.dom.click` button "Pickup or delivery?Millbrook Crossing Supercenter" (in a shadow root)
-  - s11 `web.dom.click` button "+ Add" (list 1/?)
+  - s11 `web.dom.click` button "+ Add" (list 1/8)
   - s12 `web.browser.navigate` (address withheld)
 - Divergences from Stage 1: s7 presses the chip under its post-switch name; the "Set as my store" press is missing.
 
