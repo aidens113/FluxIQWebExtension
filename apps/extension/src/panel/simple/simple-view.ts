@@ -10,21 +10,24 @@
 //   recording/review/       after a recording: analyze, preview, test, save (plan 3.3)
 //   start/start-card.ts     describe it, show FluxIQ how (Start recording),
 //                           extract data (the extraction sheet's entry)
-//   conversation/card.ts    FluxIQ Core's conversation, shown and fed
+//   ../chat/                the automation chat: live status, FluxIQ Core's
+//                           conversation and activity rows, and the composer
 //   automations/card.ts     recent automations, Run, what each run did, export
 //                           (plan 3.1, 3.5, 3.9)
 //
 // Every card renders from the one PanelStore status. A one-second tick keeps
 // the recording clock, the one-minute "Done" window and Stop's wait moving; it
-// and the conversation's polling run only while this view is shown.
+// and the chat's polling and activity subscription run only while this view is
+// shown.
 
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus } from "../../shared/protocol";
+import { createChatPanel } from "../chat";
 import { createElement } from "../dom";
 import type { PanelView, PanelViewContext } from "../shell";
 import { createAutomationsCard } from "./automations";
-import { createConversationCard } from "./conversation";
 import { createNowCard } from "./now-card";
+import { createOpenFluxIQButton } from "./open-fluxiq-button";
 import { createRecordingReview, createRecordingSteps } from "./recording";
 import { createRunStop } from "./run-stop";
 import { createSetupCard, createStartCard } from "./start";
@@ -42,7 +45,7 @@ export function mountSimpleView(context: PanelViewContext): PanelView {
   // Both show themselves: the steps while recording, the review once a recording ends.
   const recordingSteps = createRecordingSteps(context);
   const recordingReview = createRecordingReview(context);
-  const conversation = createConversationCard(store.request);
+  const conversation = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style));
   const startCard = createStartCard(context, () => focusComposer(conversation.element));
   // Until the first status arrives only the status card shows ("Checking the connection...").
   // The setup card hides itself once its checklist is complete, so it is not in this list.
@@ -116,7 +119,7 @@ export function mountSimpleView(context: PanelViewContext): PanelView {
   };
 }
 
-/** "Describe an automation": the conversation's composer is where it is described. */
+/** "Describe an automation": the chat's composer is where it is described. */
 function focusComposer(card: HTMLElement): void {
   const box = card.querySelector<HTMLTextAreaElement>("textarea");
   if (!box) return;

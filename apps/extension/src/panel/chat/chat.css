@@ -1,0 +1,87 @@
+/* The automation chat (panel/chat). Colours come from panel/theme/tokens.css
+   only, so light and dark follow the tokens; the shared primitives (.card,
+   .card-line, .notice, .dot, .small-button) from panel/shell/shell.css, and the
+   turn and composer rules from panel/simple/simple.css. The stream scrolls
+   inside the card so the composer stays in view. */
+
+.chat-panel { min-width: 0; }
+
+/* Status header. */
+.chat-header { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--divider); }
+.chat-header-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.chat-phase {
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.chat-phase[data-tone="accent"] { background: var(--accent-soft); color: var(--accent-text); }
+.chat-phase[data-tone="success"] { background: color-mix(in srgb, var(--success) 16%, var(--surface)); color: var(--success); }
+.chat-phase[data-tone="warning"] { background: var(--warning-soft); color: var(--warning-text); }
+.chat-phase[data-tone="danger"] { background: var(--danger-soft); color: var(--danger-text); }
+.chat-live { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.chat-live .dot { width: 8px; height: 8px; }
+.chat-label { font-size: 13px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.chat-step { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.chat-overlay { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.chat-overlay-title { color: var(--muted); font-size: 11px; font-weight: 650; margin-right: 2px; }
+.chat-overlay-option {
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 1px 9px;
+  font-size: 11px;
+  font-weight: 650;
+}
+.chat-overlay-option:hover:not(:disabled) { background: var(--hover); }
+.chat-overlay-option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.chat-overlay-option:disabled { opacity: .55; cursor: default; }
+.chat-overlay-option:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* Stream: turns and activity rows. */
+.chat-body { display: grid; gap: 6px; min-width: 0; }
+.chat-stream {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  max-height: 180px;
+  margin: 0;
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+html[data-surface="sidepanel"] .chat-stream { max-height: 48vh; }
+.chat-row { font-size: 12px; line-height: 1.4; min-width: 0; }
+.chat-row-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; color: var(--muted); }
+summary.chat-row-head { cursor: pointer; list-style: none; }
+summary.chat-row-head::-webkit-details-marker { display: none; }
+summary.chat-row-head::before { content: "\25B8"; flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.chat-row-details[open] > summary.chat-row-head::before { content: "\25BE"; }
+summary.chat-row-head:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 4px; }
+.chat-row-kind { flex: 0 0 auto; font-size: 10px; font-weight: 750; letter-spacing: .03em; text-transform: uppercase; }
+.chat-row-title { flex: 1 1 auto; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-row-status { flex: 0 0 auto; font-size: 11px; font-weight: 650; }
+.chat-row[data-status="started"] .chat-row-status { color: var(--accent-text); }
+.chat-row[data-status="succeeded"] .chat-row-status { color: var(--success); }
+.chat-row[data-status="failed"] .chat-row-status { color: var(--danger-text); }
+.chat-row[data-status="failed"] .chat-row-kind { color: var(--danger); }
+.chat-row-body {
+  display: grid;
+  gap: 3px;
+  margin: 4px 0 2px 14px;
+  border-left: 2px solid var(--divider);
+  padding: 2px 0 2px 8px;
+}
+.chat-row-detail-title { font-weight: 650; overflow-wrap: anywhere; }
+.chat-row-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-row-line { color: var(--muted); overflow-wrap: anywhere; }
+.chat-row-name { font-weight: 650; }
+.chat-row-ref { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--text); }
+
+.chat-fallback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }

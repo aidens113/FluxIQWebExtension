@@ -257,6 +257,27 @@ state }`, and both are accepted only from the side panel or the popup
 (`background/panel/panel-control.ts`), so the page under test cannot change
 what is drawn on it. An unknown preference is refused as `invalid_request`.
 
+**The on-page overlay** (`content/activity-overlay/`) draws the latest event
+in the top frame of that tab: a `<fluxiq-activity-overlay>` host on
+`document.documentElement`, fixed bottom-right, with a closed shadow root
+styled through the CSSOM and no `innerHTML`. `expanded` shows the phase, Core's
+sentence, "Step N of M" (just "Step N" when N passes M) and the latest detail
+title; `collapsed` is a pill; `hidden` removes the host. The overlay never
+takes input: every element is `pointer-events: none`, `inert` and
+`aria-hidden`, so hit-testing and the automation's own clicks reach the page.
+Its `data-fluxiq-activity` marker keeps it out of the recorder, DOM snapshots,
+evidence blockers and the interference checks. A `final` event fades after
+6 s; that fade is the only timer and it changes nothing but the display.
+
+**The panel's chat** (`panel/chat/`) replaces Simple Mode's conversation card.
+Its header shows the current phase, Core's sentence, the step, a live/offline
+dot and the overlay control. Its stream interleaves Core's thread turns (timed
+by Core's own `createdAt`) with activity rows. An event with a `detail` becomes
+a row, a tool that started and then finished stays one row, and a row expands
+to its text, ref and status. The composer sends typed instructions through
+`panelConversationSend`. The thread is re-read 300 ms after an event that names
+a conversation or ends the work. The 4 s poll stays as the fallback.
+
 ## Action Surface
 
 The browser action set is `WEB_AUTOMATION_ACTION_TYPES`
@@ -890,9 +911,10 @@ it out of the page's way
   policy blocks an inline `style` attribute and a `<style>` element alike, and
   nothing uses `innerHTML`, which a page requiring Trusted Types makes throw;
 - **it is not a page change.** The host carries `data-fluxiq-picker`, which
-  `isPickerHostNode`
+  `isExtensionUiNode`
   ([`content/picker-host.ts`](../../apps/extension/src/content/picker-host.ts))
-  tests for and the recorder's mutation counter skips — the host arriving and
+  tests for, together with the activity overlay's `data-fluxiq-activity`, and
+  the recorder's mutation counter skips — the host arriving and
   leaving, and anything the overlay does inside itself.
 
 ### What Crosses The Channel

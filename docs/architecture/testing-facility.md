@@ -17,6 +17,22 @@ Each command chooses `"surface":"scenario"`, `"surface":"panel"`, or `"surface":
 
 The session accepts no JavaScript/evaluate command, limits requests, selectors, waits, and action count, and applies the deterministic exact-origin network guard. Navigation cannot leave the selected scenario, panel, or extension origin. Literal entry into password, PIN, one-time-code, payment, or explicitly sensitive controls is denied. A protected field can instead use `secretEnv`, restricted to `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_TOTP`, or `DEEPSEEK_API_KEY`; the environment value is resolved in process memory, may only target a sensitive control, and is never returned. Screenshots are written only beneath the run allocation and are denied whenever a sensitive control contains a value. `inspect` returns bounded structural metadata without page text or input values. Provider credentials are removed from the browser environment. The command itself makes no provider request; a request can occur only through an explicit UI action in the loaded product.
 
+### The live panel beside the page
+
+A headed `lab run`, `lab matrix` or `lab interactive` opens the extension's
+panel beside the scenario page, in a 1700x1000 window, so what FluxIQ is doing
+can be watched live (`browser-session/live-panel/`). A trusted Playwright click
+in the extension control page calls `chrome.sidePanel.open({ tabId })` for the
+scenario tab, and the panel counts as open only once
+`chrome.runtime.getContexts` reports a `SIDE_PANEL` context. If Chromium
+refuses, a popup window of the panel is docked to the right of the scenario
+window. The scenario tab is then made active again, so the extension still
+drives the scenario page. A panel that cannot be opened never fails the run.
+The mode that ran (`side-panel`, `popup`, `none` with both reasons, or
+`skipped`) goes to stderr as `[lab] live panel: ...`, to the bundle as
+`snapshots/live-panel.json`, and to the interactive session's ready line.
+`--no-live-panel` turns it off. A headless run never opens it.
+
 ## Instruction-driven web exploration seam
 
 `packages/test-runner/src/web-flow-exploration.ts` provides the web-specific

@@ -1,7 +1,7 @@
 # Live Activity And Extension Chat
 
 Status: Active
-Status detail: Audit done and the wire contract seeded in both trees on 2026-09-29; the Core and extension workers are being dispatched under lane t185.
+Status detail: Every phase is implemented and checked in both trees (2026-09-29); the browser proof passes to the live lane's next run.
 Created: 2026-09-29
 Last updated: 2026-09-29
 Owner: Senior supervisor agent (lane lead t185)
@@ -24,35 +24,7 @@ time on the page it's doing stuff on":
    person can type instructions.
 3. In Lab runs, Chromium shows the panel beside the page.
 
-**Audit findings (2026-09-29).** Full detail is in
-[the lane report](./live-activity-chat-plan/reports/t185-live-activity-chat.md).
-
-- Core has no push path to any browser today. Its panel polls
-  (`conversation/thread/poller.ts`). The extension's conversation card polls
-  Core over HTTP every 4 s through the background
-  (`background/panel/conversation-relay.ts`).
-- The gateway can send to one session
-  (`client-gateway/service/transport.ts`). The session's `outbound` queue has
-  no bound, so a stream must not go through it.
-- `FLUXIQ_BUILD_PROGRESS_TRACE` exists only as uncommitted work in t174. The
-  real seams in t185 are:
-  - the evidence loop's `decide`, `executeTool` and `checkCompletion`, wrapped
-    at the caller in `runtime/service.ts` because `llm/evidence-loop.ts` is at
-    exactly 800 lines;
-  - the graph executor's per-attempt loop (`executor/graph-run.ts`) and the
-    `onRecordBatch` hook;
-  - parking and asks;
-  - result verification and refuted-result repair.
-- Core's `runtime/service.ts` is frozen at 4,558 lines in the baseline, with
-  11 lines of headroom. The `web-vocabulary` rule forbids web words in Core
-  contracts.
-- The extension already has a shadow-root on-page UI to copy:
-  `content/picker/overlay.ts`. It is `pointer-events: none`, styled through
-  the CSSOM, and uses no `innerHTML`. `isPickerHostNode` keeps it out of
-  recordings, but snapshots, evidence and interference checks do not exclude
-  it.
-- The Lab opens `sidepanel/index.html` as an ordinary tab. Nothing calls
-  `chrome.sidePanel.open`.
+**Audit findings** are under [Audit Findings](#audit-findings).
 
 **Decisions.**
 
@@ -97,24 +69,105 @@ time on the page it's doing stuff on":
   beside the scenario window. It is on by default for headed runs, and
   `--no-live-panel` turns it off.
 
+- **D8. `get-activity` is the Core panel's endpoint only (lead, 2026-09-29).**
+  It is not in `PAIRED_CLIENT_ENDPOINTS`. The extension is pushed
+  `server.activity`, which Core filters by the session's project. A token read
+  would let a paired client name any project id, and nothing consumes it.
+
 **Done.**
 
-- Audit.
-- Wire contract seeded:
-  - Core `packages/contracts/src/client-gateway.ts`, and the exports in
-    `packages/client-gateway-websocket/src/index.ts`. Both built.
-  - Extension `apps/extension/src/shared/activity/`, which type-checks.
-- This plan.
+- P1: the audit, this plan, and the wire contract.
+- P2:
+  - C1: the gateway push.
+  - C2: the activity hub and its emission sites.
+  - C3: `get-activity` and the Core chat's activity header and rows.
+  - E1: the background relay.
+  - E2: the on-page overlay.
+  - E3: `panel/chat/`, which replaces Simple Mode's conversation card.
+  - E4: `browser-session/live-panel/` and `--no-live-panel`.
+  - Each has a report under `live-activity-chat-plan/reports/`.
+- P3: `programs/_shared/runtime.ts:84` subscribes the hub to
+  `clientGateway.publishActivity`.
+- Lead edits:
+  - D8.
+  - The Core chat styles in `styles/conversation/01-thread.css`.
+  - Core's `createdAt` carried into the extension chat's timeline.
+  - The `cli.ts` pass-through for `--no-live-panel`.
+  - Docs: `extension-client.md` and `testing-facility.md`.
+- Validation: checks green under a build slot. The commands and their output
+  are in the ledger and the lane report.
 
-**Not done.** Everything in [Phases](#phases) from P2 on.
+**Not done.** P4 browser proof.
+- The lead's slot-2 run did not start. Its first attempt was refused because
+  Core's dist was stale. Core was rebuilt (`pnpm --filter fluxiq build`,
+  EXIT=0). Free RAM was 3.75 GB by then, below the 4 GB floor, so the run was
+  skipped.
+- The supervisor hands the proof to the live lane's next run.
 
-**Next.** Dispatch C1, C2, E1, E2, E3 and E4 in parallel (disjoint files).
-Then C3 and the runtime wiring. Then integration, validation and one headed
-Lab run in `lab-slots/slot-2`.
+**Next: what the live lane's next run must confirm** (any of the ten
+scenarios):
+1. **Live panel.**
+   - stderr has `[lab] live panel: side-panel ...` or `popup ...`.
+   - The bundle's `snapshots/live-panel.json` names the same mode.
+   - The panel is on screen beside the page.
+   - Pairing and `activateScenarioTab` still pass: the extension's
+     `activeTabUrl` is the scenario URL, never `chrome-extension://`.
+2. **Overlay from real events.** `<fluxiq-activity-overlay>` appears in the
+   scenario tab's top frame. Its phase and "Step N of M" follow Core's own
+   emissions:
+   - `thinking` and `exploring` during a build;
+   - `running` per node;
+   - `done` or `failed` at settle.
+   It must not appear before Core's first event, and it must never show a
+   status Core did not send.
+3. **No interference** (`isExtensionUiNode`, `data-fluxiq-activity`). None of
+   the following contains the host, its marker or its label text:
+   - a DOM snapshot;
+   - an evidence blocker (`evidence/overlays.ts`);
+   - an interference sentence (`covering-layer.ts`, `interference/overlays.ts`);
+   - a recorded `dom.mutation`.
+   No action is refused or misdirected at the bottom-right corner.
+4. **Chat.** The panel chat's header follows the phases. Tool and step rows
+   appear and expand. Core's turns interleave by time. A typed instruction
+   reaches Core's thread.
+5. **Core.** The `server.activity` pushes cause no gateway errors, and no
+   session `outbound` grows from them.
 
 **Blockers:** none.
 
 ---
+
+## Audit Findings
+
+(2026-09-29) Full detail is in
+[the lane report](./live-activity-chat-plan/reports/t185-live-activity-chat.md).
+
+- Core has no push path to any browser today. Its panel polls
+  (`conversation/thread/poller.ts`). The extension's conversation card polls
+  Core over HTTP every 4 s through the background
+  (`background/panel/conversation-relay.ts`).
+- The gateway can send to one session
+  (`client-gateway/service/transport.ts`). The session's `outbound` queue has
+  no bound, so a stream must not go through it.
+- `FLUXIQ_BUILD_PROGRESS_TRACE` exists only as uncommitted work in t174. The
+  real seams in t185 are:
+  - the evidence loop's `decide`, `executeTool` and `checkCompletion`, wrapped
+    at the caller in `runtime/service.ts` because `llm/evidence-loop.ts` is at
+    exactly 800 lines;
+  - the graph executor's per-attempt loop (`executor/graph-run.ts`) and the
+    `onRecordBatch` hook;
+  - parking and asks;
+  - result verification and refuted-result repair.
+- Core's `runtime/service.ts` is frozen at 4,558 lines in the baseline, with
+  11 lines of headroom. The `web-vocabulary` rule forbids web words in Core
+  contracts.
+- The extension already has a shadow-root on-page UI to copy:
+  `content/picker/overlay.ts`. It is `pointer-events: none`, styled through
+  the CSSOM, and uses no `innerHTML`. `isPickerHostNode` keeps it out of
+  recordings, but snapshots, evidence and interference checks do not exclude
+  it.
+- The Lab opens `sidepanel/index.html` as an ordinary tab. Nothing calls
+  `chrome.sidePanel.open`.
 
 ## Phases
 
@@ -368,6 +421,39 @@ Shared rules for every brief:
   `tsc -p tsconfig.json --noEmit` -> no output.
 - Outcome: Accepted
 - Follow-up: dispatch P2.
+
+### 2026-09-29 — P2 (E3, E4, C3), lead integration and checks
+- Agent: lane lead t185, with workers ext-chat-panel, lab-live-panel and
+  core-activity-endpoint.
+- Changed:
+  - Core: `api/{contracts,handlers}/activity.ts` and their registration;
+    `apps/web/.../conversation/**`; `styles/conversation/01-thread.css`.
+  - Extension: `apps/extension/src/panel/chat/**`; `panel/simple/simple-view.ts`
+    and `simple.css`; `conversation/{index,core-thread}.ts`, with `card.ts`
+    removed; `packages/test-runner/src/{cli,commands,run-scenario,interactive-session}.ts`;
+    `browser-session/live-panel/**`; two architecture docs.
+- Why: the chat, the Lab live panel, and the Core panel's activity. D8.
+- Validation: one `heavy.sh` slot ran every command below, with the observed
+  result after each arrow.
+  - Core:
+    - `pnpm --filter fluxiq check` -> EXIT=0.
+    - `pnpm --filter @fluxiq/web check` -> EXIT=0.
+    - `node scripts/structure-audit.mjs` -> "passed (197 warning(s), 355
+      baselined)".
+  - Extension:
+    - `check` -> EXIT=0.
+    - `EXTENSION_TEST_BUILD_LABEL=t185-lead ... test` -> `# tests 1213`,
+      `# pass 1213`, `# fail 0`.
+    - `build` -> EXIT=0.
+  - test-runner:
+    - `pnpm build` -> EXIT=0.
+    - `pnpm check` -> EXIT=0.
+    - The live-panel and commands tests -> `# tests 45`, `# pass 45`.
+  - Core web `conversation-activity.test.tsx` -> 7 passed, after one fixture
+    label was fixed.
+- Outcome: Accepted
+- Follow-up: the browser proof passes to the live lane. Current State lists
+  what that run must confirm.
 
 ---
 

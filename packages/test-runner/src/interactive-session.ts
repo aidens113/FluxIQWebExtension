@@ -15,6 +15,7 @@ import { loadScenarioManifest } from "./scenarios.js";
 import type { FluxIQTargetConfiguration } from "./target-config.js";
 import { selectOptionByKeyboard } from "./trusted-input/index.js";
 import { scenarioLabOriginProof } from "./lab-control/index.js";
+import { openLivePanel } from "./run-scenario/browser-session/index.js";
 
 const MAX_ACTIONS = 500;
 const MAX_LINE_BYTES = 16_384;
@@ -57,6 +58,8 @@ export type InteractiveSessionOptions = {
   environment?: NodeJS.ProcessEnv;
   input?: Readable;
   output?: Writable;
+  /** False (`--no-live-panel`) keeps the extension panel from being shown beside the scenario page. */
+  livePanel?: boolean;
 };
 
 type InteractivePages = Partial<Record<InteractiveSurface, Page>>;
@@ -209,14 +212,15 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
       control = new ExistingFluxIQControlClient(options.target.baseUrl);
       await control.login({ username: options.target.credentials.username, password: options.target.credentials.password, pin: options.target.credentials.authorizationPin, ...(options.target.credentials.totp ? { totp: options.target.credentials.totp } : {}) }, { sessionCache: new WebPanelAuthSessionCache(options.runsDirectory), ...(options.target.freshLogin ? { freshLogin: true } : {}) });
     }
+    const headless = false;
     context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, {
-      headless: false,
+      headless,
       env: withoutProviderSecrets(environment),
       locale: "en-US",
       timezoneId: "UTC",
       viewport: { width: 1280, height: 720 },
       colorScheme: "light",
-      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps"],
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps", "--window-size=1700,1000"],
     });
     const guard = await installDeterministicNetworkGuard(context, {
       scenarioOrigins: scenarioNetworkOrigins(topology.scenarioOrigin),
@@ -236,7 +240,9 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
     const panelPage = await context.newPage();
     await panelPage.goto(topology.fluxiqOrigin, { waitUntil: "domcontentloaded" });
     await scenarioPage.bringToFront();
-    writeLine(output, { status: "ready", runId, scenarioId: scenario.id, surfaces: { scenario: scenarioPage.url(), panel: panelPage.url(), extension: extensionPage.url() }, actionLimit: MAX_ACTIONS });
+    // The extension panel beside the scenario page; it never fails the session, and the mode that ran is in the ready line.
+    const livePanel = await openLivePanel(extensionPage, { enabled: options.livePanel !== false, headless, scenarioOrigin: topology.scenarioOrigin });
+    writeLine(output, { status: "ready", runId, scenarioId: scenario.id, surfaces: { scenario: scenarioPage.url(), panel: panelPage.url(), extension: extensionPage.url() }, livePanel, actionLimit: MAX_ACTIONS });
     const lines = createInterface({ input, crlfDelay: Infinity });
     let sequence = 0;
     for await (const line of lines) {
