@@ -60,11 +60,12 @@ function rowsOf(manifest) {
 /**
  * The Lab arguments one condition becomes.
  *
- * Deliberately provider-free: no `--live-llm`, so Core is issued no grant and
- * cannot consult the model at all. That is what makes the measurement a
- * measurement. A run with a grant that spends nothing shows that the model was
- * not needed *this time*; a run with no grant shows that whatever finished the
- * run was the deterministic runtime, because nothing else was available to it.
+ * Deliberately provider-free: no `--live-llm`, so no key is installed and the
+ * run carries no `runIntent`, and Core cannot consult the model at all. That is
+ * what makes the measurement a measurement. A live run that spends nothing
+ * shows that the model was not needed *this time*; a run with no model shows
+ * that whatever finished the run was the deterministic runtime, because
+ * nothing else was available to it.
  * The `expected.providerCalls` declarations on these same rows are the guard
  * for the other case, when the campaign runs them live.
  */

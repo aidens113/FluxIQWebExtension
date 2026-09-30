@@ -1,7 +1,7 @@
 // The caps, checked against what the run actually spent.
 //
 // Core enforces the same numbers on its own side, through the Flow's saved
-// settings and the execution grant it counts down. This is the second check,
+// settings and its loop budget. This is the second check,
 // and it is not redundant: the numbers Core enforces are the ones this runner
 // sent it, so a bug that sent the wrong ones -- or a Core that stopped honouring
 // them -- would leave a run over its budget with every call reported green. An
@@ -15,7 +15,7 @@ import type { LiveLlmObservedUsage } from "./observed-usage.js";
 /** Every breach found, as short sentences naming the option that was exceeded. */
 export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedUsage): string[] {
   const declared = plan.declared;
-  // The run-wide totals are judged across the calls the grant authorized, not
+  // The run-wide totals are judged across the calls the plan authorized, not
   // across the operator's cap. The two are equal for an iterating purpose; for
   // one that makes a single call, the cap may be larger, and multiplying by it
   // would let one call spend what ten were allowed.
@@ -23,11 +23,12 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
   const breaches: string[] = [];
   if (usage.calls > calls) breaches.push(`the run made ${usage.calls} provider call(s) against an authorized ${calls}`);
   if (usage.calls > declared.maxCallsPerRun) breaches.push(`the run made ${usage.calls} provider call(s) against --llm-max-calls ${declared.maxCallsPerRun}`);
-  // The total the grant asked for: the per-call limit across the authorized
-  // calls, held to Core's own ceiling. Multiplying the operator's per-call cap by
-  // a large call count would give a number no grant can reach.
+  // The run's spend ceiling, saved as the Flow's `maxEstimatedCostUsdPerRun`:
+  // the per-call limit across the authorized calls, held to the Lab's ceiling.
+  // Multiplying the operator's per-call cap by a large call count would give a
+  // number no run is allowed to reach.
   if (usage.totalEstimatedCostUsd > plan.maxTotalEstimatedCostUsd) {
-    breaches.push(`the run's estimated cost ${usage.totalEstimatedCostUsd} exceeded its total cost limit of ${plan.maxTotalEstimatedCostUsd} (--llm-max-cost-usd ${declared.maxEstimatedCostUsd} across ${calls} authorized call(s), held to Core's ceiling)`);
+    breaches.push(`the run's estimated cost ${usage.totalEstimatedCostUsd} exceeded its total cost limit of ${plan.maxTotalEstimatedCostUsd} (--llm-max-cost-usd ${declared.maxEstimatedCostUsd} across ${calls} authorized call(s), held to the Lab's ceiling)`);
   }
   const accounting = usage.accounting;
   if (accounting) {
@@ -36,9 +37,8 @@ export function liveLlmBudgetBreaches(plan: LiveLlmPlan, usage: LiveLlmObservedU
     if (accounting.inputTokens > declared.maxInputTokens * calls) breaches.push(`the run used ${accounting.inputTokens} input tokens against --llm-max-input-tokens ${declared.maxInputTokens} across ${calls} authorized call(s)`);
     if (accounting.outputTokens > declared.maxOutputTokens * calls) breaches.push(`the run used ${accounting.outputTokens} output tokens against --llm-max-output-tokens ${declared.maxOutputTokens} across ${calls} authorized call(s)`);
   }
-  // Total tokens are judged against the run token budget the grant asked for,
-  // which is never more than every authorized call at its per-call limit and is
-  // usually much less: tokens, not calls, are what bound an iterating run. Core's
+  // Total tokens are judged against the plan's run token budget, which is
+  // never more than every authorized call at its per-call limit. Core's
   // accounting is preferred; the per-call records are the floor where Core
   // published no accounting or reported less than they add up to.
   const recordedTokens = usage.observedCalls.reduce((sum, call) => sum + (call.totalTokens ?? 0), 0);

@@ -1,7 +1,7 @@
 // Approving and applying the repair a live run produced.
 //
 // Core's recovery saves what it decided as an adaptation, and a proposal-only
-// grant saves a change proposal beside it. Neither is in the Flow until someone
+// run saves a change proposal beside it. Neither is in the Flow until someone
 // reviews it: `evaluateFlowAdaptationPromotionGates` asks for evidence rather
 // than for the absence of an objection, and the two things that satisfy it are
 // a succeeded trial and a named reviewer's approval. The Lab is a named
@@ -70,7 +70,7 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
  * recorded them.
  *
  * An adaptation Core has already applied -- an executed patch under an
- * `explore_and_adapt` grant -- is left alone rather than reviewed again, and
+ * `explore_and_adapt` run -- is left alone rather than reviewed again, and
  * counts as applied. A review Core refuses is recorded as refused and the rest
  * are still attempted, so the record says how many of them landed rather than
  * stopping at the first.

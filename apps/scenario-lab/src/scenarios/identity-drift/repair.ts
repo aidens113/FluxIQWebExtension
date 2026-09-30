@@ -6,17 +6,17 @@ import type { ExpectedAction, ExpectedFact, ScenarioExpected } from "@fluxiq-web
  * which reads it from this module's build (`scenarios/<scenario id>/repair.js`).
  *
  * A variant's `expected` has one shape for every run, and a live run's outcome
- * depends on what its grant allows. Under a grant that may only *propose* a
+ * depends on what its run intent allows. Under an intent that may only *propose* a
  * repair -- the Lab's `--llm-task adapt`, Core's `diagnose_and_adapt` -- Core
  * never retries the click, so even a perfect repair ends with the click failed
  * and nothing saved. That run is held to `proposalOnlyOutcome` instead of the
  * variant's own expectations, and judged by whether the change proposal it
  * saved names `proposal.target`. Every other run -- a provider-free one, or one
- * whose grant executes the repair -- is held to the variant's `expected`.
+ * whose intent executes the repair -- is held to the variant's `expected`.
  */
 export type ScenarioRepair = {
   variantId: string;
-  /** Replaces these fields of the variant's `expected` for a run whose grant only proposes. */
+  /** Replaces these fields of the variant's `expected` for a run whose intent only proposes. */
   proposalOnlyOutcome: Pick<ScenarioExpected, "actions" | "finalState" | "failure">;
   /** The repair a correct run proposes: its patch kind, and the control its target names. */
   proposal: {

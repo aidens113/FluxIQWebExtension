@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "fluxiq/automation-studio";
 import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached, liveLlmBudgetBreaches } from "../budget.js";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "../observed-usage.js";
@@ -32,8 +31,7 @@ function livePlan(task: LlmExecutionProfile["task"], budget: Partial<LlmExecutio
   } satisfies LlmExecutionProfile);
 }
 
-/** Core's own threshold and the shared per-request budget, imported rather than copied. */
-const CORE_THRESHOLD = AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
+/** The shared per-request budget, imported rather than copied. */
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 
 const plan = livePlan("diagnose", { maxCallsPerRun: 1, maxEstimatedCostUsd: 0.25 });
@@ -136,7 +134,7 @@ function adaptingUsage(calls: number, perCall: { inputTokens: number; outputToke
 
 test("an iterating run inside its call count and run token budget reports no breach", () => {
   assert.equal(adapting.maxCalls, 26);
-  assert.equal(adapting.maxTotalTokensPerRun, CORE_THRESHOLD);
+  assert.equal(adapting.maxTotalTokensPerRun, PER_REQUEST * 26);
   // 26 calls of 3,800 tokens is 98,800: more than two calls, inside every cap.
   assert.deepEqual(liveLlmBudgetBreaches(adapting, adaptingUsage(26, { inputTokens: 3_000, outputTokens: 800, estimatedCostUsd: 0.002 })), []);
 });
@@ -149,17 +147,18 @@ test("an iterating run fails the moment it makes more calls than it asked for", 
 
 test("an iterating run fails when its calls together exceed the run token budget, though each is within its own limit", () => {
   // Every call is comfortably inside the per-request ceiling; 26 of them are
-  // over the run token budget. Both halves of that are asserted, so the probe
-  // cannot quietly stop proving what the title says when a limit moves.
+  // over a typed run token budget. Both halves of that are asserted, so the
+  // probe cannot quietly stop proving what the title says when a limit moves.
+  const typed = livePlan("adapt", { maxCallsPerRun: 26, maxTotalTokensPerRun: 300_000 });
   const perCall = { inputTokens: 20_000, outputTokens: 2_000, estimatedCostUsd: 0.002 };
   const perCallTokens = perCall.inputTokens + perCall.outputTokens;
   assert.ok(perCallTokens < PER_REQUEST, "the probe must be a legal request");
   const runTokens = perCallTokens * 26;
-  assert.ok(runTokens > adapting.maxTotalTokensPerRun, "26 such calls must overrun the run token budget");
+  assert.ok(runTokens > typed.maxTotalTokensPerRun, "26 such calls must overrun the run token budget");
   const over = adaptingUsage(26, perCall);
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, over), new RegExp(`the run used ${runTokens} total tokens against its run token budget of ${CORE_THRESHOLD}$`, "u"));
+  assert.throws(() => assertLiveLlmBudgetHeld(typed, over), new RegExp(`the run used ${runTokens} total tokens against its run token budget of 300000 \\(--llm-max-run-tokens 300000\\)$`, "u"));
   // The per-call records bound the run even where Core published no accounting.
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, { ...over, accounting: null }), new RegExp(`${runTokens} total tokens against its run token budget of ${CORE_THRESHOLD}`, "u"));
+  assert.throws(() => assertLiveLlmBudgetHeld(typed, { ...over, accounting: null }), new RegExp(`${runTokens} total tokens against its run token budget of 300000`, "u"));
 });
 
 test("a typed run token budget is the one the run is held to, and is named", () => {
@@ -180,7 +179,7 @@ test("an iterating run's total cost is bounded across its authorized calls", () 
   const over = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.05 });
   assert.doesNotThrow(() => assertLiveLlmBudgetHeld(small, over));
   assert.throws(() => assertLiveLlmBudgetHeld(small, { ...over, totalEstimatedCostUsd: 0.21 }), /estimated cost 0\.21 exceeded its total cost limit of 0\.2 \(--llm-max-cost-usd 0\.05 across 4 authorized call/u);
-  // 26 calls at $0.25 would be $6.50; the grant's total is held to Core's $2, and so is the run.
+  // 26 calls at $0.25 would be $6.50; the run's spend ceiling is held to the Lab's $2.
   assert.equal(adapting.maxTotalEstimatedCostUsd, 2);
   const pricey = adaptingUsage(26, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.081 });
   assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), /estimated cost 2\.106 exceeded its total cost limit of 2 /u);

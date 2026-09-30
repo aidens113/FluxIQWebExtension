@@ -2,19 +2,20 @@
 //
 // A repair that only works while a provider is being paid is not a repair; it
 // is an expensive retry. The proof is deterministic reuse: run the applied Flow
-// again against the same broken page, with no execution grant at all, and check
+// again against the same broken page, with no model (no `runIntent`), and check
 // two things -- that Core called no provider, and that the fixture's own goal
 // still holds afterwards.
 //
 // The run carries no `llmExecution`, so Core has nothing to spend a call
 // against. The check is still made from Core's own accounting rather than from
 // that argument: a replay that somehow reached a provider has to be able to say
-// so, and "we did not pass a grant" is an intention, not a measurement.
+// so, and "we did not ask for a model" is an intention, not a measurement.
 
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
 import { classifyRunnerFailure, type RunnerFailureCategory } from "../../failure.js";
 import type { FluxIQHttpOptions } from "../../http-control/index.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl } from "../persisted-flow-run.js";
+import type { FlowRunDataset } from "../run-datasets.js";
 
 /** One replay of the applied Flow. */
 export type RepairReplay = Readonly<{
@@ -35,6 +36,12 @@ export type RepairReplay = Readonly<{
   goalPassed: boolean;
   /** Whether Core's own run and every action attempt succeeded. */
   flowSucceeded: boolean;
+  /**
+   * Whether the replay stored exactly the datasets the judged run stored, row
+   * for row. `null` when the lane gave no datasets to reproduce: a page-state
+   * repair is judged by the fixture's final state alone.
+   */
+  datasetsReproduced: boolean | null;
 }>;
 
 /**
@@ -66,6 +73,13 @@ export type RepairReplayInput = {
   prepare: () => Promise<void>;
   /** The fixture oracle, consulted after each replay. */
   checkGoal: () => Promise<boolean>;
+  /**
+   * The datasets the lane's own run stored and was judged right on, which each
+   * replay must store exactly. A wrong-answer repair is a change to the answer,
+   * and the fixture's page state says nothing about an answer: a replay that
+   * returned other rows on the same page would otherwise pass.
+   */
+  expectedDatasets?: readonly FlowRunDataset[];
 };
 
 /**
@@ -102,7 +116,7 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       onRunIdentified: (identified) => { runId = identified; },
     }, bounds);
     runId = run.runId;
-    // Read from Core's own accounting, not from the absence of a grant.
+    // Read from Core's own accounting, not from the absence of a `runIntent`.
     const providerCalls = countedProviderCalls(await control.getRunDetail(input.projectId, run.runId, bounds));
     const goalPassed = await input.checkGoal();
     return {
@@ -115,18 +129,25 @@ async function replayOnce(control: RepairReplayControl, input: RepairReplayInput
       modelCalled: providerCalls > 0 || run.harnessActivations > 0,
       goalPassed,
       flowSucceeded: run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded"),
+      datasetsReproduced: input.expectedDatasets ? sameDatasets(input.expectedDatasets, run.extracted) : null,
     };
   } catch (error) {
     // The category, never the message: a replay that broke on a read must not
     // put whatever that read said into the bundle.
     const status: RunnerFailureCategory = classifyRunnerFailure(error);
-    return { index, outcome: "unreachable", runId, status, providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false };
+    return { index, outcome: "unreachable", runId, status, providerCalls: 0, harnessActivations: 0, modelCalled: false, goalPassed: false, flowSucceeded: false, datasetsReproduced: input.expectedDatasets ? false : null };
   }
+}
+
+/** The same datasets by id, each with the same rows in the same order. */
+function sameDatasets(expected: readonly FlowRunDataset[], actual: readonly FlowRunDataset[]): boolean {
+  const rows = (datasets: readonly FlowRunDataset[]) => JSON.stringify([...datasets].sort((a, b) => a.datasetId.localeCompare(b.datasetId)).map((dataset) => [dataset.datasetId, dataset.records]));
+  return rows(expected) === rows(actual);
 }
 
 /**
  * Provider calls Core counted for a run, from its own accounting and never
- * from the runner's belief about the grant it did not pass.
+ * from the runner's belief about the model it did not ask for.
  *
  * Deliberately the narrow question. `live-llm` builds a whole usage record for
  * a run that was authorized to spend; a replay was authorized to spend nothing,

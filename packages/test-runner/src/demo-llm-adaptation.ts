@@ -2,7 +2,7 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_LAB_SCHEMA_VERSION, assertLlmExecutionProfile, type LlmExecutionProfile, type LlmInvocationProvenance, type LlmModel, type LlmRunEvaluation, validateLlmRunEvaluation } from "@fluxiq-web-extension/test-contracts";
-import { adaptationCallCountWithinGrant } from "./demo-llm-adaptation-control.js";
+import { adaptationCallCountWithinCeiling } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
 import { attestWorkspaceSecretAbsence } from "./secret-leak-attestation.js";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
@@ -198,8 +198,8 @@ export function evaluateDemoLlmAdaptation(input: DemoLlmAdaptationCertificationI
   const evidenceCallCount = parsed.invocations.length - 2;
   // The diagnosis and the patch are the run's two interventions; a call that
   // gathered evidence leaves none behind.
-  if (!adaptationCallCountWithinGrant({ providerCallCount: parsed.providerCallCount, interventions: [diagnosisInvocation, patchInvocation] })) {
-    fail("Runtime adaptation made a provider call count its grant could not have produced");
+  if (!adaptationCallCountWithinCeiling({ providerCallCount: parsed.providerCallCount, interventions: [diagnosisInvocation, patchInvocation] })) {
+    fail("Runtime adaptation made a provider call count its run could not have produced");
   }
   const budget = FIRST_LIVE_ADAPTATION_PROFILE.budget;
   for (const invocation of parsed.invocations) {

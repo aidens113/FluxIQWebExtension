@@ -9,8 +9,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation-studio";
-import { awaitTerminalRunDetail, TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, TERMINAL_DETAIL_POLL_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS } from "fluxiq/automation-studio";
+import { awaitTerminalRunDetail, LIVE_LLM_RUN_WAIT_MS, TERMINAL_DETAIL_BASE_WAIT_MS, TERMINAL_DETAIL_MAX_WAIT_MS, TERMINAL_DETAIL_NODE_WAIT_MS, TERMINAL_DETAIL_POLL_MS, terminalDetailWaitMs } from "../terminal-run-wait.js";
 
 test("one node's allowance is every attempt's readiness ceiling plus every retry's backoff, as Core defines them", () => {
   // Core awaits readiness once per attempt and sleeps a backoff before each
@@ -42,7 +42,7 @@ test("every node after the first adds its own allowance, so a multi-node Flow is
 });
 
 test("the derived bound is capped at the longest run this facility allows", () => {
-  assert.equal(TERMINAL_DETAIL_MAX_WAIT_MS, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS);
+  assert.equal(TERMINAL_DETAIL_MAX_WAIT_MS, LIVE_LLM_RUN_WAIT_MS);
   assert.equal(terminalDetailWaitMs(20), TERMINAL_DETAIL_MAX_WAIT_MS);
   assert.equal(terminalDetailWaitMs(Number.MAX_SAFE_INTEGER), TERMINAL_DETAIL_MAX_WAIT_MS);
   // Seven nodes is where Core's own per-node worst case reaches the cap, so
@@ -118,6 +118,55 @@ test("a run with a node that would not run still takes the full recovery wait", 
   assert.ok(clock > 5_000 + TERMINAL_DETAIL_POLL_MS, `waited only ${clock}ms`);
 });
 
+// t176. Core saves a refuted run as `failed` with `resultRepair.phase:
+// "reauthoring"` *before* its re-author starts, then re-runs the same run id and
+// settles the phase only when the repaired answer has been judged (Core
+// `recovery/refuted-result/repair.ts`). The first pass may already have written
+// `llmGate`, and every node ran, so the recovery rule read this as finished --
+// or gave it five seconds -- and the Lab reported a failed run while Core was
+// still repairing it (`run-mulwm2dc-0bd95f22` ended `unsettled: "recovery"`).
+test("a run whose wrong-answer repair is still in flight is waited for until Core settles it", async () => {
+  const reads = [
+    { phase: "reauthoring", status: "failed" },
+    { phase: "reauthoring", status: "failed" },
+    { phase: "rerunning", status: "failed" }
+  ];
+  let clock = 0;
+  let read = 0;
+  const detailAt = () => {
+    // Twenty seconds a phase: far past the five-second grace, well inside the run's bound.
+    const current = reads[Math.floor(clock / 20_000)];
+    read += 1;
+    return {
+      summaryStatus: current?.status ?? "succeeded",
+      actions: [{ status: "succeeded", nodeId: "n1" }, { status: "failed", nodeId: "n2", failure: { stage: "verification" } }],
+      resultVerification: current ? "refuted" : "confirmed",
+      runDetail: { metadata: { llmGate: { outcome: "unchanged" }, resultRepair: { attempted: true, phase: current?.phase ?? "settled", ...(current ? {} : { outcome: "answered" }) } } }
+    };
+  };
+  const settled = await awaitTerminalRunDetail(
+    async () => detailAt(),
+    new Error("unused"),
+    { now: () => clock, sleep: async (ms: number) => { clock += ms; }, intervalMs: 1_000, timeoutMs: 272_500, awaitVerdict: true, awaitRecovery: true, recoveryWaitMs: 300_000, recoveryGraceMs: 5_000 }
+  );
+  assert.equal(settled.unsettled, undefined);
+  assert.equal(settled.detail.summaryStatus, "succeeded");
+  assert.equal((settled.detail.runDetail.metadata as { resultRepair: { phase: string } }).resultRepair.phase, "settled");
+  assert.ok(clock >= 60_000, `settled after ${clock}ms, before the repair finished`);
+  assert.ok(read > 3);
+});
+
+test("a repair still in flight when the run's bound ends is reported unsettled as a repair, never as finished", async () => {
+  let clock = 0;
+  const settled = await awaitTerminalRunDetail(
+    async () => ({ summaryStatus: "failed", actions: [{ status: "succeeded", nodeId: "n1" }], resultVerification: "refuted", runDetail: { metadata: { llmGate: {}, resultRepair: { phase: "reauthoring" } } } }),
+    new Error("unused"),
+    { now: () => clock, sleep: async (ms: number) => { clock += ms; }, intervalMs: 1_000, timeoutMs: 100_000, awaitVerdict: true, awaitRecovery: true, recoveryWaitMs: 300_000, recoveryGraceMs: 5_000 }
+  );
+  assert.equal(settled.unsettled, "repair");
+  assert.ok(clock >= 100_000 - 1_000, `gave up after ${clock}ms`);
+});
+
 // Core's own marker on the recovery, not a fixed guess.
 //
 // Core saves a failed run before its recovery starts and the recovery record
@@ -144,7 +193,7 @@ async function waitOn(reads: (clock: number) => ReturnType<typeof markedRun>) {
   return { settled, clock };
 }
 
-test("a recovery Core still marks running is waited for up to Core's grant lease, past the fixed five minutes", async () => {
+test("a recovery Core still marks running is waited for up to the live-run deadline, past the fixed five minutes", async () => {
   // Core finishes the recovery at 400 s, which the fixed wait would have missed.
   const { settled, clock } = await waitOn((now) => now < 400_000 ? markedRun({ state: "running", startedAt: 1 }) : markedRun({ state: "ended", startedAt: 1, endedAt: 2 }, true));
   assert.equal(settled.unsettled, undefined);
@@ -152,7 +201,7 @@ test("a recovery Core still marks running is waited for up to Core's grant lease
   assert.ok(clock >= 400_000 && clock < 400_000 + 2 * TERMINAL_DETAIL_POLL_MS, `waited ${clock}ms`);
 });
 
-test("a recovery still running when the lease runs out is returned unsettled and named", async () => {
+test("a recovery still running when the run's bound runs out is returned unsettled and named", async () => {
   const { settled, clock } = await waitOn(() => markedRun({ state: "running", startedAt: 1 }));
   assert.equal(settled.unsettled, "recovery");
   assert.equal(settled.recoveryState, "recovery.still_running");

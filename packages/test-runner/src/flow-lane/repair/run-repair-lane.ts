@@ -3,7 +3,7 @@
 // The Flow lane builds a Flow, runs it, and lets Core's recovery repair the
 // run that failed. What it leaves behind is a proposal, and a proposal is not a
 // repair. This is the rest of the loop -- approve it, apply it to the Flow,
-// then run that Flow again with no execution grant -- and it lives beside the
+// then run that Flow again with no model -- and it lives beside the
 // repair's own judgement rather than in the runner, because every step of it is
 // a statement about the repair and none of it is about browsers or bundles.
 //
@@ -12,7 +12,7 @@
 // written once the assertions pass cannot explain the run that failed them.
 //
 // A Flow FluxIQ built from an instruction takes the same lane. Its playback ran
-// under a proposal-only repair grant, so what it leaves is the same kind of
+// with the model taking part, so what it leaves is the same kind of
 // proposal; two things differ. Its nodes ask for values the way the created
 // lane answered them, so its caller hands in that lane's rule to rebuild its
 // inputs, which keeps this lane free of the creation module. And its
@@ -31,7 +31,7 @@ import type { FlowRepairExpectation } from "./declared-repair.js";
 import { assertFlowRepair, judgeFlowRepair } from "./judge-repair.js";
 import { assertLiveRepairProof, proveLiveRepair, type LiveRepairProof, type ProveLiveRepairControl } from "./prove-repair.js";
 
-/** What the lane needs of the live run: whether its grant repairs a Flow, and the task and grant purpose that produced the repair. */
+/** What the lane needs of the live run: whether it repairs a Flow, and the task and run intent that produced the repair. */
 export type LiveRepairRun = { repairsFlow: boolean; describeRepair(): { task: string; purpose: string } };
 
 export type LiveRepairLaneInput = {
@@ -43,8 +43,12 @@ export type LiveRepairLaneInput = {
   replays?: number;
   /** Absent on a provider-free run, which has no repair to apply. */
   live?: LiveRepairRun;
-  /** The Flow the lane built and the run it made, which names what the recovery saved. */
-  lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> };
+  /**
+   * The Flow the lane built and the run it made, which names what the recovery
+   * saved. `extracted` is what that run stored, which a wrong-answer repair's
+   * replays must reproduce (`resultRepairOf`).
+   */
+  lane: { flowId: string; run: Pick<PersistedFlowRunOutcome, "harnessRecovery"> & Partial<Pick<PersistedFlowRunOutcome, "extracted">> };
   /**
    * The rule of the lane that built the Flow, for rebuilding the run's inputs
    * from its nodes: a created Flow's (`createdFlowSecretInputs`), whose nodes
@@ -80,7 +84,7 @@ export type LiveRepairLaneInput = {
  * Applies and replays the repair, writes `snapshots/repair-lane.json`, and then
  * fails the run if the repair was not reusable. Returns the proof, or
  * `undefined` when the run asked for no replays or produced no repairable
- * grant. With an `expectation`, a proposal judged anything but `repaired` is
+ * proposal. With an `expectation`, a proposal judged anything but `repaired` is
  * recorded with `application: null` and fails the run before it is applied.
  */
 export async function runLiveRepairLane(
@@ -90,7 +94,11 @@ export async function runLiveRepairLane(
 ): Promise<LiveRepairProof | undefined> {
   if (input.replays === undefined || !input.live?.repairsFlow) return undefined;
   const described = input.live.describeRepair();
-  const declaredRepair = input.expectation
+  const resultRepair = resultRepairOf(input.lane.run);
+  // A declared repair describes a runtime patch -- the control a target
+  // override should land on -- and says nothing about an answer the re-author
+  // rewrote, so it is judged only where the run repaired a step.
+  const declaredRepair = input.expectation && !resultRepair
     ? await judgeFlowRepair(control, { projectId: input.projectId, flowId: input.lane.flowId, run: input.lane.run, expectation: input.expectation }, bounds)
     : undefined;
   if (declaredRepair && declaredRepair.verdict !== "repaired") {
@@ -118,7 +126,8 @@ export async function runLiveRepairLane(
     ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
     task: described.task,
     purpose: described.purpose,
-    recovery: input.lane.run.harnessRecovery,
+    recovery: resultRepair ? { ...input.lane.run.harnessRecovery, adaptationIds: [...new Set([...input.lane.run.harnessRecovery.adaptationIds, resultRepair.adaptationId])] } : input.lane.run.harnessRecovery,
+    ...(resultRepair ? { expectedDatasets: resultRepair.datasets } : {}),
     replays: input.replays,
     inputs: { ...rebuiltInputs(input, nodes), scenarioId: input.scenarioId, facilityRunId: input.facilityRunId },
     // The reset comes first, as it does in the Flow lane: it would otherwise discard the arm.
@@ -131,10 +140,30 @@ export async function runLiveRepairLane(
     application: proof.application.outcome,
     adaptations: proof.adaptationIds.length,
     replaysRequested: proof.replaysRequested,
-    replays: proof.replays.map((replay) => ({ index: replay.index, outcome: replay.outcome, providerCalls: replay.providerCalls, goalPassed: replay.goalPassed })),
+    ...(resultRepair ? { repair: "result_reauthor" } : {}),
+    replays: proof.replays.map((replay) => ({ index: replay.index, outcome: replay.outcome, providerCalls: replay.providerCalls, goalPassed: replay.goalPassed, datasetsReproduced: replay.datasetsReproduced })),
   });
   assertLiveRepairProof(proof);
   return proof;
+}
+
+/**
+ * The wrong-answer repair the run made, when Core's re-author built an edit and
+ * applied it inside the run: its adaptation, and the datasets the repaired run
+ * stored, which the lane that built the Flow has already judged.
+ *
+ * Core applies that edit itself, re-runs the same run id and judges the answer
+ * again (Core `recovery/refuted-result/`), so it leaves no proposal for this
+ * lane to approve. Without this the lane found no proposal, replayed nothing
+ * and passed -- a repair that had never been replayed read as a proven one.
+ * The adaptation is `applied` already, which the application step counts as
+ * done; what is left to prove is that the Flow now returns that answer with no
+ * model, every time.
+ */
+function resultRepairOf(run: LiveRepairLaneInput["lane"]["run"]): { adaptationId: string; datasets: NonNullable<LiveRepairLaneInput["lane"]["run"]["extracted"]> } | undefined {
+  const reauthor = run.harnessRecovery.resultReauthor;
+  if (reauthor?.applied !== true || !reauthor.adaptationId || !run.extracted) return undefined;
+  return { adaptationId: reauthor.adaptationId, datasets: run.extracted };
 }
 
 /**

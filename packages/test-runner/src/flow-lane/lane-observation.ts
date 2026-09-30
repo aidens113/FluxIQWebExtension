@@ -201,7 +201,7 @@ function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedV
  * add to, and none of its members says "the steps worked and the answer was
  * wrong". The code does, and a `flow_lane.` prefix is how a reader tells a
  * facility finding from one of Core's own codes -- the same rule
- * `flow_lane.granted_run_unsettled` already follows.
+ * `flow_lane.live_run_unsettled` already follows.
  */
 export const FLOW_LANE_REPORTED_FAILURE_CODES = Object.freeze({
   /** Core ran the Flow, judged what it produced, and said it does not answer the request. */

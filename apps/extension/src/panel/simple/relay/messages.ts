@@ -31,8 +31,8 @@ export const SIMPLE_RELAY_MESSAGES = {
    */
   listAutomations: "fluxiq.panel.listAutomations",
   /**
-   * `run-runtime-session` with `{ projectId, flowId }` and no LLM grant (a
-   * paired token cannot hold one). Answers Core's payload: `runSummary`,
+   * `run-runtime-session` with `{ projectId, flowId }` and no LLM run intent
+   * (a paired token cannot carry one). Answers Core's payload: `runSummary`,
    * `interventionCount`, `createdAdaptationIds`, `durableBehaviorChanged`,
    * `terminalReason`.
    */

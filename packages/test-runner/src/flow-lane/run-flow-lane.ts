@@ -72,12 +72,12 @@ export type FlowLaneInput = {
    */
   flowDispatchStarting: (at: number) => void;
   /**
-   * Authorizes a live provider call against the Flow this lane just built, and
-   * is called only when the run asked for one. The lane owns neither the
-   * credential nor Core's grant vocabulary; it knows only that a run may carry
-   * an authorization, and when in the sequence it has to be taken out -- after
-   * the Flow exists, because the grant binds to it, and just before the run,
-   * because Core expires it within the minute.
+   * Readies the Flow this lane just built for a run the model takes part in,
+   * and is called only when the run asked for one: it installs the key, saves
+   * the Flow's LLM settings and spend limit, and answers with the run's intent
+   * and the consequences the operator permitted. The lane owns neither the
+   * credential nor the settings; it knows only that a run may carry the model,
+   * and that the settings can be saved only once the Flow exists.
    */
   authorizeLiveLlm?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   /**
@@ -177,9 +177,8 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // A node on a file input asks for its files the same way, keyed by its recorded
   // control. It gets the file the recording lane chose, or the run fails here.
   const uploadInputs = declaredUploadInputs({ scenarioId: input.scenario.id, steps: input.workflow.recordingScript, requests: flowUploadRequests(nodes) });
-  // After the Flow exists and immediately before it runs: Core issues the grant
-  // against this Flow's saved settings and expires it within the minute, so
-  // nothing slow may come between the two.
+  // After the Flow exists and before it runs: the live run's settings are
+  // saved on this Flow.
   const llmExecution = input.authorizeLiveLlm ? await input.authorizeLiveLlm(approved.flowId) : undefined;
   // Just before the first Flow action can reach Core, whose runtime confirmation Core audits against the finalized recording.
   input.flowDispatchStarting(Date.now());
@@ -228,9 +227,9 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // Where the run started, in the recording's order: 0 is the recording's first
   // action. Null when no attempt landed on an action node.
   const startCandidateIndex = run.startCandidateIndex ?? null;
-  // Judged only for a run whose grant could propose a repair, and published
+  // Judged only for a run whose intent could propose a repair, and published
   // with the rest before any expectation is asserted.
-  const repair = input.repairExpectation && llmExecution && llmExecution.purpose !== "diagnosis_only"
+  const repair = input.repairExpectation && llmExecution && llmExecution.intent !== "diagnosis_only"
     ? await judgeFlowRepair(input.control, { projectId: input.projectId, flowId: approved.flowId, run, expectation: input.repairExpectation }, bounds)
     : undefined;
   // Joined before the evidence is written, like every other measurement here:

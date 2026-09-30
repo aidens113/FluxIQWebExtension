@@ -65,7 +65,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { awaitExtensionWorker, cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots } from "./run-scenario/index.js";
+import { activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -76,8 +76,8 @@ import { activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromC
  */
 const BLANK_TAB_URL = "about:blank";
 
-/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number };
+/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. `livePanel: false` (`--no-live-panel`) keeps the extension panel from being shown beside a headed run's page. */
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun; replays?: number; livePanel?: boolean };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
@@ -108,7 +108,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
-  // A Flow-lane run whose grant only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
+  // A Flow-lane run whose intent only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal: a recorded
   // Flow always, and a created one when `--replays` has its repair applied, whose proposal the repair lane then judges (`proveRepair` below).
   const workflow = resolveWorkflow(scenario, options, target);
   const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.flow === true || (options.creation !== undefined && options.replays !== undefined), proposalOnly: options.live?.proposesRepairOnly === true });
@@ -256,7 +256,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       await bundle.writeStructured("snapshots/clone-package.json", cloneState.clonePackage);
       await bundle.writeStructured("snapshots/clone-import.json", { projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, contentHash: cloneState.destination.contentHash, clonePackageHash: cloneState.clonePackageHash, attested: cloneState.destination.attested });
     }
-    ({ context, browserVersion } = await launchBrowser(topology, extensionPath));
+    const launched = await launchBrowser(topology, extensionPath);
+    ({ context, browserVersion } = launched);
     const scenarioOrigins = new Set(scenarioNetworkOrigins(topology.scenarioOrigin));
     const isScenarioUrl = (url: string) => { try { return scenarioOrigins.has(new URL(url).origin); } catch { return false; } };
     networkGuard = await installRunNetworkGuard(context, topology, [...scenarioOrigins]);
@@ -271,6 +272,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const page = scenarioPage = await context.newPage();
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
     await page.bringToFront();
+    // The extension panel beside the fixture, for whoever watches a headed run. It never fails the run; the mode that ran is kept in the bundle.
+    await bundle.writeStructured("snapshots/live-panel.json", await openLivePanel(extensionControl, { enabled: options.livePanel !== false, headless: launched.headless, scenarioOrigin: topology.scenarioOrigin, log: line => process.stderr.write(`${line}\n`) }));
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
     // What either Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
     const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
@@ -315,7 +318,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         catch { return false; }
       },
     });
-    // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no grant, so "the model fixed it" becomes "the Flow
+    // `--replays N`: approve the repair this run produced, apply it, and replay the Flow N times with no model, so "the model fixed it" becomes "the Flow
     // works without the model"; without the option nothing happens. `checkGoal` is the scenario's own final state, never the proposal-only one the run was
     // held to. A created Flow's lane judged no declared repair, so the repair lane judges it first, and rebuilds its inputs by the created lane's rule.
     const proveRepair = (control: ProveLiveRepairControl, activeTopology: RunningTopology, projectId: string, lane: LiveRepairLaneInput["lane"], builtFrom: "recording" | "instruction") => runLiveRepairLane(control, {
@@ -376,7 +379,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         startLocation: scenarioStartUrl(topology.scenarioOrigin, scenario),
         authorizeBuild: live.buildAuthorizer(control, activeTopology),
         settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
-        // The created Flow's playback runs under a proposal-only repair grant, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
+        // The created Flow's playback runs with the model taking part, so a Flow that fails is repaired rather than refused for want of a model, and its result is judged.
         authorizeRun: live.repairAuthorizer(control, activeTopology),
         settleRun: flowRunId => live.settleRepair(control, { projectId: createdProjectId, runId: flowRunId }, bundle, details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow's repair attempt finished"), details })),
         recordIncompleteEvidence: incomplete => bundle.writeStructured("snapshots/flow-lane.json", incomplete),
@@ -385,8 +388,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
         }),
       });
-      await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
-      await proveRepair(control, activeTopology, createdProjectId, lane, "instruction");
+      // A consequential task run without permission for its act passes by stopping to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): no Flow ran, so nothing below applies.
+      if ("permissionStop" in lane) await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } });
+      else { await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
     } else {
       if (paired && topology.authorizationPin) {
         await proveCoreActionRoundTrip({ page, control: topology.control!, sessionId: paired.sessionId, authorizationPin: topology.authorizationPin, publish: (trigger, summary, details) => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, trigger, summary), details }), record: (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); } });

@@ -120,8 +120,8 @@ function observedCall(build: CreatedFlowBuild, callId: string | null, usage: Rea
     // what the call spent, not how it was composed.
     taskKind: null,
     stage: null,
-    // The build's own reported provider and model. A build runs under one
-    // grant, bound to one provider and one model, and `settleBuild` fails the
+    // The build's own reported provider and model. A build runs on the one
+    // provider and model its Flow's settings name, and `settleBuild` fails the
     // run when Core reports it ran on another.
     provider: build.accounting?.provider ?? null,
     model: build.accounting?.model ?? null,

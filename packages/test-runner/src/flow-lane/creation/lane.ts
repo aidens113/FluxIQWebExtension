@@ -1,7 +1,7 @@
 // The created-Flow lane: a Flow is built by FluxIQ from a live instruction
 // task rather than from a recording, then run and judged on the isolated
 // target like any other Flow-lane run. The lane owns neither the credential nor
-// Core's grant vocabulary; a live run hands it `authorizeBuild` and
+// the Flow's LLM settings; a live run hands it `authorizeBuild` and
 // `settleBuild` for the build, and `authorizeRun` and `settleRun` for the
 // repair its playback may make, and the lane decides only when each is used.
 
@@ -16,11 +16,13 @@ import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedF
 import { resetScenarioLab, type LabResetFetch } from "../reset-scenario-lab.js";
 import { assertFlowDidNotStopEarly, flowActionsSnapshot } from "../run-flow-lane.js";
 import { createBlankCreationFlow } from "./blank-flow.js";
-import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
+import { buildCreatedFlowProposal, type CreatedFlowBuild, type CreatedFlowBuildControl, type CreatedFlowBuildLlm, type CreatedFlowBuildWait, type CreatedFlowPermissionRequest } from "./build-proposal.js";
 import { createdFlowAuthoredNodes } from "./authored-nodes.js";
 import { createdFlowActionTypes, createdFlowShape, type CreatedFlowShape } from "./flow-shape.js";
-import { assertCreatedFlowDataset, createdFlowDatasetHolds, judgeCreatedFlowDataset } from "./judgement.js";
+import { judgeCreatedFlowDataset } from "./judgement.js";
+import { assertCreatedFlowOracles, createdFlowOraclesHold, judgeCreatedFlowOracles, type CreatedFlowOracles } from "./oracles.js";
 import { assertCreatedFlowReachesItsOwnPage, createdFlowOwnPage, type CreatedFlowOwnPage } from "./own-page.js";
+import { judgeCreatedFlowPermissionStop, type CreatedFlowPermissionStop } from "./permission-point.js";
 import { describeCreatedFlowRequest, type CreatedFlowRequest } from "./request.js";
 import { applyCreatedFlowProposal, type CreatedFlowReview, type CreatedFlowReviewControl } from "./review-proposal.js";
 import { createdFlowSecretInputs } from "./secrets.js";
@@ -54,8 +56,8 @@ export type CreatedFlowLaneInput = {
   runToken: string;
   /** The declared secrets the task's workflow needs (`resolveCreatedFlowSecrets`); the runner also adds their values to the evidence redaction list. */
   secrets: readonly DeclaredSecret[];
-  /** Installs the key, pins the Flow's settings and issues the `build_and_adapt` grant, against the Flow as it then stands. */
-  authorizeBuild: (flowId: string) => Promise<{ grantId: string }>;
+  /** Installs the key and saves the Flow's LLM settings and spend limit; answers with the consequences the operator permitted the build. */
+  authorizeBuild: (flowId: string) => Promise<CreatedFlowBuildLlm>;
   /**
    * Publishes what the build spent and holds it to its caps, throwing on a
    * breach or on a build that reached no provider. Called once, before the
@@ -64,16 +66,16 @@ export type CreatedFlowLaneInput = {
    */
   settleBuild: (build: CreatedFlowBuild) => Promise<void>;
   /**
-   * Issues the proposal-only repair grant the created Flow's playback runs
-   * under, against the Flow as the review left it. With it, a Flow that fails
-   * is diagnosed and repaired, every change is held as a proposal awaiting
-   * approval, and the run's result is judged once it ends. Absent, the
-   * playback carries no grant and runs as deterministically as it always has.
+   * Readies the created Flow's playback for the model, against the Flow as the
+   * review left it, and answers with the run's intent. With it, a Flow that
+   * fails is diagnosed and repaired and the run's result is judged once it
+   * ends. Absent, the playback carries no model and runs as deterministically
+   * as it always has.
    */
   authorizeRun?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   /**
    * Publishes what the repair spent and holds it to its caps. Called once the
-   * granted run ends, before anything is judged, and also when the run
+   * live run ends, before anything is judged, and also when the run
    * throws, with whatever run id Core had named by then.
    */
   settleRun?: (runId: string | undefined) => Promise<void>;
@@ -108,7 +110,7 @@ export type CreatedFlowLaneInput = {
    * failure is rethrown either way.
    */
   recordIncompleteEvidence?: (evidence: CreatedFlowLaneIncomplete) => Promise<unknown>;
-  /** The fixture oracle for a task judged by its playback goal. Not consulted for a dataset task. */
+  /** The fixture oracle: a goal task's whole judgement, and a dataset task's second one wherever its workflow declares a final state (`oracles.ts`). */
   checkFinalState: () => Promise<boolean>;
   bounds?: FluxIQHttpOptions;
   buildWait?: CreatedFlowBuildWait;
@@ -138,6 +140,21 @@ export type CreatedFlowLaneEvidence = Readonly<{
   run: PersistedFlowRunOutcome;
   observation: RunLaneObservation;
   extraction: FlowExtractionJudgement | null;
+  /** Each oracle the run was held to, and how it came out: the run passes only when none failed. */
+  oracles: CreatedFlowOracles;
+}>;
+
+/**
+ * A consequential task's right ending when its act is not permitted: the build
+ * stopped to ask a person at the task's declared permission point
+ * (`permission-point.ts`), so no Flow was applied or run, and none should be.
+ * Returned rather than thrown, because it is the pass.
+ */
+export type CreatedFlowLanePermissionStop = Readonly<{
+  request: CreatedFlowRequest;
+  build: CreatedFlowBuild;
+  flowId: string;
+  permissionStop: Extract<CreatedFlowPermissionStop, { verdict: "at_declared_point" }>;
 }>;
 
 /** Where a lane that could not finish stopped, named in the order the lane does the work. */
@@ -155,7 +172,9 @@ export type CreatedFlowLaneIncomplete = Readonly<{
   lane: "created-flow";
   complete: false;
   stoppedAt: CreatedFlowLaneStage;
-  failure: { category: RunnerFailureCategory | null; message: string };
+  /** `null` only for a build that stopped to ask at the task's declared permission point, which is the pass (`permissionStop`). */
+  failure: { category: RunnerFailureCategory | null; message: string } | null;
+  permissionStop?: CreatedFlowLanePermissionStop["permissionStop"];
   task: ReturnType<typeof describeCreatedFlowRequest>;
   flowId: string | null;
   build: CreatedFlowBuild | null;
@@ -193,13 +212,13 @@ type CreatedFlowLaneProgress = {
  * the created Flow, and judges it: by the stored records for a dataset task,
  * by the scenario's playback goal otherwise.
  *
- * With `authorizeRun`, the run carries one proposal-only repair grant
- * (`diagnose_and_adapt`), and that grant does two jobs. A created Flow that
+ * With `authorizeRun`, the model takes part in the run, and does two jobs.
+ * A created Flow that
  * fails is diagnosed and repaired in the same run, the way the product
  * promises -- "created and repaired" -- rather than refused for want of a
  * model; its repair is only ever proposed, so the Flow judged here is the Flow
  * the build made, and a proposal waits for a person's approval. And the run's
- * result is judged afterwards: the grant covers Core's `loop_verification`, so
+ * result is judged afterwards: Core's `loop_verification` runs, so
  * Core asks whether what came back answers what was asked, rather than
  * recording that nobody judged it and keeping a `succeeded` that is
  * indistinguishable from a right answer. Without `authorizeRun` the run is
@@ -210,7 +229,7 @@ type CreatedFlowLaneProgress = {
  * failure is rethrown unchanged either way, so the artifact is added to the
  * run's record rather than taken out of its verdict.
  */
-export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence> {
+export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
   const progress: CreatedFlowLaneProgress = { stage: "blank-flow", published: false };
   try {
     return await buildRunAndJudge(input, progress);
@@ -227,7 +246,7 @@ export async function runCreatedFlowLane(input: CreatedFlowLaneInput): Promise<C
   }
 }
 
-async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress): Promise<CreatedFlowLaneEvidence> {
+async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFlowLaneProgress): Promise<CreatedFlowLaneEvidence | CreatedFlowLanePermissionStop> {
   const bounds = input.bounds ?? {};
   const { request, workflow, projectId, facilityRunId, authorizationPin } = input;
   if (workflow.workflowId !== request.workflowId || workflow.variant?.id !== request.variantId) {
@@ -242,7 +261,18 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   // two endings that used to leave a run with no artifact at all.
   progress.build = build;
   await input.settleBuild(build);
-  if (build.outcome === "permission_required" && build.permissionRequest) throw permissionRequired(build, build.permissionRequest);
+  if (build.outcome === "permission_required" && build.permissionRequest) {
+    const stop = judgeCreatedFlowPermissionStop(request.task, build.permissionRequest);
+    if (stop.verdict !== "at_declared_point") throw permissionRequired(build, build.permissionRequest, stop);
+    const stopped: CreatedFlowLanePermissionStop = Object.freeze({ request, build, flowId, permissionStop: stop });
+    progress.published = true;
+    await input.recordIncompleteEvidence?.({ ...incompleteCreatedFlowLaneEvidence(input, progress, undefined), permissionStop: stop });
+    return stopped;
+  }
+  // A task whose instruction says to ask first has no passing ending but the stop above: a Flow built without asking is wrong however right its records, and is never applied.
+  if (request.task.permissionPoint?.askFirst && build.outcome === "proposed") {
+    throw new RunnerFailure("runtime.behavior", "The task says to ask before its lasting act, and FluxIQ built a Flow without asking", { details: { permissionPoint: "not_asked", consequence: request.task.permissionPoint.consequence, adaptationId: build.adaptationId } });
+  }
   if (build.outcome !== "proposed" || build.adaptationId === null) {
     throw new RunnerFailure("runtime.behavior", `FluxIQ did not build a Flow from the task's instruction (${build.failure?.code ?? "no proposal"})`, {
       details: { failure: build.failure, providerCalls: build.providerCalls, providerInvocation: build.providerInvocation },
@@ -276,7 +306,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   // Exploration may have acted on the page; the Flow is judged on state it produced itself.
   await resetScenarioLab(input.scenarioOrigin, input.runToken, input.fetchLab);
   await input.prepareFlowPage("playback");
-  // Immediately before the run: Core expires the grant within the minute.
+  // Before the run: the playback's LLM settings are saved on the Flow.
   const llmExecution = input.authorizeRun ? await input.authorizeRun(flowId) : undefined;
   let identifiedRunId: string | undefined;
   let run: PersistedFlowRunOutcome;
@@ -309,7 +339,8 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   const { judgement } = request;
   // Judged before the publish and never throwing, so a Flow whose records are wrong is still published with its measurement.
   const extraction = judgement.judgeBy === "expected-dataset" ? judgeCreatedFlowDataset({ workflow, stepId: judgement.stepId, run, actionTypes, scenarioOrigin: input.scenarioOrigin }) : null;
-  const oracleHeld = extraction ? createdFlowDatasetHolds(extraction) : await input.checkFinalState();
+  const oracles = await judgeCreatedFlowOracles({ extraction, declaresFinalState: (workflow.expected.finalState?.length ?? 0) > 0, checkFinalState: input.checkFinalState });
+  const oracleHeld = createdFlowOraclesHold(oracles);
   const observation = flowLaneObservation({
     flowCreated: true,
     oracleVerdict: oracleHeld ? "passed" : "failed",
@@ -317,7 +348,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
     automationFailureExpected: workflow.expected.failure ?? null,
     extraction: extraction?.measurements ?? [],
   });
-  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, ownPage, run, observation, extraction });
+  const evidence: CreatedFlowLaneEvidence = Object.freeze({ request, build, review, flowId, shape, authoredNodes, ownPage, run, observation, extraction, oracles });
   progress.stage = "publish";
   await input.recordEvidence(evidence);
   // From here the complete snapshot is on disk, so a failing expectation below
@@ -330,8 +361,7 @@ async function buildRunAndJudge(input: CreatedFlowLaneInput, progress: CreatedFl
   assertCreatedFlowReachesItsOwnPage(ownPage, { flowId, taskId: request.task.id, taskKind: request.task.kind });
   assertFlowDidNotStopEarly(run);
   assertFlowFailure(workflow.expected.failure, run.failure);
-  if (extraction) assertCreatedFlowDataset(extraction);
-  else if (!oracleHeld) throw new RunnerFailure("runtime.behavior", "The created Flow ran, but the scenario's playback goal did not hold afterwards");
+  assertCreatedFlowOracles(extraction, oracles);
   return evidence;
 }
 
@@ -349,7 +379,7 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
     lane: "created-flow",
     complete: false,
     stoppedAt: progress.stage,
-    failure: { category: error instanceof RunnerFailure ? error.category : null, message: error instanceof Error ? error.message : String(error) },
+    failure: error === undefined ? null : { category: error instanceof RunnerFailure ? error.category : null, message: error instanceof Error ? error.message : String(error) },
     task: describeCreatedFlowRequest(input.request),
     flowId: progress.flowId ?? null,
     build: progress.build ?? null,
@@ -370,8 +400,8 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
 
 /**
  * The build asked a person, which is an answer and not a transport failure:
- * the run reports `permission.required` and the classes a later grant must
- * add, and records no Flow, because none can be applied until somebody
+ * the run reports `permission.required` and the classes a later
+ * `--llm-permit` must add, and records no Flow, because none can be applied until somebody
  * answers. Codes only -- the control's name stays on the build record, where
  * Core already bounded it.
  *
@@ -380,11 +410,13 @@ function incompleteCreatedFlowLaneEvidence(input: CreatedFlowLaneInput, progress
  * request itself. Both are the same ending for the run, and the difference is
  * worth keeping: the first has a Flow waiting behind an answer.
  */
-function permissionRequired(build: CreatedFlowBuild, request: CreatedFlowPermissionRequest): RunnerFailure {
+function permissionRequired(build: CreatedFlowBuild, request: CreatedFlowPermissionRequest, stop: Extract<CreatedFlowPermissionStop, { verdict: "elsewhere" }>): RunnerFailure {
   const proposal = build.adaptationId === null ? "before building" : "after building";
   return new RunnerFailure("runtime.behavior", `FluxIQ asked for permission ${proposal} a Flow from the task's instruction (permission.required: ${request.missing.join(", ")})`, {
     details: {
       outcome: "permission.required",
+      // Why this request is not the task's declared stop: none is declared, the run already permitted the declared class, or Core named another control.
+      permissionPoint: stop.reason,
       missing: [...request.missing],
       consequences: [...request.consequences],
       action: { kind: request.actionKind, verb: request.verb },

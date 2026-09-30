@@ -23,7 +23,7 @@
 //
 // **The gate is asked on every replayed step, with the step's own
 // declaration.** A replay is an act on a real page and is no more exempt from
-// the person's grant than the original was; Core's check arrives on the request
+// the person's permission than the original was; Core's check arrives on the request
 // like any other call's, because the replay goes through the same executor
 // (`AS/runtime/flow-bootstrap/action-permissions.ts`).
 //
@@ -159,7 +159,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   });
   if (permission.kind === "refused" || permission.kind === "invalid") {
     // Whether the declaration could not be read, whether the classes were not
-    // granted, or whether there was nobody to put the request to. All three
+    // permitted, or whether there was nobody to put the request to. All three
     // arrive as `core.replay.failed`, and they are three separate fixes.
     return answer(REPLAY_RESULT_CODES.failed, "the step was not permitted", false, {
       resultReason: permissionReason(permission),

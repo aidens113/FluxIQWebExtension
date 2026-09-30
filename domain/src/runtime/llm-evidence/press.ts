@@ -13,7 +13,7 @@
 //
 // What replaces it is not a better list. It is permission: acts with a lasting
 // consequence -- moving money, deleting, sending, editing or creating what stays
-// -- need the user's say-so, from his instruction or his grant. The model states
+// -- need the user's say-so, from his instruction or his permission. The model states
 // what its own press does (`consequences`), Core decides whether this run may,
 // and when it may not Core has already raised the request the person answers.
 // See `./permission.ts`.

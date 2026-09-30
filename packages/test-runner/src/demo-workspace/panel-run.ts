@@ -112,25 +112,13 @@ export async function waitForSubmittedDemoPage(seedPage: Page): Promise<void> {
 const PANEL_RUN_RESPONSE_TIMEOUT_MS = 180_000;
 
 export async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>, timeoutMs = PANEL_RUN_RESPONSE_TIMEOUT_MS): Promise<import("@playwright/test").Response> {
+  // The panel runs a Flow the model takes part in with one request: a model
+  // call needs no grant, so there is no preparation request to fail first.
   let resolveResponse!: (response: import("@playwright/test").Response) => void;
   const responsePromise = new Promise<import("@playwright/test").Response>(resolve => { resolveResponse = resolve; });
-  let rejectResponse!: (error: Error) => void;
-  const rejectedResponsePromise = new Promise<never>((_resolve, reject) => { rejectResponse = reject; });
   const handler = (response: import("@playwright/test").Response) => {
     if (response.request().method() !== "POST") return;
-    if (response.url().includes("/api/programs/automation-studio/run-runtime-session")) {
-      resolveResponse(response);
-      return;
-    }
-    const isLlmPreparation = response.url().includes("/api/programs/automation-studio/preflight-llm-execution")
-      || response.url().includes("/api/programs/automation-studio/issue-llm-execution-grant");
-    if (isLlmPreparation && !response.ok()) {
-      void response.json().then((body: unknown) => {
-        const error = typeof body === "object" && body !== null && typeof (body as { error?: unknown }).error === "string"
-          ? (body as { error: string }).error : "";
-        rejectResponse(new Error(`The panel rejected LLM run preparation before runtime dispatch (${llmPreparationRejectionCode(error)})`));
-      }).catch(/* best-effort: response body may be absent; retain the closed rejection category */ () => rejectResponse(new Error("The panel rejected LLM run preparation before runtime dispatch (llm_preparation.rejected)")));
-    }
+    if (response.url().includes("/api/programs/automation-studio/run-runtime-session")) resolveResponse(response);
   };
   page.on("response", handler);
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -138,33 +126,12 @@ export async function waitForPanelRunResponse(page: Page, dispatch: () => Promis
     await dispatch();
     return await Promise.race([
       responsePromise,
-      rejectedResponsePromise,
       new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new RunnerFailure("runtime.behavior", "Timed out waiting for the panel Flow run response", { details: { reasonCode: "panel_run.response_timeout", timeoutMs } })), timeoutMs); }),
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);
     page.off("response", handler);
   }
-}
-
-function llmPreparationRejectionCode(error: string): string {
-  if (/^llm_grant\.[a-z_]+$/u.test(error)) return error;
-  if (/actor session is unavailable/iu.test(error)) return "llm_grant.actor_session_unavailable";
-  if (/Authorization session mismatch/iu.test(error)) return "llm_grant.session_mismatch";
-  if (/High-token LLM execution requires explicit confirmation/iu.test(error)) return "llm_grant.high_token_confirmation_required";
-  if (/key changed during grant authorization/iu.test(error)) return "llm_grant.key_changed";
-  if (/Flow or settings changed during grant authorization/iu.test(error)) return "llm_grant.binding_changed";
-  if (/Secret key session unlock is unavailable/iu.test(error)) return "llm_grant.key_session_locked";
-  if (/Secret reveal authorization was refused/iu.test(error)) return "llm_grant.reveal_authorization_refused";
-  if (/Secret reveal authorization TTL is invalid/iu.test(error)) return "llm_grant.reveal_authorization_ttl_invalid";
-  if (/Secret key could not be opened/iu.test(error)) return "llm_grant.key_open_failed";
-  if (/enabled LLM key is required/iu.test(error)) return "llm_grant.enabled_key_required";
-  if (/reveal authorization/iu.test(error)) return "llm_grant.reveal_authorization_failed";
-  if (/token limit is invalid/iu.test(error)) return "llm_grant.token_limit_invalid";
-  if (/call limit is invalid/iu.test(error)) return "llm_grant.call_limit_invalid";
-  if (/estimated-cost limit is invalid/iu.test(error)) return "llm_grant.cost_limit_invalid";
-  if (/timeout limit is invalid/iu.test(error)) return "llm_grant.timeout_invalid";
-  return "llm_preparation.rejected";
 }
 
 export async function waitForPanelMutationResponse(page: Page, endpoint: string, dispatch: () => Promise<void>): Promise<import("@playwright/test").Response> {

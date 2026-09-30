@@ -1,26 +1,29 @@
-// The three steps between a generated Flow and a live provider call, in the
-// one order that works: install the key, pin the Flow's settings to it, then
-// take out a grant against those saved settings. The grant binds to the Flow's
-// settings revision, so it must be issued after the settings save and shortly
-// before the run -- Core expires it within the minute.
+// The two steps between a generated Flow and a live provider call, in the one
+// order that works: install the key, then pin the Flow's settings to it.
+//
+// Nothing here authorizes a model call. A model call needs no grant: Core
+// resolves the provider from the caller's own unlocked Secret Keys session and
+// holds the run to the spend limit saved in the Flow's settings. What remains
+// the operator's to allow is a consequence -- moving money, deleting, sending
+// -- and that travels with the build or the run as `permittedConsequences`,
+// not through anything this module takes out.
 
-import { issueLiveLlmExecutionGrant, type LiveLlmExecutionGrant, type LiveLlmGrantControl } from "./execution-grant.js";
 import { configureFlowLiveLlmExecution, type LiveLlmFlowSettingsControl } from "./flow-settings.js";
-import type { LiveLlmPlan, LiveLlmPurpose } from "./live-llm-plan.js";
+import type { LiveLlmPlan } from "./live-llm-plan.js";
 import { ensureLiveLlmSecretKey, type LiveLlmSecretKeyControl } from "./secret-key.js";
 
-export type LiveLlmAuthorizationControl = LiveLlmSecretKeyControl & LiveLlmFlowSettingsControl & LiveLlmGrantControl & {
+export type LiveLlmAuthorizationControl = LiveLlmSecretKeyControl & LiveLlmFlowSettingsControl & {
   /** Replaces this client's session, so a key installed a moment ago is inside its Secret Keys unlock. */
   reauthenticate(): Promise<void>;
 };
 
-/** The grant a run carries, with the opaque key reference it was issued against. */
-export type LiveLlmAuthorization = Readonly<{ grant: LiveLlmExecutionGrant; secretKeyId: string; secretKeyName: string }>;
+/** The opaque key reference a Flow was pinned to. Never the key. */
+export type LiveLlmAuthorization = Readonly<{ secretKeyId: string; secretKeyName: string }>;
 
 /**
- * Authorizes one live provider run against one Flow. The credential is passed
- * in and used exactly once, by the Secret Keys install; nothing this returns
- * carries it, so the value a caller holds never has to travel further.
+ * Readies one Flow for a live provider run. The credential is passed in and
+ * used exactly once, by the Secret Keys install; nothing this returns carries
+ * it, so the value a caller holds never has to travel further.
  */
 export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizationControl, input: {
   projectId: string;
@@ -29,13 +32,6 @@ export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizatio
   credentialValue: string;
   authorizationPassword: string;
   authorizationPin?: string;
-  /**
-   * Takes the grant out for a purpose other than the plan's, against the same
-   * key and the same saved Flow settings. `verify_result` is the one use: the
-   * call that judges a finished run's result needs a grant a runtime session
-   * accepts, and a `build_and_adapt` plan's is not one.
-   */
-  grantOverride?: { purpose: LiveLlmPurpose; maxCalls: number };
 }): Promise<LiveLlmAuthorization> {
   const key = await ensureLiveLlmSecretKey(control, {
     secretValue: input.credentialValue,
@@ -44,18 +40,11 @@ export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizatio
     model: input.plan.model,
   });
   // A FluxIQ session's Secret Keys unlock is computed at login, over the keys
-  // that existed then, and Core refuses an execution grant on a key the session
-  // cannot decrypt. A key this call just installed is exactly that key, so the
-  // session is replaced before the grant is asked for. Without this the grant
-  // is refused with a 400 on a Flow that is configured perfectly.
+  // that existed then, and Core releases a key to a model call only from the
+  // caller's own unlocked session. A key this call just installed is exactly
+  // one that session cannot decrypt, so the session is replaced before the
+  // Flow's first model call could need it.
   if (key.created) await control.reauthenticate();
   await configureFlowLiveLlmExecution(control, { projectId: input.projectId, flowId: input.flowId, plan: input.plan, secretKeyId: key.id });
-  const grant = await issueLiveLlmExecutionGrant(control, {
-    projectId: input.projectId,
-    flowId: input.flowId,
-    secretKeyId: key.id,
-    plan: input.plan,
-    ...(input.grantOverride ? { override: input.grantOverride } : {})
-  });
-  return Object.freeze({ grant, secretKeyId: key.id, secretKeyName: key.name });
+  return Object.freeze({ secretKeyId: key.id, secretKeyName: key.name });
 }

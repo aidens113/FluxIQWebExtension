@@ -19,7 +19,7 @@
 // running": it reports the run's failure, which is a product verdict this
 // facility never observed.
 
-import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY, AUTOMATION_STUDIO_READINESS_CAP_MS, automationStudioRetryBackoffMs } from "fluxiq/automation-studio";
 import { RunnerFailure } from "../failure.js";
 import { everyNodeRan, type NodeAttempt } from "./node-recovery.js";
 
@@ -63,9 +63,24 @@ export const TERMINAL_DETAIL_POLL_MS = 250;
 export const TERMINAL_DETAIL_NODE_WAIT_MS = AUTOMATION_STUDIO_READINESS_CAP_MS * AUTOMATION_STUDIO_DEFAULT_NODE_RETRY_POLICY.maxAttempts + retryBackoffTotalMs();
 
 /**
- * The ceiling on the derived bound: Core's lease on a claimed grant, which is
- * the only whole-run deadline Core publishes and already this package's bound
- * for a granted run (`GRANTED_RUN_WAIT_MS`, `persisted-flow-run.ts`).
+ * How long a live LLM run is read back for after its request timed out: ten
+ * minutes, the whole-run deadline this facility gives a run the model takes
+ * part in. The poll ends as soon as the run settles; this bounds only a run
+ * that never does. The number is what a diagnosing, exploring recovery was
+ * measured to need.
+ *
+ * Why a live run needs more than the fixed 90 seconds a one-node run gets
+ * (`TERMINAL_DETAIL_BASE_WAIT_MS`): the single request that runs it also waits
+ * for its recovery and for the model to judge the result. On 2026-09-18 that
+ * outlasted the 30-second request bound in four units, and because the run's
+ * id arrived only in the reply, nothing could be read back and every one of
+ * them failed as `environment.missing`.
+ */
+export const LIVE_LLM_RUN_WAIT_MS = 600_000;
+
+/**
+ * The ceiling on the derived bound: the live-run deadline above, already this
+ * package's bound for a live run (`persisted-flow-run.ts`).
  *
  * It binds from seven nodes up, and it should. The per-node figure is the worst
  * case Core permits, not what a node costs -- a node that resolves its target
@@ -75,7 +90,7 @@ export const TERMINAL_DETAIL_NODE_WAIT_MS = AUTOMATION_STUDIO_READINESS_CAP_MS *
  * any run in this facility is allowed to be in flight, so a deterministic run
  * still unfinished after it is not a run that was merely taking long.
  */
-export const TERMINAL_DETAIL_MAX_WAIT_MS = AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_RUN_MS;
+export const TERMINAL_DETAIL_MAX_WAIT_MS = LIVE_LLM_RUN_WAIT_MS;
 
 /**
  * How long a run of `actionNodeCount` action nodes is read back for: the fixed
@@ -109,7 +124,7 @@ function retryBackoffTotalMs(): number {
  * known: Core writes the failed status with the run's first save and the
  * record with the recovery's last, and nothing that judges a created Flow
  * reads it. So the two things a whole-run wait buys are different in kind, and
- * only one of them is worth the whole lease. Measured on
+ * only one of them is worth the whole bound. Measured on
  * `run-mudslg9p-c59266aa`: a Flow was built, ran, failed, Core's repair made
  * its two calls, and no recovery record ever arrived; the run then spent ten
  * minutes waiting and was reported `performance.budget` -- a verdict about the
@@ -117,7 +132,7 @@ function retryBackoffTotalMs(): number {
  * of fifty-five rows cannot spend nine hours that way, and it must not lose
  * the result when it does.
  *
- * Five minutes is half of Core's own lease on a claimed grant and longer than
+ * Five minutes is half of the live-run deadline and longer than
  * any recovery this facility has been observed to complete. It bounds the
  * wait; it never fails the run.
  */
@@ -150,12 +165,12 @@ export const RECOVERY_RECORD_WAIT_MS = 300_000;
 export const RECOVERY_RECORD_GRACE_MS = 5_000;
 
 /**
- * The closed code for a granted run Core was still finishing when the wait for
+ * The closed code for a live run Core was still finishing when the wait for
  * it ran out. It is the facility's finding -- the run never settled inside its
  * own deadline -- and never the run's failure, which Core had not finished
  * deciding.
  */
-export const GRANTED_RUN_UNSETTLED_CODE = "flow_lane.granted_run_unsettled";
+export const LIVE_RUN_UNSETTLED_CODE = "flow_lane.live_run_unsettled";
 
 export type PersistedFlowTerminalWait = {
   now?: () => number;
@@ -170,14 +185,14 @@ export type PersistedFlowTerminalWait = {
   intervalMs?: number;
   /**
    * Whether a `succeeded` run is only finished once Core has recorded the
-   * verdict on its result. True for a granted run: Core publishes the status
+   * verdict on its result. True for a live run: Core publishes the status
    * its steps earned first and judges the result afterwards, so a read in
    * between sees a pass the verdict may still overturn.
    */
   awaitVerdict?: boolean;
   /**
    * Whether a `failed` run is only finished once Core's recovery has recorded
-   * how it ended. True for a granted run whose grant recovers. Core writes the
+   * how it ended. True for a live run whose intent recovers. Core writes the
    * failed status with the run's first save, before the recovery starts, and
    * the recovery's record -- `metadata.llmGate` and `metadata.recoveryTrace`,
    * which every way out of Core's recovery writes -- only with its last. The
@@ -197,8 +212,15 @@ export type PersistedFlowTerminalWait = {
   recoveryGraceMs?: number;
 };
 
-/** What Core may still owe a reader about a run it has already ended. */
-export type PendingWork = "verdict" | "recovery";
+/**
+ * What Core may still owe a reader about a run it has already ended.
+ *
+ * `repair` is a wrong answer Core is still repairing: it saves the refuted run
+ * as `failed` with `resultRepair.phase` `reauthoring` before its re-author
+ * starts, re-runs the same run id, and writes `settled` only once the repaired
+ * answer is judged (Core `recovery/refuted-result/repair.ts`).
+ */
+export type PendingWork = "verdict" | "recovery" | "repair";
 
 /**
  * Why a recovery record never arrived, when Core said. Core marks a failed
@@ -209,7 +231,7 @@ export type PendingWork = "verdict" | "recovery";
  * - `recovery.threw` -- Core's recovery threw; no record will ever come.
  * - `recovery.ended_without_record` -- it ended and wrote no record.
  * - `recovery.still_running` -- Core still said `running` when the wait, bounded
- *   by Core's grant lease, ran out.
+ *   by the live-run deadline, ran out.
  *
  * A Core that writes no marker (older, or a re-run's re-projection overwrote
  * it) gets no code, and the wait follows the rule it always did.
@@ -263,7 +285,10 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
   const recoveryWaitMs = wait.recoveryWaitMs ?? RECOVERY_RECORD_WAIT_MS;
   const recoveryGraceMs = wait.recoveryGraceMs ?? RECOVERY_RECORD_GRACE_MS;
   const started = now();
-  let deadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_BASE_WAIT_MS);
+  // The whole bound, kept apart from `deadline` because a recovery's shorter
+  // bound may cut it and a repair that then turns up in flight restores it.
+  const fullDeadline = started + (wait.timeoutMs ?? TERMINAL_DETAIL_BASE_WAIT_MS);
+  let deadline = fullDeadline;
   // What Core was still doing at the last terminal read, if anything: the
   // difference between a run that never finished and one Core was finishing.
   let pending: PendingWork | undefined;
@@ -291,22 +316,26 @@ export async function awaitTerminalRunDetail<T extends TerminalRunCandidate>(
         if (marker === "threw" || marker === "ended") {
           return { detail, unsettled: "recovery", recoveryState: marker === "threw" ? "recovery.threw" : "recovery.ended_without_record" };
         }
-        // Core says it is still working: its grant lease, not a fixed guess, bounds it.
+        // Core says it is still working: the live-run deadline, not a fixed guess, bounds it.
         if (marker === "running") {
           recoveryMarker = marker;
           deadline = Math.max(deadline, firstTerminalAt + TERMINAL_DETAIL_MAX_WAIT_MS);
         } else if (pending === "recovery" && terminal === undefined) {
           deadline = Math.min(deadline, now() + (recoveryCouldBeRunning(detail) ? recoveryWaitMs : recoveryGraceMs));
         }
+        // A repair in flight is the run still running, however its nodes
+        // ended: it keeps the run's whole bound, the live-run deadline.
+        if (pending === "repair") deadline = fullDeadline;
         terminal = detail;
       }
     } catch { /* best-effort: the original timeout or abort stays authoritative until exact terminal evidence arrives, so a diagnostic read that fails must never replace what stopped the run */ }
     const delay = Math.min(intervalMs, Math.max(0, deadline - now()));
     if (delay > 0) await sleep(delay);
   }
+  if (pending === "repair" && terminal) return { detail: terminal, unsettled: "repair" };
   if (pending === "recovery" && terminal) return { detail: terminal, unsettled: "recovery", ...(recoveryMarker ? { recoveryState: "recovery.still_running" as const } : {}) };
   if (pending) {
-    throw new RunnerFailure("performance.budget", `Core was still finishing the granted run's ${pending} when the wait for it ran out`, { details: { code: GRANTED_RUN_UNSETTLED_CODE, pending, waitedMs: now() - started } });
+    throw new RunnerFailure("performance.budget", `Core was still finishing the live run's ${pending} when the wait for it ran out`, { details: { code: LIVE_RUN_UNSETTLED_CODE, pending, waitedMs: now() - started } });
   }
   throw originalFailure;
 }
@@ -334,6 +363,9 @@ export function pendingWork(
   detail: TerminalRunCandidate,
   wait: Pick<PersistedFlowTerminalWait, "awaitVerdict" | "awaitRecovery">,
 ): PendingWork | undefined {
+  // First, because a repair in flight carries the first pass's recovery record
+  // and verdict already: either rule alone would call it finished.
+  if ((wait.awaitVerdict || wait.awaitRecovery) && resultRepairInFlight(detail.runDetail)) return "repair";
   if (wait.awaitVerdict && detail.summaryStatus === "succeeded" && detail.resultVerification === null) return "verdict";
   if (wait.awaitRecovery && detail.summaryStatus === "failed" && !recoveryRecordWritten(detail.runDetail)) return "recovery";
   return undefined;
@@ -364,6 +396,12 @@ export function pendingWork(
  */
 function recoveryCouldBeRunning(detail: TerminalRunCandidate): boolean {
   return !everyNodeRan(detail.actions);
+}
+
+/** Whether Core is still repairing this run's wrong answer: re-authoring its Flow, or re-running it. */
+function resultRepairInFlight(runDetail: Readonly<Record<string, unknown>>): boolean {
+  const phase = plainRecord(plainRecord(runDetail.metadata)?.resultRepair)?.phase;
+  return phase === "reauthoring" || phase === "rerunning";
 }
 
 /** Whether Core's recovery wrote its record: the gate that decided it, or the trace of its stages. */

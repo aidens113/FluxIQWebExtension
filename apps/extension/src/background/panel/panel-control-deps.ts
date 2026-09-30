@@ -21,6 +21,10 @@ export function panelControlDeps(connection: FluxIQConnection, status: () => Pro
     status,
     openTab: async (url) => {
       await chrome.tabs.create({ url, active: true });
+    },
+    activity: {
+      read: () => connection.activityState(),
+      setOverlay: (overlay) => connection.setActivityOverlay(overlay)
     }
   };
 }

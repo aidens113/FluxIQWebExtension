@@ -54,7 +54,7 @@ test("the recording lane's probe observation reads FluxIQ's verdict from the act
 
 test("a Flow whose result nobody judged reports neither passed nor failed", () => {
   // Measured live on 2026-09-18: a created Flow returned ten rows of which not
-  // one was right, every step succeeded, the playback carried no grant so no
+  // one was right, every step succeeded, the playback carried no model so no
   // model was ever asked, and the run read `passed`. Core now says which of
   // those happened, and the lane reports it rather than a pass.
   const unjudged = flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", run: run({ resultVerification: "unverified" }), automationFailureExpected: null });

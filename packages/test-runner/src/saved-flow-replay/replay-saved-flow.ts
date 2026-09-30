@@ -10,7 +10,7 @@
 //
 // "No model" is made true rather than observed. The replay refuses to start
 // when its own process holds a provider credential, removes every model
-// provider key Core holds before the run, and runs with no execution grant, so
+// provider key Core holds before the run, and runs with no `runIntent`, so
 // Core runs it `deterministic` and resolves no provider at all. It then reads
 // Core's own accounting of the run and requires zero calls and zero
 // interventions.
@@ -57,8 +57,8 @@ export type ReplayModelAccounting = Readonly<{
   /** Credential variables in the replay process's environment, by name. Always empty: the replay refuses otherwise. */
   environmentCredentialVariables: readonly string[];
   coreProviderKeys: CoreProviderKeyRemoval | null;
-  /** Always `null`: the run is issued no execution grant, so Core starts it `deterministic` and finds no provider. */
-  executionGrant: null;
+  /** Always `null`: the run carries no `runIntent`, so Core starts it `deterministic` and asks no model. */
+  runIntent: null;
   /** The run detail's `providerCallCount`, as Core published it; `null` where it published none. */
   coreProviderCallCount: number | null;
   /** Core's per-run accounting of provider calls, `null` where Core published none. */
@@ -213,7 +213,7 @@ function resultOf(input: { replayId: string; resultPath: string; options: SavedF
     task: state.task,
     address: { scenarioOrigin: state.scenarioOrigin, scenarioPortRetained: state.scenarioPortRetained, savedNavigationOrigins: state.origins, servedAtSavedAddress: state.servedAtSavedAddress },
     model: {
-      environmentCredentialVariables: input.environmentCredentialVariables, coreProviderKeys: state.keys, executionGrant: null,
+      environmentCredentialVariables: input.environmentCredentialVariables, coreProviderKeys: state.keys, runIntent: null,
       coreProviderCallCount: state.coreProviderCallCount, accountedCalls: usage?.accounting?.calls ?? null, calls: usage?.calls ?? null, interventions: usage?.interventions ?? null,
       harnessActivations: run?.harnessActivations ?? null, llmGate: usage?.gate ?? null, resultVerification: run?.resultVerification ?? null,
     },

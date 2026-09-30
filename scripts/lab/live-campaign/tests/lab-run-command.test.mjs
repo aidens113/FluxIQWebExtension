@@ -51,7 +51,7 @@ test("--replays after -- reaches a creation task's run, which applies and replay
   assert.equal(creation.includes("--flow"), false, "a created Flow's repair lane needs no recorded Flow lane");
 });
 
-test("a task whose instruction asks for an act is granted exactly the classes it names, and an operator's own permit replaces them", () => {
+test("a task whose instruction asks for an act is permitted exactly the classes it names, and an operator's own permit replaces them", () => {
   // Nobody is watching a campaign, so a build that stops to ask a person waits
   // for an answer that never comes. Core already permits whatever it reads the
   // instruction as asking for; this is the corpus's second opinion for the
