@@ -201,11 +201,16 @@ export type PanelConversationSendRequest = {
   conversationId?: string | undefined;
   text?: string | undefined;
   /**
-   * The panel capabilities Core may answer with. Left out, an empty list is
-   * sent, so Core still reads the message and answers it in the thread.
+   * Extra capabilities Core may answer with. The relay always offers the
+   * chat's own (`background/panel/chat-capabilities.ts`, which Core runs
+   * itself) and adds these after them, minus any id already offered.
    */
   capabilities?: unknown[] | undefined;
-  onScreen?: { flowId?: string; subflowId?: string; runId?: string; recordingId?: string } | undefined;
+  /**
+   * What the panel has open. `pageUrl` is only a fallback: the relay sends the
+   * active tab's address when the browser gives one, and Core builds from it.
+   */
+  onScreen?: { flowId?: string; subflowId?: string; runId?: string; recordingId?: string; pageUrl?: string } | undefined;
   subjectKind?: string | undefined;
   subjectId?: string | undefined;
   title?: string | undefined;

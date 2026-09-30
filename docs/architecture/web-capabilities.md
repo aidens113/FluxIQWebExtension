@@ -184,12 +184,16 @@ lost.
   `validation: none` with the reason `evidence-only`.
   During a build every capture is one the call itself needs: a look is one
   capture, an action its read before acting and its read after, and each result
-  reports the digests of those captures on `stateDigests`
-  (`domain/src/runtime/llm-evidence/snapshot-state-digest.ts`). The binding sets
-  `stateDigestsOnCalls`, so Core takes no digest capture around a call and none
-  when it answers a repeated look from memory. `captureStateDigest` still takes
-  a fresh capture for callers that ask about a moment no call brackets
-  (recovery's annotation exploration).
+  reports the digests of those captures on `stateDigests` and the route state
+  of the page it left on `routeState`, the same projection `observeRouteState`
+  makes of a fresh capture (`domain/src/runtime/llm-evidence/snapshot-states.ts`).
+  The binding sets `stateDigestsOnCalls`, so Core takes no digest capture around
+  a call and none when it answers a repeated look from memory, and a build's
+  routing reads `routeState` instead of asking the host for a capture before a
+  decision. `captureStateDigest` and `observeRouteState` still take a fresh
+  capture where no call left a current page: recovery's annotation exploration,
+  a run's router, and a build step after a call that carried none (a dry-run
+  replay step that did not capture).
 - **Legacy dotted aliases** (`browser.navigate`, `dom.click`, and the rest) are
   accepted on the wire and resolved to their canonical types once, in the
   domain (see below). The map is total over all eighteen types. For seven of

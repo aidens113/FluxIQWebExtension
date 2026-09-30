@@ -179,10 +179,10 @@ test("an iterating run's total cost is bounded across its authorized calls", () 
   const over = adaptingUsage(4, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.05 });
   assert.doesNotThrow(() => assertLiveLlmBudgetHeld(small, over));
   assert.throws(() => assertLiveLlmBudgetHeld(small, { ...over, totalEstimatedCostUsd: 0.21 }), /estimated cost 0\.21 exceeded its total cost limit of 0\.2 \(--llm-max-cost-usd 0\.05 across 4 authorized call/u);
-  // 26 calls at $0.25 would be $6.50; the run's spend ceiling is held to the Lab's $2.
-  assert.equal(adapting.maxTotalEstimatedCostUsd, 2);
-  const pricey = adaptingUsage(26, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.081 });
-  assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), /estimated cost 2\.106 exceeded its total cost limit of 2 /u);
+  // 26 calls at $0.25 would be $6.50; the run's spend ceiling is held to Core's $0.25.
+  assert.equal(adapting.maxTotalEstimatedCostUsd, 0.25);
+  const pricey = adaptingUsage(26, { inputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.01 });
+  assert.throws(() => assertLiveLlmBudgetHeld(adapting, pricey), /estimated cost 0\.26 exceeded its total cost limit of 0\.25 \(.*held to Core's ceiling\)/u);
 });
 
 test("a one-call diagnosis is judged across its one authorized call, not the larger cap typed", () => {

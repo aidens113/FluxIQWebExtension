@@ -25,8 +25,8 @@ import {
   type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmPageEvidence
-} from "..";
-import { CAPTURED_DETECTIONS } from "../structure/tests/captured-detections";
+} from "../..";
+import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const SNAPSHOT = "web.output.dom-capture_snapshot";

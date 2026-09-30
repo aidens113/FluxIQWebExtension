@@ -20,6 +20,11 @@
 // links, and between being shown a marketplace's filters and not being shown
 // them at all because they are `<div>`s.
 //
+// `lead-statements.ts` says which few short lines are the main region's own
+// account of what it shows -- "No results for ...", a result count -- and the
+// ranking puts them with the page-state controls, because a packet of forty
+// controls tells a reader what it can do on a page and not what the page says.
+//
 // `link-address.ts` says when a link's address would only repeat the page the
 // link is on. The descriptor reads it to decide not to publish an address the
 // packet already carries as its `location`, which was 22% of the budget on one
@@ -27,6 +32,7 @@
 
 export { markElementActivity, forgetElementActivity, type SnapshotElementEntry } from "./changes";
 export { isDrawnControl, isFrontLayer, isPageStateControl, isSiteChrome } from "./controls";
+export { mainLeadStatements } from "./lead-statements";
 export { dialogEvidence } from "./dialogs";
 export { formEvidence } from "./forms";
 export { forgetInteractedElements, recentlyInteractedElements, rememberInteractedElement } from "./interactions";

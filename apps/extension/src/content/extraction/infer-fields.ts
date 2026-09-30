@@ -382,7 +382,7 @@ function elementSources(item: Element): FieldSource[] {
       // leaf is never a badge: the two branches cannot both apply.
       const badge = badgeSource(item, element, named, sensitive);
       if (badge !== undefined) sources.push(badge);
-      else if (isTextLeaf(element) && !statedMoreTightly(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
+      else if ((isTextLeaf(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
     }
   }
   return sources;
@@ -614,6 +614,24 @@ function testIdSelector(element: Element): string | undefined {
  */
 function isTextLeaf(element: Element): boolean {
   return element.children.length === 0 && collapsed(textOutsideSensitiveControls(element)) !== "";
+}
+
+/**
+ * Whether the element is a leaf whose words the page draws in an open shadow
+ * root rather than in its light DOM, so `isTextLeaf` sees it empty.
+ *
+ * **Until 2026-09-30 such an element was never offered.** The professional
+ * network draws each sent invitation's age with a childless `gl-time-ago`
+ * whose words exist only in its shadow root, so no column held the age and
+ * "withdraw every request a month or more old" had nothing to filter on
+ * (`t195-w9-row-age-in-shadow.md`). The host is the deepest element a selector
+ * can name, so it is the column. Its words are read once, through the field
+ * reader, only to decide this, and never carried anywhere; a sensitive host is
+ * never read at all.
+ */
+function drawsShadowText(item: Element, element: Element, selector: string, label: string, sensitive: boolean): boolean {
+  if (sensitive || element.shadowRoot === null || element.children.length > 0) return false;
+  return (readField(item, label, { kind: "text", selector, required: false }) ?? "") !== "";
 }
 
 /** The share of the run's items the field resolves in, from 0 to 1. */

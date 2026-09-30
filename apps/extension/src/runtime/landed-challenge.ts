@@ -1,4 +1,5 @@
-// Whether the page a navigation landed on is a robot check.
+// Whether the page a navigation or a click landed on is a robot check, and who
+// clears it.
 //
 // The worker judges a navigation by its address and by whether the tab moved
 // (`navigation-outcome.ts`), and neither can see what the page says. The
@@ -9,6 +10,12 @@
 // without a Flow. So the landed page's top frame is asked, and it answers with
 // `challenge-evidence.ts`'s page reading.
 //
+// A robot check comes back with who clears it. A `self_clearing` one -- a
+// "Checking your browser" page, a countdown that checks again by itself -- is
+// waited out in place (`landed-check-wait.ts`); a `person_only` one is the
+// person's at once. A frame whose script predates that distinction answers
+// `captcha` alone, which is read as `person_only`, what it meant then.
+//
 // Only a robot check is judged at arrival. The page reading also recognises a
 // code prompt, but on its headings alone, and "Two-factor authentication" heads
 // an ordinary account settings page; a code prompt stays the person's when an
@@ -17,19 +24,20 @@
 //
 // A page that could not be read is said to be unread, with why, and is never a
 // robot check: a frame with no content script, one that answers something else,
-// or one that does not answer before the deadline leaves the navigation's
-// result standing, and the navigation's validation says the page went unread.
-// `attachTabForRecording` has made the top frame's script ready before this
-// runs, so a frame that says nothing is one that genuinely could not be read.
+// or one that does not answer before the deadline leaves the result standing,
+// and a navigation's validation says the page went unread.
+// `attachTabForRecording` has made the top frame's script ready before a
+// navigation's read, so a frame that says nothing there is one that genuinely
+// could not be read.
 
-import { PAGE_CHALLENGE_MESSAGE } from "../shared/page-challenge-message";
+import { PAGE_CHALLENGE_MESSAGE, type PageRobotCheck } from "../shared/page-challenge-message";
 
 /** How the worker reaches a frame: the runner's own `sendToTab`, handed in. */
 export type FrameSender = <TResponse = unknown>(tabId: number, message: unknown, frameId?: number) => Promise<TResponse>;
 
 /** What the landed page's top frame said about the page, or why it said nothing. */
 export type LandedPageReading =
-  | { kind: "robot_check" }
+  | { kind: "robot_check"; check: PageRobotCheck }
   | { kind: "no_robot_check" }
   | { kind: "unread"; why: string };
 
@@ -38,16 +46,17 @@ const TOP_FRAME_ID = 0;
 
 /**
  * How long the top frame is given to answer. The read is synchronous and
- * bounded, so a frame that is listening answers in milliseconds; this only
- * stops a frame that is not from holding the navigation's result.
+ * bounded, so a frame that is listening answers in milliseconds once its
+ * document has been parsed; this only stops a frame that is not from holding
+ * the result.
  */
 const ANSWER_DEADLINE_MS = 1_000;
 
-/** Asks the tab's top frame whether the page it holds is a robot check. */
-export async function readLandedPage(tabId: number, send: FrameSender): Promise<LandedPageReading> {
+/** Asks the tab's top frame whether the page it holds is a robot check, and who clears it. */
+export async function readLandedPage(tabId: number, send: FrameSender, deadlineMs = ANSWER_DEADLINE_MS): Promise<LandedPageReading> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<LandedPageReading>((resolve) => {
-    timer = setTimeout(() => resolve({ kind: "unread", why: `the top frame did not answer within ${ANSWER_DEADLINE_MS} ms` }), ANSWER_DEADLINE_MS);
+    timer = setTimeout(() => resolve({ kind: "unread", why: `the top frame did not answer within ${deadlineMs} ms` }), deadlineMs);
   });
   const asked = send<unknown>(tabId, { type: PAGE_CHALLENGE_MESSAGE }, TOP_FRAME_ID).then(readingOf, unreadBecause);
   try {
@@ -58,8 +67,9 @@ export async function readLandedPage(tabId: number, send: FrameSender): Promise<
 }
 
 function readingOf(answer: unknown): LandedPageReading {
-  const challenge = typeof answer === "object" && answer !== null ? (answer as { challenge?: unknown }).challenge : undefined;
-  if (challenge === "captcha") return { kind: "robot_check" };
+  const record = typeof answer === "object" && answer !== null ? answer as { challenge?: unknown; robotCheck?: unknown } : undefined;
+  const challenge = record?.challenge;
+  if (challenge === "captcha") return { kind: "robot_check", check: record?.robotCheck === "self_clearing" ? "self_clearing" : "person_only" };
   if (challenge === null || challenge === "credential") return { kind: "no_robot_check" };
   return { kind: "unread", why: "the top frame gave no answer to the question" };
 }

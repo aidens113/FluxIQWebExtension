@@ -29,11 +29,12 @@ const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;
 /**
- * The most a Lab run may spend in all, whatever its call count: Core's default
- * run total (`maxTotalEstimatedCostUsd`). Core accepts a larger
- * `maxEstimatedCostUsdPerRun`; the Lab asks for no more than it always has.
+ * The most one Flow build, or one repair of the Flow it built, may spend in
+ * all, whatever its call count: Core's ceiling on a build's total and on its
+ * repair's, each on its own. A Flow's `maxEstimatedCostUsdPerRun` may only
+ * lower it, so the Lab never asks for more.
  */
-const LAB_MAX_TOTAL_COST_USD = 2;
+const CORE_MAX_TOTAL_COST_USD = 0.25;
 /** Core's runaway backstop on a run's calls; the Lab contract carries the same number. */
 const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 
@@ -61,7 +62,7 @@ export type LiveLlmPlan = {
   maxEstimatedCostUsd: number;
   /**
    * The estimated cost the whole run may reach: the per-call limit across the
-   * authorized calls, held to the Lab's ceiling. Saved as the Flow setting
+   * authorized calls, held to Core's $0.25 ceiling. Saved as the Flow setting
    * `adaptationPolicySettings.maxEstimatedCostUsdPerRun`, which Core's loop
    * budget holds every build and recovery on the Flow to.
    */
@@ -125,7 +126,7 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
     // and an operator who asked for less than the ceiling keeps their number.
     timeoutMs: Math.min(budget.timeoutMs, CORE_MAX_TIMEOUT_MS),
     maxEstimatedCostUsd,
-    maxTotalEstimatedCostUsd: Math.min(LAB_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
+    maxTotalEstimatedCostUsd: Math.min(CORE_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
     declared: { ...budget },
     permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };

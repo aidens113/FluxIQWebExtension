@@ -37,7 +37,8 @@ test("the manifest is valid, with four workflows, three variants, and a goal on 
   ]);
   assert.equal(manifest.playbackGoal?.id, "buy-one-kettle");
   const robot = resolveScenarioWorkflow(manifest, { workflowId: "first-page-earbuds", variantId: "robot-check" }).expected;
-  assert.deepEqual(robot.failure, { category: "user_intervention_required" }, "the hard challenge's right outcome is asking a person");
+  assert.equal(robot.failure, undefined, "the hard challenge is handed to a person, who passes it, so the run then reads the page");
+  assert.deepEqual(robot.finalState?.map(({ id }) => id), ["first-page-count", "challenge-passed", "nothing-added"]);
 });
 
 test("the catalogue is authored, fixed, and independent of the lab seed", () => {
@@ -241,7 +242,7 @@ test("the sponsored redirect sends only to the store's own product pages", () =>
 test("the catalogue's tasks name only this scenario, and its repairs name its drift and its challenge", () => {
   assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ scenarioId }) => scenarioId), Array(EVERYTHING_STORE_LIVE_TASKS.length).fill("everything-store"));
   assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ judgeBy, expectedDatasetId }) => expectedDatasetId ?? judgeBy), ["extract-plus-under-fifty", "extract-first-page", "extract-first-page", "extract-cart", "playback-goal"]);
-  assert.deepEqual(EVERYTHING_STORE_REPAIR_TASKS.map(({ variantId, expect }) => `${variantId}:${expect}`), ["redesigned-header:repair", "robot-check:refusal"]);
+  assert.deepEqual(EVERYTHING_STORE_REPAIR_TASKS.map(({ variantId, expect }) => `${variantId}:${expect}`), ["redesigned-header:repair", "robot-check:hand-off"]);
 });
 
 test("a second order fails the purchase goal that one right order meets, on either order's thank-you page", () => {

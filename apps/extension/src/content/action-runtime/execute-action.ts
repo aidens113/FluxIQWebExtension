@@ -26,7 +26,8 @@ import { evaluateAssertion } from "./assertion-evaluation";
 import { waitForCondition } from "./wait-conditions";
 import { watchInPlaceEffect } from "./in-place-effect";
 import { watchRateLimitNotice } from "./rate-limit-notice";
-import { actionFailure, actionNotImplemented, actionRateLimited, actionRejected, actionTimedOut, success } from "./results";
+import { watchRobotCheck } from "./robot-check";
+import { actionFailure, actionNeedsPerson, actionNotImplemented, actionRateLimited, actionRejected, actionTimedOut, success } from "./results";
 import { listReadFor } from "./extraction-continuation";
 
 export async function executeAction(action: BrowserActionCommand, extractionContinuation?: unknown): Promise<BrowserActionResult> {
@@ -49,10 +50,12 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     waitForCondition,
     watchInPlaceEffect,
     watchRateLimitNotice: (pressed) => watchRateLimitNotice(pressed),
+    watchRobotCheck: (pressed) => watchRobotCheck(pressed),
     success,
     failure: actionFailure,
     rejected: actionRejected,
     rateLimited: actionRateLimited,
+    needsPerson: actionNeedsPerson,
     timedOut: actionTimedOut,
     notImplemented: actionNotImplemented
   });

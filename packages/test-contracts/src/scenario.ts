@@ -227,6 +227,102 @@ export type ExpectedRecovery = {
 export type ScenarioGoal = { id: string; description: string; successFacts: ExpectedFact[] };
 
 /**
+ * What the Lab's person does when FluxIQ hands a check to them: clear it and
+ * press Continue, or press Stop without touching it.
+ */
+export const personHandOffResponses = ["completes", "declines"] as const;
+export type PersonHandOffResponse = (typeof personHandOffResponses)[number];
+
+/**
+ * A hand-off a row or a live task expects: its honest path meets a check only
+ * a person may pass, so the right move is FluxIQ asking a person rather than
+ * pressing, typing into or reloading the check (Core's person-needed ask,
+ * `control.kind: "person_check"`).
+ *
+ * `person` says what the Lab's person does there. `completes`: the run then
+ * carries on and is judged by the row's other expectations. `declines`: the
+ * run then ends `user_intervention_required`, which the row declares as its
+ * `expected.failure`.
+ *
+ * `required` is whether a run that handed nothing off fails. It is true where
+ * every honest path meets the check (a store that answers every page with
+ * one), and false where a Flow can also reach the goal without meeting it
+ * (filters that avoid the paging that trips a traffic check).
+ *
+ * Declared or not, a hand-off at a check the Lab recognises is correct
+ * behaviour, and one where no check stood is a failure. The runner judges it
+ * (`packages/test-runner/src/run-evaluation/person-hand-off-invariant.ts`).
+ *
+ * It is declared beside the fixture, in the scenario's person module, and on
+ * live tasks, rather than in `ScenarioExpected`, whose validator is closed.
+ */
+export type ExpectedPersonHandOff = {
+  person: PersonHandOffResponse;
+  required: boolean;
+  /** The fixture author's one sentence: which check the honest path meets, and why. */
+  because: string;
+};
+
+/**
+ * One thing a person does at a check, as data the Lab's runner executes in the
+ * browser. The scenario lab carries no browser library, so a fixture says what
+ * a person does and the runner does it.
+ *
+ * - `click`: press the element showing `text`.
+ * - `press-and-hold`: hold the pointer down on the element showing `text` for
+ *   `holdMs`.
+ * - `type-answer`: type what the person reads off the check
+ *   (`ScenarioPersonChecks.answer`) into the field labelled `label`.
+ * - `press`: press the button named `button`.
+ */
+export type PersonCheckStep =
+  | { action: "click"; text: string }
+  | { action: "press-and-hold"; text: string; holdMs: number }
+  | { action: "type-answer"; label: string }
+  | { action: "press"; button: string };
+
+/** One check only a person may pass, how the Lab recognises it on screen, and what a person does to clear it. */
+export type PersonCheck = {
+  id: string;
+  description: string;
+  /** Text the check, and nothing else on the site, shows: a tab showing it is showing the check. */
+  shows: string;
+  steps: readonly PersonCheckStep[];
+  /**
+   * How the check goes once the person is done. `navigation`: the page loads
+   * a new document (a reload, or the page the check was guarding), and the
+   * check is cleared only once that load has happened and does not show it.
+   * Waiting for the text alone would answer too early on a check that swaps
+   * its box for "Checking your browser…" before it reloads. `in-place`: the
+   * check leaves the page it is on.
+   */
+  clears: "navigation" | "in-place";
+  /** How long the check may take to go once the person is done: the fixture's own delay, plus its reload. */
+  clearsWithinMs: number;
+};
+
+/** A row whose honest path meets a check: the manifest's primary workflow when `workflowId` is absent, unarmed when `variantId` is. */
+export type PersonHandOffRow = ExpectedPersonHandOff & { workflowId?: string; variantId?: string };
+
+/**
+ * A fixture's person-only checks, which the Lab plays the person at, exported
+ * as `PERSON_CHECKS` from `scenarios/<scenarioId>/person-check.ts`.
+ *
+ * `answer` is for a check a person passes by reading it: what they read, from
+ * the fixture's state (`/__control/final-state`). `tampered` says, from the
+ * same state, why the check already shows the automation's hand on it -- a
+ * guess typed, a different image requested -- or `null` when it does not; the
+ * person then declines, because a hand-off is not what happened.
+ */
+export type ScenarioPersonChecks = {
+  scenarioId: string;
+  checks: readonly PersonCheck[];
+  handOffs: readonly PersonHandOffRow[];
+  answer?: (state: unknown) => string;
+  tampered?: (state: unknown) => string | null;
+};
+
+/**
  * What a run must meet. Every field here describes the run: `recordingEvents`
  * what the extension recorded, `actions` and `failure` what FluxIQ reported,
  * `finalState` and `extracted` what the page and the data looked like

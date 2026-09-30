@@ -5,6 +5,7 @@ import { createdFlowShape } from "./created-flow-shape.mjs";
 import { datasetJudgement } from "./dataset-judgement.mjs";
 import { describeFacilityFailure } from "./facility-failure.mjs";
 import { isIssueCode } from "./issue-code.mjs";
+import { personHandOffSummary } from "./person-hand-offs.mjs";
 import { repairJudgement } from "./repair-judgement.mjs";
 import { replaySummary } from "./replay-summary.mjs";
 import { repairOutcome } from "./repair-outcome.mjs";
@@ -46,9 +47,11 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
   // live-LLM snapshot, which carries the build record whether the build
   // proposed a Flow or parked on a question nobody answered.
   const consequences = consequenceSummary(liveLlm);
+  // Each time FluxIQ handed a check to the person the Lab plays, for either kind of task.
+  const personHandOffs = personHandOffSummary(bundle.personHandOffs);
   const repair = repairing ? repairOutcome(recovery, providerCalls, flowLane, repairLane) : null;
   let judgement;
-  if (repairing) judgement = repairJudgement(task, repair, oracleVerdict);
+  if (repairing) judgement = repairJudgement(task, repair, oracleVerdict, personHandOffs);
   else {
     const dataset = task.judgeBy === "expected-dataset" ? datasetJudgement(evaluation?.extraction ?? result?.observation?.extraction ?? null) : null;
     judgement = { by: task.judgeBy, passed: dataset === null ? (oracleVerdict === null ? null : oracleVerdict === "passed") : dataset.passed, oracleVerdict, dataset };
@@ -117,6 +120,12 @@ export function summarizeTask(task, attempts, final, bundle, timing = {}) {
     repair,
     /** `null` unless the run was given `--replays`; then whether its repair was applied, and whether each replay with no model met the goal. */
     repairLane,
+    /**
+     * `null` unless the Lab played the person on this run; then what the row or
+     * task declared, and each hand-off: stage, check, what the person did, the
+     * answer, and how long FluxIQ waited for it.
+     */
+    personHandOffs,
     providerCalls,
     reportedTokens: spend.tokens,
     reportedCostUsd: spend.costUsd,

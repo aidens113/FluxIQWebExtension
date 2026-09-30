@@ -58,8 +58,9 @@ import { declaredProviderCalls, runLaneWithLiveLlmSettlement, type LiveLlmRun } 
 import { runProviderFailureLog, writeProviderFailureSidecar } from "./provider-failure/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
+import { PERSON_HAND_OFFS_SNAPSHOT, startLabPerson, type LabPerson } from "./person-simulation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, type CloneRunState } from "./run-manifest/index.js";
-import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl } from "./lane-rules/index.js";
+import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, flowStartPage, scenarioStartUrl, type FlowLanePermissionStop, type FlowLaneStoppedForPermission } from "./lane-rules/index.js";
 import { proveCoreActionRoundTrip } from "./core-action-probe/index.js";
 import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
@@ -85,7 +86,11 @@ export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot:
  * bundle as `evaluation.json`. Both are absent on the existing and clone
  * targets, which run a pre-existing Flow on no evaluation lane.
  */
-export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation };
+/**
+ * `permissionStop` is present when the created-Flow build stopped to ask at the task's declared permission point: its `verdict` is
+ * `stopped_for_permission`, with the consequence and control it stopped at, and the run's own `verdict` is then `failed`, never `passed`.
+ */
+export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation; permissionStop?: FlowLaneStoppedForPermission };
 /** Owned by `run-scenario/open-scenario-start.ts` and re-exported unchanged, so every caller and test that imported it from here still does. */
 export { openScenarioStart };
 
@@ -152,7 +157,10 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   let recordingStarted = false;
   let browserVersion = "unavailable";
   let verdict: "passed" | "failed" = "failed";
-  let stoppedToAsk = false;
+  // A build that stopped to ask at the task's declared permission point: its verdict is `stopped_for_permission`, never a pass (`lane-rules/built-flow.ts`).
+  let permissionStop: FlowLanePermissionStop | undefined;
+  // The Lab playing the person at a check only a person may pass (`person-simulation/`): started before a Flow lane builds or runs, finished in cleanup.
+  let labPerson: LabPerson | undefined;
   let failureCategory: RunnerFailureCategory | undefined;
   let failureMessage: string | undefined;
   let facilityFailure: RunEvaluation["facilityFailure"] = null;
@@ -363,6 +371,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
       const control = topology.control; const activeTopology = topology; const createdProjectId = topology.projectId;
       await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
+      labPerson = await startLabPerson({ control, projectId: createdProjectId, context: context!, scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, task: creation.task.personCheck, write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }) });
       const lane = await runCreatedFlowLane({
         control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow: flowWorkflow, facilityRunId: runId,
         scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
@@ -379,8 +388,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           await writeFlowExtractionMismatches(bundle, scenario, evidence.extraction);
         }),
       });
-      // A consequential task run without permission for its act passes by stopping to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): no Flow ran, so nothing below applies.
-      if ("permissionStop" in lane) { stoppedToAsk = true; await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } }); }
+      // A consequential task run without permission for its act stops to ask at its declared permission point (`flow-lane/creation/permission-point.ts`): correct, but no Flow was built, so the run is `stopped_for_permission` and not a pass (`assertFlowLaneBuiltFlow` below).
+      if ("permissionStop" in lane) { permissionStop = { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control }; await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "FluxIQ stopped to ask at the task's declared permission point"), details: { consequence: lane.permissionStop.consequence, control: lane.permissionStop.control } }); }
       else { await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } }); await proveRepair(control, activeTopology, createdProjectId, lane, "instruction"); }
     } else {
       if (paired && topology.authorizationPin) {
@@ -464,6 +473,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } }); uiReview.phase("build");
         // Settled however the lane ends: an overspend or an unreached provider fails a finished run, and a failed lane still leaves its provider calls itemized.
+        labPerson = await startLabPerson({ control, projectId, context: context!, scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, scenarioId: scenario.id, scenarioLabDist: labPaths.scenarioLabDist, workflowId: flowWorkflow.workflowId, variantId: flowWorkflow.variant?.id, write: snapshot => bundle.writeStructured(PERSON_HAND_OFFS_SNAPSHOT, snapshot), publish: handOff => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The Lab played the person at a check FluxIQ handed off"), details: { handOff } }) });
         const lane = await runLaneWithLiveLlmSettlement({ live, control, projectId, bundle, publish: details => capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }) }, async flowRunIdentified => await runFlowLane({
           control, projectId, authorizationPin, recordingId,
           scenario, workflow: flowWorkflow, facilityRunId: runId, flowRunIdentified, ...(repair ? { repairExpectation: repair } : {}),
@@ -484,7 +494,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       }
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
-    assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, stoppedToAsk });
+    assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation, permissionStop });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     await capture.trigger(evidenceEvent(runId, scenario.id, undefined, "final", "Scenario completed")); await uiReview.finish("end");
@@ -530,6 +540,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         await capture.trigger({ ...evidenceEvent(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
+    // Before the browser closes: a hand-off in progress needs its tab, and the record is written into the bundle still being staged.
+    await labPerson?.finish();
     await uiReview.close(); try { await context?.close(); }
     catch (error) {
       const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
@@ -658,14 +670,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     // evidence sizes come from the staging directory's `snapshots/flow-lane.json`,
     // the file the bench reads once `finalize` has renamed that directory.
     const evaluation = observation
-      ? singleRunEvaluation({ runId, verdict, failureCategory, facilityFailure, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), llm: live?.usage, bundlePath: bundle.stagingPath })
+      ? singleRunEvaluation({ runId, verdict, failureCategory, facilityFailure, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), llm: live?.usage, bundlePath: bundle.stagingPath, permissionStop })
       : undefined;
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);
     bundle.registerEvidencePolicy(evidence.capture);
     const finalized = await bundle.finalize({ verdict, metrics });
     await writeProviderFailureSidecar({ runDirectory: finalized.path, runId, log: providerFailures }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); await writeExtensionStartSidecar({ runDirectory: finalized.path, runId, trace: startTrace, secrets }).catch(/* best-effort: a local diagnostic may not fail a run whose bundle is already sealed */ () => undefined); // After `finalize`, never before: the artifact index is a walk of the staging directory, so a file written there would be published. A clean run writes none.
-    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}) };
+    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}), ...(permissionStop ? { permissionStop: { verdict: "stopped_for_permission" as const, ...permissionStop } } : {}) };
   } finally {
     if (topology && !topologyStateRemoved && !keepsRunState(environment)) await removeRunOwnedTopologyState(topology).catch(() => undefined);
   }

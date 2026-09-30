@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { askPresentation } from "../ask-copy";
-import type { CoreAsk } from "../core-thread";
+import { parseThreadPage, type CoreAsk } from "../core-thread";
 
 function ask(overrides: Partial<CoreAsk>): CoreAsk {
   return { askId: "ask-1", kind: "confirm", status: "pending", options: null, answer: null, ...overrides };
@@ -38,4 +38,43 @@ test("settled questions say how they were settled", () => {
   assert.deepEqual(answered("choice", "choice", "csv", [{ id: "csv", label: "CSV" }]), { state: "settled", sentence: "You chose \"CSV\"." });
   assert.deepEqual(answered("open", "text", "only under $50"), { state: "settled", sentence: "You answered." });
   assert.deepEqual(askPresentation(ask({ status: "expired" })), { state: "settled", sentence: "FluxIQ stopped waiting for an answer." });
+});
+
+test("Core's person-needed ask at a robot check offers Continue and Stop, as Core writes it", () => {
+  // Core `runtime/parking/person-needed-ask.ts` (t197): kind `choice`, two
+  // options with routes, `parks`, `onTimeout` and a `control` marker the panel
+  // does not read. The thread reader keeps what this card shows and drops the
+  // rest, so the ask reaches the person as two buttons.
+  const page = parseThreadPage({
+    conversation: { conversationId: "c1", projectId: "p1", revision: 3 },
+    turns: [{
+      turnId: "t9",
+      author: "automation",
+      text: "FluxIQ needs you: complete the check on this page, then press Continue.",
+      ask: {
+        askId: "ask-person-1",
+        kind: "choice",
+        status: "pending",
+        options: [
+          { id: "person_done", label: "Continue", route: null },
+          { id: "person_stop", label: "Stop", route: "failed" }
+        ],
+        parks: true,
+        onTimeout: "deny",
+        timeoutMs: 300_000,
+        control: { kind: "person_check" },
+        answer: null
+      }
+    }],
+    hasMore: false
+  });
+  const turnAsk = page?.turns[0]?.ask;
+  assert.ok(turnAsk, "the ask is read");
+  assert.deepEqual(askPresentation(turnAsk), {
+    state: "choices",
+    choices: [{ label: "Continue", kind: "choice", value: "person_done" }, { label: "Stop", kind: "choice", value: "person_stop" }]
+  });
+  assert.deepEqual(askPresentation({ ...turnAsk, status: "answered", answer: { kind: "choice", value: "person_done" } }), {
+    state: "settled", sentence: "You chose \"Continue\"."
+  });
 });
