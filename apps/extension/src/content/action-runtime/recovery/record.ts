@@ -57,7 +57,10 @@ export function recordRecovery(result: BrowserActionResult, account: RecoveryAcc
     result.failure = webAutomationFailureRecord(failure.code, {
       expected: failure.expected,
       actual: failure.actual === undefined ? sentence : `${failure.actual}; ${sentence}`,
-      evidenceDigest: failure.evidenceDigest
+      evidenceDigest: failure.evidenceDigest,
+      // The wait a page named (`web.action.rate_limited`) is the producer's
+      // fact, like the digest, and is carried over; the effect is the code's.
+      retryAfterMs: failure.retryAfterMs
     });
   }
   return result;

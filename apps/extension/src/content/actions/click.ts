@@ -12,7 +12,13 @@
 // click at all.
 //
 // The post-condition is the hit test -- the point that was clicked and what it
-// landed on. A link is held to more than that, because a link states where it
+// landed on -- unless the page answers the press with a notice that it was
+// refused for going too fast. Then the press did land and nothing happened, so
+// it fails as `web.action.rate_limited` with the wait the notice named, and
+// Core runs the node again after that wait (`action-runtime/rate-limit-notice.ts`).
+// Until 2026-09-30 such a press passed on its hit test, and a Flow confirming
+// four friend requests on social-network-feed read the refused fourth as done.
+// A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
 // answering it in place -- moving the address through the history API, or
@@ -33,7 +39,7 @@
 // which needs the same press and cannot import a verb.
 
 import { dispatchClickGesture } from "../action-runtime";
-import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch } from "../action-runtime";
+import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch, RateLimitWatch } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import type { ContentActionDependencies } from "./types";
 
@@ -50,6 +56,16 @@ type NavigatingLink = { anchor: Element; href: string };
  */
 const IN_PLACE_WINDOW_MS = 5_000;
 
+/**
+ * How long after a press that is not a link the page is watched for a notice
+ * that it refused the press for going too fast (`action-runtime/rate-limit-notice.ts`).
+ * Paid in full only by a press whose answer is neither such a notice, nor the
+ * pressed control leaving the document, nor the document leaving; a notice the
+ * press's own handler opens is seen at once. Shortened, never lengthened, by
+ * the command's own timeout.
+ */
+const RATE_LIMIT_WINDOW_MS = 500;
+
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const evidence = (): ActionResultEvidence => ({
@@ -65,8 +81,20 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   const link = navigatingLink(element);
   if (!link) {
-    const accepted = dispatchClickGesture(element, report.point);
-    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, accepted), evidence());
+    // Started at the press, like the link's in-place watch, so a layer already
+    // over the page is never taken for this press's answer.
+    // Assigned inside the gesture's callback, which control flow cannot see.
+    let notice = undefined as RateLimitWatch | undefined;
+    try {
+      const accepted = dispatchClickGesture(element, report.point, () => {
+        notice = deps.watchRateLimitNotice(element);
+      });
+      const refused = notice ? await notice.settle(rateLimitWindowMs(action)) : undefined;
+      if (refused) return deps.rateLimited(action, startedAt, refused, evidence());
+      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, accepted), evidence());
+    } finally {
+      notice?.stop();
+    }
   }
 
   const document = element.ownerDocument;
@@ -144,9 +172,18 @@ function inPlaceActual(effect: InPlaceEffect): string {
 
 /** The in-place window, shortened by the command's own timeout when it names a shorter one. */
 function inPlaceWindowMs(action: BrowserActionCommand): number {
+  return windowWithin(action, IN_PLACE_WINDOW_MS);
+}
+
+/** The rate-limit window, shortened the same way. */
+function rateLimitWindowMs(action: BrowserActionCommand): number {
+  return windowWithin(action, RATE_LIMIT_WINDOW_MS);
+}
+
+function windowWithin(action: BrowserActionCommand, windowMs: number): number {
   const timeoutMs = action.timeoutMs;
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return IN_PLACE_WINDOW_MS;
-  return Math.min(Math.floor(timeoutMs), IN_PLACE_WINDOW_MS);
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return windowMs;
+  return Math.min(Math.floor(timeoutMs), windowMs);
 }
 
 /**

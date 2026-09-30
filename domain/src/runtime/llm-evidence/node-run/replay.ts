@@ -34,12 +34,13 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../failure";
 import { webActionFailureRefusal } from "../action-failure";
-import { assertActive, captureEvidence, toolExecution, toolMetadata, type WebLlmEvidenceToolExecution } from "../capture";
+import { assertActive, captureEvidence, toolExecution, toolMetadata, withCallStates, type WebLlmEvidenceToolExecution } from "../capture";
 import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } from "../limits";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { resolveWebPlanNode } from "../plan-resolution";
+import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason, type WebLlmToolRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
@@ -184,7 +185,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // (`../tool-rejection.ts`). A handle that was never in a packet, one whose
     // page has been left and one the page now gives to several elements are
     // three defects, and `core.replay.failed` is one word for all three.
-    return await answerWithPage(run, REPLAY_RESULT_CODES.failed, "the step's parameters could not be resolved", {
+    return await answerWithPage(run, REPLAY_RESULT_CODES.failed, "the step's parameters could not be resolved", false, {
       resultReason: webLlmHandleRejectionReason(resolved.issueCodes),
       nodeId: node.definitionId,
       // A refusal resolved no name, so it assumed none: `assumed` is what the
@@ -215,7 +216,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // because its read came back empty was recorded identically to one that
     // failed because the browser would not script the page. The node's id still
     // says which step of the draft it was.
-    return await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, {
+    return await answerWithPage(run, unreproducible ? REPLAY_RESULT_CODES.unreproducible : REPLAY_RESULT_CODES.failed, `the step did not run (${failure})`, true, {
       resultReason: refused.detail?.reason,
       nodeId: node.definitionId,
       assumed
@@ -228,7 +229,7 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
   // answer with an empty hand. Only the collapse is judged, because a list that
   // is shorter or in another order between two runs is the page, not the step.
   if (before !== undefined && before > 0 && now === 0) {
-    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, `the step read nothing where it read ${before}`, { resultReason: undefined, nodeId: node.definitionId, assumed });
+    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, `the step read nothing where it read ${before}`, true, { resultReason: undefined, nodeId: node.definitionId, assumed });
   }
   // A step that replayed refuses nothing and tells nothing apart, so it says
   // neither of those; the answers above it are the ones a reader has to
@@ -304,10 +305,11 @@ function answer(code: string, said: string, replayed = false, about?: WebNodeRep
  * a verdict without its page is still a verdict, and a packet over budget would
  * cost the model the evidence it already has.
  */
-async function answerWithPage(run: WebNodeRun, code: string, said: string, about?: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution> {
+async function answerWithPage(run: WebNodeRun, code: string, said: string, acted: boolean, about?: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution> {
   const budget = evidenceByteLimit(run.request.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
+  let page: WebLlmSnapshotBinding | undefined;
   try {
-    const page = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
+    page = run.restamp(await captureEvidence(run.gateway, run.sessionId, run.request, run.request.signal));
     run.shown(page);
     // The page, with what the replay made of this step written on the same
     // packet: the one shape every other packet has, and a named spread of a
@@ -315,11 +317,21 @@ async function answerWithPage(run: WebNodeRun, code: string, said: string, about
     const packet: JsonObject = page.evidence as unknown as JsonObject;
     const verdict: JsonObject = present<WebNodeReplayAnswer>({ ok: false, code, said }) as unknown as JsonObject;
     const value = { ...packet, ...verdict } as unknown as JsonValue;
-    if (serializedBytes(value) <= budget) return toolExecution(value, false, code, undefined, undefined, about);
+    if (serializedBytes(value) <= budget) return replayStates(toolExecution(value, false, code, undefined, undefined, about), page, acted);
   } catch (error) {
     if (run.request.signal?.aborted) throw error;
   }
-  return answer(code, said, false, about);
+  return replayStates(answer(code, said, false, about), page, acted);
+}
+
+/**
+ * The states a replay answer saw, from the one capture it took after the step:
+ * the state it left, and the state it found as well when the step's command
+ * never went out. A step whose command went out took no capture before it, so
+ * what it found is not said.
+ */
+function replayStates(execution: WebLlmEvidenceToolExecution, page: WebLlmSnapshotBinding | undefined, acted: boolean): WebLlmEvidenceToolExecution {
+  return withCallStates(execution, acted ? undefined : page, page);
 }
 
 /** Whether a recorded location is one this domain will navigate back to. */

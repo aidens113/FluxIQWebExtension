@@ -139,8 +139,15 @@ const CANDIDATE_SELECTOR = [
  * NodeList's own length rather than against the cap, so a page holding exactly
  * `MAX_SCANNED` interactive elements or exactly `MAX_CANDIDATES` family members
  * is reported complete, which it is.
+ *
+ * `admits`, when given, is asked of each family member before it counts toward
+ * `MAX_CANDIDATES`. A loop pass that scoped its control to one row
+ * (`record.ts`, `values`) passes the row gate here, because the scorer applies
+ * that gate only after the cap: on a list longer than sixty rows' worth of the
+ * family, a later row's control was never weighed and the pass failed as not
+ * found (lane t195, worker t195-w5's finding).
  */
-export function collectTargetCandidates(family: CandidateFamily, roots: readonly LookupRoot[] = [document]): TargetCandidatePool {
+export function collectTargetCandidates(family: CandidateFamily, roots: readonly LookupRoot[] = [document], admits?: (element: Element) => boolean): TargetCandidatePool {
   const tagName = family.tagName?.toLowerCase();
   const role = family.role?.toLowerCase();
   const lists = roots.map((root) => root.querySelectorAll(CANDIDATE_SELECTOR));
@@ -152,6 +159,7 @@ export function collectTargetCandidates(family: CandidateFamily, roots: readonly
       if (examined >= MAX_SCANNED) return { candidates, examined, truncated: true };
       examined += 1;
       if (!inFamily(element, tagName, role)) continue;
+      if (admits && !admits(element)) continue;
       // The index is across every root, so no two candidates share a fallback id.
       candidates.push({ element, fingerprint: candidateFingerprint(element, candidates.length) });
       // The scorer's budget is full. Anything after this element is unweighed,

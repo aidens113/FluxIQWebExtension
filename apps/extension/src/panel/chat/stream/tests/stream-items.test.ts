@@ -1,6 +1,6 @@
 // The chat stream's rules: thread turns and activity rows on one timeline,
 // only events with detail as rows, one row per open tool or step, a bound on
-// rows, and what a row expands to.
+// rows, and what a row carries.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -67,6 +67,7 @@ test("a tool that started and then succeeded is one row, where it first appeared
   assert.equal(row?.text, "Clicked.");
   assert.equal(row?.sequence, 3);
   assert.equal(row?.at, eventTime(1));
+  assert.equal(row?.endAt, eventTime(3), "it ends when its last event arrived");
 });
 
 test("a finished row is not reopened, and another unit of work never joins it", () => {
@@ -90,13 +91,14 @@ test("at most the limit of rows are kept, the newest; turns are never dropped", 
   assert.deepEqual(keys(buildChatStream([{ turn: turn("t"), at: 0 }], recent, 0)), ["turn:t"]);
 });
 
-test("a row expands to its text, ref and status; a bare title does not expand", () => {
+test("a row carries its unit of work, trimmed text and ref, status and times; blank text is none", () => {
   const [full, bare] = buildChatStream([], [
     activityEvent(1, { phase: "running", detail: { kind: "step", title: "Open results", text: "  Step two.  ", ref: " node-2 ", status: "started" } }),
     activityEvent(2, { detail: { kind: "note", title: "Plain", text: "   " } })
   ]).map((item) => (item.kind === "activity" ? item.row : undefined));
   assert.deepEqual(full, {
     key: "activity:build-1#1",
+    activityId: "build-1",
     kind: "step",
     title: "Open results",
     text: "Step two.",
@@ -104,10 +106,9 @@ test("a row expands to its text, ref and status; a bare title does not expand", 
     status: "started",
     phase: "running",
     at: eventTime(1),
-    sequence: 1,
-    expandable: true
+    endAt: eventTime(1),
+    sequence: 1
   });
-  assert.equal(bare?.expandable, false);
   assert.equal(bare?.text, undefined);
 });
 

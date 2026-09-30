@@ -112,6 +112,23 @@ export function navigationUnexpectedFailure(expected: string, actual: string): F
 }
 
 /**
+ * The browser landed on a robot check (`landed-challenge.ts`). The set's member
+ * is USER_INTERVENTION_REQUIRED, the code `content/action-runtime/results.ts`
+ * already reports for a challenged page: a person must answer it, and FluxIQ
+ * never tries to get past one, so Core stops for the person instead of asking a
+ * model how to proceed. The closed word `captcha` leads `actual`, as a
+ * refusal's reason does. The landed address is not quoted -- a challenge
+ * redirect often carries a return path -- and the result's own `url` says where
+ * the tab is.
+ */
+export function navigationChallengeFailure(expected: string): FailureRecord {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected,
+    actual: "captcha: the page the browser landed on is a robot check, which only a person can answer"
+  });
+}
+
+/**
  * A wait that ran out of time. The set's member is `TIMEOUT`, which carries the
  * `timeout` category, stage `execution` and retryable -- the same record this
  * built by hand, so nothing about a worker-side timeout changes but its code.

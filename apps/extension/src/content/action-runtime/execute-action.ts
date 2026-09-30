@@ -25,7 +25,8 @@ import { dialogControl } from "./dialog-control";
 import { evaluateAssertion } from "./assertion-evaluation";
 import { waitForCondition } from "./wait-conditions";
 import { watchInPlaceEffect } from "./in-place-effect";
-import { actionFailure, actionNotImplemented, actionRejected, actionTimedOut, success } from "./results";
+import { watchRateLimitNotice } from "./rate-limit-notice";
+import { actionFailure, actionNotImplemented, actionRateLimited, actionRejected, actionTimedOut, success } from "./results";
 import { listReadFor } from "./extraction-continuation";
 
 export async function executeAction(action: BrowserActionCommand, extractionContinuation?: unknown): Promise<BrowserActionResult> {
@@ -47,9 +48,11 @@ export async function executeAction(action: BrowserActionCommand, extractionCont
     evaluateAssertion,
     waitForCondition,
     watchInPlaceEffect,
+    watchRateLimitNotice: (pressed) => watchRateLimitNotice(pressed),
     success,
     failure: actionFailure,
     rejected: actionRejected,
+    rateLimited: actionRateLimited,
     timedOut: actionTimedOut,
     notImplemented: actionNotImplemented
   });

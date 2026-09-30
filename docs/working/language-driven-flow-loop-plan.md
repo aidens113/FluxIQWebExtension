@@ -21,13 +21,13 @@ and its own `fxwork/<id>` tree:
 | Lane | Lead | Owns |
 | --- | --- | --- |
 | t174 live lane | `lead-xhigh` | slot-1; throw fixed (`befca2f`); extension-start failure root-caused as a product defect, then live runs |
-| t186 remove call grants | merged | Core `91262bd`, downstream `bfb7f8eb`; t174 drops its grant work at its next merge |
-| t187 build and Lab startup speed | merged | downstream `4afa80fc`; Core build proposal pending a paired branch |
-| t188 node limits | merged | Core `c961f4a`, downstream `37379fe3` |
-| t189 decision context | merged | Core `f0dbbd6`, downstream `ca07baae`; repeats now shown to the model; live effect unproven |
-| t185 live activity + chat | merged | Core `a28815c`, downstream `6818da22`; first browser proof is t174's next run |
+| t176 t182 t185-t190 | merged | all pushed in both repositories; commits in the Work Ledger |
+| t193 live B self-repair | `lead-xhigh`, slot-2 | after-creation variants: fail, diagnose, repair, persist, zero-provider replay |
+| t194 live C judge answer | `lead-xhigh`, slot-3 | expected-dataset tasks from rung 1; exact answer, self-judgement, refute and re-author |
+| t195 live D control flow | `lead-xhigh`, slot-4 | routing, retry, loops; permission only for money, delete, send |
+| t196 page-capture cost | `lead` (t189's) | ~39 full captures per build from digests; ignored redirects must bite |
+| t192 Core build speed | `lead` (t187's) | Core `build`/`check` from about 162 s to seconds, provably safe |
 | t191 chat UI + overlay | `lead` (t185's) | user verdict: chat not ChatGPT-like, overlay not visible on the site, status flickers; screenshot-driven fix |
-| t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
 **Machine rules for every lane (binding).**
 - **Four live Lab slots, no locks** (user, 2026-09-29 evening): `lab-slots/slot-1` to `slot-4`, each owned by one
@@ -41,8 +41,12 @@ and its own `fxwork/<id>` tree:
   Never `mkdir` or `rm` a build slot by hand. One test file or directory at `--maxWorkers=2 --minWorkers=1` needs none.
 - **A live-run failure is a product or Lab defect, never machine load** (user, 2026-09-29): trace the failing step and
   its regression. The pre-pairing failures were the Lab's network guard crashing the extension's service worker.
-- Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
-  validation, and the supervisor commits and continues it.
+- **Iterate on your own branch; integrate in rounds** (user, 2026-09-29): every live lane fixes in its own worktree and
+  re-tests at once, never waiting for a commit, and keeps a "Fix log" (files, the exposing run, validation, status) at
+  the top of its report. Every 60-90 minutes the supervisor calls "Integration round N": each lane finishes its run
+  in flight and replies `Round N: ready`; the supervisor commits every lane, merges all branches into dev, checks it,
+  merges dev back into every lane, and resumes them. Leads coordinate shared causes through each other's fix logs.
+  Only the supervisor commits, merges, branches or makes worktrees.
 
 **The instruction that opened this document, 2026-09-24, and it is binding.**
 Live tests only. A full debug of every live run. Complex scenarios only. Full
@@ -772,6 +776,9 @@ debug and partitioned so neither touches the other's files:
 - t189 merged and pushed (every decision gets a durable history of what it tried and what Core answered; repeats are grouped and named; `evidence-loop.ts` split 800 to 668 lines). Supervisor: decision-context + decision-handlers + draft-shown 8 files, 61 passed; on the merged tree Core `pnpm check` exit 0 and vitest `runtime/llm` 68 files, 651 passed; both `pnpm task finish t189` -> `"passed":true`.
 - The extension-start cause found by probe `t174-w7` (a Lab defect): the network guard's canary, run inside the extension's service worker as it starts, stops the first `fluxiq.connect` from being answered. The unchanged Lab gave 1 of 10 clean starts, the guard off 3 of 3, and the canary gated until the extension is ready 5 of 5. The fix and the merge of dev into t174 are next.
 - t187 merged and pushed (`4afa80fc`), answering the user's question of why builds became slow. The code grew about four times in three weeks (Core `packages/fluxiq/src` 386 to 1,479 files) while every build started clean, and September added redundant builds: four Lab builds per run, test-contracts built twice, a full build in `task start`, a serial `pnpm check` in `task finish`, and `coreHead` in the Core web build key. Now every package build and check is reused when its content fingerprint and output digest match. Lead, before to after with nothing changed: `pnpm build` 82.6 s to 4.5 s, `pnpm check` 181 s to 34 s, the finish check 314 s to 36 s, the Lab prelude 81 s to 7 s. Supervisor on the merged tree: first build 52 s; repeat 5 s with 11 of 11 reused; after a `domain/src` edit exactly domain, extension and test-runner rebuilt (35 s); after the revert 11 of 11 reused (7 s); `pnpm check` exit 0; `pnpm task finish t187` 40 s in total. Core's own build (162 s) is untouched; t187's proposal for it needs a paired Core branch.
+- Integration round 1 (four live lanes, iterating on their own branches): t196, t191 (round 1), t174 (A), t193 (B) and t195 (D) merged into dev in both repositories; t194 (C) joins when ready. Conflicts were `run-scenario.ts` hooks (t174's UI review, t193's window capture, and the lanes' hand-applied copies of t174's older lines): both hooks were kept and the imports unioned, with `tsc --noEmit` 0 and the audit passing after each. On the merged dev: Core `pnpm check` 0 (82 s), downstream `pnpm check` 0 (106 s), and the vitest of flow-bootstrap, service-bootstrap and llm at 841 passed, 6 failed. The 6 are all in `rejections.test.ts`, where t174's thrown-issue-codes tag typed refusals; the push of dev is held until t174 fixes it. No task has passed twice yet: A run 18 built a 9-node bigbox Flow blocked by the consent wall (t195 F1 is now in); D run 6 built the first real loop (For Each, per-row Confirm, rate limit waited out).
+- The Flow builder, traced from the code (`reports/flow-builder-walkthrough.md`), is 25 steps. It found five disagreements: the extension chat cannot start a build (capabilities `[]`; the executor lives only in the web panel), assigned to new lane t198; send/publish is not gated (only money and delete, since 2026-09-28), so t195 is fixing it per `mvp-today-plan.md:150`; a build's real cost bound is $1-$2 and the $0.25 per-call cap is never enforced, so t193 is making $0.25 the enforced build total; a route-state full capture still runs before most decisions, so t196 is removing it; and the panel sends no start location, which stays by design.
+- Robot checks (`reports/robot-check-behaviour.md`): the "refresh" the user saw was FluxIQ's own same-address navigations (`chrome.tabs.reload`) onto a robot-check page that reported success. Decision (supervisor, user may override): FluxIQ never presses or solves a check; a self-clearing check is waited out; any other check pauses, asks the person, and resumes, with the Lab playing the person. New lane t197.
 - Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
 - Outcome: In progress. Pass streak 0.
 

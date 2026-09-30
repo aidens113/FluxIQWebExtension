@@ -172,6 +172,22 @@ The record stays in the binding beside the selector and never reaches the
 packet; another post filtered into row one gets a handle of its own rather than
 the previous post's.
 
+A step inside a For Each acts on the pass's row, not the recorded one. Every
+output node with an element target declares an optional `item` input after
+`in`, and Core puts the loop's current row there: the extraction's record,
+field key to string. When the recorded element sat in a record
+(`element.context.record`), the node replaces that record with the row's
+values — each non-empty string, whitespace-collapsed, deduplicated, at most 8
+of at most 200 characters
+([`native-runtime.ts`](../../domain/src/output-nodes/native-runtime.ts)).
+The page accepts a candidate only in a record that holds every value in its
+text, as a link's resolved `href`, or as an attribute or control value, and
+`values` outranks the recorded `key` and `text`, which name the row the Flow
+was built on. When the recorded selector answers with the build's row, the
+veto refuses it and resolution falls back to the same-family candidates, which
+the record gate narrows to the pass's row. A control recorded in no record, such
+as a dialog's Close, is dispatched unchanged on every pass.
+
 ## Who Reads It
 
 - **The state projection**

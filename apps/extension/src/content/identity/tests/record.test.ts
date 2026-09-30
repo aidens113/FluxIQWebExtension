@@ -171,3 +171,71 @@ test("a recorded key with no attribute beside it still finds one, which is all a
   assert.equal(agreesWithRecordedRecord({ key: "usr_a91" }, recorded), true);
   assert.equal(agreesWithRecordedRecord({ key: "usr_a91" }, other), false);
 });
+
+// t195: a step inside a For Each carries the pass's row as `values`, which win
+// over the recording's key and text -- those name the row the Flow was built on.
+
+/** A result card, keyless, whose button is identical on every card. */
+function resultCard(title: string, price: string, href: string): { card: Element; add: Element } {
+  const add = el("button", { attributes: { class: "add" }, children: ["Add to cart"] });
+  const card = el("li", {
+    attributes: { class: "result" },
+    children: [
+      el("a", { attributes: { href }, children: [el("h3", { children: [`  ${title}\n`] })] }),
+      el("span", { attributes: { itemprop: "price", content: price.replace("$", "") }, children: [price] }),
+      add
+    ]
+  });
+  return { card, add };
+}
+
+function results(): { first: Element; second: Element } {
+  const first = resultCard("Blue Kettle", "$24.99", "https://shop.test/p/blue-kettle");
+  const second = resultCard("Red Toaster", "$39.99", "https://shop.test/p/red-toaster");
+  el("ul", { children: [first.card, second.card] });
+  return { first: first.add, second: second.add };
+}
+
+test("a row's values accept the control in that row and refuse the identical one in another", () => {
+  const { first, second } = results();
+  const row = { values: ["Red Toaster", "$39.99"] };
+  assert.equal(agreesWithRecordedRecord(row, second), true);
+  assert.equal(agreesWithRecordedRecord(row, first), false);
+});
+
+test("values win over the recording's key and text, which name the build's row", () => {
+  const { first, second } = results();
+  const built = { text: "Blue Kettle $24.99", values: ["Red Toaster"] };
+  assert.equal(agreesWithRecordedRecord(built, second), true);
+  assert.equal(agreesWithRecordedRecord(built, first), false);
+  const { recorded, other } = directory();
+  const keyed = { keyAttribute: "data-member-id", key: "usr_a91", values: ["Priya Krause"] };
+  assert.equal(agreesWithRecordedRecord(keyed, other), true);
+  assert.equal(agreesWithRecordedRecord(keyed, recorded), false);
+});
+
+test("every value must be in the row, not most of them", () => {
+  const { second } = results();
+  assert.equal(agreesWithRecordedRecord({ values: ["Red Toaster", "$24.99"] }, second), false);
+});
+
+test("a value is found as a link's resolved href, as an attribute value, or in a button's words", () => {
+  const { first, second } = results();
+  assert.equal(agreesWithRecordedRecord({ values: ["https://shop.test/p/red-toaster"] }, second), true);
+  assert.equal(agreesWithRecordedRecord({ values: ["https://shop.test/p/red-toaster"] }, first), false);
+  assert.equal(agreesWithRecordedRecord({ values: ["39.99"] }, second), true, "a microdata content attribute, and a part of the text");
+  assert.equal(agreesWithRecordedRecord({ values: ["Add to cart", "Red Toaster"] }, second), true, "a button's words count here, unlike in the record's text identity");
+});
+
+test("a value is compared whitespace-collapsed, and an empty one is no value at all", () => {
+  const { second } = results();
+  assert.equal(agreesWithRecordedRecord({ values: ["  Red \n Toaster "] }, second), true);
+  assert.equal(agreesWithRecordedRecord({ values: ["", "   "], key: "usr_a91" }, second), false, "empty values fall back to the recorded key, which this row lacks");
+  assert.equal(agreesWithRecordedRecord({ values: [] }, second), true, "an empty list asks nothing");
+});
+
+test("a candidate in no record disagrees with a row's values: fail closed", () => {
+  const loose = el("button", { children: ["Add to cart"] });
+  el("div", { children: ["Red Toaster", loose] });
+  assert.equal(agreesWithRecordedRecord({ values: ["Red Toaster"] }, loose), false);
+});

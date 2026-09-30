@@ -126,6 +126,16 @@ export type WebLlmSnapshotBinding = {
    * Optional because a binding built before it existed, or by hand, has none.
    */
   shadowHosts?: Map<string, readonly string[]>;
+  /**
+   * The page's state digest, taken from the capture this binding was sanitized
+   * from, at the bound `captureStateDigest` digests at rather than this
+   * packet's own (`snapshot-state-digest.ts`). It is how a call reports the
+   * state it found and left without another capture. Like the maps it never
+   * leaves the domain inside a packet; it leaves only on the call's
+   * `stateDigests`. Absent on a binding no capture produced -- a failure packet,
+   * one built by hand -- and on a page too large to digest.
+   */
+  stateDigest?: string;
 };
 
 export type WebLlmSanitizeOptions = {

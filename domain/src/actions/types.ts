@@ -83,6 +83,16 @@ export type WebAutomationElementContext = {
     key?: string | undefined;
     /** The record's own bounded text, for a record the author keyed by nothing. */
     text?: string | undefined;
+    /**
+     * The row a For Each pass is on, as the values its extraction read from it:
+     * each whitespace-collapsed, non-empty, distinct, at most 8 of them and each
+     * at most 200 characters. Written at run time by
+     * `output-nodes/native-runtime.ts` from the node's `item` input, never by the
+     * recorder. When present it takes precedence over `key` and `text`, which
+     * name the row the Flow was *built* on: the page accepts a candidate only in
+     * a record that holds every one of these values.
+     */
+    values?: string[] | undefined;
   } | undefined;
   /**
    * The open shadow roots the element sat inside, outermost first, each named

@@ -1,9 +1,10 @@
 // Coverage of activity-relay.ts: which events are kept, what the panel pages
-// and the automation tab's top frame are sent, and that no delivery failure
-// escapes. The load-bearing cases are the stale-event drop (an event that
-// arrives out of order must not overwrite a newer status), its reset on a new
-// session (a Core restart counts from the start again), and that a page which
-// cannot take the overlay never breaks the stream.
+// and the automation tab's top frame are sent and how often, and that no
+// delivery failure escapes. The load-bearing cases are the stale-event drop
+// (an event that arrives out of order must not overwrite a newer status), its
+// reset on a new session (a Core restart counts from the start again), that
+// the page is reached whether or not a panel is open -- a panel send that
+// fails or never settles must not hold it back -- and the rate bound.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -17,10 +18,12 @@ import {
   type ExtensionActivityState
 } from "../../../shared/activity/index";
 import { ActivityRelay, type ActivityRelayDeps } from "../activity-relay";
+import { OverlayTarget } from "../overlay-target";
+import { FakeClock } from "./fake-clock";
 
 function activity(sequence: number, overrides: Partial<ClientGatewayActivity> = {}): ClientGatewayActivity {
   return {
-    activityId: "run-1",
+    activityId: "run:run-1",
     sequence,
     subject: { kind: "run", id: "run-1", projectId: "project-1" },
     phase: "running",
@@ -30,7 +33,21 @@ function activity(sequence: number, overrides: Partial<ClientGatewayActivity> = 
   };
 }
 
-function harness(options: { stored?: ActivityOverlayPreference; tabId?: number | undefined; deliver?: ActivityRelayDeps["deliverToTab"]; broadcast?: ActivityRelayDeps["broadcast"] } = {}) {
+/** Lets every promise the relay started settle. */
+async function settle(): Promise<void> {
+  for (let round = 0; round < 10; round += 1) await new Promise((resolve) => setImmediate(resolve));
+}
+
+type HarnessOptions = {
+  stored?: ActivityOverlayPreference;
+  tabId?: number | undefined;
+  automationTabId?: ActivityRelayDeps["automationTabId"];
+  deliver?: ActivityRelayDeps["deliverToTab"];
+  broadcast?: ActivityRelayDeps["broadcast"];
+};
+
+function harness(options: HarnessOptions = {}) {
+  const clock = new FakeClock(0);
   const broadcasts: ExtensionActivityState[] = [];
   const delivered: Array<{ tabId: number; message: ActivityContentMessage }> = [];
   const written: ActivityOverlayPreference[] = [];
@@ -48,38 +65,46 @@ function harness(options: { stored?: ActivityOverlayPreference; tabId?: number |
       assert.equal(message.type, ACTIVITY_MESSAGES.changed);
       broadcasts.push(message.state);
     }),
-    automationTabId: () => tabId,
+    automationTabId: options.automationTabId ?? (async () => tabId),
     deliverToTab: options.deliver ?? (async (target, message) => {
       delivered.push({ tabId: target, message });
     }),
-    live: () => true
+    live: () => true,
+    clock
   };
-  return {
-    relay: new ActivityRelay(deps),
-    broadcasts,
-    delivered,
-    written,
-    reads: () => reads
-  };
+  return { relay: new ActivityRelay(deps), clock, broadcasts, delivered, written, reads: () => reads };
 }
 
-test("an event is kept, broadcast to the panel pages, and sent to the automation tab's top frame", async () => {
+test("an event is kept, paced into a display, broadcast to the panel pages, and sent to the automation tab's top frame", async () => {
   const h = harness();
   const event = activity(1);
   assert.equal(await h.relay.accept(event), true);
+  await settle();
 
-  assert.deepEqual(h.broadcasts, [{ current: event, recent: [event], overlay: "expanded", live: true }]);
-  assert.deepEqual(h.delivered, [{
-    tabId: 7,
-    message: { type: ACTIVITY_MESSAGES.content, activity: event, overlay: "expanded", topFrameOnly: true }
-  }]);
+  assert.equal(h.broadcasts.length, 1);
+  assert.deepEqual(h.broadcasts[0]?.current, event);
+  assert.deepEqual(h.broadcasts[0]?.recent, [event]);
+  assert.equal(h.broadcasts[0]?.display?.headline, "Running your Flow");
+  assert.equal(h.broadcasts[0]?.display?.detail, "Running step 1");
+  assert.equal(h.delivered.length, 1);
+  assert.equal(h.delivered[0]?.tabId, 7);
+  assert.deepEqual(h.delivered[0]?.message, {
+    type: ACTIVITY_MESSAGES.content,
+    activity: event,
+    display: h.relay.state().display,
+    overlay: "expanded",
+    topFrameOnly: true
+  });
 });
 
 test("an event not newer than the last kept one is dropped, and nothing is sent for it", async () => {
   const h = harness();
   await h.relay.accept(activity(5));
+  await settle();
   assert.equal(await h.relay.accept(activity(5)), false);
   assert.equal(await h.relay.accept(activity(3)), false);
+  h.clock.advance(1_000);
+  await settle();
   assert.equal(h.relay.state().current?.sequence, 5);
   assert.equal(h.broadcasts.length, 1);
   assert.equal(h.delivered.length, 1);
@@ -99,7 +124,9 @@ test("a malformed payload is dropped", async () => {
   for (const payload of [undefined, null, "x", {}, { ...activity(1), sequence: "2" }, { ...activity(1), sequence: Number.NaN }, { ...activity(1), label: undefined }]) {
     assert.equal(await h.relay.accept(payload), false, JSON.stringify(payload));
   }
+  await settle();
   assert.equal(h.relay.state().current, null);
+  assert.equal(h.relay.state().display, null);
   assert.deepEqual(h.broadcasts, []);
 });
 
@@ -120,10 +147,13 @@ test("the overlay preference defaults to expanded, is read from storage once, an
   const h = harness({ stored: "collapsed" });
   assert.equal((await h.relay.read()).overlay, "collapsed");
   await h.relay.accept(activity(1));
+  await settle();
   assert.equal(h.reads(), 1);
   assert.equal(h.delivered[0]?.message.overlay, "collapsed");
 
+  h.clock.advance(1_000);
   const state = await h.relay.setOverlay("hidden");
+  await settle();
   assert.equal(state.overlay, "hidden");
   assert.deepEqual(h.written, ["hidden"]);
   assert.equal(h.broadcasts.at(-1)?.overlay, "hidden");
@@ -139,59 +169,100 @@ test("a storage failure leaves the default preference, and a write failure keeps
       throw new Error("quota");
     },
     broadcast: async () => undefined,
-    automationTabId: () => undefined,
+    automationTabId: async () => undefined,
     deliverToTab: async () => undefined,
-    live: () => false
+    live: () => false,
+    clock: new FakeClock(0)
   });
   assert.equal((await relay.read()).overlay, "expanded");
   assert.equal((await relay.setOverlay("collapsed")).overlay, "collapsed");
   assert.equal(relay.state().live, false);
 });
 
-test("no panel open and a page that refuses the overlay are both absorbed", async () => {
+test("no panel open: the broadcast fails and the page is still sent the display", async () => {
   const h = harness({
     broadcast: async () => {
       throw new Error("Could not establish connection. Receiving end does not exist.");
-    },
+    }
+  });
+  assert.equal(await h.relay.accept(activity(1)), true);
+  await settle();
+  assert.equal(h.delivered.length, 1);
+  assert.equal(h.delivered[0]?.message.display?.detail, "Running step 1");
+});
+
+test("a panel send that never settles does not hold the page back", async () => {
+  const h = harness({ broadcast: () => new Promise<void>(() => undefined) });
+  await h.relay.accept(activity(1));
+  await settle();
+  h.clock.advance(1_300);
+  await h.relay.accept(activity(2));
+  await settle();
+  h.clock.advance(300);
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => entry.message.display?.detail), ["Running step 1", "Running step 2"]);
+});
+
+test("a page that refuses the overlay is absorbed", async () => {
+  const h = harness({
     deliver: async () => {
       throw new Error("Cannot access contents of the page.");
     }
   });
   assert.equal(await h.relay.accept(activity(1)), true);
+  await settle();
   assert.equal(h.relay.state().current?.sequence, 1);
+  assert.equal(h.broadcasts.length, 1);
 });
 
 test("with no automation tab nothing is sent to a page, but the panel still hears", async () => {
   const h = harness({ tabId: undefined });
   await h.relay.accept(activity(1));
+  await settle();
   assert.equal(h.broadcasts.length, 1);
   assert.deepEqual(h.delivered, []);
 });
 
-test("events that arrive during a slow delivery are coalesced: the page gets the latest, in order", async () => {
-  const seen: number[] = [];
+test("when the automation moves to another tab, the overlay is taken down in the one it left", async () => {
+  let tab = 7;
+  const h = harness({ automationTabId: async () => tab });
+  await h.relay.accept(activity(1));
+  await settle();
+  tab = 9;
+  h.clock.advance(1_300);
+  await h.relay.accept(activity(2));
+  await settle();
+  assert.deepEqual(h.delivered.map((entry) => [entry.tabId, entry.message.display?.detail ?? null]), [[7, "Running step 1"], [7, null], [9, "Running step 2"]]);
+});
+
+test("displays that change during a slow delivery are coalesced: the page gets the latest, in order", async () => {
+  const seen: Array<string | null> = [];
   let release: (() => void) | undefined;
   const h = harness({
     deliver: async (_tabId, message) => {
-      seen.push(message.activity?.sequence ?? -1);
+      seen.push(message.display?.detail ?? null);
       if (seen.length === 1) await new Promise<void>((resolve) => { release = resolve; });
     }
   });
-  const first = h.relay.accept(activity(1));
-  await new Promise((resolve) => setImmediate(resolve));
-  await h.relay.accept(activity(2));
-  await h.relay.accept(activity(3));
+  await h.relay.accept(activity(1));
+  await settle();
+  for (const sequence of [2, 3]) {
+    h.clock.advance(1_300);
+    await h.relay.accept(activity(sequence));
+    await settle();
+  }
   release?.();
-  await first;
-  assert.deepEqual(seen, [1, 3]);
+  await settle();
+  assert.deepEqual(seen, ["Running step 1", "Running step 3"]);
 });
 
-test("a top frame that reports ready on the automation tab gets the current state again; other frames and tabs do not", async () => {
+test("a top frame that reports ready on the automation tab gets the current display again; other frames and tabs do not", async () => {
   const h = harness();
   await h.relay.noteContentReady(7, 0);
   assert.equal(h.delivered.length, 0, "nothing to re-send before any activity");
 
   await h.relay.accept(activity(1));
+  await settle();
   h.delivered.length = 0;
   await h.relay.noteContentReady(7, 3);
   await h.relay.noteContentReady(8, 0);
@@ -201,5 +272,54 @@ test("a top frame that reports ready on the automation tab gets the current stat
   await h.relay.noteContentReady(7, 0);
   await h.relay.noteContentReady(7, undefined);
   assert.equal(h.delivered.length, 2);
-  assert.equal(h.delivered[0]?.message.activity?.sequence, 1);
+  assert.equal(h.delivered[0]?.message.display?.detail, "Running step 1");
 });
+
+test("the bound: forty events in one second give at most four panel sends, four page sends and one detail change after the first", async () => {
+  const h = harness();
+  for (let index = 0; index < 40; index += 1) {
+    h.clock.advanceTo(index * 25);
+    await h.relay.accept(activity(index + 1, { phase: index % 2 ? "thinking" : "exploring", label: `Sentence ${index + 1}` }));
+    await settle();
+  }
+  assert.ok(h.broadcasts.length <= 4, `panel sends: ${h.broadcasts.length}`);
+  assert.ok(h.delivered.length <= 4, `page sends: ${h.delivered.length}`);
+  assert.equal(new Set(h.delivered.map((entry) => entry.message.display?.detail)).size, 1, "only the first sentence inside the detail interval");
+  h.clock.advance(2_000);
+  await settle();
+  assert.equal(h.delivered.at(-1)?.message.display?.detail, "Sentence 40", "the newest sentence reaches the page once the interval ends");
+});
+
+// The Lab's own topology, through the real target resolver: an extension page
+// open as a tab, FluxIQ's web panel, and the scenario tab, with the extension
+// holding whichever was activated last.
+function labTopology(options: { active: number; driven: number | undefined }) {
+  const tabs: Record<number, string> = {
+    1: "chrome-extension://abcdefghijklmnop/sidepanel/index.html",
+    2: "http://127.0.0.1:51000/scenarios/company-website/",
+    3: "http://127.0.0.1:58202/"
+  };
+  return new OverlayTarget({
+    drivenTabId: () => options.driven,
+    activeTabId: () => options.active,
+    activeTabs: async () => [{ id: options.active, url: tabs[options.active] }, { id: 2, url: tabs[2] }],
+    tabUrl: async (tabId) => tabs[tabId],
+    ownOrigins: () => ["http://127.0.0.1:58202", "ws://127.0.0.1:58203/client"]
+  });
+}
+
+for (const panel of ["open", "closed"] as const) {
+  test(`the scenario tab gets the display with the panel ${panel}, whichever Lab tab the extension holds as active`, async () => {
+    for (const setup of [{ active: 1, driven: undefined }, { active: 3, driven: undefined }, { active: 1, driven: 2 }, { active: 3, driven: 2 }]) {
+      const target = labTopology(setup);
+      const h = harness({
+        automationTabId: () => target.resolve(),
+        ...(panel === "closed" ? { broadcast: async () => { throw new Error("Receiving end does not exist."); } } : {})
+      });
+      await h.relay.accept(activity(1));
+      await settle();
+      assert.deepEqual(h.delivered.map((entry) => entry.tabId), [2], JSON.stringify(setup));
+      if (panel === "open") assert.equal(h.broadcasts.length, 1);
+    }
+  });
+}

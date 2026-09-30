@@ -51,6 +51,7 @@ import {
   toolExecution,
   toolMetadata,
   type WebLlmEvidenceGateway,
+  withCallStates,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "./capture";
@@ -70,7 +71,6 @@ import {
 } from "./plan-resolution";
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
-import { webLlmStateDigest } from "./state-digest";
 import { webLlmTargetsUnchanged } from "./target";
 import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_PATTERN } from "./stable-handles";
 import {
@@ -181,6 +181,15 @@ export type WebAutomationLlmEvidenceRuntime = {
    * what leaves is a hash of less of it.
    */
   captureStateDigest(input: WebLlmStateDigestRequest): Promise<string | undefined>;
+  /**
+   * That every result `executeTool` returns carries `stateDigests`, digested
+   * from the captures the call already took, so Core never asks
+   * `captureStateDigest` around a call (`AS/runtime/llm/harness-options/
+   * binding.ts`). Each of those questions was a whole page capture: a look
+   * cost three and an action four plus the action. `captureStateDigest` stays
+   * for a moment no call brackets.
+   */
+  stateDigestsOnCalls?: true;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
   validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
   /**
@@ -305,6 +314,9 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
     runsNodes: observationNode
       ? { initial: { node: observationNode, parameters: {}, consequences: [] }, runnable: webRunnableNodeIds() }
       : { runnable: webRunnableNodeIds() },
+    // Every call below reports the states it saw from its own captures
+    // (`./capture.ts`, `withCallStates`), which is what makes this true.
+    stateDigestsOnCalls: true,
     async executeTool(input) {
       assertActive(input.signal);
       boundedIdentifier(input.projectId, "projectId");
@@ -321,6 +333,10 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // two would miss whichever half the next build spent itself on.
       const answered = (answer: WebLlmEvidenceToolExecution): WebLlmEvidenceToolExecution =>
         repeatedRefusals.answered(evidenceScope(input, sessionId), input.toolId, answer);
+      // The page a detection read the state in, kept here because a detection
+      // refuses by throwing, past the result it would have carried it on. A
+      // node run reports its own states (`./node-run/run.ts`).
+      let observed: WebLlmSnapshotBinding | undefined;
       try {
         if (input.toolId === WEB_LLM_RUN_NODE_TOOL_ID) {
           return answered(await runWebOutputNode({
@@ -334,13 +350,16 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           }));
         }
         if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
-          return answered(await detectRepeatingStructure({
+          const detected = await detectRepeatingStructure({
             gateway,
             sessionId,
             request: input,
             returned: returnedEvidence.get(evidenceScope(input, sessionId)),
             handles: extractionHandles,
-          }));
+            observed: (page) => { observed = page; },
+          });
+          // It only observes, so the state it found is the state it left.
+          return answered(withCallStates(detected, observed, observed));
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
@@ -350,7 +369,11 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           // can be pressed next.
           const page = error.page === undefined ? undefined : retain(stable(input, error.page));
           if (page !== undefined) shown(input, sessionId, page);
-          return answered(toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code)));
+          return answered(withCallStates(
+            toolExecution(toolRejection(error.code, page?.evidence, error.detail), false, webLlmToolRejectionResultCode(error.code)),
+            observed ?? page,
+            page ?? observed
+          ));
         }
         throw error;
       }
@@ -384,9 +407,13 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       // throwing would make the step that goes there a recorded failure of
       // every such build, before the Flow had done anything wrong
       // (`AS/runtime/llm/evidence-loop.ts`: a hook that throws fails the step).
-      if (input.startLocation === undefined) return webLlmStateDigest((await captureEvidence(gateway, sessionId, request, input.signal)).evidence);
+      //
+      // The digest is the one every capture carries (`./snapshot-state-digest.ts`),
+      // so what this answers and what a call reports on `stateDigests` for the
+      // same page are one value by construction.
+      if (input.startLocation === undefined) return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
       try {
-        return webLlmStateDigest((await captureEvidence(gateway, sessionId, request, input.signal)).evidence);
+        return (await captureEvidence(gateway, sessionId, request, input.signal)).stateDigest;
       } catch (error) {
         if (error instanceof RecoverableToolRejection && error.code === "page_unreadable") return undefined;
         throw error;
