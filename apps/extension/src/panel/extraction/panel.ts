@@ -45,9 +45,20 @@ import "./extraction.css";
 
 /** What the view that mounted the panel holds (pinned by the UI audit, section 5). */
 export type ExtractionPanelHandle = {
-  /** Enables the entry point. Extraction is recorded into a recording, so it is offered only while one is running. */
+  /** Enables the entry point, or disables it with `reason` as its tooltip. */
   setAvailable(available: boolean, reason?: string): void;
 };
+
+/**
+ * What the host may add to the panel's own behaviour.
+ *
+ * `prepare` runs when the entry is pressed, before the pick starts. Extraction
+ * is recorded into a recording, so Simple Mode's "Extract data" entry uses it to
+ * start one when none is running -- the extraction then compiles into the
+ * recording's Flow like any other step, instead of bypassing it (plan 3.7).
+ * A `prepare` that throws stops the pick, and its message is shown in the sheet.
+ */
+export type ExtractionPanelOptions = { prepare?: (() => Promise<void>) | undefined };
 
 const POLL_MS = 600;
 const DEFAULT_LABEL = "Extracted data";
@@ -69,7 +80,7 @@ const REFUSALS = {
  * sits, the sheet over the whole panel -- wires it, and answers a handle for
  * the entry point.
  */
-export function mountExtractionPanel(host: HTMLElement): ExtractionPanelHandle {
+export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanelOptions = {}): ExtractionPanelHandle {
   const els = buildExtractionPanel(host);
   let draft: ExtractionDraft | undefined;
   let rows: ExtractionPreviewRow[] = [];
@@ -244,6 +255,7 @@ export function mountExtractionPanel(host: HTMLElement): ExtractionPanelHandle {
     els.status.textContent = PICK_PROMPT;
     draft = undefined;
     rows = [];
+    await options.prepare?.();
     await startExtractionPick();
     startPolling();
   }));
@@ -312,6 +324,7 @@ function shownColumnsKey(draft: ExtractionDraft | undefined): string {
 
 function renderPagination(els: ExtractionPanelElements, draft: ExtractionDraft): void {
   els.paginateRow.hidden = draft.pagination === undefined;
+  els.pagesNote.textContent = pagesSentence(draft);
   if (draft.pagination === undefined) return;
   els.paginate.checked = draft.paginate;
   els.paginateLabel.textContent = paginationLabel(draft.pagination);
@@ -336,6 +349,12 @@ function summaryLabel(draft: ExtractionDraft): string {
   const items = `${draft.itemCount} ${draft.itemCount === 1 ? "item" : "items"} found`;
   const columns = `${kept} ${kept === 1 ? "column" : "columns"}`;
   return excluded === 0 ? `${items}, ${columns}.` : `${items}, ${columns}, ${excluded} excluded.`;
+}
+
+/** "Current page" or "All pages", in words (plan 3.7, "Pages"). */
+function pagesSentence(draft: ExtractionDraft): string {
+  if (draft.pagination === undefined) return "Current page only: FluxIQ found no link to more pages.";
+  return draft.paginate ? "All pages." : "Current page. Tick below to read every page.";
 }
 
 function paginationLabel(pagination: WebAutomationExtractListPagination): string {

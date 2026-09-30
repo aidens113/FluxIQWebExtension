@@ -38,6 +38,28 @@ describe("an honest shopper passes every oracle", { concurrency: true }, () => {
     } finally { await session.close(); }
   });
 
+  it("turns down the deal wheel the promotion throws over the results, then reads the same first page", async () => {
+    const session = await kit.openStore("deal-wheel");
+    try {
+      const { page, lab } = session;
+      const expected = expectedOf("first-page-earbuds", "deal-wheel");
+      await kit.settleIn(page);
+      await kit.search(page, "wireless earbuds");
+      const wheel = page.getByRole("dialog", { name: "Spin to win up to 20% off!" });
+      await wheel.waitFor({ timeout: STORE_TIMINGS.dealWheel + 5000 });
+      assert.deepEqual(await kit.factFailures(page, expected.finalState?.filter(({ id }) => id === "wheel-closed") ?? []), ["wheel-closed: expected false, found true"], "a run that leaves the wheel up fails the variant's oracle");
+      await page.getByText("No thanks, I would rather pay full price", { exact: true }).click();
+      await wheel.waitFor({ state: "detached" });
+      for (let attempt = 0; attempt < 20 && ((await kit.control(lab, "/__control/final-state?scenario=everything-store")) as { state: { nudges: { dealWheel: string } } }).state.nudges.dealWheel !== "dismissed"; attempt += 1) await kit.pause(100);
+      await page.getByRole("link", { name: "Brightaisle Plus" }).click();
+      await page.locator(`[data-component="search-result"][data-sku][data-index="1"]`).waitFor();
+      const cards = await kit.readWholePage(page, 16);
+      assert.equal(await page.getByTestId("deal-wheel").count(), 0, "a declined wheel does not come back on the next results page");
+      assert.deepEqual(records(cards.filter((card) => !card.sponsored)), expected.extracted?.[0]?.records);
+      assert.deepEqual(await kit.factFailures(page, expected.finalState ?? []), []);
+    } finally { await session.close(); }
+  });
+
   it("sweeps every page for Plus pairs rated 4.0 or better under $50, each once", async () => {
     const session = await kit.openStore();
     try {
