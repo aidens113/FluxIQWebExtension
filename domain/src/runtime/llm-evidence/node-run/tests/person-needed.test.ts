@@ -63,7 +63,11 @@ function page(url: string): JsonObject {
     url,
     title: "Store",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
-    interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go", attributes: { type: "button" }, bounds: { x: 1, y: 1, width: 10, height: 10 } }]
+    interactiveElements: [
+      { tagName: "button", selector: "#go", visibleText: "Go", attributes: { type: "button" }, bounds: { x: 1, y: 1, width: 10, height: 10 } },
+      // The link that shows the build the next page's address, which is what lets it navigate there (`../shown-addresses.ts`).
+      { tagName: "a", selector: "#next", visibleText: "Next", href: NEXT, bounds: { x: 1, y: 20, width: 10, height: 10 } }
+    ]
   };
 }
 

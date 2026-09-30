@@ -30,12 +30,18 @@ const REMEMBERED_BUILDS = 16;
 /**
  * Core names the build's opening call `initial.<toolId>`
  * (`AS/runtime/llm/evidence-loop.ts`). That naming is Core's, not this
- * domain's; it is read here only to tell where a build begins.
+ * domain's; it is read here only to tell where a build begins, and read the
+ * same way by what a build has been shown (`./shown-addresses.ts`).
  */
 const OPENING_CALL_PREFIX = "initial.";
 
+/** Whether this call is a build's opening call, which starts the build's memory afresh. */
+export function webNodeOpensBuild(callId: string): boolean {
+  return callId.startsWith(OPENING_CALL_PREFIX);
+}
+
 /** The build a call belongs to, as this memory keys it. */
-type WebNodeBuildKey = { projectId: string; flowId: string; sessionId: string };
+export type WebNodeBuildKey = { projectId: string; flowId: string; sessionId: string };
 
 export type WebNodeArrivals = {
   /** Whether a navigation node has succeeded in this build. */
@@ -61,7 +67,7 @@ export function createWebNodeArrivals(): WebNodeArrivals {
       }
     },
     opening(build, callId) {
-      if (callId.startsWith(OPENING_CALL_PREFIX)) reached.delete(key(build));
+      if (webNodeOpensBuild(callId)) reached.delete(key(build));
     }
   };
 }

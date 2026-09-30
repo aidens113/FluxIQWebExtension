@@ -14,8 +14,8 @@
 // what its call would lastingly do, Core's gate answers from the person's
 // instruction and permission, and a refusal carries the request the person will
 // answer (`../permission.ts`). The one thing this module decides for itself is
-// that exploration stays on the origin it started on, which is the scope policy
-// the authoring navigation has always had.
+// where exploration may go: the origin it started on, and there only to an
+// address the build was shown (`./shown-addresses.ts`).
 //
 // **A build may begin nowhere.** When Core says where the Flow starts
 // (`AS/runtime/flow-bootstrap/start-location.ts`), nothing was opened for this
@@ -47,7 +47,6 @@ import {
   toolMetadata,
   withCallStates,
   withPersonNeeded,
-  type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
@@ -55,7 +54,7 @@ import { evidenceByteLimit, WEB_LLM_EVIDENCE_BYTE_BUDGETS, serializedBytes } fro
 import type { WebLlmNameAssumption } from "../name-assumption";
 import { present } from "../present";
 import { webActionPermission } from "../permission";
-import { resolveWebPlanNode, type WebPlanHandleStores } from "../plan-resolution";
+import { resolveWebPlanNode } from "../plan-resolution";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { withoutWebLlmDeniedKeys } from "../denied-keys";
@@ -64,8 +63,10 @@ import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmTo
 import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
-import type { WebNodeArrivals } from "./arrival";
+import type { WebNodeRun } from "./context";
+import { webObservedControl } from "./observed-control";
 import { webNodeReadResult } from "./read-result";
+import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 
@@ -183,23 +184,6 @@ type WebNodeCallRecord = {
   standing?: { input: JsonObject; ranWith: JsonObject; replay: WebNodeReplayStatement };
 };
 
-export type WebNodeRun = {
-  gateway: WebLlmEvidenceGateway;
-  sessionId: string;
-  request: WebLlmEvidenceToolRequest;
-  stores: WebPlanHandleStores;
-  /** Renumber a capture's handles so they keep naming what they named. */
-  restamp: (binding: WebLlmSnapshotBinding) => WebLlmSnapshotBinding;
-  /** Remember a packet the model has now been shown. */
-  shown: (binding: WebLlmSnapshotBinding) => void;
-  /**
-   * Whether this build has reached its start location, held by the runtime for
-   * the life of the process (`./arrival.ts`). Read only for a build told a
-   * start location.
-   */
-  arrivals: WebNodeArrivals;
-};
-
 /** Run the node a call named, and answer with what it did. */
 export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution> {
   const value = run.request.value;
@@ -224,6 +208,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
   // The build's opening call starts it not there, whatever the tab shows
   // (`./arrival.ts`). A build told no start location is not touched.
   if (run.request.startLocation !== undefined) run.arrivals.opening(buildOf(run), run.request.callId);
+  run.addresses.opening(buildOf(run), run.request.callId);
   const node = webRunnableNode(value.node);
   // Before anything is captured: a call naming nothing runnable costs the page
   // nothing and is answered from what the catalog says.
@@ -272,7 +257,10 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // location. Everything else is refused with where to go, rather than with
     // `page_unreadable`, which says what happened and not what to do about it.
     if (!current && !webMovesThePage(node)) return notThereYet(run, record);
-    if (current) run.shown(current);
+    // Not shown to the model, so a look cut short adds handles and forgets none:
+    // remembered as shown, a notice that pushed a shown filter past this look's
+    // forty controls took the filter's handle with it (`run-muohbi3e-e5847e5a`).
+    if (current) run.looked(current);
     // A handle written bare -- `selector: target.3` -- is the shape the Flow
     // script writes and the shape a model reaches for, and the resolver only
     // knows `{handle}`. Left alone it is not a handle at all: it goes to the
@@ -312,7 +300,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const ran = resolved.status === "resolved" ? resolved.parameters : written;
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
-    const control = current ? observedControl(current.evidence, written) : { name: undefined, kind: "step" };
+    const control = current ? webObservedControl(current.evidence, firstHandle(written), ran) : { name: undefined, kind: "step" };
     // A node that acts must say what acting would lastingly do, `[]` included.
     // Saying nothing is not the same as saying it causes nothing: a step that
     // declared nothing would be waved past the gate every time the Flow ran,
@@ -348,6 +336,12 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     const leaving = crossOrigin(node, ran, webScopeAnchor(current?.evidence.location, run.request.startLocation));
     if (leaving) {
       return refusal(undefined, "cross_origin", rejectionDetail({ reason: "another_origin", target: undefined, instead: undefined, missing: undefined, requestId: undefined }), run.request.maxEvidenceBytes, record);
+    }
+    // And only to an address this build was shown, with the page back so the link that goes there can be pressed.
+    if (run.addresses.refuses(buildOf(run), node, ran, { location: current?.evidence.location, startLocation: run.request.startLocation })) {
+      // This refusal hands the look back, so from here it is a packet shown.
+      if (current) run.shown(current);
+      return refusal(current, "address_not_shown", webUnshownAddressRefusal(run.request.startLocation), run.request.maxEvidenceBytes, record);
     }
     // What this step is, should it meet a robot check: the statement a success
     // would make, less what only the page it left can say.
@@ -401,6 +395,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // is. Returning it would be the one path by which a page's own markup
     // reached a decision.
     const read = node.proposes ? webNodeReadResult(result.payload as JsonValue | undefined, Math.max(0, Math.floor(budget / 4))) : undefined;
+    run.addresses.ran(buildOf(run), { actionType: node.actionType, parameters: ran, read, location: after?.evidence.location ?? current?.evidence.location });
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
@@ -624,15 +619,6 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
     missing: undefined,
     requestId: undefined
   });
-}
-
-/** The control a call acts on, as the person being asked would name it. */
-function observedControl(evidence: WebLlmPageEvidence, parameters: JsonObject): { name: string | undefined; kind: string } {
-  const handle = firstHandle(parameters);
-  const element = handle === undefined ? undefined : evidence.elements.find((candidate) => candidate.target === handle);
-  if (!element) return { name: undefined, kind: "step" };
-  const kind = element.role && /^[a-z]+$/u.test(element.role) ? element.role : element.tag === "a" ? "link" : /^[a-z]+$/u.test(element.tag) ? element.tag : "control";
-  return { name: element.name ?? element.text, kind };
 }
 
 /** The first target handle a call's parameters name, wherever it wrote it. */

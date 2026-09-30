@@ -44,7 +44,7 @@ import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmHandleRejectionReason, type WebLlmToolRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
-import type { WebNodeRun } from "./run";
+import type { WebNodeRun } from "./context";
 
 /** The reserved key Core marks a replay call with, and what it may ask for. */
 export const WEB_LLM_REPLAY_KEY = "replay";

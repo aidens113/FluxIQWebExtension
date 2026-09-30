@@ -102,10 +102,13 @@ test("each way a handle stops naming one control is a different reason, and the 
   //
   // This reads `handle_not_in_packet` rather than `handle_no_longer_on_page`,
   // and that is the resolver being honest about what it knew. Running any node
-  // recaptures the page first and remembers the new packet in that page's
-  // place (`node-run/run.ts`, `run.shown`), so by the time the handle is
-  // resolved it is simply not among this page's handles -- which is what
-  // `web.handle.unknown` says. Telling "was issued, and the page dropped it"
+  // looks at the page first, and a look that described the whole page -- this
+  // one does -- is remembered in that page's place (`node-run/run.ts`,
+  // `run.looked`), so by the time the handle is resolved it is simply not among
+  // this page's handles -- which is what `web.handle.unknown` says. (A look cut
+  // short at its forty controls only adds, so it cannot forget a handle the
+  // model was shown: `../node-run/tests/shown-handle-past-cap.test.ts`.)
+  // Telling "was issued, and the page dropped it"
   // apart from "was never issued" needs `plan-resolution/target-packets.ts` to
   // remember the handles a recapture replaced. Until it does, this reason is
   // not invented here.
