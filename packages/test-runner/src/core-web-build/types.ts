@@ -2,12 +2,16 @@
 
 /** Everything a published build depends on. A change to any of them yields a different build key. */
 export type CoreWebBuildInputs = {
-  /** `git rev-parse HEAD` of the Core checkout. */
-  coreHead: string;
+  /**
+   * SHA-256 of Core's `pnpm-lock.yaml`: the exact versions of every installed
+   * dependency the build resolves (React, the UI libraries, `@types/node`),
+   * which no other input names. It stands in for the installation itself.
+   */
+  lockfileHash: string;
   /** Content hash of the `apps/web` entries the staged workspace copies, and of Core's `tsconfig.base.json`. */
   webSourceHash: string;
-  /** Content hash of each built Core package the panel consumes, by package directory name. */
-  packageDistHashes: Readonly<Record<string, string>>;
+  /** Content hash of each built Core package the panel consumes -- its `dist` tree and its `package.json` -- by package directory name. */
+  packageHashes: Readonly<Record<string, string>>;
   /** The exact `next.config.mjs` text the staged workspace receives. */
   nextConfig: string;
   /** The version of the `next` package installed for Core's web app. */

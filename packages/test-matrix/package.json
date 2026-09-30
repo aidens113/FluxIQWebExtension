@@ -8,10 +8,10 @@
   },
   "exports": "./dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "build:registry": "pnpm --filter @fluxiq-web-extension/scenario-lab... build",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build:registry && pnpm build && node --test dist/**/*.test.js"
+    "build": "node ../../scripts/build-cache/cli.mjs test-matrix:build -- \"tsc -p tsconfig.json\"",
+    "build:registry": "node ../../scripts/build-cache/cli.mjs test-contracts:build && node ../../scripts/build-cache/cli.mjs scenario-lab:build",
+    "check": "node ../../scripts/build-cache/cli.mjs test-matrix:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
+    "test": "node ../../scripts/build-cache/cli.mjs test-contracts:build && node ../../scripts/build-cache/cli.mjs scenario-lab:build && node ../../scripts/build-cache/cli.mjs test-matrix:build && node --test dist/**/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

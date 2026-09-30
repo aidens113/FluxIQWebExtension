@@ -24,11 +24,22 @@
 // duplicate web builds four worktrees were each running are stopped by sharing
 // that cache, not by this.
 //
+// The three libraries go through the build cache (scripts/build-cache): each is
+// fingerprinted over its own sources, Core's lockfiles and the `dist/` of the
+// Core packages it depends on (`resolve-core-library.mjs`), reused when its
+// stamp still stands, restored from the shared store when another Core
+// checkout built the same inputs, and otherwise built with exactly the
+// `pnpm --filter <name> build` it always was. Measured 2026-09-29: that build
+// is ~27 s of every `task start --worktree --core`, for a Core whose content
+// the machine had usually built before. `@fluxiq/web` is not cached: it is
+// built as it always was.
+//
 // Written down once because two callers need the same order. Written twice, a
 // fourth Core package would be added to one copy and not the other, and the
 // symptom would be a type error in a worktree that looks correctly provisioned.
 
 import path from "node:path";
+import { resolveCoreLibrary, runStep } from "../build-cache/index.mjs";
 import { runPnpm } from "./pnpm-command.mjs";
 import { noteProgress } from "./progress-note.mjs";
 
@@ -56,8 +67,29 @@ export function fullCoreDistPaths(coreRoot) {
   return [...coreDistPaths(coreRoot), path.join(coreRoot, "apps", "web", ".next")];
 }
 
-/** Built in order: each package's output is the next one's input. */
-export async function buildCore(coreRoot, { env, note = noteProgress, packages = CORE_PACKAGES }) {
+/**
+ * Built in order: each package's output is the next one's input. A library
+ * build that fails rejects exactly as `runPnpm` does; nothing after it runs.
+ *
+ * @param {string} coreRoot
+ * @param {{
+ *   env: NodeJS.ProcessEnv, note?: (line: Record<string, unknown>) => void,
+ *   packages?: Array<{ filter: string, directory: string }>,
+ *   pnpm?: typeof runPnpm, step?: typeof runStep,
+ * }} options `pnpm` and `step` replace running pnpm and the build cache, for tests
+ */
+export async function buildCore(coreRoot, { env, note = noteProgress, packages = CORE_PACKAGES, pnpm = runPnpm, step = runStep }) {
   note({ step: "build-core", root: coreRoot, packages: packages.map((item) => item.filter) });
-  for (const item of packages) await runPnpm(coreRoot, ["--filter", item.filter, "build"], { env });
+  for (const item of packages) {
+    const build = () => pnpm(coreRoot, ["--filter", item.filter, "build"], { env });
+    if (!CORE_PACKAGES.some((library) => library.filter === item.filter)) {
+      await build();
+      continue;
+    }
+    const resolved = resolveCoreLibrary(coreRoot, item.directory, { env });
+    if (resolved.command !== `pnpm --filter ${item.filter} build`) throw new Error(`packages/${item.directory} in ${coreRoot} is ${resolved.command.split(" ")[2]}, not ${item.filter}`);
+    const outcome = await step(resolved, { env, run: async () => { await build(); return 0; } });
+    note({ step: "build-core-package", package: item.filter, "build-cache": outcome.result, source: outcome.source, reason: outcome.reason, ms: outcome.ms });
+    if (outcome.exitCode !== 0) throw new Error(`pnpm --filter ${item.filter} build in ${coreRoot} was not stamped: ${outcome.reason}`);
+  }
 }

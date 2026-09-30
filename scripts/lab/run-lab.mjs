@@ -21,6 +21,8 @@ import { repositoryBuilds, staleRepositoryBuild } from "./domain-build-staleness
 import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { scanCoreSources } from "./core/index.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
+import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
+import { buildOrder, runStep } from "../build-cache/index.mjs";
 
 const args = process.argv.slice(2);
 const interactive = args[0] === "interactive";
@@ -31,6 +33,7 @@ const instanced = paths.instance !== null;
 // they neither wait for Core nor report a change in it.
 const READ_ONLY_COMMANDS = new Set(["inspect", "compare", "auth", "clone-cache"]);
 const loadsCore = !READ_ONLY_COMMANDS.has(args[0] ?? "");
+const timer = createStepTimer(note);
 
 /** The Core scan this run started from; `null` when the run does not load Core. */
 let coreBefore = null;
@@ -52,7 +55,7 @@ if (loadsCore) {
   // It refuses rather than warns because a warning is what this failure
   // already had: three worktree runs printed their way to "environment.missing"
   // and were written off as an undiagnosed worktree fault.
-  const commit = await readCoreCommit(coreRoot, process.env.FLUXIQ_LAB_CORE_BRANCH?.trim() || "dev");
+  const commit = await timer.time("core-commit", () => readCoreCommit(coreRoot, process.env.FLUXIQ_LAB_CORE_BRANCH?.trim() || "dev"));
   const behind = commit === null ? { stale: false } : coreCommitStaleness(commit);
   if (behind.stale) {
     note({ lab: "core-commit", state: "behind", root: coreRoot, behind: behind.behind, head: commit.head, target: commit.target, why: behind.message });
@@ -67,10 +70,10 @@ Set FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 to run against it anyway.
 
   const quietMs = positiveInteger(process.env.FLUXIQ_LAB_CORE_QUIET_MS, DEFAULT_QUIET_MS);
   const timeoutMs = positiveInteger(process.env.FLUXIQ_LAB_CORE_WAIT_TIMEOUT_MS, DEFAULT_WAIT_TIMEOUT_MS);
-  const guard = await waitForQuietCoreOutput(coreRoot, {
+  const guard = await timer.time("core-quiet", () => waitForQuietCoreOutput(coreRoot, {
     quietMs, timeoutMs,
     onWait: (scan, quiet) => note({ lab: "core-build", state: "waiting", root: scan.root, files: scan.files, newest: iso(scan.newestMs), newestPath: scan.newestPath, quietMs: quiet, timeoutMs, why: "FluxIQ Core's build output was written moments ago; a rebuild underneath a run deletes modules the run imports" }),
-  });
+  }));
   coreBefore = guard.scan;
   note({ lab: "core-build", state: guard.status, root: guard.scan.root, files: guard.scan.files, newest: iso(guard.scan.newestMs), waitedMs: guard.waitedMs });
   if (guard.status === "timed-out") {
@@ -90,7 +93,7 @@ Set FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 to run against it anyway.
   // is reported as one, before anything runs; `failure: "setup"` says so to a
   // reader of these lines, and the campaign already reads a `why` followed by a
   // non-zero exit as a task that never started rather than a product result.
-  const built = coreBuildMissing(await scanCoreBuildEntries(coreRoot));
+  const built = coreBuildMissing(await timer.time("core-entries", () => scanCoreBuildEntries(coreRoot)));
   if (!built.built) {
     note({ lab: "core-build", state: built.state, failure: "setup", root: coreRoot, missing: built.missing, command: built.command, why: built.message });
     process.stderr.write(`${built.message}
@@ -105,7 +108,7 @@ Set FLUXIQ_LAB_ALLOW_BEHIND_CORE=1 to run against it anyway.
   // product's. On 2026-09-17 that cost three campaign slices -- thirty live
   // tasks, zero provider calls -- against a ceiling that had been raised in
   // source hours earlier.
-  const staleness = coreBuildStaleness(await scanCoreSources(coreRoot), guard.scan);
+  const staleness = coreBuildStaleness(await timer.time("core-staleness", () => scanCoreSources(coreRoot)), guard.scan);
   if (staleness.stale) {
     note({ lab: "core-build", state: "stale", root: coreRoot, behindMs: staleness.behindMs, why: staleness.message });
     if (process.env.FLUXIQ_LAB_ALLOW_STALE_CORE !== "1") {
@@ -118,9 +121,32 @@ Rebuild with: pnpm --filter fluxiq build (in ${coreRoot}). Set FLUXIQ_LAB_ALLOW_
   }
 }
 
-// The same question asked of this repository's own two builds, which a run
-// loads exactly as it loads Core's: `domain/dist` for the web domain's nodes
-// and rejections, and the extension's build for what the browser runs.
+const buildEnvironment = {
+  ...process.env,
+  FLUXIQ_LAB_EXTENSION_BUILD_ROOT: paths.extensionBuildRoot,
+  FLUXIQ_LAB_SCENARIO_OUT_DIR: paths.scenarioOutDir
+};
+
+// Every build the run loads, through the build cache: a step whose inputs and
+// outputs are unchanged since its last successful build is reused without
+// spawning anything, and the rest are rebuilt (`prelude/build-phase.mjs`).
+try {
+  await timer.time("build-lock", () => withBuildLock(paths.buildLockPath, () => runBuildPhase({
+    interactive, instanced, env: buildEnvironment, runStep, buildOrder, timer, note,
+    copyHostModule: async () => {
+      await mkdir(path.dirname(paths.hostModule), { recursive: true });
+      await copyFile(paths.sharedHostModule, paths.hostModule);
+    }
+  }), { onWait: owner => process.stderr.write(`[lab] waiting for the build lock held by process ${owner.pid}\n`) }));
+} catch (error) {
+  process.stderr.write(`${JSON.stringify({ status: "failed", category: "environment.missing", message: error instanceof Error ? error.message : String(error) })}\n`);
+  process.exit(1);
+}
+
+// The question Core's staleness guard asks, asked of this repository's own two
+// builds, which a run loads exactly as it loads Core's: `domain/dist` for the
+// web domain's nodes and rejections, and the extension's `dist/e2e-chromium`
+// for what the browser runs.
 //
 // It cost two runs on 2026-09-26, both after Core was rebuilt and the domain
 // was not: `run-muhp2yip-3a0f198b` hung for 675 s on its first provider call
@@ -128,42 +154,23 @@ Rebuild with: pnpm --filter fluxiq build (in ${coreRoot}). Set FLUXIQ_LAB_ALLOW_
 // build. Neither was a product result, neither said why, and the first was
 // diagnosed wrongly before the second showed the pattern. Core's guard had
 // existed for nine days; this side had none.
+//
+// Asked after the build phase, not before it. Before it, an edited domain was
+// refused although the next step would have rebuilt it. After it, every output
+// is either freshly built or, on a reuse, touched to now, so a stale answer
+// means a source was edited while the prelude was building it.
 {
-  const stale = await staleRepositoryBuild(repositoryBuilds(repositoryRoot, paths.extensionBuildRoot));
+  const stale = await timer.time("repository-staleness", () => staleRepositoryBuild(repositoryBuilds(repositoryRoot, paths.extensionBuildRoot)));
   if (stale) {
     note({ lab: "repository-build", state: "stale", build: stale.name, behindMs: stale.behindMs, why: stale.message });
     if (process.env.FLUXIQ_LAB_ALLOW_STALE_BUILD !== "1") {
       process.stderr.write(`${stale.message}
-Rebuild with: ${stale.rebuild}. Set FLUXIQ_LAB_ALLOW_STALE_BUILD=1 to run anyway.
+A source changed while the Lab was building it; run again, or rebuild with: ${stale.rebuild}. Set FLUXIQ_LAB_ALLOW_STALE_BUILD=1 to run anyway.
 `);
       process.exit(1);
     }
     note({ lab: "repository-build", state: "stale-allowed", build: stale.name, why: "FLUXIQ_LAB_ALLOW_STALE_BUILD=1 was set, so this run proceeds against a build older than its source." });
   }
-}
-
-const buildEnvironment = {
-  ...process.env,
-  FLUXIQ_LAB_EXTENSION_BUILD_ROOT: paths.extensionBuildRoot,
-  FLUXIQ_LAB_SCENARIO_OUT_DIR: paths.scenarioOutDir
-};
-
-try {
-  await withBuildLock(paths.buildLockPath, async () => {
-    await run("pnpm", ["--filter", "@fluxiq-web-extension/scenario-lab", "build"], buildEnvironment);
-    await run("pnpm", ["--filter", "@fluxiq-web-extension/extension", "test:e2e:build"], buildEnvironment);
-    // The host bundle is built before the workspace build, whose domain step
-    // deletes only `tsc` output and deliberately keeps `dist/host/`.
-    if (interactive || instanced) await run("pnpm", ["--filter", "@fluxiq-web-extension/domain", "host:build"], buildEnvironment);
-    await run("pnpm", ["--filter", "@fluxiq-web-extension/test-runner...", "build"], buildEnvironment);
-    if (instanced) {
-      await mkdir(path.dirname(paths.hostModule), { recursive: true });
-      await copyFile(paths.sharedHostModule, paths.hostModule);
-    }
-  }, { onWait: owner => process.stderr.write(`[lab] waiting for the build lock held by process ${owner.pid}\n`) });
-} catch (error) {
-  process.stderr.write(`${JSON.stringify({ status: "failed", category: "environment.missing", message: error instanceof Error ? error.message : String(error) })}\n`);
-  process.exit(1);
 }
 
 const runEnvironment = {
@@ -174,6 +181,7 @@ const runEnvironment = {
 };
 process.stderr.write(`${JSON.stringify({ lab: "paths", instance: paths.instance, extensionPath: paths.extensionPath, scenarioEntrypoint: paths.scenarioEntrypoint, hostModule: paths.hostModule, runsDirectory: process.env.FLUXIQ_TEST_RUNS_DIR ?? null })}\n`);
 
+timer.finish();
 process.exitCode = await run("node", [path.join(repositoryRoot, "packages", "test-runner", "dist", "cli.js"), ...args], runEnvironment, { tolerateFailure: true });
 
 // The race this catches is the one the guard above cannot prevent: Core was
@@ -212,20 +220,14 @@ function iso(ms) { return ms > 0 ? new Date(ms).toISOString() : null; }
 /**
  * Runs one child to completion, inheriting this process's streams.
  *
- * @param {"pnpm" | "node"} command
+ * @param {"node"} command
  * @param {string[]} commandArgs
  * @param {NodeJS.ProcessEnv} env
  * @param {{ tolerateFailure?: boolean }} [options]
  * @returns {Promise<number>}
  */
 function run(command, commandArgs, env, options = {}) {
-  const executable = command === "node" ? process.execPath : command;
-  const child = spawn(executable, commandArgs, {
-    cwd: repositoryRoot,
-    env,
-    stdio: "inherit",
-    shell: command === "pnpm" && process.platform === "win32"
-  });
+  const child = spawn(process.execPath, commandArgs, { cwd: repositoryRoot, env, stdio: "inherit" });
   return new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("close", (code, signal) => {

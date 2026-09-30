@@ -7,11 +7,11 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "domain:dist": "node -e \"const fs=require('node:fs');if(fs.existsSync('../../domain/dist/index.d.ts'))process.exit(0);console.log('[test-runner] domain/dist is absent: building @fluxiq-web-extension/domain once so this package can resolve its ./node declarations. An existing dist is never rebuilt here.');process.exit(1)\" || pnpm --filter @fluxiq-web-extension/domain build",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "pnpm domain:dist && pnpm clean && tsc -p tsconfig.json",
-    "check": "pnpm domain:dist && tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build && node --test \"dist/**/*.test.js\""
+    "domain:dist": "node scripts/domain-dist.mjs",
+    "clean": "node scripts/clean-dist.mjs",
+    "build": "node scripts/domain-dist.mjs && node ../../scripts/build-cache/cli.mjs test-runner:build -- \"node scripts/clean-dist.mjs && tsc -p tsconfig.json\"",
+    "check": "node scripts/domain-dist.mjs && node ../../scripts/build-cache/cli.mjs test-runner:check -- \"tsc -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/fluxiq-build/check.tsbuildinfo\"",
+    "test": "node scripts/domain-dist.mjs && node ../../scripts/build-cache/cli.mjs test-runner:build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "@fluxiq-web-extension/domain": "workspace:*",
