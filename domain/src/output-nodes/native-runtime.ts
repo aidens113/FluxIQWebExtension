@@ -7,6 +7,7 @@ import type {
 } from "fluxiq/automation-studio/nodes";
 import type { AutomationNodeExecutionResult } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
+import { webAutomationCheckWaitParameters } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
@@ -61,6 +62,10 @@ export function createWebAutomationOutputNodeImplementationBundle(
  * dispatch effect naming its own output, which `tests/native-runtime.test.ts`
  * pins.
  *
+ * A click or a navigation also carries the room to wait out a robot check that
+ * clears by itself (`actions/check-wait.ts`). This is where a Flow a model built
+ * gets it: its nodes are these, and nothing recorded them.
+ *
  * The list extraction also owes Core the dataset its rows are saved into, and
  * refuses to read a list it could not save (`extract-list/dispatch.ts`). That
  * refusal is about the node's own configuration, decided before anything runs,
@@ -70,7 +75,7 @@ function createOutputNodeImplementation(outputId: WebAutomationActionType): Auto
   return (context): AutomationNodeExecutionResult => {
     try {
       const parameters = scopedToRow(compactJsonObject(context.parameters), context.inputs?.item);
-      if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters });
+      if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters: webAutomationCheckWaitParameters(outputId, parameters) });
       const extraction = webAutomationExtractListDispatch(parameters);
       return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
     } catch (error) {

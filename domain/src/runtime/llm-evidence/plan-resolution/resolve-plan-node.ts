@@ -23,7 +23,10 @@
 //   columns and pages the plan asks for (`extraction/slot.ts`);
 // - Core's Run Output node (`builtin.policy.action`) naming a web output is
 //   resolved in its payload exactly as that output's own node is, since the
-//   payload is what the output runs with.
+//   payload is what the output runs with. One naming a click or a navigation
+//   is also given the room to wait out a robot check that clears by itself
+//   (`actions/check-wait.ts`), as a recorded one is, which resolves it even
+//   when it names no handle.
 //
 // A handle's element in a child frame also writes `browserFrameId`, and a node
 // that already names a different frame is refused rather than silently moved.
@@ -70,6 +73,7 @@
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
+import { webAutomationActionWaitsOutChecks, webAutomationCheckWaitNode } from "../../../actions/check-wait";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
 import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
@@ -492,14 +496,24 @@ function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanH
     for (const entry of inner.refusals) refusals.push({ code: entry.code, kind: entry.kind, path: ["parameters", ...entry.path], fits: entry.fits });
   }
   if (refusals.length > 0) return { status: "refused", refusals };
-  if (inner?.status !== "resolved") return { status: "unchanged" };
+  const runsWith = inner?.status === "resolved" ? inner.parameters : isJsonRecord(payload) ? payload as JsonObject : undefined;
+  // A click or a navigation is given the room to wait out a check that clears
+  // by itself, on this node's own timeout, exactly as a recorded one is
+  // (`actions/check-wait.ts`): Core reads that timeout off this node, not off
+  // the output's payload, and it is what bounds the command.
+  const checkWait = isWebOutputId(outputId) && runsWith !== undefined && webAutomationActionWaitsOutChecks(outputId)
+    ? webAutomationCheckWaitNode(outputId, { parameters: runsWith, timeoutMs: typeof parameters.timeoutMs === "number" ? parameters.timeoutMs : undefined })
+    : undefined;
+  const allowanceAdded = checkWait !== undefined && (checkWait.timeoutMs !== parameters.timeoutMs || checkWait.parameters.checkWaitMs !== runsWith?.checkWaitMs);
+  if (inner?.status !== "resolved" && !allowanceAdded) return { status: "unchanged" };
   const resolved: JsonObject = {};
-  for (const [key, value] of Object.entries(parameters)) resolved[key] = key === "parameters" ? inner.parameters : value;
+  for (const [key, value] of Object.entries(parameters)) resolved[key] = key === "parameters" ? checkWait?.parameters ?? runsWith ?? value : value;
+  if (checkWait?.timeoutMs !== undefined) resolved.timeoutMs = checkWait.timeoutMs;
   // The payload's own assumptions, read from where they really are: the output
   // runs inside `parameters`, so a name assumed there is at
   // `parameters.extractList.…` on this node and a reader holding the Run Output
   // node's authored parameters finds it exactly there.
-  const assumed = inner.assumed.map((entry) => nested(entry));
+  const assumed = inner?.status === "resolved" ? inner.assumed.map((entry) => nested(entry)) : [];
   return { status: "resolved", parameters: resolved, assumed };
 }
 

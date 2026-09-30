@@ -15,6 +15,7 @@ import type { JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH } from "../extract-list";
 import { createWebAutomationOutputNodeImplementationBundle } from "../native-runtime";
+import { WEB_AUTOMATION_CHECK_WAIT_MS } from "../../actions/check-wait";
 
 const bundle = createWebAutomationOutputNodeImplementationBundle();
 
@@ -31,11 +32,36 @@ test("every web automation action type has a bound implementation", () => {
 });
 
 test("an implementation emits exactly one dispatch effect naming its own output", async () => {
-  const result = await execute("web.dom.click", { selector: "#save", timeoutMs: 10_000 });
+  const result = await execute("web.dom.type", { selector: "#name", text: "Ada", timeoutMs: 10_000 });
   assert.deepEqual(result.effects, [{
     type: "policy.output.dispatch",
-    payload: { outputId: "web.dom.click", parameters: { selector: "#save", timeoutMs: 10_000 } }
+    payload: { outputId: "web.dom.type", parameters: { selector: "#name", text: "Ada", timeoutMs: 10_000 } }
   }]);
+});
+
+// t203: a Flow a model built runs these nodes, and nothing recorded them, so
+// this is where its clicks and navigations get the room to wait out a robot
+// check that clears by itself (`actions/check-wait.ts`). Before, a built press
+// was bounded by its own 10 s timeout less the reply margin, and bigbox's 8 s
+// check ran it out (`run-muoga8at`).
+test("a built click or navigation dispatches with the check allowance on top of its own timeout", async () => {
+  const click = dispatchedPayload(await execute("web.dom.click", { selector: "#save", timeoutMs: 10_000 }));
+  assert.deepEqual(click, { outputId: "web.dom.click", parameters: { selector: "#save", timeoutMs: 10_000 + WEB_AUTOMATION_CHECK_WAIT_MS, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } });
+  // A navigation node names no timeout: the page then gives the check its
+  // whole wait, and only the allowance itself is said.
+  const navigate = dispatchedPayload(await execute("web.browser.navigate", { url: "https://shop.test/" }));
+  assert.deepEqual(navigate, { outputId: "web.browser.navigate", parameters: { url: "https://shop.test/", checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } });
+  // Dispatched again, it carries the allowance once.
+  const again = dispatchedPayload(await execute("web.dom.click", click.parameters as Record<string, JsonValue>));
+  assert.deepEqual(again, click);
+});
+
+test("an action that cannot land on a check dispatches no allowance", async () => {
+  for (const outputId of ["web.dom.type", "web.dom.wait_for_selector", "web.dom.scroll"] as WebAutomationActionType[]) {
+    const parameters = dispatchedPayload(await execute(outputId, { selector: "#target", timeoutMs: 10_000 })).parameters as Record<string, JsonValue>;
+    assert.equal("checkWaitMs" in parameters, false, outputId);
+    assert.equal(parameters.timeoutMs, 10_000, outputId);
+  }
 });
 
 test("an implementation reports no status of its own for Core to trust", async () => {
@@ -223,6 +249,11 @@ async function executeOnRow(outputId: WebAutomationActionType, parameters: Recor
   return payload.parameters as Record<string, JsonValue>;
 }
 
+/** A click's parameters as dispatched: as given, with the check allowance beside them. */
+function clicked(parameters: Record<string, JsonValue>): Record<string, JsonValue> {
+  return { ...parameters, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS };
+}
+
 const cardControl = {
   selector: "li.result:nth-of-type(1) button.add",
   element: {
@@ -262,20 +293,20 @@ test("a row's values are bounded: at most eight, each at most 200 characters", a
 
 test("without a row the recorded record is dispatched unchanged", async () => {
   const parameters = await executeOnRow("web.dom.click", cardControl, undefined);
-  assert.deepEqual(parameters, cardControl);
+  assert.deepEqual(parameters, clicked(cardControl));
 });
 
 test("a row that is not an object, or holds no string, leaves the recorded record alone", async () => {
   for (const item of [["a", "b"], "Red Toaster", null, { count: 3, blank: "  " }] as JsonValue[]) {
-    assert.deepEqual(await executeOnRow("web.dom.click", cardControl, item), cardControl, JSON.stringify(item));
+    assert.deepEqual(await executeOnRow("web.dom.click", cardControl, item), clicked(cardControl), JSON.stringify(item));
   }
 });
 
 test("a control the build recorded in no record -- a dialog's Close -- is dispatched untouched on a loop's row", async () => {
   const close = { selector: "dialog button.close", element: { tagName: "BUTTON", visibleText: "Close", context: { landmark: "dialog" } } };
-  assert.deepEqual(await executeOnRow("web.dom.click", close, { title: "Red Toaster" }), close);
+  assert.deepEqual(await executeOnRow("web.dom.click", close, { title: "Red Toaster" }), clicked(close));
   const bare = { selector: "#save" };
-  assert.deepEqual(await executeOnRow("web.dom.click", bare, { title: "Red Toaster" }), bare);
+  assert.deepEqual(await executeOnRow("web.dom.click", bare, { title: "Red Toaster" }), clicked(bare));
 });
 
 // A Flow the model built names its control through a snapshot handle, and that

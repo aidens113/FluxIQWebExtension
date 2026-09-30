@@ -1,7 +1,7 @@
 import type { FluxIQ } from "fluxiq";
 import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { WEB_AUTOMATION_CHECK_WAIT_MS, WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS, webAutomationActionWaitsOutChecks } from "./actions/check-wait";
+import { webAutomationCheckWaitNode } from "./actions/check-wait";
 import { webAutomationExtractListTimeoutMs, webAutomationRecordedExtraction } from "./actions/extraction";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
@@ -204,9 +204,8 @@ function candidate(outputId: string, parameters: JsonObject, sourceInputId: stri
   // A click or a navigation can land on a check that clears by itself, and is
   // given the room to wait it out on top of Core's default timeout
   // (`actions/check-wait.ts`); `checkWaitMs` says how much of it is that room.
-  const checkWait = webAutomationActionWaitsOutChecks(outputId);
-  const authored = checkWait ? { ...parameters, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } : parameters;
-  return { outputId, parameters: compact(authored), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(checkWait ? { timeoutMs: WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS + WEB_AUTOMATION_CHECK_WAIT_MS } : {}), ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
+  const node = webAutomationCheckWaitNode(outputId, { parameters });
+  return { outputId, parameters: compact(node.parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(node.timeoutMs === undefined ? {} : { timeoutMs: node.timeoutMs }), ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
 }
 
 /** The label Core's fallback gives a `web.dom.click` action entry, `readableTokenValue` of its output id. The Core proposal rows in `tests/domain.test.ts` hold the two equal. */
@@ -216,7 +215,8 @@ const FALLBACK_CLICK_LABEL = "Web Dom Click";
  * A click's `action` entry whose landing names the event id Core stored on it,
  * as the candidate Core's fallback (`recordingActionEntryCandidate`) proposes for
  * that entry, read off the same fields: output, parameters, source input,
- * confirmation, confidence and label, with the landing claim added. Any other
+ * confirmation, confidence and label, with the landing claim and the check
+ * allowance (`actions/check-wait.ts`) added. Any other
  * `action` entry gives `undefined`, and so does one the fallback refuses
  * (`policyEligible: false`), so Core's fallback decides for it.
  */
@@ -230,9 +230,11 @@ function linkedClickEntry(observation: AutomationStudioRecordingMapperObservatio
   const sourceInputId = nonBlankString(observation.metadata.inputId) ?? nonBlankString(entry.confirmationInputId);
   const confirmationInputId = readString(entry.confirmationInputId);
   const timeoutMs = entry.confirmationTimeoutMs;
+  const node = webAutomationCheckWaitNode(outputId, { parameters: (readObject(entry.parameters) ?? {}) as JsonObject });
   return {
     outputId,
-    parameters: (readObject(entry.parameters) ?? {}) as JsonObject,
+    parameters: node.parameters,
+    ...(node.timeoutMs === undefined ? {} : { timeoutMs: node.timeoutMs }),
     ...(sourceInputId === undefined ? {} : { sourceInputIds: [sourceInputId] }),
     ...(confirmationInputId ? { expectedConfirmation: { inputId: confirmationInputId, timeoutMs: typeof timeoutMs === "number" ? timeoutMs : 5_000 } } : {}),
     expectedState,

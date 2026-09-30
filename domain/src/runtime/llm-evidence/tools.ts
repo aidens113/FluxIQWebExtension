@@ -41,6 +41,7 @@ import type {
 } from "fluxiq/automation-studio";
 import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { webAutomationCheckWaitParameters } from "../../actions/check-wait";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
 import {
@@ -229,7 +230,11 @@ export type WebAutomationLlmEvidenceRuntime = {
  */
 const RETAINED_SELECTOR_BINDINGS = 8;
 
-export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
+export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
+  // Every command a build sends goes out through this gateway, so a click or a
+  // navigation the model runs carries the same room to wait out a robot check
+  // that clears by itself as the Flow's own (`actions/check-wait.ts`).
+  const gateway = withCheckWait(sessions);
   // Which node one free look runs, read from this domain's own definitions
   // rather than named here (`./node-run/catalog.ts`).
   const observationNode = webObservationNodeId();
@@ -498,6 +503,15 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       return resolveWebPlanNodeParameters(input, { targets: targetPackets, extractions: extractionHandles });
     },
   };
+}
+
+/** The gateway, sending each click and navigation with the check allowance (`actions/check-wait.ts`). */
+function withCheckWait(sessions: WebLlmEvidenceGateway): WebLlmEvidenceGateway {
+  return present<WebLlmEvidenceGateway>({
+    eligibleSessionIds: () => sessions.eligibleSessionIds(),
+    structureDetectionSessionIds: sessions.structureDetectionSessionIds?.bind(sessions),
+    executeAction: (sessionId, command) => sessions.executeAction(sessionId, { ...command, parameters: webAutomationCheckWaitParameters(command.actionType, command.parameters) })
+  });
 }
 
 /** Bind web-only evidence tools into Core's domain-neutral global LLM harness. */

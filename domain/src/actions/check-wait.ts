@@ -17,10 +17,32 @@
 // behaves exactly as it did; only a command that is actually waiting out a
 // check uses the extra time.
 //
+// **One allowance, wherever the command was made.** A recording, a model
+// building a Flow, and the Flow it built all make clicks and navigations, and
+// each is given the allowance here rather than by a rule of its own:
+//
+// - a recorded node, on its node timeout (`web-panel-host.ts`: the candidate
+//   the domain maps, and the linked click it proposes for Core's fallback);
+// - a Run Output node a model wrote, the same way
+//   (`runtime/llm-evidence/plan-resolution/resolve-plan-node.ts`);
+// - a web output node -- the node a model's build appends -- on the parameters
+//   it dispatches, both when the build runs it (the gateway of
+//   `runtime/llm-evidence/tools.ts`, which every build command goes out
+//   through) and when the Flow does (`output-nodes/native-runtime.ts`).
+//
+// Before that only recorded nodes had it, and a built press on bigbox's 8 s
+// check was given about four seconds and failed (`run-muoga8at`).
+//
+// Adding it is idempotent: the timeout it is added to is the one the command
+// had before any allowance (`webAutomationBaseTimeoutMs`), so a command that
+// passes through two of these places carries it once.
+//
 // This follows the paginated read (`extraction/request.ts`), which scales its
 // `timeoutMs` for the same reason: Core sends the node's timeout as the
 // command's, and a default sized for one quick action cuts a longer honest one
 // short.
+
+import type { JsonObject, JsonValue } from "fluxiq/core";
 
 /** How long a command may spend waiting out a check that said it would clear by itself. */
 export const WEB_AUTOMATION_CHECK_WAIT_MS = 15_000;
@@ -48,4 +70,43 @@ export function webAutomationBaseTimeoutMs(command: { timeoutMs?: number | undef
   // Never below a positive remainder: an allowance larger than the timeout it
   // was added to is a malformed command, and the whole of it stays bounded.
   return timeoutMs > checkWaitMs ? timeoutMs - checkWaitMs : timeoutMs;
+}
+
+/** A node's parameters, and the timeout Core reads off the node itself. */
+export type WebAutomationCheckWaitNode = { parameters: JsonObject; timeoutMs?: number | undefined };
+
+/**
+ * A node whose timeout Core reads off the node rather than its parameters -- a
+ * recorded node, and Core's Run Output node -- carrying the check allowance
+ * when it is a click or a navigation: `checkWaitMs` in its parameters, and the
+ * allowance on top of the timeout it names, less any allowance it already
+ * carries, or on top of Core's default when it names none
+ * (`nodes/policy/action.ts`). Any other node is returned as it is.
+ */
+export function webAutomationCheckWaitNode(outputId: string, node: WebAutomationCheckWaitNode): WebAutomationCheckWaitNode {
+  if (!webAutomationActionWaitsOutChecks(outputId)) return node;
+  const base = webAutomationBaseTimeoutMs({ timeoutMs: node.timeoutMs, checkWaitMs: numeric(node.parameters.checkWaitMs) }) ?? WEB_AUTOMATION_DEFAULT_ACTION_TIMEOUT_MS;
+  return { parameters: { ...node.parameters, checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS }, timeoutMs: base + WEB_AUTOMATION_CHECK_WAIT_MS };
+}
+
+/**
+ * The parameters an action is dispatched with, carrying the check allowance
+ * when it is a click or a navigation: `checkWaitMs`, and the allowance added to
+ * the `timeoutMs` they name. Parameters that name no timeout keep naming none:
+ * the page then gives the check its whole wait, and Core waits its own command
+ * default, which is longer. Any other action's parameters are returned as they
+ * are.
+ */
+export function webAutomationCheckWaitParameters(outputId: string, parameters: JsonObject): JsonObject {
+  if (!webAutomationActionWaitsOutChecks(outputId)) return parameters;
+  const base = webAutomationBaseTimeoutMs({ timeoutMs: numeric(parameters.timeoutMs), checkWaitMs: numeric(parameters.checkWaitMs) });
+  return {
+    ...parameters,
+    ...(base === undefined ? {} : { timeoutMs: base + WEB_AUTOMATION_CHECK_WAIT_MS }),
+    checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS
+  };
+}
+
+function numeric(value: JsonValue | undefined): number | undefined {
+  return typeof value === "number" ? value : undefined;
 }

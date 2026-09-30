@@ -168,6 +168,64 @@ test("a node with no handle is unchanged, and a literal selector is never passed
   assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: NAME_SELECTOR, text: { handle: "not-a-handle" } }), { status: "unchanged" });
 });
 
+// t203: Core reads a Run Output node's timeout off the node and defaults it to
+// 5 s (`nodes/policy/action.ts`), which is what bounds its command. A recorded
+// click is given 15 s on top of that to wait out a check that clears by itself;
+// one a model wrote is given the same, by the same rule.
+test("a Run Output click or navigation a model wrote carries the check allowance, handle or none", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField] }));
+  await inspect(runtime);
+  const click = { outputId: "web.dom.click", parameters: { selector: "#submit" } };
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", click), {
+    status: "resolved",
+    parameters: { outputId: "web.dom.click", parameters: { selector: "#submit", checkWaitMs: 15_000 }, timeoutMs: 20_000 }
+  }, "Core's 5 s default and the 15 s allowance");
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { ...click, timeoutMs: 8_000, failureRoute: "failed" }), {
+    status: "resolved",
+    parameters: { outputId: "web.dom.click", parameters: { selector: "#submit", checkWaitMs: 15_000 }, timeoutMs: 23_000, failureRoute: "failed" }
+  }, "a timeout the model set keeps its value, with the allowance on top");
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.browser.navigate", parameters: { url: FORM_URL } }), {
+    status: "resolved",
+    parameters: { outputId: "web.browser.navigate", parameters: { url: FORM_URL, checkWaitMs: 15_000 }, timeoutMs: 20_000 }
+  });
+  // Resolved again, it carries the allowance once and has nothing left to change.
+  const once = await resolve(runtime, "builtin.policy.action", click);
+  assert.equal(once.status, "resolved");
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", (once as { parameters: JsonObject }).parameters), { status: "unchanged" });
+  // An action that cannot land on a check is not given it.
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.type", parameters: { selector: NAME_SELECTOR, text: "Ada" } }), { status: "unchanged" });
+});
+
+test("a click or navigation the build runs goes to the page with the check allowance, and nothing else does", async () => {
+  const sent: Array<{ actionType: string; parameters: JsonObject }> = [];
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      sent.push({ actionType: command.actionType, parameters: command.parameters });
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      return { status: "succeeded", payload: { snapshot: { url: FORM_URL, title: "Fixture", interactiveElements: [nameField, submit] } } };
+    }
+  });
+  const run = async (callId: string, node: string, parameters: JsonObject) =>
+    await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node, parameters, consequences: [] } });
+  await run("call.look", SNAPSHOT_NODE, {});
+  const pressed = await run("call.press", CLICK_NODE, { selector: { handle: "target.2" }, timeoutMs: 5_000 });
+  await run("call.go", NAVIGATE_NODE, { url: FORM_URL });
+  await run("call.type", TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada", timeoutMs: 5_000 });
+  const click = sent.find((command) => command.actionType === "web.dom.click");
+  assert.ok(click, "the press went out");
+  assert.equal(click.parameters.checkWaitMs, 15_000);
+  assert.equal(click.parameters.timeoutMs, 20_000, "the model's 5 s, with the 15 s allowance on top");
+  assert.equal(sent.find((command) => command.actionType === "web.browser.navigate")?.parameters.checkWaitMs, 15_000);
+  for (const command of sent.filter((entry) => entry.actionType === "web.dom.type" || entry.actionType === "web.dom.capture_snapshot")) {
+    assert.equal("checkWaitMs" in command.parameters, false, command.actionType);
+  }
+  assert.equal(sent.find((command) => command.actionType === "web.dom.type")?.parameters.timeoutMs, 5_000);
+  // What the step records is what the model wrote, not the allowance: the
+  // Flow's own node adds it again when it runs (`output-nodes/native-runtime.ts`).
+  assert.equal(JSON.stringify(pressed.draft ?? {}).includes("checkWaitMs"), false);
+});
+
 test("an extraction handle becomes the request the detection kept, with the plan's own bounds", async () => {
   const capture = CAPTURED_DETECTIONS["data-table-largest"];
   const runtime = runtimeOver(() => ({ url: capture.url, elements: [], structure: structuredClone(capture.structure) as JsonValue }));
@@ -308,7 +366,8 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   // Core's Run Output node runs its payload as the named web output, so a handle there is resolved as that output's node resolves it.
   assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "target.2" } } }), {
     status: "resolved",
-    parameters: { outputId: "web.dom.click", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } }
+    // It is a click, so it also carries the check allowance (`actions/check-wait.ts`).
+    parameters: { outputId: "web.dom.click", parameters: { selector: "#submit", element: SUBMIT_IDENTITY, checkWaitMs: 15_000 }, timeoutMs: 20_000 }
   });
   const malformed: JsonObject[] = [
     { selector: { handle: "target.x" } },
