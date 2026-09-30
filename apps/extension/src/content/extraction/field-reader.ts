@@ -17,7 +17,9 @@
 //   microdata's `content`, `aria-valuenow`, an `aria-label` restating its own
 //   text, or the copy of a paired rendering the page marked `aria-hidden` --
 //   never anything read out of the words, so an element that declares nothing
-//   tighter reads exactly as it always did;
+//   tighter reads exactly as it always did. Where the element is, or holds, the
+//   host of an open shadow root, the text is instead what the page draws there
+//   (`drawnText`, below), because `textContent` never enters a shadow root;
 // - `attribute`: that attribute, unreadable when the element does not carry it;
 // - `link`: the `href` resolved against the element's base URL, unreadable when
 //   there is none or it resolves to anything but http or https, so a
@@ -41,6 +43,7 @@
 // performed, so it throws.
 
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import { isSensitiveFormControl } from "../element-traits";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { ExtractFieldReader } from "./field-spec";
 import { recordControlType } from "./record-control";
@@ -87,7 +90,75 @@ function readColumn(item: Element, name: string, header: string): string | undef
 }
 
 function readText(element: Element): string {
-  return tightestStatedValue(element) ?? normalizeText(textOutsideSensitiveControls(element));
+  return tightestStatedValue(element)
+    ?? normalizeText(hostsOpenShadowRoot(element) ? drawnText(element) : textOutsideSensitiveControls(element));
+}
+
+/**
+ * How many nodes one text read visits once it crosses into a shadow root. A
+ * field is a title, a price, a row; the bound is what keeps a component that
+ * stamps a large tree from turning one field into an unbounded walk.
+ */
+const MAX_DRAWN_NODES = 10_000;
+
+/** Elements whose text is never drawn, which a shadow root routinely carries -- a component's own stylesheet above all. */
+const UNDRAWN_TAGS: ReadonlySet<string> = new Set(["STYLE", "SCRIPT", "TEMPLATE", "NOSCRIPT"]);
+
+/** Whether the element, or anything inside it, hosts an open shadow root. A closed root is unreachable and reads as its host's light text. */
+function hostsOpenShadowRoot(element: Element): boolean {
+  if (element.shadowRoot) return true;
+  for (const descendant of element.querySelectorAll("*")) {
+    if (descendant.shadowRoot) return true;
+  }
+  return false;
+}
+
+/**
+ * The element's text as the page draws it, in document order: a host of an
+ * open shadow root reads what its root holds rather than its light children,
+ * and a `<slot>` reads the light nodes assigned to it, or its fallback when
+ * none are. It is `textOutsideSensitiveControls` across shadow boundaries --
+ * every subtree rooted at a sensitive control is left out by the same shared
+ * rule (decision D2) -- and it also leaves out a stylesheet or script, whose
+ * text is not drawn.
+ *
+ * **Until 2026-09-30 the text in a shadow root was never read.** The
+ * professional network's sent invitations draw each request's age with a
+ * `gl-time-ago` element whose words ("Sent 1 month ago") exist only in its open
+ * shadow root, so a text field on the age read `""` and one on the whole row
+ * read the row without it, and "withdraw every request a month or more old"
+ * had no value to filter on (`t195-w9-row-age-in-shadow.md`).
+ */
+function drawnText(element: Element): string {
+  let text = "";
+  let visited = 0;
+  const pending: Node[] = [...drawnChildren(element)].reverse();
+  for (let node = pending.pop(); node && visited < MAX_DRAWN_NODES; node = pending.pop()) {
+    visited += 1;
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.nodeValue ?? "";
+      continue;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    const child = node as Element;
+    if (UNDRAWN_TAGS.has(child.tagName.toUpperCase()) || isSensitiveFormControl(child)) continue;
+    const inner = drawnChildren(child);
+    for (let index = inner.length - 1; index >= 0; index -= 1) {
+      const next = inner[index];
+      if (next) pending.push(next);
+    }
+  }
+  return text;
+}
+
+/** What is drawn inside an element: its open shadow root's nodes, a slot's assigned nodes, or else its own children. */
+function drawnChildren(element: Element): readonly Node[] {
+  if (element.shadowRoot) return [...element.shadowRoot.childNodes];
+  if (element.tagName.toUpperCase() === "SLOT" && typeof (element as HTMLSlotElement).assignedNodes === "function") {
+    const assigned = (element as HTMLSlotElement).assignedNodes();
+    if (assigned.length > 0) return assigned;
+  }
+  return [...element.childNodes];
 }
 
 /** The `href` as an absolute http(s) URL, or `undefined` when there is none or it is not one. */

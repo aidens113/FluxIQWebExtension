@@ -6,7 +6,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { proposedFieldSpec, type FieldSource } from "../infer-fields";
+import { readField } from "../field-reader";
+import { inferFields, proposedFieldSpec, type FieldSource } from "../infer-fields";
+import { fakeShadowDom } from "./fake-shadow-dom";
 
 const PRICE: FieldSource = { kind: "text", label: "product-price", selector: '[data-testid="product-price"]', sensitive: false };
 
@@ -44,4 +46,39 @@ test("an attribute source names its attribute and a column source its header, an
   assert.deepEqual(image, { kind: "attribute", selector: "img", attribute: "src", required: true });
   const column = proposedFieldSpec({ kind: "column", label: "Price", header: "Price", columnIndex: 2, sensitive: false }, 1);
   assert.deepEqual(column, { kind: "column", header: "Price", required: true });
+});
+
+// And the one source decided on a document here: an element whose words the
+// page draws only in an open shadow root. The professional network's sent
+// invitations draw each request's age as a childless `gl-time-ago` whose
+// shadow root holds "Sent 1 month ago", and until 2026-09-30 no column was
+// proposed for it, so "a month or more ago" had nothing to filter on.
+
+const dom = fakeShadowDom();
+
+function sentRow(name: string, age: string | undefined): Element {
+  const time = dom.el("gl-time-ago", { datetime: "2026-08-19T08:00:00.000Z", format: "sent" });
+  if (age !== undefined) dom.shadow(time, dom.el("span", {}, age));
+  return dom.el("li", { "data-entity-urn": "urn:gl:invitation:1" },
+    dom.el("div", {}, dom.el("div", {}, dom.el("strong", {}, name)), dom.el("div", {}, "Data engineer"), time),
+    dom.el("div", {}, dom.el("button", { type: "button" }, "Withdraw")));
+}
+
+test("an element whose words are only in its open shadow root is proposed as a text column that reads them", () => {
+  const run = [sentRow("Aoife Brennan", "Sent 1 month ago"), sentRow("Rosa Meijer", "Sent 4 weeks ago"), sentRow("Marit Dekker", "Sent 8 months ago")];
+  const fields = inferFields(run[0]!, run);
+  const age = fields.find((field) => field.spec.kind === "text" && field.spec.selector?.endsWith("gl-time-ago") === true);
+  assert.ok(age, JSON.stringify(fields.map((field) => field.spec)));
+  assert.equal(age.coverage, 1);
+  assert.equal(age.spec.required, true);
+  // The label is page structure, never the words read (D3).
+  assert.doesNotMatch(age.label, /month|week|Sent/u);
+  const reader = { kind: "text" as const, selector: age.spec.selector!, required: true };
+  assert.deepEqual(run.map((row) => readField(row, age.key, reader)), ["Sent 1 month ago", "Sent 4 weeks ago", "Sent 8 months ago"]);
+});
+
+test("an element with no words in its light DOM or its shadow root is not proposed", () => {
+  const run = [sentRow("Aoife Brennan", undefined), sentRow("Rosa Meijer", undefined)];
+  const fields = inferFields(run[0]!, run);
+  assert.equal(fields.some((field) => field.spec.selector?.endsWith("gl-time-ago") === true), false, JSON.stringify(fields.map((field) => field.spec)));
 });

@@ -303,6 +303,11 @@ lane, so four runs do not share state. A live-run failure is a product or Lab
 defect, never the machine: the stalls and crashes once blamed on load and
 memory were a Lab defect (the network guard crashing the extension's service
 worker as it started). Trace the failing step and the regression behind it.
+The Lab itself refuses a live run after an empty balance, in a relaunch loop,
+without a debug of the previous run, or on unchanged source after a failure;
+there is no spending limit, and the spend ledger records each run's cost for
+reporting. Overrides are files only the user creates
+(`docs/architecture/testing-facility.md`, "Live-run waste guards").
 
 Authoring worktrees live under `fxwork/` beside the checkout
 (`C:/Users/osrs_/FluxStuff/fxwork/` here), never under `fxlab/`, which holds the
