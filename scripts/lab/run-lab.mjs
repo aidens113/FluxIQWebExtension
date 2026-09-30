@@ -21,6 +21,7 @@ import { repositoryBuilds, staleRepositoryBuild } from "./domain-build-staleness
 import { coreCommitStaleness, readCoreCommit } from "./core/index.mjs";
 import { scanCoreSources } from "./core/index.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "./lab-instance.mjs";
+import { admitLiveRun, formatRefusals, recordLiveRunFinish, recordLiveRunStart } from "./live-guards/index.mjs";
 import { createStepTimer, runBuildPhase } from "./prelude/index.mjs";
 import { buildOrder, runStep } from "../build-cache/index.mjs";
 
@@ -34,6 +35,16 @@ const instanced = paths.instance !== null;
 const READ_ONLY_COMMANDS = new Set(["inspect", "compare", "auth", "clone-cache"]);
 const loadsCore = !READ_ONLY_COMMANDS.has(args[0] ?? "");
 const timer = createStepTimer(note);
+
+// The live-run spend guards, asked before anything else a live run does: no
+// budget, an empty provider balance, a relaunch loop, an undebugged previous
+// run, or a rerun of a failed task on unchanged source is refused here, before
+// Core is waited on, before the build and before any provider call. On
+// 2026-09-30 launcher loops with no agent watching spent $4.25 on 47 runs that
+// fixed nothing and fired about 1,050 more against an empty balance; a rule in
+// a note did not stop them. There is no flag past a refusal, only a file the
+// user creates (docs/architecture/testing-facility.md, "Live-run spend guards").
+const liveAdmission = await admitLiveRunOrExit();
 
 /** The Core scan this run started from; `null` when the run does not load Core. */
 let coreBefore = null;
@@ -182,7 +193,9 @@ const runEnvironment = {
 process.stderr.write(`${JSON.stringify({ lab: "paths", instance: paths.instance, extensionPath: paths.extensionPath, scenarioEntrypoint: paths.scenarioEntrypoint, hostModule: paths.hostModule, runsDirectory: process.env.FLUXIQ_TEST_RUNS_DIR ?? null })}\n`);
 
 timer.finish();
+const liveStart = liveAdmission === null ? null : await recordLiveRunStart(liveAdmission);
 process.exitCode = await run("node", [path.join(repositoryRoot, "packages", "test-runner", "dist", "cli.js"), ...args], runEnvironment, { tolerateFailure: true });
+if (liveStart !== null) await recordLiveFinish(liveAdmission, liveStart, process.exitCode);
 
 // The race this catches is the one the guard above cannot prevent: Core was
 // quiet when the run started and was rebuilt while it was in flight. Saying so
@@ -201,6 +214,45 @@ if (coreBefore !== null) {
         ? "FluxIQ Core was rebuilt while this run was in flight. The run passed, but it did not load one fixed Core."
         : "FluxIQ Core was rebuilt while this run was in flight. A cross-repository build race is the first thing to rule out before treating this failure as a product defect.",
     });
+  }
+}
+
+/**
+ * Admits a live run or exits, refused, having spent nothing. Returns null for
+ * an invocation that makes no provider call.
+ */
+async function admitLiveRunOrExit() {
+  let admission;
+  try {
+    admission = await admitLiveRun({ args, env: process.env, repositoryRoot, coreRoot: coreRepositoryRoot(process.env, repositoryRoot) });
+  } catch (error) {
+    // Fail closed: a guard that cannot read its ledger or fingerprint the tree
+    // does not guess that the run is allowed.
+    admission = { refusals: [{ rule: "guard-error", why: `the live-run guards could not be evaluated: ${error instanceof Error ? error.message : String(error)}`, remedy: "Fix the file or checkout the message names, then run again." }] };
+  }
+  if (admission === null) return null;
+  if (admission.refusals.length > 0) {
+    const refusal = formatRefusals(admission.refusals);
+    process.stderr.write(refusal.text);
+    process.stderr.write(refusal.line);
+    process.exit(1);
+  }
+  note({ lab: "live-guard", state: "admitted", instance: admission.launch.instance, task: admission.launch.task, fingerprint: admission.launch.fingerprint, ...(admission.overridden.length === 0 ? {} : { overridden: admission.overridden, why: "an OVERRIDE-<rule> file the user created let this run past those rules" }) });
+  return admission;
+}
+
+/** Records a finished live run in the spend ledger, and says so when it stopped all live runs. */
+async function recordLiveFinish(admission, start, exitCode) {
+  try {
+    const { finishes, stopped } = await recordLiveRunFinish(admission, start, { exitCode });
+    note({ lab: "live-guard", state: "recorded", runs: finishes.map((finish) => ({ runId: finish.runId, verdict: finish.verdict, totalEstimatedCostUsd: finish.totalEstimatedCostUsd })) });
+    if (stopped !== null) {
+      note({ lab: "live-guard", state: "stopped", file: stopped, why: "the provider reported an empty balance or exhausted quota; every live run is refused until a person tops the account up and deletes this file" });
+    }
+  } catch (error) {
+    // The run already happened; the next admission reconciles an unfinished
+    // start from the run directory, so this is reported rather than fatal.
+    note({ lab: "live-guard", state: "finish-unrecorded", why: `the spend ledger could not record this run (${error instanceof Error ? error.message : String(error)}); the next live admission reconciles it` });
   }
 }
 
