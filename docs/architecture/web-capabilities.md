@@ -182,6 +182,14 @@ lost.
   captures evidence rather than performing a browser capability, takes no
   parameters, has no action input, and is classified safe. Its result declares
   `validation: none` with the reason `evidence-only`.
+  During a build every capture is one the call itself needs: a look is one
+  capture, an action its read before acting and its read after, and each result
+  reports the digests of those captures on `stateDigests`
+  (`domain/src/runtime/llm-evidence/snapshot-state-digest.ts`). The binding sets
+  `stateDigestsOnCalls`, so Core takes no digest capture around a call and none
+  when it answers a repeated look from memory. `captureStateDigest` still takes
+  a fresh capture for callers that ask about a moment no call brackets
+  (recovery's annotation exploration).
 - **Legacy dotted aliases** (`browser.navigate`, `dom.click`, and the rest) are
   accepted on the wire and resolved to their canonical types once, in the
   domain (see below). The map is total over all eighteen types. For seven of
