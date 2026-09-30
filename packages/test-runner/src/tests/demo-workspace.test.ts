@@ -57,7 +57,8 @@ test("resolves one reusable demo directory below the configured runs root", () =
   assert.equal(config.gatewayUrl, "ws://127.0.0.1:4877/client");
   assert.equal(config.flowId, "flow.web-extension-demo");
   assert.equal(config.projectName, "FluxIQ Web Extension Test");
-  assert.equal(config.headless, true);
+  // Headed by default since t179 (c16fb5bd): the Lab runs no headless browser (user rule, 2026-09-29).
+  assert.equal(config.headless, false);
 });
 
 test("accepts configurable loopback ports and rejects remote self-managed endpoints", () => {
