@@ -719,6 +719,14 @@ debug and partitioned so neither touches the other's files:
 - Validation: both clones `pnpm check` exit 0; downstream `pnpm build` exit 0; Lab dry run `status: ready` with zero provider calls. Live run `run-mun5e1ie-5aeefbbd` (everything-store-kettle-to-cart) failed on its first provider call with `flow_bootstrap.provider_transport_unknown`; an authenticated `GET /models` with the same key returned 200 listing `deepseek-flash`, so the throw is inside Core (assigned to t174).
 - Outcome: In progress. Pass streak 0.
 
+### 2026-09-30 — Checkpoint before a machine restart (pagefile fix); where every lane stands
+- Agent: supervisor. All lanes were told to save state to their reports and stop; the machine restarts to apply a fixed 16-24 GB pagefile (the "memory" crashes were the Windows commit limit, 15.7 GB with a 3.9 GB system-managed pagefile, not physical RAM at 65%).
+- Merged and pushed to dev: t173, t175 (amendment-stall fixes), t177 (observability), t178 (improve an existing Flow), t179 (Week 2 metrics; its ui:e2e journeys run on non-ten fixtures and must not run until moved onto the ten), t180 (pause/resume), t181 (Simple Mode), t183 (packaging, CI, /get-started), t184 (55 live tasks on the ten audited, 54 ready), t182 downstream half. Downstream dev `5aedc85e`, Core dev `e85a02a`.
+- Pending integration: t176 (repair→persist→zero-provider replay chain; 3 downstream conflicts) and t182's Core half (service.ts 1 line over its 4558 ratchet) are with worker integrate-0930; state in `reports/integrate-0930.md`.
+- In progress, resume from each report: t174 live lane (`fxwork/t174`, uncommitted file-level merges of dev plus fixes: grant-refusal naming, Lab long request to 675 s, side-panel crash re-open, throw stage, summary truncation, ambiguous-target replay; runs 1-10 in `reports/t174-live-lane.md`); t185 live activity overlay + extension chat (`fxwork/t185`, `docs/working/live-activity-chat-plan.md`); t186 remove LLM call grants (`fxwork/t186`, B1/C/W/D/E done, B2 test fixes and t176 follow-ups remain); t187 Lab startup speed (`fxwork/t187`); t188 remove every 16-node cap, default 100 per Subflow configurable in UI (report `reports/t188-node-limits.md`, worktree not yet created); t189 decision context — why the model repeats itself (report `reports/t189-decision-context.md`, worktree not yet created).
+- Binding rules now in force (memory and AGENTS.md): one live run at a time in `lab-slots/slot-1`, headed; Lab/browser runs only on the ten realistic scenarios; no heavy builds/tests from other lanes while slot-1 exists; no LLM call grants; all agents Opus 5.5 with per-task effort (`lead`, `lead-xhigh`, `worker-low`, `worker`, `worker-high`).
+- Outcome: Paused for restart. Pass streak 0.
+
 ## Open Questions
 
 - Which complex scenario goes first? `everything-store` is the known multi-step
