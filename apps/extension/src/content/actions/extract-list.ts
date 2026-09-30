@@ -42,7 +42,7 @@
 // `rejectedSamples`. Only the exploring model's own node run sends it, so the
 // model that wrote a condition can see which rows it turned down
 // (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`); a Flow played
-// back never does, and its summary stays counts alone.
+// back never does, and its summary carries no rows.
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation, WebAutomationExtractListRequest } from "../types";
 import type { ContentActionDependencies } from "./types";
@@ -90,7 +90,7 @@ function includedFieldNames(request: WebAutomationExtractListRequest): string[] 
 
 /**
  * The read's account of itself: counts, a flag and declared field keys, and
- * nothing read off the page.
+ * nothing read off the page but each condition's bounded `seen` value.
  *
  * `itemsSeen` and `emptyRecords` are the two counts a zero read is diagnosed by,
  * and they are sent only when the page counted them, because the domain's copy
@@ -116,7 +116,8 @@ function summaryOf(outcome: Outcome, fieldNames: readonly string[]): ExtractionS
     ...(outcome.emptyRecords === undefined ? {} : { emptyRecords: outcome.emptyRecords }),
     ...(outcome.listPresence ? { listPresence: outcome.listPresence } : {}),
     ...(outcome.listWait ? { listWait: { stoppedOn: outcome.listWait.stoppedOn, waitedMs: outcome.listWait.waitedMs, waitedFor: outcome.listWait.waitedFor } } : {}),
-    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected] } } : {}),
+    // `seen` is the one page value here, one per condition and cut to 60 characters (`extraction/item-filter.ts`).
+    ...(outcome.conditions ? { conditions: { ...outcome.conditions, rejected: [...outcome.conditions.rejected], ...(outcome.conditions.seen ? { seen: [...outcome.conditions.seen] } : {}) } } : {}),
     // Only beside the counts they illustrate, and only for a read asked for them.
     ...(outcome.conditions && outcome.rejectedSamples ? { rejectedSamples: outcome.rejectedSamples.map((rows) => rows.map((row) => ({ ...row }))) } : {}),
     ...(outcome.paginationStop ? { paginationStop: outcome.paginationStop } : {}),

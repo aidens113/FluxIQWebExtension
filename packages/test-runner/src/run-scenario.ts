@@ -66,7 +66,7 @@ import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioS
 import { cleanupFailureOutcome, describeRecordingStartDiagnostic, extensionStatus, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery, pollStatus, recordingStartDiagnostic, runtimeMessage } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
-import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
+import { ExtensionStartTrace, writeExtensionStartSidecar, extensionControlPage, extensionStartFailureDetails, activateScenarioTab, armingOf, assertCoreRoundTrip, browserVersionFromCdp, cloneDestinationAssessment, configuredCredentials, evidenceEvent, exportRunClonePackage, installRunNetworkGuard, keepsRunState, launchBrowser, openExistingFluxIQControl, openLivePanel, openScenarioStart, persistedFlowRunContext, productFailureOf, readDecisionTrace, recordingIds, requireExtension, resolveRunSecrets, unarmedWorkflow, workflowSelection, writePersistedFlowSnapshots, UiReviewRecorder, PeriodicCapture, createRunScreenshotAdapter } from "./run-scenario/index.js";
 
 /**
  * The blank tab a browser opens on, and where a Flow that must reach its own
@@ -502,7 +502,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   } catch (error) {
     failureCategory = classifyRunnerFailure(error);
     failureMessage = error instanceof Error ? error.message : String(error);
-    if (flowObservation?.reportedVerdict == null) {
+    // A failure FluxIQ caused is the product's, verdict or not: a build that ended without a Flow is not a facility fault (`run-scenario/product-failure.ts`).
+    const productFailure = productFailureOf(error, { flowLane, flowCreated: flowObservation?.flowCreated });
+    if (flowObservation?.reportedVerdict == null && !productFailure) {
       facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.execute");
     }
     // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis. So now are a `runtime.behavior` failure's, which is the class the created-Flow lane actually raises -- a build that proposed nothing, a build that asked for a permission, a Flow with no extract node -- and whose details were dropped here while a recording's were kept. One of them does carry page data (`assertExtraction`'s record mismatch publishes the expected and the observed record), so the gate is the disclosure rule `snapshots/extraction-mismatches.json` already publishes observed values by: a scenario that declares a replay secret has one on its page by construction, and its details are withheld.
@@ -512,7 +514,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const pairingWaitDetails = pairingStatusWaitFailureDetails(error);
     const httpTransportDetails = httpTransportFailureDetails(error);
     const topologyReadinessDetails = topologyReadinessFailureDetails(error);
-    const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
+    const failureEvent = { ...evidenceEvent(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.details && (error.category === "recording.contract" || (error.category === "runtime.behavior" && !scenario.secrets?.length)) ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(extensionStartDetails ? { failureDetails: extensionStartDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}), ...(productFailure ? { productFailure } : {}) } };
     // The picture is taken at the failure, before cleanup changes what is on screen.
     await capture.trigger(failureEvent).catch(() => undefined); await uiReview.finish("failure");
   } finally {

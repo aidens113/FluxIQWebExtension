@@ -106,6 +106,13 @@ export type ExtractionCheckpointConditions = {
   applied: number;
   kept: number;
   rejected: number[];
+  /**
+   * The first value each condition's own read found on an item it held of, or
+   * `null` (`content/extraction/item-filter.ts`). It travels so the value a read
+   * reports is the whole read's first, not its last document's. Absent from a
+   * page build that did not collect it.
+   */
+  seen?: (string | null)[] | undefined;
 };
 
 /**
@@ -177,10 +184,12 @@ function refusalCountsValue(value: unknown): ExtractionCheckpointRefusals | unde
 /** A checkpoint's condition counts, copied, or `undefined` when any member is not a count. */
 function conditionCountsValue(value: unknown): ExtractionCheckpointConditions | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const { applied, kept, rejected } = value as Record<string, unknown>;
+  const { applied, kept, rejected, seen } = value as Record<string, unknown>;
   if (!isCount(applied) || !isCount(kept) || kept > applied) return undefined;
   if (!Array.isArray(rejected) || !rejected.every(isCount)) return undefined;
-  return { applied, kept, rejected: [...rejected] };
+  // One value or `null` per condition, or the checkpoint is refused.
+  if (seen !== undefined && !(Array.isArray(seen) && seen.length === rejected.length && seen.every((entry) => entry === null || typeof entry === "string"))) return undefined;
+  return { applied, kept, rejected: [...rejected], ...(seen === undefined ? {} : { seen: [...seen as (string | null)[]] }) };
 }
 
 function isRecord(value: unknown): value is ExtractionCheckpointRecord {

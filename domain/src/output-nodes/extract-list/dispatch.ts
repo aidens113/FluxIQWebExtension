@@ -25,6 +25,19 @@
 // itself, which is what an editor prefills -- is given the scaled timeout. Any
 // other value is the author's decision and is sent as it is.
 //
+// **And the timeout is the dispatch's own, not only the page's.** Core gives a
+// command the time its dispatch payload's `timeoutMs` names, plus its answer
+// margin, and a command that names none gets the gateway's default of 30 s
+// (Core `runtime/io-policy.ts`, `client-gateway/service/commands.ts`). Until
+// 2026-09-30 the scaled timeout travelled in `parameters` alone: the page read
+// for up to ten seconds a page while Core stopped waiting at thirty, so a paced
+// read of more than about six pages -- 2.5 s between loads on one site, and each
+// page revealed to its end -- would be abandoned with every row it read. So the
+// node's final `timeoutMs`, scaled or authored, is sent beside the parameters
+// too. The scaling is bounded as `maxPages` is, at fifty pages; a tighter cap
+// would cut short a read of fifty paced pages, which needs two minutes for its
+// pacing alone.
+//
 // A request that does not parse derives nothing and scales nothing: it is sent
 // as authored, and the dispatch refuses it with its own reason.
 
@@ -61,15 +74,21 @@ export function webAutomationExtractListDispatch(nodeParameters: JsonObject): We
   const declared = authored === undefined || authored === null
     ? request === undefined ? undefined : webAutomationDerivedRecordOutput(request)
     : request === undefined ? withRecordsPath(authored) : webAutomationReconciledRecordOutput(authored, request);
-  if (declared === undefined) return { ok: true, payload: { parameters } };
+  const timeout = commandTimeout(parameters.timeoutMs);
+  if (declared === undefined) return { ok: true, payload: { parameters, ...timeout } };
   const parsed = parseAutomationStudioRecordOutput(declared);
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
   // The parsed output is plain JSON; its type only spells the optional keys.
-  return { ok: true, payload: { parameters, recordOutput: parsed.output as unknown as JsonObject } };
+  return { ok: true, payload: { parameters, ...timeout, recordOutput: parsed.output as unknown as JsonObject } };
 }
 
 function leftDefault(timeoutMs: JsonValue | undefined): boolean {
   return timeoutMs === undefined || timeoutMs === WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS;
+}
+
+/** The node's timeout as the dispatch's own, which is how long Core waits for the read: a positive finite number, or nothing. */
+function commandTimeout(timeoutMs: JsonValue | undefined): { timeoutMs?: number } {
+  return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {};
 }
 
 function withRecordsPath(authored: JsonValue): JsonValue {

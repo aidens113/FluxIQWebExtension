@@ -14,8 +14,34 @@
 // `aria-current`, the numbers shown move with the page, and page two's Next
 // leads back to page two. So a positional selector names the same link here
 // that it names on the store, which is the whole point.
+//
+// **And with `lazyTail`, the store's results as a read that reveals them sees
+// them.** The store draws twelve results with the page and a sentinel under
+// the twelfth; once a scroll brings the sentinel within 200 px of the viewport,
+// it fetches the rest of the page and replaces itself with them, 600 ms later
+// (`client/search-script.ts`, `client/timings.ts` there). Here every element
+// takes one row of the document in document order, the viewport is 800 px
+// tall, `scrollIntoView` scrolls it, and a page turn starts at the top again,
+// as a new document does: so twelve results reach below the fold, and the
+// last four exist only once something scrolled the sentinel into reach.
 
-/** An element, as much of one as the pager lookup, the label reader and the page advance ask for. */
+/** One row of the fake document per element, and the viewport's height, in px. */
+const ROW_PX = 40;
+const VIEWPORT_PX = 800;
+/** How far below the viewport the store's sentinel starts its fetch. */
+const SENTINEL_REACH_PX = 200;
+
+/** The page's scroll: where it is, how often it moved, and what the page does when it moves. */
+type Viewport = { root: FakeElement; scrollY: number; scrolls: number; listeners: Array<() => void> };
+let viewport: Viewport | undefined;
+
+/** An element's top in the document: its row in document order, or 0 once it left the page. */
+function layoutTop(element: FakeElement): number {
+  const index = viewport === undefined ? -1 : descendants(viewport.root).indexOf(element);
+  return Math.max(0, index) * ROW_PX;
+}
+
+/** An element, as much of one as the pager lookup, the label reader, the page advance and the reveal ask for. */
 export class FakeElement {
   readonly tagName: string;
   parentElement: FakeElement | null = null;
@@ -89,6 +115,36 @@ export class FakeElement {
   click(): void {
     this.onClick?.();
   }
+
+  get nextElementSibling(): FakeElement | null {
+    const siblings = this.parentElement?.children ?? [];
+    return siblings[siblings.indexOf(this) + 1] ?? null;
+  }
+
+  getBoundingClientRect(): { x: number; y: number; top: number; bottom: number; left: number; right: number; width: number; height: number } {
+    const top = layoutTop(this) - (viewport?.scrollY ?? 0);
+    return { x: 0, y: top, top, bottom: top + ROW_PX, left: 0, right: 320, width: 320, height: ROW_PX };
+  }
+
+  /** Scrolls the viewport so this element's bottom meets the viewport's, as `block: "end"` does. */
+  scrollIntoView(): void {
+    if (!viewport) return;
+    const scrollY = Math.max(0, layoutTop(this) + ROW_PX - VIEWPORT_PX);
+    if (scrollY === viewport.scrollY) return;
+    viewport.scrollY = scrollY;
+    viewport.scrolls += 1;
+    for (const listener of viewport.listeners) listener();
+  }
+
+  /** Puts `nodes` where this element was, as the store's sentinel does with the results it fetched. */
+  replaceWith(...nodes: FakeElement[]): void {
+    const parent = this.parentElement;
+    if (!parent) return;
+    const at = parent.children.indexOf(this);
+    detach(this);
+    for (const node of nodes) node.parentElement = parent;
+    parent.children.splice(at, 1, ...nodes);
+  }
 }
 
 function detach(element: FakeElement): void {
@@ -112,7 +168,7 @@ function simpleMatches(element: FakeElement, selector: string): boolean {
   return value === undefined ? actual !== null : actual === value;
 }
 
-/** A child-combinator chain -- `main > div:nth-of-type(2) > nav > a:nth-of-type(4)` -- whose first step is any descendant. */
+/** A child-combinator chain -- `main > div:nth-of-type(2) > nav > a:nth-of-type(4)`, or `nav > *` -- whose first step is any descendant. */
 function chainFrom(root: FakeElement, selector: string): FakeElement[] {
   const steps = selector.split(">").map((step) => step.trim());
   let found = descendants(root).filter((element) => stepMatches(element, steps[0] ?? ""));
@@ -121,10 +177,10 @@ function chainFrom(root: FakeElement, selector: string): FakeElement[] {
 }
 
 function stepMatches(element: FakeElement, step: string): boolean {
-  const parsed = /^([a-z]+)(?::nth-of-type\((\d+)\))?$/u.exec(step);
+  const parsed = /^([a-z]+|\*)(?::nth-of-type\((\d+)\))?$/u.exec(step);
   if (!parsed) throw new Error(`The fake page does not read the selector step ${JSON.stringify(step)}.`);
   const [, tag, nth] = parsed;
-  if (element.tagName !== tag?.toUpperCase()) return false;
+  if (tag !== "*" && element.tagName !== tag?.toUpperCase()) return false;
   if (nth === undefined) return true;
   const sameTag = (element.parentElement?.children ?? [element]).filter((sibling) => sibling.tagName === element.tagName);
   return sameTag.indexOf(element) === Number(nth) - 1;
@@ -151,10 +207,18 @@ export type StorePage = {
   cards: FakeElement[];
   /** The page each followed control led to, in order. */
   followed: number[];
+  /** How many times the page scrolled. */
+  scrolls(): number;
   /** Puts the pager under the list, for a page that draws it late. */
   drawPager(): void;
   restore(): void;
 };
+
+/** The store's split of a results page: the results drawn with it, the ones its sentinel fetches, and how long the fetch takes. */
+export type LazyTail = { eager: number; lazy: number; loadMs: number };
+
+/** The everything store's own split: twelve drawn, four fetched, 600 ms after the sentinel comes within reach. */
+export const STORE_LAZY_TAIL: LazyTail = { eager: 12, lazy: 4, loadMs: 600 };
 
 function link(target: number, label: string, text: string, turnTo: (page: number) => void): FakeElement {
   const element = new FakeElement("a", { href: pageHref(target), "aria-label": label }, text);
@@ -183,20 +247,39 @@ function pager(page: number, turnTo: (target: number) => void): FakeElement {
   return new FakeElement("nav", { role: "navigation", "aria-label": "pagination" }, "", [previous, ...numbers, next]);
 }
 
-/** Four cards of a page; the second is a product whose own link reads "Next", which is never the pager's. */
-function cardsOf(page: number): FakeElement[] {
-  return [1, 2, 3, 4].map((index) => new FakeElement("div", { "data-card": `${page}-${index}` }, "", [
+/** Cards `first` to `last` of a page (four by default); the second is a product whose own link reads "Next", which is never the pager's. */
+function cardsOf(page: number, first = 1, last = 4): FakeElement[] {
+  return Array.from({ length: last - first + 1 }, (_, offset) => first + offset).map((index) => new FakeElement("div", { "data-card": `${page}-${index}` }, "", [
     new FakeElement("a", { href: `/dp/P${page}${index}` }, index === 2 ? "Next" : `Wireless earbuds ${page}.${index}`)
   ]));
+}
+
+/**
+ * What a page draws in its results: every card, or, with a lazy tail, its eager
+ * cards and a sentinel under the last of them that fetches the rest once a
+ * scroll brings it within reach, and replaces itself with them.
+ */
+function resultsOf(page: number, tail: LazyTail | undefined, scrolled: Viewport): FakeElement[] {
+  if (tail === undefined) return cardsOf(page);
+  const sentinel = new FakeElement("div", { "data-sentinel": "" });
+  let requested = false;
+  scrolled.listeners.push(() => {
+    if (requested || !sentinel.isConnected || sentinel.getBoundingClientRect().top > VIEWPORT_PX + SENTINEL_REACH_PX) return;
+    requested = true;
+    setTimeout(() => { sentinel.replaceWith(...cardsOf(page, tail.eager + 1, tail.eager + tail.lazy)); }, tail.loadMs);
+  });
+  return [...cardsOf(page, 1, tail.eager), sentinel];
 }
 
 /**
  * Stands the store's results page `page` up as the document, until `restore`.
  * With `pager: "late"`, the page draws its list first and its pager only when
  * `drawPager` is called. Pressing a pager link replaces the results with that
- * page's, as the store's does, and records where it led.
+ * page's and the pager with that page's, as the store's does, scrolls back to
+ * the top, and records where it led. With `lazyTail`, each page's results end
+ * in the store's sentinel (see the header).
  */
-export function storePage(page: number, options: { pager?: "drawn" | "late" | "none" } = {}): StorePage {
+export function storePage(page: number, options: { pager?: "drawn" | "late" | "none"; lazyTail?: LazyTail } = {}): StorePage {
   const saved = {
     document: (globalThis as Record<string, unknown>).document,
     window: (globalThis as Record<string, unknown>).window,
@@ -204,17 +287,28 @@ export function storePage(page: number, options: { pager?: "drawn" | "late" | "n
     input: (globalThis as Record<string, unknown>).HTMLInputElement
   };
   const followed: number[] = [];
-  const results = new FakeElement("div", { role: "list" }, "", cardsOf(page));
+  const scrolled: Viewport = { root: new FakeElement("body"), scrollY: 0, scrolls: 0, listeners: [] };
+  const results = new FakeElement("div", { role: "list" }, "", resultsOf(page, options.lazyTail, scrolled));
+  // The page the document shows, which its address follows as a new document's would.
+  let current = page;
   const turnTo = (target: number): void => {
     followed.push(target);
-    results.replaceChildren(...cardsOf(target));
+    current = target;
+    results.replaceChildren(...resultsOf(target, options.lazyTail, scrolled));
+    scrolled.scrollY = 0;
+    // A pager drawn with the list is redrawn with it, for the page it now shows.
+    if (nav.parentElement) {
+      const redrawn = pager(target, turnTo);
+      nav.replaceWith(redrawn);
+      nav = redrawn;
+    }
   };
   const widget = new FakeElement("div", { role: "region", "aria-label": "Customers frequently viewed" }, "", [
     new FakeElement("a", { href: "/dp/W1" }, "Popular earbuds"),
     new FakeElement("a", { href: "/dp/W2" }, "Popular charging case")
   ]);
   const column = new FakeElement("div", {}, "", [results, widget]);
-  const nav = pager(page, turnTo);
+  let nav = pager(page, turnTo);
   if ((options.pager ?? "drawn") === "drawn") column.append(nav);
   const rail = new FakeElement("aside", {}, "", [new FakeElement("a", { href: pageHref(1) + "&stars=4", "aria-label": "4 Stars & Up" }, "4 Stars & Up")]);
   const main = new FakeElement("main", {}, "", [
@@ -222,21 +316,27 @@ export function storePage(page: number, options: { pager?: "drawn" | "late" | "n
     new FakeElement("div", {}, "", [rail, column])
   ]);
   const body = new FakeElement("body", {}, "", [main]);
+  scrolled.root = body;
+  viewport = scrolled;
 
   (globalThis as Record<string, unknown>).HTMLElement = FakeElement;
   (globalThis as Record<string, unknown>).HTMLInputElement = class {};
   (globalThis as Record<string, unknown>).window = { addEventListener: () => {}, removeEventListener: () => {} };
   (globalThis as Record<string, unknown>).document = {
     readyState: "complete",
-    URL: `${STORE_ORIGIN}${pageHref(page)}`,
+    get URL(): string {
+      return `${STORE_ORIGIN}${pageHref(current)}`;
+    },
     querySelector: (selector: string) => body.querySelector(selector),
     querySelectorAll: (selector: string) => body.querySelectorAll(selector)
   };
   return {
-    cards: [...results.children],
+    cards: results.children.filter((child) => child.getAttribute("data-card") !== null),
     followed,
+    scrolls: () => scrolled.scrolls,
     drawPager: () => { column.append(nav); },
     restore: () => {
+      if (viewport === scrolled) viewport = undefined;
       for (const [name, value] of Object.entries({ document: saved.document, window: saved.window, HTMLElement: saved.element, HTMLInputElement: saved.input })) {
         (globalThis as Record<string, unknown>)[name] = value;
       }

@@ -158,7 +158,7 @@ test("a lane that fails after Core ran the Flow still leaves its provider calls 
   assert.equal(written.exploration.toolDetail, "not-published");
   assert.equal(JSON.stringify(written).includes("sentence Core wrote"), false, "the snapshot carries Core's own prose");
   assert.equal(JSON.stringify(written).includes(CREDENTIAL.value), false, "the snapshot carries the credential");
-  assert.deepEqual(published, [{ calls: 3, interventions: 2, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true }, settledAfterLaneFailure: true }]);
+  assert.deepEqual(published, [{ calls: 3, interventions: 2, totalEstimatedCostUsd: 0.003, llmGate: { invoked: true }, runTotal: { calls: 3, totalEstimatedCostUsd: 0.003 }, settledAfterLaneFailure: true }]);
   // The evaluation's usage is the run's, not zero.
   assert.equal(live.usage.calls, 3);
 });

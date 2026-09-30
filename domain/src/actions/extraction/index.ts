@@ -9,4 +9,5 @@ export * from "./recorded-definition";
 export * from "./rejected-samples";
 export * from "./request";
 export * from "./schema";
+export * from "./seen-values";
 export * from "./summary";

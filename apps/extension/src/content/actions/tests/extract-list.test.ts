@@ -176,7 +176,7 @@ test("a filtered read reports what its conditions did, in counts, and how many i
     timedOut: false,
     missingFields: [],
     filtered: 3,
-    conditions: { applied: 4, kept: 1, rejected: [2, 1], unfiltered: false }
+    conditions: { applied: 4, kept: 1, rejected: [2, 1], unfiltered: false, seen: ["Brightaisle Plus", null] }
   };
   const { deps, calls } = dependencies(outcome);
   await extractListAction(COMMAND, deps, 1);
@@ -190,11 +190,12 @@ test("a filtered read reports what its conditions did, in counts, and how many i
     truncated: false,
     missingFields: [],
     fieldNames: ["name", "price", "sku"],
-    conditions: { applied: 4, kept: 1, rejected: [2, 1], unfiltered: false }
+    conditions: { applied: 4, kept: 1, rejected: [2, 1], unfiltered: false, seen: ["Brightaisle Plus", null] }
   };
   assert.deepEqual(call.evidence?.extraction, summary);
-  // The counts survive the domain's wire copy, which is what puts them in front
-  // of the judgement and the repair rather than only in the page.
+  // The counts, and what each condition's own read found, survive the domain's
+  // wire copy, which is what puts them in front of the judgement and the repair
+  // rather than only in the page.
   assert.deepEqual(wireSummary(call.validation, call.evidence), summary);
   assert.equal(call.validation.status, "passed");
   assert.match(call.validation.status === "passed" ? call.validation.actual : "", /1 record from 1 page, 3 items left out by where/u);

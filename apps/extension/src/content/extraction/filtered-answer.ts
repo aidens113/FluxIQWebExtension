@@ -34,10 +34,12 @@
 //
 // ## Counts only
 //
-// Nothing here is read off the page. The report travels on the wire beside the
-// extraction summary (`domain/src/actions/extraction/summary.ts`), whose whole
-// contract is that it carries counts, flags and declared field keys and never a
-// value -- so a row's content cannot ride out on a diagnostic.
+// Nothing here is read off the page but `seen`: one value per condition, cut to
+// 60 characters, which says what a condition's own read was about. The report
+// travels on the wire beside the extraction summary
+// (`domain/src/actions/extraction/summary.ts`), whose contract is otherwise
+// counts, flags and declared field keys -- so no row's content rides out on a
+// diagnostic.
 
 import type { ExtractedListRecord } from "./list-reader";
 
@@ -60,6 +62,8 @@ export type ListExtractionConditionReport = {
   rejected: number[];
   /** Whether the read answered with rows its conditions rejected, because keeping only the survivors would have answered with none. */
   unfiltered: boolean;
+  /** One value each condition's own read found on an item it held of, or `null` (`item-filter.ts`); the one member read off the page. */
+  seen?: (string | null)[] | undefined;
 };
 
 /** The rows a read has to choose between, each with the required fields some row of it lacked. */

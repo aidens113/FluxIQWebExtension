@@ -37,11 +37,28 @@
 // the list is followed by another, because a list that loads in parts loads the
 // next part the same way; `LIST_REVEALS` bounds that, so a feed that goes on
 // for ever is not swept by a read that never asked to page. A read that pages
-// by scrolling has its own bounded mechanism (`pagination.ts`) and does not
-// come here at all.
+// by scrolling, or by a load-more control, has its own bounded mechanism
+// (`pagination.ts`) and does not come here at all.
+//
+// **Every page of a page-by-page read is revealed too** (`awaitPageComplete`).
+// Until 2026-09-30 only a read of one page was: a read that followed `next` or
+// numbered pages waited for each page's first item and read it, so the store's
+// last four results on every page were never loaded, and a five-page read was
+// four rows short of thirteen (`run-munw7ffn-fe1cecd2`). A page reached by a
+// control is a whole page like the first, and so is one reached in a new
+// document through the worker's checkpoint.
+//
+// A reveal the command's deadline cut short says so (`"timed_out"`), and the
+// read then ends as any read the deadline ends -- `timedOut`, with the
+// `deadline` stop -- rather than reading the part of the page it saw as the
+// whole of it. An element that cannot scroll or say where it is (a test's
+// stand-in) is not revealed, which is a reveal that moved nothing.
 
 /** What a wait saw: its condition, nothing within its window, or the command's deadline. */
 export type WaitOutcome = "changed" | "unchanged" | "timed_out";
+
+/** Whether a reveal finished -- nothing more came, or nothing more was wanted -- or the command's deadline cut it short. */
+export type ListCompletion = "complete" | "timed_out";
 
 /** How long a revealed list has to grow: the window `pagination.ts` gives a lazy feed after a scroll. */
 const LIST_GROWTH_WINDOW_MS = 900;
@@ -73,10 +90,11 @@ export async function waitUntil(condition: () => boolean, windowMs: number, poll
 }
 
 /**
- * Brings the whole of a one-page list onto the page: reveals its end and waits
+ * Brings the whole of a page's list onto the page: reveals its end and waits
  * for what that brings, until a reveal brings nothing, nothing moves, the list
  * holds as many items as the read can use, the reveals run out, or the
- * command's deadline passes. See the header.
+ * command's deadline passes -- the one ending that answers `"timed_out"`. See
+ * the header.
  *
  * `wanted` is how many items the read could still use. A read that already sees
  * its own `maxItems` has nothing to gain by revealing more and does not touch
@@ -88,14 +106,38 @@ export async function waitUntil(condition: () => boolean, windowMs: number, poll
  * stands, so what it reports is still the page rather than an error invented
  * here, exactly as `awaitListPresent` does.
  */
-export async function awaitListComplete(item: string, wanted: number, actionDeadline: number | undefined): Promise<void> {
+export async function awaitListComplete(item: string, wanted: number, actionDeadline: number | undefined): Promise<ListCompletion> {
   for (let reveal = 0; reveal < LIST_REVEALS; reveal += 1) {
     const before = matchCount(item);
-    if (before === 0 || before >= wanted) return;
-    if (!revealListEnd(item)) return;
+    if (before === 0 || before >= wanted) return "complete";
+    if (!revealListEnd(item)) return "complete";
     const grew = await waitUntil(() => matchCount(item) > before, LIST_GROWTH_WINDOW_MS, LIST_GROWTH_POLL_MS, actionDeadline);
-    if (grew !== "changed") return;
+    if (grew === "timed_out") return "timed_out";
+    if (grew === "unchanged") return "complete";
   }
+  return "complete";
+}
+
+/** What one page of a page-by-page read can still use. */
+export type PageWant = {
+  /** Whether the read keeps reading whatever it has: conditions, a dedupe or a sort decide only once the rows are read. */
+  everything: boolean;
+  /** Records the read can still keep under its bound. */
+  records: number;
+  /** Whether an item on the page was read already, which a page that appends rather than replaces still shows. */
+  taken(element: Element): boolean;
+};
+
+/**
+ * Brings the whole of one page of a `next` or numbered read onto the page
+ * before it is read (see the header). The wanted count is the read of one
+ * page's rule, with the records left under the bound in place of `maxItems`,
+ * plus the items already read on a page that appended its next ones, since
+ * those fill no place.
+ */
+export async function awaitPageComplete(item: string, want: PageWant, actionDeadline: number | undefined): Promise<ListCompletion> {
+  const wanted = want.everything ? Number.MAX_SAFE_INTEGER : Math.max(1, want.records) + matches(item).filter((element) => want.taken(element)).length;
+  return await awaitListComplete(item, wanted, actionDeadline);
 }
 
 /**
@@ -107,8 +149,10 @@ function revealListEnd(item: string): boolean {
   const items = matches(item);
   const last = items[items.length - 1];
   if (!last) return false;
+  const target = last.nextElementSibling ?? last;
+  if (typeof last.getBoundingClientRect !== "function" || typeof target.scrollIntoView !== "function") return false;
   const before = last.getBoundingClientRect().top;
-  (last.nextElementSibling ?? last).scrollIntoView({ block: "end", behavior: "instant" });
+  target.scrollIntoView({ block: "end", behavior: "instant" });
   return Math.abs(last.getBoundingClientRect().top - before) > MOVED_PX;
 }
 

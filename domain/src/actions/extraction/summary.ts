@@ -7,9 +7,11 @@
 // way, so the copy below admits nothing else: a string that is not a
 // well-formed field key, a word outside its set, or a missing field that is not
 // one of the read's own fields, drops the whole summary rather than letting
-// page text ride on a field nothing redacts. The one exception, `rejectedSamples`,
-// exists only when an exploring model's node run asks (`./rejected-samples.ts`).
+// page text ride on a field nothing redacts. Two exceptions carry page text,
+// each bounded: `rejectedSamples`, only when an exploring model's node run asks
+// (`./rejected-samples.ts`), and `conditions.seen` (`./seen-values.ts`).
 
+import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
 import { isWebAutomationExtractFieldKey } from "./field-key";
 import { webAutomationExtractionOrderReportValue, type WebAutomationExtractionOrderReport } from "./order-report";
 import { webAutomationExtractionRejectedSamplesValue, type WebAutomationExtractionRejectedRow } from "./rejected-samples";
@@ -258,6 +260,8 @@ export type WebAutomationExtractionConditionReport = {
   rejected: number[];
   /** Whether the read answered with rows its conditions rejected, because keeping only the survivors would have answered with none. */
   unfiltered: boolean;
+  /** One value each condition's own read found on an item it held of, cut to 60 characters (`./seen-values.ts`); absent from a page build that predates it. */
+  seen?: WebAutomationExtractionConditionSeen | undefined;
 };
 
 /**
@@ -281,12 +285,9 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // Only beside the counts, cut to their bounds whatever the page sent; malformed drops the summary.
   const rejectedSamples = summary.rejectedSamples === undefined ? undefined : webAutomationExtractionRejectedSamplesValue(summary.rejectedSamples, conditions?.rejected.length ?? -1, fieldNames);
   if (summary.rejectedSamples !== undefined && rejectedSamples === undefined) return undefined;
-  // Optional, and held to the same rule: a word this side does not know is a
-  // producer saying something about the read that this contract cannot read
-  // back, so it drops the summary rather than arriving as a half-understood
-  // fact. Optional is what keeps an extension build that predates it -- the
-  // unpacked one a browser may still have loaded -- sending summaries that
-  // still arrive whole.
+  // Optional, so an extension build that predates it still sends a summary that
+  // arrives whole; a word this side does not know drops the summary rather than
+  // arriving as a half-understood fact.
   const listPresence = listPresenceValue(summary.listPresence);
   if (summary.listPresence !== undefined && listPresence === undefined) return undefined;
   // The wait's own account, held to the same rule, and for a reason the field it
@@ -311,16 +312,13 @@ export function webAutomationExtractionSummaryValue(value: unknown): WebAutomati
   // outside the set drops the summary rather than arriving half understood.
   const paginationStop = paginationStopValue(summary.paginationStop);
   if (summary.paginationStop !== undefined && paginationStop === undefined) return undefined;
-  // What dedupe and sort did, held to the same rule: optional, so a page build
-  // that predates them still sends a summary that arrives whole.
+  // What dedupe and sort did, held to the same rule.
   const order = summary.order === undefined ? undefined : webAutomationExtractionOrderReportValue(summary.order);
   if (summary.order !== undefined && order === undefined) return undefined;
-  // No cross-check against `recordCount`, unlike `kept > applied` below. A
-  // continued read carries its predecessor's records and counts only its own
-  // document's items (the rule the condition report already states), so
-  // `recordCount` above `itemsSeen` is a legitimate read rather than a producer
-  // counting something else -- and the penalty here is dropping the whole
-  // account, which is the one thing a zero read cannot afford to lose.
+  // No cross-check against `recordCount`, unlike `kept > applied` below: a
+  // continued read carries its predecessor's records, so `recordCount` above
+  // `itemsSeen` is a legitimate read, and dropping the account would lose the
+  // one thing a zero read cannot afford to.
   return {
     recordCount,
     pagesRead,
@@ -388,7 +386,9 @@ function conditionReportValue(value: unknown): WebAutomationExtractionConditionR
   if (applied === undefined || kept === undefined || rejected === undefined || typeof report.unfiltered !== "boolean") return undefined;
   // A read cannot have kept more items than it looked at.
   if (kept > applied) return undefined;
-  return { applied, kept, rejected: [...rejected], unfiltered: report.unfiltered };
+  const seen = report.seen === undefined ? undefined : webAutomationExtractionConditionSeenValue(report.seen, rejected.length);
+  if (report.seen !== undefined && seen === undefined) return undefined;
+  return { applied, kept, rejected: [...rejected], unfiltered: report.unfiltered, ...(seen !== undefined ? { seen } : {}) };
 }
 
 function countValue(value: unknown): number | undefined {

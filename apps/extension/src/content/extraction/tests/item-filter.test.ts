@@ -14,6 +14,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { itemFilterFor } from "../item-filter";
+import { extractList } from "../list-reader";
+import type { ExtractionCheckpoint } from "../../../shared/extraction-continuation";
+import type { WebAutomationExtractListRequest } from "../../types";
 
 /** Never touched: every condition here names a field of the record. */
 const ITEM = {} as Element;
@@ -79,4 +82,78 @@ test("a condition over a column the request does not read refuses the read rathe
     () => itemFilterFor({ item: ".card", fields: { name: ".name", badge: { kind: "text", selector: ".badge", handling: "exclude" } }, where: [{ field: "badge", is: "absent" }] }),
     /excluded/u
   );
+});
+
+// What a condition's own read found (`seen`), so a condition described without
+// its locator is still recognisable. Live run `run-munw7ffn-fe1cecd2` filtered on
+// the aria-label of the store's Brightaisle Plus icon; its judge was told only
+// `attribute aria-label is present` and advised adding a Plus condition.
+
+/** Items that answer `getAttribute` (`aria-label`, and `data-*` from `values`), under `.row`, with a `.more` control whose click adds `more`. */
+function fakePage(rows: Array<Record<string, string>>, more: Array<Record<string, string>> = []): { restore(): void } {
+  const saved = { document: globalThis.document, element: globalThis.HTMLElement, input: globalThis.HTMLInputElement };
+  const row = (values: Record<string, string>) => ({
+    getAttribute: (name: string) => (name === "aria-label" ? values.label ?? null : name.startsWith("data-") ? values[name.slice(5)] ?? null : null),
+    parentElement: null
+  }) as unknown as Element;
+  const shown = rows.map(row);
+  class FakeElement {}
+  const globals = globalThis as Record<string, unknown>;
+  globals.HTMLElement = FakeElement;
+  globals.HTMLInputElement = class {};
+  const button = Object.assign(new FakeElement(), { matches: () => false, getAttribute: () => null, isConnected: true, click: () => { shown.push(...more.splice(0).map(row)); } });
+  globals.document = { readyState: "complete", querySelectorAll: (selector: string) => (selector === ".row" ? shown : []), querySelector: (selector: string) => (selector === ".more" ? button : null) };
+  return { restore: () => Object.assign(globals, { document: saved.document, HTMLElement: saved.element, HTMLInputElement: saved.input }) };
+}
+
+/** Plus members under $50: the Plus condition reads the icon's accessible name, the price condition names a column. */
+const PLUS: WebAutomationExtractListRequest = {
+  item: ".row",
+  fields: { name: { kind: "attribute", attribute: "data-name" }, price: { kind: "attribute", attribute: "data-price" } },
+  where: [{ read: { kind: "attribute", attribute: "aria-label" }, is: "present" }, { field: "price", lessThan: 50 }]
+};
+
+const START: ExtractionCheckpoint = { records: [], pagesRead: 0, scrolls: 0, missingFields: [], itemsSeen: 0 };
+
+test("a condition with its own read keeps the first value it read on an item it held of, cut to sixty characters; a column's condition keeps none", async () => {
+  const page = fakePage([
+    { name: "No badge", price: "$10" },
+    { name: "Dear", price: "$99", label: "Brightaisle Plus" },
+    { name: "Cheap", price: "$20", label: "Brightaisle Plus Premium" }
+  ]);
+  try {
+    const outcome = await extractList(PLUS, { resume: START });
+    assert.deepEqual(outcome.records.map((record) => record.name), ["Cheap"]);
+    // Held on "Dear" (which the price then rejected), so that is the first; the
+    // value on the row the read rejected for want of it is never a candidate.
+    assert.deepEqual(outcome.conditions?.seen, ["Brightaisle Plus", null]);
+  } finally {
+    page.restore();
+  }
+  const long = fakePage([{ name: "A", price: "$1", label: "x".repeat(100) }]);
+  try {
+    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["x".repeat(60), null]);
+  } finally {
+    long.restore();
+  }
+});
+
+test("the value is the whole read's first: the checkpoint carries it, and the next document keeps it rather than its own", async () => {
+  const taken: ExtractionCheckpoint[] = [];
+  const page = fakePage([{ name: "A", price: "$10", label: "Brightaisle Plus" }], [{ name: "B", price: "$10", label: "Later label" }]);
+  try {
+    await extractList({ ...PLUS, paginate: { mode: "loadMore", control: ".more", maxPages: 2 } }, { resume: START, checkpoint: async (progress) => { taken.push(progress); } });
+    assert.deepEqual(taken[0]?.conditions?.seen, ["Brightaisle Plus", null]);
+  } finally {
+    page.restore();
+  }
+  const next = fakePage([{ name: "C", price: "$10", label: "Later label" }]);
+  try {
+    const carried: ExtractionCheckpoint = { ...START, pagesRead: 1, conditions: taken[0]!.conditions! };
+    assert.deepEqual((await extractList(PLUS, { resume: carried })).conditions?.seen, ["Brightaisle Plus", null]);
+    // A document that carried nothing reports its own.
+    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["Later label", null]);
+  } finally {
+    next.restore();
+  }
 });

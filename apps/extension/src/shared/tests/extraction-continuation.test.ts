@@ -73,6 +73,16 @@ test("the condition counts cross the document boundary, and unreadable ones refu
   }
 });
 
+test("what each condition's own read found crosses the document boundary, and a malformed value refuses the checkpoint", () => {
+  const seen = { ...CHECKPOINT, conditions: { applied: 4, kept: 1, rejected: [1, 2], seen: ["Brightaisle Plus", null] } };
+  const read = readExtractionCheckpoint(seen);
+  assert.deepEqual(read, seen);
+  assert.notEqual(read?.conditions?.seen, seen.conditions.seen);
+  for (const malformed of [["Brightaisle Plus"], ["Brightaisle Plus", 3], "Brightaisle Plus", [null, null, null]]) {
+    assert.equal(readExtractionCheckpoint({ ...CHECKPOINT, conditions: { ...seen.conditions, seen: malformed } }), undefined, JSON.stringify(malformed));
+  }
+});
+
 test("what a read spent on refused pages crosses the document boundary, and unreadable counts refuse the checkpoint rather than reset", () => {
   // A reload is a new document: a read that forgot its retries would reload a
   // refusing page for ever (`content/extraction/pagination.ts`).

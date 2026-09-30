@@ -43,6 +43,16 @@
 // A condition reads through the one field reader (`field-reader.ts`), so a
 // value inside a sensitive control refuses the whole extraction here exactly as
 // it does in a column (decision D2), rather than quietly deciding a row.
+//
+// **And it says what its read found.** A condition with a read of its own is
+// described downstream without the part that addresses the page, so
+// `attribute aria-label is present` is all the judge of `run-munw7ffn-fe1cecd2`
+// was told of the store's Brightaisle Plus badge, and it advised adding a Plus
+// condition the Flow already had. So the filter writes, into the caller's `seen`,
+// the first value each such condition read on an item it held of, cut to 60
+// characters (`domain/src/actions/extraction/seen-values.ts`, which cuts to
+// the same bound at the wire). A condition over a column leaves `null`: its
+// values are the records.
 
 import { webAutomationExtractConditionHolds } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractItemCondition, WebAutomationExtractListRequest } from "../types";
@@ -76,11 +86,19 @@ type Condition = {
  */
 export type ExtractItemRejections = readonly number[];
 
-/** Which conditions reject an item, or `undefined` when the request names none and every item is a record. */
-export type ExtractItemFilter = ((item: Element, record: ReadRecord) => ExtractItemRejections) | undefined;
+/**
+ * Which conditions reject an item, or `undefined` when the request names none
+ * and every item is a record. `seen`, when given, holds one entry per condition,
+ * and each `null` entry takes the first value that condition's own read produced
+ * on an item it held of.
+ */
+export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (string | null)[]) => ExtractItemRejections) | undefined;
 
 /** No condition rejected the item, shared because it is the answer for every row a read keeps. */
 const KEPT: ExtractItemRejections = [];
+
+/** Characters kept of a value a condition read; the domain's reader cuts to the same bound. */
+const SEEN_CHARS = 60;
 
 /**
  * The filter the request's `where` describes, or `undefined` for a request
@@ -93,10 +111,14 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
   const written = request.where;
   if (written === undefined || written.length === 0) return undefined;
   const conditions = written.map((condition, index) => normalize(condition, index, request));
-  return (item, record) => {
+  return (item, record, seen) => {
     let rejectedBy: number[] | undefined;
     for (const [index, entry] of conditions.entries()) {
-      if (holds(entry, item, record)) continue;
+      const value = valueOf(entry, item, record);
+      if (webAutomationExtractConditionHolds(entry.says, value)) {
+        if (seen?.[index] === null && entry.value.kind === "read" && value) seen[index] = value.slice(0, SEEN_CHARS);
+        continue;
+      }
       rejectedBy ??= [];
       rejectedBy.push(index);
     }
@@ -125,11 +147,11 @@ function normalize(condition: WebAutomationExtractItemCondition, index: number, 
   return { value: { kind: "read", reader: { ...reader, required: true } }, name, says: condition };
 }
 
-function holds(entry: Condition, item: Element, record: ReadRecord): boolean {
-  const value = entry.value.kind === "field"
+/** The value a condition tests on an item, or `undefined` when the item does not have it. */
+function valueOf(entry: Condition, item: Element, record: ReadRecord): string | undefined {
+  return entry.value.kind === "field"
     ? valueInRecord(record, entry.value.key)
     : readField(item, entry.name, entry.value.reader) ?? undefined;
-  return webAutomationExtractConditionHolds(entry.says, value);
 }
 
 /**
