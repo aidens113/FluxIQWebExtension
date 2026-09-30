@@ -5,6 +5,7 @@ export { renderConfirmationPage } from "./confirmation.js";
 export { confirmationTexts } from "./confirmation-texts.js";
 export type { ConfirmationTexts } from "./confirmation-texts.js";
 export { renderHomePage } from "./home.js";
+export { ordersTodayText } from "./orders-today.js";
 export { pageKit } from "./page-kit.js";
 export type { PageKit } from "./page-kit.js";
 export { renderPaymentFrame } from "./payment-frame.js";

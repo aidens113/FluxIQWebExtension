@@ -5,6 +5,7 @@ import {
 } from "@fluxiq-web-extension/test-contracts";
 import { benchDistribution } from "./distribution.js";
 import { benchExtractionMetrics } from "./extraction-metrics.js";
+import { benchAdaptationMetrics } from "./adaptation-metrics.js";
 
 /**
  * One bench result, a corpus row's workflow unarmed or one of its variants, on
@@ -250,11 +251,10 @@ function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics 
     notExecutedRuns: runs.filter(executedNothing).length,
     actionsExecuted: runs.reduce((sum, run) => sum + actionsExecuted(run), 0),
     ...(Object.keys(extractionByLane).length === 0 ? {} : { extractionByLane }),
+    // Reserved: each run keeps its own recovery record, and no aggregate is defined.
     harnessRecovery: null,
-    adaptationCost: null,
-    adaptationValidation: null,
-    adaptationPersistence: null,
-    adaptationReuse: null,
+    // Week 2: counted from each run's own records, `null` where no run measured one.
+    ...benchAdaptationMetrics(runs),
   };
 }
 

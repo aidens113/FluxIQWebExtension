@@ -114,3 +114,17 @@ Not an interactive grant, audited separately: the standing result-check authoriz
 ## Progress
 
 - Lead: `runtime/llm` layer landed — deleted `execution/`, `grant-capabilities.ts`, `runtime-session-grant.ts` and their tests, `_shared/tests/runtime-llm-grants.test.ts`; added `model-caller.ts`, `runtime-session-llm.ts`, `session-key-provider.ts`, `deepseek/session-key.ts` (shared with the chat key), rewrote `resolver-contract.ts`, `llm/index.ts`, `deepseek/panel-command-key.ts`, `_shared/runtime.ts`; dropped the grant attempt-limit symbol from `provider-retry/call.ts`. Validation: `npx vitest run .../llm/tests/session-key-provider.test.ts` → 4 passed (a model call with no grant succeeds on the caller's key; no caller → no provider; locked session fails the call).
+
+## Merge of dev (t180, t182, t177), 2026-09-29
+
+Resolved in both trees; staged with `git add` only (supervisor commits).
+
+- Core `runtime/service.ts` `finally`: kept dev's `this.runControl.close(...)` (t180); dropped the grant revoke.
+- Core `api/handlers/runtime-execution.ts` import: grant-free runtime imports plus dev's `automationStudioRunChangedDurableBehavior`; `AUTOMATION_STUDIO_RUNTIME_SESSION_GRANT_PURPOSES` dropped.
+- Web `runtime/runtime-host.ts` import: dev's `pause/resume/getRuntimeRunControl`; `issueLlmExecutionGrant`/`preflightLlmExecution` dropped.
+- Web `conversation/capabilities/catalog/running.ts`: kept dev's `run.pause/takeControl/resume/progress`, `REASON`, `runControlOutcome`; dropped `PURPOSE`, `flowModelKey` (it existed only to fetch a key for a grant), and the `flowModelFromDetail`/`loadFlowSettingsDetail` imports.
+- Web `runtime/tests/run-control-interactions.test.tsx` (new from dev): removed its `preflightLlm`/`issueLlmGrant` mocks.
+- Downstream `test-runner/src/demo-workspace/panel-run.ts`: kept dev's `PANEL_RUN_RESPONSE_TIMEOUT_MS` (180 s) and `RunnerFailure` timeout (`panel_run.response_timeout`); dropped the preflight/issue-grant rejection listener.
+- Left for step 2 grep: t182's paired-client field denylist still names `llmExecutionGrantId` (`apps/web/src/lib/program-route.ts` + tests, `route.test.ts`, `client-gateway.md`), `runtime-execution.ts` refuses a request that carries `llmExecutionGrantId`, and `simple-panel-control.test.ts` sends one.
+
+Validation (build slot b1): `packages/fluxiq` `npx tsc --noEmit` exit 0; `apps/web` `npx tsc --noEmit` exit 0; downstream `packages/test-runner` `pnpm check` exit 0.

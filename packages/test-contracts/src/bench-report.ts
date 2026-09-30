@@ -1,4 +1,5 @@
 import { evaluationLanes, type EvaluationLane, type LlmUsage } from "./evaluation.js";
+import type { BenchAdaptationCost, BenchAdaptationPersistence, BenchAdaptationReuse, BenchAdaptationValidation } from "./adaptation-reuse.js";
 import type { FluxIQExecutionMetadata } from "./run.js";
 
 export const BENCH_REPORT_SCHEMA_VERSION = "0.1" as const;
@@ -188,20 +189,18 @@ export type BenchCorpusMetrics = {
    */
   extractionByLane?: Partial<Record<EvaluationLane, BenchExtractionMetrics>>;
   /**
-   * Week 2 aggregates, still reserved: always `null`, and refused otherwise,
-   * because no bench aggregates them yet. The per-run measurements they will
-   * aggregate are typed on `RunEvaluation` (`harnessRecovery`, including each
-   * patch attempt's verdict, and the four adaptation measurements in
-   * `adaptation-reuse.ts`), and a bench keeps each run's evaluation beside
-   * `runs.json`: read those, and never read a `null` here as a measurement of
-   * zero. Defining an aggregate means defining it here, in its validator, in
-   * the bench's comparison rows and in its rendering together.
+   * Week 2 aggregates (`adaptation-reuse.ts`), each `null` when no run of the
+   * bench measured it -- never a record of zeros -- and counted from the runs'
+   * own `RunEvaluation` records beside `runs.json`, never from Core. Reports
+   * written before they were defined state `null` for all four, which reads as
+   * unmeasured. `harnessRecovery` is still reserved: always `null`, and
+   * refused otherwise; read each run's own record instead.
    */
   harnessRecovery: null;
-  adaptationCost: null;
-  adaptationValidation: null;
-  adaptationPersistence: null;
-  adaptationReuse: null;
+  adaptationCost: BenchAdaptationCost | null;
+  adaptationValidation: BenchAdaptationValidation | null;
+  adaptationPersistence: BenchAdaptationPersistence | null;
+  adaptationReuse: BenchAdaptationReuse | null;
 };
 
 /**

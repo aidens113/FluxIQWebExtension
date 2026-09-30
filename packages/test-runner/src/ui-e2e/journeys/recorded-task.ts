@@ -27,7 +27,7 @@ import {
 } from "../../demo-workspace/index.js";
 import { selectOptionByKeyboard } from "../../trusted-input/index.js";
 import { connectExtensionForProject } from "./extension-project.js";
-import { JOURNEY_RECORDING_FINALIZE_TIMEOUT_MS, journeyFlowConfiguration, type JourneySession } from "./session.js";
+import { JOURNEY_RECORDING_FINALIZE_TIMEOUT_MS, journeyFlowConfiguration, type JourneyProjectKey, type JourneySession } from "./session.js";
 
 export type RecordedTaskId = "missing-target" | "redesigned-field";
 
@@ -91,9 +91,9 @@ export const RECORDED_TASKS: Readonly<Record<RecordedTaskId, RecordedTask>> = {
 };
 
 /** Provisions the Flow in the task's own project, records `task` into it, and generates its Subflow. */
-export async function recordTaskFlow(session: JourneySession, task: RecordedTask, flow: { flowId: string; flowName: string }): Promise<DemoWorkspaceState & { latestRecordingId: string }> {
+export async function recordTaskFlow(session: JourneySession, task: RecordedTask, flow: { flowId: string; flowName: string }, projectKey: JourneyProjectKey = `failure-${task.id}`): Promise<DemoWorkspaceState & { latestRecordingId: string }> {
   const { control, extensionPage, panelPage, scenarioPage, evidence } = session;
-  const config = journeyFlowConfiguration(session.config, `failure-${task.id}`, flow);
+  const config = journeyFlowConfiguration(session.config, projectKey, flow);
   const profile = recordedTaskProfile(task);
   const provisioned = await provisionDemoFlow(control, config, panelPage, evidence, profile);
   const before = recordingIds(await control.listRecordings(provisioned.projectId));

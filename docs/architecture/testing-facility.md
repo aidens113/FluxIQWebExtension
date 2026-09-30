@@ -1671,10 +1671,17 @@ the Lab's on-disk proof that the recorder withheld what
   databases. On `persistent-isolated`, whose workspace outlives the run, only
   files whose modification or creation time is at or after the run's start,
   less two seconds, are scanned, together with every link or entry the walk
-  could not judge; a SQLite store this run wrote to is scanned whole. The
-  browser profile is not scanned, because the extension's LevelDB storage is
-  binary. The existing target's FluxIQ is remote, so a scenario declaring
-  secrets is left unattested there.
+  could not judge; a SQLite store this run wrote to is scanned whole. And
+  `extension-storage`, the extension's own storage in the Chromium profile the
+  run launched: `Default/Local Extension Settings/<id>` and
+  `Default/Sync Extension Settings/<id>` (`chrome.storage`, which holds the
+  offline event queue, the session and extraction sessions) and
+  `Default/IndexedDB/chrome-extension_<id>_*`
+  (`chromium-extension-storage-dirs.ts`), bounded by `writtenSince` on
+  `persistent-isolated`. It is never taken from a person's own profile. Not
+  covered: the panel's `Default/Local Storage/leveldb`, which is shared with web
+  origins, and Firefox, which has no Lab lane. The existing target's FluxIQ is
+  remote, so a scenario declaring secrets is left unattested there.
 - **Text files** are searched for each literal. The scanner's credential-syntax
   categories (`credential-field`, `credential-assignment`,
   `authorization-material`) are recorded as advisories and do not fail the run.
@@ -1688,6 +1695,14 @@ the Lab's on-disk proof that the recorder withheld what
   (`sqlite-store-reader/`). A store the scan cannot read in full, a database
   over a ceiling, and a `-wal` or `-journal` holding bytes with no database
   beside it are each an `unscanned-store` finding.
+- **LevelDB stores** (`*.log`, `*.ldb`, `MANIFEST-*`, `CURRENT`, `LOG*` under
+  `extension-storage`) are never skipped as binary. Each file is searched byte
+  for byte for the literal in UTF-8 and UTF-16LE, write-ahead log records are
+  reassembled across blocks, and table blocks are Snappy-decoded before the
+  search (`leveldb-store/`). This is best effort: a table the decoder cannot
+  read is counted in the scope summary's `undecodedLevelDbFiles` and recorded,
+  not failed, and a file the scan cannot read at all is an `unscanned-store`
+  finding. Other files in those directories get the text scan.
 - **Other binaries**, files with a known binary extension such as images,
   video, archives, fonts and executables, are skipped and counted.
 - **Limits** are `SECRET_LEAK_ATTESTATION_RUN_LIMITS`: 10,000 files, 8 MiB per
@@ -1803,6 +1818,27 @@ resumed.
   (23 unarmed and 21 variants).
   W19 to W23 and W29 are variants only. Because `week1` runs
   `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
+  `week2` is A01 to A06 on the Flow lane alone: identity-drift's
+  `renamed-redesign` with its unarmed baseline (the Week 2 exit chain's drift),
+  W04's and W08's extraction drifts, W13 and W24, and member-directory's
+  `restyled` with its baseline -- 8 results per repeat, 0 skipped.
+- **Week 2 adaptation metrics.** A Flow-lane run's evaluation carries
+  `adaptationReuse`, `adaptationValidation`, `adaptationPersistence` and
+  `adaptationCost`, read from the bundle's `snapshots/adaptation.json`
+  (`run-evaluation/adaptation/`). A lane writes that file from
+  `readRunAdaptationMeasurements`, which reads Core's run detail, the Flow and
+  Subflow graphs the run executed, and each adaptation the run created,
+  trialled, or executed a stamp of, before Core deletes the run's workspace.
+  Reuse names applied adaptations stamped on nodes the run attempted that it did
+  not create; validation is Core's own confidence rule over each adaptation's
+  stored results; persistence is its stored status and revisions; cost is
+  Core's `llmGate.costAccounting`. Without the file all four are `null`,
+  unmeasured. `report.json` aggregates them: reuse as deterministic replays (an
+  exercising run with 0 Core-counted provider calls and 0 interventions) over
+  the exercising runs whose count Core stated, with uncertified runs counted
+  beside the rate; tiers and statuses as tallies; cost as sums over the runs
+  that stated it. An aggregate no run measured is `null`, never zeros.
+  `harnessRecovery` has no aggregate and stays `null`.
 - **Runs.** Each repeat is one pass over the corpus. `--target` must be
   `isolated` or `persistent-isolated`. A result the corpus runs on no lane, or
   one that does not resolve against the registry, is recorded as skipped with
@@ -1864,7 +1900,11 @@ resumed.
   a presence test would read 1.000 whatever happened; `paginationAccuracy`
   needs both an expected page count and an observed one, which the Flow lane
   cannot supply; and `extractionExactSuccess` and `extractionFalseSuccess` are
-  per run. Beside them, `judgedSteps` and `unjudgedSteps`, and the split of the
+  per run. A run is an exact success only when every judged step listed its
+  records and matched them: a count-only step whose counts agree is a miss for
+  exact success (X5.5), so a lane of count-only steps such as
+  `data-table-inventory-large` can never print 1.0, while a count that
+  disagrees under a reported pass is still a false success. Beside them, `judgedSteps` and `unjudgedSteps`, and the split of the
   judged into `comparedSteps`, `countOnlySteps` and `unjudgeableSteps`, state
   what each number stands on; `report.md` prints that split as a sentence and
   each rate's own unit and population beside it, because no two of these rates

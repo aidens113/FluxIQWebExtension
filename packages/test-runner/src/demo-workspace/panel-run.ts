@@ -100,7 +100,18 @@ export async function waitForSubmittedDemoPage(seedPage: Page): Promise<void> {
   throw new RunnerFailure("runtime.behavior", "Recording-generated Flow completed without producing the submitted demo result in any extension-controlled tab");
 }
 
-export async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>, timeoutMs = 60_000): Promise<import("@playwright/test").Response> {
+/**
+ * How long a panel run may take to answer. Core answers `run-runtime-session`
+ * only once the run is terminal, so a run whose recovery ladder retries a
+ * missing target answers late. Measured on 2026-09-29 (ui:e2e run
+ * r20260929t232702-0470, headed, shared machine): the drifted run's three
+ * failed click attempts had ended 45 s after Run and no answer came by 60 s,
+ * the old bound. A run that answers returns at once, so the bound costs only a
+ * failure.
+ */
+const PANEL_RUN_RESPONSE_TIMEOUT_MS = 180_000;
+
+export async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>, timeoutMs = PANEL_RUN_RESPONSE_TIMEOUT_MS): Promise<import("@playwright/test").Response> {
   // The panel runs a Flow the model takes part in with one request: a model
   // call needs no grant, so there is no preparation request to fail first.
   let resolveResponse!: (response: import("@playwright/test").Response) => void;
@@ -115,7 +126,7 @@ export async function waitForPanelRunResponse(page: Page, dispatch: () => Promis
     await dispatch();
     return await Promise.race([
       responsePromise,
-      new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Timed out waiting for the panel Flow run response")), timeoutMs); }),
+      new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new RunnerFailure("runtime.behavior", "Timed out waiting for the panel Flow run response", { details: { reasonCode: "panel_run.response_timeout", timeoutMs } })), timeoutMs); }),
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);

@@ -96,6 +96,27 @@ test("a step that judged nothing misses exact success and is never counted as a 
   assert.deepEqual(wrong?.extractionExactSuccess, { count: 0, total: 1, workflows: 1, rate: 0 });
 });
 
+/**
+ * X5.5. `data-table-inventory-large` states a count and lists no records, so
+ * its step compares no value; agreeing counts once made the run an exact
+ * success and a Flow lane of such runs printed 1.0. It is a miss for exact
+ * success, while its count is still judged in the count accuracy, and a count
+ * that disagrees under a reported pass is still a false success.
+ */
+test("a count-only match is never an exact success, so a lane of count-only steps cannot print 1.0", () => {
+  const metrics = benchExtractionMetrics([
+    result("data-table-inventory-large", [run(0, { extraction: [countOnly(1_000, 1_000)] })]),
+    result("W04", [run(0, { extraction: [compared(2, 2)] })]),
+  ]);
+  assert.deepEqual(metrics?.extractionExactSuccess, { count: 1, total: 2, workflows: 2, rate: 0.5 });
+  assert.deepEqual(metrics?.extractionCountAccuracy, { count: 1, total: 1, workflows: 1, rate: 1 });
+  const onlyCounts = benchExtractionMetrics([result("data-table-inventory-large", [run(0, { extraction: [countOnly(1_000, 1_000)] })])]);
+  assert.deepEqual(onlyCounts?.extractionExactSuccess, { count: 0, total: 1, workflows: 1, rate: 0 });
+  assert.deepEqual(onlyCounts?.extractionFalseSuccess, { count: 0, total: 1, workflows: 1, rate: 0 });
+  const wrongCount = benchExtractionMetrics([result("data-table-inventory-large", [run(0, { extraction: [countOnly(1_000, 999)] })])]);
+  assert.deepEqual(wrongCount?.extractionFalseSuccess, { count: 1, total: 1, workflows: 1, rate: 1 });
+});
+
 test("a run that measured no extraction is not a measurement of zero: the lane states nothing at all", () => {
   assert.equal(benchExtractionMetrics([result("W01", [run(0)])]), undefined);
   // A run that measured extraction and had no extract step states a block with nothing judged.

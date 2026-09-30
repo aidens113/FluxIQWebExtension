@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, validateWebScenario, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
 import { CATALOG, EARBUD_ADS, EARBUDS, FEATURED_BRANDS, HOUSEHOLD, SEARCH_PARAMS, STORE_PATHS, TIDEWELL_KETTLES, resultsPage, searchCatalog, type SearchFilters } from "../catalog/index.js";
 import { EVERYTHING_STORE_LIVE_TASKS } from "../live-tasks.js";
 import { EVERYTHING_STORE_REPAIR_TASKS } from "../repair-tasks.js";
@@ -20,6 +20,11 @@ const markupOf = (html: string) => html.slice(0, html.indexOf("<script"));
 const dataset = (workflowId: string, step: string) => resolveScenarioWorkflow(manifest, { workflowId }).expected.extracted?.find((entry) => entry.step === step);
 const earbudSearch = (filters: SearchFilters = NONE) => searchCatalog({ keywords: "wireless earbuds", department: "all", filters, sort: "featured", page: 1 });
 const passed = () => apply(fresh(), "pass-soft-check");
+/** The ids of the facts a page's markup does not hold, read by test id as the lanes read them. */
+const failingFacts = (page: string, facts: readonly ExpectedFact[]) => facts.filter((fact) => {
+  const shown = new RegExp(`data-testid="${fact.subject}"[^>]*>([^<]*)<`, "u").exec(page)?.[1]?.replaceAll("&amp;", "&");
+  return fact.predicate === "text" ? shown?.trim() !== fact.value : (shown !== undefined) !== fact.value;
+}).map((fact) => fact.id);
 
 test("the manifest is valid, with four workflows, three variants, and a goal on the purchase", () => {
   const result = validateWebScenario(manifest);
@@ -237,4 +242,44 @@ test("the catalogue's tasks name only this scenario, and its repairs name its dr
   assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ scenarioId }) => scenarioId), Array(EVERYTHING_STORE_LIVE_TASKS.length).fill("everything-store"));
   assert.deepEqual(EVERYTHING_STORE_LIVE_TASKS.map(({ judgeBy, expectedDatasetId }) => expectedDatasetId ?? judgeBy), ["extract-plus-under-fifty", "extract-first-page", "extract-first-page", "extract-cart", "playback-goal"]);
   assert.deepEqual(EVERYTHING_STORE_REPAIR_TASKS.map(({ variantId, expect }) => `${variantId}:${expect}`), ["redesigned-header:repair", "robot-check:refusal"]);
+});
+
+test("a second order fails the purchase goal that one right order meets, on either order's thank-you page", () => {
+  const matte = TIDEWELL_KETTLES.find((child) => child.variant?.colour === "Matte Black" && child.variant.capacity === "1.7 L")!;
+  const buy = (state: StoreState) => apply(apply(apply(apply(state, "start-checkout", { pipeline: "buy-now", sku: matte.sku, quantity: 1 }), "set-delivery", { option: "standard" }), "set-plus-trial", { enabled: false }), "place-order");
+  const thankYou = (state: StoreState, index: number) => markupOf(route(state, "thankyou", `orderId=${state.orders[index]!.orderId}`)?.body ?? "");
+  const goal = manifest.playbackGoal?.successFacts ?? [];
+  const once = buy(fresh());
+  assert.deepEqual(failingFacts(thankYou(once, 0), goal), [], "one right order meets the goal");
+  const twice = buy(once);
+  assert.equal(twice.orders.length, 2);
+  assert.notDeepEqual(failingFacts(thankYou(twice, 1), goal), [], "the kettle bought twice spends the money twice, and the page it ends on must say so");
+  assert.notDeepEqual(failingFacts(thankYou(twice, 0), goal), [], "and so must the first order's page, reloaded afterwards");
+});
+
+test("moving the phone case to Saved for later and deleting it leave the same cart, and only the first meets the cart task's final state", () => {
+  const sage = TIDEWELL_KETTLES.find((child) => child.variant?.colour === "Sage Green" && child.variant.capacity === "1.7 L")!;
+  const withKettles = apply(fresh(), "add-to-cart", { sku: sage.sku, quantity: 2 });
+  const saved = apply(apply(withKettles, "save-for-later", { lineId: "L2" }), "save-for-later", { lineId: "L2" });
+  const deleted = apply(withKettles, "delete-line", { lineId: "L2" });
+  assert.deepEqual(saved.cart, deleted.cart, "the cart table a run reads back is the same either way");
+  const cartPage = (state: StoreState) => markupOf(route(state, "cart")?.body ?? "");
+  for (const variantId of [undefined, "redesigned-header"]) {
+    const finalState = resolveScenarioWorkflow(manifest, { workflowId: "add-to-cart", ...(variantId ? { variantId } : {}) }).expected.finalState ?? [];
+    assert.deepEqual(failingFacts(cartPage(saved), finalState), [], `${variantId ?? "baseline"}: saved for later, as asked`);
+    assert.notDeepEqual(failingFacts(cartPage(deleted), finalState), [], `${variantId ?? "baseline"}: deleted, which the task did not ask for`);
+  }
+});
+
+test("the first-page task asks for the search results, and the widget under them would add rows the answer does not hold", () => {
+  const task = EVERYTHING_STORE_LIVE_TASKS.find(({ id }) => id === "everything-store-first-page-plus-earbuds")!;
+  const outcome = earbudSearch({ ...NONE, plus: true });
+  const page = markupOf(route(passed(), "s", "k=wireless+earbuds&rh=plus")?.body ?? "");
+  assert.match(page, /aria-label="Customers frequently viewed"/u, "the widget is on the first page");
+  const answer = new Set(dataset("first-page-earbuds", "extract-first-page")?.records?.map(({ url }) => url));
+  const widgetRows = outcome.alsoViewed.length;
+  assert.equal(widgetRows, 4, "four products that are not results, each already one of the sixteen, so a read of every product on the page lists them twice");
+  assert.ok(outcome.alsoViewed.every((product) => answer.has(STORE_PATHS.product(product))));
+  assert.match(task.instruction, /every search result on the first page/u, "so the instruction names the results, not every product on the page");
+  assert.doesNotMatch(task.instruction, /every product/u);
 });

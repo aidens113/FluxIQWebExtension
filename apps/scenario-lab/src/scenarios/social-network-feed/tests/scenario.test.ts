@@ -3,6 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, scenarioPageFactSchedule, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import { escapeHtml } from "../../../html.js";
 import { FEED_BEFORE_CAUGHT_UP, feedPlanFor, FRIEND_REQUESTS, fullDateText, OPEN_DAY_POST, shortDateText } from "../content/index.js";
+import { SOCIAL_NETWORK_FEED_TASKS } from "../live-tasks.js";
 import { GROUP_POST_TEXT, MOVED_OPEN_DAY_TEXT } from "../manifest.js";
 import { cutText, feedClasses, pendingBoxText, SEE_MORE_AFTER } from "../markup/index.js";
 import { socialNetworkFeedScenario as scenario } from "../scenario.js";
@@ -212,4 +213,41 @@ test("arming clears what an earlier run did, and every route answers or says the
     assert.equal(response?.status, 404, subpath);
     assert.match(response?.body ?? "", /This content isn't available right now/u);
   }
+});
+
+/** The columns an instruction names after "with columns", in its own order. */
+function instructionColumns(instruction: string): string[] {
+  const at = instruction.indexOf("with columns ");
+  assert.ok(at >= 0, "a dataset instruction names its columns");
+  const list = instruction.slice(at + "with columns ".length).split(/[:.]|,? where /u)[0] ?? "";
+  return list.split(/, | and /u).map((column) => column.trim()).filter(Boolean);
+}
+
+test("every dataset task names exactly the columns its expected records carry", () => {
+  for (const task of SOCIAL_NETWORK_FEED_TASKS.filter(({ judgeBy }) => judgeBy === "expected-dataset")) {
+    const owner = manifest.workflows?.find(({ recordingScript }) => recordingScript.some(({ id }) => id === task.expectedDatasetId));
+    const entry = resolveScenarioWorkflow(manifest, { ...(owner ? { workflowId: owner.id } : {}), ...(task.variantId ? { variantId: task.variantId } : {}) }).expected.extracted?.find(({ step }) => step === task.expectedDatasetId);
+    assert.ok(entry?.records && entry.records.length > 0, `${task.id}: full records, not a count`);
+    for (const record of entry.records) assert.deepEqual(Object.keys(record).sort(), instructionColumns(task.instruction).sort(), task.id);
+  }
+});
+
+test("the open-day table holds the run to what the instruction keeps fixed: the post stays Public, and only the moved post is left", () => {
+  const task = SOCIAL_NETWORK_FEED_TASKS.find(({ id }) => id === "social-network-feed-move-open-day")!;
+  assert.match(task.instruction, /including who can see it, should stay the same/u);
+  const workflow = resolveScenarioWorkflow(manifest, { workflowId: "move-open-day" });
+  // A repost left at the composer's default audience (Friends) must read differently from the right one,
+  // and so must a repost that left the Saturday post in place: the table is every open-day post of Maya's.
+  assert.deepEqual(workflow.expected.extracted?.[0]?.records, [{ text: MOVED_OPEN_DAY_TEXT, audience: "Public", posted: fullDateText(0) }]);
+  assert.match(task.instruction, /every post of mine about the open day/u);
+  const step = workflow.recordingScript.find(({ id }) => id === "extract-open-day");
+  assert.ok(step?.fields?.audience, "the recording reads the audience the post shows");
+  assert.equal(OPEN_DAY_POST.audience, "Public", "the audience to keep is Public");
+});
+
+test("the confirmed-requests table is read back from the list, so a run that confirmed too many shows them", () => {
+  const task = SOCIAL_NETWORK_FEED_TASKS.find(({ id }) => id === "social-network-feed-confirm-requests")!;
+  assert.match(task.instruction, /every request the list now shows as accepted/u);
+  const step = resolveScenarioWorkflow(manifest, { workflowId: "confirm-requests" }).recordingScript.find(({ id }) => id === "extract-confirmed");
+  assert.match(step?.target ?? "", /messages\/t\//u, "the recording reads the cards that show Request accepted and a Message link");
 });

@@ -1,6 +1,6 @@
 // The Connection tab (UI audit, section 4, "Connection tab copy"): the raw
 // connection state, the settings with an explicit Save, Disconnect, the queue,
-// the ids, and Forget this pairing behind a confirmation.
+// the ids, Report a problem, and Forget this pairing behind a confirmation.
 //
 // Every outcome stays where it happened until the viewer acts again (audit
 // defect F1): a status push refills the ids and the state line but never wipes
@@ -17,6 +17,7 @@ import type { PanelViewContext } from "../../shell";
 import type { AdvancedTabPanel } from "../tab-panel";
 import { readConnectionDraft, writeConnectionDraft } from "./draft-store";
 import { createForgetConfirmation } from "./forget-confirmation";
+import { createProblemReportSection } from "./problem-report-section";
 import { savePlan } from "./save-plan";
 import { createSettingsForm } from "./settings-form";
 
@@ -52,6 +53,7 @@ export function mountConnectionTab(context: PanelViewContext): AdvancedTabPanel 
       createElement("div", {}, [createElement("dt", { text: "Connection ID" }), sessionId]),
       createElement("div", {}, [createElement("dt", { text: "Current tab" }), activeTab])
     ]),
+    createProblemReportSection(context),
     forget.element
   ]);
 

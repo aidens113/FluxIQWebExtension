@@ -74,7 +74,7 @@ function refusesAt(build, mutations) {
 test("the four Week 2 measurements are exported with a validator each", () => {
   for (const name of Object.values(validators)) assert.equal(typeof contracts[name], "function", name);
   assert.deepEqual(contracts.adaptationConfidenceTiers, ["unverified", "provisional", "established"]);
-  assert.deepEqual(contracts.adaptationRecordStatuses, ["testing", "validated", "applied", "rejected", "disabled", "reverted", "superseded"]);
+  assert.deepEqual(contracts.adaptationRecordStatuses, ["proposed", "testing", "validated", "applied", "rejected", "disabled", "reverted", "superseded"]);
 });
 
 test("a repair run and its replay carry every Week 2 measurement, and round-trip", () => {
@@ -198,4 +198,39 @@ test("the provider calls agree across reuse and cost, and a disabled provider ma
   assert.deepEqual(issuesOf(repairRun(offline)).sort(), ["$.adaptationCost.providerCalls", "$.adaptationReuse.providerCalls"]);
   assert.deepEqual(issuesOf(repairRun({ ...offline, llm: { mode: "deterministic-dry", profileId: "deterministic-dry", calls: 0 } })).sort(), ["$.adaptationCost.providerCalls", "$.adaptationReuse.providerCalls"]);
   assert.deepEqual(issuesOf(replayRun({ ...offline, adaptationReuse: { ...replayReuse(), providerCalls: null }, adaptationCost: { ...replayCost(), providerCalls: null } })), []);
+});
+
+const { validateBenchAdaptationReuse, validateBenchAdaptationValidation, validateBenchAdaptationPersistence, validateBenchAdaptationCost, adaptationRecordStatuses } = contracts;
+const benchIssues = (checked) => (checked.valid ? [] : checked.issues.map((issue) => issue.path));
+
+test("Core's proposed status is a stored status: a build or repair awaiting review is recorded, not refused", () => {
+  assert.ok(adaptationRecordStatuses.includes("proposed"));
+  assert.deepEqual(issuesOf(repairRun({ adaptationPersistence: { adaptations: [{ adaptationId: ADAPTATION, status: "proposed", baseRevision: 3, appliedRevision: null }] } })), []);
+});
+
+test("a bench's reuse aggregate nests its counts and states its rate over the certified exercising runs only", () => {
+  const reuse = { measuredRuns: 4, exercisingRuns: 3, deterministicReplays: 1, uncertifiedRuns: 1, resumedRuns: 1, rate: 0.5 };
+  assert.deepEqual(benchIssues(validateBenchAdaptationReuse(reuse)), []);
+  assert.deepEqual(benchIssues(validateBenchAdaptationReuse({ ...reuse, rate: 1 / 3 })), ["$.rate"]);
+  assert.deepEqual(benchIssues(validateBenchAdaptationReuse({ ...reuse, exercisingRuns: 1, uncertifiedRuns: 1, rate: null })), ["$.deterministicReplays"]);
+  assert.deepEqual(benchIssues(validateBenchAdaptationReuse({ ...reuse, exercisingRuns: 1, deterministicReplays: 0, uncertifiedRuns: 1, rate: null })), []);
+  assert.deepEqual(benchIssues(validateBenchAdaptationReuse({ ...reuse, exercisingRuns: 5, rate: 0.25 })), ["$.exercisingRuns"]);
+  // An aggregate over no run is null, never a record of zeros.
+  assert.deepEqual(benchIssues(validateBenchAdaptationReuse({ measuredRuns: 0, exercisingRuns: 0, deterministicReplays: 0, uncertifiedRuns: 0, resumedRuns: 0, rate: null })), ["$.measuredRuns"]);
+});
+
+test("a bench's tier and status tallies count every closed word and sum to the adaptations", () => {
+  assert.deepEqual(benchIssues(validateBenchAdaptationValidation({ measuredRuns: 2, adaptations: 3, tiers: { unverified: 1, provisional: 1, established: 1 } })), []);
+  assert.deepEqual(benchIssues(validateBenchAdaptationValidation({ measuredRuns: 2, adaptations: 4, tiers: { unverified: 1, provisional: 1, established: 1 } })), ["$.tiers"]);
+  assert.deepEqual(benchIssues(validateBenchAdaptationValidation({ measuredRuns: 2, adaptations: 1, tiers: { unverified: 1, provisional: 0 } })), ["$.tiers.established"]);
+  const statuses = Object.fromEntries(adaptationRecordStatuses.map((status) => [status, status === "applied" ? 2 : 0]));
+  assert.deepEqual(benchIssues(validateBenchAdaptationPersistence({ measuredRuns: 1, adaptations: 2, statuses })), []);
+  assert.deepEqual(benchIssues(validateBenchAdaptationPersistence({ measuredRuns: 1, adaptations: 2, statuses: { ...statuses, pending: 0 } })), ["$.statuses.pending"]);
+});
+
+test("a bench's cost sums only what Core stated and cannot spend without an accounted run", () => {
+  const cost = { measuredRuns: 3, countedRuns: 2, providerCalls: 4, accountedRuns: 1, inputTokens: 100, outputTokens: 20, totalTokens: 120, estimatedCostUsd: 0.004 };
+  assert.deepEqual(benchIssues(validateBenchAdaptationCost(cost)), []);
+  assert.deepEqual(benchIssues(validateBenchAdaptationCost({ ...cost, accountedRuns: 0 })).sort(), ["$.estimatedCostUsd", "$.inputTokens", "$.outputTokens", "$.totalTokens"]);
+  assert.deepEqual(benchIssues(validateBenchAdaptationCost({ ...cost, countedRuns: 4 })), ["$.countedRuns"]);
 });
