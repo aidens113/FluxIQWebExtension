@@ -31,7 +31,7 @@
 // this file, using the same shared rule rather than a second one.
 
 import { compactObject } from "./compact-object";
-import { isDrawnControl, isFrontLayer, isPageStateControl, isSiteChrome, pageEvidence, recentlyInteractedElements, repeatsTheDocumentAddress, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
+import { isDrawnControl, isFrontLayer, isPageStateControl, isSiteChrome, mainLeadStatements, pageEvidence, recentlyInteractedElements, repeatsTheDocumentAddress, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { isEventBackedElement, observedEventElementQueue } from "./event-elements";
 import {
@@ -203,13 +203,14 @@ function snapshotElements(): { entries: SnapshotElementEntry[]; counts: Snapshot
     included.push(element);
   }
   const repeats = repeatExemplars(included, touchedElements());
+  const leadStatements = mainLeadStatements(included, composedDocumentOrder);
   // Each element is asked what it is once, before the sort rather than inside
   // it. A comparator that asked would ask O(n log n) times, and every question
   // here reads computed style or walks ancestors.
   const ranked = included.map((element) => ({
     element,
     follower: repeats.followers.has(element) ? 1 : 0,
-    bucket: snapshotElementBucket(element),
+    bucket: snapshotElementBucket(element, leadStatements),
     priority: elementPriority(element)
   }));
   const entries = ranked
@@ -312,10 +313,19 @@ function shouldIncludeSnapshotElement(element: Element): boolean {
  * corporate links rank behind the page's own content instead of ahead of it --
  * and still ahead of the page's prose, because a footer link is at least
  * something to act on.
+ *
+ * The exception to "text last" is the main region's own account of what it is
+ * showing: at most three short lines, "No results for ..." or "1-16 of 42
+ * results" (`evidence/lead-statements.ts`). They rank with the page-state
+ * controls, whose outcome they state, and after them on priority, since a
+ * control scores higher than text. Ranked as prose they were in no packet:
+ * live run 21 searched with a query the store matched nothing for, was never
+ * told, and read that page as results for all 64 of its decisions.
  */
-function snapshotElementBucket(element: Element): number {
+function snapshotElementBucket(element: Element, leadStatements: ReadonlySet<Element>): number {
   if (isEventBackedElement(element)) return 0;
   if (isPageStateControl(element)) return 1;
+  if (leadStatements.has(element)) return 1;
   const control = controlBucket(element);
   if (control !== undefined) {
     // A control of whatever is painted over the page joins them: the page
