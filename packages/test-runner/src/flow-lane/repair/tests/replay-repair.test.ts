@@ -30,7 +30,7 @@ function core(options: { detail?: () => ExistingRunDetail; status?: string; atte
     startPersistedFlow: async () => { runs.push("start"); return { runId: "run.replay" }; },
     runPersistedFlow: async (input: { llmExecution?: unknown }) => {
       if (options.failRun) throw new RunnerFailure("runtime.behavior", "Core would not start the run");
-      runs.push(input.llmExecution ? "granted" : "ungranted");
+      runs.push(input.llmExecution ? "live" : "deterministic");
       return { session: { runId: "run.replay", status: options.status ?? "succeeded" } };
     },
     automationStudioCall: async () => ({ runDetail: { summary: { runId: "run.replay", status: options.status ?? "succeeded" }, actionAttempts: options.attempts ?? [attempt()], interventions: [] } }),
@@ -46,14 +46,14 @@ function core(options: { detail?: () => ExistingRunDetail; status?: string; atte
   };
 }
 
-test("each replay prepares the page, runs the Flow with no grant, and records that no provider was called", async () => {
+test("each replay prepares the page, runs the Flow with no model, and records that no provider was called", async () => {
   const fake = core();
   const replays = await replayRepairedFlow(fake.control, { ...fake.input, replays: 2 });
   assert.equal(replays.length, 2);
   assert.deepEqual(replays.map((replay) => replay.index), [1, 2]);
   assert.deepEqual(fake.prepared, [1, 2], "the page was not put back before each replay");
   assert.deepEqual(fake.goals, [1, 2]);
-  assert.deepEqual(fake.runs, ["start", "ungranted", "start", "ungranted"], "a replay must carry no execution grant");
+  assert.deepEqual(fake.runs, ["start", "deterministic", "start", "deterministic"], "a replay must carry no runIntent");
   for (const replay of replays) {
     assert.equal(replay.outcome, "ran");
     assert.equal(replay.providerCalls, 0);

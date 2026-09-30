@@ -1,7 +1,7 @@
 import type { ExistingFlowAdaptation, ExistingRunDetail } from "./existing-fluxiq-control.js";
 import type { DemoLlmAdaptationReadiness } from "./demo-llm-adaptation-readiness.js";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "./demo-llm-adaptation.js";
-import { adaptationCallCountWithinGrant, targetRepairValidationIsHonest } from "./demo-llm-adaptation-control.js";
+import { adaptationCallCountWithinCeiling, targetRepairValidationIsHonest } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
 import type { TargetProposalStructure } from "./demo-workspace/index.js";
 import { DEFAULT_LLM_MODEL, type LlmModel } from "@fluxiq-web-extension/test-contracts";
@@ -78,7 +78,7 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
   if (failed.length !== 1) fail("failed_action_invalid");
   const interventions = run.interventions ?? [];
   if (interventions.length !== 2 || interventions[0]?.kind !== "diagnosis" || interventions[1]?.kind !== "runtime_patch") fail("interventions_invalid");
-  if (!adaptationCallCountWithinGrant(run)) fail("provider_accounting_invalid");
+  if (!adaptationCallCountWithinCeiling(run)) fail("provider_accounting_invalid");
   const providerCallCount = run.providerCallCount!;
   for (const [index, intervention] of interventions.entries()) {
     const prompt = index === 0 ? "automation-studio.runtime-diagnosis.v1" : "automation-studio.runtime-patch.v1";
@@ -201,7 +201,7 @@ export function evaluateExplorationAdaptationValidation(input: Readonly<{
     || applied.patchKinds?.length !== 1 || applied.patchKinds[0] !== "edit_action_target"
     || applied.appliedMutationCount !== 1) fail("validation_target_invalid");
   if (sourceRun.summary.projectId !== readiness.projectId || sourceRun.summary.flowId !== readiness.flowId
-    || sourceRun.summary.runId !== applied.sourceRunId || !adaptationCallCountWithinGrant(sourceRun)
+    || sourceRun.summary.runId !== applied.sourceRunId || !adaptationCallCountWithinCeiling(sourceRun)
     || sourceRun.interventions?.length !== 2
     || sourceRun.interventions[0]?.kind !== "diagnosis" || sourceRun.interventions[1]?.kind !== "runtime_patch"
     || sourceRun.adaptationIds?.length !== 1 || sourceRun.adaptationIds[0] !== applied.adaptationId

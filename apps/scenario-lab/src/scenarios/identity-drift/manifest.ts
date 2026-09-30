@@ -32,7 +32,7 @@ function driftVariant(mode: Exclude<IdentityDriftMode, "baseline" | "renamed-red
  * A correct repair shows in the run's `harnessRecovery` as `attempted: true`
  * and one `temporary_target_override` in `runtimePatchAttempts` with
  * `preflightOk: true` and no `issueCodes`. Under the Lab's `--llm-task adapt`
- * grant (`diagnose_and_adapt`) Core only *proposes* a target, so that attempt
+ * intent (`diagnose_and_adapt`) Core only *proposes* a target, so that attempt
  * is `proposalOnly: true`, `executed: false`, with an adaptation and a change
  * proposal, and the run itself still ends `target_not_found` with nothing
  * saved. Such a run is therefore held to `repair.ts` instead: the declared

@@ -66,7 +66,7 @@ export async function readHarnessRecovery(
   const attempted = interventions.length + runtimePatchAttempts.length + adaptationIds.length + changeProposalIds.length > 0;
   // A refusal belongs on any run that got no repair, not only on one whose
   // recovery never started. `refusalCode` was `attempted ? null : ...`, so the
-  // loop's own reasons -- the plan asked for no patch, the grant's scope
+  // loop's own reasons -- the plan asked for no patch, the run's intent
   // allowed none, a person's answer was needed -- had nowhere to go the moment
   // a single intervention existed. What silences it now is a recovery that
   // produced something, because then the lists are the answer.
@@ -87,16 +87,12 @@ export async function readHarnessRecovery(
  * model wrote that a person has to allow first. Core's sentences -- `reason`,
  * `patchSkipped` -- stay behind in every case.
  */
-function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null; refusalCause?: string } {
+function recoveryRefusal(runDetail: Readonly<Record<string, unknown>>): { refusalCode: string | null; refusalRung: HarnessRecoveryRung | null } {
   const none = { refusalCode: null, refusalRung: null };
   const gate = plainRecord(metadataValue(runDetail, "llmGate"));
   if (!gate) return none;
-  const { invoked, code, cause, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate;
-  // Core's own cause behind the gate's code, where it named one. Only a string:
-  // the slot is Core's vocabulary, and the contract holds it to a code shape.
-  if (invoked === false && code !== undefined) {
-    return { refusalCode: code as string, refusalRung: "gate", ...(typeof cause === "string" ? { refusalCause: cause } : {}) };
-  }
+  const { invoked, code, patchSkippedCode, patchSkippedRung, patchHeldCode, patchHeldRung } = gate;
+  if (invoked === false && code !== undefined) return { refusalCode: code as string, refusalRung: "gate" };
   if (patchSkippedCode !== undefined) return { refusalCode: patchSkippedCode as string, refusalRung: rung(patchSkippedRung) };
   if (patchHeldCode !== undefined) return { refusalCode: patchHeldCode as string, refusalRung: rung(patchHeldRung) ?? "resolution" };
   return none;

@@ -281,7 +281,7 @@ export async function authenticatedControl(config: DemoWorkspaceConfiguration): 
     },
     // Each managed demo Core process has a fresh in-memory secret-key unlock.
     // A durable cookie can outlive that process, so establish one fresh login
-    // after startup before any LLM grant is requested.
+    // after startup before any model call is made.
     { sessionCache, freshLogin: true },
   );
   await control.validateCurrentSession(config.username);

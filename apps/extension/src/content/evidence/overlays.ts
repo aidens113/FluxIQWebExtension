@@ -21,6 +21,7 @@
 // the widget that holds it: a chat launcher in an empty corner became a
 // blocker, and a consent wall counted its own buttons among what it covered.
 
+import { isExtensionUiNode } from "../picker-host";
 import { deepElementFromPoint, selectorFor } from "../selector";
 import { composedContains, composedParent } from "../shadow-dom";
 import { isInteractableUiElement } from "../element-traits";
@@ -78,7 +79,9 @@ function hitPointFor(element: Element): { x: number; y: number } | undefined {
  */
 function blockerAt(candidate: Element, point: { x: number; y: number }): Element | undefined {
   const hit = deepElementFromPoint(point.x, point.y);
-  if (!hit || hit === candidate) return undefined;
+  // The extension's own overlays take no pointer event, so a hit test never
+  // lands on one; the guard keeps that true should one ever be hit-testable.
+  if (!hit || hit === candidate || isExtensionUiNode(hit)) return undefined;
   if (composedContains(candidate, hit) || composedContains(hit, candidate)) return undefined;
   return overlayRoot(hit, candidate);
 }

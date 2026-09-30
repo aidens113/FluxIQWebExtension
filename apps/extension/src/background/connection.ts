@@ -11,6 +11,8 @@
 //   ServerCommandChannel what FluxIQ sends, the runtime command it runs, and the
 //                        result that goes back.
 //   TabRecorder          which tab switches and closes a recording keeps as actions.
+//   ActivityRelay        what FluxIQ is doing now (`server.activity`), fanned out
+//                        to the panel pages and the automation tab's overlay.
 //
 // Beneath those sit the WebSocket session and its reconnection lifecycle, the
 // activity log, the runtime command status, navigation and pointer-click
@@ -32,8 +34,10 @@ import type {
   RecordingEventPayload,
   RecordingLogPage
 } from "../shared/protocol";
+import type { ActivityOverlayPreference, ExtensionActivityState } from "../shared/activity/index";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
+import { ActivityRelay, overlayPreferenceStorage } from "./activity/index";
 import { RecordedStepIndex } from "./recorded-steps";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, removeQueuedRecordingEvent, writeSession } from "./storage";
 // Written as ".../index" because this file and its collaborators' directory are
@@ -85,6 +89,7 @@ export class FluxIQConnection {
   private readonly recording: ActiveRecording;
   private readonly intake: RecordedEventIntake;
   private readonly commands: ServerCommandChannel;
+  private readonly activity: ActivityRelay;
 
   // Construction order is dependency order: a collaborator handed to another as
   // an instance is built first. Anything reached through a closure is read when
@@ -122,7 +127,10 @@ export class FluxIQConnection {
           this.addActivity("pairing", "Waiting for approval", referenceCode ? `Reference ${referenceCode}` : undefined, "warning");
           this.emitStatus();
         },
-        onSessionReady: (message) => void this.commands.handleSessionReady(message),
+        onSessionReady: (message) => {
+          this.activity.noteSessionReady();
+          void this.commands.handleSessionReady(message);
+        },
         onCommand: (payload, messageId) => void this.commands.handleCommand(payload, messageId),
         onHeartbeat: () => void this.page.sendBrowserState()
       }
@@ -248,8 +256,24 @@ export class FluxIQConnection {
       onActivity,
       emitStatus,
       recordEvent,
+      acceptActivity: (activity) => void this.activity.accept(activity),
       stopRecording: (notifyServer) => this.stopRecording(notifyServer),
       disconnect: () => this.disconnect()
+    });
+    this.activity = new ActivityRelay({
+      readOverlay: () => overlayPreferenceStorage.read(),
+      writeOverlay: (overlay) => overlayPreferenceStorage.write(overlay),
+      broadcast: async (message) => {
+        await chrome.runtime.sendMessage(message);
+      },
+      // An unsupported page (a browser page, the store) cannot take a content
+      // script, so the relay does not try.
+      automationTabId: () => (this.page.unsupported() ? undefined : this.page.tabId()),
+      deliverToTab: async (tabId, message) => {
+        await ensureContentScript(tabId);
+        await sendToTab(tabId, message, 0);
+      },
+      live: () => this.gateway.state() === "connected"
     });
   }
 
@@ -376,7 +400,17 @@ export class FluxIQConnection {
   }
 
   handleContentReady(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+    void this.activity.noteContentReady(tabId, frameId);
     return this.intake.acceptContentReady(payload, tabId, frameId);
+  }
+
+  /** What FluxIQ is doing now, with the stored overlay preference. */
+  activityState(): Promise<ExtensionActivityState> {
+    return this.activity.read();
+  }
+
+  setActivityOverlay(overlay: ActivityOverlayPreference): Promise<ExtensionActivityState> {
+    return this.activity.setOverlay(overlay);
   }
 
   handleTabUpdated(tab: chrome.tabs.Tab): Promise<void> {

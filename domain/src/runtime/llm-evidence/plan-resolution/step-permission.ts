@@ -5,8 +5,8 @@
 // plan-parameter-resolution.ts`), and the web domain declared no such field and
 // never called it, so every step of every created Flow passed ungated. Measured
 // live (`run-mud4ywy4-45c2002f`): a nine-node Flow that filled a scheduler's
-// composer and submitted it was authored and replayed under a grant that
-// permitted nothing, with `permissionRequest: null` and
+// composer and submitted it was authored and replayed under a permission gate
+// that permitted nothing, with `permissionRequest: null` and
 // `instructedConsequences: []`. Nobody was asked anything. The exploration
 // press tool had been asking about its own presses since 2026-09-18, and the
 // one place a lasting act actually lands -- the Flow -- asked about none.
@@ -18,7 +18,7 @@
 // model was shown it, and the verb -- and calls the check. There is no word
 // list and no reading of what a button looks like: the standing product rule is
 // that FluxIQ refuses nothing on its own judgement of a control, and that the
-// user's instruction or grant is the only authority. Core holds both.
+// user's instruction or permission is the only authority. Core holds both.
 //
 // **A step that commits must say so, even to say it does nothing.** A press is
 // the one web action whose consequence cannot be worked out from the action:

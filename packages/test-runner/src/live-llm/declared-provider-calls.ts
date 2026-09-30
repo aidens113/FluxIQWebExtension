@@ -7,7 +7,7 @@
 // green live-LLM result. But a fixture that arms a fault the deterministic
 // runtime is *supposed* to absorb -- a control renamed between authoring and
 // replay, content that arrives after the action needing it -- ends with a
-// grant that correctly went unspent, and under the guard every correct
+// model that was correctly never called, and under the guard every correct
 // absorption reads as a defect.
 //
 // The answer is a declaration, not a weaker guard, and it follows

@@ -32,6 +32,7 @@
 // descends (`deepElementFromPoint`), and every walk up or down crosses the
 // boundary (`../../shadow-dom`). A closed root still presents only its host.
 
+import { isExtensionUiNode } from "../../picker-host";
 import { deepElementFromPoint } from "../../selector";
 import { composedClosest, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
 import { hasDismissalControl } from "./way-out";
@@ -116,7 +117,8 @@ function painted(selector: string): Element[] {
  */
 function coveringDialog(point: Point): Element | undefined {
   const hit = deepElementFromPoint(point.x, point.y);
-  if (!hit) return undefined;
+  // The extension's own overlays (`picker-host.ts`) are never the page's layer.
+  if (!hit || isExtensionUiNode(hit)) return undefined;
   const declared = composedClosest(hit, DIALOG_SELECTOR);
   if (declared) return declared;
   const overlay = outermostFixed(hit);

@@ -10,7 +10,7 @@ import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
 
 /**
  * A build that pressed nothing it was not allowed to: its second decision
- * asked to press "Delete post", which would publish, and neither a grant nor
+ * asked to press "Delete post", which would publish, and neither a permit nor
  * the instruction allowed that.
  */
 export async function permissionRequiredDiagnostic(): Promise<unknown> {

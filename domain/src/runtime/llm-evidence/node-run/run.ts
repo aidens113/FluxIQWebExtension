@@ -12,7 +12,7 @@
 //
 // **Nothing is refused on FluxIQ's own judgement of a control.** The model says
 // what its call would lastingly do, Core's gate answers from the person's
-// instruction and grant, and a refusal carries the request the person will
+// instruction and permission, and a refusal carries the request the person will
 // answer (`../permission.ts`). The one thing this module decides for itself is
 // that exploration stays on the origin it started on, which is the scope policy
 // the authoring navigation has always had.

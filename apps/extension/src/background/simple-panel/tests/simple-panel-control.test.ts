@@ -58,7 +58,7 @@ test("the automations list reads Flows, then their newest runs, and joins nothin
 
 test("a run sends only the project and the Flow, whatever else the panel put in the message", async () => {
   const h = harness();
-  await h.send({ type: SIMPLE_PANEL_MESSAGES.runAutomation, flowId: "flow-1", flow: { nodes: [] }, llmExecutionGrantId: "g", inputs: { password: "x" } });
+  await h.send({ type: SIMPLE_PANEL_MESSAGES.runAutomation, flowId: "flow-1", flow: { nodes: [] }, runIntent: "build_and_adapt", permittedConsequences: ["move_money"], inputs: { password: "x" } });
   await h.send({ type: SIMPLE_PANEL_MESSAGES.testGeneratedAutomation, flowId: "flow-2", proposalId: "p" });
   assert.deepEqual(h.calls.map((call) => [call.endpoint, call.payload]), [
     ["run-runtime-session", { projectId: "project-1", flowId: "flow-1" }],

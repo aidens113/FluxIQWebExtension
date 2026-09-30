@@ -8,7 +8,7 @@ import type { PersistedFlowLlmExecution } from "../persisted-flow-run.js";
 import type { FlowRepairExpectation } from "../repair/index.js";
 import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
 
-// The Flow lane under a live grant, the way `identity-drift --variant
+// The Flow lane with the model taking part, the way `identity-drift --variant
 // renamed-redesign --flow --live-llm --llm-task adapt` runs it: the recorded
 // click fails with `target_not_found`, Core's recovery proposes (or is refused)
 // a target override, and the run is held to the scenario's declared
@@ -49,15 +49,15 @@ function liveCore(recovery: Recovery) {
   const attempt = recovery === "none" ? undefined : patchAttempt(recovery);
   const proposed = recovery === "proposed-save" || recovery === "proposed-discard";
   const candidates = [{ candidateId: "candidate.0", outputId: "web.dom.type" }, { candidateId: "candidate.1", outputId: "web.dom.click" }];
-  const grantedRunIds: string[] = [];
+  const liveRunIds: string[] = [];
   const control: FlowLaneControl = {
     automationStudioCall: async (endpoint, payload) => {
       calls.push(endpoint);
-      // A granted run names its own id before it starts, and Core runs it under that id.
+      // A live run names its own id before it starts, and Core runs it under that id.
       if (endpoint === "run-runtime-session") {
         const request = payload as Record<string, unknown>;
         calls.push(`run:${String(request.runIntent ?? "none")}`);
-        grantedRunIds.push(String(request.newRunId));
+        liveRunIds.push(String(request.newRunId));
         return { runtimeSession: { runId: String(request.newRunId), flowId: String(request.flowId), status: "failed" } };
       }
       if (endpoint === "list-recordings") return { recordings: [{ recordingId: "recording.one", startedAt: 0, endedAt: 1, metadata: { summaryOnly: true, eventCount: 2 } }] };
@@ -72,7 +72,7 @@ function liveCore(recovery: Recovery) {
       if (endpoint === "list-flow-subflows") return { subflows: [] };
       if (endpoint === "get-flow-run-detail") {
         return { runDetail: {
-          summary: { runId: grantedRunIds[grantedRunIds.length - 1] ?? "run.live", status: "failed" },
+          summary: { runId: liveRunIds[liveRunIds.length - 1] ?? "run.live", status: "failed" },
           actionAttempts: [
             { attemptId: "attempt.type", nodeId: "recorded.type", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20 },
             { attemptId: "attempt.save", nodeId: "recorded.save", definitionId: "builtin.policy.action", order: 2, status: "failed", startedAt: 30, finishedAt: 40, failure: NOT_FOUND },
@@ -80,7 +80,7 @@ function liveCore(recovery: Recovery) {
           interventions: recovery === "none" ? [] : [{ interventionId: "i.diagnosis", kind: "diagnosis" }, { interventionId: "i.patch", kind: "runtime_patch" }],
           adaptationIds: proposed ? [ADAPTATION_ID] : [],
           changeProposalIds: proposed ? [PROPOSAL_ID] : [],
-          // Every way out of Core's recovery writes its gate and its trace; a granted
+          // Every way out of Core's recovery writes its gate and its trace; a live
           // run is finished only once they are in (`persisted-flow-run.ts`).
           metadata: { llmGate: { invoked: recovery !== "none" }, recoveryTrace: { stages: [] }, ...(attempt ? { runtimePatchAttempts: [attempt.raw] } : {}) },
         } };
@@ -94,7 +94,7 @@ function liveCore(recovery: Recovery) {
     selectExistingContext: async () => {},
     startPersistedFlow: async () => { throw new Error("a live run starts no session of its own"); },
     runPersistedFlow: async (input) => {
-      calls.push(`run:${input.llmExecution?.purpose ?? "none"}`);
+      calls.push(`run:${input.llmExecution?.intent ?? "none"}`);
       return { session: { runId: "run.live", status: "failed" } };
     },
     getRunDetail: async (): Promise<HarnessRecoveryDetail> => ({
@@ -104,10 +104,10 @@ function liveCore(recovery: Recovery) {
       changeProposalIds: proposed ? [PROPOSAL_ID] : [],
     }),
   };
-  return { control, calls, adaptationReads, grantedRunIds };
+  return { control, calls, adaptationReads, liveRunIds };
 }
 
-async function runLiveLane(recovery: Recovery, options: { purpose?: PersistedFlowLlmExecution["purpose"]; expectation?: FlowRepairExpectation | null } = {}) {
+async function runLiveLane(recovery: Recovery, options: { intent?: PersistedFlowLlmExecution["intent"]; expectation?: FlowRepairExpectation | null } = {}) {
   const fake = liveCore(recovery);
   const evidence: FlowLaneEvidence[] = [];
   const identified: string[] = [];
@@ -132,7 +132,7 @@ async function runLiveLane(recovery: Recovery, options: { purpose?: PersistedFlo
       recordEvidence: async (item) => { evidence.push(item); },
       checkFinalState: async () => true,
       flowDispatchStarting: () => {},
-      authorizeLiveLlm: async () => ({ grantId: "llm-grant:test", purpose: options.purpose ?? "diagnose_and_adapt" }),
+      authorizeLiveLlm: async () => ({ intent: options.intent ?? "diagnose_and_adapt", permittedConsequences: [] }),
       flowRunIdentified: (runId) => { identified.push(runId); },
       ...(expectation ? { repairExpectation: expectation } : {}),
     });
@@ -183,8 +183,8 @@ test("a proposal naming Discard, or no recovery at all, fails the run on its rep
   assert.match((quiet.outcome.error as Error).message, /Core attempted no recovery/u);
 });
 
-test("no repair is judged for a grant that cannot propose one, or a run with nothing declared", async () => {
-  for (const [name, options] of [["diagnosis only", { purpose: "diagnosis_only" as const }], ["nothing declared", { expectation: null }]] as const) {
+test("no repair is judged for an intent that cannot propose one, or a run with nothing declared", async () => {
+  for (const [name, options] of [["diagnosis only", { intent: "diagnosis_only" as const }], ["nothing declared", { expectation: null }]] as const) {
     const { outcome, evidence, adaptationReads } = await runLiveLane("refused", options);
     assert.ok("value" in outcome, `${name}: ${"error" in outcome ? String(outcome.error) : ""}`);
     assert.equal(outcome.value.repair, undefined, name);
@@ -193,7 +193,7 @@ test("no repair is judged for a grant that cannot propose one, or a run with not
   }
 });
 
-/** A granted run's id is named by the runner before the run starts, a lowercase UUID Core then runs under. */
+/** A live run's id is named by the runner before the run starts, a lowercase UUID Core then runs under. */
 function assertRunIdNamedFirst(identified: readonly string[], message?: string): void {
   assert.equal(identified.length, 1, message);
   assert.match(identified[0]!, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u, message);

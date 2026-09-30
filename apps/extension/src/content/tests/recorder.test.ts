@@ -22,7 +22,7 @@ import type { RecordingEventKind, RecordingEventPayload } from "../types";
 type Recorder = typeof import("../recorder");
 /**
  * A node as the tally sees it: what it is attached to, and whether it carries
- * an attribute. That is the whole of what `picker-host.ts` asks of a node, and
+ * an attribute. That is the whole of what `picker-host.ts` (`isExtensionUiNode`) asks of a node, and
  * asking it of plain objects is what lets the tally be tested here at all.
  */
 type FakeNode = { parentNode: FakeNode | null; hasAttribute(name: string): boolean };
@@ -182,6 +182,20 @@ test("the picker's overlay is not a page change: its host, and what it holds, ar
       { added: 1, removed: 0, attributes: 0, text: 0 },
       "only the node the page itself added is counted"
     );
+  });
+});
+
+test("the activity overlay is not a page change either: its host arriving, restyling and leaving counts nothing", async (t) => {
+  await whileRecording(t, ({ emit }) => {
+    const host: FakeNode = { parentNode: null, hasAttribute: (name) => name === "data-fluxiq-activity" };
+    deliver?.([
+      { type: "childList", target: pageNode(), addedNodes: [host], removedNodes: [] },
+      // The final event fades it: a style attribute on the host.
+      { type: "attributes", target: host, addedNodes: [], removedNodes: [] },
+      { type: "childList", target: pageNode(), addedNodes: [], removedNodes: [host] }
+    ]);
+    emit("dom.click", {});
+    assert.deepEqual(kinds(), ["dom.click"], "no dom.mutation is flushed for the overlay alone");
   });
 });
 

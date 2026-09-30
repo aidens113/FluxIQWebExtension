@@ -1,4 +1,4 @@
-import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, type RunHarnessRecovery, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "./harness-recovery.js";
+import { harnessChangeVerdictBases, harnessChangeVerdictOutcomes, harnessPatchPermissionOutcomes, harnessRecoveryContextOmissionReasons, harnessRecoveryRungs, harnessResultRepairOutcomes, harnessResultRepairPhases, type RunHarnessRecovery, type RunHarnessResultReauthor, type RunHarnessResultRepair } from "./harness-recovery.js";
 import { add, array, enumeration, keys, object, result, uniqueStrings, type JsonObject } from "./runtime-validation.js";
 import type { ValidationIssue, ValidationResult } from "./validation.js";
 
@@ -11,9 +11,9 @@ const CODE = /^[a-z][a-z0-9_.-]{1,127}$/u;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/u;
 const IDENTIFIER_MAX_LENGTH = 256;
 
-const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "refusalCause", "contextSections", "resultReauthor", "resultRepair"] as const satisfies readonly (keyof RunHarnessRecovery)[];
+const recoveryKeys = ["attempted", "interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds", "refusalCode", "refusalRung", "contextSections", "resultReauthor", "resultRepair"] as const satisfies readonly (keyof RunHarnessRecovery)[];
 const resultReauthorKeys = ["routed", "refusal", "adaptationId", "applied", "failureCode", "failureStage", "failureRetryable", "providerInvocation", "providerResponse", "providerStatus"] as const satisfies readonly (keyof RunHarnessResultReauthor)[];
-const resultRepairKeys = ["attempted", "nodeId", "code"] as const satisfies readonly (keyof RunHarnessResultRepair)[];
+const resultRepairKeys = ["attempted", "nodeId", "code", "phase", "outcome"] as const satisfies readonly (keyof RunHarnessResultRepair)[];
 const contextSectionKeys = ["included", "omitted"] as const;
 const contextOmissionKeys = ["section", "reason"] as const;
 const interventionKeys = ["kind", "validationOk", "validationCodes"] as const;
@@ -90,11 +90,6 @@ export function validateRunHarnessRecovery(input: unknown): ValidationResult<Run
       enumeration(value.refusalRung, harnessRecoveryRungs, "$.refusalRung", issues);
       if (value.refusalCode === undefined || value.refusalCode === null) add(issues, "$.refusalRung", "must be null unless a refusal code names what it declined");
     }
-    // A cause explains a refusal, so there has to be one to explain.
-    if (value.refusalCause !== undefined && value.refusalCause !== null) {
-      checkCode(value.refusalCause, "$.refusalCause", issues);
-      if (value.refusalCode === undefined || value.refusalCode === null) add(issues, "$.refusalCause", "must be null unless a refusal code names what it explains");
-    }
     // Section names and Core's own omission reasons. A name is not content, so
     // nothing here can carry page data; the check is that it stays that way.
     if (value.contextSections !== undefined && value.contextSections !== null) {
@@ -163,6 +158,16 @@ function checkResultRepair(input: unknown, path: string, issues: ValidationIssue
     if (value.attempted === false) add(issues, `${path}.nodeId`, "must be null for a result that was never taken through the failure entry point");
   }
   if (value.code !== null) checkCode(value.code, `${path}.code`, issues);
+  // Absent in a record written before Core reported its phase; one of Core's
+  // own words otherwise, and an outcome exactly when the repair has settled.
+  if (value.phase !== undefined) {
+    enumeration(value.phase, harnessResultRepairPhases, `${path}.phase`, issues);
+    if (value.attempted === false) add(issues, `${path}.phase`, "must be absent for a result that was never taken through the failure entry point");
+  }
+  if (value.outcome !== undefined) {
+    enumeration(value.outcome, harnessResultRepairOutcomes, `${path}.outcome`, issues);
+    if (value.phase !== "settled") add(issues, `${path}.outcome`, "must be absent unless the repair has settled");
+  } else if (value.phase === "settled") add(issues, `${path}.outcome`, "must name how a settled repair ended");
 }
 
 function checkContextSections(input: unknown, path: string, issues: ValidationIssue[]): void {

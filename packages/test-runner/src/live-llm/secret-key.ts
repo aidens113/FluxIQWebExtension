@@ -1,7 +1,7 @@
 // The run's provider key, installed into Core the way a person would: as an
 // encrypted Secret Key, authorized by the account's password and PIN. The
 // credential reaches Core once, over loopback, inside this one call; every
-// later step -- the Flow's settings, the execution grant, the run itself --
+// later step -- the Flow's settings, the build, the run itself --
 // carries only the opaque key id Core hands back.
 
 import { RunnerFailure } from "../failure.js";

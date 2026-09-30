@@ -54,6 +54,7 @@ import {
   meaningfulText
 } from "./element-traits";
 import { repeatExemplars } from "./repeat-exemplars";
+import { isExtensionUiNode } from "./picker-host";
 import { withSelectorMemo } from "./selector";
 import { composedClosest, composedDocumentOrder, composedRoots, queryComposed, shadowHostsOf } from "./shadow-dom";
 import { visualDocumentBounds } from "./visual-bounds";
@@ -274,6 +275,8 @@ function snapshotCandidateElements(): { candidates: Element[]; scanned: number }
 
 function shouldIncludeSnapshotElement(element: Element): boolean {
   if (element === document.documentElement || element === document.body) return false;
+  // The extension's own overlays (`picker-host.ts`) are not the page.
+  if (isExtensionUiNode(element)) return false;
   // Asked across shadow boundaries: a control inside a hidden widget's root is
   // hidden with it, and `closest` alone stops at the root.
   if (composedClosest(element, "script, style, noscript, template")) return false;

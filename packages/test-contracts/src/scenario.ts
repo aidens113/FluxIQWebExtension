@@ -145,7 +145,7 @@ export type ExpectedFailure = { category: AutomationStudioAdaptiveFailureClass; 
 /**
  * A run this scenario or variant declares must finish without the model being
  * consulted at all: the deterministic runtime is expected to absorb whatever
- * the fixture arms, and the grant `--live-llm` takes out must go unspent.
+ * the fixture arms, and the provider calls `--live-llm` allows must go unmade.
  *
  * It exists because the opposite is asserted by default. `--live-llm` is a
  * request for a real provider call, so a live run that reached no provider

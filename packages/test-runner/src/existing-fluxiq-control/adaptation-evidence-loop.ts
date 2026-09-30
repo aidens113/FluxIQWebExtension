@@ -121,7 +121,7 @@ function outsideItsContract(loop: ExistingAdaptationEvidenceLoop): boolean {
     || (loop.providerCallCount !== undefined && loop.decisionCount !== loop.providerCallCount)
     // The total is the loop's calls plus the ones outside it, and a record
     // that does not add up is not accounting. Both are bounded by the same
-    // per-run ceiling as the loop count: they were paid for out of one grant.
+    // per-run ceiling as the loop count: they were paid for out of one run's budget.
     || (loop.totalProviderCallCount !== undefined && (loop.providerCallCount === undefined
       || loop.totalProviderCallCount !== loop.providerCallCount + (loop.additionalProviderCallCount ?? 0)
       || loop.totalProviderCallCount > LLM_LAB_MAX_CALLS_PER_RUN))

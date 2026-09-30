@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, LLM_LAB_SCHEMA_VERSION, llmActionConsequences, llmModels, type LlmExecutionProfile, type LlmTaskKind } from "@fluxiq-web-extension/test-contracts";
-import {
-  AUTOMATION_STUDIO_ACTION_CONSEQUENCES,
-  AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS,
-  AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS,
-  AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD,
-} from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
 import type { PersistedFlowLlmExecution } from "../../flow-lane/index.js";
 import { planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
 
@@ -17,7 +11,7 @@ import { planLiveLlmExecution, type LiveLlmPurpose } from "../live-llm-plan.js";
  * effective limit is at or inside what the operator typed, and a profile that
  * cannot be run inside its own stated bounds is refused rather than widened.
  *
- * They also pin the call-count model Core now has. A purpose that does not
+ * They also pin the call-count model Core now has. An intent that does not
  * iterate makes one call; one that does takes the operator's number, bounded
  * only by Core's runaway backstop. The Lab used to pin adaptation at exactly
  * two calls, which left a real recovery no call to gather evidence with.
@@ -43,15 +37,6 @@ function profile(overrides: Partial<LlmExecutionProfile> = {}, budget: Partial<L
   };
 }
 
-/**
- * Core's own numbers, imported rather than copied. This file used to carry the
- * confirmation threshold as the literal 100_000, in step with a Lab plan that
- * carried the same literal -- so the two agreed with each other and with
- * nothing else. Core had moved to ten *full* requests, and because the plan's
- * number is sent on every grant request, the stale copy overrode Core rather
- * than merely lagging it. Nothing below writes a token count down.
- */
-const CORE_THRESHOLD = AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
 const PER_REQUEST = DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest;
 const DEFAULT_CALLS = DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
 
@@ -95,12 +80,12 @@ test("an adapt call limit above Core's backstop or below one is refused, naming 
   assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 2.5 })), /--llm-max-calls 2\.5 must be a whole number/u);
 });
 
-test("repair plans the iterating explore_and_adapt grant, and adapt stays the narrow one", () => {
-  // Compile-time as much as run-time: the purpose must be one the plan names
+test("repair plans the iterating explore_and_adapt intent, and adapt stays the narrow one", () => {
+  // Compile-time as much as run-time: the intent must be one the plan names
   // and one the Flow lane will carry to Core.
   const purpose: LiveLlmPurpose = "explore_and_adapt";
-  const carried: PersistedFlowLlmExecution = { grantId: "llm-grant:test", purpose };
-  assert.equal(carried.purpose, "explore_and_adapt");
+  const carried: PersistedFlowLlmExecution = { intent: purpose, permittedConsequences: [] };
+  assert.equal(carried.intent, "explore_and_adapt");
   const repair = planLiveLlmExecution(profile({ task: "repair" }));
   assert.equal(repair.purpose, "explore_and_adapt");
   assert.equal(repair.task, "repair");
@@ -108,11 +93,11 @@ test("repair plans the iterating explore_and_adapt grant, and adapt stays the na
   assert.equal(repair.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
   assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 40 })).maxCalls, 40);
   assert.throws(() => planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 65 })), /--llm-max-calls 65 must be a whole number between 1 and 64/u);
-  // The narrow grant is unchanged: `repair` is a new task, not a redefinition of `adapt`.
+  // The narrow intent is unchanged: `repair` is a new task, not a redefinition of `adapt`.
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });
 
-test("create-flow plans the web panel's iterating build_and_adapt grant, with the operator's call count and every call's tokens", () => {
+test("create-flow plans the web panel's iterating build_and_adapt, with the operator's call count and every call's tokens", () => {
   // The whole per-request triple comes from the shared budget. Overriding the
   // output and total limits alone left the input limit at the default, and
   // input plus output may not exceed the total, so the profile was refused.
@@ -122,11 +107,8 @@ test("create-flow plans the web panel's iterating build_and_adapt grant, with th
   // Core's own iterating default, not a one-call build.
   assert.equal(byDefault.maxCalls, DEFAULT_CALLS);
   // A build's token budget is every authorized call at the per-request limit,
-  // so the cost cap and the stall guard bind before tokens do; past Core's
-  // threshold, so the explicit --live-llm budget confirms it.
+  // so the cost cap and the stall guard bind before tokens do.
   assert.equal(byDefault.maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
-  assert.equal(byDefault.highTokenConfirmation.required, true);
-  assert.match(byDefault.highTokenConfirmation.reason, /a creation build's default: .*--llm-max-cost-usd and the stall guard bind before tokens/u);
   assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
   // The campaigns' 600,000 at ~16k input tokens a decision capped real builds
   // at ~34 decisions, so an untyped build budget outlasts every decision ...
@@ -139,57 +121,29 @@ test("create-flow plans the web panel's iterating build_and_adapt grant, with th
   const cheap = planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 48, maxEstimatedCostUsd: 0.01 }));
   assert.equal(cheap.maxEstimatedCostUsd, 0.01);
   assert.equal(cheap.maxTotalEstimatedCostUsd, 0.48);
-  // ... a typed budget is still validated, and every other purpose still honours it.
+  // ... a typed budget is still validated, and every other intent still honours it.
   assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), /--llm-max-run-tokens .* must be a whole number of at least/u);
   assert.equal(planLiveLlmExecution(profile({ task: "repair" }, { maxCallsPerRun: 48, maxTotalTokensPerRun: 600_000 })).maxTotalTokensPerRun, 600_000);
-  // A build grant is never one a Flow run carries: the Flow lane's type has no room for it.
-  const runPurposes: ReadonlyArray<PersistedFlowLlmExecution["purpose"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
+  // A build intent is never one a Flow run carries: the Flow lane's type has no room for it.
+  const runPurposes: ReadonlyArray<PersistedFlowLlmExecution["intent"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
   assert.equal((runPurposes as readonly string[]).includes(byDefault.purpose), false);
 });
 
-test("without --llm-max-run-tokens the run token budget is Core's default, so a default adapt run needs no confirmation", () => {
-  // Twenty-six calls at the per-request ceiling could use twenty-six times it;
-  // Core's default budget holds the run down to its confirmation threshold,
-  // which is ten full requests.
-  const byDefault = planLiveLlmExecution(profile({ task: "adapt" }));
-  const exposure = PER_REQUEST * DEFAULT_CALLS;
-  assert.equal(byDefault.maxTotalTokensPerRun, CORE_THRESHOLD);
-  assert.deepEqual(
-    { required: byDefault.highTokenConfirmation.required, authorizedTokens: byDefault.highTokenConfirmation.authorizedTokens, threshold: byDefault.highTokenConfirmation.threshold },
-    { required: false, authorizedTokens: CORE_THRESHOLD, threshold: CORE_THRESHOLD },
-  );
-  assert.match(byDefault.highTokenConfirmation.reason, new RegExp(`budget of ${CORE_THRESHOLD} \\(Core's default: the smaller of --llm-max-total-tokens ${PER_REQUEST} x ${DEFAULT_CALLS} authorized call\\(s\\) = ${exposure} and ${CORE_THRESHOLD}\\) is within Core's ${CORE_THRESHOLD}-token confirmation threshold`, "u"));
-  // Fewer calls than the threshold covers: the budget is what those calls could use.
+test("without --llm-max-run-tokens the run token budget is every authorized call at the per-request limit", () => {
+  // What bounds a run is its spend ceiling, the calls it was allowed and
+  // Core's stall guard.
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).maxTotalTokensPerRun, PER_REQUEST * DEFAULT_CALLS);
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 3 })).maxTotalTokensPerRun, PER_REQUEST * 3);
   assert.equal(planLiveLlmExecution(profile()).maxTotalTokensPerRun, PER_REQUEST);
 });
 
-test("Core's high-token confirmation is planned exactly when the run token budget exceeds its threshold", () => {
-  const atThreshold = planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: CORE_THRESHOLD }));
-  assert.equal(atThreshold.maxTotalTokensPerRun, CORE_THRESHOLD);
-  assert.equal(atThreshold.highTokenConfirmation.required, false);
-  assert.match(atThreshold.highTokenConfirmation.reason, new RegExp(`budget of ${CORE_THRESHOLD} \\(--llm-max-run-tokens ${CORE_THRESHOLD}\\) is within`, "u"));
-
-  const above = planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: CORE_THRESHOLD + 1 }));
-  assert.equal(above.maxTotalTokensPerRun, CORE_THRESHOLD + 1);
-  assert.equal(above.highTokenConfirmation.required, true);
-  assert.equal(above.highTokenConfirmation.authorizedTokens, CORE_THRESHOLD + 1);
-  assert.match(above.highTokenConfirmation.reason, new RegExp(`budget of ${CORE_THRESHOLD + 1} \\(--llm-max-run-tokens ${CORE_THRESHOLD + 1}\\) is above Core's ${CORE_THRESHOLD}-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation`, "u"));
-
-  // Calls alone never trigger it: even Core's backstop of calls, at the default
-  // per-request budget, is held to the threshold and so needs no confirmation.
-  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).highTokenConfirmation.required, false);
-});
-
 test("a run token budget only moves down: held to what the authorized calls could use, refused below one request", () => {
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: 300_000 })).maxTotalTokensPerRun, 300_000);
   const held = planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 2, maxTotalTokensPerRun: 500_000 }));
   assert.equal(held.maxTotalTokensPerRun, PER_REQUEST * 2);
-  assert.equal(held.highTokenConfirmation.required, false);
-  assert.match(held.highTokenConfirmation.reason, new RegExp(`--llm-max-run-tokens 500000, held to --llm-max-total-tokens ${PER_REQUEST} x 2 authorized call\\(s\\) = ${PER_REQUEST * 2}`, "u"));
   // A diagnosis makes one call however high the typed budget, so one request is all it can spend.
   const diagnosis = planLiveLlmExecution(profile({}, { maxCallsPerRun: 64, maxInputTokens: 40_000, maxOutputTokens: 10_000, maxTotalTokensPerRequest: 50_000, maxTotalTokensPerRun: 3_000_000 }));
   assert.equal(diagnosis.maxTotalTokensPerRun, 50_000);
-  assert.equal(diagnosis.highTokenConfirmation.required, false);
   // The floor a run budget may never sit below is one whole request, which is
   // now the per-request ceiling itself rather than the 10,000 it once was.
   assert.throws(() => planLiveLlmExecution(profile({ task: "adapt" }, { maxTotalTokensPerRun: PER_REQUEST - 1 })), new RegExp(`--llm-max-run-tokens ${PER_REQUEST - 1} must be a whole number of at least --llm-max-total-tokens ${PER_REQUEST}`, "u"));
@@ -205,7 +159,7 @@ test("a cost cap of zero cannot authorize a live call", () => {
   assert.throws(() => planLiveLlmExecution(profile({}, { maxEstimatedCostUsd: 0 })), /cannot authorize a live provider call/u);
 });
 
-test("the run's total cost limit is the per-call limit across the authorized calls, held to Core's $2", () => {
+test("the run's spend ceiling is the per-call limit across the authorized calls, held to the Lab's $2", () => {
   assert.equal(planLiveLlmExecution(profile()).maxTotalEstimatedCostUsd, 0.25);
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).maxTotalEstimatedCostUsd, 2);
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: 4, maxEstimatedCostUsd: 0.05 })).maxTotalEstimatedCostUsd, 0.2);
@@ -253,40 +207,16 @@ test("token limits are held inside Core's ceiling and must add up", () => {
   assert.throws(() => planLiveLlmExecution(profile({}, { maxInputTokens: 9_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000 })), /exceeds --llm-max-total-tokens/u);
 });
 
-test("the call, token and cost numbers the Lab mirrors are Core's own", async () => {
-  // This is the drift detector, and it did its job: it caught the Lab
-  // overriding Core's confirmation threshold with a stale 100_000. But it did
-  // so by parsing Core's source for a plain number, and that stopped working
-  // the moment Core derived the threshold from its per-call limit instead of
-  // writing it down -- the check then failed with "no longer a plain numeric
-  // constant" rather than with the difference it had actually found.
-  //
-  // So everything Core exports is imported here instead. An import cannot be
-  // defeated by a change of expression, and cannot drift.
-  assert.equal(AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS, LLM_LAB_MAX_CALLS_PER_RUN);
-  assert.equal(AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
-  assert.equal(AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, planLiveLlmExecution(profile()).highTokenConfirmation.threshold);
-  // Core's ceiling on a grant's total cost, which a backstop-sized plan reaches,
-  // is the one number here Core does not export -- so it is still read from
-  // Core's source, where it is still a plain numeric constant. Reading the
-  // source rather than the build is deliberate: the build can lag it, and a Lab
-  // run against a Core build older than Core's source is refused outright
-  // (`scripts/lab/core-build-stale.mjs`).
-  // The path moved on 2026-09-24: Core split `llm/execution-grants.ts` into
-  // `llm/execution/`, because three files shared the `execution-` prefix and the
-  // store had outgrown its line limit. Reading a file by path is what makes that
-  // a test failure rather than a silent pass, which is the trade this assertion
-  // already accepted when it chose source over build.
-  const source = await readFile(new URL("../../../src/programs/automation-studio/runtime/llm/execution/grants.ts", import.meta.resolve("fluxiq/automation-studio")), "utf8");
-  const totalCost = /^const MAX_TOTAL_COST_USD = ([0-9_.]+);/mu.exec(source);
-  assert.ok(totalCost?.[1], "MAX_TOTAL_COST_USD is no longer a plain numeric constant in Core's llm/execution/grants.ts");
-  assert.equal(Number(totalCost[1].replaceAll("_", "")), planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd);
+test("a backstop-sized plan's spend ceiling is the Lab's $2, whatever its call count", () => {
+  // The ceiling is the Lab's own choice, saved on the Flow as
+  // `maxEstimatedCostUsdPerRun`.
+  assert.equal(planLiveLlmExecution(profile({ task: "adapt" }, { maxCallsPerRun: LLM_LAB_MAX_CALLS_PER_RUN })).maxTotalEstimatedCostUsd, 2);
 });
 
 test("the consequence classes the Lab mirrors are Core's own, in Core's order", () => {
   // The contracts package cannot import Core's runtime, so it keeps a copy;
   // this is what stops the copy drifting. A class Core adds or renames fails
-  // here instead of at a live grant.
+  // here instead of at a live run.
   assert.deepEqual([...llmActionConsequences], [...AUTOMATION_STUDIO_ACTION_CONSEQUENCES]);
 });
 
