@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
 import type { WebAutomationExtractListPagination } from "../../types";
-import { advancePage, deadlineFor, paginationBound, PaginationFault, paginationStopOf, type PaginationProgress } from "../pagination";
+import { advancePage, BROWSER_PAGE_HOST, deadlineFor, MAX_PAGE_RETRIES, pageRefusalOf, paginationBound, PaginationFault, paginationStopOf, refusedPageWaitMs, type PaginationProgress } from "../pagination";
 
 /** A requested bound, and what the page holds it to. */
 const BOUNDS: ReadonlyArray<readonly [requested: number, held: number]> = [
@@ -73,4 +73,41 @@ test("a move that threw says which way it failed: a pagination fault's own word,
   assert.equal(paginationStopOf(new PaginationFault("control_not_clickable", "Not clickable.")), "control_not_clickable");
   assert.equal(paginationStopOf(new Error("The node was detached.")), "page_fault");
   assert.equal(paginationStopOf("not even an error"), "page_fault");
+});
+
+// And the policy for a page the server refused (`run-munnhi5q-4867dabe`: the
+// store's 429 page, mid-pagination, read as the list ending). The reload itself
+// needs a document and is proven across documents in
+// `list-reader-refused-page.test.ts`.
+
+test("a status says whether the server refused the page: 429 and 503 are refusals, no status is unexplained, anything else was served", () => {
+  assert.equal(pageRefusalOf(429), "rate_limited");
+  assert.equal(pageRefusalOf(503), "unavailable");
+  assert.equal(pageRefusalOf(undefined), "unexplained");
+  for (const served of [200, 204, 404, 500]) assert.equal(pageRefusalOf(served), undefined, String(served));
+  // Node has no navigation entry, which is the browser that gives no status.
+  assert.equal(BROWSER_PAGE_HOST.status(), undefined);
+});
+
+test("the first retry outlasts an 8 s rate-limit window, and a read never reloads into what could be its third refusal as too fast", () => {
+  const none = { retries: 0, rateLimits: 0 };
+  assert.ok((refusedPageWaitMs("rate_limited", none, undefined, true) ?? 0) > 8_000);
+  assert.equal(refusedPageWaitMs("rate_limited", none, undefined, true), 8_500);
+  // A second 429 is the read's second refusal: it stops rather than risk a third.
+  assert.equal(refusedPageWaitMs("rate_limited", { retries: 1, rateLimits: 1 }, undefined, true), undefined);
+  // An unexplained page counts as a possible 429, both ways.
+  assert.equal(refusedPageWaitMs("unexplained", none, undefined, true), 8_500);
+  assert.equal(refusedPageWaitMs("unexplained", { retries: 1, rateLimits: 1 }, undefined, true), undefined);
+  // A 503 is no limiter's refusal: it may be retried up to the bound, each wait twice the last.
+  assert.equal(refusedPageWaitMs("unavailable", none, undefined, true), 8_500);
+  assert.equal(refusedPageWaitMs("unavailable", { retries: 1, rateLimits: 0 }, undefined, true), 17_000);
+  assert.equal(refusedPageWaitMs("unavailable", { retries: MAX_PAGE_RETRIES, rateLimits: 0 }, undefined, true), undefined);
+  assert.equal(MAX_PAGE_RETRIES, 2);
+});
+
+test("a retry the read's time cannot cover, or one whose reload would lose the read, is not made", () => {
+  const none = { retries: 0, rateLimits: 0 };
+  assert.equal(refusedPageWaitMs("rate_limited", none, 10_500, true), 8_500);
+  assert.equal(refusedPageWaitMs("rate_limited", none, 10_499, true), undefined);
+  assert.equal(refusedPageWaitMs("rate_limited", none, undefined, false), undefined);
 });

@@ -87,6 +87,17 @@ test("the shape a model copies shows a mark and a bound over a column under the 
   assert.equal(Object.hasOwn(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE, "where"), true, "the example declares where, or a model cannot write it beside extractList");
 });
 
+test("the grammar says a badge column filters by presence", () => {
+  // An icon badge is a detected column holding its name where the badge is and
+  // null where it is not, so presence is all a condition can ask of it. The
+  // shape shows only `is: "absent"`, the advertisement mark; "Brightaisle Plus
+  // eligible" is the other direction, and a run asking for it had no column and
+  // no shape for it (`t194-w3-extract-conditions.md`, Q2).
+  const grammar = WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR;
+  assert.equal(grammar.includes('badge: is: "present"'), true, "the grammar does not say a badge filters by presence");
+  assert.equal(grammar.indexOf("where is optional") < grammar.indexOf("badge:"), true, "optional still comes first");
+});
+
 test("the grammar says a list can be deduplicated and sorted, and the example declares both keys without using them", () => {
   // Live run `run-mulwm2dc-0bd95f22`: asked for roles "deduplicated, newest
   // first", the verifier said to add dedupe and sort and the repair had nowhere
