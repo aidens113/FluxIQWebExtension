@@ -82,8 +82,11 @@ test("a second failure ends the start as a RunnerFailure with closed details onl
 });
 
 test("any other navigation failure is not retried, and fails with its own reason", async () => {
-  const other = context(["other", "ok"]);
-  await assert.rejects(openExtensionControlPage(other, "u"), (error: unknown) => {
+  // The page's own clock stands still: `waitedMs` is then 0 by construction,
+  // where the wall clock made it 0 only when the machine was idle enough.
+  const clock = { value: 1_000, stepMs: 0 };
+  const other = context(["other", "ok"], clock);
+  await assert.rejects(openExtensionControlPage(other, "u", { now: () => clock.value }), (error: unknown) => {
     assert.ok(error instanceof RunnerFailure);
     assert.match(error.message, /ERR_FILE_NOT_FOUND/u);
     assert.deepEqual(error.details, { extensionStage: "control-page", attempts: 1, retried: [], reason: "navigation_failed", waitedMs: 0 });

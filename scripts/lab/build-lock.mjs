@@ -50,7 +50,9 @@ export async function withBuildLock(lockPath, body, options = {}) {
   const isProcessAlive = options.isProcessAlive ?? nativeProcessIsAlive;
   const record = { pid: options.pid ?? process.pid, acquiredAt: new Date(now()).toISOString(), heartbeatAt: new Date(now()).toISOString() };
   await mkdir(path.dirname(lockPath), { recursive: true });
-  const deadline = Date.now() + timeoutMs;
+  // Measured on the same clock as the heartbeat, so a caller that injects
+  // `now` decides both, and a test is not at the mercy of the machine's load.
+  const deadline = now() + timeoutMs;
   let announced = false;
 
   for (;;) {
@@ -74,12 +76,15 @@ export async function withBuildLock(lockPath, body, options = {}) {
       await rm(lockPath, { force: true });
       continue;
     }
-    if (Date.now() > deadline) {
-      throw new Error(`Timed out waiting ${Math.round(timeoutMs / 1000)}s for the Lab build lock held by process ${owner.pid} (${lockPath})`);
-    }
+    // Announced before the deadline is judged: a waiter that times out has
+    // always said whom it was waiting for, even when the first look at the
+    // lock already came after the deadline (a slow disk, a starved timer).
     if (!announced) {
       announced = true;
       options.onWait?.(owner);
+    }
+    if (now() > deadline) {
+      throw new Error(`Timed out waiting ${Math.round(timeoutMs / 1000)}s for the Lab build lock held by process ${owner.pid} (${lockPath})`);
     }
     await new Promise(resolve => setTimeout(resolve, pollMs));
   }

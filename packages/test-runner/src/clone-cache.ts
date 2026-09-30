@@ -61,15 +61,19 @@ export class ClonePackageCache {
     const entry: CloneCacheEntry = { schemaVersion: CACHE_SCHEMA_VERSION, scope: normalized, revision: normalizedRevision, packageHash: hashCanonicalJson(JSON.parse(canonical)), clonePackage, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + this.maxAgeMs).toISOString() };
     const serialized = `${JSON.stringify(entry)}\n`;
     if (Buffer.byteLength(serialized) > this.maxEntryBytes) throw new Error("Clone cache entry exceeds the configured size bound");
-    await this.withEntryLock(normalized, async () => {
-      const target = this.pathFor(normalized);
-      const temporary = path.join(this.directory, `.${path.basename(target)}.${randomUUID()}.tmp`);
-      try {
-        await writeFile(temporary, serialized, { encoding: "utf8", flag: "wx", mode: 0o600 }); await secure(temporary, "file");
-        await rename(temporary, target); await secure(target, "file");
-        await this.prune();
-      } catch (error) { await rm(temporary, { force: true }).catch(() => undefined); throw error; }
-    });
+    await this.prepareDirectory();
+    const target = this.pathFor(normalized);
+    const temporary = path.join(this.directory, `.${path.basename(target)}.${randomUUID()}.tmp`);
+    try {
+      // Written and hardened before the lock is taken: the name is this call's
+      // own, and hardening spawns icacls several times, which on a busy machine
+      // takes seconds. Held inside the lock, it made every other writer of the
+      // scope wait out those seconds in turn. The rename below moves the file
+      // with the ACL it was given here, so the entry is never readable by
+      // anyone else, and only the swap and the prune need the lock.
+      await writeFile(temporary, serialized, { encoding: "utf8", flag: "wx", mode: 0o600 }); await secure(temporary, "file");
+      await this.withEntryLock(normalized, async () => { await rename(temporary, target); await this.prune(); }, true);
+    } catch (error) { await rm(temporary, { force: true }).catch(() => undefined); throw error; }
     return publicStatus(entry, "valid");
   }
 
@@ -77,16 +81,31 @@ export class ClonePackageCache {
     const normalized = normalizeScope(scope); return this.withEntryLock(normalized, async () => { await rm(this.pathFor(normalized), { force: true }); return { state: "missing", ...normalized }; });
   }
 
-  private async withEntryLock<T>(scope: CloneCacheScope, operation: () => Promise<T>): Promise<T> {
-    await mkdir(this.directory, { recursive: true, mode: 0o700 }); await secure(this.directory, "directory");
+  private async prepareDirectory(): Promise<void> { await mkdir(this.directory, { recursive: true, mode: 0o700 }); await secure(this.directory, "directory"); }
+
+  private async withEntryLock<T>(scope: CloneCacheScope, operation: () => Promise<T>, prepared = false): Promise<T> {
+    if (!prepared) await this.prepareDirectory();
     const lock = `${this.pathFor(scope)}.lock`;
-    const deadline = Date.now() + LOCK_TIMEOUT_MS;
+    // The timeout bounds one holder, not the queue. A waiter that watched the
+    // lock pass from holder to holder was making progress, and a fixed deadline
+    // from its first look timed it out behind a queue of healthy holders; the
+    // clock restarts whenever the lock is a different one.
+    let holder: string | undefined;
+    let deadline = 0;
     while (true) {
-      try { await mkdir(lock, { mode: 0o700 }); await secure(lock, "directory"); break; }
+      // An empty marker inside the hardened directory: it inherits the
+      // directory's current-user-only ACL, and holds nothing to protect.
+      try { await mkdir(lock, { mode: 0o700 }); break; }
       catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        try { if (Date.now() - (await stat(lock)).mtimeMs > STALE_LOCK_MS) { await rm(lock, { recursive: true, force: true }); continue; } } catch { continue; }
-        if (Date.now() >= deadline) throw new Error("Timed out waiting for the scoped clone cache lock");
+        let seen: string;
+        try {
+          const info = await stat(lock);
+          if (Date.now() - info.mtimeMs > STALE_LOCK_MS) { await rm(lock, { recursive: true, force: true }); continue; }
+          seen = `${info.ino}:${info.birthtimeMs}`;
+        } catch { continue; }
+        if (seen !== holder) { holder = seen; deadline = Date.now() + LOCK_TIMEOUT_MS; }
+        else if (Date.now() >= deadline) throw new Error("Timed out waiting for the scoped clone cache lock");
         await new Promise(resolve => setTimeout(resolve, LOCK_WAIT_MS));
       }
     }
