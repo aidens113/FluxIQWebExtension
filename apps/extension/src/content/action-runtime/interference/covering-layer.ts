@@ -30,6 +30,7 @@
 import { isSensitiveFormControl } from "../../element-traits";
 import { isDrawnControl } from "../../evidence";
 import { accessibleNameFor } from "../../identity";
+import { isExtensionUiNode } from "../../picker-host";
 import { deepElementFromPoint } from "../../selector";
 import { composedClosest, composedContains, composedDescendants } from "../../shadow-dom";
 import { outermostFixed, type Point } from "./overlays";
@@ -59,7 +60,8 @@ const MAX_NAME_LENGTH = 40;
 export function coveringLayerSentence(target: Element, point: Point): string | undefined {
   try {
     const hit = deepElementFromPoint(point.x, point.y, target.ownerDocument);
-    if (!hit || composedContains(target, hit)) return undefined;
+    // The extension's own overlays are never a layer the page put over the target.
+    if (!hit || isExtensionUiNode(hit) || composedContains(target, hit)) return undefined;
     const layer = composedClosest(hit, DIALOG_SELECTOR) ?? outermostFixed(hit);
     if (!layer || composedContains(layer, target)) return undefined;
     return describeLayer(layer);

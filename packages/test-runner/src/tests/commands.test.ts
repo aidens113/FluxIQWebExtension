@@ -295,3 +295,12 @@ test("--llm-permit carries the named consequence classes on the live profile", (
   assert.throws(() => parseLabCommand(["run", "social-scheduler", ...create, "--llm-permit"]), /--llm-permit requires a value/u);
   assert.throws(() => parseLabCommand(["run", "social-scheduler", "--llm-permit", "delete"]), /explicit --live-llm/u);
 });
+test("--no-live-panel turns the headed run's live panel off for run, matrix and interactive, wherever it sits", () => {
+  assert.deepEqual(parseLabCommand(["run", "basic-form"]), { command: "run", scenarioId: "basic-form" }, "absent, the panel is on: the command carries no livePanel at all");
+  assert.deepEqual(parseLabCommand(["run", "--no-live-panel", "basic-form", "--seed", "7"]), { command: "run", scenarioId: "basic-form", seed: 7, livePanel: false }, "the flag takes no value, so the scenario id after it is still the positional");
+  assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow", "--no-live-panel"]), { command: "run", scenarioId: "basic-form", flowLane: true, livePanel: false });
+  assert.deepEqual(parseLabCommand(["matrix", "--no-live-panel", "--all"]), { command: "matrix", all: true, repeat: 1, livePanel: false });
+  assert.deepEqual(parseLabCommand(["interactive", "--no-live-panel", "basic-form"]), { command: "interactive", scenarioId: "basic-form", livePanel: false });
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--no-live-panel", "--no-live-panel"]), /--no-live-panel may only be specified once/);
+  assert.throws(() => parseLabCommand(["bench", "--corpus", "smoke", "--no-live-panel"]), /Unknown option: --no-live-panel/);
+});

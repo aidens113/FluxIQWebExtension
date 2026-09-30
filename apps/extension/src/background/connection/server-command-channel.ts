@@ -60,6 +60,8 @@ export type ServerCommandChannelDeps = {
   readonly setLastError: (message: string | undefined) => void;
   readonly onActivity: (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => void;
   readonly emitStatus: () => void;
+  /** Takes a `server.activity` payload: what FluxIQ is doing now, for the panel and the overlay. */
+  readonly acceptActivity: (activity: unknown) => void;
   // Re-entry through the facade for the three public paths a command can take.
   readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number) => Promise<void>;
   readonly stopRecording: (notifyServer: boolean) => Promise<void>;
@@ -89,6 +91,13 @@ export class ServerCommandChannel {
         return;
       }
       this.deps.gateway.markFailed();
+      return;
+    }
+
+    // Activity is a status display, not a command: it opens no runtime status
+    // and is never answered.
+    if (message.type === "server.activity") {
+      this.deps.acceptActivity(message.payload);
       return;
     }
 

@@ -1,4 +1,4 @@
-import type { ClientGatewayCapability } from "@fluxiq/client-gateway-websocket";
+import { CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID, type ClientGatewayCapability } from "@fluxiq/client-gateway-websocket";
 import type { FluxIQRuntimeCapability } from "fluxiq/runtime";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
@@ -89,5 +89,14 @@ export const webAutomationGatewayCapabilities: WebAutomationClientGatewayCapabil
     actionTypes: WEB_AUTOMATION_ACTION_TYPES,
     outputIds: WEB_AUTOMATION_ACTION_TYPES,
     metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  },
+  {
+    // Asks Core for `server.activity`: what it is doing now, for the panel's
+    // chat and the on-page overlay. Receive-only and domain-neutral, so it
+    // names no domain, input, output or action type -- nothing becomes
+    // executable by declaring it.
+    id: CLIENT_GATEWAY_ACTIVITY_CAPABILITY_ID,
+    label: "Live activity",
+    kind: "custom"
   }
 ];

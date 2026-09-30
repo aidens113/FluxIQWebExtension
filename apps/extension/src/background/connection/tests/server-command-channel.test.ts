@@ -37,6 +37,7 @@ function harness() {
   const snapshotLabels: string[] = [];
   const activities: Array<{ label: string; tone: ActivityEntry["tone"] | undefined }> = [];
   const sent: Array<{ type: string; payload: unknown }> = [];
+  const activitiesAccepted: unknown[] = [];
   const runtimeStatus = new RuntimeStatusTracker();
   let lastError: string | undefined = "stale error";
   let pageTabId: number | undefined = 3;
@@ -100,6 +101,9 @@ function harness() {
     },
     emitStatus: () => undefined,
     recordEvent: async () => undefined,
+    acceptActivity: (activity) => {
+      activitiesAccepted.push(activity);
+    },
     stopRecording: async (notifyServer) => {
       stops.push(notifyServer);
     },
@@ -115,6 +119,7 @@ function harness() {
     snapshotLabels,
     activities,
     sent,
+    activitiesAccepted,
     runtimeStatus,
     lastError: () => lastError
   };
@@ -319,4 +324,23 @@ test("a tab result is confirmed only with the request its own command started wi
     finishedAt: 150
   }, 3);
   assert.deepEqual(h.sent.map((message) => message.type), ["client.action_result"], "another command's close is not this result's operation");
+});
+
+test("server.activity goes to the activity relay and nothing else: no status, no reply, no error", async () => {
+  const h = harness();
+  const payload = {
+    activityId: "build-1",
+    sequence: 4,
+    subject: { kind: "build", id: "build-1", projectId: "project-1" },
+    phase: "exploring",
+    label: "Looking at the page",
+    at: "2026-09-29T00:00:00.000Z"
+  };
+  await h.channel.handleMessage(serverMessage({ type: "server.activity", id: "m-9", payload }));
+  assert.deepEqual(h.activitiesAccepted, [payload]);
+  assert.deepEqual(h.calls, ["gateway.noteMessageReceived"]);
+  assert.deepEqual(h.sent, []);
+  assert.deepEqual(h.activities, []);
+  assert.equal(h.lastError(), "stale error");
+  assert.equal(h.runtimeStatus.current().state, "idle");
 });
