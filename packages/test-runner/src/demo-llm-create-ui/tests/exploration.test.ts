@@ -19,15 +19,17 @@ import { readCreateUiSource } from "./module-source.js";
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 
 test("evidence-guided proposal parser retains only bounded proposal accounting", () => {
-  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
-  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4 });
+  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.2, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
+  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: DEFAULT_LLM_MODEL, inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.2 });
   assert.equal("maxCalls" in EVIDENCE_GUIDED_CREATION_LIMITS, false);
   assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, status: "applied" } } }, "project.one", "flow.one"), /escaped its checkpoint scope/u);
   // The aggregate bound is the run's token budget, not per-call tokens times a call count.
   const atBudget = { ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun - 40_000, outputTokens: 40_000, totalTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun } } } };
   assert.equal(parseEvidenceGuidedCreationProposal(atBudget, "project.one", "flow.one").totalTokens, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun);
   assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun - 4_000, outputTokens: 4_001, totalTokens: EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun + 1 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
-  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, estimatedCostUsd: 1.01 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
+  // The whole build is held to Core's $0.25 ceiling on a Flow build: $0.20 passes above, $0.26 does not.
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd, 0.25);
+  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, estimatedCostUsd: 0.26 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
 });
 
 test("no creation profile types a call count into Flow Settings", async () => {
@@ -73,7 +75,7 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
     maxInputTokens: DEFAULT_LLM_LAB_BUDGET.maxInputTokens, maxOutputTokens: DEFAULT_LLM_LAB_BUDGET.maxOutputTokens,
     maxTotalTokens: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest,
     maxTotalTokensPerRun: DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest * 10, timeoutSeconds: 45,
-    runDeadlineSeconds: 600, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0,
+    runDeadlineSeconds: 600, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 0.25, providerRetries: 0,
   });
   assert.ok(EVIDENCE_GUIDED_CREATION_LIMITS.maxInputTokens + EVIDENCE_GUIDED_CREATION_LIMITS.maxOutputTokens <= EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens);
   // The exploration Flow's settings follow the shared budget instead of
