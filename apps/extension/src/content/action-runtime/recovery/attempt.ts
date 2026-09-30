@@ -28,10 +28,10 @@
 // attempts in no time at all and still assert what was waited.
 
 import type { BrowserActionCommand, BrowserActionResult } from "../../types";
-import { clearInterference } from "../interference";
+import { clearableLayerOverPage, clearInterference } from "../interference";
 import { CLEAN_RECOVERY_ACCOUNT, type RecoveryAccount, type RecoveryOutcome } from "./account";
 import { recoveryBackoffMs, recoveryBudgetRemainingMs } from "./budget";
-import { faultNeedsInterference, recoverableFault, type RecoveryFault } from "./fault";
+import { faultMayHideBehindLayer, faultNeedsInterference, recoverableFault, type RecoveryFault } from "./fault";
 
 /** One execution's answer, and the account of what reaching it cost. */
 export type RecoveredExecution = {
@@ -54,6 +54,14 @@ export type RecoveryPause = (ms: number) => Promise<void>;
 export type RecoveryIntervention = (fault: RecoveryFault) => number;
 
 /**
+ * Whether a layer the intervention could clear stands over the page now. Asked
+ * only for a missing target (`faultMayHideBehindLayer`), which is usually late
+ * rather than walled off, so the loop presses for it only on a yes. Injected
+ * and defaulted for the reason `RecoveryIntervention` is.
+ */
+export type RecoveryLayerProbe = () => boolean;
+
+/**
  * Runs `attempt` until it answers with something retrying cannot improve, or
  * until the budget is spent, and reports the last answer with the account.
  *
@@ -68,7 +76,8 @@ export async function runWithRecovery(
   attempt: () => Promise<BrowserActionResult>,
   pause: RecoveryPause = sleep,
   now: () => number = Date.now,
-  intervene: RecoveryIntervention = clearInterference
+  intervene: RecoveryIntervention = clearInterference,
+  layerOverPage: RecoveryLayerProbe = clearableLayerOverPage
 ): Promise<RecoveredExecution> {
   const absorbed: RecoveryFault[] = [];
   let waitedMs = 0;
@@ -94,7 +103,11 @@ export async function runWithRecovery(
     // ladder and report the refusal it started with; and the pause after the
     // press is what gives the layer time to finish leaving before the target is
     // hit-tested again.
-    if (faultNeedsInterference(fault)) dismissed += intervene(fault);
+    //
+    // A missing target is cleared for too, but only when a clearable layer is
+    // there: a page that draws the target once its consent wall is answered
+    // never draws it while the loop merely waits (`fault.ts`).
+    if (faultNeedsInterference(fault) || (faultMayHideBehindLayer(fault) && layerOverPage())) dismissed += intervene(fault);
     waitedMs += backoffMs;
     await pause(backoffMs);
     // A clipped pause can land exactly on the command deadline, and a real

@@ -1397,8 +1397,8 @@ For the whole of a Flow lane — the created Flow's build, its run and any
 replays, or a recorded Flow's run — it reads the project's threads once a
 second through `list-conversations` and `get-conversation`, and answers each
 person-needed ask once through `answer-ask` (`kind: "choice"`, the option as
-`value`). Every other ask, a permission above all, is left for its own answer.
-For each one it:
+`value`). A permission ask is answered only in the created-Flow lane (below);
+every other ask is left for its own answer. For each person-needed ask it:
 
 1. finds the scenario tab showing a check the fixture's person module knows,
    among the tabs on the scenario's origin, newest first, looking for up to
@@ -1438,6 +1438,26 @@ cleared, the answer, and the seconds FluxIQ waited from the ask to the answer,
 with the Lab's own reason for anything but a clear — never page text. Each is
 also a `runtime.settle` event on the run's timeline at the moment it was
 answered, and the campaign row carries the same record as `personHandOffs`.
+
+**The person also answers a permission ask, in the created-Flow lane.** A build
+or a repair that reaches an act the run was not permitted (a `move_money`,
+`delete` or `send_or_publish` act asks every time) parks on a `permission` ask
+keyed by its request id and waits up to 120 s. Given the task's
+`permissionPoint`, the Lab answers `grant` when the ask stands at that point —
+the same judgement the lane scores with (`flow-lane/creation/permission-point.ts`:
+the class in `missing` and the control label equal) — and `deny` anywhere else,
+on a control Core left unnamed (the person cannot tell it is the task's act), or
+when the task declares no point; a task with `askFirst` has its
+ask left for Core's timeout. Each answer is recorded apart from the hand-offs, as
+`permissionAnswers` in the same snapshot (ask id, stage, missing classes, the
+control as Core named it, verdict, answer, seconds waited), so the hand-off
+invariant scores nothing new. The lane then passes a consequential task's Flow
+only if Core's own record on the Flow's thread shows a grant at the point on the
+named control (`permissionPoint: "not_asked"` otherwise), unless the operator permitted the
+class; a build that still ends on its request is `stopped_for_permission`,
+never a pass. The Flow's playback needs no second answer: a saved Flow replays
+with no permission gate, and only a repair's exploration is gated, which parks
+on the run's thread and is answered by the same rule.
 
 **A hand-off at a real check is correct.** The evaluation's
 `person-hand-off` invariant (`run-evaluation/person-hand-off-invariant.ts`),

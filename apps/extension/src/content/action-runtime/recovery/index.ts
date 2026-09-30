@@ -9,10 +9,10 @@
 
 export { runWithRecovery } from "./attempt";
 export { recordRecovery } from "./record";
-export { recoverableFault, faultNeedsInterference, webActionReadsOnly, RECOVERY_FAULT_BY_CODE, RECOVERY_OBSTRUCTION_FAULTS, RECOVERY_KNOWN_ACTION_TYPES } from "./fault";
+export { recoverableFault, faultNeedsInterference, faultMayHideBehindLayer, webActionReadsOnly, RECOVERY_FAULT_BY_CODE, RECOVERY_OBSTRUCTION_FAULTS, RECOVERY_KNOWN_ACTION_TYPES } from "./fault";
 export { recoveryBackoffMs, recoveryBackoffLadder, RECOVERY_TARGET_BACKOFF_MS, RECOVERY_BLIP_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_BUDGET_MS } from "./budget";
 export { recoveryAccountSentence, CLEAN_RECOVERY_ACCOUNT } from "./account";
 
-export type { RecoveredExecution, RecoveryPause, RecoveryIntervention } from "./attempt";
+export type { RecoveredExecution, RecoveryPause, RecoveryIntervention, RecoveryLayerProbe } from "./attempt";
 export type { RecoveryAccount, RecoveryOutcome } from "./account";
 export type { RecoveryFault } from "./fault";

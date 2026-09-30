@@ -1,11 +1,16 @@
-// Core's person-needed asks, read and answered the way a person's panel does:
+// Core's asks for a person, read and answered the way a person's panel does:
 // through the conversation endpoints (`list-conversations`, `get-conversation`,
-// `answer-ask`). Core raises one when FluxIQ meets a check only a person may
-// pass, on the Flow's thread during a build and on the run's thread during a
-// run, and waits in place for the answer
-// (`AS/runtime/parking/person-needed-ask.ts` in FluxIQ Core).
+// `answer-ask`). Two kinds are the Lab person's. A person-needed ask, raised
+// when FluxIQ meets a check only a person may pass
+// (`AS/runtime/parking/person-needed-ask.ts` in FluxIQ Core). And a permission
+// ask, raised when a build or a repair reaches an act with a lasting
+// consequence the work was not permitted, keyed by the request's own id
+// (`AS/runtime/parking/permission-ask.ts`). Both come on the Flow's thread
+// during a build and on the run's thread during a run, and Core waits in place
+// for the answer.
 
 import type { FluxIQHttpOptions } from "../http-control/index.js";
+import { permissionQuestionOf } from "../flow-lane/index.js";
 import type { PersonHandOffStage } from "./hand-off-record.js";
 
 /** `control.kind` on every person-needed ask, and on nothing else: Core's marker, so no ask is recognised by its words. */
@@ -27,7 +32,14 @@ export type PendingPersonAsk = Readonly<{
   stage: PersonHandOffStage;
   /** When Core raised the ask, in milliseconds since the epoch. */
   createdAt: number;
-}>;
+}> & (
+  | Readonly<{ kind: "person_check" }>
+  /** `missing` is the classes the work was not permitted; `controlName` the control Core named, as Core bounded it, or `null` when it named none. */
+  | Readonly<{ kind: "permission"; missing: readonly string[]; controlName: string | null }>
+);
+
+/** How a person answers a permission ask: allow the act, or refuse it. */
+export type PermissionAskAnswer = "grant" | "deny";
 
 /** Where the asks are read: the project, and the domain it belongs to, which Core holds every call to. */
 export type PersonAskScope = { projectId: string; domainId: string };
@@ -39,12 +51,13 @@ const TURN_PAGE = 200;
 const MAX_PAGES = 20;
 
 /**
- * Every person-needed ask still waiting in the project, oldest first.
+ * Every ask for a person still waiting in the project, oldest first.
  *
  * Only threads Core says have a pending ask are opened, and within them only
- * an ask that is pending, is a choice, and carries `control.kind:
- * "person_check"` is returned. Every other ask -- a permission, a question
- * about the Flow -- is someone else's to answer and is left alone.
+ * a pending ask of the two kinds above is returned: a choice carrying
+ * `control.kind: "person_check"`, and a `permission`. Every other ask -- a
+ * question about the Flow, a confirmation -- is someone else's to answer and
+ * is left alone.
  */
 export async function pendingPersonAsks(control: PersonAskControl, scope: PersonAskScope): Promise<PendingPersonAsk[]> {
   const listed = record(await control.automationStudioCall("list-conversations", { projectId: scope.projectId }, READ_BOUNDS, scope.domainId));
@@ -55,9 +68,15 @@ export async function pendingPersonAsks(control: PersonAskControl, scope: Person
     const subject = subjectOf(thread.subject);
     for (const turn of await turnsOf(control, scope, thread.conversationId)) {
       const ask = isRecord(turn.ask) ? turn.ask : undefined;
-      if (!ask || ask.status !== "pending" || ask.kind !== "choice" || typeof ask.askId !== "string") continue;
-      if (!isRecord(ask.control) || ask.control.kind !== PERSON_CHECK_CONTROL_KIND) continue;
-      asks.push(Object.freeze({ askId: ask.askId, conversationId: thread.conversationId, subject, stage: stageOf(subject), createdAt: typeof ask.createdAt === "number" ? ask.createdAt : Date.now() }));
+      if (!ask || ask.status !== "pending" || typeof ask.askId !== "string") continue;
+      const raised = { askId: ask.askId, conversationId: thread.conversationId, subject, stage: stageOf(subject), createdAt: typeof ask.createdAt === "number" ? ask.createdAt : Date.now() };
+      if (ask.kind === "permission") {
+        const question = permissionQuestionOf(ask);
+        asks.push(Object.freeze({ ...raised, kind: "permission" as const, missing: Object.freeze([...question.missing]), controlName: question.controlName }));
+        continue;
+      }
+      if (ask.kind !== "choice" || !isRecord(ask.control) || ask.control.kind !== PERSON_CHECK_CONTROL_KIND) continue;
+      asks.push(Object.freeze({ ...raised, kind: "person_check" as const }));
     }
   }
   return asks.sort((left, right) => left.createdAt - right.createdAt);
@@ -66,6 +85,11 @@ export async function pendingPersonAsks(control: PersonAskControl, scope: Person
 /** Answers one person-needed ask with the option the person pressed. Flat, as Core's `answer-ask` takes it. */
 export async function answerPersonAsk(control: PersonAskControl, scope: PersonAskScope, askId: string, option: typeof PERSON_DONE | typeof PERSON_STOP): Promise<void> {
   await control.automationStudioCall("answer-ask", { projectId: scope.projectId, askId, kind: "choice", value: option }, READ_BOUNDS, scope.domainId);
+}
+
+/** Answers one permission ask: `grant` allows the act and releases the waiting work, `deny` refuses it. Flat, as Core's `answer-ask` takes it. */
+export async function answerPermissionAsk(control: PersonAskControl, scope: PersonAskScope, askId: string, answer: PermissionAskAnswer): Promise<void> {
+  await control.automationStudioCall("answer-ask", { projectId: scope.projectId, askId, kind: answer }, READ_BOUNDS, scope.domainId);
 }
 
 /** Every turn of one thread, a page at a time. */

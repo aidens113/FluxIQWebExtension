@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { answerPersonAsk, pendingPersonAsks, type PersonAskControl } from "../asks.js";
+import { answerPermissionAsk, answerPersonAsk, pendingPersonAsks, type PersonAskControl } from "../asks.js";
 
 type Call = { endpoint: string; payload: Record<string, unknown>; domainId: string | undefined };
 
@@ -29,10 +29,11 @@ function fakeCore(threads: Record<string, Array<Array<Record<string, unknown>>>>
 
 const scope = { projectId: "project-1", domainId: "web-automation" };
 
-test("only pending person-needed choices are returned, oldest first, with the stage their thread names", async () => {
+test("only pending person-needed choices and permissions are returned, oldest first, with the stage their thread names", async () => {
   const { control, calls } = fakeCore({
     "c-flow": [[
-      { turnId: "t1", ask: { ...ask("permission-1"), kind: "permission", control: null } },
+      { turnId: "t1", ask: { ...ask("permission-1", { createdAt: 50 }), kind: "permission", control: null } },
+      { turnId: "t4", ask: { ...ask("confirm-1"), kind: "confirm", control: null } },
       { turnId: "t2", ask: ask("build-check", { createdAt: 300 }) },
       { turnId: "t3", ask: null },
     ]],
@@ -46,7 +47,7 @@ test("only pending person-needed choices are returned, oldest first, with the st
     { conversationId: "c-run", pendingAskCount: 2, subject: { kind: "run", id: "run-9" } },
   ]);
   const asks = await pendingPersonAsks(control, scope);
-  assert.deepEqual(asks.map(({ askId, stage, subject }) => [askId, stage, subject?.id]), [["run-check", "run", "run-9"], ["build-check", "build", "flow-1"]]);
+  assert.deepEqual(asks.map(({ askId, kind, stage, subject }) => [askId, kind, stage, subject?.id]), [["permission-1", "permission", "build", "flow-1"], ["run-check", "person_check", "run", "run-9"], ["build-check", "person_check", "build", "flow-1"]]);
   assert.ok(!calls.some(({ payload }) => payload.conversationId === "c-idle"), "a thread with nothing pending is not opened");
   assert.deepEqual(calls.filter(({ payload }) => payload.conversationId === "c-run").map(({ payload }) => payload.sinceTurnId ?? null), [null, "r1"], "a long thread is read a page at a time");
   assert.ok(calls.every(({ domainId, payload }) => domainId === "web-automation" && payload.projectId === "project-1"), "every call names the project and its domain, which Core holds each call to");
@@ -56,4 +57,32 @@ test("the answer is flat, a choice naming the option, as answer-ask takes it", a
   const { control, calls } = fakeCore({}, []);
   await answerPersonAsk(control, scope, "run-check", "person_done");
   assert.deepEqual(calls, [{ endpoint: "answer-ask", payload: { projectId: "project-1", askId: "run-check", kind: "choice", value: "person_done" }, domainId: "web-automation" }]);
+});
+
+test("a permission ask carries the classes it lacked and the control Core named, from the ask or else its request", async () => {
+  const request = { requestId: "request-2", missing: ["delete"], control: { name: "Withdraw", kind: "button" } };
+  const { control } = fakeCore({
+    "c-flow": [[
+      { turnId: "t1", ask: { ...ask("request-1"), kind: "permission", missing: ["move_money"], control: { name: "Place order", kind: "button" }, permissionRequest: { missing: ["delete"], control: { name: "Other", kind: "button" } } } },
+      { turnId: "t2", ask: { ...ask("request-2", { createdAt: 200 }), kind: "permission", control: null, permissionRequest: request } },
+      { turnId: "t3", ask: { ...ask("request-3", { createdAt: 300 }), kind: "permission", missing: ["send_or_publish"], control: { name: null, kind: null } } },
+      { turnId: "t4", ask: { ...ask("request-4", { createdAt: 400 }), kind: "permission", status: "answered", missing: ["move_money"] } },
+    ]],
+  }, [{ conversationId: "c-flow", pendingAskCount: 3, subject: { kind: "flow", id: "flow-1" } }]);
+  const asks = await pendingPersonAsks(control, scope);
+  assert.deepEqual(asks.map((entry) => entry.kind === "permission" ? [entry.askId, entry.missing, entry.controlName] : [entry.askId]), [
+    ["request-1", ["move_money"], "Place order"],
+    ["request-2", ["delete"], "Withdraw"],
+    ["request-3", ["send_or_publish"], null],
+  ], "an answered permission is not pending, and each pending one reads Core's own fields first");
+});
+
+test("a permission answer is flat, grant or deny with no value, as answer-ask takes it", async () => {
+  const { control, calls } = fakeCore({}, []);
+  await answerPermissionAsk(control, scope, "request-1", "grant");
+  await answerPermissionAsk(control, scope, "request-2", "deny");
+  assert.deepEqual(calls, [
+    { endpoint: "answer-ask", payload: { projectId: "project-1", askId: "request-1", kind: "grant" }, domainId: "web-automation" },
+    { endpoint: "answer-ask", payload: { projectId: "project-1", askId: "request-2", kind: "deny" }, domainId: "web-automation" },
+  ]);
 });

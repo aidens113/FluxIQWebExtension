@@ -16,6 +16,7 @@ import type {
   DialogControl,
   ExtractedElementValue,
   FileInputOutcome,
+  IgnoredPressWatch,
   InPlaceEffectWatch,
   KeyboardCapability,
   RateLimitNotice,
@@ -102,6 +103,14 @@ export type ContentActionDependencies = {
    * itself. Made between the hover and the press; `settle` reads the answer.
    */
   watchRobotCheck(pressed: Element): RobotCheckWatch;
+  /**
+   * Starts watching, from just before a press on `pressed`, for any sign the
+   * page answered it at all: a request, a change inside the control's section,
+   * a navigation, or focus moving elsewhere. Made between the hover and the
+   * press; `settle` reads what was seen, and a press after which nothing was
+   * is the one the click verb makes once more.
+   */
+  watchIgnoredPress(pressed: Element): IgnoredPressWatch;
 
   /** Succeeds, or fails with `output_not_observed` when the validation did not hold. */
   success(

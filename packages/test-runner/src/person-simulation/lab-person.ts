@@ -3,8 +3,9 @@ import type { ExpectedPersonHandOff } from "@fluxiq-web-extension/test-contracts
 import { RunnerFailure } from "../failure.js";
 import { LAB_PROJECT_DOMAIN_ID } from "../flow-lane/index.js";
 import { expectedPersonHandOff } from "./expected-hand-off.js";
-import type { PersonHandOff, PersonHandOffSnapshot } from "./hand-off-record.js";
+import type { LabPersonSnapshot, PersonHandOff } from "./hand-off-record.js";
 import type { PersonAskControl } from "./asks.js";
+import type { PermissionPlay, PersonPermissionAnswer } from "./permission-answer.js";
 import { loadPersonChecks } from "./check-module.js";
 import { startPersonSimulation } from "./simulation.js";
 import { scenarioTabs } from "./tab.js";
@@ -24,10 +25,19 @@ export type LabPersonInput = {
   variantId: string | undefined;
   /** A live task's own declaration (`LiveInstructionTask.personCheck`), which wins over the row's. */
   task?: ExpectedPersonHandOff | undefined;
+  /**
+   * A created-Flow task's permission point (`LiveInstructionTask.permissionPoint`,
+   * `undefined` for a task that declares none): the person then answers
+   * permission asks, allowing the act at the point and refusing it elsewhere.
+   * Absent, permission asks are left alone.
+   */
+  permissions?: PermissionPlay | undefined;
   /** Writes the record into the run's bundle (`PERSON_HAND_OFFS_SNAPSHOT`). */
-  write: (snapshot: PersonHandOffSnapshot) => Promise<unknown>;
+  write: (snapshot: LabPersonSnapshot) => Promise<unknown>;
   /** Puts each hand-off on the run's timeline as it is answered. */
   publish: (handOff: PersonHandOff) => Promise<unknown>;
+  /** Puts each permission answer on the run's timeline as it is given. */
+  publishPermission?: (answer: PersonPermissionAnswer) => Promise<unknown>;
 };
 
 /** The person a run is playing, until the run is done with it. */
@@ -46,8 +56,8 @@ export type LabPerson = {
 /**
  * Starts the Lab playing the person for one run: loads the scenario's person
  * module from the scenario lab build the run uses, resolves the hand-off the
- * row or task declares, and reads Core's threads for person-needed asks until
- * `finish`. Started before the build or the run it covers, because either may
+ * row or task declares, and reads Core's threads for person-needed asks, and
+ * for permission asks when given the task's point, until `finish`. Started before the build or the run it covers, because either may
  * ask the moment it starts.
  */
 export async function startLabPerson(input: LabPersonInput): Promise<LabPerson> {
@@ -63,6 +73,8 @@ export async function startLabPerson(input: LabPersonInput): Promise<LabPerson> 
     tabs: () => scenarioTabs(input.context, origin),
     readState: () => readFixtureState(origin, input.runToken, input.scenarioId),
     onHandOff: async (handOff) => { await input.publish(handOff); },
+    ...(input.permissions ? { permissions: input.permissions } : {}),
+    ...(input.publishPermission ? { onPermissionAnswer: async (answer: PersonPermissionAnswer) => { await input.publishPermission?.(answer); } } : {}),
   });
   let writeFailure: unknown;
   let finished: Promise<void> | undefined;

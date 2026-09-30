@@ -40,10 +40,9 @@
 // page: the account this feeds (`recovery/account.ts`) carries counts and words
 // from closed sets so that it can travel on any result without redaction.
 
-import { challengeIn } from "../challenge-evidence";
 import { dispatchClickGesture } from "../click-gesture";
 import { overlaysOverPage } from "./overlays";
-import { dismissControlIn } from "./way-out";
+import { pressableWayOut } from "./pressable-way-out";
 
 /**
  * At most this many overlays are dismissed in one intervention.
@@ -82,9 +81,9 @@ function pressWaysOut(): number {
   for (const overlay of overlaysOverPage()) {
     if (dismissed >= MAX_DISMISSALS_PER_ATTEMPT) break;
     // Guard 1. A dialog that asks for what only a person can give is left
-    // alone, way out or no way out.
-    if (challengeIn(overlay, "dialog")) continue;
-    const control = dismissControlIn(overlay);
+    // alone, way out or no way out (`pressable-way-out.ts`, which
+    // `presence.ts` reads too, so what is cleared and what is looked for agree).
+    const control = pressableWayOut(overlay);
     if (!control) continue;
     if (press(control)) dismissed += 1;
   }

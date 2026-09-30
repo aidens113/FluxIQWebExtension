@@ -24,6 +24,16 @@
 // USER_INTERVENTION_REQUIRED with the press recorded as made; one that clears
 // by itself is waited out, untouched, and the press passes. Nothing is waited
 // for unless such a check appears.
+// And a press the page ignored outright is made once more. bigbox-retail's
+// first add-to-cart press after every load only wakes the page and does
+// nothing, and a Flow that reloaded and pressed once did so thirty times
+// (`run-munvz5x0-84fa6177`). So the first press is watched, for up to 800 ms,
+// for any sign at all that the page answered it -- a request, a change inside
+// the control or its section, a navigation, focus moving elsewhere
+// (`action-runtime/ignored-press/`) -- and only when none came is the control,
+// if it can still be pressed, pressed again at the same point, once, and the
+// result says so. Any sign, above all a request, means it is never pressed
+// again: a second press on one that did something is a second order.
 // A link is held to more than that, because a link states where it
 // goes: the click must visibly do what following it would. A navigation that
 // begins does, and so does the page's own script taking the click over and
@@ -45,8 +55,19 @@
 // which needs the same press and cannot import a verb.
 
 import { WEB_AUTOMATION_CHECK_WAIT_MS, webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
-import { dispatchClickGesture } from "../action-runtime";
-import type { ActionResultEvidence, InPlaceEffect, InPlaceEffectWatch, RateLimitWatch, RobotCheckSighting, RobotCheckWatch } from "../action-runtime";
+import { dispatchClickGesture, pressAgain } from "../action-runtime";
+import type {
+  ActionResultEvidence,
+  ClickPoint,
+  IgnoredPressAnswer,
+  IgnoredPressWatch,
+  InPlaceEffect,
+  InPlaceEffectWatch,
+  RateLimitNotice,
+  RateLimitWatch,
+  RobotCheckSighting,
+  RobotCheckWatch
+} from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import type { ContentActionDependencies } from "./types";
 
@@ -84,6 +105,31 @@ const ROBOT_CHECK_WAIT_MS = WEB_AUTOMATION_CHECK_WAIT_MS;
 /** Kept back from the command's own timeout, so a result still reaches Core in time. */
 const ROBOT_CHECK_REPLY_MARGIN_MS = 1_000;
 
+/**
+ * How long after a press that is not a link the page is watched for any sign
+ * it answered the press at all (`action-runtime/ignored-press/`). Paid in full
+ * only by a press the page did nothing whatever about -- any request, change
+ * in the control's section, navigation or focus move ends it at once -- and
+ * that press is then made once more. Shortened, never lengthened, by the
+ * command's own timeout.
+ */
+const IGNORED_PRESS_WINDOW_MS = 800;
+
+/** What a press made twice says, in the result's `actual`. A closed phrase: nothing the page wrote is in it. */
+const PRESSED_ONCE_MORE = "the page ignored the first press, so it was pressed once more";
+
+/** What one press on a control that is not a link was seen to bring. */
+type PressOutcome = {
+  /** Whether the click's default action was allowed to run. */
+  accepted: boolean;
+  /** A notice that the page refused the press for going too fast. */
+  refused: RateLimitNotice | undefined;
+  /** A robot check the press put up. */
+  sighting: RobotCheckSighting | undefined;
+  /** What the page did at all; only read on a first press, which is the only one that may be followed by another. */
+  answer: IgnoredPressAnswer | undefined;
+};
+
 export async function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   const { element, resolution } = deps.resolveTarget(action);
   const evidence = (): ActionResultEvidence => ({
@@ -99,31 +145,23 @@ export async function clickAction(action: BrowserActionCommand, deps: ContentAct
 
   const link = navigatingLink(element);
   if (!link) {
-    // Started at the press, like the link's in-place watch, so a layer already
-    // over the page is never taken for this press's answer.
-    // Assigned inside the gesture's callback, which control flow cannot see.
-    let notice = undefined as RateLimitWatch | undefined;
-    let check = undefined as RobotCheckWatch | undefined;
-    try {
-      const accepted = dispatchClickGesture(element, report.point, () => {
-        notice = deps.watchRateLimitNotice(element);
-        check = deps.watchRobotCheck(element);
-      });
-      // Both watches read the same window and end on the same signals, so an
-      // ordinary press waits no longer than the rate-limit watch alone; only a
-      // robot check the press puts up is followed past it.
-      const windowMs = rateLimitWindowMs(action);
-      const [refused, sighting] = await Promise.all([
-        notice ? notice.settle(windowMs) : undefined,
-        check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt)) : undefined
-      ]);
-      if (refused) return deps.rateLimited(action, startedAt, refused, evidence());
-      if (sighting && sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, sighting, evidence());
-      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, accepted, sighting), evidence());
-    } finally {
-      notice?.stop();
-      check?.stop();
+    const first = await press(element, report.point, action, deps, startedAt, true);
+    if (first.refused) return deps.rateLimited(action, startedAt, first.refused, evidence());
+    if (first.sighting && first.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, first.sighting, evidence());
+    // A robot check that came and went was an answer; so is any sign the watch saw.
+    if (first.sighting || !first.answer || !pressAgain(first.answer.seen, 0)) {
+      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
     }
+    // The page did nothing at all. The control is pressed once more at the same
+    // point, but only while it can still be pressed: one now covered, disabled
+    // or gone was answered after all, by whatever covered or removed it.
+    if (!deps.checkActionability(element).actionable) {
+      return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, first.accepted, first.sighting), evidence());
+    }
+    const second = await press(element, report.point, action, deps, startedAt, false);
+    if (second.refused) return deps.rateLimited(action, startedAt, second.refused, evidence());
+    if (second.sighting && second.sighting.outcome !== "cleared") return deps.needsPerson(action, startedAt, second.sighting, evidence());
+    return deps.success(action, startedAt, "Element clicked.", hitTestValidation(report.detail, second.accepted, second.sighting, true), evidence());
   }
 
   const document = element.ownerDocument;
@@ -154,6 +192,46 @@ function navigatingLink(element: Element): NavigatingLink | undefined {
   if (!anchor || typeof anchor.href !== "string" || !anchor.href) return undefined;
   if (anchor.protocol === "javascript:") return undefined;
   return { anchor, href: anchor.href };
+}
+
+/**
+ * Presses a control that is not a link once, with the watches started between
+ * the hover and the press so that nothing already on the page is taken for its
+ * answer. They read the same window and end on their own signals, so an
+ * ordinary press waits no longer than its answer takes; only a robot check the
+ * press puts up is followed past it. `watchIgnored` is set for the first press
+ * only: the second is never followed by a third.
+ */
+async function press(
+  element: Element,
+  point: ClickPoint,
+  action: BrowserActionCommand,
+  deps: ContentActionDependencies,
+  startedAt: number,
+  watchIgnored: boolean
+): Promise<PressOutcome> {
+  // Assigned inside the gesture's callback, which control flow cannot see.
+  let notice = undefined as RateLimitWatch | undefined;
+  let check = undefined as RobotCheckWatch | undefined;
+  let ignored = undefined as IgnoredPressWatch | undefined;
+  try {
+    const accepted = dispatchClickGesture(element, point, () => {
+      notice = deps.watchRateLimitNotice(element);
+      check = deps.watchRobotCheck(element);
+      if (watchIgnored) ignored = deps.watchIgnoredPress(element);
+    });
+    const windowMs = rateLimitWindowMs(action);
+    const [refused, sighting, answer] = await Promise.all([
+      notice ? notice.settle(windowMs) : undefined,
+      check ? check.settle(windowMs, robotCheckWaitMs(action, startedAt)) : undefined,
+      ignored ? ignored.settle(windowWithin(action, IGNORED_PRESS_WINDOW_MS)) : undefined
+    ]);
+    return { accepted, refused, sighting, answer };
+  } finally {
+    notice?.stop();
+    check?.stop();
+    ignored?.stop();
+  }
 }
 
 /**
@@ -222,7 +300,8 @@ function windowWithin(action: BrowserActionCommand, windowMs: number): number {
  * but is not a failure -- handling a click in script and preventing the default
  * is ordinary, and what the click then did is the next action's business.
  */
-function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotCheckSighting): BrowserActionValidation {
+function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotCheckSighting, pressedOnceMore = false): BrowserActionValidation {
+  const again = pressedOnceMore ? `; ${PRESSED_ONCE_MORE}` : "";
   const prevented = accepted ? "" : "; the page prevented the click's default action";
   const waited = cleared
     ? `; ${cleared.afterMs} ms after the press the page put up a robot check that cleared by itself ${cleared.waitedMs} ms later, untouched`
@@ -230,7 +309,7 @@ function hitTestValidation(detail: string, accepted: boolean, cleared?: RobotChe
   return {
     status: "passed",
     expected: "the click lands on the target or something inside it",
-    actual: `${detail}${prevented}${waited}`
+    actual: `${detail}${again}${prevented}${waited}`
   };
 }
 

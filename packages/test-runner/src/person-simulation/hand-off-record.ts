@@ -3,6 +3,7 @@
 // words, counts and the Lab's own sentences only: nothing a page showed.
 
 import type { ExpectedPersonHandOff } from "@fluxiq-web-extension/test-contracts";
+import type { PersonPermissionAnswer } from "./permission-answer.js";
 
 /** Where the bundle keeps the record, relative to its root. */
 export const PERSON_HAND_OFFS_SNAPSHOT = "snapshots/person-hand-offs.json";
@@ -63,3 +64,12 @@ export type PersonHandOffSnapshot = Readonly<{
   pollFailures: number;
   lastPollFailure: string | null;
 }>;
+
+/**
+ * What the Lab's person writes: the hand-off record, and beside it, as a list
+ * of its own, each answer it gave to a permission ask (`permission-answer.ts`).
+ * Kept apart from `handOffs` so the hand-off invariant, which reads a
+ * `PersonHandOffSnapshot`, scores nothing new; empty for a run whose person
+ * was not given the task's permission point.
+ */
+export type LabPersonSnapshot = PersonHandOffSnapshot & Readonly<{ permissionAnswers: readonly PersonPermissionAnswer[] }>;

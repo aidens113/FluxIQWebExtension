@@ -7,6 +7,25 @@ production profile, 48k in / 8k out / 56k per call, $0.25 cap. Launcher: scratch
 (t174's `live-run.sh` with slot-4, the t195 instance and tree, and a full log per run). From run 5 it passes
 `--llm-max-calls 64`, as t174's L1 does, because Core ignores the configured call limit (t193's cause B).
 
+## Session 2 status (2026-09-30, ~19:45Z): stopped by the supervisor's order
+
+No Lab run is in flight and none will be started: the supervisor stopped all Lab runs (the user's order) for a cross-lane
+audit. `lab-slots/slot-4/owner` is empty. The honest pass count is **0** on every task. The 12 overnight "passes" on
+pickup-order were permission stops with `flowCreated: false`, and two of them (`run-munzbfbj`, `run-muo2fscr`) stopped on an
+unnamed control, not even at the declared point. Every real run of instance `t195-slot-4` now has a debug file: runs 11-33
+were written this session by t195-w15 and w17a/b/c, and the 346 empty-balance runs share
+`debugs/t195-slot-4-balance-failures-2026-09-30.md`.
+
+Launcher this session: scratchpad `live-run-d.sh` (session `be617e0f`). It makes one run per invocation, with no loop:
+`FLUXIQ_LAB_INSTANCE=t195-slot-4 FLUXIQ_BUILD_PROGRESS_TRACE=1 node scripts/lab/run-lab.mjs run <scenario> --live-llm
+--llm-profile production --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow --instruction-task <task>
+--llm-max-input-tokens 48000 --llm-max-output-tokens 8000 --llm-max-total-tokens 56000 --llm-max-calls 64
+--llm-max-cost-usd 0.25`. The browser is headed. The owner file is written at launch and cleared at exit.
+
+**Owning the overnight waste.** The lane's keeper (`t195-queue2.sh`) kept relaunching pickup-order after this lane's agent
+had ended: 16 real runs that nobody debugged ($1.66), then 346 instant empty-balance failures. That was this lane's defect.
+This session used no keeper, no loop and no background relauncher.
+
 ## Fix log
 
 Protocol (supervisor, 2026-09-30): loop continuously, fix in this branch, validate, re-run; hand back only at
@@ -34,6 +53,12 @@ Protocol (supervisor, 2026-09-30): loop continuously, fix in this branch, valida
 | F17 | A press that landed and left the page unchanged tells the model, beside `pageChanged: false`, that some pages take the first press after loading only as a wake-up: press the same control once more before anything else, and keep both presses for the Flow. | domain `runtime/llm-evidence/node-run/run.ts` (`unchangedPress`), `tests/press.test.ts` | run 11 (forty decisions of press-unchanged / navigate-away on bigbox's Add to cart, never two presses in a row) | domain 939/939; extension + domain `tsc` 0 | validated (unit), live in run 13 |
 | F18 | The dry-run gate replays an unchanged refused draft at most twice (a step can fail once on a page still settling), then judges its refusal again from those replays' outcomes, with the current asked and conditional sets, instead of replaying it for every completion. Run 9 completed one unchanged draft fourteen times; the replays took 401 of its 537 s and the build hit its 540 s deadline (w11). | Core `llm/node-tools/dry-run-gate.ts`, `llm/node-tools/tests/dry-run-gate.test.ts` (new); `llm/tests/draft-amendment-feedback.test.ts` (F16's reason in the exhaustive record) | run 9 (w11's debug) | Core llm + flow-draft + flow-bootstrap vitest 118 files 1504/1504; fluxiq `tsc` 0 | validated (unit), live from run 14 |
 | F19 | The click node's catalog description says, in its first 80 characters, "If nothing happens, click it again before leaving the page": some pages ignore the first click after loading, and reloading resets that. F17's hint alone missed bigbox: the "Val" assistant opens on a timer, so the page changed after the swallowed press and `pageChanged` read true. | domain `actions/schemas.ts` (`web.dom.click` description, 156 characters) | runs 13, 14 (`add.paper.towels` / `add.to.cart` / `open.cart` loops) | domain 939/939; extension + domain `tsc` 0 | validated (unit); **live: no effect in run 15** -- the runtime fix is next (planned F20: a press that caused no request, no change in its own section and no navigation is pressed once more; one that sent anything never is) |
+| F21 | Both withdrawal tasks declare `permissionPoint: { consequence: "delete", control: "Withdraw" }` (supervisor, 2026-09-30: delete asks every time, even when named; not `--llm-permit delete`, which would hide the ask). The task comment is corrected to the rule. | `apps/scenario-lab/src/scenarios/professional-network/live-tasks.ts`; `apps/scenario-lab/src/scenarios/tests/live-instructions.test.ts`, `packages/test-runner/src/flow-lane/creation/tests/permission-point.test.ts` (pins) | supervisor decisions (2), (3) | test-runner build 0; `permission-point.test.js` 10/10; `live-instructions.test.js` 11/11 | validated (unit) |
+| F20 | A press the page ignored (no fetch/XHR/beacon begun, no mutation inside the control's own section within four ancestors, no navigation, no focus move, within 800 ms) is pressed once more, once per command, never on a link; any request, a rate-limit notice or a robot check forbids it. `actual` says so. | extension `content/action-runtime/ignored-press/{ignored-press-watch, page-press-listener, press-again, press-scope, index}.ts` + 4 tests (new), `actions/{click.ts, types.ts}` + `click.test.ts`, `action-runtime/{execute-action.ts, index.ts}`; `docs/architecture/web-capabilities.md` (Click row) | runs 13-15 | lead, 2026-09-30 session 2: extension units 1500/1500, extension + domain `tsc` 0 | validated (unit), live pending |
+| R1+R2 | (lane A's) The interference probes include the four viewport corners, inset 6% (bigbox's support-chat card); recovery clears a covering layer on `target_absent` when a clearable layer stands over the page (company-website s2 behind consent). | extension `content/action-runtime/interference/{probe-points.ts (new), presence.ts (new), pressable-way-out.ts (new), overlays.ts, clear.ts, index.ts}`, `recovery/{attempt.ts, fault.ts, index.ts}` + `interference/tests/probe-points.test.ts` (new), `recovery/tests/attempt.test.ts` | lane A runs 20, 22, 26, 31 | w13 (`reports/t195-w13-probes-and-walls.md`): each test fails with its change reverted. Lead: extension units 1500/1500, `tsc` 0 | validated (unit), live pending |
+| F22 | The permission sentence a person reads in the panel's chat is plainer: "The Flow would press \"Place order\" (button) each time it runs. That would spend, refund or move money, and that always needs your permission, even when your instruction asks for it." (run 16's UI review). | Core `action-permissions/request.ts`; tests `action-permissions/tests/{destructive, gate}.test.ts`, `recovery/annotation/tests/{patches, recovery-permissions}.test.ts` (the last a stale pin fixed this session); domain `plan-resolution/tests/plan-step-permission.test.ts` | run 16 UI | Core vitest action-permissions + recovery + parking + permission-defaults 43 files 557/557; Core build 0; domain 976/976 | validated (unit) |
+| L1 | **The Lab plays the person at a permission ask.** A pending `kind: "permission"` ask on the build's or run's thread is answered `grant` only at the task's declared point on the **named** control (class in `missing`, label equal). It is answered `deny` elsewhere, on a control Core left unnamed, or when no point is declared; the lead added the unnamed rule after `run-munzbfbj` and `run-muo2fscr` asked for money on unnamed controls on the cart and home pages. An `askFirst` task's ask is left for Core's timeout. Answers are recorded as `permissionAnswers`, apart from the hand-offs. The lane then applies a consequential task's Flow only if Core's own record on the Flow's thread shows a grant at the point on the named control (otherwise `permissionPoint: "not_asked"`), unless the operator permitted the class. Finding: a saved Flow replays with no permission gate (Core `adaptation.ts:344-346`); only a repair's exploration is gated, and it parks on the run's thread and is answered by the same rule. | test-runner `person-simulation/{asks, simulation, lab-person, hand-off-record, index, permission-answer (new)}.ts` + `tests/{asks, simulation}.test.ts`; `run-scenario.ts` (the creation-branch `startLabPerson` call); `flow-lane/creation/{lane, permission-point, index}.ts` + `tests/{lane, permission-point}.test.ts`, `tests/fake-creation-core.ts`; `docs/architecture/testing-facility.md` | honest verdict (dev `f2f80024`): every consequential task stopped, so none could pass | w14 (`reports/t195-w14-lab-answers-permission.md`): each new test fails with its change reverted. Lead: test-runner `tsc --noEmit` 0. Private build, `node --test` over person-simulation, flow-lane/creation, lane-rules and run-evaluation: 207/208; the one failure is runner-wiring's redaction pin, t174's recorded stale pin. With the unnamed rule reverted in the compiled JS: 2 failures (lane.test #22, simulation.test #28). Structure audit passed | validated (unit); live unproven |
+| T1 | Core's service-bootstrap permission test stated the pre-F10 rule (an instructed refund goes ahead unasked) and failed on dev. F10 changed that behaviour on purpose, so the test was wrong. It is now two cases: "still asks before moving money with nothing permitted, carrying what the instruction asked for on the request", and "keeps what the instruction asked for with the proposal and the Flow once the person permits the money". | Core `runtime/tests/service-bootstrap/tests/permission.test.ts` | supervisor, 2026-09-30 | w16 (`reports/t195-w16-permission-test.md`). Lead: `vitest run` over permission.test.ts and recovery/annotation, 10 files 122/122 | validated |
 
 Owned elsewhere (recorded by another lane first, taken at the next round):
 - Core ignores the Flow's configured call limit: **t193** (its cause B).
@@ -45,6 +70,33 @@ Owned elsewhere (recorded by another lane first, taken at the next round):
   `required_values_missing` first (run 2): the judge lane, **t194**, to confirm ownership.
 - The panel's "Done" mid-build and "Add an AI model key: To do" during a live build, and no on-page overlay in
   any screenshot of runs 2-5: **t191** (UI evidence: scratchpad `t195-shots/*-r2-*.png` .. `*-r5-*.png`).
+
+**Ready to commit.** Lead-validated this session. The Core `request.ts` change and the extension F20/R1/R2 changes are already
+in the WIP commits `b6bf5eb0` and `c22646d0`; their validation is below.
+
+- Ready to commit (Core, `task/t195-live-control-flow`): `packages/fluxiq/src/programs/automation-studio/runtime/recovery/annotation/tests/recovery-permissions.test.ts` (F22's stale pin) and `packages/fluxiq/src/programs/automation-studio/runtime/tests/service-bootstrap/tests/permission.test.ts` (T1). This also validates the WIP's F22 (`action-permissions/request.ts` and its test pins). Validation:
+  - `npx vitest run src/programs/automation-studio/runtime/action-permissions src/programs/automation-studio/runtime/recovery src/programs/automation-studio/runtime/parking src/programs/automation-studio/runtime/tests/permission-defaults.test.ts` -> 43 files, 557/557.
+  - `npx vitest run .../service-bootstrap/tests/permission.test.ts .../recovery/annotation` -> 10 files, 122/122.
+  - `pnpm --filter fluxiq build` -> exit 0.
+- Ready to commit (downstream, the content of WIP `c22646d0`: F20, R1+R2, F21, and F22's domain pin). Validation:
+  - `node apps/extension/scripts/test-extension.mjs` -> 1500/1500.
+  - `tsc -p apps/extension --noEmit` -> 0; `tsc -p domain --noEmit` -> 0.
+  - `node domain/scripts/test-domain.mjs` -> 976/976.
+  - `node scripts/structure-audit.mjs` -> passed (129 warnings, 120 baselined).
+  - Live: run 33, built with the final F20, shows no click failures. F20's second press itself was not exercised live.
+- Ready to commit (downstream, L1):
+  - `packages/test-runner/src/person-simulation/{asks.ts, simulation.ts, lab-person.ts, hand-off-record.ts, index.ts, permission-answer.ts}`
+  - `packages/test-runner/src/person-simulation/tests/{asks.test.ts, simulation.test.ts}`
+  - `packages/test-runner/src/run-scenario.ts`
+  - `packages/test-runner/src/flow-lane/creation/{lane.ts, permission-point.ts, index.ts}`
+  - `packages/test-runner/src/flow-lane/creation/tests/{lane.test.ts, permission-point.test.ts, fake-creation-core.ts}`
+  - `docs/architecture/testing-facility.md`
+  - Validation: `npx tsc -p packages/test-runner/tsconfig.json --noEmit` -> 0. A private `--outDir` build with `node --test` over person-simulation, flow-lane/creation, lane-rules and run-evaluation -> 208 tests, 207 pass, 1 fail; the failure is the runner-wiring redaction pin, which predates this lane's work and is t174's. Structure audit passed.
+  - **Merge note:** the supervisor's dev merge was refused on `lane.ts`, `permission-point.test.ts` and this report. Dev's side of `lane.ts` must be merged by hand, keeping `assertGrantedAtPermissionPoint` and the `authorize` wrapper.
+- Ready to commit (docs; validation: docs only):
+  - This report.
+  - Reports `t195-w13-probes-and-walls.md`, `t195-w14-lab-answers-permission.md`, `t195-w15-debug-r17.md`, `t195-w16-permission-test.md`, `t195-w17a-debugs.md`, `t195-w17b-debugs.md`, `t195-w17c-debugs.md`.
+  - Debugs `run-muog33va-96469cb2.md`, `run-munuxns5-833f4313.md`, `run-munvmg0n-12e4a3ce.md`, `run-munvz5x0-84fa6177.md`, `run-munwmfrs-b81bbc65.md`, `run-muny5y17-a927214b.md`, `run-munyqgjr-473ac9b8.md`, `run-munz227o-5119fa06.md`, `run-munzbfbj-2fb8947d.md`, `run-munzihwx-47ccdf7c.md`, `run-munzrj6r-6f754710.md`, `run-munzz9j1-f8c30ff5.md`, `run-muo07nnh-9c8f7e46.md`, `run-muo0g1ky-f3a866ba.md`, `run-muo0qepn-c0aa6dd0.md`, `run-muo0zggr-442f9107.md`, `run-muo1ch23-3de731fb.md`, `run-muo1ni63-3e0aa746.md`, `run-muo1rxmv-0c617136.md`, `run-muo1z05y-ad79d4c3.md`, `run-muo2825e-5f295f24.md`, `run-muo2fscr-7055485a.md`, and `t195-slot-4-balance-failures-2026-09-30.md`.
 
 ## Decided: which consequential acts ask
 
@@ -79,13 +131,78 @@ this report, and debugs `run-munq51ik`, `run-munsxchc`, `run-muntfume`, `run-mun
 `t195-w9-row-age-in-shadow.md`, `t195-w11-debugs-r7-r10.md`. No F0 (t174) copies remain: the merge made them t174's own.
 Next after the merge: F20 (a runtime second press for an ignored press), then lane A's R1 and R2 in the interference area.
 
+**Rule slip, 2026-09-30 ~10:05Z:** while validating F21 the lead ran the whole scenario-lab `pnpm test`, which includes
+browser checks of fixtures outside the ten realistic scenarios; the user's rule allows browser runs only on those ten.
+It will not be repeated: only the pure catalog test file is run for scenario-lab changes.
+
+## Top causes for the audit
+
+These are the causes that recur across lane D's 33 real runs (2026-09-30). Run numbers refer to the Runs table below. "R/"
+is Core `packages/fluxiq/src/programs/automation-studio/runtime/`. Every run stopped at stage 2, the build. **No run has
+reached stage 3 (a Flow) since run 6.**
+
+1. **The build replays the draft from its first step and returns to the start location mid-build.**
+   - Runs: every run from 7 on (7-33). In run 9 the replays took 401 of 537 s; in runs 17-32 they were about 18-64 s each.
+   - Effect: the replays re-did lasting acts (napkins added to the cart twice in `munzbfbj`; items saved for later).
+   - Status: **owned by t196.** F18 (t195) capped unchanged replays at two; that is only partial.
+2. **The draft is a transcript of the steps taken, not an intelligent Flow.**
+   - Runs: 11, 13, 14 and 15 (40-step trip loops), and 15 again, where the model dropped its whole draft and restarted.
+   - Status: **owned by t196.**
+3. **The draft shown to the model is capped at 4,000 bytes.** The instruction is cut from 1,051 to 177 bytes, and up to 44 steps
+   are shown without their inputs or left out.
+   - Runs: every run debugged, 11-33. `handle_not_in_packet` refusals (runs 18, 22, 33) may also be a cap.
+   - Status: **owned by t200.**
+4. **Nobody answered the permission ask, so no consequential task could pass.** The build waits 120 s and ends
+   `permission_required`.
+   - Runs: 5, 10, 16, 17, 21-24, 26, 27, 29 and 31.
+   - Status: **fixed at unit level (L1), not live-proven.** With L1 the Lab grants at the declared point on a named control.
+5. **After a refused ask, the build keeps pressing and claiming the refused act.** It wastes 8-21 decisions, up to the call
+   ceiling, and reports `permission_required`, which hides why the loop ended.
+   - Runs: 16, 17, 19, 23, 24, 26, 27, 29 and 31.
+   - Status: **open (t195).** L1 removes the refusal at the point, but a refusal elsewhere must still end the build at once and
+     say why.
+6. **Money is declared on the wrong control, so the ask comes at the wrong place.** Core's gate trusts the model's declaration.
+   - Runs: 20, 25 and 30 (`move_money` on "Continue to checkout"); 19 and 32 (money on an unnamed control, on the cart page and
+     on the home page).
+   - Status: **open (t195, F10's area).** The Lab no longer grants on an unnamed control (L1).
+7. **Loops are authored wrongly, or Core breaks them.** In run 33, Core's `rerun` of the listing left the repeat's `over` on the
+   dropped step (`R/llm/evidence-loop/rerun-replacement.ts:22-24`). The refusal then named the wrong field
+   (`R/flow-bootstrap/authoring/draft-routing.ts:178-182`) and never suggested `reorder`.
+   - Runs: 2, 6, 7, 8, 9, 10 and 33.
+   - Status: F2, F4, F5, F11, F15 and F16 are fixed. **Rerun re-pointing and the three-way refusal are open (t195)**; they were
+     first recorded in run 33, and the fix is proposed in `reports/t195-w15-debug-r17.md`.
+8. **The build gives up while a way remains.** The no-progress guard or an unusable decision ends it with budget left: 25 calls
+   and $0.19 in run 33. There is no repair path inside the build.
+   - Runs: 8, 28 and 33.
+   - Status: **open.** Lifecycle (c) was violated. First recorded by t195 in run 33; the audit should assign it (t195 or t196).
+9. **Wrong lasting acts during exploration.**
+   - A non-qualifying request was confirmed before any filter (Tom Becker): runs 8 and 33.
+   - The towels were saved for later instead of the soap: runs 23, 25 and 30.
+   - The 3pm-4pm slot was chosen while 2pm-3pm was open: runs 5, 17, 22-24, 27 and 29.
+   - Place order was pressed with empty fields: runs 26 and 31.
+   - Status: **open (t195).** F14's wording did not stop the Tom Becker case in run 33.
+10. **Bigbox ignores the first press after a load, which causes trip loops.**
+    - Runs: 11, 13, 14, 15 and 24.
+    - Status: F17 and F19 had no live effect, and F19 was reverted. **F20, a runtime second press, is fixed at unit level and not
+      yet live-proven.** Open trace: runs 16-32 show clicks `action_failed` with the page changed; those builds may have carried
+      w12's half-made F20. Run 33, with the final F20, shows none.
+11. **UI (t191).** Seen in every run:
+    - raw `core.run_node` / `web.action.*` codes;
+    - the Simple/Advanced toggle;
+    - setup cards above the chat;
+    - "Add an AI model key" shown during a build;
+    - a permission stop shown as "Build failed", and "Flow ready" shown with no Flow;
+    - "Worked for" times that disagree with the real duration;
+    - no failure reason;
+    - the overlay never says FluxIQ is waiting for an answer.
+
 ## Tasks and streaks
 
 | Task | Passes in a row | Latest |
 | --- | --- | --- |
-| `social-network-feed-confirm-requests` | 0 | run 6: loop built and row-scoped; wrong listing, no filter, rate-limit wait unread |
+| `social-network-feed-confirm-requests` | 0 | run 33 `run-muog33va`: the model set up the loop, Core's rerun broke its `over` (`rerun-replacement.ts:22-24`), and the no-progress guard ended the build at 39 of 64 calls |
 | `professional-network-withdraw-stale-requests` | 0 | run 3: For Each with only the Withdraw in its body, pass 2 blocked by the dialog; the first page holds no stale row (w7) |
-| `bigbox-retail-pickup-order` (unpermitted: must ask at Place order, F10) | 0 (run 5 asked correctly; the Lab failed it, F3) | **the lane stays on this task** (supervisor, 2026-09-30); run 11: first-press trap (F17) |
+| `bigbox-retail-pickup-order` (must ask at Place order; the Lab now allows it there, L1) | **0**: the 12 overnight "passes" were `stopped_for_permission` with `flowCreated: false`, and two stopped on unnamed controls | runs 16-32 never made a Flow; the next run needs L1 live |
 | `job-board-apply-quillmark` | 0 | not run |
 | `photo-social-moon-jar-price` | 0 | not run |
 
@@ -112,6 +229,10 @@ in t174). Screenshots are taken of the lane's own headed Chromium window every 3
 | 13 | `run-munvmg0n-12e4a3ce` | pickup-order | 2, 64 decisions, no Flow | 23 navigations and 13 clicks; never reached Place order; completions refused `missing=a2:step_claimed_twice`, then `a1:step_is_optional`; iteration limit. | F18, F19 | - |
 | 14 | `run-munvz5x0-84fa6177` | pickup-order | 2, 64 decisions, no Flow | The model's call ids show the loop: `add.paper.towels` / `add.to.cart` / `open.cart` repeated from iteration 15 to 47 -- every trip to the product page reloads it, and bigbox swallows the first Add to cart after a load (`client/shell-script.ts:45` `vr.wake`), so it never added. It then reached guest checkout, pickup slot and contact (54-61), and the completion check passed at decision 64 with no decisions left. | F19 | - |
 | 15 | `run-munwmfrs-b81bbc65` | pickup-order | 2, 64 decisions, no Flow | The same loop with F19's description in the catalog: `open.towels` / `add.towels` / `open.cart` ten times over, never two presses in a row; iteration limit. The model does not act on the sentence; the runtime has to. | F20 (planned) | - |
+| 16 | `run-muny5y17-a927214b` | pickup-order | **stopped_for_permission** (the old Lab said passed), no Flow | The build reached checkout and pressed Place order; the gate raised `permission_required` for `move_money` at "Place order" (control matched) although the model read the instruction as asking for it (`instructed` includes move_money, "pay at pickup"): F10 live. Nothing was ordered. The Lab scored it as the declared stop (`FluxIQ stopped to ask at the task's declared permission point`, F3 live). 64 build calls, $0.12. UI (bundle `screenshots/00022-0e9735c507ec.jpg`): the ask is in the panel's chat with Allow / Don't allow and F10's sentence; for t191, the overlay and panel status read "Using core.run_node" and "Add an AI model key: To do" shows during a live build; the sentence (Core `action-permissions/request.ts`) could be friendlier. | F3, F10 live | not a pass (dev `f2f80024`); debug by w17a |
+| 17-32 | `munyqgjr`, `munz227o`, `munzbfbj`, `munzihwx`, `munzrj6r`, `munzz9j1`, `muo07nnh`, `muo0g1ky`, `muo0qepn`, `muo0zggr`, `muo1ch23`, `muo1ni63`, `muo1rxmv`, `muo1z05y`, `muo2825e`, `muo2fscr` (each `run-<id>-*`) | pickup-order, launched by the unattended keeper | 2, no Flow in any. Endings: 9 `stopped_for_permission` at Place order; 3 stops at "Continue to checkout" (`move_money`); 2 stops on unnamed controls (cart and home page); 2 iteration-limit or no-progress endings | Nobody answered the ask for 120 s (L1). After the refusal, 8-21 decisions re-pressed and claimed the refused press. The 3pm-4pm slot was chosen while 2pm-3pm was open. The towels were saved for later instead of the soap. Place order was pressed with empty fields. Dry runs replayed from the start (t196). The draft shown was capped (t200). Details: `reports/t195-w17a/b/c-debugs.md`. $1.66 in total. | L1 (with the unnamed rule) | debugs written this session |
+| - | 346 runs, `run-muo2nioi-e4a9bd18` .. `run-muodhgog-5be437d1` | pickup-order, launched by the keeper | none: the provider refused the first call for insufficient balance | the keeper went on relaunching after the balance ran out | dev's Lab guards | `debugs/t195-slot-4-balance-failures-2026-09-30.md` |
+| 33 | `run-muog33va-96469cb2` | confirm-requests | 2, 39 of 64 calls, 142 s, $0.061, no Flow | The model set up the loop (`16:repeat(over=15)` on the Confirm), then sent `15:rerun` of the listing. Core appended the rerun as `d17`, dropped `d15`, and left `d16.over = d15` (`R/llm/evidence-loop/rerun-replacement.ts:22-24`). Every completion was then refused `flow_draft.repeat_span_unknown`. That refusal's message blames `through` when `over` is the missing step, and it offers no `reorder` (`R/flow-bootstrap/authoring/draft-routing.ts:178-182`). The model resent one completion until the no-progress guard (8) ended the build as `evidence_unusable_decision`, with 25 calls and $0.19 left, which violates lifecycle (c). Exploration again confirmed Tom Becker (1 mutual friend) before any filter. Two dry runs replayed the draft from the home feed, 18 s each (t196). The draft shown to the model was capped at 4,000 bytes (t200). No repair ran: there was never a Flow to test, and the build loop has no repair path for its own dead end. UI (t191): raw `core.run_node` codes, the Simple/Advanced toggle, "Build failed / Build failed", "Worked for 51s" for a 142 s build, and no reason given. Debug: `debugs/run-muog33va-96469cb2.md` (w15) | open: rerun re-pointing and the refusal wording (t195) | - |
 
 ## t174's fixes applied as a working-tree patch (owned by t174)
 

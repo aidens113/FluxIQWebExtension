@@ -303,9 +303,95 @@ test("a target covered by an overlay is cleared the same way, and a disabled one
 test("nothing on the page is pressed for a fault pressing cannot help", async () => {
   const pressed: string[] = [];
   const intervene = (fault: string): number => { pressed.push(fault); return 1; };
+  const nothingOverPage = (): boolean => false;
   for (const code of [WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, WEB_AUTOMATION_FAILURE_CODES.TIMEOUT]) {
     const slow = page("web.dom.extract", [failed("web.dom.extract", code)]);
-    await runWithRecovery(command("web.dom.extract"), Date.now(), slow.attempt, pause, Date.now, intervene);
+    await runWithRecovery(command("web.dom.extract"), Date.now(), slow.attempt, pause, Date.now, intervene, nothingOverPage);
   }
   assert.deepEqual(pressed, [], "a late target and an unread post-condition are waited for, never clicked at");
+});
+
+test("a layer over the page is never looked for on a fault other than a missing target", async () => {
+  let asked = 0;
+  const probe = (): boolean => { asked += 1; return true; };
+  for (const code of [WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED]) {
+    const pressed: string[] = [];
+    const slow = page("web.dom.extract", [failed("web.dom.extract", code)]);
+    await runWithRecovery(command("web.dom.extract"), Date.now(), slow.attempt, pause, Date.now, (fault) => { pressed.push(fault); return 1; }, probe);
+    assert.deepEqual(pressed, [], `something was pressed after ${code}`);
+  }
+  assert.equal(asked, 0);
+});
+
+// --- A target the page draws only once a wall is answered ------------------
+//
+// company-website, lane t174 row R2: s2 declines a newsletter offer the page
+// opens only after its "Your privacy choices" wall is answered, so the verb
+// reports TARGET_NOT_FOUND and the loop used to only wait. The probe is
+// injected; a challenge is never clearable (`interference/pressable-way-out.ts`).
+
+test("a target hidden behind a consent wall: the wall is cleared, then the target is waited for on its own ladder", async () => {
+  const absent = failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  // The wall stands until it is answered, and the offer is drawn only after.
+  let wall = true;
+  const cleared: string[] = [];
+  const intervene = (fault: string): number => { cleared.push(fault); wall = false; return 1; };
+  let calls = 0;
+  const attempt = async (): Promise<BrowserActionResult> => {
+    calls += 1;
+    return wall || calls < 3 ? absent : succeeded("web.dom.click");
+  };
+
+  const { result, account } = await runWithRecovery(command("web.dom.click"), Date.now(), attempt, pause, Date.now, intervene, () => wall);
+
+  assert.equal(result.status, "succeeded", "the offer's decline must be found once the wall is answered");
+  assert.deepEqual(cleared, ["target_absent"], "the wall is cleared once, and not pressed at again once it has gone");
+  assert.deepEqual(account, { attempts: 3, absorbed: ["target_absent", "target_absent"], waitedMs: 750, dismissed: 1, outcome: "recovered" });
+  assert.deepEqual(paused, [250, 500], "the missing target keeps the target ladder, inside the same budget");
+});
+
+test("the wall is cleared before the wait, so the retry looks for the target on a page the wall has left", async () => {
+  const order: string[] = [];
+  let calls = 0;
+  const attempt = async (): Promise<BrowserActionResult> => {
+    order.push("attempt");
+    calls += 1;
+    return calls === 1 ? failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND) : succeeded("web.dom.click");
+  };
+  await runWithRecovery(
+    command("web.dom.click"),
+    Date.now(),
+    attempt,
+    async (ms) => { order.push(`pause ${ms}`); },
+    Date.now,
+    () => { order.push("clear"); return 1; },
+    () => { order.push("probe"); return true; }
+  );
+  assert.deepEqual(order, ["attempt", "probe", "clear", "pause 250", "attempt"]);
+});
+
+test("a missing target with nothing clearable over the page is only waited for, as before", async () => {
+  const absent = failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  const never = page("web.dom.click", Array.from({ length: 9 }, () => absent));
+  const pressed: string[] = [];
+  let asked = 0;
+  // No layer, or only a challenge, which is never a clearable one.
+  const probe = (): boolean => { asked += 1; return false; };
+  const { result, account } = await runWithRecovery(command("web.dom.click"), Date.now(), never.attempt, pause, Date.now, (fault) => { pressed.push(fault); return 1; }, probe);
+  assert.equal(result, absent);
+  assert.deepEqual(pressed, [], "nothing is pressed at blind for a target that is merely late");
+  assert.equal(asked, RECOVERY_TARGET_BACKOFF_MS.length, "the page is asked once per retry the ladder allows");
+  assert.equal(account.dismissed, 0);
+  assert.deepEqual(paused, [...RECOVERY_TARGET_BACKOFF_MS]);
+});
+
+test("a wall that will not clear does not stretch the missing target's ladder or its budget", async () => {
+  const absent = failed("web.dom.click", WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  const never = page("web.dom.click", Array.from({ length: 9 }, () => absent));
+  const { result, account } = await runWithRecovery(command("web.dom.click"), Date.now(), never.attempt, pause, Date.now, () => 0, () => true);
+  assert.equal(result, absent, "the reported result must be the page's own");
+  assert.equal(account.attempts, RECOVERY_TARGET_BACKOFF_MS.length + 1);
+  assert.equal(account.outcome, "exhausted");
+  assert.equal(account.dismissed, 0);
+  assert.deepEqual(paused, [...RECOVERY_TARGET_BACKOFF_MS]);
 });
