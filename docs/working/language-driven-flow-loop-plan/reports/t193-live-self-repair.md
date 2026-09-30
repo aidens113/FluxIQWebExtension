@@ -228,6 +228,8 @@ Between runs 6 and 7, the lane's keeper loop made about 60 immediate relaunches.
 | F | The store chooser's three identical "Set as my store" buttons were folded into one example: the first store's. The other two ranked past the packet's 40 elements, and the example carried no card words. The model therefore saw one button for three stores and set the first one twice. (The shadow root and the scroll window were not the cause.) | extension `content/repeat-exemplars.ts` (folding); domain `runtime/llm-evidence/look-alikes.ts` (`within` blocked by list position; a lone example had no `within`) | t193 (first recorded here) | fixed (wE), live pending |
 | F2 | The press result carries only `control: "Set as my store"` and `pageChanged: true`, so nothing told the model the chip now named another store. wE recommends adding the pressed control's row words and the handles whose names changed. | domain press result (`runtime/llm-evidence/press.ts`) | t193 | recommendation, not fixed |
 | C | The model repeats an answered request many times in a row: ten in run 1, seven in run 3 (decisions 6-13), each answered `already_answered` with the repeat count and `pageUnchanged`. The loop's words are right, and deepseek-flash repeats anyway. | Core `llm/evidence-loop/answered-request.ts` and the no-progress guard | t189's area (decision history) / lane A | recorded, not fixed here |
+| I1 | **For t174 (instructed-act gap).** Run 5's accepted 9-node Flow has no store-switch node: navigate, type and click Search twice, click "+ Add", navigate twice, click "+ Add" (item 2 of 5). Act 1, "switch my pickup store to Millbrook Crossing Supercenter", was accepted as satisfied without a step that performs it. | Core `flow-bootstrap/instructed-acts/check.ts` | t174 (supervisor ruling, round 2) | recorded, not fixed here |
+| H2 | The dry run replays on a site the build already changed: the store is already switched, and it re-adds cart items. Supervisor ruling: never clear site data; a mutating step is verified (its target actionable, or its effect already present), not re-executed. | Core `flow-draft/dry-run.ts` | t196 (supervisor ruling, round 2) | routed |
 | E | Refuted: wD read `draft.instructionBytes` falling from 1,052 to 154 as the person's instruction being truncated. It is the draft's own guidance, which has three lengths by design (`llm/evidence-loop/draft-shown.ts:64-73`). | - | - | not a cause |
 
 ## UI evidence for t191
@@ -242,3 +244,10 @@ whole-window captures of the page and the side panel):
 - `00003`, `00005`, `00006`, `00008`: "FluxIQ is working" in the panel, and **no on-page status overlay** is
   visible on the site in any capture.
 - The status line itself read well: "Clicking 'Loftwell Ultra Strong Paper Towels, 6 Double Rolls'".
+
+From runs 4-5, after t191 round 1 (`run-munri5gr-94d7f8a0/screenshots/00007`, `00008`; `run-munutuvf-6a1c548a/screenshots/00018`, `00019`):
+- Better: the on-page overlay now shows at bottom left ("Building your Flow", "Running your Flow · Step 7 of 9"), and the panel has a chat area with a composer ("Ask FluxIQ to do something...").
+- Raw internal names in status text: "Using core.run_node" through the whole build (every dry run too), and "Running step 7 of 9: node.bootstrap.460d691a999aac51.main.s7" in both the panel and the overlay.
+- The step count runs past the total: the panel and the overlay read "Step 11" / "Running step 11" for a 9-node Flow once the repair's exploration steps begin.
+- The setup card still says "To do: Add an AI model key" while a keyed build and run are under way.
+- During the Flow run the chat asks "... this run's 107 actions said it would cause that; 89 of them said they would cause nothing lasting. Apply it as it stands? Yes / No". It is unclear what is being applied, and no one answers it in a Lab run.
