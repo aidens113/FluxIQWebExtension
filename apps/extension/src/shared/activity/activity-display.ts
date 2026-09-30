@@ -2,7 +2,7 @@ import type { ClientGatewayActivityPhase } from "@fluxiq/client-gateway-websocke
 
 /**
  * The status a person sees, paced from Core's raw events by the background
- * (`background/activity/`). The overlay and the chat header render this and
+ * (`background/activity/`). The overlay and the chat's live line render this and
  * nothing else, so both show the same words and neither can flicker faster
  * than the pacer lets it.
  *

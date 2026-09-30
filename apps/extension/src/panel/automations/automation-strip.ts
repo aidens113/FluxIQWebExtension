@@ -66,7 +66,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     lines.textContent = row === undefined
       ? (state.mode === "offline" ? "Connect to FluxIQ to see its runs." : "")
       : row.running || row.runId === undefined ? row.lines.join(" · ") : `Last run: ${row.lines.join(" · ")}`;
-    const blocked = row?.running ? undefined : state.runtimeBusy || state.runInFlight ? "Wait for FluxIQ to finish." : undefined;
+    const blocked = row?.running ? undefined : state.working || state.runInFlight ? "Wait for FluxIQ to finish." : undefined;
     run.textContent = row?.running ? "Running..." : "Run";
     run.disabled = row === undefined || row.running || blocked !== undefined || state.mode !== "list";
     run.setAttribute("aria-label", `Run ${row?.name ?? shown.name}`);

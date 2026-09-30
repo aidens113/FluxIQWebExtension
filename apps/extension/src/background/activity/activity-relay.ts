@@ -10,6 +10,11 @@
 // concerns -- the panels when the display or the event list changed, the page
 // when the display or the overlay preference did.
 //
+// The chat tells every unit of work as step messages, so the relay also keeps
+// each recent unit's whole story (`unit-history.ts`), beside `recent`, which
+// stays the last 60 events of every kind. Neither feeds the pacer: it sees
+// every event as it arrives.
+//
 // Activity is ephemeral (plan D2): nothing here is a durable record, and a
 // worker restart forgets it. The overlay preference is the one thing kept, in
 // `chrome.storage.local`, because it is the person's choice rather than Core's.
@@ -42,6 +47,7 @@ import {
 import { systemActivityClock, type ActivityClock } from "./clock";
 import { ActivityPacer } from "./pacer";
 import { FanOutGate } from "./fan-out-gate";
+import { UnitHistory } from "./unit-history";
 
 /** The top frame's id in every tab; the overlay lives only there. */
 const TOP_FRAME_ID = 0;
@@ -69,6 +75,7 @@ export type ActivityRelayDeps = {
 export class ActivityRelay {
   private current: ClientGatewayActivity | null = null;
   private recent: ClientGatewayActivity[] = [];
+  private readonly history = new UnitHistory();
   private overlay: ActivityOverlayPreference = "expanded";
   private lastSequence = Number.NEGATIVE_INFINITY;
   private loaded: Promise<void> | undefined;
@@ -105,7 +112,7 @@ export class ActivityRelay {
   }
 
   state(): ExtensionActivityState {
-    return { current: this.current, display: this.pacer.display(), recent: [...this.recent], overlay: this.overlay, live: this.deps.live() };
+    return { current: this.current, display: this.pacer.display(), recent: [...this.recent], history: this.history.events(), overlay: this.overlay, live: this.deps.live() };
   }
 
   /** The state with the stored overlay preference read, for a panel asking now. */
@@ -123,6 +130,7 @@ export class ActivityRelay {
     this.lastSequence = activity.sequence;
     this.current = activity;
     this.recent = [...this.recent, activity].slice(-ACTIVITY_RECENT_LIMIT);
+    this.history.accept(activity);
     await this.load();
     // Marked before the pacer runs, so a display change it makes goes out in
     // the same send as the event list rather than one interval later.

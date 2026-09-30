@@ -16,20 +16,15 @@ export { parseAssistantText, renderTextBlocks, type TextBlock, type TextRun } fr
 export { createOnPageStatusSetting, onPageStatusModel, type OnPageStatusModel, type OnPageStatusSetting } from "./settings";
 export {
   activityForTarget,
-  activityRows,
   buildChatStream,
-  buildChatThread,
-  CHAT_ACTIVITY_ROW_LIMIT,
+  CHAT_STEP_MESSAGE_LIMIT,
   createTurnClock,
-  isInternalStep,
+  outcomeWords,
+  stepMessages,
   stepWords,
-  workSummary,
-  type ActivityRow,
   type ChatStream,
   type ChatStreamItem,
-  type ChatThread,
-  type ThreadEntry,
-  type WorkFold
+  type StepMessage
 } from "./stream";
 export type { ChatTarget } from "./target";
 export { emptyStateModel, isAtBottom, liveLineModel, stepText, type EmptyStateModel, type LiveLineModel } from "./view";

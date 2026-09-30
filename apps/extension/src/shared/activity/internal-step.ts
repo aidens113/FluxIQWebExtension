@@ -7,9 +7,11 @@
 // own draft). Shown as rows, these made the chat say "Looking at the page"
 // five times before FluxIQ had done anything
 // (docs/working/language-driven-flow-loop-plan/reports/looking-at-page-repeat.md).
-// No DOM.
+// Shared, because the background leaves them out of the history it keeps for
+// the chat (`background/activity/unit-history.ts`) and the chat leaves them
+// out of its step messages. No DOM.
 
-import type { ClientGatewayActivity } from "../../../shared/activity/index";
+import type { ClientGatewayActivity } from "@fluxiq/client-gateway-websocket";
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
 

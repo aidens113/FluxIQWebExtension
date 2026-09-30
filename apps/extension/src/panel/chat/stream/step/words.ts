@@ -6,7 +6,7 @@
 // tool" rather than as the id. Result codes and lists of issue codes are
 // dropped, since the step's mark already says whether it worked. No DOM.
 
-import type { ClientGatewayActivity } from "../../../shared/activity/index";
+import type { ClientGatewayActivity } from "../../../../shared/activity/index";
 
 type ActivityDetail = NonNullable<ClientGatewayActivity["detail"]>;
 

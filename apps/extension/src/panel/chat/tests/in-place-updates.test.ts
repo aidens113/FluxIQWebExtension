@@ -1,12 +1,12 @@
-// The live line and a fold of work update in place: fifty paced displays or
-// steps later they are the same elements, only their words changed, so
-// neither remounts nor flickers.
+// The live line and the step messages update in place: fifty paced displays
+// or steps later they are the same elements, only their words changed, so
+// nothing remounts or flickers.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ActivityDisplay } from "../../../shared/activity/index";
-import { buildChatStream, buildChatThread } from "../stream";
-import { createLiveLine, createWorkDisclosure, liveLineModel } from "../view";
+import { buildChatStream } from "../stream";
+import { createLiveLine, createThreadView, liveLineModel } from "../view";
 import { activityEvent } from "./activity-fixture";
 import { fake, withFakeDocument } from "./fake-dom";
 
@@ -48,7 +48,7 @@ test("the live line keeps every node across 50 updates and hides between units o
 });
 
 test("the live line says a message is on its way before the first activity, and nothing when idle", () => {
-  assert.deepEqual(liveLineModel(null, true), { headline: "Sending your message", detail: "", step: "", waiting: false });
+  assert.deepEqual(liveLineModel(null, true), { headline: "Sending your message", detail: "", step: "", waiting: false, action: "" });
   assert.equal(liveLineModel(null, false), null);
   assert.equal(liveLineModel(display(1, { working: false, outcome: "failed" }), false), null);
 });
@@ -59,8 +59,8 @@ test("while the work waits for the person, the live line stays up and says what 
   // working, so it neither pulses nor shimmers, and it is marked waiting.
   const ask = "FluxIQ needs you: complete the check on this page, then press Continue.";
   const waiting = display(9, { phase: "waiting_permission", headline: "Waiting for you", detail: ask, step: null, working: false, outcome: "waiting" });
-  assert.deepEqual(liveLineModel(waiting, false), { headline: "Waiting for you", detail: ask, step: "", waiting: true });
-  assert.deepEqual(liveLineModel({ ...waiting, headline: " ", detail: null }, false), { headline: "Waiting for you", detail: "", step: "", waiting: true });
+  assert.deepEqual(liveLineModel(waiting, false), { headline: "Waiting for you", detail: ask, step: "", waiting: true, action: "" });
+  assert.deepEqual(liveLineModel({ ...waiting, headline: " ", detail: null }, false), { headline: "Waiting for you", detail: "", step: "", waiting: true, action: "" });
   await withFakeDocument(() => {
     const line = createLiveLine();
     line.update(liveLineModel(display(1), false));
@@ -70,30 +70,52 @@ test("while the work waits for the person, the live line stays up and says what 
     assert.equal(root.hidden, false);
     assert.equal(line.element.getAttribute("data-state"), "waiting");
     assert.equal(root.byClass("chat-live-detail")[0]!.textContent, ask);
+    assert.equal(root.byClass("chat-live-action")[0]!.hidden, true, "the question is on screen: nothing to open");
   });
 });
 
-test("a fold keeps its steps' elements while steps arrive; only a step that changed is rebuilt", async () => {
+test("while the question is in a thread not on screen, the live line offers the one action that opens it", async () => {
+  const waiting = display(9, { phase: "waiting_permission", headline: "Waiting for you", detail: "FluxIQ needs you: complete the check on this page, then press Continue.", step: null, working: false, outcome: "waiting" });
+  assert.equal(liveLineModel(waiting, false, true)?.action, "Show the question");
+  assert.equal(liveLineModel(display(1), false, true)?.action, "", "working, nothing waits on the person");
+  assert.equal(liveLineModel(null, true, true)?.action, "");
   await withFakeDocument(() => {
-    const fold = createWorkDisclosure(() => undefined);
+    let opened = 0;
+    const line = createLiveLine(() => (opened += 1));
+    line.update(liveLineModel(waiting, false, true));
+    const button = fake(line.element).byClass("chat-live-action")[0]!;
+    assert.equal(button.hidden, false);
+    assert.equal(button.textContent, "Show the question");
+    button.dispatch("click");
+    assert.equal(opened, 1);
+    line.update(liveLineModel(display(2), false, true));
+    assert.equal(button.hidden, true, "the work went on: the button goes");
+  });
+});
+
+test("fifty step messages later the first is the same element, and only a message that changed is touched", async () => {
+  await withFakeDocument(() => {
+    const view = createThreadView();
     const events = [
-      activityEvent(1, { detail: { kind: "step", title: "Build started", status: "started" } }),
-      activityEvent(2, { phase: "thinking", detail: { kind: "thought", title: "Deciding the next step", status: "started" } })
+      activityEvent(1, { phase: "exploring", detail: { kind: "thought", title: "Looking at the page", text: "I need to see what is on it.", status: "succeeded" } }),
+      activityEvent(2, { phase: "exploring", detail: { kind: "tool", title: "Looking at the page", ref: "web.inspect_current_page", status: "started" } })
     ];
-    const render = () => fold.update(buildChatThread(buildChatStream([], events), true).live!, true);
+    const render = () => view.render(buildChatStream([], events), null, () => ({ ask: undefined as never, state: "" }), "build-1");
     render();
-    const root = fake(fold.element);
-    const first = root.byClass("chat-step")[0]!;
-    assert.equal(first.getAttribute("data-status"), "succeeded", "Build started is over once anything followed it");
-    for (let sequence = 3; sequence <= 50; sequence += 1) {
-      events.push(activityEvent(sequence, { phase: "thinking", detail: { kind: "thought", title: "Deciding the next step", status: "started" } }));
+    const root = fake(view.element);
+    const first = root.byClass("chat-step-msg")[0]!;
+    const firstNodes = [first, ...first.descendants()];
+    for (let sequence = 3; sequence <= 100; sequence += 2) {
+      events.push(activityEvent(sequence, { phase: "exploring", detail: { kind: "thought", title: `Clicking button ${sequence}`, text: `Reason ${sequence}.`, status: "succeeded" } }));
+      events.push(activityEvent(sequence + 1, { phase: "exploring", detail: { kind: "tool", title: `Clicking button ${sequence}`, ref: "core.run_node", status: "succeeded" } }));
       render();
     }
-    const steps = root.byClass("chat-step");
-    assert.equal(steps.length, 50);
-    assert.equal(steps[0], first, "the first step is the same element 49 steps later");
-    assert.equal(root.byClass("chat-work-label")[0]!.textContent, "49 steps so far", "Started building is listed but not counted");
-    assert.equal(steps[48]!.byClass("chat-step-title")[0]!.textContent, "Decided the next step");
-    assert.equal(steps[49]!.byClass("chat-step-title")[0]!.textContent, "Deciding the next step");
+    const messages = root.byClass("chat-step-msg");
+    assert.equal(messages.length, 50);
+    assert.equal(messages[0], first, "the first message is the same element 49 messages later");
+    assert.deepEqual([first, ...first.descendants()], firstNodes);
+    assert.equal(first.byClass("chat-step-outcome")[0]!.hidden, true, "its action never said it ended, and the work moved on");
+    assert.equal(messages[49]!.byClass("chat-step-title")[0]!.textContent, "Clicking button 99");
+    assert.equal(messages[49]!.byClass("chat-step-outcome-label")[0]!.textContent, "Done");
   });
 });

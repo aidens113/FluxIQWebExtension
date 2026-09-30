@@ -24,11 +24,16 @@
 //
 // Nothing here shows the steps of a run: what FluxIQ decides and does is the
 // chat's to show, and internal page reads are never steps.
+//
+// Record, extract and Run wait while FluxIQ works. That is read from the
+// shell's own activity feed (the paced display the chat shows), held steady
+// by `working-hold.ts`, and handed to both screens, so a build's many page
+// reads never make those controls flicker.
 
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
-import { createChatPanel, type ChatTarget } from "../chat";
+import { createActivityFeed, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { createStartView, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
@@ -38,6 +43,8 @@ import { createPanelStore } from "../state";
 import type { PanelContext, PanelSurface } from "./contracts";
 import { INITIAL_SHELL, reduceShell, shellScreen, type ShellEvent, type ShellScreen } from "./screen-state";
 import { createTopBar, screenId, tabId } from "./top-bar";
+import { createWorkingHold } from "./working-hold";
+import { workingInput } from "./working-input";
 import "../theme/tokens.css";
 import "./shell.css";
 
@@ -51,6 +58,7 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   let noAnswer = false;
   let recordingWas: RecordingState | undefined;
   let visible = true;
+  let connected = false;
 
   const recording = createRecordingControls(context);
   const review = createRecordingReview(context);
@@ -60,6 +68,21 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     review: review.element,
     newAutomation: recording.newAutomation
   });
+  const working = createWorkingHold(
+    { setTimeout: (run, ms) => window.setTimeout(run, ms), clearTimeout: (handle) => window.clearTimeout(handle as number) },
+    (now) => {
+      recording.setWorking(now);
+      automations.setWorking(now);
+    }
+  );
+  const activity: ActivityFeed = createActivityFeed({ request: store.request, listen: listenToPushes }, observeWorking);
+  activity.start();
+  void activity.read();
+
+  function observeWorking(): void {
+    working.observe(workingInput(store.current(), activity.snapshot()));
+  }
+
   const start = createStartView(context, () => dispatch({ type: "gear" }));
   const settings = createSettingsView(context, () => dispatch({ type: "closeSettings" }));
   const openIcon = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "icon" });
@@ -132,6 +155,11 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     review.render(status);
     chat.render(status);
     automations.render(status);
+    observeWorking();
+    // The relay forgets its state when the worker restarts; read it again on reconnecting.
+    const nowConnected = status.connectionState === "connected";
+    if (nowConnected && !connected) void activity.read();
+    connected = nowConnected;
     const ended = (recordingWas === "recording" || recordingWas === "paused") && status.recordingState === "idle";
     recordingWas = status.recordingState;
     // A recording that just ended is reviewed on the automations tab.
@@ -155,4 +183,11 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     activate();
   });
   draw();
+}
+
+/** The background's broadcasts to this page, for the shell's activity feed. */
+function listenToPushes(listener: (message: unknown) => void): () => void {
+  const handler = (message: unknown): void => listener(message);
+  chrome.runtime.onMessage.addListener(handler);
+  return () => chrome.runtime.onMessage.removeListener(handler);
 }

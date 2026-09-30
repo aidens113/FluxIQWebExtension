@@ -1,6 +1,8 @@
-// The slim line above an automation's chat: which automation this thread is
-// about, and the way back to the latest chat. Hidden for the latest chat,
-// which needs no introduction. Built once and updated in place.
+// The slim line above an automation's or a question's chat: which automation
+// this thread is about ("Automation Price tracker"), or whose question it
+// holds ("The run's question"), and the way back to the latest chat. Hidden
+// for the latest chat, which needs no introduction. Built once and updated in
+// place.
 
 import { createElement } from "../../dom";
 import type { ChatTarget } from "../target";
@@ -21,18 +23,21 @@ export function createContextLine(back: () => void): ContextLine {
     attrs: { type: "button", "aria-label": "Back to the latest chat", title: "Back to the latest chat" }
   }, [chevron(), createElement("span", { text: "Latest chat" })]);
   backButton.addEventListener("click", back);
+  const kind = createElement("span", { className: "chat-context-kind", text: "Automation" });
   const element = createElement("div", { className: "chat-context", hidden: true }, [
     backButton,
-    createElement("span", { className: "chat-context-about" }, [createElement("span", { className: "chat-context-kind", text: "Automation" }), name])
+    createElement("span", { className: "chat-context-about" }, [kind, name])
   ]);
   return {
     element,
     update(target) {
-      const hidden = target.kind !== "automation";
+      const hidden = target.kind === "latest";
       if (element.hidden !== hidden) element.hidden = hidden;
-      const text = target.kind === "automation" ? target.name.trim() || "This automation" : "";
+      const text = target.kind === "automation" ? target.name.trim() || "This automation" : target.kind === "question" ? target.title : "";
       if (name.textContent !== text) name.textContent = text;
       if (name.getAttribute("title") !== text) name.setAttribute("title", text);
+      const automation = target.kind === "automation";
+      if (kind.hidden === automation) kind.hidden = !automation;
     }
   };
 }

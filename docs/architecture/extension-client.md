@@ -280,8 +280,16 @@ relay:
 - keeps `current` and the last `ACTIVITY_RECENT_LIMIT` (60) events in memory
   only, so a worker restart forgets them. The conversation thread stays the
   durable record;
+- keeps, beside them, each recent unit of work's whole story for the chat
+  (`history`, `UnitHistory`): every decision Core explained (a `thought` with
+  text), every check and repair, every action's start and end, every run step
+  and the unit's final event, in arrival order, bounded by
+  `ACTIVITY_HISTORY_LIMITS` (the last 10 units, at most 500 events each, the
+  newest kept). A decision still being made ("Deciding the next step", no
+  text), a pure status change and Core's bookkeeping (`isInternalStep`) are
+  left out. The pacer and the overlay are untouched by it;
 - folds the events into one paced **display** (`ActivityPacer`, below), which
-  is what the overlay and the chat header draw;
+  is what the overlay and the chat's live line draw;
 - broadcasts `{ type: "fluxiq.activity.changed", state }` to the extension's
   pages when the event list, the display or the overlay preference changed;
 - sends `{ type: "fluxiq.activity.overlay", activity, display, overlay,
@@ -426,20 +434,41 @@ as the detail under "Waiting for you". The expanded overlay draws it whole,
 because it fits the line, and does not fade. The collapsed pill shows only the
 headline.
 
-**The panel's chat** (`panel/chat/`) replaces Simple Mode's conversation card.
-Its header shows the current phase, Core's sentence, the step, a live/offline
-dot and the overlay control. Its one status line is the display's headline
-while the work runs. While the work waits for the person, the line is Core's
-ask instead (`header-model.ts`), because "Waiting for you" does not say what
-to do. The ask's own turn in the thread carries its choices as buttons
-(`panel/simple/conversation/ask-copy.ts`): the person-needed ask shows
-"Continue" and "Stop", which send `choice` with `person_done` or
-`person_stop`. Its stream interleaves Core's thread turns (timed
-by Core's own `createdAt`) with activity rows. An event with a `detail` becomes
-a row, a tool that started and then finished stays one row, and a row expands
-to its text, ref and status. The composer sends typed instructions through
-`panelConversationSend`. The thread is re-read 300 ms after an event that names
-a conversation or ends the work. The 4 s poll stays as the fallback.
+**The panel's chat** (`panel/chat/`) fills the panel and has no header. It
+shows Core's thread (the latest, one automation's, or the thread a build or a
+run asked its question in) and FluxIQ's work in one stream, like a chat app:
+
+- The person's turns are bubbles on the right; FluxIQ's answers are
+  full-width formatted text. A question's turn carries its choices as buttons
+  (`conversation/ask-copy.ts`): the person-needed ask shows "Continue" and
+  "Stop", which send `choice` with `person_done` or `person_stop`.
+- **Every step is its own FluxIQ message**, in order, with its reason
+  (`stream/step/messages.ts`, `view/step-message-view.ts`): each explained
+  decision reads "**Clicking “Get a free quote”** — The quote form is behind
+  this button, so I'm opening it.", each repair gives its diagnosis, and each
+  result check its verdict. The action Core took for a decision (the `tool`
+  events after its `thought`) is that message's quiet outcome line: "Working
+  on it" while it runs, then "Done" or "Didn't work", with Core's sentence
+  when it has one in words; a check reads "Passed" or "Didn't pass". A run's
+  steps are messages too. An action with no decision before it is its own
+  message, in words. There are no folds, disclosures or step counts, and no
+  raw tool or node id is shown (`stream/step/words.ts`).
+- Messages are keyed by the event that opened them (`activityId#sequence`)
+  and updated in place, never remounted; each keeps the time of that event,
+  so nothing reorders. They come from the relay's `history`, so a whole build
+  stays in the chat after it settles, placed by time among the thread's turns
+  (timed by Core's own `createdAt`), before the answer it led to.
+- The live line is always last. It shows the paced display only: the
+  headline, the step, and Core's latest sentence ("Thinking about the next
+  step" while Core decides, which adds no message). While the work waits for
+  the person it says what Core asked, and "Show the question" opens the thread
+  holding the question when it is not on screen.
+- New content is followed only while the person is at the bottom of the
+  stream; scrolled up, it stays put and "Jump to latest" shows.
+
+The composer sends typed instructions through `panelConversationSend`. The
+thread is re-read 300 ms after an event that names a conversation or ends the
+work. The 4 s poll stays as the fallback.
 
 **The chat builds and runs automations** (t198). The background relay
 (`background/panel/conversation-relay.ts`) adds two things to every message:

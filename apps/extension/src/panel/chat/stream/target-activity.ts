@@ -1,36 +1,68 @@
 // The live activity that belongs in the chat on screen. No DOM.
 //
+// The events are the relay's `history` -- each recent unit of work's whole
+// story -- or, from a background that keeps none, its `recent` window.
+//
 //   - Work that speaks through another thread (any of its events names a
 //     different `conversationId`) belongs to that thread, and never shows in
-//     this one, whichever chat this is.
+//     this one, whichever chat this is -- except in the question chat opened
+//     for that very work.
 //   - The latest chat shows everything else, as FluxIQ's own chat does.
 //   - An automation's chat shows only the work on that automation: events
 //     whose subject names its Flow, or that speak through the thread on
 //     screen.
+//   - A question's chat (the thread a build or a run asked the person in)
+//     shows the work that asked, and what speaks through the thread on screen.
 //
-// The live line follows the paced display only while the unit of work it
-// describes is one this chat shows.
+// The live line follows the paced display while the unit of work it
+// describes is one this chat shows, and always while that work waits for the
+// person: a question nobody sees is a build or a run stopped for good, so
+// every chat says so. When the question is not in the thread on screen,
+// `answerIn` names the thread that holds it (`askThread`), and the live line
+// offers to open it.
 
-import type { ActivityDisplay, ExtensionActivityState } from "../../../shared/activity/index";
+import type { ActivityDisplay, ClientGatewayActivity, ExtensionActivityState } from "../../../shared/activity/index";
+import { sameThread } from "../same-thread";
 import type { ChatTarget } from "../target";
+import { askThread, type QuestionTarget } from "./ask-thread";
 
-/** The events and the paced display the chat on screen shows. */
-export type TargetActivity = { recent: ExtensionActivityState["recent"]; display: ActivityDisplay | null };
+/** The events and the paced display the chat on screen shows, and where to answer what the work asks. */
+export type TargetActivity = {
+  /** The events the chat tells as step messages, oldest first. */
+  events: ClientGatewayActivity[];
+  display: ActivityDisplay | null;
+  /** The thread holding the question the work waits on, when it is not the thread on screen; null otherwise. */
+  answerIn: QuestionTarget | null;
+};
 
 /** `state`'s activity for `target`, whose thread on screen is `conversationId` when there is one. */
 export function activityForTarget(state: ExtensionActivityState, target: ChatTarget, conversationId: string | undefined): TargetActivity {
   const display = state.display ?? null;
+  const own = target.kind === "question" ? target.activityId : undefined;
+  const story = state.history ?? state.recent;
   const elsewhere = new Set(
     conversationId === undefined
       ? []
-      : state.recent.filter((event) => event.conversationId !== undefined && event.conversationId !== conversationId).map((event) => event.activityId)
+      : [...story, ...state.recent]
+        .filter((event) => event.conversationId !== undefined && event.conversationId !== conversationId && event.activityId !== own)
+        .map((event) => event.activityId)
   );
-  const recent = state.recent.filter((event) => {
+  const belongs = (event: ClientGatewayActivity): boolean => {
     if (elsewhere.has(event.activityId)) return false;
     if (target.kind === "latest") return true;
-    return event.subject.flowId === target.flowId || (conversationId !== undefined && event.conversationId === conversationId);
-  });
-  if (target.kind === "latest" && elsewhere.size === 0) return { recent, display };
-  const shown = display !== null && recent.some((event) => event.activityId === display.activityId);
-  return { recent, display: shown ? display : null };
+    if (conversationId !== undefined && event.conversationId === conversationId) return true;
+    return target.kind === "automation" ? event.subject.flowId === target.flowId : event.activityId === target.activityId;
+  };
+  const events = story.filter(belongs);
+  const asked = askThread(state);
+  const answerIn = asked !== undefined && !asksHere(target, asked) ? asked : null;
+  const shown = display !== null
+    && (display.outcome === "waiting" || (target.kind === "latest" && elsewhere.size === 0) || [...events, ...state.recent].some((event) => event.activityId === display.activityId && belongs(event)));
+  return { events, display: shown ? display : null, answerIn };
+}
+
+/** True when `target`'s thread is the one `asked` names. */
+function asksHere(target: ChatTarget, asked: QuestionTarget): boolean {
+  if (target.kind === "automation") return asked.subjectKind === "flow" && asked.subjectId === target.flowId;
+  return sameThread(target, asked);
 }

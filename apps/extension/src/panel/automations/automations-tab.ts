@@ -40,6 +40,8 @@ export type AutomationsTab = {
   render(status: ExtensionStatus): void;
   /** Starts or stops reading the list; starting reads it at once when connected. */
   setActive(active: boolean): void;
+  /** Whether FluxIQ is working, held steady by the shell; Run waits while it is. */
+  setWorking(working: boolean): void;
 };
 
 /** Builds the automations tab. */
@@ -105,6 +107,7 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
       strip.render(status);
       if (controller.observe(status) && active) void controller.refresh();
     },
+    setWorking: (working) => controller.setWorking(working),
     setActive(next) {
       if (next === active) return;
       active = next;

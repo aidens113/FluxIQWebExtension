@@ -1,7 +1,8 @@
 // What an empty chat says, and the example prompts it offers. The examples
 // only fill the composer, so the person reads and edits one before anything
 // is sent; they show only when a message could be sent now. An automation's
-// empty chat asks about that automation. No DOM.
+// empty chat asks about that automation; a question's empty thread offers
+// nothing to start from. No DOM.
 
 import type { ConversationMode } from "../conversation";
 import type { ChatTarget } from "../target";
@@ -23,6 +24,11 @@ const AUTOMATION_EXAMPLES: readonly string[] = [
 
 /** The empty state for a chat in `mode` showing `target`. */
 export function emptyStateModel(mode: ConversationMode, target: ChatTarget): EmptyStateModel | null {
+  // A question's thread that holds nothing: the question was answered and its
+  // thread closed, or Core has not written it yet. It is no place to start.
+  if (target.kind === "question" && mode === "empty") {
+    return { title: target.title, line: "There is no question waiting here now. Go back to the latest chat to carry on.", examples: [] };
+  }
   const automation = target.kind === "automation" ? target.name.trim() || "this automation" : undefined;
   const title = automation === undefined ? "What can FluxIQ do for you?" : `Ask about ${automation}`;
   switch (mode) {

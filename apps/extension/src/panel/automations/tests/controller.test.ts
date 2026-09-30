@@ -9,7 +9,6 @@ import { statusWith } from "../../tests/status-fixture";
 import { createAutomationsController, type SaveFile } from "../controller";
 
 const connected = statusWith({ connectionState: "connected" });
-const busy = statusWith({ connectionState: "connected", runtime: { state: "running", actionType: "web.dom.click" } });
 const UNSUPPORTED: PanelResult<unknown> = { ok: false, sentence: "This extension doesn't support that yet.", unsupported: true };
 const ok = (payload: unknown): PanelResult<unknown> => ({ ok: true, value: { ok: true, payload } });
 
@@ -130,12 +129,29 @@ test("Run sends runAutomation, shows Running..., then the reply's summary, re-re
 
 test("Run waits while FluxIQ runs something, and while offline", async () => {
   const { controller, types } = setup(() => list([oldRun]));
-  controller.observe(busy);
-  assert.equal(controller.state().runtimeBusy, true);
+  controller.observe(connected);
+  controller.setWorking(true);
+  assert.equal(controller.state().working, true);
   await controller.run("f1");
+  controller.setWorking(false);
   controller.observe(statusWith({ connectionState: "disconnected" }));
   await controller.run("f1");
   assert.equal(types().includes(M.runAutomation), false);
+});
+
+test("the runtime flipping to running is not \"working\": only the shell's held signal is, and each change redraws once", () => {
+  const { controller, changes } = setup(() => list([]));
+  controller.observe(connected);
+  const before = changes();
+  for (let flip = 0; flip < 20; flip++) {
+    controller.observe(statusWith({ connectionState: "connected", runtime: flip % 2 === 0 ? { state: "running" } : { state: "idle" } }));
+  }
+  assert.equal(controller.state().working, false);
+  assert.equal(changes(), before, "page reads never redraw the tab");
+  controller.setWorking(true);
+  controller.setWorking(true);
+  controller.setWorking(false);
+  assert.equal(changes(), before + 2);
 });
 
 test("a failed Run says why in its row; an unsupported Run points to FluxIQ and is not sent again", async () => {
