@@ -30,16 +30,17 @@ and its own `fxwork/<id>` tree:
 | t190 instructed acts | merged | Core `deaf2e7`, downstream `c6e23e46`; bigbox proof is a live run |
 
 **Machine rules for every lane (binding).**
-- **Lab slots** (`C:/Users/osrs_/FluxStuff/lab-slots/`): `slot-1` is the only live run, held by t174. `slot-2` is one
-  provider-free run on the ten scenarios, and only while free RAM is above 4 GB. Claim with `mkdir`, release with `rmdir`.
-- **Build slots** (`b1`, `b2`): run every heavy command (`pnpm check`, `pnpm build`, `pnpm test`, a package's whole
+- **Four live Lab slots, no locks** (user, 2026-09-29 evening): `lab-slots/slot-1` to `slot-4`, each owned by one
+  live lane for all its runs (A create & run t174; B self-repair; C judge its own answer; D control flow and
+  consequential acts), so no lane waits on another. `lab-slots/ui-1` holds provider-free UI runs (t191). Headed, ten
+  realistic scenarios only. Before fixing a cause, check the other live lanes' reports; the first lane to record a
+  cause owns its fix.
+- **Build slots** (`b1`-`b4`): run every heavy command (`pnpm check`, `pnpm build`, `pnpm test`, a package's whole
   suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`) through
-  `bash C:/Users/osrs_/FluxStuff/build-slots/heavy.sh "<lane> <what>" <command...>`. It waits for a slot, uses `b2`
-  only while `lab-slots/slot-1` is absent, and releases only its own. Never `mkdir` or `rm` a build slot by hand
-  (a hand-written `rm` deleted another lane's claim on 2026-09-29). One test file, or one test directory at
-  `--maxWorkers=2 --minWorkers=1` / `--test-concurrency=2`, needs no slot.
+  `bash C:/Users/osrs_/FluxStuff/build-slots/heavy.sh "<lane> <what>" <command...>`, which releases only its own slot.
+  Never `mkdir` or `rm` a build slot by hand. One test file or directory at `--maxWorkers=2 --minWorkers=1` needs none.
 - **A live-run failure is a product or Lab defect, never machine load** (user, 2026-09-29): trace the failing step and
-  its regression. The CPU priority governor was stopped as a non-fix. Benchmarks still pause while slot-1 is held.
+  its regression. The pre-pairing failures were the Lab's network guard crashing the extension's service worker.
 - Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
   validation, and the supervisor commits and continues it.
 
