@@ -66,16 +66,18 @@ furious: never an automatic loop that runs without an agent; "not idle" never me
   - D's run 6 built the first real loop.
 - Per-run costs are in each run's `snapshots/live-llm.json` under `observed.totalEstimatedCostUsd`.
 
-**In flight at handoff: two workers editing THIS dev checkout (uncommitted).** In the new session run `git status`, validate,
-then commit or discard.
-1. **Lab live guards** (`scripts/lab/**`, `docs/architecture/testing-facility.md`, one `AGENTS.md` line). Every live run is refused
-   before any model call when:
-   - there is no budget file, or the ledger total (`lab-slots/spend-ledger.jsonl`) has reached it;
-   - `lab-slots/STOP-balance` exists (written on an insufficient-balance failure);
+**Finished at handoff: both guard workers are committed on dev (`5363e39b` guards, `f2f80024` honest pass).**
+1. **Lab live guards: done and committed** (supervisor re-ran live-guards 29/29; audit passed). Every live run is refused before any
+   model call when:
+   - there is no budget file `lab-slots/spend-budget.json` (`{ "maxUsd": n, "window": "day" }`), or the ledger total
+     (`lab-slots/spend-ledger.jsonl`) has reached it;
+   - `lab-slots/STOP-balance` exists (written on an insufficient-balance failure; no override);
    - the previous run failed and the source fingerprint is unchanged;
    - the previous run has no debug file;
-   - one instance made more than 3 runs in 30 minutes.
-   Overrides are user-created files only. Validate with `pnpm lab:test` (or the package.json lab test) and the structure audit.
+   - one instance started more than 3 runs in 30 minutes (the 4th is refused).
+   Overrides are user-created `lab-slots/OVERRIDE-<rule>` files only. No budget file exists yet, so every live run is refused until
+   the user makes one. The debug rule applies across tasks, so a multi-task campaign stops after its first task until that
+   debug exists. A real admitted run's ledger lines are not yet proven.
 2. **Honest pass verdict: done and committed, `f2f80024`** (supervisor re-ran built-flow and permission-stop, 8/8). A permission
    stop is now `stopped_for_permission`, never a pass or part of a streak. Still to do, in `scripts/lab`, after the guards worker:
    `live-campaign/row/summarize-task.mjs` reads the verdict from `result.permissionStop` or the `stopped-for-permission`
@@ -127,7 +129,7 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` unle
 - The robot-check decision stands unless the user overrides it.
 
 **Next, in order.**
-1. Validate and commit the two in-flight worker changes (guards, honest pass), then push.
+1. Finish the honest-pass follow-ups in `scripts/lab` (listed under item 2 above), with tests.
 2. Triage each lane's uncommitted work above.
 3. Integration round 3: C, t191, t192, t196, t197, t198.
 4. Once a budget is set: re-dispatch the four live leads, with briefs from `reports/supervisor-2026-09-29-lead-briefs.md`,
