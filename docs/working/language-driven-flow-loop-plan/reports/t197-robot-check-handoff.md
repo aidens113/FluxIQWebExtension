@@ -48,6 +48,30 @@ Lane lead report. Branch `task/t197-robot-check-handoff` in both trees
     expect a hand-off without requiring one. The hand-off invariant is judged in run-evaluation and in the
     campaign rows. `testing-facility.md` is updated.
 
+- 2026-09-30, round 2 (w6 recovery, w7 browser check, then the lead's fixes for w7's defects 1 and 3). The
+  lead stopped mid-edit on a session limit; the supervisor committed the tree as WIP (downstream `8e4b7bd3`,
+  Core `0b3b7960`) and merged dev into both.
+  - w6 (`reports/t197-w6-recovery.md`): recovery uses the same person-needed ask as the build. The shared logic
+    moved out of `flow-bootstrap/person-needed.ts` into Core `parking/person-needed-tool-calls.ts`, and both the
+    build wrapper (stage `authoring`) and `recovery/runtime-exploration.ts` (stage `recovery`) call it. No repair,
+    re-plan or patch model sees a call that met a check; after Stop, a timeout or no port, no re-plan or patch
+    call is made. The domain's run-time repair binding (`harness-options/execute.ts`) now marks `personNeeded`.
+  - w7 (`reports/t197-w7-browser-check.md`): headed, provider-free, ui-1. Proved the ask in the side panel, a
+    person-only check after a click (crossborder) and on a wait node (everything-store). Found defects 1 and 3.
+  - Defect 1 fix (self-clearing check handed over after 3.9 s): `domain/src/actions/check-wait.ts` (new). A
+    recorded click or navigation gets `timeoutMs` 5 s + 15 s and `checkWaitMs: 15000`
+    (`web-panel-host.ts` `candidate`, `gateway-mapping.ts`, `actions/types.ts`). The extension's check wait
+    uses the whole timeout; the click's other windows and the recovery retry budget use the timeout less the
+    allowance (`click.ts`, `recovery/budget.ts`, `landed-check-wait.ts`).
+  - Defect 3 fix (a run a person cleared judged failed): Core `service/summaries/conversions.ts` carries the
+    attempt's ask as closed words (`kind`, `status`, `route`, `personNeeded`) in `metadata.ask`. The runner's
+    `persisted-flow-run.ts` marks such an attempt `clearedByPerson`, and `node-recovery.ts` counts it as
+    ending its node well, so its failure is a recovered one.
+  - Triage (w8, this round): all of the above kept. The one unfinished piece was the parity test in
+    `domain/src/tests/web-panel-host.test.ts`, which did not expect `checkWaitMs` on a recorded navigation or
+    click; fixed. `failure-taxonomy.md` now documents `checkWaitMs`. Core dist was stale (02:03) and was
+    rebuilt; the 4 domain permission-test failures seen before the rebuild were that staleness.
+
 ## Design (binding for workers)
 
 - **Build.** A person-needed tool result never reaches the model. Core parks on the ask. After
@@ -109,9 +133,41 @@ Run by the lead on 2026-09-30, after all five workers had finished:
   Whether the Flow lane records usefully with the variant armed from the start is itself unverified.
   - As a result, the Playwright person (`person-simulation/tab.ts`), Core's real conversation payloads, and
     the end-to-end ask, answer and resume path are exercised only against fakes.
-- Recovery exploration and the run-time repair tools are not wrapped. A check met while exploring still
-  reaches the repair model as `needs_person`, and exploration records it `refused`. Core's run now parks at
-  the node first, so the ladder does not run on a check node.
+- (Round 1 only; closed by w6 in round 2.) Recovery exploration and the run-time repair tools were not
+  wrapped.
+- Round 2: no browser check was run. `tasklist /FI "PID eq 7468"` showed `node.exe 7468 Console` still alive
+  (the orphaned t191 interactive Lab), so the brief's rule skipped it; `lab-slots/ui-1` was not claimed.
+  Defects 1 and 3 are fixed and unit-tested only. Not exercised live: the 15 s wait on a recorded click, a
+  cleared run judged passed, and the recovery ask.
+- The exploration's 600 s recovery clock keeps running while the person is asked (w6); a late Continue ends
+  the exploration `budget_exhausted`. The rule holds (no model sees the check), but the answer is wasted.
+- Not checked: whether click and navigation commands a model builds carry the check allowance; the fix covers
+  recorded candidates.
+- Core `node scripts/structure-audit.mjs` says 1 baseline entry can be lowered (probably
+  `flow-bootstrap/person-needed.ts` shrinking); `pnpm structure:baseline` was not run.
+- Downstream test-runner `run-evaluation/tests/runner-wiring.test.js` fails 1 row ("a persistent-isolated
+  workspace is bounded to what this run wrote…"). It reads `runner.ts`, which this branch does not touch, so it
+  comes from dev; not re-run on dev to confirm.
+- One Core run of the full set failed `run-detail-preservation.test.ts` (a 26 s file) once; alone it passed
+  3/3. Read as a load timeout, not re-checked further.
+
+## Ready to commit
+
+Ready to commit: downstream `8e4b7bd3` as it stands plus `domain/src/tests/web-panel-host.test.ts`,
+`docs/architecture/failure-taxonomy.md` and this report; Core `0b3b7960` as it stands (no new Core edits).
+Validation (w8, 2026-09-30, after the dev merge):
+- Core `heavy.sh ... pnpm --filter fluxiq check` -> CHECK_EXIT=0; `node scripts/structure-audit.mjs` ->
+  "passed (199 warning(s), 354 baselined)".
+- Core `npx vitest run` over recovery, llm/harness-options, parking, flow-bootstrap, executor,
+  service/summaries and service-bootstrap person-needed -> "Tests 1 failed | 1733 passed (1734)"; the failure,
+  `run-detail-preservation.test.ts`, re-run alone -> "Tests 3 passed (3)".
+- Core `heavy.sh ... pnpm --filter fluxiq build` -> exit 0.
+- Downstream `heavy.sh ... pnpm check` -> CHECK_EXIT=0; `node scripts/structure-audit.mjs` -> "passed (128
+  warning(s), 120 baselined)".
+- Domain `DOMAIN_TEST_BUILD_LABEL=t197w8 heavy.sh ... domain test` -> "# tests 985 # pass 985 # fail 0".
+- Extension `EXTENSION_TEST_BUILD_LABEL=t197w8 heavy.sh ... extension test` -> "# tests 1454 # pass 1454 # fail 0".
+- Test-runner `pnpm build`, then `node --test` node-recovery, persisted-flow-run and person-simulation -> "#
+  tests 49 # pass 49 # fail 0"; all flow-lane and run-evaluation -> 410/411, the one failure above.
 - w3 narrowed page-scope challenge gating to person-only checks. A missing target under a self-clearing
   cover that never clears is retried as `TARGET_NOT_FOUND` instead of being handed over.
 - w3's in-page watch probably misses local-classifieds' pushState feed cover. The cover lifts by itself in

@@ -44,3 +44,12 @@ test("a run with no attempt answers vacuously, so a caller that cares establishe
   assert.deepEqual(recoveredByNode([]), []);
   assert.equal(everyNodeEndedSucceeded([]), true);
 });
+
+test("a failed attempt a person cleared ends its node well, as a success would", () => {
+  const cleared = { nodeId: "s1", status: "failed", clearedByPerson: true };
+  assert.deepEqual(recoveredByNode([cleared, attempt("s2", "succeeded")]), [true, true]);
+  assert.equal(everyNodeEndedSucceeded([cleared]), true);
+  // Only the literal mark counts, and a later attempt of the node still decides it.
+  assert.deepEqual(recoveredByNode([{ nodeId: "s1", status: "failed", clearedByPerson: "yes" }]), [false]);
+  assert.deepEqual(recoveredByNode([cleared, attempt("s1", "failed")]), [false, false]);
+});

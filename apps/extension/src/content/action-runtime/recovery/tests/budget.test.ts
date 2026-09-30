@@ -55,6 +55,14 @@ test("a command that named its own timeout is never exceeded, which is what stop
   assert.equal(recoveryBackoffMs("target_absent", 0, command(200), 0, 10), 190);
 });
 
+test("the check allowance is never spent on retries: the budget is the timeout the command had before it", () => {
+  const withAllowance = { ...command(20_000), checkWaitMs: 15_000 } as BrowserActionCommand;
+  // Exactly as a plain 5 s command: nothing left at 5 s, however long the whole timeout.
+  assert.equal(recoveryBackoffMs("timeout", 0, withAllowance, 0, 5_000), undefined);
+  assert.equal(recoveryBackoffMs("timeout", 0, command(5_000), 0, 5_000), undefined);
+  assert.equal(recoveryBackoffMs("target_absent", 0, withAllowance, 0, 10), recoveryBackoffMs("target_absent", 0, command(5_000), 0, 10));
+});
+
 test("an unreadable timeout is treated as naming none, never as leaving no budget", () => {
   for (const timeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.equal(recoveryBackoffMs("target_absent", 0, command(timeoutMs), 0, 0), 250, `timeoutMs ${String(timeoutMs)} switched the defence off`);

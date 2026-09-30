@@ -252,7 +252,12 @@ check on this page, then press Continue", with the choices Continue and Stop.
   as person-only or self-clearing, and waits a self-clearing one out in place —
   no reload, at most about fifteen seconds. One that does not clear in that time
   is treated as person-only. A navigation or a press that lands on a person-only
-  check reports `USER_INTERVENTION_REQUIRED`, never success.
+  check reports `USER_INTERVENTION_REQUIRED`, never success. A recorded click
+  or navigation is given the fifteen seconds on top of its own timeout, and its
+  command says so in `checkWaitMs` (`domain/src/actions/check-wait.ts`): Core's
+  deadline then covers the wait, while every other wait in the command, and its
+  retries, stay within the timeout it had before (`run-munx9bvj-a7ba7442`,
+  where a 5 s click cut the wait to 3.9 s and an 8 s check went to a person).
 - **Building a Flow.** The domain marks the call's execution result
   `personNeeded: true` (`domain/src/runtime/llm-evidence/node-run/run.ts`,
   `personDraft`) and keeps its `needs_person` code and reason for the run's own
@@ -271,7 +276,21 @@ check on this page, then press Continue", with the choices Continue and Stop.
   `user_intervention_required` category, and raised no ask of its own, gets the
   person-needed ask as its ask effect. Continue goes down `success`, and the
   next node reads the page fresh. Stop or a timeout goes down `failed`, with a
-  clear person-needed ending.
+  clear person-needed ending. A run that still fails in that category is never
+  handed to a repair model: the recovery gate reads it as `manual_intervention`.
+- **Repairing a failed run.** A check met while the recovery explores the page
+  is handled as in a build, through the same Core wrapper
+  (`runtime/parking/person-needed-tool-calls.ts`). Every recovery option marks
+  such a call `personNeeded` (`domain/src/runtime/llm-evidence/harness-options/execute.ts`),
+  and Core asks the person through the run's thread, at stage `recovery`,
+  instead of showing the repair model the check. On Continue the exploration
+  goes on from a fresh look, and only that look is kept for the patch. Stop, a
+  timeout, no thread, or more than three asks end the exploration
+  `user_intervention_required`, with `endedBy` set to the person-needed code
+  (`person_needed.stopped`, `.timed_out`, `.no_thread`, `.cancelled` or
+  `.asks_exhausted`). The recovery then makes no re-plan and no patch call, and
+  records the patch as skipped: `llm.runtime_patch_person_needed` at rung
+  `exploration`.
 
 `AUTH_REQUIRED` shares the model-facing `needs_person` refusal and not this
 parking: a sign-in is not something a Continue press clears.

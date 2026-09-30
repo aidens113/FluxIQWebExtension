@@ -25,6 +25,7 @@ import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, Automati
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry, createEnvelope } from "fluxiq/io";
 import { WEB_AUTOMATION_DOMAIN_ID } from "..";
+import { WEB_AUTOMATION_CHECK_WAIT_MS, webAutomationActionWaitsOutChecks } from "../actions/check-wait";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { createWebAutomationRecordingEvent } from "../client";
 import { WEB_AUTOMATION_INPUT_IDS, actionInputDefinitions, webAutomationInputIdForRecordedEvent, webAutomationRecordsInputPayload } from "../io/input-model";
@@ -171,11 +172,25 @@ test("D1: a click sent as a domain event is proposed once, claiming the path it 
   assert.deepEqual(recording.web.map((candidate) => [candidate.outputId, candidate.expectedState]), [["web.dom.click", urlClaim("/scenarios/auth-gate/account")], ["web.dom.type", undefined]], "one candidate for each executable event; only the click claims a landing");
   assert.deepEqual(recording.none, [], "Core has no fallback of its own for a domain event");
   const signInCall = observationCall(recording.calls, signIn);
-  assert.deepEqual(mapCall(signInCall)?.parameters, webAutomationOutputPayload("web.dom.click", signIn.payload ?? {}), "the click's parameters are read from its own payload");
+  assert.deepEqual(mapCall(signInCall)?.parameters, { ...webAutomationOutputPayload("web.dom.click", signIn.payload ?? {}), checkWaitMs: 15_000 }, "the click's parameters are read from its own payload, with the check allowance beside them");
   assert.equal("expectedState" in (mapWebRecordingObservation(signInCall.observation) ?? {}), false, "mapped with no following entries, a click claims nothing");
 
   const bySequence = await recordThroughCore([{ event: signIn }, { event: landing(ACCOUNT, signIn, 4, 1_150, "sequence only") }]);
   assert.deepEqual(bySequence.web.map((candidate) => [candidate.outputId, candidate.expectedState]), [["web.dom.click", undefined]], "a landing with no event id names no click, since no entry shows the mapper its tab");
+});
+
+test("a recorded click is given room to wait out a check that clears by itself, and a typing step is not", async () => {
+  // `run-munx9bvj-a7ba7442`: Core's default 5 s cut the extension's wait to 3.9 s.
+  const signIn = click(3, 900);
+  const typed = createWebAutomationRecordingEvent({ kind: "dom.input", sequence: 5, url: ACCOUNT, title: "Account", eventTimestampMs: 1_200, element: { selector: "input[name=q]", tagName: "input" }, inputValue: "ada" }, { tabId: 7, frameId: 0 });
+  const recording = await recordThroughCore([{ event: signIn }, { event: landing(ACCOUNT, signIn, 4, 1_150) }, { event: typed }]);
+  const [clicked, typing] = recording.web as Array<{ outputId: string; timeoutMs?: number; parameters: JsonObject }>;
+  assert.equal(clicked?.outputId, "web.dom.click");
+  assert.equal(clicked?.timeoutMs, 20_000, "Core's 5 s default and the 15 s allowance");
+  assert.equal(clicked?.parameters.checkWaitMs, 15_000);
+  assert.equal(typing?.outputId, "web.dom.type");
+  assert.equal("timeoutMs" in (typing ?? {}), false);
+  assert.equal("checkWaitMs" in (typing?.parameters ?? {}), false);
 });
 
 test("a typed navigation sent as a domain event is proposed once, and the recording's start not at all", async () => {
@@ -218,7 +233,9 @@ test("every recorded row sent as a domain event maps to what the live input path
     const proposed = mapCall(observationCall(calls, event));
     assert.equal(proposed?.outputId, liveOutputId, `${label}: proposal and live output agree`);
     assert.deepEqual(proposed?.sourceInputIds, liveInputId === undefined ? undefined : [liveInputId], `${label}: proposal cites the live input`);
-    if (liveOutputId !== undefined) assert.deepEqual(proposed?.parameters, webAutomationOutputPayload(liveOutputId, event.payload ?? {}), `${label}: proposal parameters equal the live output binding payload`);
+    // A click or a navigation also carries the check allowance (`actions/check-wait.ts`), which the live binding has no part in.
+    const allowance = liveOutputId !== undefined && webAutomationActionWaitsOutChecks(liveOutputId) ? { checkWaitMs: WEB_AUTOMATION_CHECK_WAIT_MS } : {};
+    if (liveOutputId !== undefined) assert.deepEqual(proposed?.parameters, { ...webAutomationOutputPayload(liveOutputId, event.payload ?? {}), ...allowance }, `${label}: proposal parameters equal the live output binding payload, with the check allowance where it applies`);
   }
   assert.deepEqual(web.map((candidate) => candidate.outputId), recorded.flatMap(({ liveOutputId }) => liveOutputId === undefined ? [] : [liveOutputId]), "Core's proposal holds each executable row once, in recorded order");
   const eventOf = (kind: string): RecordingEvent => {

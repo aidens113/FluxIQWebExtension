@@ -20,6 +20,11 @@
 // qualifier before asking -- gets the selector hint behind exactly that
 // control.
 //
+// A robot check met by any option -- a look of one, a press or an entry that
+// raises one, a navigation that lands on one -- comes back marked
+// `personNeeded`, exactly as the authoring tools mark theirs, so Core hands it
+// to the person and no repair model ever sees it.
+//
 // A refusal says why it refused, and never more than that: one closed reason,
 // the handle the call named, and the keys the tool's own schema declares. A
 // refusal must never become a side channel for the page content the refusal was
@@ -35,6 +40,7 @@ import {
   captureEvidence,
   selectSession,
   toolExecution,
+  withPersonNeeded,
   type WebLlmEvidenceGateway,
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
@@ -113,7 +119,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
           // the model reads the evidence, and whoever reads the run afterwards
           // reads the code, and one word for four refusals is what made
           // `run-mug776kx-0214b287` undiagnosable (`../capture.ts`).
-          return toolExecution(
+          const refused = toolExecution(
             toolRejection(error.code, page?.evidence, error.detail),
             false,
             webLlmToolRejectionResultCode(error.code),
@@ -124,6 +130,11 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
             // node, so there is no assumed name either.
             { resultReason: error.detail?.reason, nodeId: undefined, assumed: undefined }
           );
+          // A robot check is the person's, never the repair model's: marked,
+          // Core puts it to the person and shows the model nothing of it
+          // (`AS/runtime/recovery/runtime-exploration.ts`). A recovery option
+          // writes no draft, so none stands once the person has cleared it.
+          return error.personNeeded ? withPersonNeeded(refused, undefined) : refused;
         }
         throw error;
       }

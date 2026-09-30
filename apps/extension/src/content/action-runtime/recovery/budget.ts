@@ -37,6 +37,7 @@
 // and the list read's own render window -- instead of doubling them. It is also
 // why nothing here needs to know which verbs those are.
 
+import { webAutomationBaseTimeoutMs } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../../types";
 import { faultNeedsInterference, type RecoveryFault } from "./fault";
 
@@ -112,7 +113,7 @@ export function recoveryBudgetRemainingMs(action: BrowserActionCommand, startedA
  * defence because of one is the shape of failure this whole file exists to stop.
  */
 function commandBudgetMs(action: BrowserActionCommand): number {
-  const timeoutMs = action.timeoutMs;
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return Number.POSITIVE_INFINITY;
-  return timeoutMs;
+  // The timeout before any check allowance (`checkWaitMs`): retries never
+  // spend the room a command was given to wait out a check that clears itself.
+  return webAutomationBaseTimeoutMs(action) ?? Number.POSITIVE_INFINITY;
 }

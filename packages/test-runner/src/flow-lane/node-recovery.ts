@@ -14,7 +14,8 @@
 // many attempts as the run had unnamed ones.
 //
 // Nothing here reads a failure record, a status word other than Core's own
-// `succeeded`, or anything the page produced.
+// `succeeded` (and the closed `clearedByPerson` mark derived from Core's ask
+// record), or anything the page produced.
 
 /**
  * As much of one attempt as this rule reads: Core's status word, the node it
@@ -26,7 +27,17 @@
  * Nothing here reads a failure's message, its expected or actual text, or
  * anything the page produced.
  */
-export type NodeAttempt = { readonly status?: unknown; readonly nodeId?: unknown; readonly failure?: { readonly stage?: unknown } | null };
+export type NodeAttempt = { readonly status?: unknown; readonly nodeId?: unknown; readonly failure?: { readonly stage?: unknown } | null; readonly clearedByPerson?: unknown };
+
+/**
+ * Whether an attempt ended its node well: it succeeded, or it failed on a check
+ * only a person could pass and a person cleared it, so the run went on down the
+ * node's `success` route with no further attempt (`persisted-flow-run.ts`
+ * `clearedByPerson`).
+ */
+function endedWell(attempt: NodeAttempt | undefined): boolean {
+  return attempt?.status === "succeeded" || attempt?.clearedByPerson === true;
+}
 
 /**
  * The stage a refuted result's failure carries. Core records the refutation on
@@ -49,9 +60,9 @@ const VERIFICATION_STAGE = "verification";
  */
 export function recoveredByNode(attempts: readonly NodeAttempt[]): boolean[] {
   const keys = attempts.map((attempt, index) => nodeKey(attempt, index));
-  const ended = new Map<string, unknown>();
-  keys.forEach((key, index) => { ended.set(key, attempts[index]?.status); });
-  return keys.map((key) => ended.get(key) === "succeeded");
+  const ended = new Map<string, boolean>();
+  keys.forEach((key, index) => { ended.set(key, endedWell(attempts[index])); });
+  return keys.map((key) => ended.get(key) === true);
 }
 
 /**
@@ -92,7 +103,7 @@ export function everyNodeRan(attempts: readonly NodeAttempt[]): boolean {
   const ended = new Map<string, NodeAttempt>();
   attempts.forEach((attempt, index) => { ended.set(nodeKey(attempt, index), attempt); });
   for (const attempt of ended.values()) {
-    if (attempt.status === "succeeded") continue;
+    if (endedWell(attempt)) continue;
     if (attempt.failure && attempt.failure.stage === VERIFICATION_STAGE) continue;
     return false;
   }

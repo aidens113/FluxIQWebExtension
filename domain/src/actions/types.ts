@@ -309,6 +309,13 @@ export type WebAutomationActionCommand = {
   key?: string | undefined;
   url?: string | undefined;
   timeoutMs?: number | undefined;
+  /**
+   * How much of `timeoutMs` is the allowance for waiting out a robot check that
+   * clears by itself (`check-wait.ts`). Only that wait may use it; every other
+   * wait stays within `timeoutMs - checkWaitMs`, the timeout the command had
+   * before the allowance was added.
+   */
+  checkWaitMs?: number | undefined;
   coordinates?: WebAutomationPoint | undefined;
   visualTarget?: WebAutomationActionVisualTarget | undefined;
   /**

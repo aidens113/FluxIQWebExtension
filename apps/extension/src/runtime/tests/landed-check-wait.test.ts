@@ -106,3 +106,12 @@ test("the wait is 15 s when the command names no timeout, and within what is lef
   assert.equal(checkWaitBudgetMs({ ...ACTION, timeoutMs: 10_000 }, 1_000, 5_000), 5_000, "10 s less the 4 s spent and a 1 s margin");
   assert.equal(checkWaitBudgetMs({ ...ACTION, timeoutMs: 3_000 }, 1_000, 5_000), 0);
 });
+
+test("a recorded 5 s click given the check allowance waits a check out for the full 15 s, inside Core's deadline", () => {
+  // `run-munx9bvj-a7ba7442`, node `entry.13`: a 5 s click cut the wait to 3,913 ms
+  // and an 8 s check went to a person. With the allowance the command's timeout
+  // is 20 s, Core waits 23 s, and the whole wait fits with the reply margin.
+  const recorded = { ...ACTION, timeoutMs: 20_000, checkWaitMs: 15_000 } as BrowserActionCommand;
+  assert.equal(checkWaitBudgetMs(recorded, 1_000, 2_000), 15_000);
+  assert.equal(checkWaitBudgetMs(recorded, 1_000, 6_000), 14_000, "20 s less the 5 s spent and the 1 s margin");
+});
