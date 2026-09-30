@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
+import type { DeterministicNetworkPolicy } from "../network-guard.js";
 import { launchFirefoxWithExtension } from "./firefox/index.js";
 import { pagePanelDriver } from "./panel-driver.js";
 import type { ChatBrowserSession } from "./types.js";
@@ -19,8 +20,8 @@ const POPUP_WIDTH = 420;
  * 2. Otherwise the popup page in an unfocused `type: "popup"` window beside
  *    the browser window, as the Lab's docked popup does for Chrome.
  */
-export async function openFirefoxChatSession(input: { profileDir: string; addonPath: string; scenarioUrl: string }): Promise<ChatBrowserSession> {
-  const launched = await launchFirefoxWithExtension({ profileDir: input.profileDir, addonPath: input.addonPath });
+export async function openFirefoxChatSession(input: { profileDir: string; addonPath: string; scenarioUrl: string; policy: DeterministicNetworkPolicy }): Promise<ChatBrowserSession> {
+  const launched = await launchFirefoxWithExtension({ profileDir: input.profileDir, addonPath: input.addonPath, policy: input.policy });
   const { context, extensionOrigin } = launched;
   const control = context.pages()[0] ?? await context.newPage();
   await gotoExtensionPage(control, `${extensionOrigin}/${POPUP_PATH}`);
@@ -29,6 +30,7 @@ export async function openFirefoxChatSession(input: { profileDir: string; addonP
   const session: ChatBrowserSession = {
     browser: "firefox",
     context,
+    guard: launched.guard,
     control,
     scenario,
     extensionOrigin,

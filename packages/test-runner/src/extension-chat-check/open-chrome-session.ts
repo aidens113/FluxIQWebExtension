@@ -1,6 +1,7 @@
 import type { Page, Request } from "@playwright/test";
 import { extensionViewPanelDriver, pagePanelDriver } from "./panel-driver.js";
 import type { RunningTopology } from "../coordinator.js";
+import { installDeterministicNetworkGuard, type DeterministicNetworkGuard, type DeterministicNetworkPolicy } from "../network-guard.js";
 import { launchBrowser, openSidePanel } from "../run-scenario/index.js";
 import type { ChatBrowserSession } from "./types.js";
 
@@ -18,10 +19,21 @@ const PANEL_PATH = "sidepanel/index.html";
  * service worker's own requests, so the chat's call to Core is observed as it
  * leaves the worker, not only as the recording proxy receives it. Only the
  * worker's requests are kept, by URL and body; headers never are.
+ *
+ * The deterministic network guard (`policy`) is installed right after the
+ * launch and before any page is opened, as the run lane does
+ * (`guarded-browser/tests/launch-containment.test.ts` pins the order).
  */
-export async function openChromeChatSession(input: { topology: RunningTopology; extensionPath: string; scenarioUrl: string; workerRequests: WorkerRequest[] }): Promise<ChatBrowserSession> {
+export async function openChromeChatSession(input: { topology: RunningTopology; extensionPath: string; scenarioUrl: string; workerRequests: WorkerRequest[]; policy: DeterministicNetworkPolicy }): Promise<ChatBrowserSession> {
   process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = "1";
   const { context, browserVersion } = await launchBrowser(input.topology, input.extensionPath);
+  let guard: DeterministicNetworkGuard;
+  try {
+    guard = await installDeterministicNetworkGuard(context, input.policy);
+  } catch (error) {
+    await context.close().catch(/* best-effort: the guard failure is the one reported */ () => undefined);
+    throw error;
+  }
   context.on("request", (request: Request) => {
     if (!request.serviceWorker() || !/\/api\/programs\//u.test(request.url())) return;
     let postData: unknown = request.postData();
@@ -37,6 +49,7 @@ export async function openChromeChatSession(input: { topology: RunningTopology; 
   const session: ChatBrowserSession = {
     browser: "chrome",
     context,
+    guard,
     control,
     scenario,
     extensionOrigin,

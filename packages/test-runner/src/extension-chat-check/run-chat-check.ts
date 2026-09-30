@@ -5,6 +5,7 @@ import { extensionStatus, pairExtensionWithColdEpochRecovery, runtimeMessage } f
 import { loadScenarioManifest } from "../scenarios.js";
 import { saveApprovalFlow, type ApprovalFlow } from "./approval-flow.js";
 import { startCoreRecordingProxy, type CoreRecordingProxy } from "./core-recording-proxy.js";
+import { chatNetworkPolicy } from "./chat-network-policy.js";
 import { evidenceWriter } from "./evidence-writer.js";
 import { openChromeChatSession, type WorkerRequest } from "./open-chrome-session.js";
 import { openFirefoxChatSession } from "./open-firefox-session.js";
@@ -102,9 +103,10 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
     const pageUrl = new URL(options.pagePath, `${topology.scenarioOrigin}${scenario.startPath}`).href;
     result.pageUrl = pageUrl;
     stage(`open ${options.browser}`);
+    const policy = chatNetworkPolicy(topology, proxy.origin);
     session = options.browser === "chrome"
-      ? await openChromeChatSession({ topology, extensionPath: labPaths.extensionPath, scenarioUrl: pageUrl, workerRequests })
-      : await openFirefoxChatSession({ profileDir: path.join(topology.allocation.runRoot, "firefox-profile"), addonPath: path.join(options.repositoryRoot, "apps", "extension", "dist", "firefox"), scenarioUrl: pageUrl });
+      ? await openChromeChatSession({ topology, extensionPath: labPaths.extensionPath, scenarioUrl: pageUrl, workerRequests, policy })
+      : await openFirefoxChatSession({ profileDir: path.join(topology.allocation.runRoot, "firefox-profile"), addonPath: path.join(options.repositoryRoot, "apps", "extension", "dist", "firefox"), scenarioUrl: pageUrl, policy });
     result.browserVersion = session.browserVersion;
     stage("pair");
     const page = session.control;
@@ -146,6 +148,8 @@ export async function runExtensionChatCheck(options: ChatCheckOptions): Promise<
       result.ask = await proveAskAnswered(context, { flow: result.flow, screenshot: name => evidence.shot(name) });
       await evidence.shot("ask-settled");
     }
+    stage("network guard");
+    session.guard.assertNoViolations();
     stage("done");
   } catch (error) {
     result.failure = error instanceof Error ? `${error.message}${error.stack ? `\n${error.stack.split("\n").slice(1, 6).join("\n")}` : ""}` : String(error);

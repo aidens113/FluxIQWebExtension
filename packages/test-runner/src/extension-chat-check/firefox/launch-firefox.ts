@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { firefox, type BrowserContext } from "@playwright/test";
 import { withoutProviderSecrets } from "../../environment.js";
+import { installDeterministicNetworkGuard, type DeterministicNetworkGuard, type DeterministicNetworkPolicy } from "../../network-guard.js";
 import { installTemporaryAddon } from "./install-temporary-addon.js";
 
 /** The gecko id `apps/extension/manifest.firefox.json` declares. */
@@ -15,6 +16,8 @@ export type LaunchedFirefox = {
   addonId: string;
   /** The profile Firefox runs on, which names its process for a window capture. */
   profileDir: string;
+  /** The route-level network guard, installed before this returns, so no page is ever opened outside it. */
+  guard: DeterministicNetworkGuard;
 };
 
 /**
@@ -30,8 +33,17 @@ export type LaunchedFirefox = {
  *
  * `extensions.openPopupWithoutUserGesture.enabled` lets `action.openPopup()`
  * run from a script, so the real toolbar popup can be opened without a click.
+ *
+ * The deterministic network guard (`policy`) is installed on the context
+ * before the add-on is installed and before this returns, as
+ * `launchGuardedPersistentContext` does for Chromium. Two limits of Firefox:
+ * Chromium's `networkContainmentArgs` switches have no Firefox equivalent, so
+ * containment is the route guard alone; and the add-on's background page is
+ * not a service worker, so the guard's service-worker proof has nothing to
+ * prove there and Playwright is not known to route the background's own
+ * requests. What the popup page and the scenario page request is guarded.
  */
-export async function launchFirefoxWithExtension(input: { profileDir: string; addonPath: string }): Promise<LaunchedFirefox> {
+export async function launchFirefoxWithExtension(input: { profileDir: string; addonPath: string; policy: DeterministicNetworkPolicy }): Promise<LaunchedFirefox> {
   const uuid = randomUUID();
   const port = await freePort();
   const context = await firefox.launchPersistentContext(input.profileDir, {
@@ -52,10 +64,11 @@ export async function launchFirefoxWithExtension(input: { profileDir: string; ad
     },
   });
   try {
+    const guard = await installDeterministicNetworkGuard(context, input.policy);
     const { id } = await installTemporaryAddon(port, input.addonPath);
-    return { context, extensionOrigin: `moz-extension://${uuid}`, addonId: id, profileDir: input.profileDir };
+    return { context, extensionOrigin: `moz-extension://${uuid}`, addonId: id, profileDir: input.profileDir, guard };
   } catch (error) {
-    await context.close().catch(/* best-effort: the failed install is the error worth reporting */ () => undefined);
+    await context.close().catch(/* best-effort: the failed guard or install is the error worth reporting */ () => undefined);
     throw error;
   }
 }

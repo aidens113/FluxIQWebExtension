@@ -21,6 +21,7 @@ const SANCTIONED: Record<string, string> = {
   "interactive-session.ts": "installs the guard before opening any page",
   "saved-flow-replay/replay-browser.ts": "installs the guard before opening any page",
   "bench/compatibility.ts": "launches headless only to read the browser version; it opens no page",
+  "extension-chat-check/firefox/launch-firefox.ts": "installs the guard before it installs the add-on or returns the context; Firefox has no containment switches",
 };
 
 /** Source text without comments, so a launch named in prose is not a launch. */
@@ -73,6 +74,13 @@ test("each sanctioned launch installs the guard before any page is opened", asyn
 
   assertOrder(await source("interactive-session.ts"), "interactive session", "chromium.launchPersistentContext(", "installDeterministicNetworkGuard(context", "newPage(");
   assertOrder(await source("saved-flow-replay/replay-browser.ts"), "saved-Flow replay", "chromium.launchPersistentContext(", "installDeterministicNetworkGuard(context", "newPage(");
+
+  const firefoxChat = await source("extension-chat-check/firefox/launch-firefox.ts");
+  assertOrder(firefoxChat, "Firefox chat check", "firefox.launchPersistentContext(", "installDeterministicNetworkGuard(context", "installTemporaryAddon(");
+  assert.equal(/newPage\(|\.goto\(/u.test(firefoxChat), false, "the Firefox chat launcher opens no page itself");
+  const chromeChat = await source("extension-chat-check/open-chrome-session.ts");
+  assertOrder(chromeChat, "Chrome chat check", "await launchBrowser(", "installDeterministicNetworkGuard(context", "newPage(");
+  assertOrder(chromeChat, "Chrome chat check", "await launchBrowser(", "installDeterministicNetworkGuard(context", ".goto(");
 
   const bench = await source("bench/compatibility.ts");
   assert.equal(/newPage\(|\.goto\(/u.test(bench), false, "the compatibility bench opens no page from its unguarded browser");

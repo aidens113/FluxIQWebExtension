@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
+import type { DeterministicNetworkGuard } from "../network-guard.js";
 import type { ObservedCoreCall } from "./core-recording-proxy.js";
 import type { EvidenceWriter } from "./evidence-writer.js";
 import type { ChatPanelDriver } from "./panel-driver.js";
@@ -19,6 +20,8 @@ export type ChatPanelMode = "side-panel" | "action-popup" | "popup-window";
 export type ChatBrowserSession = {
   browser: ChatBrowser;
   context: BrowserContext;
+  /** The route-level network guard, installed before any page was opened. */
+  guard: DeterministicNetworkGuard;
   /** An extension page kept open to send runtime messages from; never the page the person types in. */
   control: Page;
   scenario: Page;
