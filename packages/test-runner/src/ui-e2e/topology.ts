@@ -131,7 +131,8 @@ export class UiE2eTopology {
     const config = resolveDemoWorkspaceConfiguration(repositoryRoot, {
       FLUXIQ_TEST_RUNS_DIR: runsDirectory,
       ...(environment.FLUXIQ_CORE_ROOT ? { FLUXIQ_CORE_ROOT: environment.FLUXIQ_CORE_ROOT } : {}),
-      ...(environment.FLUXIQ_DEMO_HEADLESS ? { FLUXIQ_DEMO_HEADLESS: environment.FLUXIQ_DEMO_HEADLESS } : {}),
+      // Headed unless the caller opts in explicitly: the Lab runs no headless browser.
+      FLUXIQ_DEMO_HEADLESS: environment.FLUXIQ_DEMO_HEADLESS?.trim() || "false",
       FLUXIQ_TEST_USERNAME: identity.username,
       FLUXIQ_TEST_PASSWORD: identity.password,
       FLUXIQ_TEST_PIN: identity.pin,

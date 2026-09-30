@@ -90,6 +90,78 @@ again; a status update never wipes it. Earlier, a refused command's error was
 hidden in the same tick it was shown, because the re-render after every command
 ended by drawing `lastError`, which the background had usually not set.
 
+## Staying Connected
+
+A browser FluxIQ has paired reconnects without anyone pressing Connect, as long
+as "Reconnect automatically" is on and the person has not pressed Disconnect
+since they last pressed Connect (remembered in `chrome.storage.session`).
+
+- **Worker start.** `background/index.ts` reconnects on every start of the
+  Manifest V3 worker, not only on `runtime.onStartup`: a browser start, an
+  extension reload or update, and a worker Chrome stopped for idleness and an
+  event woke all start the worker with a token in storage and no socket. Building
+  the connection and reconnecting are each single-flight, so start-up, a panel
+  opening and an alarm arriving together make one socket.
+- **Dropped socket.** `GatewaySession` retries with a backoff of 1 s doubling to
+  30 s. `retryNow()` starts the backoff over and tries at once; the worker calls
+  it when the browser reports it is back `online` and when the reconnect alarm
+  fires.
+- **Reconnect alarm.** The backoff timer dies with a stopped worker, so while a
+  paired, auto-reconnecting browser is neither connected nor waiting on a pairing
+  approval, `reconnect-watchdog.ts` holds a `chrome.alarms` alarm
+  (`fluxiq.reconnect`, every 30 s) that wakes the worker; it is cleared once the
+  connection is back. This is why the manifests ask for `alarms`.
+- **A panel opening** still reconnects too (`getStatus` from a control page).
+
+`e2e/reconnect.spec.ts` covers a restarted worker reconnecting, a dropped socket
+reconnecting, and the alarm being set and firing.
+
+**Saved state of the wrong shape** is repaired, not thrown. Settings, the
+session, the client id and the offline queue are read through
+`background/saved-state.ts`: each well-formed field is kept, each malformed one
+is replaced by its default (a malformed token is dropped, and the browser pairs
+again), the repair is written back and noted, by field name only, in the problem
+log.
+
+**A panel relay that runs out of time** (two minutes; a conversation turn waits
+on a model) answers `timed_out`, "FluxIQ may still be working on this", rather
+than `unreachable`, so the panel does not invite a retry that does it twice.
+
+## Problem Reports
+
+`fluxiq.panel.reportProblem` (`RUNTIME_MESSAGES.panelReportProblem`, control
+pages only) answers `{ ok: true, report }` with a `ProblemReport`
+(`shared/protocol.ts`) built by allowlist in `background/diagnostics/`. It is
+made even when FluxIQ cannot be reached, and then says why its recent-runs part
+is missing. The Advanced view's Connection tab shows it as "Report a problem":
+it copies the report and offers it as a file. What it holds and withholds is in
+[sensitive values](sensitive-values.md#problem-reports).
+
+## Simple Mode Relays
+
+Simple Mode's requests (`SIMPLE_PANEL_MESSAGES` in `shared/protocol.ts`, the
+strings in `RUNTIME_MESSAGES`) are relayed by `background/simple-panel/` with
+the pairing token, and each sends Core only the fields named here, never the
+panel's message:
+
+| Message | Core endpoint and request |
+| --- | --- |
+| `listAutomations` | `list-flow-summaries` `{ projectId }`, then `list-flow-runs` `{ projectId, sort: "updated", direction: "desc", limit: 50 }`; answers `{ flows, runs }` |
+| `runAutomation`, `testGeneratedAutomation` | `run-runtime-session` `{ projectId, flowId }` |
+| `runDetail` | `get-flow-run-detail` `{ projectId, runId, compact: true }`, then `list-flow-adaptations` for its Flow; answers `{ runDetail, adaptations }` |
+| `exportDataset` | `export-run-dataset` `{ projectId, runId, datasetId, format }` |
+| `modelReadiness` | `secret-keys` `snapshot` `{}`; answers `{ keys }`, each key's `kind`, `provider` and `enabled` only |
+| `generateFromRecording` | `generate-recording-proposal` `{ projectId, recordingId, mode: "direct" }` for the recording this browser stopped last |
+| `saveGeneratedAutomation` | `review-recording-flow-proposal` `{ projectId, proposalId, decision: "approved" }` |
+| `removeRecordingStep` | by `entryId`, the `ActivityEntry.id` the recording log showed: removed from the offline queue if it was never sent, otherwise `remove-recording-entry` `{ projectId, recordingId, eventId }` |
+
+Core accepts the token on these endpoints only with the same narrowed requests
+(Core's `docs/architecture/automation-studio/client-gateway.md`), so a run from
+the panel never carries an inline Flow, run inputs, an LLM grant or external
+side effects. The step index and the last stopped recording live in the worker,
+so neither survives a worker restart; the relay then says the step can no longer
+be removed.
+
 ## Wire Shape
 
 Every message is a versioned JSON envelope:

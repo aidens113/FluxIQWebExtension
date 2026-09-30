@@ -155,6 +155,29 @@ export class GatewaySession {
     this.clearReconnect();
   }
 
+  /**
+   * Tries again at once when the session is waiting out a backoff, or failed
+   * while it still wants to be connected, and starts the backoff over. For the
+   * moments something says the way to FluxIQ may be open again -- the network
+   * came back, a wake-up alarm fired -- so a person does not wait up to
+   * `RECONNECT_MAX_DELAY_MS` for a retry already due. A session the person
+   * disconnected, or one already connecting or connected, is left alone.
+   */
+  retryNow(): boolean {
+    if (!this.shouldStayConnected) return false;
+    if (this.connectionState !== "reconnecting" && this.connectionState !== "error") return false;
+    this.reconnectAttempt = 0;
+    this.connect().catch((error: unknown) => {
+      this.fail(error instanceof Error ? error.message : "WebSocket connection failed.");
+    });
+    return true;
+  }
+
+  /** The session was asked to connect and has not been told to stop. */
+  wantsConnection(): boolean {
+    return this.shouldStayConnected;
+  }
+
   closeClient(): void {
     this.stopHeartbeat();
     void this.client?.close();

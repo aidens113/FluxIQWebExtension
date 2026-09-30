@@ -90,11 +90,20 @@ export function requireDemoScenarioUrl(origin: string, scenarioPath: string): st
   return scenarioUrl.href;
 }
 
-export async function waitForUrl(url: string, token: string, child?: ScenarioLabProcess): Promise<void> {
-  const deadline = Date.now() + 15_000;
+/**
+ * How long Scenario Lab gets to answer its health check. Measured on
+ * 2026-09-29 on the shared machine, the server took 3.3 s, 8.4 s and 18.1 s
+ * just to start evaluating, and the ui:e2e run's second session was killed at
+ * the old 15 s bound before it ever printed ready. A ready Lab returns at once,
+ * so the bound costs only a failure.
+ */
+export const SCENARIO_LAB_READY_TIMEOUT_MS = 60_000;
+
+export async function waitForUrl(url: string, token: string, child?: ScenarioLabProcess, timeoutMs = SCENARIO_LAB_READY_TIMEOUT_MS): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (child && (child.exitCode !== null || child.signalCode !== null)) {
-      throw new RunnerFailure("process.startup", "Scenario Lab exited before its health endpoint became ready");
+      throw new RunnerFailure("process.startup", "Scenario Lab exited before its health endpoint became ready", { details: { reasonCode: "scenario_lab.exited" } });
     }
     try {
       const response = await fetch(url, { headers: { authorization: "Bearer " + token } });
@@ -102,5 +111,5 @@ export async function waitForUrl(url: string, token: string, child?: ScenarioLab
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  throw new RunnerFailure("process.startup", "Timed out waiting for " + url);
+  throw new RunnerFailure("process.startup", "Timed out waiting for " + url, { details: { reasonCode: "scenario_lab.not_ready", timeoutMs } });
 }

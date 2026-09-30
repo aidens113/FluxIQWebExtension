@@ -51,6 +51,9 @@ const DIGEST_FIELDS = {
   comments: "[role=\"button\"][aria-expanded] > span",
 };
 
+/** Who a post is shared with: the audience icon's title, "Public" or "Friends", which is what hovering it shows. */
+const AUDIENCE_FIELD = "svg[role=\"img\"][aria-label^=\"Shared with\"] > title";
+
 const OWN_POST = "[role=\"feed\"] > [role=\"article\"]:has(h3 a[href*=\"/people/maya-lindqvist/\"])";
 const CONFIRMED_CARD = "[role=\"list\"] > [role=\"listitem\"]:has(a[href*=\"/messages/t/\"])";
 const card = (slug: string) => `[role="listitem"]:has(a[href$="/people/${slug}/"])`;
@@ -214,14 +217,14 @@ export const socialNetworkFeedManifest = createScenarioManifest({
         { id: "write-open-day", operation: "type", target: "role:textbox:What's on your mind, Maya?", value: MOVED_OPEN_DAY_TEXT },
         ...PRESS_POST_TWICE,
         { id: "reposted", operation: "waitForState", target: OWN_POST, timeoutMs: 5000 },
-        { id: "extract-open-day", operation: "extract", target: OWN_POST, fields: { text: DIGEST_FIELDS.text, posted: DIGEST_FIELDS.posted } },
+        { id: "extract-open-day", operation: "extract", target: OWN_POST, fields: { text: DIGEST_FIELDS.text, audience: AUDIENCE_FIELD, posted: DIGEST_FIELDS.posted } },
         { id: "open-day-extracted", operation: "checkpoint" },
       ],
       expected: {
         pageFacts: [buildIs("baseline"), path(ROOT)],
         recordingEvents: [{ type: "web.element.clicked" }],
         actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.extract_list", outcome: "succeeded" }],
-        extracted: [{ step: "extract-open-day", count: 1, records: [{ text: MOVED_OPEN_DAY_TEXT, posted: fullDateText(0) }] }],
+        extracted: [{ step: "extract-open-day", count: 1, records: [{ text: MOVED_OPEN_DAY_TEXT, audience: OPEN_DAY_POST.audience, posted: fullDateText(0) }] }],
         finalState: [path(ROOT)],
         allowedConsoleErrors: [],
       },

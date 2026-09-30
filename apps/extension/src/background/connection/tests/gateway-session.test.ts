@@ -43,3 +43,11 @@ test("failing or disconnecting keeps the error", () => {
   h.session.markDisconnected();
   assert.deepEqual(h.events, ["emit", "emit"]);
 });
+
+test("retrying now does nothing for a session nobody asked to connect, even a failed one", () => {
+  const h = harness();
+  h.session.markFailed();
+  assert.equal(h.session.wantsConnection(), false);
+  assert.equal(h.session.retryNow(), false);
+  assert.equal(h.session.state(), "error");
+});

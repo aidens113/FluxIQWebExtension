@@ -16,6 +16,7 @@ import type { ContentAttachment } from "../content-attachment";
 import { EventSequence } from "../event-sequence";
 import { NavigationRecorder, type NavigationOrigin, type NavigationVerdict } from "../navigation-recorder";
 import { PointerClickFilter } from "../pointer-click-filter";
+import type { RecordedStepRef } from "../../recorded-steps";
 import { RecordedEventIntake, type RecordedEventIntakeDeps } from "../recorded-event-intake";
 import type { RecordingEvidenceReporter } from "../recording-evidence";
 import { ScriptedNavigationIntent } from "../scripted-navigation/index";
@@ -37,6 +38,7 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
   const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
   const evidenceKinds: string[] = [];
   const activities: Array<{ kind: string; label: string; tone: ActivityEntry["tone"] | undefined }> = [];
+  const steps: RecordedStepRef[] = [];
   const reentered: Array<{ payload: RecordingEventPayload; tabId: number | undefined; frameId: number | undefined }> = [];
   const recordingStates: Array<[number, boolean, number | undefined]> = [];
   const scheduled: string[] = [];
@@ -95,6 +97,10 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
     onActivity: (kind, label, _detail, tone) => {
       activities.push({ kind, label, tone });
     },
+    onRecordedStep: (kind, label, _detail, step) => {
+      activities.push({ kind, label, tone: undefined });
+      steps.push(step);
+    },
     recordEvent: async (payload, tabId, frameId, admittedNavigation) => {
       reentered.push({ payload, tabId, frameId });
       if (options.reenter) await intake?.accept(payload, tabId, frameId, admittedNavigation);
@@ -107,6 +113,7 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
     sent,
     evidenceKinds,
     activities,
+    steps,
     reentered,
     recordingStates,
     scheduled,
@@ -205,6 +212,8 @@ test("an executable action is counted and carries the recording id; passive evid
   assert.match(JSON.stringify(h.sent[0]?.payload), /"recording-1"/);
   assert.deepEqual(h.evidenceKinds, ["dom.click"]);
   assert.deepEqual(h.activities.map((activity) => activity.label), ["Click"]);
+  // The step is indexed by the event it was sent as, so the panel can remove it later.
+  assert.deepEqual(h.steps, [{ recordingId: "recording-1", eventId: (h.sent[0]?.payload as { eventId?: string }).eventId }]);
 
   await h.intake.accept({ kind: "content.ready", sequence: 2, url: "https://shop.test/", title: "Shop", eventTimestampMs: 2_000 } as RecordingEventPayload, 1, 0);
   assert.equal(h.counted(), 1);

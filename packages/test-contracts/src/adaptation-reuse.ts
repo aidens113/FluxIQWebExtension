@@ -19,13 +19,23 @@
  * `interventions` are both `0`; a `providerCalls` of `null` certifies nothing.
  */
 export type RunAdaptationReuse = {
-  /** The adaptations whose nodes this run executed (Core's `runDetail.metadata.adaptationsExercised`), in Core's order, each once. */
+  /**
+   * The adaptations, not created by this run and `applied` in Core's store,
+   * whose ids Core stamped on a node this run attempted (the node's
+   * `metadata.adaptationIds`), in attempt order, each once. Core's own replay
+   * rule counts the same stamps.
+   */
   exercisedAdaptationIds: string[];
   /** The provider calls Core counted for the run (`providerCallCount`), `null` when Core stated no count. */
   providerCalls: number | null;
   /** The LLM interventions Core recorded for the run. */
   interventions: number;
-  /** How the run continued after a change's in-run trial (Core's `runDetail.metadata.resume`), `null` when it did not resume from one. */
+  /**
+   * How the run continued after a change's in-run trial, `null` when it did
+   * not resume from one: Core's `metadata.adaptiveRetry` for the status and
+   * attempt count, and its resumable patch attempts' `resumeFrom` and
+   * `adaptationId` for the point and the changes trialled.
+   */
   resume: RunAdaptationResume | null;
 };
 
@@ -72,8 +82,8 @@ export type RunAdaptationConfidence = {
   lastFailure: AdaptationEvidenceKind | null;
 };
 
-/** Core's adaptation statuses (`AutomationStudioFlowAdaptationStatus`). */
-export const adaptationRecordStatuses = ["testing", "validated", "applied", "rejected", "disabled", "reverted", "superseded"] as const;
+/** Core's adaptation statuses (`AutomationStudioFlowAdaptationStatus`), `proposed` included: a build or repair awaiting review is stored as one. */
+export const adaptationRecordStatuses = ["proposed", "testing", "validated", "applied", "rejected", "disabled", "reverted", "superseded"] as const;
 export type AdaptationRecordStatus = (typeof adaptationRecordStatuses)[number];
 
 /**
@@ -115,4 +125,68 @@ export type RunAdaptationCost = {
   totalTokens: number | null;
   estimatedCostUsd: number | null;
   reservedCalls: number | null;
+};
+
+/**
+ * The four measurements one run can carry, together: what a Flow-lane run
+ * writes to its bundle's `snapshots/adaptation.json` and what
+ * `RunEvaluation` copies member by member. Each is `null` when not measured.
+ */
+export type RunAdaptationMeasurements = {
+  adaptationReuse: RunAdaptationReuse | null;
+  adaptationValidation: RunAdaptationValidation | null;
+  adaptationPersistence: RunAdaptationPersistence | null;
+  adaptationCost: RunAdaptationCost | null;
+};
+
+/**
+ * FluxBench's Week 2 aggregates over a bench's runs, each `null` when no run
+ * measured it. They are counts over the runs' own records and never re-read
+ * Core, so a report and its `runs.json` always agree.
+ *
+ * Reuse is the Phase 2.9 proof. A run is **exercising** when it executed a node
+ * stamped with an adaptation it did not create, and a **deterministic replay**
+ * when it was exercising and Core counted 0 provider calls and 0
+ * interventions. A run whose count Core did not state is **uncertified**: it
+ * is neither a replay nor a miss, and `rate` is replays over the exercising
+ * runs whose count was stated.
+ */
+export type BenchAdaptationReuse = {
+  measuredRuns: number;
+  exercisingRuns: number;
+  deterministicReplays: number;
+  uncertifiedRuns: number;
+  resumedRuns: number;
+  rate: number | null;
+};
+
+/** Each graded adaptation once per run that graded it, counted by Core's tier. */
+export type BenchAdaptationValidation = {
+  measuredRuns: number;
+  adaptations: number;
+  tiers: Record<AdaptationConfidenceTier, number>;
+};
+
+/** Each stored adaptation once per run that read it, counted by Core's status after the run. */
+export type BenchAdaptationPersistence = {
+  measuredRuns: number;
+  adaptations: number;
+  statuses: Record<AdaptationRecordStatus, number>;
+};
+
+/**
+ * What the model cost the bench, summed from Core's accounting. `countedRuns`
+ * are the runs whose provider calls Core stated, and `providerCalls` their
+ * sum; `accountedRuns` are the runs with Core's token and USD totals, which the
+ * four totals sum. A run that stated neither adds to `measuredRuns` alone.
+ */
+export type BenchAdaptationCost = {
+  measuredRuns: number;
+  countedRuns: number;
+  providerCalls: number;
+  accountedRuns: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
 };

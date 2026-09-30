@@ -156,6 +156,11 @@ export class ActiveRecording {
     return this.activeRecordingId;
   }
 
+  /** The recording that ended last, until another starts. */
+  lastStoppedRecordingId(): string | undefined {
+    return this.stoppedRecordingId;
+  }
+
   eventCount(): number {
     return this.events;
   }

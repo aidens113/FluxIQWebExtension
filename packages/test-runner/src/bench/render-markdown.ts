@@ -153,7 +153,30 @@ function metricLines(report: BenchReport, coverage: BenchMarkdownCoverage): stri
     table(["Lane", "Metric", "Samples", "p50", "p95"], distributions.map(([name, distribution]) => [ALL_LANES, name, String(distribution.samples), distribution.p50 === null ? "n/a" : String(distribution.p50), distribution.p95 === null ? "n/a" : String(distribution.p95)])),
     "",
     ...extractionLines(report),
-    `Truncation count, ${ALL_LANES}: ${metrics.truncationCount}. Sanitized packet bytes and the truncation count come from Flow-lane runs only: a recording-lane run runs no Flow, so Core captures no sanitized packet for it. Raw snapshot bytes has no samples on any lane: no producer measures raw snapshots, and they are not a Week 1 metric. Week 2 metrics (harness recovery; adaptation cost, validation, persistence, and reuse) are null.`,
+    `Truncation count, ${ALL_LANES}: ${metrics.truncationCount}. Sanitized packet bytes and the truncation count come from Flow-lane runs only: a recording-lane run runs no Flow, so Core captures no sanitized packet for it. Raw snapshot bytes has no samples on any lane: no producer measures raw snapshots, and they are not a Week 1 metric.`,
+    "",
+    ...adaptationLines(report),
+  ];
+}
+
+/**
+ * The Week 2 adaptation aggregates, each stated with its population. An
+ * aggregate no run measured prints as unmeasured, never as zeros, and the
+ * reuse rate prints beside the uncertified runs it leaves out, so a rate over
+ * one certified run cannot pass for a rate over the bench.
+ */
+function adaptationLines(report: BenchReport): string[] {
+  const { adaptationReuse: reuse, adaptationValidation: graded, adaptationPersistence: stored, adaptationCost: cost } = report.metrics;
+  const unmeasured = "unmeasured: no run recorded it";
+  return [
+    "## Week 2 adaptation, Flow lane",
+    "",
+    "Counted from each run's own records, read from Core before the run's workspace was deleted. Harness recovery has no bench aggregate; each run keeps its own record.",
+    "",
+    `- Reuse: ${reuse ? `${reuse.deterministicReplays} deterministic replays of ${reuse.exercisingRuns - reuse.uncertifiedRuns} exercising runs whose provider calls Core stated (rate ${reuse.rate === null ? "n/a" : reuse.rate.toFixed(3)}); ${reuse.uncertifiedRuns} exercising runs uncertified; ${reuse.resumedRuns} resumed after a trial; over ${reuse.measuredRuns} measured runs` : unmeasured}.`,
+    `- Validation: ${graded ? `${graded.adaptations} graded adaptations -- ${Object.entries(graded.tiers).map(([tier, count]) => `${tier} ${count}`).join(", ")}; over ${graded.measuredRuns} measured runs` : unmeasured}.`,
+    `- Persistence: ${stored ? `${stored.adaptations} stored adaptations -- ${Object.entries(stored.statuses).filter(([, count]) => count > 0).map(([status, count]) => `${status} ${count}`).join(", ") || "none"}; over ${stored.measuredRuns} measured runs` : unmeasured}.`,
+    `- Cost: ${cost ? `${cost.providerCalls} provider calls over ${cost.countedRuns} counted runs; ${cost.totalTokens} tokens and $${cost.estimatedCostUsd.toFixed(4)} over ${cost.accountedRuns} accounted runs; over ${cost.measuredRuns} measured runs` : unmeasured}.`,
     "",
   ];
 }

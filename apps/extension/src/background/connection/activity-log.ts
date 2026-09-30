@@ -20,7 +20,8 @@ export class ActivityLog {
     return [...this.recent];
   }
 
-  record(kind: string, label: string, detail?: string, tone: ActivityEntry["tone"] = "neutral"): void {
+  /** Records one entry and answers the id it was given. */
+  record(kind: string, label: string, detail?: string, tone: ActivityEntry["tone"] = "neutral"): string {
     const timestamp = Date.now();
     this.lastAt = timestamp;
     const entry = compactObject({
@@ -35,6 +36,16 @@ export class ActivityLog {
     this.recent.splice(RECENT_ACTIVITY_LIMIT);
     this.log.unshift(entry);
     this.log.splice(RECORDING_LOG_LIMIT);
+    return entry.id;
+  }
+
+  /** Removes an entry from the recent list and the log. Answers whether it was there. */
+  remove(id: string): boolean {
+    const recentIndex = this.recent.findIndex((entry) => entry.id === id);
+    if (recentIndex >= 0) this.recent.splice(recentIndex, 1);
+    const logIndex = this.log.findIndex((entry) => entry.id === id);
+    if (logIndex >= 0) this.log.splice(logIndex, 1);
+    return recentIndex >= 0 || logIndex >= 0;
   }
 
   clearRecent(): void {

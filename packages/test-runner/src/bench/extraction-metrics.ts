@@ -38,7 +38,7 @@ export const BENCH_EXTRACTION_RATE_DEFINITIONS: Readonly<Record<BenchExtractionR
   },
   extractionExactSuccess: {
     unit: "runs",
-    definition: "runs that judged at least one extraction step, every judged step of which matched. A step whose expectation could judge nothing is a miss, not an exclusion",
+    definition: "runs that judged at least one extraction step, every judged step of which compared its listed records and matched. A count-only step is a miss, not a hit: agreeing counts compared no value. A step whose expectation could judge nothing is a miss, not an exclusion",
   },
   extractionFieldCompleteness: {
     unit: "fields",
@@ -116,6 +116,17 @@ export function extractionStepMatched(measurement: RunExtractionMeasurement): bo
   return measurement.countStated && measurement.expectedRecords === measurement.observedRecords;
 }
 
+/**
+ * Whether one judged step proved its extraction exactly right: it listed its
+ * records and every one matched. A count-only step never is, even when the
+ * counts agree (X5.5): `data-table-inventory-large` observes the records it
+ * expected without comparing one value, and scoring that as an exact success
+ * published 1.0 for a lane that checked nothing but a length.
+ */
+export function extractionStepExact(measurement: RunExtractionMeasurement): boolean {
+  return measurement.recordsListed && extractionStepMatched(measurement);
+}
+
 /** Whether a judged step actually compared something, which is what makes a mismatch evidence rather than a gap. */
 const stepJudgedSomething = (measurement: RunExtractionMeasurement): boolean =>
   measurement.status === "judged" && (measurement.recordsListed || measurement.countStated);
@@ -166,7 +177,9 @@ function paginationAccuracy(judged: readonly Step[]): BenchRate {
  * Runs whose every judged extraction step matched, over the runs that judged
  * at least one, in runs.
  *
- * A run holding a step that judged nothing is a **miss**, not an exclusion.
+ * A run holding a step that judged nothing is a **miss**, not an exclusion,
+ * and so is a run holding a count-only step whose counts agree
+ * (`extractionStepExact`): a matching length is not a matching extraction.
  * The claim is "this run's extraction was exactly right", and a step whose
  * expectation nothing could judge leaves the run unable to support it — the
  * same rule `initialExecutionSuccess` applies to a run in which FluxIQ
@@ -176,7 +189,7 @@ function paginationAccuracy(judged: readonly Step[]): BenchRate {
  */
 function exactSuccess(measured: readonly Run[]): BenchRate {
   const population = measured.filter(({ evaluation }) => (evaluation.extraction ?? []).some((measurement) => measurement.status === "judged"));
-  const exact = population.filter(({ evaluation }) => (evaluation.extraction ?? []).filter((measurement) => measurement.status === "judged").every(extractionStepMatched)).length;
+  const exact = population.filter(({ evaluation }) => (evaluation.extraction ?? []).filter((measurement) => measurement.status === "judged").every(extractionStepExact)).length;
   return { count: exact, total: population.length, workflows: workflowsOf(population), rate: population.length === 0 ? null : exact / population.length };
 }
 

@@ -13,7 +13,7 @@ import type { ExistingFluxIQControlClient } from "../../existing-fluxiq-control.
 import type { RecordedTaskId } from "./recorded-task.js";
 
 /** The journeys that provision a Flow, one project each; a failure task is its own journey here. */
-export type JourneyProjectKey = "extraction" | `failure-${RecordedTaskId}`;
+export type JourneyProjectKey = "extraction" | "first-run" | `failure-${RecordedTaskId}`;
 
 /**
  * How long a journey waits, from Stop recording, for Core to finalize the new

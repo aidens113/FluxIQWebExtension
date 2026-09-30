@@ -9,6 +9,7 @@ import { localClassifiedsScenario as scenario } from "../scenario.js";
 import { createClassifiedsState, mutateClassifiedsState } from "../state.js";
 import { OFFER_LISTING_KEY } from "../targets.js";
 import type { ClassifiedsMode, ClassifiedsState } from "../types.js";
+import type { ExpectedFact } from "@fluxiq-web-extension/test-contracts";
 
 const NOW = 1_800_000_000_000;
 const context: RenderContext = { runToken: "local-classifieds-unit-token", seed: 44, alternateOrigin: "http://127.0.0.1:9" };
@@ -105,8 +106,8 @@ test("only readouts carry test ids, plus the one control the recording names; th
   assert.match(redesigned, />Hide</u);
   assert.match(markupOf(body(route(armed("moved-save"), `item/${bike.id}/`))), /aria-label="Add to saved items"/u);
   const offered = apply(createClassifiedsState(), "send-offer", { listingId: bike.id, amount: 140 });
-  assert.deepEqual(testIds(String(json(route(offered, `item/${bike.id}/detail.json`)).html)), ["marketplace_offer_receipt", "marketplace_pdp_save"]);
-  assert.deepEqual(json(route(offered, `item/${bike.id}/receipt.json`)), { receipt: "Offer of £140 sent to Morgan Tate", buying: 3 });
+  assert.deepEqual(testIds(String(json(route(offered, `item/${bike.id}/detail.json`)).html)), ["marketplace_conversation", "marketplace_offer_receipt", "marketplace_pdp_save"]);
+  assert.deepEqual(json(route(offered, `item/${bike.id}/receipt.json`)), { receipt: "Offer of £140 sent to Morgan Tate", conversation: "You've sent Morgan Tate 1 offer", buying: 3 });
   assert.match(markupOf(scenario.render(armed("location-check"), context)), /data-testid="marketplace_location_prompt" hidden/u);
 });
 
@@ -153,4 +154,37 @@ test("the saved page lists newest first, with its own live total and the sold it
   assert.deepEqual(titles, ["Glass dining table with chrome legs", "Adjustable desk lamp, black", "Rattan armchair"]);
   assert.match(html, />Sold</u);
   assert.match(html, />Price dropped</u);
+});
+
+/** The text of the first element carrying `testid` in served markup, entities decoded, as the fact probe reads it; `null` when absent. */
+function servedText(html: string, testid: string): string | null {
+  const match = new RegExp(`data-testid="${testid}"[^>]*>([^<]*)<`, "u").exec(html);
+  if (!match) return null;
+  return match[1]!.replace(/&#039;/gu, "'").replace(/&quot;/gu, '"').replace(/&lt;/gu, "<").replace(/&gt;/gu, ">").replace(/&amp;/gu, "&").trim();
+}
+
+/** The goal facts that do not hold on the listing page a run ends on: its shell as served, and its panel as filled in. */
+function failingOn(state: ClassifiedsState, listingKey: string, facts: readonly ExpectedFact[]): string[] {
+  const id = listingByKey(listingKey).id;
+  const html = `${markupOf(body(route(state, `item/${id}/`)))}${String(json(route(state, `item/${id}/detail.json`)).html)}`;
+  return facts.filter((fact) => fact.predicate !== "text" || servedText(html, fact.subject) !== fact.value).map(({ id: factId }) => factId);
+}
+
+test("the offer goal holds for the one honest offer and fails every run that did something else or something more", () => {
+  const goal = scenario.manifest.playbackGoal!.successFacts;
+  assert.ok(goal.every((fact) => fact.predicate === "text"), "every goal fact is read off the page the run ends on");
+  const offer = (state: ClassifiedsState, key = OFFER_LISTING_KEY, amount = 140, website = "", now = NOW) =>
+    apply(state, "send-offer", { listingId: listingByKey(key).id, amount, note: "", website }, now);
+  const later = NOW + CONTACT_INTERVAL_MS;
+  assert.deepEqual(failingOn(offer(createClassifiedsState()), OFFER_LISTING_KEY, goal), [], "the honest run");
+  const wrong: Array<[string, ClassifiedsState, string]> = [
+    ["nothing sent", createClassifiedsState(), OFFER_LISTING_KEY],
+    ["the ready-made message first, then the offer once the rate limit let it go", offer(apply(createClassifiedsState(), "send-message", { listingId: bike.id, text: "Hi, is this still available?", website: "" }), OFFER_LISTING_KEY, 140, "", later), OFFER_LISTING_KEY],
+    ["the offer sent twice", offer(offer(createClassifiedsState()), OFFER_LISTING_KEY, 140, "", later), OFFER_LISTING_KEY],
+    ["the asking price left in the box", offer(createClassifiedsState(), OFFER_LISTING_KEY, 165), OFFER_LISTING_KEY],
+    ["the electric folding bike", offer(createClassifiedsState(), "e-folding"), "e-folding"],
+    ["the honeypot filled", offer(createClassifiedsState(), OFFER_LISTING_KEY, 140, "140"), OFFER_LISTING_KEY],
+    ["a second seller offered too", offer(offer(createClassifiedsState(), "e-folding"), OFFER_LISTING_KEY, 140, "", later), OFFER_LISTING_KEY],
+  ];
+  for (const [why, state, endsOn] of wrong) assert.notDeepEqual(failingOn(state, endsOn, goal), [], why);
 });
