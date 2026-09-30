@@ -31,11 +31,12 @@ and its own `fxwork/<id>` tree:
 **Machine rules for every lane (binding).**
 - **Lab slots** (`C:/Users/osrs_/FluxStuff/lab-slots/`): `slot-1` is the only live run, held by t174. `slot-2` is one
   provider-free run on the ten scenarios, and only while free RAM is above 4 GB. Claim with `mkdir`, release with `rmdir`.
-- **Build slots** (`C:/Users/osrs_/FluxStuff/build-slots/b1`, `b2`): claim one with `mkdir`, writing an `owner` file
-  (lane, command, ISO time), before any heavy command: `pnpm check`, `pnpm build`, `pnpm test`, a package's whole
-  suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`. Release right after, on failure too. `b2` only
-  while `lab-slots/slot-1` is absent. One test file, or one test directory at `--maxWorkers=2` /
-  `--test-concurrency=2`, needs no slot. A slot whose owner file is over 90 minutes old may be removed.
+- **Build slots** (`b1`, `b2`): run every heavy command (`pnpm check`, `pnpm build`, `pnpm test`, a package's whole
+  suite, Core `packages/fluxiq` tsc, `next build`, `pnpm task start`) through
+  `bash C:/Users/osrs_/FluxStuff/build-slots/heavy.sh "<lane> <what>" <command...>`. It waits for a slot, uses `b2`
+  only while `lab-slots/slot-1` is absent, and releases only its own. Never `mkdir` or `rm` a build slot by hand
+  (a hand-written `rm` deleted another lane's claim on 2026-09-29). One test file, or one test directory at
+  `--maxWorkers=2 --minWorkers=1` / `--test-concurrency=2`, needs no slot.
 - Only the supervisor commits, merges, branches or makes worktrees. A lead reports `Ready to commit` with files and
   validation, and the supervisor commits and continues it.
 
