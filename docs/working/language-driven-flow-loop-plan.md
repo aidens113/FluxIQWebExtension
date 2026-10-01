@@ -690,6 +690,23 @@ debug and partitioned so neither touches the other's files:
   `service-bootstrap/tests/permission.test.ts` (lane D). t201 owns the first three.
 - Outcome: In progress. Pass streak 0.
 
+### 2026-09-30 — Integration round 3 merged and pushed: the whole page, the three-phase build, the audit's fixes
+- Agent: supervisor, with t191, t196, t200, t202-t214 and lanes A-D; each owner's claim re-run by the supervisor before
+  its commit; conflicts resolved by the supervisor or by a worker it briefed (t196, t200).
+- Changed: pushed Core `25c8b32f..37ff0989`, downstream `888386b0..4625fd99`. Regressions found and fixed on the way: lane
+  B's store-failure pool read (t207), native nodes losing Flow inputs (t209, from lane D's de5d5bfa), the chat-build tests
+  under t200's window rule (t214), t200's loss of the Lab artifact screen (t212), dev's stale Core dist hiding a bad import
+  (now refused by the test scripts and `pnpm check`), the web taxonomy missing `onboarding`, and `evidence-loop/` over 25 files.
+- Validation (Core `e458f1ea` + docs `37ff0989`, downstream `a099165e`): `CORE_BUILD=0`, `CORE_CHECK=0`, `pnpm docs:check` ->
+  "Deterministic framework reference is current." after regeneration; Core vitest runtime+storage+ui `4526 passed, 9 failed`,
+  all nine 15 s timeouts in heavy service tests, no assertion failure; alone, `execution-digest` 4/4, `modes` 4/4, `flow-map`
+  2/2, and four still time out at 15 s (run-detail-preservation, adaptive-loop auto-apply, instruction-readiness,
+  subflow-pagination); web `1457 passed (1457)`; `DS_BUILD=0`, `DS_CHECK=0`; extension `# pass 1673 # fail 0`; domain
+  `# pass 1057 # fail 0`; scenario-lab `# pass 620 # fail 0`; test-runner `# pass 1726 # fail 0`.
+- Outcome: Pushed as a validated checkpoint with the heavy-service-test timeouts stated, not hidden; t215 owns their speed.
+  t210 (the last caps: harness token defaults, the ranked 64-node catalog, the 512-address navigation memory) merges
+  before live runs resume. Pass streak 0.
+
 ## Open Questions
 
 - Which complex scenario goes first? `everything-store` is the known multi-step
