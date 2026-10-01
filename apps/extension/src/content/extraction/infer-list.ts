@@ -22,6 +22,14 @@
 // fields. Skipping `<td>` and `<th>` is what makes picking a cell propose the
 // twelve rows rather than the four columns.
 //
+// **A label/value list is one record, not two runs** (`single-record/`). A
+// receipt's `<dl>` of `dt`/`dd` pairs groups into a run of `dd`s and a run of
+// `dt`s, each a record one field long; a pick inside one is read as the list's
+// own record instead, one item with a field per pair. Its pairs are skipped as
+// levels, as a table's cells are, so the run of `dd`s is never proposed. A run
+// of three or more inside a value -- a `dd` holding a list of tags -- is nearer
+// and still wins, and so does one enclosing the list -- a page of receipts.
+//
 // A level is only accepted once it can be named: `item-selector.ts` must find a
 // selector that matches exactly the run, and the item must expose at least one
 // field. A level that fails either is not the record -- the walk goes on
@@ -39,8 +47,9 @@ import { testIdFor } from "../describe-element";
 import { selectorFor } from "../selector";
 import { detectPagination } from "./detect-pagination";
 import { inferFields } from "./infer-fields";
-import { generalizedItemSelector } from "./item-selector";
+import { generalizedItemSelector, type ItemSelectorCandidate } from "./item-selector";
 import { isRecordPair } from "./record-pair";
+import { keyValueRecord } from "./single-record";
 
 /** What the page's own repeating evidence calls a template rather than a coincidence (`evidence/repeating.ts`). */
 const MIN_ITEMS_PER_RUN = 3;
@@ -58,15 +67,40 @@ export function isRecordItemTag(tagName: string): boolean {
  * repeating run that can be named and read.
  */
 export function inferListFromElement(picked: Element): WebAutomationExtractionProposal | undefined {
-  let pair: WebAutomationExtractionProposal | undefined;
+  const keyValue = enclosingKeyValueRecord(picked);
+  let nearest: WebAutomationExtractionProposal | undefined;
   for (let level: Element | null = picked; level && level !== document.documentElement; level = level.parentElement) {
+    if (keyValue && isPairOf(level, keyValue.list)) continue;
     const proposal = proposalForLevel(level);
-    if (!proposal) continue;
-    if (proposal.itemCount >= MIN_ITEMS_PER_RUN) return proposal;
-    // A pair: kept, and the walk goes on for a run it sits inside.
-    pair ??= proposal;
+    if (proposal && proposal.itemCount >= MIN_ITEMS_PER_RUN) return proposal;
+    // A pair, or the label/value list's own record: the nearest is kept, and
+    // the walk goes on for a run it sits inside. At the list's own level a pair
+    // of lists is the nearer claim, since it holds this one.
+    nearest ??= proposal ?? (level === keyValue?.list ? keyValue.record : undefined);
   }
-  return pair;
+  return nearest;
+}
+
+/** The label/value list `picked` is, or sits inside, read as its one record, or `undefined` when it is in none (`single-record/`). */
+function enclosingKeyValueRecord(picked: Element): { list: Element; record: WebAutomationExtractionProposal } | undefined {
+  const list = picked.closest("dl");
+  const record = list ? keyValueRecord(list, namedExactly) : undefined;
+  return list && record ? { list, record } : undefined;
+}
+
+/** Whether `level` is one of the list's pairs or one of a pair's terms and values, which are a record's fields and never records. */
+function isPairOf(level: Element, list: Element): boolean {
+  const parent = level.parentElement;
+  return parent === list || (parent?.parentElement === list && parent.tagName.toUpperCase() === "DIV");
+}
+
+/** The element's container and a selector naming the element and nothing else, or `undefined` when there is none. */
+function namedExactly(element: Element): { container: string; item: ItemSelectorCandidate } | undefined {
+  const container = element.parentElement;
+  if (!container || container === document.documentElement) return undefined;
+  const containerSelector = selectorFor(container);
+  const item = generalizedItemSelector([element], containerSelector);
+  return item ? { container: containerSelector, item } : undefined;
 }
 
 function proposalForLevel(level: Element): WebAutomationExtractionProposal | undefined {

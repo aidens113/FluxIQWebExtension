@@ -31,6 +31,15 @@
 // handle's selector but describe its element differently still resolve, since
 // they name one address, but with only the identity fields they agree on.
 //
+// A handle's element in a child frame also keeps the path of the document the
+// frame held when the element was shown (`frameUrlPath`), read off the frame
+// address the merge published with the element (`data-fluxiq-frame-url`). The
+// frame id names nothing once a Flow reloads the page -- Chrome renumbers a
+// frame when it navigates -- and the path finds the same document again, as it
+// does for a recorded node (`output-nodes/payloads.ts`). The pathname only: the
+// origin differs run to run and the query may carry a token. Pages that agree on
+// a bare handle keep the newest path any of them gave.
+//
 // A look the model is not shown -- the one a node run takes before it acts --
 // is remembered too, and when it was cut short it is only added: its handles
 // join the page's and none the page already had is forgotten. A look describes
@@ -49,6 +58,8 @@
 // are for the extraction handles (`structure/handles.ts`).
 
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
+import { webAutomationUrlPath } from "../../../output-nodes";
+import type { WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webPlanElementIdentity, type WebPlanElementIdentity } from "./element-identity";
@@ -61,7 +72,7 @@ const REMEMBERED_STALE_PAGES = 64;
 export type WebLlmTargetScope = { projectId: string; flowId: string };
 
 export type WebLlmTargetResolution =
-  | { ok: true; selector: string; frameId: number | undefined; element: WebPlanElementIdentity }
+  | { ok: true; selector: string; frameId: number | undefined; frameUrlPath?: string; element: WebPlanElementIdentity }
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" };
 
 export type WebLlmTargetPackets = {
@@ -72,7 +83,7 @@ export type WebLlmTargetPackets = {
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined): WebLlmTargetResolution;
 };
 
-type PageTarget = { selector: string; frameId: number | undefined; element: WebPlanElementIdentity; shared: boolean };
+type PageTarget = { selector: string; frameId: number | undefined; frameUrlPath: string | undefined; element: WebPlanElementIdentity; shared: boolean };
 type PageTargets = Map<string, PageTarget>;
 type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string> };
 
@@ -132,6 +143,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
         seen.set(address, known === undefined ? target : {
           selector: known.selector,
           frameId: known.frameId,
+          frameUrlPath: target.frameUrlPath ?? known.frameUrlPath,
           element: agreedIdentity(known.element, target.element),
           shared: known.shared || target.shared
         });
@@ -152,7 +164,13 @@ function targetsOf(binding: WebLlmSnapshotBinding): PageTargets {
   for (const element of binding.evidence.elements) {
     const selector = binding.selectors.get(element.target);
     if (selector === undefined) continue;
-    const target: PageTarget = { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target)), shared: false };
+    const target: PageTarget = {
+      selector,
+      frameId: element.frameId,
+      frameUrlPath: webLlmFrameUrlPath(element),
+      element: webPlanElementIdentity(element, selector, binding.shadowHosts?.get(element.target)),
+      shared: false
+    };
     const address = addressOf(target);
     uses.set(address, (uses.get(address) ?? 0) + 1);
     targets.set(element.target, target);
@@ -190,7 +208,26 @@ function addressOf(target: PageTarget): string {
 
 /** A resolution whose identity is the caller's own copy, so nothing done to it reaches the store. */
 function resolved(target: PageTarget): WebLlmTargetResolution {
-  return { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+  const resolution: Extract<WebLlmTargetResolution, { ok: true }> = { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+  if (target.frameUrlPath !== undefined) resolution.frameUrlPath = target.frameUrlPath;
+  return resolution;
+}
+
+/** The attribute the frame merge publishes a child frame's element with: its frame document's URL, screened as a link is. */
+const FRAME_URL_ATTRIBUTE = "data-fluxiq-frame-url";
+
+/**
+ * The pathname of the document a child frame's element was shown in, by the
+ * rule a recorded node's path follows (`output-nodes/url-path.ts`); nothing for
+ * the top frame, for a frame whose document is not http(s), or for an element
+ * published without its frame's address.
+ */
+function webLlmFrameUrlPath(element: WebLlmEvidenceElement): string | undefined {
+  if (element.frameId === undefined || element.frameId <= 0) return undefined;
+  const url = element.attributes?.find(([name]) => name.toLowerCase() === FRAME_URL_ATTRIBUTE)?.[1];
+  if (url === undefined || !URL.canParse(url)) return undefined;
+  const parsed = new URL(url);
+  return parsed.protocol === "http:" || parsed.protocol === "https:" ? webAutomationUrlPath(parsed.pathname) : undefined;
 }
 
 /**

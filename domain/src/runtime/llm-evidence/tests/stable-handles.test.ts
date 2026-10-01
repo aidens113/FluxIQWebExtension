@@ -352,3 +352,116 @@ test("a renumbered parent still names the element's ancestor", () => {
   assert.equal(main?.target, "t2");
   assert.equal(binding.evidence.elements.find((element) => element.text === "Second")?.parent, "t2");
 });
+
+// Layers that come and go (C1, `run-mup2i28c-6c7fc209`). A popup, a dialog or a
+// cookie banner the page puts beside its main column is one more `div` under
+// `body`, and every positional selector behind it moves. The controls behind it
+// keep their handles; the layer's own controls get handles of their own.
+
+const STORE_URL = "https://shop.example/store";
+
+/** The page's main column under `prefix`, its selectors written as the extension generates them. */
+function mainColumn(prefix: string): JsonObject[] {
+  return [
+    { tagName: "button", selector: `${prefix} > header > button:nth-of-type(1)`, visibleText: "Pickup or delivery?" },
+    { tagName: "a", selector: `${prefix} > main > a`, visibleText: "Wireless earbuds", attributes: { href: "/p/1" } },
+    { tagName: "button", selector: `${prefix} > main > button`, visibleText: "Add to cart" }
+  ];
+}
+
+function handlesOf(shown: Array<{ target: string; name: string }>, names: string[]): string[] {
+  return names.map((name) => {
+    const found = shown.find((line) => line.name === name);
+    assert.ok(found, `${name} is shown: ${JSON.stringify(shown)}`);
+    return found.target;
+  });
+}
+
+const MAIN = ["Pickup or delivery?", "Wireless earbuds", "Add to cart"];
+
+test("a popup inserted before the main column moves every position, and every control behind it keeps its handle", async () => {
+  let elements = mainColumn("body > div");
+  const runtime = runtimeOver(() => ({ url: STORE_URL, elements }));
+  const before = handlesOf(await inspect(runtime), MAIN);
+
+  const popup = [
+    { tagName: "h2", selector: "body > div:nth-of-type(1) > h2", visibleText: "Get $10 off your first pickup order" },
+    { tagName: "button", selector: "body > div:nth-of-type(1) > button", visibleText: "No thanks" }
+  ];
+  elements = [...popup, ...mainColumn("body > div:nth-of-type(2)")];
+  const during = await inspect(runtime);
+  assert.deepEqual(handlesOf(during, MAIN), before, "the controls behind the popup keep their handles");
+  const [noThanks] = handlesOf(during, ["No thanks"]);
+  assert.equal(before.includes(noThanks!), false, "the popup's own control is a control of its own");
+  // The handle the model was shown still resolves, to where the control is now.
+  assert.equal(await selectorFor(runtime, before[0]!), "body > div:nth-of-type(2) > header > button:nth-of-type(1)");
+
+  elements = mainColumn("body > div");
+  assert.deepEqual(handlesOf(await inspect(runtime), MAIN), before, "and keep them once it has closed");
+  assert.equal(await selectorFor(runtime, before[0]!), "body > div > header > button:nth-of-type(1)");
+});
+
+test("a dialog that takes the main column's old position never takes its controls' handles", async () => {
+  // The page already has two divs, so the main column's selectors are
+  // positional from the start; the dialog opens first in the body and its
+  // header button lands on exactly the main column's old selector.
+  const footer = { tagName: "a", selector: "body > div:nth-of-type(2) > a", visibleText: "Help", attributes: { href: "/help" } };
+  let elements: JsonObject[] = [...mainColumn("body > div:nth-of-type(1)"), footer];
+  const runtime = runtimeOver(() => ({ url: STORE_URL, elements }));
+  const before = handlesOf(await inspect(runtime), [...MAIN, "Help"]);
+
+  const dialog = [
+    { tagName: "div", selector: "body > div:nth-of-type(1)", role: "dialog", accessibleName: "Choose a store" },
+    { tagName: "button", selector: "body > div:nth-of-type(1) > header > button:nth-of-type(1)", visibleText: "Close" }
+  ];
+  elements = [...dialog, ...mainColumn("body > div:nth-of-type(2)"), { ...footer, selector: "body > div:nth-of-type(3) > a" }];
+  const during = await inspect(runtime);
+  assert.deepEqual(handlesOf(during, [...MAIN, "Help"]), before);
+  const [close] = handlesOf(during, ["Close"]);
+  assert.equal(before.includes(close!), false, "the dialog's Close is not the store button that was at its selector");
+  assert.equal(await selectorFor(runtime, close!), "body > div:nth-of-type(1) > header > button:nth-of-type(1)");
+  assert.equal(await selectorFor(runtime, before[0]!), "body > div:nth-of-type(2) > header > button:nth-of-type(1)");
+});
+
+test("a cookie banner appended after the main column, and dismissed, leaves every handle where it was", async () => {
+  let elements = mainColumn("body > div");
+  const runtime = runtimeOver(() => ({ url: STORE_URL, elements }));
+  const before = handlesOf(await inspect(runtime), MAIN);
+  elements = [...mainColumn("body > div:nth-of-type(1)"), { tagName: "button", selector: "body > div:nth-of-type(2) > button", visibleText: "Accept all" }];
+  const during = await inspect(runtime);
+  assert.deepEqual(handlesOf(during, MAIN), before);
+  const [accept] = handlesOf(during, ["Accept all"]);
+  assert.equal(before.includes(accept!), false);
+  elements = mainColumn("body > div");
+  const after = await inspect(runtime);
+  assert.deepEqual(handlesOf(after, MAIN), before);
+  assert.equal(after.some((line) => line.target === accept), false, "the banner's handle left with it");
+});
+
+test("a control inside a shadow root keeps its handle when an overlay moves its host's position (the store button of run 34)", async () => {
+  const storeButton = (hosts: string): JsonObject => ({ tagName: "button", selector: "button", visibleText: "Pickup or delivery?Carden Falls Supercenter", context: { shadowHosts: [hosts] } });
+  let elements: JsonObject[] = [storeButton("body > div > header > div > vr-fulfillment-picker")];
+  const runtime = runtimeOver(() => ({ url: STORE_URL, elements }));
+  const [store] = handlesOf(await inspect(runtime), ["Pickup or delivery?Carden Falls Supercenter"]);
+  elements = [storeButton("body > div:nth-of-type(1) > header > div > vr-fulfillment-picker"), { tagName: "button", selector: "body > div:nth-of-type(2) > button", visibleText: "Reject all" }];
+  assert.deepEqual(handlesOf(await inspect(runtime), ["Pickup or delivery?Carden Falls Supercenter"]), [store]);
+});
+
+test("a button whose label a press changed keeps its handle, but a list whose items changed is not paired up by count", async () => {
+  let elements: JsonObject[] = [
+    { tagName: "button", selector: "main > button", visibleText: "Add to cart" },
+    ...["Kinetra Buds", "Lumo Air", "Pulsebud Neo"].map((title, index) => ({ tagName: "a", selector: `ul > li:nth-of-type(${index + 1}) > a`, visibleText: title, attributes: { href: `/p/${index}` } }))
+  ];
+  const runtime = runtimeOver(() => ({ url: STORE_URL, elements }));
+  const before = await inspect(runtime);
+  const [add] = handlesOf(before, ["Add to cart"]);
+  const oldItems = handlesOf(before, ["Kinetra Buds", "Lumo Air", "Pulsebud Neo"]);
+  elements = [
+    { tagName: "button", selector: "main > button", visibleText: "Added" },
+    ...["Voltbay One", "Soundcore X", "Aria Mini"].map((title, index) => ({ tagName: "a", selector: `ul > li:nth-of-type(${index + 1}) > a`, visibleText: title, attributes: { href: `/p/${index + 10}` } }))
+  ];
+  const after = await inspect(runtime);
+  assert.deepEqual(handlesOf(after, ["Added"]), [add]);
+  const newItems = handlesOf(after, ["Voltbay One", "Soundcore X", "Aria Mini"]);
+  for (const handle of newItems) assert.equal(oldItems.includes(handle), false, `${handle} was another product's`);
+});

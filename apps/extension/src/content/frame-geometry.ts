@@ -7,9 +7,13 @@
 import { FRAME_GEOMETRY_REQUEST, FRAME_GEOMETRY_RESPONSE } from "./messages";
 import type { RectDescriptor } from "./types";
 
-let frameViewportOffset: RectDescriptor | undefined = isTopFrame()
-  ? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }
-  : undefined;
+// The child frame's cached offset. Nothing here reads `window` while the module
+// loads: the top frame's offset is computed whenever it is asked for
+// (`currentFrameViewportOffset`), so seeding it here bought nothing and made
+// every module that imports this one unloadable without a `window` -- the
+// extension's unit tests ran only when another test file had left one on the
+// global first.
+let frameViewportOffset: RectDescriptor | undefined;
 let frameGeometryRequestId = 0;
 
 export function isTopFrame(): boolean {

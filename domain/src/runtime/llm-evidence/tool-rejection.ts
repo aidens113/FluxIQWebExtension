@@ -103,6 +103,16 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  *   (`AS/runtime/parking/person-needed-ask.ts`).
  * - `target_covered`: something that is not a modal -- a banner, an overlay --
  *   lies over the control.
+ *
+ * Either of the last two is also said before anything is sent, with the reason
+ * `covered_by_layer`, when the look a press takes before it acts already shows
+ * the control `coveredBy` something: `target` is the control's handle,
+ * `instead` the handles of what covers it, and `page` the page with that layer
+ * in it -- its `COVERING` or `DIALOG` header line names it. Deal with the layer
+ * first (close it, or answer it), then press the control again. A press made
+ * through a cover used to be sent anyway: it closed a timed email popup by
+ * landing on its backdrop and was reported `succeeded`, while the store button
+ * underneath it never opened anything (`run-mup2i28c-6c7fc209`, C4, C9).
  * - `target_not_actionable`: the control is there but disabled or hidden.
  * - `target_not_found`: the control is no longer on the page, or no longer one.
  * - `page_changed`: the page navigated or was replaced while the action ran.
@@ -315,6 +325,7 @@ export const WEB_LLM_TOOL_REJECTION_REASONS = [
   "handle_in_wrong_parameter",
   "handle_in_another_frame",
   "handle_wrong_kind_of_control",
+  "covered_by_layer",
   "extraction_handle_required",
   "column_not_in_detected_list",
   "unexpected_input_keys",
