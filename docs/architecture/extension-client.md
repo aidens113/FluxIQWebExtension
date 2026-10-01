@@ -1776,6 +1776,11 @@ Older optional low-level callers retain omitted-ID compatibility and its risk.
 IDs provide correlation, not authorization or ordering of content commands.
 Receiver lifecycle and confirmation idempotence require separate validation.
 
+Chat question inputs submit on plain, unhandled Enter. Composing events,
+legacy IME key code229 and modified Enter leave the native event untouched;
+answer buttons retain their existing behavior. Conversation ownership and
+submission coordination remain in the existing Chat controller.
+
 The default development endpoints are:
 
 ```text

@@ -45,7 +45,9 @@ export function askControls(ask: CoreAsk, context: AskControlsContext): HTMLElem
       };
       send.addEventListener("click", submit);
       input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && !event.isComposing) submit();
+        if (event.key !== "Enter" || event.defaultPrevented || event.isComposing || event.keyCode === 229
+          || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        submit();
       });
       children.push(createElement("div", { className: "turn-answer-row" }, [input, send]));
       break;
