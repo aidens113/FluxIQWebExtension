@@ -19,7 +19,7 @@ const clickCommand: FluxIQRuntimeCommand = {
   parameters: { selector: "#go" }
 };
 
-async function runClick(payload: JsonObject): Promise<FluxIQRuntimeCommandResult> {
+async function runClick(payload: JsonObject, status = "succeeded"): Promise<FluxIQRuntimeCommandResult> {
   const fluxiq = {
     programs: {
       clientGateway: {
@@ -30,7 +30,7 @@ async function runClick(payload: JsonObject): Promise<FluxIQRuntimeCommandResult
           }]
         })
       },
-      automationStudioClientGateway: { executeAction: async () => ({ commandId: "client.command.click", status: "succeeded", payload }) }
+      automationStudioClientGateway: { executeAction: async () => ({ commandId: "client.command.click", status, payload }) }
     }
   } as unknown as FluxIQ;
   return await createWebAutomationRuntimeAdapter({ fluxiq }).execute(clickCommand, {});
@@ -75,4 +75,10 @@ test("a malformed checkWait puts no clearedWait on the runtime result", async ()
     const result = await runClick(clientPayload({ checkWait }));
     assert.equal("clearedWait" in result, false, JSON.stringify(checkWait));
   }
+});
+
+test("a failed runtime click carries the check it cleared before failing", async () => {
+  const result = await runClick(clientPayload({ status: "failed", checkWait: { waitedMs: 7 } }), "failed");
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.clearedWait, { waitedMs: 7 });
 });

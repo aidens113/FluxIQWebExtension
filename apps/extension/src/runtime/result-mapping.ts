@@ -1,5 +1,6 @@
 import {
   webAutomationActionFromGatewayCommand,
+  webAutomationClearedCheckWaitValue,
   webAutomationActionResultPayload,
   webAutomationActionTargetFromElement,
   webAutomationActionVisualTargetFromElement,
@@ -54,6 +55,7 @@ export function gatewayActionResultFromBrowserResult(result: BrowserActionResult
     status: result.status,
     startedAt: result.startedAt,
     completedAt: result.finishedAt,
+    clearedWait: webAutomationClearedCheckWaitValue(result.checkWait),
     message: result.message,
     target: result.element ? webAutomationActionTargetFromElement(result.element as never) as unknown as JsonObject : undefined,
     payload: compactObject({

@@ -124,6 +124,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     const { reading, checkWait } = await settleLandedReading(firstReading, tabId, LANDED_TAB_ACCESS, checkWaitBudgetMs(action, startedAt));
     const landing = { landed: await readTabUrl(tabId), title: await readTabTitle(tabId), loadFailed, reading, checkWait, drive };
     const result = navigationResult(action, startedAt, action.url, landing);
+    const clearedWait = clearedCheckWait(landing.checkWait);
+    if (clearedWait) result.checkWait = clearedWait;
     return withTarget(navigationPace ? withPaceNote(result, navigationPace) : result, tabId, frameId);
   }
 
@@ -303,9 +305,6 @@ function navigationResult(
     validation: { status: "passed", expected: comparison.expected, actual: `${comparison.actual}: ${movement.detail}${waited}${unread}` },
     ...page
   });
-  // The same wait as a fact, for a reader that must not parse the prose above.
-  const checkWait = clearedCheckWait(landing.checkWait);
-  if (checkWait !== undefined) completed.checkWait = checkWait;
   return completed;
 }
 
