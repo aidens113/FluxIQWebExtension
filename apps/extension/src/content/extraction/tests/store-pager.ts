@@ -24,6 +24,20 @@
 // tall, `scrollIntoView` scrolls it, and a page turn starts at the top again,
 // as a new document does: so twelve results reach below the fold, and the
 // last four exist only once something scrolled the sentinel into reach.
+//
+// **And the same pager drawn the ways other sites draw theirs** (t194-w30):
+// - `controls: "buttons"` is Guildline's people search (t194-w27 G1): every
+//   page control a `<button>` with no address, the current page a button
+//   marked `aria-current`, and Next a script's button -- which keeps the
+//   store's own bug, so from page two it loads page two;
+// - `current: "self-link"` is the marketplace's unfiltered search (t194-w26
+//   G5): nothing marked `aria-current`, the current page a link to the
+//   document showing it, and Previous and the numbers sharing one mark
+//   (`data-page-item`) that Next does not carry; `current: "unmarked"` is the
+//   same pager whose current page links somewhere else, so nothing on it says
+//   which page is current;
+// - `stuckOn` is a page every control of which loads that same page again:
+//   a list that goes on past a page the read cannot leave.
 
 /** One row of the fake document per element, and the viewport's height, in px. */
 const ROW_PX = 40;
@@ -114,6 +128,21 @@ export class FakeElement {
 
   click(): void {
     this.onClick?.();
+  }
+
+  /** One box while it is on the page and not `hidden`, none otherwise: whether it is painted. */
+  getClientRects(): unknown[] {
+    for (let node: FakeElement | null = this; node; node = node.parentElement) if (node.getAttribute("hidden") !== null) return [];
+    return this.isConnected ? [{}] : [];
+  }
+
+  /** `DOCUMENT_POSITION_PRECEDING` (2), `FOLLOWING` (4) or, for a descendant, `CONTAINED_BY | FOLLOWING` (20), by the order of one tree. */
+  compareDocumentPosition(other: FakeElement): number {
+    if (this.contains(other) && other !== this) return 20;
+    let top: FakeElement = this;
+    while (top.parentElement) top = top.parentElement;
+    const order = [top, ...descendants(top)];
+    return order.indexOf(other) > order.indexOf(this) ? 4 : order.indexOf(other) < order.indexOf(this) ? 2 : 0;
   }
 
   get nextElementSibling(): FakeElement | null {
@@ -220,31 +249,61 @@ export type LazyTail = { eager: number; lazy: number; loadMs: number };
 /** The everything store's own split: twelve drawn, four fetched, 600 ms after the sentinel comes within reach. */
 export const STORE_LAZY_TAIL: LazyTail = { eager: 12, lazy: 4, loadMs: 600 };
 
-function link(target: number, label: string, text: string, turnTo: (page: number) => void): FakeElement {
-  const element = new FakeElement("a", { href: pageHref(target), "aria-label": label }, text);
+/** How the pager draws its controls and its current page: see the header. */
+export type PagerStyle = {
+  controls?: "links" | "buttons";
+  current?: "aria" | "self-link" | "unmarked";
+  /** A page every control of which loads that page again. */
+  stuckOn?: number;
+};
+
+/** The Next a `next` read names on a pager drawn with `controls: "buttons"`. */
+export const NEXT_BUTTON = 'button[data-next="true"]';
+/** What Previous and the numbers share on a pager drawn with `current: "self-link"` or `"unmarked"`, and Next does not. */
+export const PAGE_ITEM = "a[data-page-item]";
+
+/** A control that loads `target` when pressed: a link to it, or a script's button with no address. */
+function control(target: number, label: string, text: string, turnTo: (page: number) => void, style: PagerStyle, extra: Record<string, string> = {}): FakeElement {
+  const element = style.controls === "buttons"
+    ? new FakeElement("button", { type: "button", "aria-label": label, ...extra }, text)
+    : new FakeElement("a", { href: pageHref(target), "aria-label": label, ...extra }, text);
   element.onClick = () => turnTo(target);
   return element;
 }
 
-/** The store's pager for `page`, markup for markup; `turnTo` is what pressing one of its links does. */
-function pager(page: number, turnTo: (target: number) => void): FakeElement {
+/** The store's pager for `page`, markup for markup unless `style` draws it another site's way; `turnTo` is what pressing one of its controls does. */
+function pager(page: number, turnTo: (target: number) => void, style: PagerStyle = {}): FakeElement {
+  const lead = (target: number): number => (style.stuckOn === page ? page : target);
+  const item: Record<string, string> = style.current === "self-link" || style.current === "unmarked" ? { "data-page-item": "" } : {};
   const previous = page > 1
-    ? link(page - 1, `Go to previous page, page ${page - 1}`, "Previous", turnTo)
+    ? control(lead(page - 1), `Go to previous page, page ${page - 1}`, "Previous", turnTo, style, item)
     : new FakeElement("span", { "aria-disabled": "true" }, "Previous");
   const numbers: FakeElement[] = [];
   let last = 0;
   for (const target of shownPages(page)) {
     if (target > last + 1) numbers.push(new FakeElement("span", { "aria-hidden": "true" }, "…"));
-    numbers.push(target === page
-      ? new FakeElement("span", { "aria-current": "page", "aria-label": `Current page, page ${target}` }, String(target))
-      : link(target, `Go to page ${target}`, String(target), turnTo));
+    numbers.push(target !== page
+      ? control(lead(target), `Go to page ${target}`, String(target), turnTo, style, item)
+      : currentPage(page, turnTo, style, item));
     last = target;
   }
   // The store's own bug: on page two, Next leads back to page two.
   const next = page < PAGE_COUNT
-    ? link(page === 2 ? 2 : page + 1, `Go to next page, page ${page + 1}`, "Next", turnTo)
-    : new FakeElement("span", { "aria-disabled": "true" }, "Next");
+    ? control(lead(page === 2 ? 2 : page + 1), `Go to next page, page ${page + 1}`, "Next", turnTo, style, style.controls === "buttons" ? { "data-next": "true" } : {})
+    : new FakeElement(style.controls === "buttons" ? "button" : "span", { "aria-disabled": "true" }, "Next");
   return new FakeElement("nav", { role: "navigation", "aria-label": "pagination" }, "", [previous, ...numbers, next]);
+}
+
+/** The current page as the pager draws it: marked text, a marked button, or a link with no mark -- to this page or, unmarked, elsewhere. */
+function currentPage(page: number, turnTo: (target: number) => void, style: PagerStyle, item: Record<string, string>): FakeElement {
+  if (style.current === "self-link") return control(page, `Go to page ${page}`, String(page), turnTo, style, item);
+  if (style.current === "unmarked") {
+    const element = new FakeElement("a", { href: `${pageHref(page)}&from=pager`, "aria-label": `Go to page ${page}`, ...item }, String(page));
+    element.onClick = () => turnTo(page);
+    return element;
+  }
+  if (style.controls === "buttons") return control(page, `Current page, page ${page}`, String(page), turnTo, style, { "aria-current": "page" });
+  return new FakeElement("span", { "aria-current": "page", "aria-label": `Current page, page ${page}` }, String(page));
 }
 
 /** Cards `first` to `last` of a page (four by default); the second is a product whose own link reads "Next", which is never the pager's. */
@@ -279,7 +338,7 @@ function resultsOf(page: number, tail: LazyTail | undefined, scrolled: Viewport)
  * the top, and records where it led. With `lazyTail`, each page's results end
  * in the store's sentinel (see the header).
  */
-export function storePage(page: number, options: { pager?: "drawn" | "late" | "none"; lazyTail?: LazyTail } = {}): StorePage {
+export function storePage(page: number, options: { pager?: "drawn" | "late" | "none"; lazyTail?: LazyTail } & PagerStyle = {}): StorePage {
   const saved = {
     document: (globalThis as Record<string, unknown>).document,
     window: (globalThis as Record<string, unknown>).window,
@@ -298,7 +357,7 @@ export function storePage(page: number, options: { pager?: "drawn" | "late" | "n
     scrolled.scrollY = 0;
     // A pager drawn with the list is redrawn with it, for the page it now shows.
     if (nav.parentElement) {
-      const redrawn = pager(target, turnTo);
+      const redrawn = pager(target, turnTo, options);
       nav.replaceWith(redrawn);
       nav = redrawn;
     }
@@ -308,7 +367,7 @@ export function storePage(page: number, options: { pager?: "drawn" | "late" | "n
     new FakeElement("a", { href: "/dp/W2" }, "Popular charging case")
   ]);
   const column = new FakeElement("div", {}, "", [results, widget]);
-  let nav = pager(page, turnTo);
+  let nav = pager(page, turnTo, options);
   if ((options.pager ?? "drawn") === "drawn") column.append(nav);
   const rail = new FakeElement("aside", {}, "", [new FakeElement("a", { href: pageHref(1) + "&stars=4", "aria-label": "4 Stars & Up" }, "4 Stars & Up")]);
   const main = new FakeElement("main", {}, "", [

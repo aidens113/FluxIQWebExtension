@@ -12,6 +12,15 @@
 // answer says so with `minItems: 0`. An empty list on a sign-in gate is
 // reported as `auth_required` by `results.ts`, which sees every result.
 //
+// **Rows that read nothing are not an answer** (supervisor's decision on
+// t194-w25 G4, 2026-10-01). A read whose every returned record is empty --
+// every declared field of every row read nothing -- found the list and read its
+// fields off the wrong element: a Flow built on one layout of a page and played
+// on another (the auction's gallery view) answered ten empty rows and passed.
+// It now fails, whatever `minItems` says, so the model is told it read nothing
+// (the domain names it `records_have_no_fields`) instead of storing an empty
+// table as the answer.
+//
 // Beside the records, every read that returned reports its own account as the
 // result's `extraction` (C2): how many records, how many pages, whether a cap
 // cut it short, how many items the selector named, how many rows came back
@@ -161,7 +170,7 @@ function conditionsOf(report: NonNullable<Outcome["conditions"]>): NonNullable<E
  */
 function validationFor(outcome: Outcome, minItems: number, expected: string): BrowserActionValidation {
   const gap = recordGap(outcome);
-  if (outcome.records.length >= minItems && outcome.missingFields.length === 0) {
+  if (outcome.records.length >= minItems && outcome.missingFields.length === 0 && !everyRecordEmpty(outcome)) {
     return { status: "passed", expected, actual: `${readSummary(outcome)}; ${gap ?? "every declared field present"}` };
   }
   const shortfalls = [
@@ -170,6 +179,11 @@ function validationFor(outcome: Outcome, minItems: number, expected: string): Br
     ...(gap ? [gap] : [])
   ];
   return { status: "failed", expected, actual: `${readSummary(outcome)}; ${shortfalls.join("; ")}` };
+}
+
+/** Whether rows came back and not one declared field of any of them read anything (see the header). */
+function everyRecordEmpty(outcome: Outcome): boolean {
+  return outcome.records.length > 0 && (outcome.emptyRecords ?? 0) === outcome.records.length;
 }
 
 /**
@@ -183,7 +197,7 @@ function recordGap(outcome: Outcome): string | undefined {
   if (blank.length === 0 && incomplete === 0) return undefined;
   const rows = `${count(incomplete, "record")} short of a declared field`;
   const empty = outcome.emptyRecords ?? 0;
-  const whole = empty > 0 && empty === outcome.records.length && outcome.records.length > 0
+  const whole = empty > 0 && everyRecordEmpty(outcome)
     ? ", and every returned record is empty, so the fields were read off the wrong element"
     : "";
   return blank.length === 0 ? `${rows}${whole}` : `${rows}, blank in ${blank.join(", ")}${whole}`;

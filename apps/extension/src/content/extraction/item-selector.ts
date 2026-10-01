@@ -87,9 +87,24 @@ export function generalizedItemSelector(run: readonly Element[], container: stri
     tagName: first.tagName,
     role: first.getAttribute("role") ?? undefined,
     testIds: run.map(testIdOf),
-    classes: first.classList
+    classes: sharedClasses(run)
   };
   return itemSelectorCandidates(parts).find((candidate) => selects(candidate.selector, run));
+}
+
+/**
+ * The classes every item of the run carries, which is what `classes` promises.
+ * Until 2026-10-01 this was the first item's own list, and a run whose first
+ * item is drawn apart was named by the class that set it apart: a pager draws
+ * its current page as the same link with one class more (`a.pageLink.pageCurrent`
+ * beside `a.pageLink`), so the only structural candidate named the current page
+ * alone and the pager was proposed as no pagination at all (t194 G2, G4).
+ */
+function sharedClasses(run: readonly Element[]): string[] {
+  const [first, ...rest] = run;
+  if (!first) return [];
+  const others = rest.map((element) => new Set(element.classList));
+  return [...first.classList].filter((name) => others.every((classes) => classes.has(name)));
 }
 
 /** Whether the selector answers with exactly this run, in the document's order. */

@@ -29,7 +29,9 @@
 //
 // A number is read by the rule a `where` bound reads one by
 // (`webAutomationExtractConditionNumber`): the first run of digits, thousands
-// separators dropped, so `$1,299.00` is 1299 and `£65,000 to £80,000` is 65000.
+// separators dropped, so `$1,299.00` is 1299 and `£65,000 to £80,000` is 65000;
+// a run whose separators can only be continental is read as written, so
+// `EUR 169,00` is 169 and `1.165,00 €` is 1165 (t194-w32).
 //
 // `auto` reads a column as dates when most of its values state one, as numbers
 // when most state one, and as text otherwise, deciding once per key over the

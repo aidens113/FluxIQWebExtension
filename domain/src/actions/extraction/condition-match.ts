@@ -24,6 +24,25 @@
 // number in it fails every numeric comparison, because a row with no price is
 // not a row under $50.
 //
+// A continental page writes a price with its separators the other way round:
+// "EUR 169,00", "1.165,00 €", "16,49 €". Until 2026-10-01 those read as 16900,
+// 1.165 and 1649, so a bound on a euro price kept and dropped the wrong lots
+// (auction-marketplace-kestrel-auctions, t194-w25 G3). The first number is now
+// read as written when its separators can only be continental:
+//
+// - a comma followed by one or two digits and nothing more ("169,00", "14,5",
+//   "16,49") is a decimal comma, since a thousands group always has three;
+// - dot groups of three before a decimal comma ("1.165,00", "1.234.567,8")
+//   are thousands, since the comma after them is the decimal;
+// - two or more dot groups of three and no comma ("1.165.000") are thousands,
+//   since a number has at most one decimal point.
+//
+// Every other form reads as it always has, with the comma as the thousands
+// separator and the dot as the decimal: "£1,165.00" is 1165 and "1.5" is 1.5.
+// A lone group of three, "1,165" or "1.165", could be written either way, and
+// keeps that reading (1165 and 1.165) because nothing in the text says
+// otherwise.
+//
 // One count is written differently: a named one and "N others". "Aisha Khan
 // and 4 other mutual friends" is five mutual friends, and "Liked by Sam and 12
 // others" is thirteen likes, so a value that names someone before any digit
@@ -96,6 +115,16 @@ const DELIMITED_PATTERN = /^\/(.+)\/([a-z]*)$/su;
 
 /** The first number written in a value: an optional sign, digits with group separators, and an optional fraction. */
 const NUMBER = /-?\d[\d,]*(?:\.\d+)?/u;
+
+/** The first number written in a value with every separator between its digits, so its separators can be read as a whole. */
+const SEPARATED_NUMBER = /-?\d+(?:[.,]\d+)*/u;
+
+/**
+ * The separator forms only a continental page writes (see "What a value is"),
+ * each matched against the whole of `SEPARATED_NUMBER`'s match: a decimal comma
+ * with dot groups before it, a decimal comma alone, and dot groups alone.
+ */
+const CONTINENTAL_NUMBER = /^-?(?:\d{1,3}(?:\.\d{3})+,\d+|\d+,\d{1,2}|\d{1,3}(?:\.\d{3}){2,})$/u;
 
 const BOUND_HOLDS: Record<ConditionBound, (value: number, bound: number) => boolean> = {
   atLeast: (value, bound) => value >= bound,
@@ -201,6 +230,11 @@ export function webAutomationExtractConditionNumber(value: string): number | und
   if (named !== null) {
     const others = Number(named[1]!.replaceAll(",", ""));
     if (Number.isFinite(others)) return others + 1;
+  }
+  const separated = SEPARATED_NUMBER.exec(value);
+  if (separated !== null && CONTINENTAL_NUMBER.test(separated[0])) {
+    const number = Number(separated[0].replaceAll(".", "").replace(",", "."));
+    if (Number.isFinite(number)) return number;
   }
   const found = NUMBER.exec(value);
   if (found === null) return undefined;

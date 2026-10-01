@@ -6,7 +6,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { itemSelectorCandidates, type ItemSelectorParts, type ItemTestId } from "../item-selector";
+import { generalizedItemSelector, itemSelectorCandidates, type ItemSelectorParts, type ItemTestId } from "../item-selector";
+import { asElements, el, page } from "./selector-page";
 
 const CONTAINER = '[data-testid="product-list"]';
 
@@ -57,4 +58,32 @@ test("candidates are offered strongest first", () => {
   const confidences = itemSelectorCandidates(parts({ role: "row", testIds: testIds("row-1", "row-2", "row-3") })).map((candidate) => candidate.confidence);
   assert.deepEqual([...confidences].sort((left, right) => right - left), confidences);
   assert.ok(confidences.every((confidence) => confidence > 0 && confidence <= 1), confidences.join(" "));
+});
+
+// `classes` is the classes the items share, and the run is named by them, not
+// by the first item's own: a pager draws its current page as the same link
+// with one class more, and naming the run by that class named the current page
+// alone, so no candidate answered with the run (t194 G2, G4).
+test("a run whose first item carries one class more than the rest is named by the classes they all share", () => {
+  const run = [
+    el("a", { class: "pageLink pageCurrent", href: "?p=1" }, "1"),
+    el("a", { class: "pageLink", href: "?p=2" }, "2"),
+    el("a", { class: "pageLink", href: "?p=3" }, "3")
+  ];
+  const stood = page(el("body", {}, [el("main", {}, [el("nav", {}, [el("span", { class: "pageArrow" }, "‹"), ...run])])]));
+  try {
+    assert.deepEqual(generalizedItemSelector(asElements(run), "main > nav"), { selector: "main > nav > a.pageLink", confidence: 0.75 });
+  } finally {
+    stood.restore();
+  }
+});
+
+test("a run whose items share no class is named by its tag alone, and only where that names exactly the run", () => {
+  const run = [el("li", { class: "odd" }, "one"), el("li", { class: "even" }, "two")];
+  const stood = page(el("body", {}, [el("main", {}, [el("ul", {}, run)])]));
+  try {
+    assert.equal(generalizedItemSelector(asElements(run), "main > ul")?.selector, "main > ul > li");
+  } finally {
+    stood.restore();
+  }
 });
