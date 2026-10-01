@@ -49,7 +49,7 @@ function snapshot(layer: Layer): JsonObject {
     : { tagName: "div", selector: cover, accessibleName: "Get $10 off your first pickup order" };
   const popup: JsonObject[] = [layerElement, { tagName: "button", selector: `${cover} > button`, visibleText: "No thanks" }];
   const evidence: JsonObject = layer === "banner" ? {} : {
-    overlays: { tested: 3, blockedCount: 2, blockers: [{ selector: cover, label: layer === "dialog" ? "Choose a store" : "Get $10 off your first pickup order", blocks: 2, blocked: [storeButton, `${main} > main > a`], ...(layer === "overlap" ? {} : { kind: layer === "dialog" ? "consent" : "promotion" }) }] }
+    overlays: { tested: 3, blockedCount: 2, blockers: [{ selector: cover, label: layer === "dialog" ? "Choose a store" : "Get $10 off your first pickup order", blocks: 2, blocked: [storeButton, `${main} > main > a`], kind: layer === "overlap" ? undefined : layer === "dialog" ? "consent" : "promotion" }] }
   };
   if (layer === "dialog") evidence.dialogs = { open: [{ selector: cover, role: "dialog", label: "Choose a store", modal: true }] };
   return {
