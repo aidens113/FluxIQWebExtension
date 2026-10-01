@@ -18,8 +18,14 @@
 //
 // Not a message: a pure status change, a decision still being made
 // ("Deciding the next step", no text: the live line says it), a build's
-// start and finish markers (the live line and the answer say those), and
-// Core's own bookkeeping (`isInternalStep`).
+// start and finish markers (the live line and the answer say those), a note
+// with no words, and Core's own bookkeeping (`isInternalStep`). A note with no
+// words is a call Core made for itself -- the look before the first decision,
+// the dry run putting the page back -- which the live line says while it
+// runs; as a message it was a bare heading, twice, once as it started and
+// once as it ended (live runs 34 and 35: "Looking at the page").
+// What the person asked the work (`request`) is their message, not a step
+// (`../stream-items.ts`).
 //
 // Every action is a card (`actionCard`): an icon for its kind, what it acted
 // on, and how it went. The actions (`tool`) a decision led to are that
@@ -258,6 +264,7 @@ export function stepMessages(events: readonly ClientGatewayActivity[], limit: nu
       if (!marker && status === "started") unit.step = placed;
       continue;
     }
+    if (detail.kind === "note" && words.text === undefined) continue;
     add(event, detail, detail.kind, at, null);
   }
 
