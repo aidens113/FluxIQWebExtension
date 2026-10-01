@@ -87,11 +87,21 @@ Core is at `1e27fbd8`; downstream is round 4 plus this handoff.
   `fxwork/t223/!FluxIQWebExtension/docs/working/language-driven-flow-loop-plan/reports/t223-compact-page-view.md`.
   - The format rules are fixed.
   - W1 (measurement) is done.
-  - W2 (capture: `ownText`, `parent`, `includeHidden`) and W3 (the `tN` handle form) were running at the stop. The
-    extension passed 1692/1692 after W2.
-  - Still to do: W4 (elements, sanitize, stable handles, `page-view/`), W5 (wiring every path in the report's "Every
-    path an element reaches a model" table), W6 (`page-find/`), W7 (tool registration and descriptions), W8 (measure a
-    whole decide request before and after).
+  - At the lead's stop: W2 (capture: `ownText`, `parent`, `includeHidden`), W3 (`tN` handles) and W4 (element fields,
+    hidden-proof handles, a `web-state.v3` digest, the new `domain/src/runtime/llm-evidence/page-view/`) are built.
+    - The view is not wired in yet: the model still gets v2 packets.
+    - The extension passed 1692/1692 (lead-run).
+    - Re-run before trusting them: W4's domain 1130/1130 and W3's Core 1,597 passed (both worker-reported only).
+  - Measured view: 20 pages 2,174,142 B down to 116,258 B (5.3%).
+    - everything-store start 2,791 B, bigbox start 5,927 B, everything-store results 13,754 B. All three beat the
+      approved example.
+  - One whole decide request on the results page today: 1,413,957 B, about 471k tokens (the provider recorded 477,506).
+    - Pages are 95.6% of it, and 4 of them are earlier pages.
+    - 41% is `read.snapshot`, a raw page copy inside node-run outcomes. W5 must remove it (lane B's W1 removes it on a
+      press).
+  - Still to do: re-run the domain check and tests; W5, wiring every path in the report's "Every path an element reaches
+    a model" table; W6, `page-find/`; W7, registration and descriptions; then the after-measurement with
+    `t223-request-measure.mjs --publish`.
 - Lane B routed C1-C4 and C9 to t223. Handles keyed on an `nth-of-type` selector are renumbered when a popup appears
   (`stable-handles.ts`).
 
