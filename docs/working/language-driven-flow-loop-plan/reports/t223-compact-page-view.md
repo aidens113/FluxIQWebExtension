@@ -199,6 +199,20 @@ The supervisor then cut phase B to the shortest mergeable checkpoint, and set a 
   - None of the 384 dev-only or dev-changed test files uses the evidence runtime or reads `elements`, `failureEvidence` or `stateDiff` (checked with `git show dev:<file>`).
   - Dev's two changes in `llm-evidence/` are lane B's B1 `observed-state/` keys (`elements`, `dialogs`, `blockedBy`, `page`), which are compatible with v3.
   - So the rest of dev's 126 failures could not be reproduced here. The supervisor should merge dev into the branch, or send the failing list.
+- **After the supervisor merged dev (`621a7364`: round 6, F15, B1/T2/T3, the fake-DOM fix).**
+  - First, rebuild Core's libraries: the merge left Core's dist 88 minutes behind its source, and `core-build.mjs` stops the suite.
+  - Then the suite gave `# tests 2128 # pass 2017 # fail 111`. All 111 failed with the same error, `Cannot set property ownerDocument of #<_FakeElement> which has only a getter`, in `panel/extraction/tests/*` (103) and `panel/settings/tests/settings-recovery.test.ts` (8).
+  - **Classification: neither (a) nor (b) of t223.** Two dev commits collide in test support:
+    - `cfecc984`, the fake-DOM fix, gave `FakeElement` a getter-only `ownerDocument`;
+    - round 6 (t224) assigns it: `dialog-dom.ts` through a constructor parameter property, `settings-recovery.test.ts` through `Object.assign`.
+  - **Dev's extension typecheck was failing too:** TS2610 (a property overriding the accessor) in `dialog-dom.ts`, `recording/review/tests/recording-review.test.ts` and `settings/tests/forget-confirmation.test.ts`.
+  - **Fix, test support only:**
+    - the three subclasses override `ownerDocument` with a getter;
+    - `settings-recovery.test.ts` defines the property instead of assigning it.
+
+    No product code changed.
+  - Of the 118 names in the coordinator's dev list, the other 7 are the store-chooser tests, class (a), fixed in `cc874339`.
+  - **After:** `heavy.sh pnpm --filter @fluxiq-web-extension/extension check` → exit 0; `heavy.sh pnpm --filter @fluxiq-web-extension/extension test` → `# tests 2128 # pass 2128 # fail 0`.
 
 **Phase C, done:**
 - **The host-runtime `summary` is the v3 page**, so Core's `core.state_snapshot` returns the compact view. `runtime/host-runtime.ts` uses `publishedWebLlmPage(sanitizeWebLlmSnapshot(...))`.

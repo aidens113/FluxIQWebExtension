@@ -14,7 +14,8 @@ async function fixture(body: (context: {
     const doc = document as unknown as { activeElement: FakeElement | null; visibilityState: string; focused: boolean; hasFocus(): boolean; createElement(tag: string): FakeElement };
     doc.activeElement = null; doc.focused = true; doc.hasFocus = () => doc.focused;
     class FocusElement extends FakeElement {
-      readonly ownerDocument = doc;
+      // A getter, as `FakeElement`'s own is (`cfecc984`): a property may not override it.
+      get ownerDocument(): typeof doc { return doc; }
       get parentElement(): FakeElement | null { return this.parentNode; }
       contains(node: FakeElement): boolean { return node === this || this.descendants().includes(node); }
       hasAttribute(name: string): boolean { return this.attributes.has(name); }
