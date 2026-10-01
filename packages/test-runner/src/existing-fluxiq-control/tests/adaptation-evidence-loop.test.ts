@@ -68,16 +68,25 @@ test("fewer trace rows than iterations is refused: every iteration wrote at leas
   assert.throws(() => adaptationEvidenceLoop(loop({ traceStepCount: 17, iterationCount: 18 }), "detail"), /exceeded its bounded contract/u);
 });
 
-test("more rows than two per decision is refused, and exactly two per decision is not", () => {
+test("two rows for every decision reads, and a row past Core's ceiling does not", () => {
   assert.equal(adaptationEvidenceLoop(loop({ providerCallCount: 64, decisionCount: 64, iterationCount: 65, traceStepCount: 129 }), "detail")?.traceStepCount, 129);
-  assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 64, decisionCount: 64, iterationCount: 65, traceStepCount: 130 }), "detail"), /exceeded its bounded contract/u);
+  // Core's row ceiling is one round's, two per decision and the opening look, for each of six live rounds (Core t214).
+  assert.equal(adaptationEvidenceLoop(loop({ providerCallCount: 64, decisionCount: 64, iterationCount: 70, traceStepCount: 774 }), "detail")?.traceStepCount, 774);
+  assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 64, decisionCount: 64, iterationCount: 70, traceStepCount: 775 }), "detail"), /exceeded its bounded contract/u);
+});
+
+// A Flow accepted after a repair publishes every live round, numbered across
+// the build, and counts each round's opening look as an iteration (Core t214).
+test("a build of several rounds counts each round's opening look, and no more than six", () => {
+  assert.equal(adaptationEvidenceLoop(loop({ providerCallCount: 20, decisionCount: 20, iterationCount: 23, traceStepCount: 25, toolCallCount: 15 }), "detail")?.iterationCount, 23);
+  assert.throws(() => adaptationEvidenceLoop(loop({ providerCallCount: 20, decisionCount: 20, iterationCount: 27, traceStepCount: 30 }), "detail"), /exceeded its bounded contract/u);
 });
 
 test("a build publishes one step per trace row, so its steps are bounded by the rows", () => {
   const steps = (count: number) => Array.from({ length: count }, () => ({ toolId: "core.run_node" }));
 
   assert.equal(adaptationEvidenceLoop(loop({ steps: steps(100) }), "detail")?.steps?.length, 100);
-  assert.throws(() => adaptationEvidenceLoop(loop({ steps: steps(130) }), "detail"), /exceeded its bounded contract/u);
+  assert.throws(() => adaptationEvidenceLoop(loop({ steps: steps(775) }), "detail"), /exceeded its bounded contract/u);
 });
 
 // A row used to be rebuilt as exactly `toolId`, `effectApplied` and
