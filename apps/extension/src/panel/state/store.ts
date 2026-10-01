@@ -5,6 +5,8 @@
 // status (every connection and recording command answers with one) publishes
 // that status too, so a view that sends Start recording sees the result without
 // asking again.
+// Status reads only publish while still current: a later read, push or command
+// acknowledgement supersedes a delayed getStatus reply.
 //
 // Failures never touch the status. They come back to the view that made the
 // request, as a sentence, and that view keeps showing it: a status render does
@@ -29,8 +31,11 @@ export type PanelStore = {
 export function createPanelStore(): PanelStore {
   let status: ExtensionStatus | undefined;
   const listeners = new Set<(status: ExtensionStatus) => void>();
+  let observations = 0;
+  let readGeneration = 0;
 
   function publish(next: ExtensionStatus): void {
+    observations += 1;
     status = next;
     for (const listener of [...listeners]) listener(next);
   }
@@ -50,10 +55,13 @@ export function createPanelStore(): PanelStore {
       };
     },
     async request<T>(message: PanelMessage): Promise<PanelResult<T>> {
+      const isRead = message.type === RUNTIME_MESSAGES.getStatus;
+      const generation = isRead ? ++readGeneration : readGeneration;
+      const observed = observations;
       const result = await panelRequest<T>(message);
       if (result.ok) {
         const carried = (result.value as { status?: unknown } | undefined)?.status;
-        if (isStatus(carried)) publish(carried);
+        if (isStatus(carried) && (!isRead || generation === readGeneration && observed === observations)) publish(carried);
       }
       return result;
     }

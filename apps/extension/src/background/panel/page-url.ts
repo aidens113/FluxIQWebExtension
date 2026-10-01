@@ -12,8 +12,8 @@ export function acceptedPageUrl(value: unknown): string | undefined {
   return protocol === "http:" || protocol === "https:" ? value : undefined;
 }
 
-// `URL.canParse` arrived in Firefox 115 and the manifest still admits 109 (as
-// `open-fluxiq.ts` notes). A `TypeError` from the constructor is the one failure
+// `URL.canParse` arrived in Chrome 120 and the Chrome manifest still admits 116
+// (`shared/tests/no-url-can-parse.test.ts` holds every file to this). A `TypeError` from the constructor is the one failure
 // that means "not an address"; anything else is rethrown.
 function parsedProtocol(value: string): string | undefined {
   try {

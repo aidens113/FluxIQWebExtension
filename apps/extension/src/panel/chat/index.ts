@@ -30,4 +30,5 @@ export {
   type StepMessage
 } from "./stream";
 export type { ChatTarget } from "./target";
+export { createChatOwnerContext, type ChatOwner } from "./owner-context";
 export { emptyStateModel, isAtBottom, liveLineModel, stepText, type EmptyStateModel, type LiveLineModel } from "./view";

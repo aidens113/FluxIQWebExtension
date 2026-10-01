@@ -1,52 +1,61 @@
 # t193 live lane B: self-repair
 
-## State at stop (2026-10-01, session 3, by the user's order)
+## State at stop (2026-10-01, session 4, returned on the coordinator's order)
 
-No Lab is running from this lane and no worker is running. Nothing was committed, stashed or reset. This session made one
-live run: 34, `run-mup2i28c-6c7fc209` (bigbox pickup-cart redesigned), $0.1820 per the spend ledger, stage 2, no Flow.
-Its debug is `debugs/run-mup2i28c-6c7fc209.md`. Every task's pass streak is still 0.
+No Lab ran from this lane this session, and no worker ran: all three dispatches were refused by the 20-subagent limit,
+so the lead did the work itself. Nothing was committed, stashed or reset. Trees: downstream `a15a465e`, Core `f3778a8e`
+(round 5) plus the uncommitted work below. Every task's pass streak is still 0. Session 3's W1, W2 and C5-C7 are merged
+(round 5).
 
-**Ready to commit, each validated (detail and commands in the Fix log):**
-- **W1, downstream** (`fxwork/t193/!FluxIQWebExtension`): a node's `read` no longer carries the extension's raw page
-  record. Files: `domain/src/runtime/llm-evidence/node-run/{page-record.ts (new), rejected-rows.ts, run.ts (comment),
-  tests/press-raw-read.test.ts (new)}`. Validation: domain test -> `# tests 1065 # pass 1065 # fail 0`; domain check
-  rc 0; audit passed (135 warnings, 119 baselined).
-- **W2, Core** (`fxwork/t193/!FluxIQ`): the request prefix is stable, so DeepSeek's cache can hit. Files:
-  `runtime/llm/deepseek/{request-body.ts, system-prompt.ts}`, `runtime/llm/evidence-loop/tests/request-prefix.test.ts`
-  (new), and `runtime/llm/tests/{provider-cache-prefix, evidence-loop-provider, routing-context-packet}.test.ts`.
-- **C5-C7, Core:** the amendment held for its rerun, no act on a look, and every step's number shown. Files:
-  `runtime/flow-draft/{amendment.ts, entry.ts, step.ts, tests/look-positions.test.ts}`,
-  `runtime/llm/decision-handlers/{amendment.ts, types.ts}`, `runtime/llm/evidence-loop.ts`,
-  `runtime/llm/evidence-loop/{index.ts, held-amendments.ts, tests/held-amendments.test.ts, tests/draft-numbers.test.ts}`,
-  `runtime/llm/tests/evidence-loop-tool-failure.test.ts`, `runtime/tests/deepseek-bootstrap-exploration.test.ts`.
-- **Validation for W2 and C5-C7 together:** Core vitest, 235 files, 2568/2568; tsc rc 0; fluxiq build rc 0. The Core
-  audit's only failure is `service.ts` at 4506 lines against a 4505 baseline. That is on pushed dev (`e5b8f015`); this
-  lane did not touch `service.ts`.
-- **Docs, downstream:** this report; `debugs/run-mup2i28c-6c7fc209.md`; `reports/t193-{wS-press-raw-read,
-  wT-prompt-prefix, wU-run34-debug, wV-draft-amendments}.md`.
+**Ready to commit, each validated with narrow checks (commands and output in the Fix log, rows T3, T2, B1):**
+- **T3, Core: a person's no in a repair's exploration is a decline.** `R/recovery/runtime-exploration.ts`,
+  `R/action-permissions/gate.ts` (the `"refused"` alias is gone; `settle` can no longer grant on an unknown answer),
+  and their tests, plus the repair paragraph of `docs/architecture/automation-studio/llm-flow-bootstrap.md`.
+- **T2, Core: a sometimes-present interruption survives the test from the start.** The new
+  `R/flow-draft/sometimes-present.ts`; `R/flow-draft/{dry-run.ts, entry.ts, index.ts}`;
+  `R/llm/node-tools/dry-run-gate.ts`; tests in `R/flow-draft/tests`, `R/llm/node-tools/tests` and
+  `R/llm/decision-context/tests/{recorded-runs.ts, recorded-windows.test.ts}`. Run 4's completion 29 is now
+  scripted as today's check refuses it; the row says why.
+- **B1, Core and downstream: the current page whole; each superseded page replaced by its outcome.**
+  - Core: `R/llm/{context-window.ts, evidence-loop.ts, evidence-loop-decision.ts, loop-configuration.ts}`,
+    `R/llm/decision-context/shown.ts`, `R/llm/harness-options/{binding.ts, option.ts, registry.ts}`, and one same-line
+    field each in `R/service.ts` and `R/recovery/runtime-exploration.ts`. Tests: `R/llm/tests/context-window.test.ts`,
+    `R/llm/evidence-loop/tests/request-prefix.test.ts`, the new `R/llm/harness-options/tests/observed-state-keys.test.ts`
+    and `R/recovery/tests/runtime-exploration-views.test.ts`, and `R/llm/decision-handlers/tests/completion.test.ts`.
+    Doc: `llm-flow-bootstrap.md`.
+  - Downstream: the new `domain/src/runtime/llm-evidence/observed-state/` folder.
+  - **It is not active until the 3-line merge step in t223's `tools.ts`** (Fix log, B1 row).
+- **Validation, final state:**
+  - Core vitest over every changed directory: 77 files, 784/784.
+  - Core `tsc` rc 0; Core audit passed (206 warnings, 353 baselined).
+  - Downstream: domain `check` rc 0; the new domain test 2/2; downstream audit passed (137 warnings, 118 baselined).
+- Docs, downstream: this report.
 
-**Half-done or not verified:**
-- The domain suite (1065/1065) ran against Core with W2 only. It was not re-run after C5-C7 changed Core's draft code.
-- C6 refuses under the borrowed reason `not_a_kept_step`. Its own reason, `not_a_flow_step`, needs one line in each of
-  t210's `llm/draft-amendment-feedback.ts` and `flow-bootstrap/evidence-loop-steps.ts`; the exact lines are in wV's
-  report.
+**Not verified:**
+- Live behaviour of all three.
+- The whole domain and Core suites (not run, by the user's no-full-suites rule).
+- `R/tests` beyond the request-prefix row, which drives the real service.
+- t223's v3 node-run result keeping the page under the `page` key: check it at merge.
+
+**Merge notes:**
+- `request-prefix.test.ts` (W2's) gained a row and a parameter.
+- `recorded-windows.test.ts`: run 4 now diverges at 29, 40, 44 and 46.
+- `automationStudioAskedAndGranted` has no caller left. It is public API in the generated reference, so it was kept.
+
+**Still open from session 3:**
+- C6 borrows the refusal reason `not_a_kept_step`. Its own reason, `not_a_flow_step`, needs one line in each of t210's
+  `llm/draft-amendment-feedback.ts` and `flow-bootstrap/evidence-loop-steps.ts` (`reports/t193-wV-draft-amendments.md`).
 - Held amendments are not on the `core.evidence_history` row.
 - The live cache hit after W2 is unmeasured.
-- Merge notes:
-  - t223 edits example text in the same Core `system-prompt.ts` as W2, in a different hunk.
-  - W2 moves an evidence decision's routing context from `context.flowBootstrap.routing` to `context.routing`.
-- Routed, not fixed:
-  - C1-C4 and C9 go to t223 or the supervisor. C1 is the handles keyed on an `nth-of-type` selector that a popup
-    renumbers, in `stable-handles.ts`, which t223's W4 rewrites.
-  - B1, re-sending every superseded page whole, is a supervisor decision; it is less pressing after t223.
+- C1-C4 and C9 were routed to t223; check what t223's merge closed.
 
-**Exact next step:** once the supervisor lifts the Lab stop and has merged these fixes and t223:
-1. Fast-forward both trees.
-2. Rebuild Core's libraries.
-3. Re-run the domain suite.
-4. Start run 35, bigbox pickup-cart redesigned, through `scratchpad/t193/live-run-b.sh` (session `58ff9269`), to
-   measure the cache hits, page sizes and decision count with W1, W2, C5-C7 and the compact page.
-5. Debug it, then continue the task order.
+**Exact next step:** the supervisor commits these, merges dev (with t223) into both trees, and adds the 3 lines to
+`tools.ts`. Then:
+1. Rebuild Core's libraries.
+2. Run the domain `check`.
+3. Start run 35, bigbox pickup-cart redesigned, through `scratchpad/t193/live-run-b.sh`.
+4. Measure the input tokens per call: one page plus a reference per step, rather than every page.
+5. Debug it, and continue the task order.
 
 **Session 3 (2026-10-01, from ~04:50 UTC), after integration round 3 and t210 rounds 1-2.** Trees fast-forwarded to
 pushed dev (downstream `58fd0cd3`, Core `e5b8f015`); C2 and C3/C6/C9/K7 are on dev (Core `d6b50b5a`). Core libraries
@@ -107,6 +116,42 @@ runs: **$2.68**, of which **$1.92 (runs 10-32) was spent by the unattended keepe
 189 later launches failed on the empty balance and spent nothing. Every one of the 33 runs has its debug file. Session 2
 made one run (33) and two validated Core fix sets (C2; C3/C6/C9/K7), both waiting to be committed (Fix log).
 
+## Session 4 (2026-10-01, after round 5): three fixes that need no Lab
+
+Trees: downstream `a15a465e`, Core `f3778a8e` (round 5; W1, W2 and C5-C7 are merged there). Labs stay stopped until
+t223 lands; t223's files are not edited here. Core's dist predated round 5 (built 07:11 UTC), so the lead rebuilt it
+before any worker edited Core: `heavy.sh "t193 core libs build round5" pnpm --filter @fluxiq/contracts --filter fluxiq
+--filter @fluxiq/client-gateway-websocket build` (result in the fix log).
+
+**B1 design (the decision is the supervisor's recommendation).** Core cannot tell a page from an outcome: a node run's
+result is the page packet and the outcome flattened together (`web-llm-evidence.v2`: `elements`, `dialogs`,
+`blockedBy` beside `ok`, `status`, `pageChanged`, `control`, `read`), and t223's v3 puts the page in one `page` string.
+So the domain declares the page keys, as it already declares `deniedEvidenceKeys` on the evidence-runtime binding
+(`R/llm/harness-options/binding.ts`). Core keeps the newest entry carrying a page whole. In every earlier one it replaces
+exactly those keys with a reference to the entry that next carried a page. It never names the newest page, so a stub
+never changes once written and the request stays a byte prefix up to the last stub. The rest of the result is kept:
+what the step did and what changed. Order is unchanged and nothing is removed. The binding is built in t223's `tools.ts`,
+so the one wiring line there is a merge step.
+
+**Consent replay (task 2) direction.** Core already has the answer: `optional` routing (`R/flow-draft/routing.ts`, whose
+header names the consent-banner case). Nothing applies it when the model does not: t194's run 9 authored Accept as
+required, and the test from the start refused it as `unreproducible` (D1 keeps site data). The safety net goes into the
+dry run. An `unreproducible` step that claims no act, and without which every later step passed, is made optional on
+the draft; anything else still refuses, as runs 18, 21 and 33 require.
+
+**A person's no (task 3).** This applies t195-w18's build-side fix to `R/recovery/runtime-exploration.ts`
+(`reports/t195-w18-declined-ask-not-final.md`, open question 1).
+
+| Worker | Brief | Owns | Report |
+| --- | --- | --- | --- |
+| t193-wW (`worker-high`) | B1, as designed above | Core `R/llm/{context-window.ts, decision-context/**, evidence-loop.ts, evidence-loop/**, evidence-loop-decision.ts, harness-options/**, node-tools/run-node.ts}`, the Core docs on the window; downstream the new `domain/src/runtime/llm-evidence/observed-state/` | `reports/t193-wW-superseded-pages.md` |
+| t193-wX (`worker-high`) | the consent replay, as directed above | Core `R/flow-draft/**`, `R/llm/node-tools/{dry-run-gate, replay-draft, replay}.ts`, `R/flow-bootstrap/authoring/**`; downstream `node-run/{replay, replay-answer, verify}.ts` | `reports/t193-wX-sometimes-present-step.md` |
+| t193-wY (`worker-high`) | a declined answer is a decline in a repair's exploration | Core `R/recovery/runtime-exploration.ts` and its tests, `R/action-permissions/gate.ts` (alias removal only) | `reports/t193-wY-repair-decline.md` |
+
+**None of the three was dispatched.** All three Agent calls were refused: "Concurrent subagent limit reached. You can run 20
+subagents at once. Do not retry." The other lanes held the slots. The lead therefore does the three tasks itself, in
+the order 3, 2, B1, under the same file partition. Each fix is recorded in the fix log as it is validated.
+
 ## Top causes for the audit
 
 Recurring causes across runs 1-33, most runs first. "Stops at" is the stage the runs ended at (2 exploration, 4 replay,
@@ -149,6 +194,9 @@ Recurring causes across runs 1-33, most runs first. "Stops at" is the stage the 
 | W1 (session 3): a node's `read` never carries the extension's record of the page. `snapshot`, `element`, `visualTarget`, `resolution` and `structure` are taken out of what the model is shown; a read's own answer (extracted rows, `rejectedRows`, validation wording, dialog, url) stays whole; `recorded` (replay) is unchanged. Raw snapshots had ridden on press payloads since `ee25ac9e` (09-12); whole `read`s since `2e16cf00` (09-22, capped); t200's `b507d5fa` (09-30) removed the cap | domain `runtime/llm-evidence/node-run/{page-record.ts (new), rejected-rows.ts, run.ts (comment only), tests/press-raw-read.test.ts (new, 4 tests)}` (worker t193-wS, report `t193-wS-press-raw-read.md`) | run 34 | wS: with the fix reverted 3 of the 4 new tests fail. Lead, after Core was rebuilt with W2: `heavy.sh "t193 lead domain test" env DOMAIN_TEST_BUILD_LABEL=t193-lead pnpm --filter @fluxiq-web-extension/domain test` -> `# tests 1065 # pass 1065 # fail 0`; `heavy.sh ... domain check` -> rc 0, 0 `error TS`; `node scripts/structure-audit.mjs` -> `passed (135 warning(s), 119 baselined)` | **Ready to commit** (downstream); live pending (Labs stopped) |
 | W2 (session 3): an evidence decision's request is ordered so call N is a byte prefix of call N+1 through the last tool result they share. The constant head (task envelope, instruction, policy gates, node catalog) comes first, then the evidence window, then everything that varies: the offered tools, the counter, the routing context (moved from `flowBootstrap.routing` to `context.routing`), reusable context, and last `outputSchema`. Run 34 measured the three values that broke the prefix: `outputSchema` (rebuilt three times per build), the routing context (grows per new page state) and the tools (withdrawn at wrap-up). The system prompt states the reusable-context rule on every evidence decision, so it no longer changes when reusable context appears. Nothing is removed. Pricing already bills hits at DeepSeek flash's $0.006/M against $0.30/M for a miss (checked against the logged cost of call 2) | Core `runtime/llm/deepseek/{request-body.ts, system-prompt.ts}`, new `runtime/llm/evidence-loop/tests/request-prefix.test.ts` (worker t193-wT, report `t193-wT-prompt-prefix.md`); old-order tests updated by the lead from wT's diff: `runtime/llm/tests/{provider-cache-prefix, evidence-loop-provider, routing-context-packet}.test.ts` | run 34 | wT: the new test fails on HEAD ("call 1 -> 2: first difference at 3570, inside outputSchema...; must match through 46020") and passes after. Lead: `heavy.sh "t193 lead vitest llm" npx vitest run runtime/llm + tests/{deepseek-bootstrap-exploration, llm-deepseek-flow-bootstrap, deepseek-recovery-requests}.test.ts + recovery/annotation/tests + route-state/tests + service/flow-bootstrap-commands/tests` -> `Test Files 106 passed (106)`, `Tests 969 passed (969)`; `heavy.sh ... npx tsc --noEmit -p packages/fluxiq/tsconfig.json` -> rc 0; `heavy.sh ... pnpm --filter fluxiq build` -> rc 0; Core `node scripts/structure-audit.mjs` -> 1 violation, `runtime/service.ts: 4506 lines ... Baseline for this entry is 4505`, which is on pushed dev (`service.ts` unchanged here; dev's, not t193's) | **Ready to commit** (Core); live cache hit unmeasured (Labs stopped). **Compatibility:** the request payload's routing context path moved (`context.flowBootstrap.routing` -> `context.routing`) for evidence decisions only; no reader outside the provider request was found (wT grep). Merge note: t223 edits example text in the same `system-prompt.ts` (a different hunk) |
 | C5-C7 (session 3, run 34): **C5** an amendment that names the step a `rerun` replaces waits and lands on the replacing step once the rerun has worked, and is refused `did_not_work` if it fails (before, `4 add a1` beside `4 rerun` was judged on the failed step and refused). **C6** `add`, `keep` or an act claimed on a step that is not of a Flow's kind (a look) is refused (before, `5 add a2` marked the `snap.store` look as adding the towels); the refusal borrows `not_a_kept_step` until a dedicated `not_a_flow_step` can go into t210's `llm/draft-amendment-feedback.ts` and `flow-bootstrap/evidence-loop-steps.ts` (exact lines in wV's report). **C7** the draft entry was rebuilt every decision (the debug's "stale" wording was wrong), but it hid looks while they held step numbers, so the model numbered across gaps it could not see; every step is now listed, a look as `disposition: look`, and both draft instructions say a look can never be added or do an act | Core `runtime/flow-draft/{amendment.ts, entry.ts, step.ts}`, `runtime/llm/decision-handlers/{amendment.ts, types.ts}`, `runtime/llm/evidence-loop.ts` (797 lines), `runtime/llm/evidence-loop/{index.ts, held-amendments.ts (new)}`, new tests `runtime/flow-draft/tests/look-positions.test.ts`, `runtime/llm/evidence-loop/tests/{held-amendments, draft-numbers}.test.ts` (worker t193-wV, report `t193-wV-draft-amendments.md`); expectations updated by the lead: `runtime/llm/tests/evidence-loop-tool-failure.test.ts` (the opening look listed at step 1), `runtime/tests/deepseek-bootstrap-exploration.test.ts` (decision 24's unrun look now listed: `steps: iteration - 4`) | run 34 (C5, C6, C7) | wV: 8 of the 9 new tests fail on HEAD (the ninth, rerun-threw, also refused on HEAD). Lead, with W2 and C5-C7 in place: `heavy.sh "t193 lead vitest core final" npx vitest run runtime/{llm, flow-draft, flow-bootstrap, recovery, route-state/tests, service/flow-bootstrap-commands/tests, service/runtime-adaptation, result-verification, tests/service-bootstrap, tests/refuted-result} + tests/{deepseek-bootstrap-exploration, llm-deepseek-flow-bootstrap, deepseek-recovery-requests}.test.ts` -> `Test Files 235 passed (235)`, `Tests 2568 passed (2568)` (an earlier, narrower run had 4 failures: 3 `adaptation.test.ts` 15 s timeouts, which pass alone 9/9 with `--testTimeout=90000`, and the exploration draft count, fixed above); `heavy.sh ... npx tsc --noEmit -p packages/fluxiq/tsconfig.json` -> rc 0; `heavy.sh ... pnpm --filter fluxiq build` -> rc 0; Core audit -> only dev's `service.ts` 4506/4505 | **Ready to commit** (Core); live pending (Labs stopped). Not done: the held amendments' outcome is not on the `core.evidence_history` amendment row (the model is told through `core.amendment_check`) |
+| T3 (session 4): **a person's no in a repair's exploration is a decline, not silence.** `asking()` used `automationStudioAskedAndGranted` and settled every non-grant as `"refused"`, which is the same as unanswered. So the first decline aborted the exploration on a request the person had already refused, and no later question could be asked. Now, as on the build path (t195-w18):<br>- each request is asked once (a set of request ids);<br>- a decline settles `declined`, the check is asked again, and the gate's `declined` refusal reaches the model (`consequences_declined`) while the exploration goes on;<br>- a different control is a new question, and it is asked;<br>- only an unanswered request aborts and ends `operator_approval_required` carrying it.<br>The `"refused"` alias left `gate.settle`. That exposed a fail-open: any word but `unanswered`, `refused` and `declined` fell through to the grant. `settle` now acts only on `granted` and `declined`. | Core `R/recovery/runtime-exploration.ts`, `R/action-permissions/gate.ts`, tests `R/recovery/tests/runtime-exploration-permission.test.ts` (the deny row rewritten; 2 new rows; the nobody row made strict) and `R/action-permissions/tests/gate.test.ts` (alias row removed; 1 new row). Doc `docs/architecture/automation-studio/llm-flow-bootstrap.md` (the repair-path paragraph). | lane D (t195-w18 open question 1) | With `runtime-exploration.ts` alone at HEAD (HEAD's `gate.ts` and test restored too for the control run), the permission file -> `Tests 4 failed \| 12 passed (16)` with HEAD's exploration and the lead's gate. HEAD's exploration, gate and test together pass 14/14. The 4th failure was the mixed revert: HEAD's `settle("refused")` against the new gate granted, and that is the fail-open fixed above. With the fix: `npx vitest run R/recovery R/action-permissions R/parking R/flow-bootstrap R/tests/service-bootstrap R/tests/refuted-result` -> 1544/1546. The 2 failures were `adaptation.test.ts` 15 s timeouts under load; that file alone with `--testTimeout=90000`, plus `llm/build-purse/tests/purse.test.ts` -> 16/16. `npx tsc --noEmit -p tsconfig.json` (packages/fluxiq) -> rc 0. Core `node scripts/structure-audit.mjs` -> `passed (206 warning(s), 353 baselined)` | **Ready to commit** (Core). Not done: `automationStudioAskedAndGranted` now has no caller, but it is public Core API in the generated framework reference, so it was left |
+| T2 (session 4): **a sometimes-present interruption survives the test from the start.** Run 9's case: the build authored the cookie Accept as a hard step, and the test from the start keeps site data (D1). Accept came back `unreproducible` and the Flow was refused for want of one paid "optional" decision. The dry run now answers it itself (`flow-draft/sometimes-present.ts`). A step counts as only sometimes there when all of these hold:<br>- it was run again and its target was absent (`unreproducible`, not a verify-only check, never `failed` or `changed`);<br>- it does none of the person's acts;<br>- it carries no routing;<br>- every later step passed (replayed, conditional, withheld, or itself one of these);<br>- at least one later step actually replayed.<br>Such steps are made `optional` on the draft, with `replayed.madeOptional: true`. This happens only when it leaves nothing else in the way; otherwise nothing changes and today's refusal stands. A missing act step, a missing last step, or one followed by a failure still refuses (runs 18, 21 and 33).<br>Checked and found already in place:<br>- an assembled `optional` step carries on when its target is absent and runs when it is there (`flow-bootstrap/authoring/tests/draft-routing.test.ts`, "carries on past an optional step whose action failed"). At playback the failed edge is a deterministic ladder candidate ahead of any model diagnosis (`executor/recovery-ladder.ts`);<br>- the domain answers `unreproducible` only for an absent target (`node-run/replay.ts:214`; t174-w2's fix is in).<br>The draft guidance now names banners and popups as sometimes there, and the dry-run instruction states the rule. | Core `R/flow-draft/{sometimes-present.ts (new), dry-run.ts (`madeOptional` on the outcome type, header, instruction), entry.ts (guidance sentence), index.ts}`, `R/llm/node-tools/dry-run-gate.ts`; tests `R/flow-draft/tests/sometimes-present.test.ts` (new, 10), `R/llm/node-tools/tests/dry-run-gate.test.ts` (4 new; run 21's step 38 given its act), `R/llm/decision-context/tests/{recorded-runs.ts, recorded-windows.test.ts}`. Run 4's completion 29 is now scripted as today's check refuses it: the kettle was added at D34 and saved at D41, so its acts were not done at 29. The old "ok" was a choice made to exercise the dry run. With the new rule, that choice made the replay accept the build at 29: on the recorded data the rule makes the store-remembered prompt and soft check (steps 3 and 6) optional. | t194 run 9 `run-mup2u8o3-6697c4be` | With `dry-run-gate.ts` at HEAD, the gate file -> `Tests 1 failed \| 12 passed (13)`: the run-9 row fails and the three refusal rows guard unchanged behaviour. `sometimes-present.test.ts` cannot load without its module. With the fix: `npx vitest run R/flow-draft R/llm/node-tools` -> 12 files, 111/111. `R/llm/decision-context` plus the two `flow-bootstrap/tests/person-needed*` files -> 8 files, 54/54 (before the run-4 script change, `recorded-windows` failed 5 rows; with HEAD's gate it passed 20/20). `npx tsc --noEmit -p tsconfig.json` -> rc 0. Core audit -> `passed (206 warning(s), 353 baselined)` | **Ready to commit** (Core). The only recorded-run coverage of "a stale dry-run refusal leaves the window" went with run 4's dry run; it is re-covered by a loop test under B1 |
+| B1 (session 4, the supervisor's recommendation, now the decision): **the current page whole; every page the tab has left replaced by the outcome that replaced it.** The domain declares which top-level keys of its results are its view of the target: `observedStateKeys` on the evidence-runtime binding, beside `deniedEvidenceKeys`. The declaration travels binding -> bundle -> registry loop binding (scoped to bundles with an offered option, never onto a tool, so no provider sees it) -> loop input. The build (`service.ts`, same line, line-neutral) and the repair's exploration both pass it. `context-window.ts` keeps the newest entry carrying a view whole. In every earlier one it replaces exactly the declared keys with `supersededBy: <callId of the next entry that carried a view>`; the rest stays in its order. A Core entry carrying a view (`core.dry_run.page`) counts. Nested keys are never touched. Nothing is removed and the order is unchanged. A stub names its direct successor, so it never changes, and each request is a byte prefix of the next through every entry before its view. The constant decision instruction explains `supersededBy` once (not `deepseek/system-prompt.ts`, which t223 edits). With no declaration, output is byte-identical to before. The decision dump records the shown window, stubs included. Downstream: `domain/src/runtime/llm-evidence/observed-state/` declares `["elements", "dialogs", "blockedBy", "page"]` (v2 packet and t223's v3 page). | Core `R/llm/{context-window.ts, evidence-loop.ts (1 line), evidence-loop-decision.ts (instruction), loop-configuration.ts}`, `R/llm/decision-context/shown.ts`, `R/llm/harness-options/{binding.ts, option.ts, registry.ts}`, `R/service.ts` (1 line, same line), `R/recovery/runtime-exploration.ts` (1 line, same line). Tests: `R/llm/tests/context-window.test.ts` (5 new), `R/llm/evidence-loop/tests/request-prefix.test.ts` (new row through the real service and DeepSeek adapter; old row asserts no stub without a declaration), `R/llm/harness-options/tests/observed-state-keys.test.ts` (new, 4), `R/recovery/tests/runtime-exploration-views.test.ts` (new), `R/llm/decision-handlers/tests/completion.test.ts` (new: a refused test's verdict and page leave the window; this replaces run 4's recorded coverage, which T2 removed). Doc `docs/architecture/automation-studio/llm-flow-bootstrap.md` (new paragraph). Downstream `domain/src/runtime/llm-evidence/observed-state/{index.ts, observed-state-keys.ts, tests/observed-state-keys.test.ts}` (new). | run 34 `run-mup2i28c-6c7fc209` (15.7k -> 215k input tokens in 5 decisions) | With `context-window.ts` alone at HEAD, the three B1 files -> `Tests 5 failed \| 10 passed (15)`; the stability and no-declaration rows hold on HEAD by design. With the fix, all changed Core directories (`R/llm/tests/context-window.test.ts`, `R/llm/{decision-context, decision-handlers/tests, evidence-loop/tests, harness-options/tests, node-tools}`, `R/recovery/tests`, `R/flow-draft`, `R/action-permissions`) -> `Test Files 77 passed (77)`, `Tests 784 passed (784)`. `npx tsc --noEmit -p tsconfig.json` -> rc 0. Core audit -> `passed (206 warning(s), 353 baselined)`. Downstream: the new test bundled alone (esbuild) -> `# tests 2 # pass 2 # fail 0`; `heavy.sh pnpm --filter @fluxiq-web-extension/domain check` -> rc 0; `node scripts/structure-audit.mjs` -> `passed (137 warning(s), 118 baselined)` | **Ready to commit** (Core and downstream). **Not yet active: needs a merge step in `domain/src/runtime/llm-evidence/tools.ts`** (t223's file), after merging dev:<br>1. `import { WEB_LLM_OBSERVED_STATE_KEYS } from "./observed-state";`<br>2. in `WebAutomationLlmEvidenceRuntime`, after `deniedEvidenceKeys: readonly string[];`: `observedStateKeys: readonly string[];`<br>3. in the returned binding, after `deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,`: `observedStateKeys: WEB_LLM_OBSERVED_STATE_KEYS,`<br>Then check that t223's v3 results still put the page under `page`. Not run: the whole domain suite (no full suites by order); `R/tests` (`service.ts` changed by one field, covered by the request-prefix row through the real service) |
 | C5 **reverted by the lead** (session 2): wM had scaled the recovery context's byte budget with the call's input allowance (8,000 up to 16,000 bytes). That is a cap on what the model is shown, which the supervisor assigned to t200 on 2026-09-30, so the hunk and its test were removed | - | wK's C5 (12 runs lost `failed_target` and `recovery_candidates`) | - | reverted; owned by t200 |
 
 **Session 2 validation, run by the lead on the t193 trees (2026-09-30 ~20:00 UTC, after dev's merge `3c7ddf64`):**

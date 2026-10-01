@@ -123,7 +123,7 @@ export function createConversationController(request: PanelStore["request"], onC
   let readError: string | undefined;
   let sending = false;
   let sendError: string | undefined;
-  const answering = new Set<string>();
+  const answering = new Map<string, object>();
   const answerErrors = new Map<string, string>();
   let inFlight: Promise<void> | undefined;
   let again = false;
@@ -131,6 +131,11 @@ export function createConversationController(request: PanelStore["request"], onC
   let failing: { since: number; count: number } | undefined;
   let retriesUsed = 0;
   let cancelRetry: (() => void) | undefined;
+
+  async function safeRequest<T>(message: Parameters<PanelStore["request"]>[0]): Promise<PanelResult<T>> {
+    try { return await request<T>(message); }
+    catch { return { ok: false, sentence: "Couldn't reach FluxIQ. Try again.", code: "failed" }; }
+  }
 
   function failed(result: Extract<PanelResult<unknown>, { ok: false }>, sentence: string, set: (sentence: string) => void): void {
     if (result.unsupported) fallback = "unsupported";
@@ -170,7 +175,7 @@ export function createConversationController(request: PanelStore["request"], onC
 
   async function readOnce(): Promise<void> {
     const asked = generation;
-    const listed = await request<{ payload?: { conversations?: unknown } }>(threadListRequest(target));
+    const listed = await safeRequest<{ payload?: { conversations?: unknown } }>(threadListRequest(target));
     if (asked !== generation) return;
     if (!listed.ok) return readFailed("list", listed);
     const list = listed.value.payload?.conversations;
@@ -181,7 +186,7 @@ export function createConversationController(request: PanelStore["request"], onC
     const same = shown?.conversationId === latest.conversationId;
     if (same && shown?.revision === latest.revision) return settle(shown, anchorTurnId, turns);
 
-    const tail = await readThreadTail(request, {
+    const tail = await readThreadTail(safeRequest, {
       conversationId: latest.conversationId,
       projectId: latest.projectId,
       anchorTurnId: same ? anchorTurnId : undefined
@@ -219,13 +224,14 @@ export function createConversationController(request: PanelStore["request"], onC
       loaded = false;
       clearReadFailure();
       sendError = undefined;
+      answering.clear();
       answerErrors.clear();
       onChange();
       void controller.refresh();
     },
     state() {
-      const mode: ConversationMode = fallback !== undefined ? "fallback"
-        : !connected ? "offline"
+      const mode: ConversationMode = !connected ? "offline"
+        : fallback !== undefined ? "fallback"
           : turns.length > 0 ? "thread"
             : loaded && readError === undefined ? "empty"
               : "loading";
@@ -238,17 +244,19 @@ export function createConversationController(request: PanelStore["request"], onC
         reading: inFlight !== undefined,
         sending,
         sendError,
-        answering,
+        answering: new Set(answering.keys()),
         answerErrors
       };
     },
     setConnected(next) {
       if (next === connected) return;
       connected = next;
+      generation += 1;
       if (!next) {
         if (fallback === "refused") fallback = undefined;
         clearReadFailure();
         sendError = undefined;
+        answering.clear();
         answerErrors.clear();
       }
       onChange();
@@ -286,11 +294,10 @@ export function createConversationController(request: PanelStore["request"], onC
       sendError = undefined;
       onChange();
       const asked = generation;
-      const result = await request<{ payload?: { conversation?: unknown } }>(threadSendRequest(target, shown, body));
+      const result = await safeRequest<{ payload?: { conversation?: unknown } }>(threadSendRequest(target, shown, body));
       sending = false;
       if (asked !== generation) {
         // The person moved to another thread meanwhile; the message went to the one it was written in.
-        if (!result.ok) failed(result, SEND_FAILED, () => undefined);
         onChange();
         return result.ok;
       }
@@ -312,18 +319,21 @@ export function createConversationController(request: PanelStore["request"], onC
       return true;
     },
     async answer(askId, kind, value) {
-      if (answering.has(askId) || !readable()) return;
-      answering.add(askId);
+      if (answering.has(askId) || !readable() || !shown || !turns.some((turn) => turn.ask?.askId === askId && turn.ask.status === "pending")) return;
+      const asked = generation;
+      const operation = {};
+      answering.set(askId, operation);
       answerErrors.delete(askId);
       onChange();
-      const result = await request({
+      const result = await safeRequest({
         type: RUNTIME_MESSAGES.panelConversationAnswer,
         askId,
         kind,
         value,
         projectId: shown?.projectId
       });
-      answering.delete(askId);
+      if (answering.get(askId) === operation) answering.delete(askId);
+      if (asked !== generation) return;
       if (!result.ok) {
         failed(result, ANSWER_FAILED, (sentence) => answerErrors.set(askId, sentence));
         onChange();

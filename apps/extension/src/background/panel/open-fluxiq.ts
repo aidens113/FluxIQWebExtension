@@ -19,8 +19,8 @@ export function fluxIQWebAddress(coreApiUrl: string | undefined, automation?: { 
   return url.toString();
 }
 
-// `URL.canParse` would say this without a throw, but it arrived in Firefox 115
-// and the manifest still admits 109. A `TypeError` from the constructor is the
+// `URL.canParse` would say this without a throw, but it arrived in Chrome 120
+// and the Chrome manifest still admits 116. A `TypeError` from the constructor is the
 // one failure that means "not an address"; anything else is rethrown.
 function parsedAddress(raw: string): URL | undefined {
   try {

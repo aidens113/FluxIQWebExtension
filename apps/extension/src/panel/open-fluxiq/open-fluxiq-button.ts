@@ -21,7 +21,7 @@ export type OpenFluxIQButton = {
  * small one, a link, or the top bar's icon (the words are then its name and
  * tooltip).
  */
-export type OpenFluxIQStyle = { label: string; look: "primary" | "small" | "link" | "icon" };
+export type OpenFluxIQStyle = { label: string; look: "primary" | "small" | "link" | "icon"; canOpen?: () => boolean };
 
 const FAILED = "Couldn't open FluxIQ. Check its web address in Settings.";
 const LOOKS = { primary: "primary-button", small: "small-button", link: "link-button", icon: "icon-button" } as const;
@@ -35,6 +35,7 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
   const notice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
   const element = createElement("span", { className: "open-fluxiq" }, [button, notice]);
   let address: string | undefined;
+  let pending = false;
 
   function render(): void {
     const shown = error.current();
@@ -43,20 +44,28 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
     notice.hidden = shown === undefined;
   }
 
-  button.addEventListener("click", () => {
+  async function open(): Promise<void> {
+    if (pending || style.canOpen?.() === false) return;
+    pending = true;
     error.clear();
     render();
     button.disabled = true;
     const failedAt = address;
-    const message: { type: string; flowId?: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ };
-    const selectedFlowId = flowId?.();
-    if (selectedFlowId !== undefined) message.flowId = selectedFlowId;
-    void request(message).then((result) => {
+    try {
+      const message: { type: string; flowId?: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ };
+      const selectedFlowId = flowId?.();
+      if (selectedFlowId !== undefined) message.flowId = selectedFlowId;
+      const result = await request(message);
+      if (!result.ok && address === failedAt) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt, result.detail);
+    } catch {
+      if (address === failedAt) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt);
+    } finally {
+      pending = false;
       button.disabled = false;
-      if (!result.ok) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt, result.detail);
       render();
-    });
-  });
+    }
+  }
+  button.addEventListener("click", () => void open());
 
   return {
     element,

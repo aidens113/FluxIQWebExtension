@@ -25,6 +25,8 @@ const STATE_WORDS: Readonly<Record<StartStep["state"], string>> = { done: "Done"
 export function createStartView(context: PanelContext, openSettings: () => void): StartView {
   const { store } = context;
   const error = createStickyError<ExtensionStatus>();
+  let pending = false;
+  let latestStatus: ExtensionStatus | undefined;
   const title = createElement("h2", { className: "start-title" });
   const line = createElement("p", { className: "start-line" });
   const open = createOpenFluxIQButton(store.request, { label: "Open FluxIQ", look: "small" });
@@ -67,15 +69,25 @@ export function createStartView(context: PanelContext, openSettings: () => void)
   addressLink.addEventListener("click", openSettings);
 
   async function press(action: "connect" | "disconnect"): Promise<void> {
+    if (pending) return;
+    pending = true;
     error.clear();
     drawNotice();
     connectButton.disabled = true;
     cancelPairing.disabled = true;
-    const result = await store.request({ type: action === "connect" ? RUNTIME_MESSAGES.connect : RUNTIME_MESSAGES.disconnect });
-    connectButton.disabled = false;
-    cancelPairing.disabled = false;
-    if (!result.ok) error.show(result.sentence, (status) => status.connectionState === (action === "connect" ? "connected" : "disconnected"), result.detail);
-    drawNotice();
+    const causeGone = (status: ExtensionStatus) => status.connectionState === (action === "connect" ? "connected" : "disconnected");
+    try {
+      const result = await store.request({ type: action === "connect" ? RUNTIME_MESSAGES.connect : RUNTIME_MESSAGES.disconnect });
+      if (!result.ok) error.show(result.sentence, causeGone, result.detail);
+    } catch {
+      error.show("The connection request could not finish. Try again.", causeGone);
+    } finally {
+      pending = false;
+      connectButton.disabled = false;
+      cancelPairing.disabled = false;
+      if (latestStatus !== undefined) error.observe(latestStatus);
+      drawNotice();
+    }
   }
 
   function drawNotice(): void {
@@ -88,6 +100,7 @@ export function createStartView(context: PanelContext, openSettings: () => void)
   return {
     element,
     render(guide, status) {
+      latestStatus = status;
       title.textContent = guide.heading;
       line.textContent = guide.line;
       list.hidden = guide.steps.length === 0;

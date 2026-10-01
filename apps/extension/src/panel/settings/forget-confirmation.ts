@@ -9,7 +9,9 @@ import { createElement } from "../dom";
 export type ForgetConfirmation = { readonly element: HTMLElement; setBusy(busy: boolean): void };
 
 /** Builds the control; `onForget` runs when the viewer confirms. */
-export function createForgetConfirmation(onForget: () => Promise<void>): ForgetConfirmation {
+export function createForgetConfirmation(onForget: () => Promise<boolean>): ForgetConfirmation {
+  let busy = false;
+  let pending = false;
   const openButton = createElement("button", {
     id: "forgetPairingButton",
     className: "small-button danger-button",
@@ -25,24 +27,66 @@ export function createForgetConfirmation(onForget: () => Promise<void>): ForgetC
     hidden: true,
     attrs: { role: "group", "aria-labelledby": "forgetPairingQuestion" }
   }, [question, createElement("div", { className: "card-actions" }, [forgetButton, cancelButton])]);
+  const notice = createElement("p", { className: "card-line", hidden: true, attrs: { role: "alert" } });
+  confirm.append(notice);
 
-  function setOpen(open: boolean): void {
+  function ownsFocus(source: HTMLElement): boolean {
+    const doc = source.ownerDocument;
+    if (!source.isConnected || doc.visibilityState !== "visible" || !doc.hasFocus() || doc.activeElement !== source) return false;
+    for (let parent: HTMLElement | null = source; parent !== null; parent = parent.parentElement) {
+      if (parent.hidden || parent.hasAttribute("inert")) return false;
+    }
+    return true;
+  }
+
+  function setOpen(open: boolean, restoreFocus: boolean): void {
     confirm.hidden = !open;
     openButton.hidden = open;
     openButton.setAttribute("aria-expanded", String(open));
-    (open ? cancelButton : openButton).focus();
+    if (restoreFocus) (open ? cancelButton : openButton).focus();
   }
 
-  openButton.addEventListener("click", () => setOpen(true));
-  cancelButton.addEventListener("click", () => setOpen(false));
-  forgetButton.addEventListener("click", () => {
-    void onForget().then(() => setOpen(false));
+  openButton.addEventListener("click", () => {
+    if (!busy && !pending) setOpen(true, ownsFocus(openButton));
   });
+  cancelButton.addEventListener("click", () => {
+    if (!busy && !pending) setOpen(false, ownsFocus(cancelButton));
+  });
+  forgetButton.addEventListener("click", () => void forget());
+
+  async function forget(): Promise<void> {
+    if (busy || pending) return;
+    const restoreFocus = ownsFocus(forgetButton);
+    pending = true;
+    notice.hidden = true;
+    renderBusy();
+    try {
+      if (await onForget()) {
+        pending = false;
+        renderBusy();
+        setOpen(false, restoreFocus && ownsFocus(forgetButton));
+      } else {
+        notice.textContent = "Pairing wasn't forgotten. Try Forget again.";
+        notice.hidden = false;
+      }
+    } catch {
+      notice.textContent = "Couldn't forget this pairing. Try Forget again.";
+      notice.hidden = false;
+    } finally {
+      pending = false;
+      renderBusy();
+    }
+  }
+
+  function renderBusy(): void {
+    for (const button of [openButton, forgetButton, cancelButton]) button.disabled = busy || pending;
+  }
 
   return {
     element: createElement("div", { className: "forget-pairing" }, [openButton, confirm]),
-    setBusy(busy) {
-      for (const button of [openButton, forgetButton, cancelButton]) button.disabled = busy;
+    setBusy(value) {
+      busy = value;
+      renderBusy();
     }
   };
 }

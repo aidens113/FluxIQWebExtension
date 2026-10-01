@@ -93,6 +93,7 @@ import { nextControlOnPage, type NextControlChoice } from "./detect-pagination";
 import { waitUntil, type WaitOutcome } from "./list-wait";
 import { offeredLoadRetry } from "./load-retry";
 import { awaitPageRendered } from "./page-render";
+import { parsedUrl } from "../../shared/parsed-url";
 
 /** Why a read that pages stopped paging: the domain's closed set of words. */
 export type PaginationStop = NonNullable<WebAutomationExtractionSummary["paginationStop"]>;
@@ -558,9 +559,10 @@ function linkAddress(control: HTMLElement): URL | undefined {
   const link = control.closest("a[href]");
   const href = link?.getAttribute("href")?.trim();
   // An address that does not parse is not a link to a page, which is what
-  // `undefined` means here, so it is asked rather than caught.
-  if (!link || !href || href.startsWith("#") || !URL.canParse(href, link.baseURI)) return undefined;
-  const url = new URL(href, link.baseURI);
+  // `undefined` means here.
+  if (!link || !href || href.startsWith("#")) return undefined;
+  const url = parsedUrl(href, link.baseURI);
+  if (!url) return undefined;
   return url.protocol === "http:" || url.protocol === "https:" ? url : undefined;
 }
 
