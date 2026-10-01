@@ -28,10 +28,22 @@ Types15426/build23524 exposed original public state alias removed; root restored
 it. Corrected types1691/build11533 native0. Structure12361 now native0 after
 NEW test barrel import fix. Core DataInspector/settings workers frozen;
 root owning22293 native0 fivefiles79/21.19s and strict80956 fourroots0.
-Core full31117/types65532/build34521 active; structure46579 only protected
-4506/4505. Two workers own AskControls two-path unit and test-only lazy-tail
-ordering probe; third refines hierarchy dialog readiness. Core source frozen.
-Extension broad checks await new owning source freeze.
+Core broad CLOSED: full31117 failed2807pass3oldauth/contractfailures; types65532
+native0/127109ms, build34521 native0/286125ms. Narrow31353 passedlogin8 but
+failedcontractrecording.delete[several] with syntheticfixture EPERM (67pass1fail).
+Structure46579 only protected4506/4505; no edits/waivers. Source checkpoints
+Coreb1dfc40e and downstream1884e5e2 durable, no merge/push. Root reproduced
+orderingprobe8cases; worker now owns exact list-wait+NEWregressions recovery,
+Ask worker owns local keyboard two paths, third hierarchy recovery three paths.
+Broad checks await current source freeze; protected failure remains recorded.
+AskControls is now independently verified:54/native0/338.26ms and actual-config
+two-root strict0. Its worker completed the bounded read-only Core deletion-fixture
+audit: no source-confirmed fixture cause, protected deletion/quiescence handoff
+recorded without edits or weakened assertions. That worker now owns exact
+ProjectTree+NEWkeyboard test. Lazy worker48 focused passes await root independent checks/strict closure.
+Hierarchy correction is still active: first53/54 pass exposed actual failure
+feedback rendering; direct imported StatusText inspection and a StrictMode
+regression are released within its existing component/test ownership only.
 Exact current progress and
 original failures persist in reports/twelfth-supervisor-verification.md.
 
