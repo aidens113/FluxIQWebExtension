@@ -45,7 +45,8 @@ export const WEB_LLM_EVIDENCE_TOOL_IDS = [
   "web.inspect_current_page",
   "web.navigate_same_origin",
   "web.press_control",
-  "web.enter_field"
+  "web.enter_field",
+  "web.find_on_page"
 ] as const;
 
 export type WebLlmEvidenceToolId = (typeof WEB_LLM_EVIDENCE_TOOL_IDS)[number];
@@ -56,6 +57,13 @@ export const WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
 export const WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 export const WEB_LLM_PRESS_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[4];
 export const WEB_LLM_ENTER_FIELD_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[5];
+/**
+ * Search the whole page, hidden and off-screen elements included, for words or
+ * any attribute, and get the matches as the page view prints them (t223,
+ * `./page-find/`). The page view shows what has visible words or is a control;
+ * this finds the rest.
+ */
+export const WEB_LLM_FIND_ON_PAGE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[6];
 
 /** An observation succeeded: evidence was captured and nothing on the page moved. */
 export const WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded" as const;

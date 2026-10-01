@@ -49,6 +49,10 @@ export class FakeElement {
   constructor(tag: string) {
     this.tagName = tag.toUpperCase();
   }
+  /** The fake document installed by `withFakeDocument`, as a real element's owner. */
+  get ownerDocument(): { activeElement: unknown } {
+    return (globalThis as { document?: { activeElement: unknown } }).document ?? { activeElement: null };
+  }
 
   get children(): FakeElement[] {
     return this.childNodes.filter((node): node is FakeElement => node instanceof FakeElement);
@@ -117,6 +121,11 @@ export class FakeElement {
   descendants(): FakeElement[] {
     return this.children.flatMap((child) => [child, ...child.descendants()]);
   }
+  /** Tag-name selectors only (`"button"`), which is all the views ask for; anything else fails loudly. */
+  querySelectorAll(selector: string): FakeElement[] {
+    if (!/^[a-z][a-z0-9-]*$/iu.test(selector)) throw new Error(`fake-dom supports tag-name selectors only, not ${JSON.stringify(selector)}`);
+    return this.descendants().filter((element) => element.tagName === selector.toUpperCase());
+  }
   /** Every element under this one whose class list has `name`. */
   byClass(name: string): FakeElement[] {
     return this.descendants().filter((element) => element.className.split(/\s+/u).includes(name));
@@ -135,7 +144,8 @@ export async function withFakeDocument(body: () => void | Promise<void>): Promis
     createElement: (tag: string) => new FakeElement(tag),
     createElementNS: (_namespace: string, tag: string) => new FakeElement(tag),
     createTextNode: (text: string) => new FakeText(text),
-    visibilityState: "visible"
+    visibilityState: "visible",
+    activeElement: null
   };
   try {
     await body();

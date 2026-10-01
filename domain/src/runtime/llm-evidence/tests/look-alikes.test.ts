@@ -50,9 +50,9 @@ test("wrappers the page gives nothing to tell apart are counted top to bottom", 
   const evidence = packet([wrapper("#c", 300), wrapper("#a", 100), wrapper("#b", 200)]);
   // Each carries its own measured box, which is where the count comes from.
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "div", box: { x: 0, y: 300, width: 100, height: 20 }, alike: { index: 3, total: 3 } },
-    { target: "target.2", tag: "div", box: { x: 0, y: 100, width: 100, height: 20 }, alike: { index: 1, total: 3 } },
-    { target: "target.3", tag: "div", box: { x: 0, y: 200, width: 100, height: 20 }, alike: { index: 2, total: 3 } }
+    { target: "t1", tag: "div", box: { x: 0, y: 300, width: 100, height: 20 }, alike: { index: 3, total: 3 } },
+    { target: "t2", tag: "div", box: { x: 0, y: 100, width: 100, height: 20 }, alike: { index: 1, total: 3 } },
+    { target: "t3", tag: "div", box: { x: 0, y: 200, width: 100, height: 20 }, alike: { index: 2, total: 3 } }
   ]);
 });
 
@@ -75,9 +75,9 @@ test("the same control in two cards is told apart by each card's own words", () 
     { tagName: "a", selector: "#title-1", visibleText: "Soundcrest Air Pro 2 Wireless Earbuds", context: { record: { text: "Soundcrest Air Pro 2 Wireless Earbuds 4.3 out of 5 stars $49.99" } } }
   ]);
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "button", text: "Add to cart", landmark: "main", within: "Soundcrest Air Pro 2 Wireless Earbuds 4.3 out of 5 stars $49.99" },
-    { target: "target.2", tag: "button", text: "Add to cart", landmark: "main", within: "Brightaisle Buds Lite 4.1 out of 5 stars $19.99" },
-    { target: "target.3", tag: "a", text: "Soundcrest Air Pro 2 Wireless Earbuds" }
+    { target: "t1", tag: "button", text: "Add to cart", landmark: "main", within: "Soundcrest Air Pro 2 Wireless Earbuds 4.3 out of 5 stars $49.99" },
+    { target: "t2", tag: "button", text: "Add to cart", landmark: "main", within: "Brightaisle Buds Lite 4.1 out of 5 stars $19.99" },
+    { target: "t3", tag: "a", text: "Soundcrest Air Pro 2 Wireless Earbuds" }
   ]);
 });
 
@@ -107,8 +107,8 @@ test("a dialog's control and the page's control of the same name are told apart 
   // In the page's order -- nothing is moved to the front -- and the dialog's
   // own control says whose it is.
   assert.deepEqual(evidence.elements.map((element) => [element.target, element.name, element.dialog, element.alike]), [
-    ["target.1", "Close", undefined, undefined],
-    ["target.2", "Close", "Never miss a deal", undefined]
+    ["t1", "Close", undefined, undefined],
+    ["t2", "Close", "Never miss a deal", undefined]
   ]);
 });
 

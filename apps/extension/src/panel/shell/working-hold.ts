@@ -20,6 +20,8 @@ export type WorkingHold = {
   observe(raw: boolean): void;
   /** Cancels a pending change. */
   stop(): void;
+  /** Retires pending work and clears the previous owner's raw and held value. */
+  reset(): void;
 };
 
 /** How long working must last before the controls wait: page reads shorter than this never show. */
@@ -37,8 +39,10 @@ export function createWorkingHold(
   let raw = false;
   let pending: unknown;
   let hasPending = false;
+  let epoch = 0;
 
   function cancel(): void {
+    epoch += 1;
     if (hasPending) clock.clearTimeout(pending);
     hasPending = false;
   }
@@ -51,13 +55,22 @@ export function createWorkingHold(
       cancel();
       if (raw === shown) return;
       hasPending = true;
+      const scheduled = epoch;
       pending = clock.setTimeout(() => {
+        if (scheduled !== epoch) return;
         hasPending = false;
         if (raw === shown) return;
         shown = raw;
         onChange(shown);
       }, raw ? timing.onMs : timing.offMs);
     },
-    stop: cancel
+    stop: cancel,
+    reset() {
+      cancel();
+      raw = false;
+      if (!shown) return;
+      shown = false;
+      onChange(false);
+    }
   };
 }

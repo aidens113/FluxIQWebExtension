@@ -35,7 +35,7 @@ test("task and worktree scripts build nothing except through pnpm build, pnpm ch
   assert.deepEqual(offending, []);
 });
 
-test("task start builds the worktree with pnpm build and Core with buildCore; task finish checks with pnpm check", () => {
+test("task start builds the worktree with pnpm build and Core with buildCore; task finish runs pnpm check only on --full-check", () => {
   const start = readFileSync(path.join(SCRIPTS, "task", "start.mjs"), "utf8");
   assert.match(start, /runPnpm\(created\.root, \["build"\]/u);
   assert.match(start, /await buildCore\(created\.coreRoot/u);

@@ -11,7 +11,7 @@
 //   pnpm task sync-core [--to REV] [--allow-running]
 //     run inside a task worktree: move the shared Core it builds against to
 //     Core's dev (or REV), when Core has moved on since the worktree opened.
-//   pnpm task finish <id> [title words...] [--skip-checks] [--allow-running]
+//   pnpm task finish <id> [title words...] [--full-check] [--skip-checks] [--allow-running]
 //   pnpm task abandon <id> [--force] [--allow-running]
 //   pnpm task list
 //   pnpm task prune [--days N] [--base DIR] [--allow-running]

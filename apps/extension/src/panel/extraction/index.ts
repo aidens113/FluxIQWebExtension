@@ -28,3 +28,5 @@ export {
   type ExtractionFieldHandling,
   type ExtractionFieldRow
 } from "./view-model";
+
+export { createExtractionDialogFocus } from "./dialog-focus";

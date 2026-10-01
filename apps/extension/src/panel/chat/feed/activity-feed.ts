@@ -60,6 +60,7 @@ export type ActivityFeed = {
 };
 
 const EMPTY_STATE: ExtensionActivityState = { current: null, display: null, recent: [], overlay: "expanded", live: false };
+const READ_FAILED = "Couldn't read activity. Try again.";
 const OVERLAY_FAILED = "Couldn't change the on-page status. Try again.";
 
 /** Creates the feed. `onChange` is called after every change to `snapshot()`. */
@@ -70,10 +71,16 @@ export function createActivityFeed(deps: ActivityFeedDeps, onChange: () => void)
   let overlayError: string | undefined;
   let overlaySaving = false;
   let unsubscribe: (() => void) | undefined;
-  // Bumped by every push, so a read reply asked for before it is known stale.
-  let pushes = 0;
+  // Lifecycle invalidates stopped subscriptions and requests. Observations
+  // protect newer state; read generations also order replies without a push.
+  let lifecycle = 0;
+  let readGeneration = 0;
+  let observations = 0;
+  let listening = false;
+  let overlayOperation: object | undefined;
 
   function take(next: ExtensionActivityState): void {
+    observations += 1;
     state = next;
     if (reach !== "unsupported") reach = "ready";
     readError = undefined;
@@ -82,7 +89,6 @@ export function createActivityFeed(deps: ActivityFeedDeps, onChange: () => void)
   function onPush(message: unknown): void {
     const typed = message as { type?: unknown; state?: unknown } | null;
     if (typed?.type !== ACTIVITY_MESSAGES.changed || !isActivityState(typed.state)) return;
-    pushes += 1;
     take(typed.state);
     onChange();
   }
@@ -90,36 +96,71 @@ export function createActivityFeed(deps: ActivityFeedDeps, onChange: () => void)
   return {
     snapshot: () => ({ reach, state, readError, overlayError, overlaySaving }),
     start() {
-      unsubscribe ??= deps.listen(onPush);
+      if (listening) return;
+      listening = true;
+      const started = lifecycle;
+      const cleanup = deps.listen((message) => {
+        if (listening && started === lifecycle) onPush(message);
+      });
+      if (listening && started === lifecycle) unsubscribe = cleanup;
+      else cleanup();
     },
     stop() {
-      unsubscribe?.();
+      lifecycle += 1;
+      readGeneration += 1;
+      listening = false;
+      overlayOperation = undefined;
+      overlaySaving = false;
+      const cleanup = unsubscribe;
       unsubscribe = undefined;
+      cleanup?.();
     },
     async read() {
       if (reach === "unsupported") return;
-      const askedAt = pushes;
-      const result = await deps.request<{ state?: unknown }>({ type: ACTIVITY_MESSAGES.read });
-      if (askedAt !== pushes) return;
-      if (result.ok && isActivityState(result.value.state)) take(result.value.state);
-      else if (!result.ok && result.unsupported) reach = "unsupported";
-      else if (reach !== "ready") {
-        reach = "failed";
-        readError = result.ok ? "The extension answered with activity this panel can't read." : result.sentence;
+      const asked = lifecycle, generation = ++readGeneration, observed = observations;
+      const current = () => asked === lifecycle && generation === readGeneration && observed === observations && reach !== "unsupported";
+      try {
+        const result = await deps.request<{ state?: unknown }>({ type: ACTIVITY_MESSAGES.read });
+        if (!current()) return;
+        if (result.ok && isActivityState(result.value.state)) take(result.value.state);
+        else if (!result.ok && result.unsupported) reach = "unsupported";
+        else if (reach !== "ready") {
+          reach = "failed";
+          readError = result.ok ? "The extension answered with activity this panel can't read." : result.sentence;
+        }
+        onChange();
+      } catch {
+        if (!current()) return;
+        if (reach !== "ready") { reach = "failed"; readError = READ_FAILED; }
+        onChange();
       }
-      onChange();
     },
     async setOverlay(overlay) {
       if (reach === "unsupported" || overlaySaving || overlay === state.overlay) return;
+      const asked = lifecycle, observed = observations, operation = {};
+      overlayOperation = operation;
+      const current = () => asked === lifecycle && overlayOperation === operation;
+      const supported = () => reach !== "unsupported";
       overlaySaving = true;
       overlayError = undefined;
       onChange();
-      const result = await deps.request<{ state?: unknown }>({ type: ACTIVITY_MESSAGES.setOverlay, overlay });
-      overlaySaving = false;
-      if (result.ok && isActivityState(result.value.state)) take(result.value.state);
-      else if (!result.ok && result.unsupported) reach = "unsupported";
-      else overlayError = OVERLAY_FAILED;
-      onChange();
+      if (!current()) return;
+      try {
+        const result = await deps.request<{ state?: unknown }>({ type: ACTIVITY_MESSAGES.setOverlay, overlay });
+        if (!current()) return;
+        if (result.ok && isActivityState(result.value.state)) {
+          if (observed === observations && supported()) take(result.value.state);
+        } else if (!result.ok && result.unsupported) reach = "unsupported";
+        else overlayError = OVERLAY_FAILED;
+      } catch {
+        if (current()) overlayError = OVERLAY_FAILED;
+      } finally {
+        if (current()) {
+          overlayOperation = undefined;
+          overlaySaving = false;
+          onChange();
+        }
+      }
     }
   };
 }

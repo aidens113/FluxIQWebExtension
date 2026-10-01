@@ -1,0 +1,99 @@
+# Extraction real session ID adoption plan
+
+Status: Complete (real-ID executable blueprint; implementation HELD)
+Owner: recording_controls
+Date: 2026-10-01
+
+## Written brief
+
+- Backend preview three-path unit remains held while full extension gates run; frozen recovery/client/worker source unchanged. Own only this report.
+- Read parent Current State, extraction-session-ownership-audit.md S1 and completed preview plan. Inspect exact shared/extraction-messages.ts, panel/extraction/{messages,client,panel}.ts, read-recovery/createExtractionReadRecovery.ts and background/extraction/control.ts; old tests/fixtures only for actual wire compatibility evidence.
+- Design adoption of REAL backend extraction sessionId/tabId/form and start reply identity. Never reuse protocol.sessionId, pairing tokens, synthetic extra fixture IDs or invent proof. After selected session discovery, preview/Confirm/cancel must address that exact extraction ID; missing selected ID must not fall back to a replacement. Changed discovered ID retires old raw draft, rows, notices and callbacks coherently.
+- Compare initial restore discovery policies (active-tab vs historical global latest) and legacy omitted-ID compatibility explicitly; recommend a concrete policy with exact existing affected consumers/tests. Do not silently allow an unowned legacy draft to execute against latest. Inventory fixtures needing truthful real reply fields while retaining original assertions; request exact fixture-only release rather than weakening tests.
+- Separate frontend publication/explicit session binding from later receiver/recording authorization. Backend preview control/store paths will be serialized before this unit; no parallel edits to those files. Keep D12 erasure, Firefox popup restore, recorded acknowledgement, preparation milestone and newly fixed Retry behavior intact.
+- Return exact synchronized source/test scopes, phased tests-first plan and current pre/post dispatch validation. No source/tests/heavy/broad/private/browser/Lab/provider/panel/commit/shared docs; source release awaits root verification.
+
+## Proposed implementation
+
+Recommend active-automation-tab initial discovery, followed by explicit real extraction session identity on every production draft/preview/Confirm/cancel operation. Preserve legacy low-level callers deliberately, but never create or execute an unbound product draft. Exact seven-source proposal adds session-store.ts tab lookup to the six explicitly named files; that extra path and policies require supervisor release. Backend preview unit runs first and these overlapping paths are serial.
+
+Progress checkpoint: production extraction client consumers are panel.ts and read-recovery integration; other direct client consumers are owning client/preview-reread tests. Backend explicit message IDs already work. Existing panel.test picked fixture includes sessionId/tabId but omits form; draft/read/pure helper fixtures omit real identity and several start replies are bare ok. These require exact truthful setup additions, never deletion/weakening of original behavioral assertions. Initial discovery active-tab policy requires a separately released session-store tab lookup, making seven product sources rather than the brief's six explicitly enumerated source files. Recommendation and legacy split being recorded; no source/tests/gates.
+
+## Identity contract already exists; do not invent an owner capability
+
+Backend control.ExtractionSessionView really returns sessionId:string, tabId:number, form:list|value together with state/proposal/refused/preview. startPick returns {ok:true,sessionId,tabId} for list (control.ts:145). session-store holds real immutable sessionId/tabId/form. These are actual production fields; neither shared protocol.sessionId nor fixture surplus fields are their authority.
+
+Define one shared extraction identity/view declaration (shared/extraction-messages.ts), then panel/messages re-exports that rather than maintaining a narrowed duplicate. A narrow validated identity value contains nonempty sessionId, finite nonnegative integer tabId and supported form; start response may represent list implicitly because actual start supports only list, but specify that typed compatibility deliberately. Validate actual reply identity before adoption. Return cloned immutable identity locally; never carry pairing credentials/page cells in identity. Backend keeps its real existing view values and shared types should not introduce new wire names or public Core exports.
+
+An identity binds this picked definition to one background session/tab. It does NOT establish recording/project/pairing/document authorization or prove a command already issued was cancelled. Subsequent S2/S4 work remains necessary.
+
+## Initial discovery and legacy policy recommendation
+
+| Call | New production policy | Legacy compatibility |
+| --- | --- | --- |
+| Initial restored-session discovery, no selected identity | getSession without ID selects session for manager.status().activeTabId only; absent active tab/session returns existing ok/missing shape | Deliberate behavior change from historical globally latest; never return another tab merely because it started last |
+| Selected read/preview | Always explicit selected extraction.sessionId; returned real identity must equal expected tuple before accepting draft/rows | Background explicit-ID support already exists; missing explicit ID result stays missing, no fallback |
+| Start | Return actual start ID/tab; adopt only current acknowledged identity, then poll explicitly | Bare old ok can trigger bounded existing-session verification before binding; cannot make an executable unowned draft |
+| Confirm/cancel from product panel | Explicit selected extraction.sessionId; refuse locally/close local-only when none; never silently address latest | Low-level optional identity arguments and trusted backend omitted-ID mutation support may remain for old callers/tests, with clear compatibility limitation |
+| ID-less/malformed legacy session view | Display bounded compatibility/recovery feedback; no accepted executable draft/rows or implicit Confirm/cancel | Count-only older Confirm acknowledgement remains supported when request itself was bound |
+
+Rationale: extension entry says Extract Data From This Page and manager.activeTabId is the actual automation page; global latest may belong to another tab. Do not bind discovery to a raw chrome active tab or query browser storage. Proposed store.getForTab(tabId) returns actual current stored session for that tab (one per tab), not latestId fallback. control.readSession must receive manager only to choose unbound discovery; explicit selected ID stays exact, allowing existing session restoration/cancellation without reinterpreting it as new active-tab selection. User/tab context changes are separately constrained by S4; this policy does not invent authorization rules from optional status.
+
+Preserving legacy omitted-ID Confirm/cancel backend acceptance avoids breaking existing trusted test/control callers and keeps original assertion bodies unchanged. It leaves old clients' implicit routing risk explicitly unresolved. New panel binding is the guaranteed scope, not universal backend authorization. If supervisor wants to retire legacy mutations instead, write a separate exact compatibility migration for callers/original tests before release. No anonymous or inferred identity is fabricated to make old fixtures pass.
+
+## Frontend selection, raw draft and local lifecycle
+
+Panel owns selected identity alongside draft/rawNames/rows. Starting a new pick first clears old selection, draft/raw names/rows/notices and advances existing epoch/row leases, then issues prepare/start through current busy gate. Valid current start acknowledgement binds its real ID; do not re-run prepare. Initial valid restore binds its ID before proposal/rows are adopted. No selected identity means no preview read, Confirm mutation or background cancel; Close of pre-prepare/compatibility failure performs local cleanup only.
+
+Once bound, session/poll/preview operations capture exact identity plus epoch and operation object. Helper read callback accepts optional explicit identity; omitted identity is reserved for initial discovery or explicit uncertain-start verification when no acknowledged ID exists. Already-bound failure Retry keeps the same ID even if another surface starts B; absent A closes/retires A rather than discovering B. If a reply to explicit A carries B, treat it as mismatching/untrusted response, erase old preview/draft as needed and report a bounded recovery failure; do not automatically accept B. Changed identity is accepted only through a current unbound/new-pick discovery lifecycle, which retires old raw drafts, rows, leases, notices, timers and retained actions coherently.
+
+First binding during current start/discovery must not reset the successful preparation milestone or release the current operation lock reentrantly. Distinguish first adoption from a real replacement transition; use current immutable selection reference checks, not a blanket reset on every successful same-ID session refresh. Fields/raw typing survive matching-session recovery; all existing D12 privacy filtering remains based on proposal source keys.
+
+Confirm builds payload from current draft and captures identity before dispatch. Native control callbacks check current epoch/selected identity/current control lease before building/sending. Capture the identity through the async closure; do not look up a mutable selected ID after await. Cancel captures identity BEFORE immediate local raw/row erasure, then sends to that exact ID; a failure remains retryable against the same ID (not whatever latest later becomes). Recorded counts receipt must be accepted only for current issued operation's identity/epoch, and must still acknowledge count-only older replies correctly. Local close after receipt does not cancel a new background session.
+
+## Pre/post dispatch checks
+
+- Before read/preview/Retry/Confirm/cancel: current epoch, exact selected immutable reference (when required), current operation/control identity, existing busy gate and current selection/privacy tuple. A current ticket for A never dispatches B. First discovery is explicitly marked unbound, not inferred from undefined after an owner change.
+- Before start after awaited prepare: current epoch/pick operation; owner selection still in this new-pick lifecycle. After start reply: current operation and validated returned identity before binding/polling.
+- After every await: current epoch, original op, original selected identity; matching response ID/tab/form for session payload. Invalid/missing identity cannot publish rows or enable Confirm. Old finally cannot clear newer identity's lock. Issued mutations remain possibly completed despite discarded UI reply.
+- Bound absent-session response retires selected draft/raw/rows/timer/actions. No follow-on omitted-ID read or new start as an automatic fallback. Explicit user starts a new lifecycle if needed.
+- Failed start with no acknowledged ID first verifies existing active-tab session under discovery policy before resending start; if a valid existing session is found, bind/recover it without repeated prepare/start. If verification missing, explicit Retry may start once. A different surface's same-tab new session is an uncertainty limitation of this recovery policy, not proof it originated from the failed start; do not state stronger issued-command guarantees.
+
+## Exact synchronized proposed product scope ? seven sources
+
+1. apps/extension/src/shared/extraction-messages.ts: one real identity/session view and start response contract, optional local envelope/sessionId typing as needed. No Core/protocol-wide field additions.
+2. apps/extension/src/panel/extraction/messages.ts: re-export actual shared session/identity type; retain existing optional count-response compatibility.
+3. apps/extension/src/panel/extraction/client.ts: start returns validated actual identity or safe legacy-unbound result; read/Confirm/cancel accept optional explicit identity/sessionId and include it on actual messages; session response identity validation; original defensive counts/error provenance unchanged.
+4. apps/extension/src/panel/extraction/panel.ts: selected identity, bound drafts/Confirm/cancel, replacement erasure and current receipt/action leases; preserve raw/caret/modal/Retry/privacy.
+5. apps/extension/src/panel/extraction/read-recovery/createExtractionReadRecovery.ts: operation/ticket selection identity, explicit bound reads, start acknowledgement binding and uncertain-start discovery; original channel/poll/preparation locks preserved.
+6. apps/extension/src/background/extraction/control.ts: shared real view typing and manager-based active-tab initial discovery only, preserving previously released backend preview post-await fencing.
+7. apps/extension/src/background/extraction/session-store.ts: actual tab lookup only, preserving completed preview operation/store erasure. This seventh source is an additional release request, not authorization from the current read-only brief.
+
+New owning tests: panel/extraction/tests/panel-session-ownership.test.ts; panel/extraction/tests/client-session-identity.test.ts; background/tests/extraction-session-identity.test.ts. Existing read-recovery/tests/createExtractionReadRecovery.test.ts may need fixture/signature adaptation only, with new identity adversarial coverage preferably in NEW read-recovery/tests/session-identity.test.ts; ask exact release before changing original assertions. No existing field-row/focus/helpers/barrels need product edit because shared type import is direct/internal. If one exported identity/view declaration breaks a structure budget, request exact cohesive shared extraction subdirectory move rather than editing baseline or extracting unowned files.
+
+## Truthful fixture inventory ? exact release required, assertions retained
+
+- panel/extraction/tests/panel.test.ts: picked constant already has real-shaped sessionId:s1/tabId:11 but needs form:list; Firefox picking fixture at237 needs tabId/form. Explicit picking/refusal/start reply objects need actual sessionId/tabId/form or start ack ID/tab. Preserve modal/IME/Escape/inert/recreate/error/receipt assertion expressions.
+- panel/extraction/tests/panel-draft-recovery.test.ts: picked constant currently has no identity; add one stable valid identity and form. New-pick starts return matching real start identity through existing setup branches. Keep raw intent/caret/privacy/detached callback assertions unchanged.
+- panel/extraction/tests/panel-read-recovery.test.ts: picked constant and ad hoc picking/picked-without-proposal fixtures need identity/form; successful start branch needs actual ack identity. Preserve stage retry/error-provenance/old-action/typing/privacy/focus assertions exactly. Missing/malformed identities are tested only as intentionally adverse NEW cases, not rewritten old happy fixtures.
+- panel/extraction/read-recovery/tests/createExtractionReadRecovery.test.ts: typed picked and injected successful start return identity; fixture read accepts expected identity while preserving reads array that records original column selection assertions. Add separate ID recording in NEW suite instead of weakening old duplicate/order/error tests.
+- panel/extraction/tests/dialog-dom.ts: default world.reply returns bare ok for every message. Either exact fixture-only release for default start ack only (leave no-session getSession and count-only confirm/cancel outcomes unchanged), or local happy-start setup additions in each owning test. Prefer default start ack adaptation with truthful fixed synthetic IDs to avoid altering assertion bodies; this is a shared fixture path and cannot change without explicit release.
+- panel/extraction/tests/client.test.ts: count-only Confirm and error-provenance assertions can remain unchanged if low-level optional-binding compatibility is retained. Start returns may change but none of original assertions depends on its return identity. No fixture edit indicated; new identity behavior lives in client-session-identity.test.ts.
+- panel/extraction/tests/preview-reread.test.ts: actual background returns real identity already; legacy optional direct read/Confirm calls can remain unchanged under the recommended compatibility policy. New production bound behavior measured by NEW client/background suite. If supervisor chooses mandatory low-level binding, exact call-setup migration here/client.test must be separately released because some calls are embedded in assertion expressions.
+- panel/extraction/tests/dialog-focus.test.ts and field-row.test.ts do not call runtime extraction client/use session identity; no change needed. proposal-fixture contains proposal structure only and needs no session metadata. Pure preview/view-model/confirm-payload tests remain untouched.
+
+Never amend original assertions to permit no identity or latest routing. Record exact setup adaptations, original assertion comparison evidence and unchanged original behavioral counts. New regression fixtures must obtain session identity through actual start/control reply where cross-boundary behavior is claimed.
+
+## Tests-first phases and schedules
+
+After backend preview freeze/review and policy/source/fixture release:
+
+1. NEW actual production client/control schedules against old source: open A, start/pick B through actual control, panel A preview/Confirm/cancel must dispatch A or safe missing result, never B. Verify original A draft does not mix B proposal item/columns. Two tabs: omitted initial discovery selects automation active-tab session, not later other-tab global session. Reproduce failures before source edits.
+2. Introduce shared real type/validated client identity, explicit messages and active-tab discovery/store lookup. NEW wire tests inspect exact dispatched sessionId and identity mismatch/empty/noninteger rejection. Keep legacy count-only/error-provenance/omitted mutation compatibility rows explicit.
+3. Integrate selected panel/helper identity fences. Deferred read/preview/start/Confirm/cancel with A/B/A and same-ID different tab/form; old control/ticket and old finally cannot send/release current work. Bound missing A never retries latest B. Current matching read preserves raw/caret; legitimate new lifecycle clears it. Record/cancel failures retain exact bound ID for Retry without dispatching unowned commands.
+4. Preserve prepare-success/start-failure verification, no repeated prepare, normal picked/picking popup restore, no automatic sheet on failed hidden restore, disabled stable pending Retry, count-only receipt and local Close after receipt. Legacy no-ID restore cannot enable executable draft, and local pre-start Close sends no background cancel.
+5. Truthful fixture-only adaptations as released, unchanged original assertions; run new suites plus owning extraction recovery/draft/panel/client/preview-reread/backend control/confirm/boundary suites through external heavy harness, actual-config scoped types for exact released roots. Supervisor independent source review/full extension/type/build/structure afterwards. No live browser certification inferred.
+
+## Final return and limits
+
+Only this report changed. Exact source and fixture proposals remain HELD; no product/tests/shared-doc edits, heavy/broad/private/live/Core/commits. Seven sources include proposed extra session-store lookup and require supervisor release. Initial-discovery/legacy policies are recommendations requiring integration decision, not newly implemented contracts. Session binding resolves the frontend implicit-latest hazard for new panel; receiver stale cancel/record, uncertain-start ownership and project/recording authorization remain separate follow-ups.

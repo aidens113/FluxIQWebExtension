@@ -1,0 +1,50 @@
+# Deployment recovery implementation
+
+Status: Complete — source/tests frozen for supervisor verification
+Date: 2026-10-01
+Worker: deployment_docs_audit
+Scope: Exact existing live-views/deployment-sync.tsx, new live-views/tests/deployment-sync-recovery.test.tsx, and existing tests/deployment-sync.test.ts only for truthful source-location changes. No source/tests changed during the gate freeze.
+
+## Preparation evidence
+
+Read the latest parent Current State and Deployment recovery implementation brief. Prior source audit is frozen in deployment-docs-recovery-audit.md. Read deployment-sync/types.ts and api/contracts.ts only to establish the actual response contract; no backend/storage/runtime files edited or read. Git is optional on DeploymentSyncSnapshot; available git contains rootDir/available/dirty/status/branches/versions/remotes. Runs contain id/targetId/status/startedAtMs, with optional mode/finishedAtMs/message/plan; version refs are required string arrays. Artifacts are not rendered and will not receive invented presentation requirements.
+
+## Proposed implementation within exact ownership
+
+1. Keep exported DeploymentSyncLive as the API-owner wrapper. A monotonically identified owner object keyed by API identity creates a private component instance on domain/API replacement during render. Its callbacks check the wrapper's current owner as well as mounted layout lifecycle before reading, writing, setting state, aborting a request, or closing a confirmation. Old state never renders beneath a new owner; retained A callbacks cannot request in A or B after replacement. No API/backend change.
+2. Private workspace retains selected target/tab/confirmed result on same-owner refresh. Reads use one controller/generation, synchronous pending tracking and fixed feedback. Preserve the last valid snapshot when a read fails; mark refresh failure locally with read Retry. Initial failure has no fabricated empty snapshot. Abort/suppress superseded reads and teardown; catch unexpected rejection and release only the active read's state. No timers or polling.
+3. Keep a synchronous mutation ref locked from entry through POST acknowledgement and snapshot reconciliation. Public callbacks check it before any request. A mutation invalidates older pre-action reads so old metadata cannot erase its reconciliation. Caught fulfilled failures/rejections release through guarded finally; no automatic write replay and no generic Retry that repeats checkout/rollback. The normal explicit action controls remain available for a conscious retry after release.
+4. Give each confirmation a monotonically identified token containing its captured endpoint, targetId and optional versionSha. Opening/canceling/submitting synchronously checks token and action lock. Retained Cancel/Confirm callbacks for an earlier token cannot act on a later dialog. Validate captured target/version against latest confirmed metadata at entry; disappearance disables or dismisses an invalid confirmation. Changing the selected target alone never retargets the captured confirmation. Repository safety remains server-owned.
+5. Keep action acknowledgement feedback independent of read feedback. A confirmed action result remains visible when the following snapshot read fails; describe snapshot confirmation failure without announcing that the write failed. POST failure retains prior useful result and selection. Ignore old-owner result/finally callbacks. Mutation response shape validation prevents malformed success detail from crashing.
+6. Validate only payload shape/fields actually rendered, including arrays and their members, optional rendered strings/numbers/metadata objects and version refs. Missing or malformed successful payload produces a fixed recoverable error rather than empty success. Preserve unknown git distinction: absent/unavailable git cannot claim Clean or emit a clean success alert; a real available dirty=false snapshot can. Existing explicit confirmation labels, target/version wire data, result detail, and empty registration states remain.
+
+Local validators and private workspace stay in the released source file. If this cannot remain within structure budgets without a focused helper, request exact helper ownership rather than expanding files silently. No stylesheet, shared hook, ProgramAPI or generic coordinator edits.
+
+## Tests-first cases after release
+
+Use real DeploymentSyncLive with synthetic API responses/deferred promises and only provider dependencies mocked. No real repository mutations or provider calls.
+
+- Open A checkout; render B API before B snapshot completes: A confirmation/result absent, captured A confirm/cancel/refresh refuse requests and cannot change B's later confirmation.
+- Pending A POST resolves or rejects after B render: no B detail/status/busy pollution and no captured A reconciliation GET.
+- Activate Dry Run twice in one turn; activate a captured Confirm twice: exactly one POST, disabled controls remain locked through reconciliation.
+- Cancel token1; open token2; invoke retained token1 Cancel/Confirm: token2 remains, no POST. Preserve target/version capture after switching selected target. Confirmed metadata removal rejects unavailable target or rollback version at mutation entry before passive effects.
+- Fulfilled mutation refusal and unexpected rejection: fixed feedback, prior confirmed result/selection retained, lock releases and explicit newly confirmed retry works.
+- Successful mutation plus failed/rejected snapshot: acknowledged result remains, separate read failure, Retry issues GET only.
+- Same-owner refresh preserves selected target/history tab/selected detail, while stale earlier read cannot overwrite newer confirmed metadata. Unmount completion is inert.
+- Missing/malformed snapshot payload, collection row, version refs and run payload: controlled failure, no false empty success or render exception; current-owner direct Retry works.
+- Optional/available=false git displays unknown/unavailable rather than Clean; available dirty=false displays Clean; no-target valid payload remains truthful empty state.
+
+Preserve both existing Deployment source-contract tests. Add actual behavior tests before product changes, observe the original failures, then run the narrow affected suite through heavy.sh. Root owns broad gates and independently reviews results. A temporary scoped type config must extend the actual web config without relaxing compiler options.
+
+## Progress / validation
+
+- Supervisor explicitly released implementation after sixth Core gates passed. Only deployment-sync.tsx and new deployment-sync-recovery.test.tsx changed; the existing two source contracts passed unchanged. No helper or extra ownership was necessary; source is173lines.
+- Tests-first heavy run selected two regression cases: both failed on original source, duplicate Dry Run produced two POSTs and foreign confirmation remained after domain replacement. Native1/1.88s; eight other cases were excluded by the explicit reproduction name filter, not skipped in authored tests.
+- First implementation run produced10pass/2fail: action lock recovery passed but fixed failure text was not locally rendered. Direct owning StatusText inspection confirmed it returns null and emits a global alert only. Added persistent local action status/alert while retaining existing global alert behavior. Subsequent12/12 passed native0/2.17s.
+- Extended owner/order/selection/action-response tests passed21/21 native0/2.54s; final targeted suite passed26/26 native0/2.51s (24 actual behavioral regressions plus2 unchanged contracts). No skipped tests in the final suite. Cases cover initial/read/write malformed success, fulfilled failures/rejection, old-domain reads/mutations and callbacks, stale dialog epochs, synchronous write/read locks, superseded reads, target/version removal, capture semantics, same-owner state, unmount, acknowledged write/read failure and unavailable-vs-clean Git.
+- First strict scoped typecheck passed native0, session55643, using a TEMP config extending actual apps/web/tsconfig.json with incremental:false only; final repeat includes the additional test cases and is pending. No compiler/config/baseline relaxation.
+- Second scoped check18939 passed native0. Final lifecycle review found a Strict Mode cleanup corner: an aborted queued initial read ref must be cleared before the next mount effect starts. Cleanup now clears that ref; added actual StrictMode initial-read regression. Read-in-progress text is locally announced with role=status. Final lifecycle suite passed27/27 native0/2.73s (25 behavioral plus2 unchanged contracts). One final scoped type run after this lifecycle refinement is pending; no further source edits planned.
+- Final strict scoped types60167 passed native0 after the lifecycle refinement; diff whitespace check passed. Source/tests are frozen for supervisor review. Earlier pending notes above are chronological checkpoints now resolved.
+- Current owner/key/layout guards prevent retained old-domain callbacks and result/finally publication. Manual reads coalesce; action entry aborts/invalidate older reads and maintains one mutation lock through reconciliation. A confirmed result survives read failure. Direct Retry reads only; repository mutation retry remains explicit through the original action/confirmation controls. Issued repository mutations are not claimed cancellable.
+- Rendered successful payloads are shape-validated; unrendered artifacts do not receive invented requirements. Wrong-target/mode action responses fail locally. API backend errors/exceptions are not printed. Optional/unavailable git shows Unknown and never emits clean success. Confirmed target and version removal reconciles selection/detail and invalidates stale confirmations.
+- No broad gates, actual repository mutation, provider call, browser session, panel startup, commit, push or shared-document edit ran. Root independently verifies claims and owns authored architecture updates and full integration checks.

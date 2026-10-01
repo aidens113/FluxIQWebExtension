@@ -6,9 +6,11 @@
 // `DOMException` and costs only the convenience. Anything else is rethrown.
 
 const DRAFT_KEY = "fluxiq.ui.conversationDraft";
+const OWNED_DRAFT_KEY = "fluxiq.ui.conversationDraft.v1";
 
 /** The stored draft and a way to replace it. */
-export type DraftStorage = { read(): string; write(text: string): void };
+export type OwnedDraft = { text: string; owner: string | null };
+export type DraftStorage = { read(): string; write(text: string): void; readOwned(): OwnedDraft; writeOwned(text: string, owner: string | null): void };
 
 /** The draft kept in `localStorage`. */
 export function draftStorage(): DraftStorage {
@@ -29,6 +31,30 @@ export function draftStorage(): DraftStorage {
       } catch (error) {
         if (!(error instanceof DOMException)) throw error;
         /* best-effort: a draft storage refused is only retyped after reopening the panel */
+      }
+    },
+    readOwned() {
+      try {
+        const raw = globalThis.localStorage?.getItem(OWNED_DRAFT_KEY);
+        if (raw === null || raw === undefined) return { text: globalThis.localStorage?.getItem(DRAFT_KEY) ?? "", owner: null };
+        let value: unknown;
+        try { value = JSON.parse(raw); } catch { return { text: globalThis.localStorage?.getItem(DRAFT_KEY) ?? raw, owner: null }; }
+        if (typeof value === "object" && value !== null) {
+          const record = value as Record<string, unknown>;
+          if (typeof record.text === "string") return { text: record.text, owner: record.version === 1 && (typeof record.owner === "string" || record.owner === null) ? record.owner : null };
+        }
+        return { text: globalThis.localStorage?.getItem(DRAFT_KEY) ?? raw, owner: null };
+      } catch (error) {
+        if (error instanceof DOMException) return { text: "", owner: null };
+        throw error;
+      }
+    },
+    writeOwned(text, owner) {
+      try {
+        globalThis.localStorage?.setItem(OWNED_DRAFT_KEY, JSON.stringify({ version: 1, text, owner }));
+        globalThis.localStorage?.removeItem(DRAFT_KEY);
+      } catch (error) {
+        if (!(error instanceof DOMException)) throw error;
       }
     }
   };

@@ -39,7 +39,7 @@ test("anything but the move that goes there is refused, and never reaches the pa
 
   const pressed = await runtime.executeTool({
     ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, startLocation: START,
-    value: { node: CLICK, parameters: { target: { handle: "target.1" } }, consequences: [] }
+    value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] }
   });
 
   assert.equal(pressed.resultCode, "web.action.rejected.not_at_start_location");

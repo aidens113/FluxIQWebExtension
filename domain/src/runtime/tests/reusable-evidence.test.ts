@@ -8,11 +8,11 @@ const evidence = (overrides: Partial<WebLlmPageEvidence> = {}): WebLlmPageEviden
   trust: "untrusted-page-evidence",
   location: "https://example.test/form?token=private#secret",
   elements: [
-    { target: "target.1", tag: "textarea", name: "Name", hasValue: true },
-    { target: "target.2", tag: "select", name: "Plan", selectedValue: "enterprise", options: [{ value: "starter", label: "Starter" }, { value: "enterprise", label: "Private enterprise choice" }] },
-    { target: "target.3", tag: "input", inputType: "password", name: "Account password" },
-    { target: "target.4", tag: "a", name: "Next", href: "https://example.test/next?ticket=private" },
-    { target: "target.5", tag: "a", name: "Away", href: "https://outside.test/path?cross=private" },
+    { target: "t1", tag: "textarea", name: "Name", hasValue: true },
+    { target: "t2", tag: "select", name: "Plan", selectedValue: "enterprise", options: [{ value: "starter", label: "Starter" }, { value: "enterprise", label: "Private enterprise choice" }] },
+    { target: "t3", tag: "input", inputType: "password", name: "Account password" },
+    { target: "t4", tag: "a", name: "Next", href: "https://example.test/next?ticket=private" },
+    { target: "t5", tag: "a", name: "Away", href: "https://outside.test/path?cross=private" },
   ],
   truncated: false,
   ...overrides,
@@ -39,7 +39,7 @@ test("produces deterministic versioned compatibility and a non-executable projec
   assert.match(first.fingerprint.digest, /^[a-f0-9]{64}$/u);
   assert.equal(first.promptProjection.byteCount, Buffer.byteLength(JSON.stringify(first.promptProjection), "utf8"));
   const serialized = JSON.stringify(first);
-  assert.doesNotMatch(serialized, /private|enterprise|password|token|ticket|target\.1|instruction-name-adapted|#plan|#next/iu);
+  assert.doesNotMatch(serialized, /private|enterprise|password|token|ticket|"t1"|instruction-name-adapted|#plan|#next/iu);
   assert.deepEqual(first.fingerprint.location, { origin: "https://example.test", path: "/form" });
   assert.ok(first.promptProjection.facts.some(fact => fact.kind === "element" && fact.tag === "textarea" && fact.name === "Name"));
   assert.equal(first.promptProjection.facts.filter(fact => fact.kind === "element" && fact.sameOriginLink).length, 1);
@@ -65,7 +65,7 @@ test("keeps opposite run outcomes compatible while preserving them in prompt con
 });
 
 test("a 500-element page is projected whole, in document order, with no count or byte bound and no throw past forty", () => {
-  const many = Array.from({ length: 500 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index} ${"x".repeat(100)}` }));
+  const many = Array.from({ length: 500 }, (_, index) => ({ target: `t${index + 1}`, tag: "button", name: `Action ${index} ${"x".repeat(100)}` }));
   const actions = Array.from({ length: 30 }, (_, index) => ({ definitionId: `web.output.dom-click-${index}`, status: "failed" as const }));
   const clientCapabilities = Array.from({ length: 30 }, (_, index) => `web.capability.${index}`);
   const first = produceWebReusableEvidence({ evidence: evidence({ elements: many }), actions, clientCapabilities });
@@ -98,7 +98,7 @@ test("rejects credentialed and non-http locations", () => {
 test("the fingerprint excludes every control it excluded before, by the shared rule plus its own two types", () => {
   const excluded = (element: Partial<WebLlmPageEvidence["elements"][number]>): boolean => {
     const production = produceWebReusableEvidence({
-      evidence: evidence({ elements: [{ target: "target.1", tag: "input", name: "Field name", ...element } as WebLlmPageEvidence["elements"][number]] }),
+      evidence: evidence({ elements: [{ target: "t1", tag: "input", name: "Field name", ...element } as WebLlmPageEvidence["elements"][number]] }),
     });
     return !production.promptProjection.facts.some(fact => fact.kind === "element");
   };

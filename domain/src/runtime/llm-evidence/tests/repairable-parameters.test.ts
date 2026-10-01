@@ -10,7 +10,7 @@ import {
 import { webFailedActionDefinitionId, webFailureRepairParameters } from "../repairable-parameters";
 
 const element = (fields: Partial<WebLlmEvidenceElement>): WebLlmEvidenceElement =>
-  ({ target: "target.1", tag: "div", ...fields });
+  ({ target: "t1", tag: "div", ...fields });
 
 /** What every one-target DOM output tells a model its one parameter is. */
 const elementDescription = (): string => webRepairableParameters("web.output.dom-click")[0]!.description;

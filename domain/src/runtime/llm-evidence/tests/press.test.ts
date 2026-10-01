@@ -22,13 +22,13 @@ import type { AutomationStudioActionPermissionVerdict } from "fluxiq/automation-
 import type { WebLlmEvidenceGateway } from "../capture";
 import { pressControl, type WebControlPress } from "../press";
 import { RecoverableToolRejection } from "../tool-rejection";
+import { shownPageLines, type ShownPageLine } from "../page-view/tests/shown-page-lines";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
 import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 
 const BASE = { projectId: "project.one", flowId: "flow.one" } as const;
 const ROWS = `[data-testid="order-rows"]`;
 
-type PacketElement = { target: string; name?: string };
 type QueueLab = { gateway: WebLlmEvidenceGateway; clicked: string[]; state: { composerOpen: boolean; rowTicked: boolean; presses: number } };
 
 /**
@@ -82,13 +82,12 @@ type EvidenceRuntime = ReturnType<typeof createWebAutomationLlmEvidenceRuntime>;
 /** The handles the model was given, read back by the name a person would see. */
 async function handlesByName(runtime: EvidenceRuntime): Promise<Map<string, string>> {
   const inspected = await runtime.executeTool({ ...BASE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const elements = (inspected.evidence as { elements: PacketElement[] }).elements;
-  const named = elements.filter((element): element is PacketElement & { name: string } => typeof element.name === "string");
-  return new Map(named.map((element) => [element.name, element.target]));
+  const named = shownPageLines(inspected.evidence).filter((line): line is ShownPageLine & { words: string } => typeof line.words === "string");
+  return new Map(named.map((line) => [line.words, line.target]));
 }
 
 function namesIn(evidence: unknown): Array<string | undefined> {
-  return (evidence as { elements: PacketElement[] }).elements.map((element) => element.name);
+  return shownPageLines(evidence).map((line) => line.words);
 }
 
 test("opens the composer behind a plain New post button, which is the press three fixtures could not make", async () => {

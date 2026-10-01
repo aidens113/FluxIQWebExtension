@@ -20,6 +20,7 @@ import { createWebLlmExtractionHandles, type WebLlmExtractionHandles } from "../
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webAutomationExplorationRefusalClassifier, webAutomationRecoveryHarnessOptionBundle } from "..";
 import { WEB_RECOVERY_DETECT_OPTION_ID } from "../vocabulary";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID } as const;
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
@@ -82,8 +83,8 @@ function rejection(code: string, detail?: JsonObject): { kind: string; evidence:
 }
 
 function linkHandle(packet: JsonObject): string {
-  const link = (packet.elements as Array<{ target: string; tag: string }>).find((element) => element.tag === "a");
-  assert.ok(link, "the inspect packet describes the product link");
+  const link = shownPageLines(packet).find((line) => line.kind === "link");
+  assert.ok(link, "the inspect page shows the product link");
   return link.target;
 }
 
@@ -143,11 +144,11 @@ test("refuses a target no recovery packet issued, or whose page has moved on, wi
   const { registry, commands, setPage } = harness();
   await run(registry, "web.recovery.inspect", {});
 
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "target.9" }));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t9" }), rejection("target_unobserved", { reason: "handle_not_in_packet", target: "t9" }));
   // Another Flow's exploration issued nothing this one can name.
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }, "flow.two"), rejection("target_unobserved", { reason: "nothing_observed_yet" }));
   setPage({ url: `${CATALOG.url}page/2`, elements: [LINK], structure: CATALOG.structure });
-  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "target.1" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "target.1" }));
+  assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "t1" }), rejection("target_unobserved", { reason: "page_moved_since_packet", target: "t1" }));
   assert.equal(commands.some((command) => command.parameters.detectStructure !== undefined), false);
 
   assert.deepEqual(await run(registry, WEB_RECOVERY_DETECT_OPTION_ID, { target: "a" }), rejection("invalid_input", { reason: "malformed_handle", target: "a" }));

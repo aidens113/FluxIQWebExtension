@@ -27,8 +27,8 @@ test("5,000 elements in are 5,000 elements out, in the capture's order", () => {
   assert.equal(bound.evidence.elements.length, 5_000);
   assert.equal(bound.evidence.truncated, false);
   assert.deepEqual(bound.evidence.elements.map((element) => element.text), raw.map((element) => element.visibleText));
-  assert.deepEqual(bound.evidence.elements.map((element) => element.target), raw.map((_, index) => `target.${index + 1}`));
-  assert.equal(bound.selectors.get("target.5000"), "#e4999");
+  assert.deepEqual(bound.evidence.elements.map((element) => element.target), raw.map((_, index) => `t${index + 1}`));
+  assert.equal(bound.selectors.get("t5000"), "#e4999");
   for (const absent of ["elementTotal", "elementsTruncated", "budgetTruncated", "captureTruncated"]) assert.equal(absent in bound.evidence, false, absent);
 });
 
@@ -40,7 +40,7 @@ test("an open modal's controls stay where the page put them: nothing is moved to
     ],
     { evidence: { dialogs: { modal: true, open: [{ selector: "#modal", role: "dialog", modal: true, native: false, label: "Offer", bounds: { x: 200, y: 200, width: 300, height: 200 } }] } } }
   ));
-  assert.deepEqual(evidence.elements.map((element) => element.target), ["target.1", "target.2"]);
+  assert.deepEqual(evidence.elements.map((element) => element.target), ["t1", "t2"]);
   assert.deepEqual(evidence.elements.map((element) => element.name ?? element.text), ["Home", "Close"]);
 });
 
@@ -124,7 +124,7 @@ test("an element carries its click listener, implied role, label, rounded docume
     documentBounds: { x: 10.4, y: 2_000.6, width: 16.2, height: 15.5 }
   }])).elements;
   assert.deepEqual(element, {
-    target: "target.1", tag: "input", inputType: "checkbox", name: "Agree", label: "I agree to the terms", implicitRole: "checkbox",
+    target: "t1", tag: "input", inputType: "checkbox", name: "Agree", label: "I agree to the terms", implicitRole: "checkbox",
     hasClickHandler: true, checked: true, onViewport: false, box: { x: 10, y: 2_001, width: 16, height: 16 }
   });
 });

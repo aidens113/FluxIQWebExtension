@@ -257,9 +257,16 @@ output, not a substitute for authored documentation.
 
 ## Validation
 
-Run the narrowest relevant checks while iterating, then `pnpm check`,
-`pnpm test`, and `pnpm build` when the scope warrants them. Package-level
-commands are listed in
+**Full suites run at most twice a day (user, 2026-10-01).** A merge into `dev`
+is gated by narrow checks only: the typecheck of each package the change
+touches, the tests in the directories it changed, and the structure audit
+(the only gate `pnpm task finish` runs; `--full-check` adds `pnpm check`).
+The full suites — `pnpm check`, `pnpm test`, `pnpm build`, Core's whole vitest
+run — run as a sweep on `dev` at most twice a day, in the background, and
+whatever they find is fixed forward. Never run a 15-30 minute suite before each
+merge or after each fix: it is what made integration slow. Workers and leads
+likewise validate a fix with the tests beside it, not whole package suites.
+Package-level commands are listed in
 [repository layout and commands](docs/architecture/repository-layout.md).
 
 Compilation and smoke tests do not prove live browser behavior. For changes to

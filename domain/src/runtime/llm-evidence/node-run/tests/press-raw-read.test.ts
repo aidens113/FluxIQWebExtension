@@ -13,6 +13,7 @@ import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
 import { webNodeWithoutPageRecord } from "../page-record";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.privacy", flowId: "flow.privacy" };
 const ORIGIN = "https://store.test";
@@ -28,7 +29,7 @@ const RAW_CLASS = "css-0yh3pb0-raw-only";
 const RAW_ONLY_LINK = "/raw-only/secret-route/12345";
 const VALIDATION = { status: "passed", expected: "the click lands on the target or something inside it", actual: "the point 509,430 landed on the target" };
 
-type Packet = JsonObject & { elements: Array<{ target: string; text?: string; name?: string }>; read?: JsonObject; control?: string; status?: string; pageChanged?: boolean };
+type Packet = JsonObject & { page: string; read?: JsonObject; control?: string; status?: string; pageChanged?: boolean };
 
 /** The page as the extension's raw snapshot holds it: selectors, xpaths, classes, attributes. */
 function rawPage(bannerOpen: boolean, rawOnlyLink: boolean): JsonObject {
@@ -112,9 +113,7 @@ async function arriveAndLook(site: ReturnType<typeof store>): Promise<Packet> {
 }
 
 function handleOf(packet: Packet, text: string): string {
-  const element = packet.elements.find((candidate) => candidate.text === text || candidate.name === text);
-  assert.ok(element, `${text} is in the packet`);
-  return element.target;
+  return shownHandle(packet, text);
 }
 
 test("a click whose payload carries the raw snapshot returns no snapshot, element, resolution or visual target to the model", async () => {
@@ -140,9 +139,12 @@ test("a click whose payload carries the raw snapshot returns no snapshot, elemen
   assert.equal(packet.control, "Accept");
   assert.deepEqual(packet.read?.validation, VALIDATION);
   assert.equal(packet.read?.url, HOME);
-  // And the page, sanitized, with the banner gone.
-  assert.equal(packet.elements.some((element) => element.text === "Accept"), false);
-  assert.equal(packet.elements.some((element) => element.name === "Search"), true);
+  // And the page, as the compact view (t223), with the banner gone.
+  assert.equal(packet.schemaVersion, "web-llm-page.v3");
+  assert.equal(Object.hasOwn(packet, "elements"), false, "no element list");
+  const words = shownPageLines(packet).map((line) => line.words);
+  assert.equal(words.includes("Accept"), false);
+  assert.equal(words.includes("Search"), true);
 
   // The replay's record is the payload as the node answered it: unchanged.
   assert.equal(pressed.draft?.proposes, true);

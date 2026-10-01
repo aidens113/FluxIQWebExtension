@@ -2,7 +2,7 @@
 // being authored -- and no other control on that page or any other.
 //
 // The sanitizer numbers a packet's elements positionally --
-// `target.${index + 1}` -- because it sees one snapshot and has no memory. That
+// `t${index + 1}` -- because it sees one snapshot and has no memory. That
 // was fine while the model only read. It stopped being fine the moment a Flow
 // could act, twice over.
 //
@@ -11,20 +11,20 @@
 // page (`plan-resolution/target-packets.ts`), and an ordinary recapture -- what
 // `web.press_control` does on success, and what a second inspect does --
 // renumbers everything after any element that appeared or disappeared.
-// Measured: with the page `[banner, beds, band, search]`, `target.2` resolved
+// Measured: with the page `[banner, beds, band, search]`, `t2` resolved
 // to the Bedrooms select; the banner was dismissed, the page recaptured, and
-// the same `target.2` resolved to the Price-band select, with no refusal and
+// the same `t2` resolved to the Price-band select, with no refusal and
 // nothing to tell anybody anything had moved. Live, a created Flow chose
-// `target.2` for its first filter and the run failed with `expected a select
+// `t2` for its first filter and the run failed with `expected a select
 // element to choose value "5" in, actual the target is a <button>`
 // (`run-mu6btt9u-8ba762fd`).
 //
 // **Across pages.** Until 2026-09-21 every page numbered its own controls from
-// `target.1`, and a handle meant nothing off its page. But the Flow script
-// format has the model write a step's target bare, `target: target.7`
+// `t1`, and a handle meant nothing off its page. But the Flow script
+// format has the model write a step's target bare, `target: t7`
 // (`fluxiq` `flow-script-format.ts`), and an exploration visits several pages:
 // the store's front page, its results, a product. Every page had a
-// `target.7`, so a bare handle named a different control on each page the
+// `t7`, so a bare handle named a different control on each page the
 // exploration had seen, and the plan resolver -- correctly -- refused it as
 // `web.handle.ambiguous`. That was the build's end in 6 of E1 lane B's 12
 // builds on the realistic stores (`core.decision_unusable` with
@@ -40,20 +40,23 @@
 // authored. A bare handle therefore names exactly one element, and a
 // `location` beside it only confirms what the handle already says.
 //
+// Handles were spelled `target.N` until t223, which is how the runs above
+// recorded them.
+//
 // What this is not. It never invents a handle for something the capture did
 // not describe; it only chooses the number an element already described is
 // given. And it does not reach across Flows: each project and Flow has its own
 // numbers, exactly as the packet store keys them.
 
 import { createHash } from "node:crypto";
+import type { WebLlmEvidenceElement } from "./elements";
 import type { WebLlmEvidenceBlocker, WebLlmEvidenceDialog } from "./page-evidence";
 import { present } from "./present";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 
 /**
  * The handle numbers one Flow's authoring may issue, as
- * `plan-resolution/handle-tokens.ts` matches them: `target.1` to
- * `target.999999`.
+ * `plan-resolution/handle-tokens.ts` matches them: `t1` to `t999999`.
  *
  * A capture now describes every element of the page (t200), not forty, so a
  * page of a few thousand elements spends a few thousand numbers on its first
@@ -63,8 +66,13 @@ import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
  * long as the exploration needed.
  */
 export const WEB_LLM_TARGET_HANDLE_MAX_NUMBER = 999_999;
-/** Every handle this module can issue and nothing else: `target.` and a number from 1 to `WEB_LLM_TARGET_HANDLE_MAX_NUMBER`. */
-export const WEB_LLM_TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]{0,5}$";
+/**
+ * Every handle this module can issue, and nothing else: `t` and a number from 1
+ * to `WEB_LLM_TARGET_HANDLE_MAX_NUMBER`. The old spelling, `target.` and the same
+ * number, is still accepted as input and names the same element
+ * (`./handle-spelling/`); nothing issues it any more (t223).
+ */
+export const WEB_LLM_TARGET_HANDLE_PATTERN = "^(?:t|target\\.)[1-9][0-9]{0,5}$";
 /** Flows remembered, as the packet store bounds them: a Flow the store still resolves still has its numbers. */
 const RETAINED_FLOWS = 32;
 
@@ -112,13 +120,21 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
         flows.set(flowKey, flow);
       }
 
-      const assigned = addresses.map((address) => {
+      // Rendered elements are numbered before hidden ones, so a capture that
+      // includes hidden elements spends no number a rendered element of the
+      // same page would have been given first (t223).
+      const assigned: string[] = [];
+      for (const index of renderedFirst(binding)) {
+        const address = addresses[index] as string;
         const known = flow.byAddress.get(address);
-        if (known !== undefined) return `target.${known}`;
+        if (known !== undefined) {
+          assigned[index] = `t${known}`;
+          continue;
+        }
         flow.spent += 1;
         flow.byAddress.set(address, flow.spent);
-        return `target.${flow.spent}`;
-      });
+        assigned[index] = `t${flow.spent}`;
+      }
       return rewrite(binding, assigned);
     }
   };
@@ -151,7 +167,13 @@ export function createWebLlmStableTargetHandles(): WebLlmStableTargetHandles {
 function addressesOf(binding: WebLlmSnapshotBinding): string[] {
   const seen = new Map<string, number>();
   const location = binding.evidence.location;
-  return binding.evidence.elements.map((element) => {
+  const elements = binding.evidence.elements;
+  const addresses: string[] = [];
+  // The occurrence of a shared selector is counted over the rendered elements
+  // first, so a hidden element that shares one cannot take the occurrence, and
+  // with it the address, a rendered element has in an ordinary capture.
+  for (const index of renderedFirst(binding)) {
+    const element = elements[index] as WebLlmEvidenceElement;
     const selector = binding.selectors.get(element.target) ?? "";
     const record = binding.records.get(element.target) ?? "";
     // A selector written inside a shadow root is only half an address, and two
@@ -163,14 +185,23 @@ function addressesOf(binding: WebLlmSnapshotBinding): string[] {
     const base = parts.join("\0");
     const occurrence = seen.get(base) ?? 0;
     seen.set(base, occurrence + 1);
-    return createHash("sha256").update(`${base}\0${occurrence}`).digest("base64url");
-  });
+    addresses[index] = createHash("sha256").update(`${base}\0${occurrence}`).digest("base64url");
+  }
+  return addresses;
+}
+
+/** The packet's element indexes: the rendered elements in document order, then the hidden ones in document order. */
+function renderedFirst(binding: WebLlmSnapshotBinding): number[] {
+  const rendered: number[] = [];
+  const hidden: number[] = [];
+  binding.evidence.elements.forEach((element, index) => (element.hidden === true ? hidden : rendered).push(index));
+  return [...rendered, ...hidden];
 }
 
 /**
  * The binding with each element's handle replaced, element and every
  * handle-keyed map together, and every handle one element names of another
- * (`covers`, `coveredBy`, `inDialog`, a dialog's or blocker's `target`) with
+ * (`covers`, `coveredBy`, `inDialog`, `parent`, a dialog's or blocker's `target`) with
  * it -- and the failed target with it, where the packet
  * marks one, so a failure packet cannot end up naming a handle its own
  * elements no longer carry. Authoring captures never mark one; the line is
@@ -199,6 +230,9 @@ function rewrite(binding: WebLlmSnapshotBinding, assigned: readonly string[]): W
     if (element.covers !== undefined) element.covers = element.covers.map(rename);
     if (element.coveredBy !== undefined) element.coveredBy = element.coveredBy.map(rename);
     if (element.inDialog !== undefined) element.inDialog = rename(element.inDialog);
+    // The structure the page view folds by (t223): a parent must still name
+    // the element's ancestor after renumbering.
+    if (element.parent !== undefined) element.parent = rename(element.parent);
   }
   const evidence: WebLlmPageEvidence = { ...binding.evidence, elements };
   if (evidence.failedTarget !== undefined) evidence.failedTarget = renamed.get(evidence.failedTarget) ?? evidence.failedTarget;

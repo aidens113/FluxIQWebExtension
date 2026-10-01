@@ -4,7 +4,7 @@
 // The model authors a Flow from packets that never show it a selector. So where
 // a web node needs one, the plan names what the model was shown instead:
 //
-// - a `selector` parameter written `{ "handle": "target.N" }` -- optionally with
+// - a `selector` parameter written `{ "handle": "tN" }` -- optionally with
 //   the `location` of the page whose packet issued it -- becomes the selector
 //   the runtime kept behind that handle (`target-packets.ts`);
 // - so does the node's `target` or `element` parameter written the same way.
@@ -81,6 +81,7 @@ import { webLlmNameAssumptions, type WebLlmNameAssumption, type WebLlmNameAssump
 import type { WebLlmExtractionHandles } from "../structure";
 import { isJsonRecord } from "../untrusted-json";
 import { resolveWebExtractionSlot } from "./extraction";
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
 import { webPlanPositionCode } from "./issue-position";
 import { webPlanOwnExtractionList } from "./own-extraction-list";
@@ -528,7 +529,7 @@ function resolveTarget(value: Record<string, unknown>, scope: Scope, targets: We
   if (kind === "extraction") return "web.handle.misplaced";
   if (kind !== "target" || typeof value.handle !== "string") return "web.handle.malformed";
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
-  const resolution = targets.resolve(scope, value.handle, value.location as string | undefined);
+  const resolution = targets.resolve(scope, canonicalWebLlmTargetHandle(value.handle) ?? value.handle, value.location as string | undefined);
   if (!resolution.ok) return TARGET_ISSUES[resolution.code];
   return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element as unknown as JsonObject };
 }
