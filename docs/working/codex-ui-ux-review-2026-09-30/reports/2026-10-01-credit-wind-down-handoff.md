@@ -7,6 +7,8 @@ Date: 2026-10-01
 
 ## Current State
 
+Push update (2026-10-01): user explicitly requested pushing. Both origin task/t224-codex-ui-ux-review branches were created successfully, preserving extension da6477b5 and Core e05597bb. This is a remote checkpoint, with fresh full Core gates still pending. No dev/main push, merge, force push or PR; Claude retains integration ownership. The earlier no-push statements below describe the original wind-down checkpoint.
+
 Both task/t224-codex-ui-ux-review worktrees remain under C:/Users/osrs_/FluxStuff/fxwork/t224, paired extension/Core. Keep Claude's main checkouts, protected implementation and integration ownership untouched. No merge/push/live/Lab/provider/browser/panel/private data work was performed. All three workers are stopped, all commands closed. The caret implementation brief was NOT dispatched; its release was revoked before any source/test edit.
 
 ## Verified local units and exact evidence

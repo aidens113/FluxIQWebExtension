@@ -39,7 +39,7 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 
 | Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
-| [codex-ui-ux-review-2026-09-30.md](./codex-ui-ux-review-2026-09-30.md) | Codex senior supervisor | 637 | All Core web panels and the extension, focusing on user journeys, accessible controls, feedback and recovery. | `codex-ui-ux-review-2026-09-30.md in the sibling FluxIQ Core worktree.` |
+| [codex-ui-ux-review-2026-09-30.md](./codex-ui-ux-review-2026-09-30.md) | Codex senior supervisor | 642 | All Core web panels and the extension, focusing on user journeys, accessible controls, feedback and recovery. | `codex-ui-ux-review-2026-09-30.md in the sibling FluxIQ Core worktree.` |
 
 ## Complete
 
