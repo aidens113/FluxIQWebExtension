@@ -111,13 +111,32 @@ test("a selector handle becomes the selector the exploration was shown, which th
   assert.equal(JSON.stringify(shown).includes("#submit"), false);
 
   // The live failure this exists for: the model guessed `input[name="Name"]`. Given the handle instead, the plan gets the real one.
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada", timeoutMs: 5_000 }), {
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t1" }, text: "Ada", timeoutMs: 5_000 }), {
     status: "resolved",
     parameters: { selector: NAME_SELECTOR, text: "Ada", timeoutMs: 5_000, element: NAME_IDENTITY }
   });
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
   // A node already naming the top frame keeps doing so.
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), { status: "resolved", parameters: { selector: "#submit", browserFrameId: 0, element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2" }, browserFrameId: 0 }), { status: "resolved", parameters: { selector: "#submit", browserFrameId: 0, element: SUBMIT_IDENTITY } });
+});
+
+test("a handle written the old way, `target.N`, resolves to the element `tN` names (t223)", async () => {
+  const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit] }));
+  const shown = await inspect(runtime);
+  // What the model is shown is only ever `tN`.
+  assert.equal(JSON.stringify(shown).includes("target.1"), false);
+
+  for (const [current, legacy] of [["t1", "target.1"], ["t2", "target.2"]] as const) {
+    for (const slot of ["selector", "target", "element"] as const) {
+      assert.deepEqual(await resolve(runtime, CLICK_NODE, { [slot]: { handle: legacy } }), await resolve(runtime, CLICK_NODE, { [slot]: { handle: current } }), `${slot}: ${legacy}`);
+    }
+    assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: legacy, location: FORM_URL } }), await resolve(runtime, CLICK_NODE, { selector: { handle: current, location: FORM_URL } }));
+  }
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  // Two spellings of one handle name one element, so writing both in two slots is not ambiguous.
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "target.2" }, selector: { handle: "t2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  // A number nothing was given is unknown in either spelling.
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.9" } }), refusedAt("web.handle.unknown", "selector"));
 });
 
 test("a target handle under the node's `target` or `element` parameter names its element as one under `selector` does", async () => {
@@ -130,31 +149,31 @@ test("a target handle under the node's `target` or `element` parameter names its
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [nameField, submit, planField] }));
   await inspect(runtime);
 
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { target: { handle: "target.1" }, text: "Ada" }), {
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { target: { handle: "t1" }, text: "Ada" }), {
     status: "resolved",
     parameters: { selector: NAME_SELECTOR, text: "Ada", element: NAME_IDENTITY }
   });
-  const selected = await resolve(runtime, SELECT_NODE, { target: { handle: "target.3", location: FORM_URL }, value: "team" });
+  const selected = await resolve(runtime, SELECT_NODE, { target: { handle: "t3", location: FORM_URL }, value: "team" });
   assert.equal(selected.status, "resolved");
   assert.equal(selected.status === "resolved" && selected.parameters.selector, 'select[name="plan"]');
   assert.equal(selected.status === "resolved" && selected.parameters.value, "team");
   assert.equal(selected.status === "resolved" && "target" in selected.parameters, false, "the handle's slot does not stay behind as an adapted target");
   // The handle is the authority on the element: a selector the model wrote beside it is replaced, as its `element` is.
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "target.2", location: FORM_URL }, selector: "button.guessed-submit" }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "t2", location: FORM_URL }, selector: "button.guessed-submit" }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
   // Both slots may name the element, only if they name the same one.
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "target.2" }, selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "target.1" }, selector: { handle: "target.2" } }), refusedAt("web.handle.ambiguous", "target"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "t2" }, selector: { handle: "t2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "t1" }, selector: { handle: "t2" } }), refusedAt("web.handle.ambiguous", "target"));
   // `element` names the element too, and was refused live on its own and beside a `selector` handle (the campaign after `run-mu4vs7j1-aca950d7`).
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { element: { handle: "target.2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, element: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { element: { handle: "target.1" }, target: { handle: "target.2" }, text: "Ada" }), refusedAt("web.handle.ambiguous", "element"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { element: { handle: "t2" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2" }, element: { handle: "t2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { element: { handle: "t1" }, target: { handle: "t2" }, text: "Ada" }), refusedAt("web.handle.ambiguous", "element"));
   // It is a handle slot like `selector`, judged the same way.
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "target.9" } }), refusedAt("web.handle.unknown", "target"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "t9" } }), refusedAt("web.handle.unknown", "target"));
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { element: { handle: "extraction.1" } }), refusedAt("web.handle.misplaced", "element", EXTRACTION_HINT));
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "extraction.1" } }), refusedAt("web.handle.misplaced", "target", EXTRACTION_HINT));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "target.2", extra: true } }), refusedAt("web.handle.malformed", "target", TARGET_HINT));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { target: { handle: "t2", extra: true } }), refusedAt("web.handle.malformed", "target", TARGET_HINT));
   // Only on a node that has an element to name; and an adapted target that names no handle is not this resolver's.
-  assert.deepEqual(await resolve(runtime, NAVIGATE_NODE, { url: "https://example.test/", target: { handle: "target.1" } }), refusedAt("web.handle.misplaced", "target", TARGET_HINT));
+  assert.deepEqual(await resolve(runtime, NAVIGATE_NODE, { url: "https://example.test/", target: { handle: "t1" } }), refusedAt("web.handle.misplaced", "target", TARGET_HINT));
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: "#submit", target: { kind: "element", fingerprint: { tagName: "button" } } }), { status: "unchanged" });
 });
 
@@ -209,9 +228,9 @@ test("a click or navigation the build runs goes to the page with the check allow
   const run = async (callId: string, node: string, parameters: JsonObject) =>
     await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node, parameters, consequences: [] } });
   await run("call.look", SNAPSHOT_NODE, {});
-  const pressed = await run("call.press", CLICK_NODE, { selector: { handle: "target.2" }, timeoutMs: 5_000 });
+  const pressed = await run("call.press", CLICK_NODE, { selector: { handle: "t2" }, timeoutMs: 5_000 });
   await run("call.go", NAVIGATE_NODE, { url: FORM_URL });
-  await run("call.type", TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada", timeoutMs: 5_000 });
+  await run("call.type", TYPE_NODE, { selector: { handle: "t1" }, text: "Ada", timeoutMs: 5_000 });
   const click = sent.find((command) => command.actionType === "web.dom.click");
   assert.ok(click, "the press went out");
   assert.equal(click.parameters.checkWaitMs, 15_000);
@@ -296,37 +315,37 @@ test("handles are resolved per page and numbered per Flow: a recapture replaces 
   // number the Flow has never spent (see stable-handles.ts).
   page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedAt("web.handle.unknown", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" } }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
   // Another page's control is given its own number, even at the same selector,
   // and both resolve bare: the plan writes them bare.
   page = { url: "https://example.test/b", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), clickResolvedTo("#renamed", "button", "Renamed"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t3" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
   // A third page's control is another number again: nothing is ambiguous bare,
   // and a location beside a handle confirms the page that issued it.
   page = { url: "https://example.test/c", elements: [{ tagName: "a", selector: "#other", visibleText: "Other" }] };
   await inspect(runtime);
-  for (const handle of ["target.2", "target.3", "target.4"]) {
+  for (const handle of ["t2", "t3", "t4"]) {
     assert.equal((await resolve(runtime, CLICK_NODE, { selector: { handle } })).status, "resolved", handle);
   }
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.4" } }), clickResolvedTo("#other", "a", "Other"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.4", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.4", location: "https://example.test/never" } }), refusedAt("web.handle.unknown", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/c" } }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t4" } }), clickResolvedTo("#other", "a", "Other"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t4", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t4", location: "https://example.test/never" } }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2", location: "https://example.test/c" } }), refusedAt("web.handle.unknown", "selector"));
 
   // A page let go by the bounded store makes its handles stale, by location and bare.
   for (let index = 0; index < 8; index += 1) {
     page = { url: `https://example.test/more/${index}`, elements: [{ tagName: "button", selector: "#other", visibleText: "Other" }] };
     await inspect(runtime);
   }
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/a" } }), refusedAt("web.handle.stale", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedAt("web.handle.stale", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.12" } }), clickResolvedTo("#other", "button", "Other"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2", location: "https://example.test/a" } }), refusedAt("web.handle.stale", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t3" } }), refusedAt("web.handle.stale", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t12" } }), clickResolvedTo("#other", "button", "Other"));
 });
 
 test("a handle is this project and Flow's alone, and a reveal's recapture is what the plan resolves against", async () => {
@@ -337,13 +356,13 @@ test("a handle is this project and Flow's alone, and a reveal's recapture is wha
     (actionType) => { if (actionType === "web.dom.click") expanded = true; }
   );
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }, { flowId: "flow.two" }), refusedAt("web.handle.unknown", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }, { projectId: "project.two" }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" } }, { flowId: "flow.two" }), refusedAt("web.handle.unknown", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" } }, { projectId: "project.two" }), refusedAt("web.handle.unknown", "selector"));
 
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), refusedAt("web.handle.unknown", "selector"));
-  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" } }), refusedAt("web.handle.unknown", "selector"));
+  const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.equal(revealed.resultCode, "web.action.succeeded");
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR, element: NAME_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR, element: NAME_IDENTITY } });
 });
 
 test("a misplaced or malformed handle refuses the whole node, by name", async () => {
@@ -351,20 +370,20 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   await inspect(runtime);
   // A target handle goes in an element node's selector; on the extraction node any handle was meant for its list.
   const misplaced: Array<[string, JsonObject, string, string]> = [
-    [TYPE_NODE, { selector: NAME_SELECTOR, text: { handle: "target.1" } }, "text", TARGET_HINT],
-    [NAVIGATE_NODE, { url: { handle: "target.1" } }, "url", TARGET_HINT],
-    [SNAPSHOT_NODE, { selector: { handle: "target.1" } }, "selector", TARGET_HINT],
-    [EXTRACT_LIST_NODE, { selector: { handle: "target.1" } }, "selector", EXTRACTION_HINT],
-    [EXTRACT_LIST_NODE, { extractList: { handle: "target.1" } }, "extractList", EXTRACTION_HINT],
-    [EXTRACT_LIST_NODE, { extractList: { item: { handle: "target.1" }, fields: { name: "td" } } }, "extractList.item", EXTRACTION_HINT],
+    [TYPE_NODE, { selector: NAME_SELECTOR, text: { handle: "t1" } }, "text", TARGET_HINT],
+    [NAVIGATE_NODE, { url: { handle: "t1" } }, "url", TARGET_HINT],
+    [SNAPSHOT_NODE, { selector: { handle: "t1" } }, "selector", TARGET_HINT],
+    [EXTRACT_LIST_NODE, { selector: { handle: "t1" } }, "selector", EXTRACTION_HINT],
+    [EXTRACT_LIST_NODE, { extractList: { handle: "t1" } }, "extractList", EXTRACTION_HINT],
+    [EXTRACT_LIST_NODE, { extractList: { item: { handle: "t1" }, fields: { name: "td" } } }, "extractList.item", EXTRACTION_HINT],
     [CLICK_NODE, { selector: { handle: "extraction.1" } }, "selector", EXTRACTION_HINT],
-    ["builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "target.2" } }, recordOutput: { handle: "target.1" } }, "recordOutput", TARGET_HINT]
+    ["builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "t2" } }, recordOutput: { handle: "t1" } }, "recordOutput", TARGET_HINT]
   ];
   for (const [node, parameters, position, hint] of misplaced) {
     assert.deepEqual(await resolve(runtime, node, parameters), refusedAt("web.handle.misplaced", position, hint), `${node} ${JSON.stringify(parameters)}`);
   }
   // Core's Run Output node runs its payload as the named web output, so a handle there is resolved as that output's node resolves it.
-  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "target.2" } } }), {
+  assert.deepEqual(await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.click", parameters: { selector: { handle: "t2" } } }), {
     status: "resolved",
     // It is a click, so it also carries the check allowance (`actions/check-wait.ts`).
     parameters: { outputId: "web.dom.click", parameters: { selector: "#submit", element: SUBMIT_IDENTITY, checkWaitMs: 15_000 }, timeoutMs: 20_000 }
@@ -372,19 +391,23 @@ test("a misplaced or malformed handle refuses the whole node, by name", async ()
   const malformed: JsonObject[] = [
     { selector: { handle: "target.x" } },
     // Past the widest number a Flow issues (`stable-handles.ts`): six digits.
-    { selector: { handle: "target.1000000" } },
+    { selector: { handle: "t1000000" } },
+    { selector: { handle: "t0" } },
+    // The old spelling is read over the same numbers, and no others.
     { selector: { handle: "target.0" } },
+    { selector: { handle: "target.1000000" } },
+    { selector: { handle: "tx" } },
     { selector: { handle: 5 } },
-    { selector: { handle: "target.1", extra: true } },
-    { selector: { handle: "target.1", location: 3 } },
-    { selector: { handle: "target.1", location: "" } }
+    { selector: { handle: "t1", extra: true } },
+    { selector: { handle: "t1", location: 3 } },
+    { selector: { handle: "t1", location: "" } }
   ];
   for (const parameters of malformed) {
     assert.deepEqual(await resolve(runtime, CLICK_NODE, parameters), refusedAt("web.handle.malformed", "selector", TARGET_HINT), JSON.stringify(parameters));
   }
   // Nothing of a refused node is resolved, and every reason is named once, in a fixed order, before where each applied.
   assert.deepEqual(
-    await resolve(runtime, TYPE_NODE, { selector: { handle: "target.9" }, text: { handle: "target.1" } }),
+    await resolve(runtime, TYPE_NODE, { selector: { handle: "t9" }, text: { handle: "t1" } }),
     refusedWith("web.handle.misplaced", "web.handle.unknown", TARGET_HINT, "web.handle.unknown:selector", "web.handle.misplaced:text")
   );
   assert.deepEqual([...WEB_PLAN_HANDLE_ISSUE_CODES], [
@@ -414,15 +437,15 @@ test("a handle naming a control this step cannot act on refuses the node here, n
   const chooser: JsonObject = { tagName: "select", selector: "#band", accessibleName: "Price band" };
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [submit, chooser] }));
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.1" }, value: "5" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "5" }), {
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "t1" }, value: "5" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "t2" }, value: "5" }), {
     status: "resolved",
     parameters: { selector: "#band", value: "5", element: { tagName: "select", accessibleName: "Price band", selector: "#band" } }
   });
   // Entering text into something that can never hold any is refused the same way.
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
   // A click names no kind of control, so nothing here constrains it.
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
 });
 
 test("a refusal for the wrong control names the node that acts on it, and only when the control's kind says which", async () => {
@@ -441,25 +464,25 @@ test("a refusal for the wrong control names the node that acts on it, and only w
   await inspect(runtime);
 
   // The choice node on a button: dom-click, at the slot the handle was written in.
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { target: { handle: "target.1" }, value: "Millbrook" }), refusedAt("web.handle.wrong_control", "target", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { target: { handle: "t1" }, value: "Millbrook" }), refusedAt("web.handle.wrong_control", "target", USE_CLICK));
   // And the call it names, with the same handle, is one the resolver makes real.
-  const pressed = await resolve(runtime, CLICK_NODE, { target: { handle: "target.1" } });
+  const pressed = await resolve(runtime, CLICK_NODE, { target: { handle: "t1" } });
   assert.equal(pressed.status, "resolved", JSON.stringify(pressed));
   // The choice node on a select still resolves: nothing is named where nothing was refused.
-  assert.equal((await resolve(runtime, SELECT_NODE, { selector: { handle: "target.2" }, value: "5" })).status, "resolved");
+  assert.equal((await resolve(runtime, SELECT_NODE, { selector: { handle: "t2" }, value: "5" })).status, "resolved");
   // A text-entry node on a button names dom-click; on a select, dom-select.
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_SELECT));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t1" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, text: "Ada" }), refusedAt("web.handle.wrong_control", "selector", USE_SELECT));
   // A role says it is pressed, whatever element carries it; so does an input type.
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.3" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.6" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "t3" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "t6" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector", USE_CLICK));
   // A native option is chosen through its select, a different handle, so it
   // names nothing; neither does an element whose tag says nothing here knows.
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.4" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector"));
-  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "target.5" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector"));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "t4" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector"));
+  assert.deepEqual(await resolve(runtime, SELECT_NODE, { selector: { handle: "t5" }, value: "x" }), refusedAt("web.handle.wrong_control", "selector"));
   // Through Core's Run Output node the payload is refused the same way, at its own position.
   assert.deepEqual(
-    await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.select", parameters: { target: { handle: "target.1" }, value: "x" } }),
+    await resolve(runtime, "builtin.policy.action", { outputId: "web.dom.select", parameters: { target: { handle: "t1" }, value: "x" } }),
     refusedWith("web.handle.wrong_control", USE_CLICK, "web.handle.wrong_control:parameters.target")
   );
 });
@@ -470,15 +493,15 @@ test("a selector the page gave to several controls is refused rather than acted 
   let page: Page = { url: "https://example.test/catalog", elements: [submit, link("one"), link("two")] };
   const runtime = runtimeOver(() => page);
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedAt("web.handle.not_unique", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/catalog" } }), refusedAt("web.handle.not_unique", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t3" } }), refusedAt("web.handle.not_unique", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2", location: "https://example.test/catalog" } }), refusedAt("web.handle.not_unique", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
   // A page that describes the link alone does not make the other page's shared
   // selector unique; its own link is its own control, with a number of its own.
   page = { url: "https://example.test/other", elements: [submit, link("one")] };
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), refusedAt("web.handle.not_unique", "selector"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.5", location: "https://example.test/other" } }), {
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t2" } }), refusedAt("web.handle.not_unique", "selector"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t5", location: "https://example.test/other" } }), {
     status: "resolved",
     parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "one", selector: '[data-testid="product-link"]' } }
   });
@@ -486,7 +509,7 @@ test("a selector the page gave to several controls is refused rather than acted 
   const framedLink: JsonObject = { tagName: "a", selector: 'frame[4] >> [data-testid="product-link"]', accessibleName: "framed", attributes: { href: "/p/framed", "data-testid": "product-link", "data-fluxiq-frame-id": "4" } };
   page = { url: "https://example.test/framed", elements: [link("top"), framedLink] };
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.7", location: "https://example.test/framed" } }), {
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t7", location: "https://example.test/framed" } }), {
     status: "resolved",
     parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "framed", selector: '[data-testid="product-link"]' }, browserFrameId: 4 }
   });
@@ -496,12 +519,12 @@ test("a child frame's element names its frame, and a node naming another frame i
   const framed: JsonObject = { tagName: "input", selector: `frame[7] >> ${NAME_SELECTOR}`, inputType: "text", accessibleName: "Name", attributes: { name: "name", type: "text", "data-fluxiq-frame-id": "7" } };
   const runtime = runtimeOver(() => ({ url: FORM_URL, elements: [submit, framed] }));
   await inspect(runtime);
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, text: "Ada" }), {
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, text: "Ada" }), {
     status: "resolved",
     parameters: { selector: NAME_SELECTOR, text: "Ada", element: NAME_IDENTITY, browserFrameId: 7 }
   });
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 7 }), { status: "resolved", parameters: { selector: NAME_SELECTOR, browserFrameId: 7, element: NAME_IDENTITY } });
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 3 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
-  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" }, browserFrameId: 7 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, browserFrameId: 7 }), { status: "resolved", parameters: { selector: NAME_SELECTOR, browserFrameId: 7, element: NAME_IDENTITY } });
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, browserFrameId: 3 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
+  assert.deepEqual(await resolve(runtime, TYPE_NODE, { selector: { handle: "t2" }, browserFrameId: 0 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: "t1" }, browserFrameId: 7 }), refusedAt("web.handle.frame_mismatch", "browserFrameId"));
 });

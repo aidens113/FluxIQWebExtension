@@ -210,7 +210,7 @@ test("the element ordering does not decide the selector or the emptiness guard",
 
 /** What `validateWebRuntimeTargetOverrideEvidence` resolves the renamed Save to (`renamed-save-override.test.ts`). */
 const repairedSave = {
-  handles: { element: "target.2" },
+  handles: { element: "t2" },
   handleResolution: "named",
   tagName: "button",
   accessibleName: "Apply changes",
@@ -288,9 +288,9 @@ test("a repair with no selector still carries its own identity, beside the recor
 });
 
 test("handles without a resolution are not the domain's mark, and the content rule still decides", () => {
-  const sameControl = { ...recordedNode(), target: { handles: { element: "target.1" }, tagName: "button", accessibleName: "Save changes" } };
+  const sameControl = { ...recordedNode(), target: { handles: { element: "t1" }, tagName: "button", accessibleName: "Save changes" } };
   assert.equal(adaptedTargetSupersedesRecording(sameControl), false);
-  const otherControl = { ...recordedNode(), target: { handles: { element: "target.1" }, handleResolution: "guessed", tagName: "button", accessibleName: "Discard changes" } };
+  const otherControl = { ...recordedNode(), target: { handles: { element: "t1" }, handleResolution: "guessed", tagName: "button", accessibleName: "Discard changes" } };
   assert.equal(adaptedTargetSupersedesRecording(otherControl), true);
   assert.equal(adaptedTargetSupersedesRecording(recordedNode()), false, "no target at all is the recording");
 });
@@ -461,7 +461,7 @@ const recordedRowAction = {
 
 /** The same control found again under a new name -- and the list position, which is all a repair knows about the row. */
 const renamedRowAction = {
-  handles: { element: "target.2" },
+  handles: { element: "t2" },
   handleResolution: "named",
   tagName: "button",
   accessibleName: "Member actions",

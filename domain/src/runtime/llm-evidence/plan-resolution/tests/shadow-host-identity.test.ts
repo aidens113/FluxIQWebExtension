@@ -80,7 +80,7 @@ test("a click and a wait resolved from a handle inside a shadow root carry its h
   const runtime = runtimeOver([search, reject]);
   await inspect(runtime);
 
-  const clicked = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });
+  const clicked = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t2" } });
   assert.deepEqual(clicked.element, {
     tagName: "button",
     accessibleName: "Reject non-essential",
@@ -88,22 +88,22 @@ test("a click and a wait resolved from a handle inside a shadow root carry its h
     selector: reject.selector,
     context: { shadowHosts: ["body > rf-consent"] }
   });
-  const waited = await resolvedParameters(runtime, WAIT_NODE, { selector: { handle: "target.2" } });
+  const waited = await resolvedParameters(runtime, WAIT_NODE, { selector: { handle: "t2" } });
   assert.deepEqual((waited.element as JsonObject | undefined)?.context, { shadowHosts: ["body > rf-consent"] });
 
   const element = dispatchedElement("web.dom.click", clicked);
   assert.deepEqual((element?.context as JsonObject | undefined)?.shadowHosts, ["body > rf-consent"], "the chain survives Core's normalizer and the gateway mapping");
 
   // A light-document control's identity is what it always was.
-  const typed = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.1" } });
+  const typed = await resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "t1" } });
   assert.deepEqual((typed.element as JsonObject).context, { formId: "search" });
 });
 
 test("the packet the model reads carries no host chain; the binding keeps it beside the selector", () => {
   const binding = sanitizeWebLlmSnapshotWithBindings({ url: BOARD_URL, interactiveElements: [search, reject] });
   assert.equal(JSON.stringify(binding.evidence).includes("rf-consent"), false);
-  assert.deepEqual(binding.shadowHosts?.get("target.2"), ["body > rf-consent"]);
-  assert.equal(binding.shadowHosts?.has("target.1"), false);
+  assert.deepEqual(binding.shadowHosts?.get("t2"), ["body > rf-consent"]);
+  assert.equal(binding.shadowHosts?.has("t1"), false);
 });
 
 test("two widgets giving their buttons one selector inside their own roots are two addresses, not a shared selector", () => {
@@ -111,18 +111,18 @@ test("two widgets giving their buttons one selector inside their own roots are t
   const scope = { projectId: "project.one", flowId: "flow.one" };
   const inWidget = (host: string, text: string): JsonObject => ({ tagName: "button", selector: "button.primary", visibleText: text, context: { shadowHosts: [host] } });
   targets.remember(scope, sanitizeWebLlmSnapshotWithBindings({ url: BOARD_URL, interactiveElements: [inWidget("body > rf-consent", "Accept all"), inWidget("body > rf-assistant", "Send")] }));
-  const first = targets.resolve(scope, "target.1", BOARD_URL);
-  const second = targets.resolve(scope, "target.2", BOARD_URL);
+  const first = targets.resolve(scope, "t1", BOARD_URL);
+  const second = targets.resolve(scope, "t2", BOARD_URL);
   assert.equal(first.ok && first.element.context?.shadowHosts?.[0], "body > rf-consent");
   assert.equal(second.ok && second.element.context?.shadowHosts?.[0], "body > rf-assistant");
 
   // The same selector twice in one root is still one shared selector.
   targets.remember(scope, sanitizeWebLlmSnapshotWithBindings({ url: BOARD_URL, interactiveElements: [inWidget("body > rf-consent", "Accept all"), inWidget("body > rf-consent", "Accept all")] }));
-  assert.deepEqual(targets.resolve(scope, "target.1", BOARD_URL), { ok: false, code: "not_unique" });
+  assert.deepEqual(targets.resolve(scope, "t1", BOARD_URL), { ok: false, code: "not_unique" });
 });
 
 test("a chain with one unreadable host is dropped whole", () => {
   const broken = { ...reject, context: { shadowHosts: ["body > rf-consent", ""] } };
   const binding = sanitizeWebLlmSnapshotWithBindings({ url: BOARD_URL, interactiveElements: [broken] });
-  assert.equal(binding.shadowHosts?.has("target.1"), false);
+  assert.equal(binding.shadowHosts?.has("t1"), false);
 });

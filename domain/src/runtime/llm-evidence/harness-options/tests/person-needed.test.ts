@@ -41,7 +41,7 @@ test("a press whose control raises a robot check comes back marked personNeeded"
   const { registry, commands } = registeredWith({ click: CHECK });
   await run(registry, "web.recovery.inspect", {});
 
-  const pressed = await run(registry, "web.recovery.press", { target: "target.1", consequences: [] }) as JsonObject;
+  const pressed = await run(registry, "web.recovery.press", { target: "t1", consequences: [] }) as JsonObject;
 
   assert.equal(pressed.personNeeded, true);
   assert.equal(pressed.resultCode, "web.action.rejected.needs_person");
@@ -74,7 +74,7 @@ test("a press that meets a sign-in wall is not marked personNeeded", async () =>
   const { registry } = registeredWith({ click: SIGN_IN });
   await run(registry, "web.recovery.inspect", {});
 
-  const pressed = await run(registry, "web.recovery.press", { target: "target.1", consequences: [] }) as JsonObject;
+  const pressed = await run(registry, "web.recovery.press", { target: "t1", consequences: [] }) as JsonObject;
 
   assert.equal(pressed.resultCode, "web.action.rejected.needs_person");
   assert.equal("personNeeded" in pressed, false);
@@ -83,7 +83,7 @@ test("a press that meets a sign-in wall is not marked personNeeded", async () =>
 test("every other refusal is reported exactly as before, unmarked", async () => {
   const { registry } = registeredWith({});
 
-  const refused = await run(registry, "web.recovery.press", { target: "target.1", consequences: [] }) as JsonObject;
+  const refused = await run(registry, "web.recovery.press", { target: "t1", consequences: [] }) as JsonObject;
 
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.equal("personNeeded" in refused, false);

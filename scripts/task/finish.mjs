@@ -1,5 +1,12 @@
 // Closing a task: integrate, validate, merge, clean up.
 //
+// The gate before a merge is the structure audit only, which takes seconds. The
+// task's own narrow checks (the touched packages' typecheck and the tests beside
+// the changed code) are run by whoever did the work, before finish. The full
+// suites run at most twice a day as a sweep on `dev`, and what they find is fixed
+// forward (user, 2026-10-01: a 15-30 minute suite before every merge is what
+// made integration slow). `--full-check` still runs `pnpm check` here on request.
+//
 // The integration step is the one that earns its keep. Two tasks can change
 // different files, merge without a single conflict, and still leave the system
 // incompatible -- git has no way to see that. Merging the integration branch
@@ -20,12 +27,14 @@
 // gates never saw. So this returns the paired branch and the command that
 // closes it, rather than closing it or ignoring it.
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { processesUsingRoots, readSideState, removeWorktree, runGit, runPnpm } from "../worktree/index.mjs";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 import { locateTask } from "./locate.mjs";
 import { pairedCore } from "./paired-core.mjs";
 
-export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integrationBranch = "dev", skipChecks = false, allowRunning = false, dryRun = false, title }) {
+export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integrationBranch = "dev", skipChecks = false, fullCheck = false, allowRunning = false, dryRun = false, title }) {
   const task = await locateTask(repositoryRoot, id);
   const workRoot = task.worktree?.root ?? repositoryRoot;
 
@@ -62,7 +71,7 @@ export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integ
 
   const validation = skipChecks
     ? { ran: false, command: null, reason: "--skip-checks" }
-    : await validate(workRoot);
+    : fullCheck ? await validate(workRoot) : await audit(workRoot);
 
   if (!task.worktree) await runGit(repositoryRoot, ["checkout", integrationBranch]);
 
@@ -80,6 +89,15 @@ export async function finishTask({ repositoryRoot, coreRepositoryRoot, id, integ
   await runGit(repositoryRoot, ["branch", "-d", task.branch]);
 
   return { id, branch: task.branch, merged: subject, validation, worktree: task.worktree?.root ?? null, removed: Boolean(task.worktree), core: pairing, applied: true };
+}
+
+async function audit(workRoot) {
+  try {
+    await promisify(execFile)(process.execPath, ["scripts/structure-audit.mjs"], { cwd: workRoot, maxBuffer: 64 * 1024 * 1024 });
+    return { ran: true, command: "node scripts/structure-audit.mjs", passed: true };
+  } catch (cause) {
+    throw new Error(`The structure audit failed in ${workRoot}, so the task was not merged. Fix it and run finish again.`, { cause });
+  }
 }
 
 async function validate(workRoot) {

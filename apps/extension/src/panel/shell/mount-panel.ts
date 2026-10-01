@@ -33,7 +33,7 @@
 import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
-import { createActivityFeed, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
+import { createActivityFeed, createChatOwnerContext, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
 import { createElement } from "../dom";
 import { createStartView, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
@@ -59,12 +59,25 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   let recordingWas: RecordingState | undefined;
   let visible = true;
   let connected = false;
+  let activatedRow: HTMLElement | undefined;
 
   const recording = createRecordingControls(context);
   const review = createRecordingReview(context);
   const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style));
   const automations = createAutomationsTab(context, {
-    choose: (row) => void chooseAutomation(row, { open: openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }) }),
+    choose: (row) => {
+      const source = activatedRow;
+      activatedRow = undefined;
+      chooseAutomation(row, { open: openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }) });
+      const doc = root.ownerDocument;
+      if (!source || !doc.hasFocus() || doc.visibilityState !== "visible" || screen !== "chat") return;
+      const box = chat.element.querySelector<HTMLTextAreaElement>("#conversationInput");
+      if (box && !box.disabled && navigationVisible(box)) chat.focusComposer();
+      else {
+        const tab = topBar.element.querySelector<HTMLButtonElement>(`#${tabId("chat")}`);
+        if (tab && !tab.disabled && tab.getAttribute("aria-selected") === "true" && navigationVisible(tab)) tab.focus({ preventScroll: true });
+      }
+    },
     review: review.element,
     newAutomation: recording.newAutomation
   });
@@ -75,12 +88,37 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
       automations.setWorking(now);
     }
   );
-  const activity: ActivityFeed = createActivityFeed({ request: store.request, listen: listenToPushes }, observeWorking);
-  activity.start();
-  void activity.read();
+  const workingOwner = createChatOwnerContext(store.request);
+  let activity: ActivityFeed | undefined;
+  let activityCurrent = () => false;
+  let activityUnsupported = false;
+  replaceWorkingFeed();
+
+  function replaceWorkingFeed(): void {
+    const previous = activity;
+    activity = undefined;
+    previous?.stop();
+    working.reset();
+    const lease = workingOwner.capture();
+    const next = createActivityFeed({
+      request: <T>(message: Parameters<typeof store.request>[0]) => current()
+        ? lease.request<T>(message)
+        : Promise.resolve({ ok: false as const, sentence: "This context has changed. Try again." }),
+      listen: listener => listenToPushes(message => { if (current()) listener(message); })
+    }, () => {
+      if (!current()) return;
+      if (next.snapshot().reach === "unsupported") activityUnsupported = true;
+      observeWorking();
+    });
+    function current(): boolean { return activity === next && lease.current(); }
+    activity = next;
+    activityCurrent = current;
+    if (!activityUnsupported) { next.start(); void next.read(); }
+    observeWorking();
+  }
 
   function observeWorking(): void {
-    working.observe(workingInput(store.current(), activity.snapshot()));
+    working.observe(workingInput(store.current(), activityCurrent() ? activity?.snapshot() : undefined));
   }
 
   const start = createStartView(context, () => dispatch({ type: "gear" }));
@@ -103,18 +141,34 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   automations.element.setAttribute("aria-labelledby", tabId("automations"));
   const main = createElement("main", { className: "app-main" }, [recording.bar, start.element, settings.element, chatScreen, automations.element]);
   root.replaceChildren(createElement("div", { className: "shell" }, [topBar.element, main]));
+  // Capture the actual activating row before its handler changes screens.
+  automations.element.addEventListener("click", (event) => {
+    const source = (event.target as Element).closest<HTMLElement>(".automation-row");
+    const doc = root.ownerDocument;
+    activatedRow = source && automations.element.contains(source) && source === doc.activeElement && navigationVisible(source) && doc.hasFocus() && doc.visibilityState === "visible" ? source : undefined;
+    queueMicrotask(() => { activatedRow = undefined; });
+  }, true);
 
   function openInChat(target: ChatTarget): void {
     chat.open(target);
     showTarget(chat.target());
   }
 
-  /** The strip follows the chat's thread, whoever changed it (the chat has its own "Latest chat"). */
+  let passiveName: { readonly flowId: string; readonly name: string } | undefined;
+  /** The strip follows navigation; passive names already came from its own drawn row. */
   function showTarget(target: ChatTarget): void {
+    if (target.kind === "automation" && passiveName && target.flowId === passiveName.flowId && target.name === passiveName.name) return;
     automations.strip.show(target.kind === "automation" ? target : undefined);
     draw();
   }
   chat.onTargetChange(showTarget);
+  automations.strip.onNameChange((automation) => {
+    const target = chat.target();
+    if (target.kind !== "automation" || target.flowId !== automation.flowId) return;
+    const previous = passiveName;
+    passiveName = automation;
+    try { chat.updateAutomationName(automation); } finally { passiveName = previous; }
+  });
 
   function dispatch(event: ShellEvent): void {
     const next = reduceShell(state, event);
@@ -149,16 +203,19 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   store.subscribe((status: ExtensionStatus) => {
     noAnswer = false;
+    const owner = workingOwner.observe(status);
+    const replaced = owner.changed || owner.initial;
+    if (replaced) replaceWorkingFeed();
+    else observeWorking();
     topBar.render(status);
     openIcon.observe(status);
     recording.render(status);
     review.render(status);
     chat.render(status);
     automations.render(status);
-    observeWorking();
     // The relay forgets its state when the worker restarts; read it again on reconnecting.
     const nowConnected = status.connectionState === "connected";
-    if (nowConnected && !connected) void activity.read();
+    if (nowConnected && !connected && !replaced && !activityUnsupported) void activity?.read();
     connected = nowConnected;
     const ended = (recordingWas === "recording" || recordingWas === "paused") && status.recordingState === "idle";
     recordingWas = status.recordingState;
@@ -190,4 +247,8 @@ function listenToPushes(listener: (message: unknown) => void): () => void {
   const handler = (message: unknown): void => listener(message);
   chrome.runtime.onMessage.addListener(handler);
   return () => chrome.runtime.onMessage.removeListener(handler);
+}
+
+function navigationVisible(element: HTMLElement): boolean {
+  return element.isConnected && !element.closest("[hidden], [inert]") && element.getClientRects().length > 0;
 }

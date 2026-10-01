@@ -36,14 +36,14 @@
 // row's words, which of them from the top (`look-alikes.ts`).
 
 import type { JsonObject } from "fluxiq/core";
-import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
+import { sanitizedEvidenceElement, type DescribedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
 import { openDialogNameOf } from "./front-layer";
 import { joinWebLlmLayers, type WebLlmLayerSubject } from "./layers";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { tellWebLlmLookAlikesApart, type WebLlmLookAlikeCues } from "./look-alikes";
 import { capturedTruncated, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
 import { present } from "./present";
-import { jsonRecord } from "./untrusted-json";
+import { countValue, isJsonRecord, jsonRecord } from "./untrusted-json";
 import { screenedPageText } from "./withheld";
 import type { WebRepairCandidateProjection } from "./target";
 
@@ -90,7 +90,7 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
 
 /**
  * The packet plus the target-handle-to-selector map behind it. The map never
- * leaves the domain: it is how an opaque `target.N` the model was given is
+ * leaves the domain: it is how an opaque `tN` the model was given is
  * bound back to a selector across a later recapture.
  */
 export type WebLlmSnapshotBinding = {
@@ -183,9 +183,21 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const layerSubjects: WebLlmLayerSubject[] = [];
   // Every element, in the capture's order. Nothing is skipped but what cannot
   // be addressed or must not be described (`elements.ts`).
-  for (const raw of snapshot.interactiveElements) {
-    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+  const rawElements: unknown[] = snapshot.interactiveElements;
+  const describedAt = rawElements.map((raw) => sanitizedEvidenceElement(raw, { target: "t0", url, focusedSelector }));
+  const handleAt = positionalHandles(describedAt);
+  const parentAt = rawParentHandles(rawElements, handleAt);
+  describedAt.forEach((described, index) => {
+    if (!described) return;
+    described.element.target = handleAt[index] as string;
+    // Written only where there is one: an absent parent is a missing key, as
+    // every absent field of the packet is (`./present.ts`).
+    const parent = parentAt[index];
+    if (parent !== undefined) described.element.parent = parent;
+  });
+  for (const [index, described] of describedAt.entries()) {
     if (!described) continue;
+    const raw = rawElements[index];
     elements.push(described.element);
     // The one place a selector is written down, and it is not the packet.
     selectors.set(described.element.target, described.selector);
@@ -208,6 +220,7 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     // packet field renamed or dropped in `page-evidence.ts` fails here instead
     // of quietly leaving the packet.
     frame: context.frame,
+    viewport: context.viewport,
     loading: context.loading,
     navigation: context.navigation,
     dialogs: context.dialogs,
@@ -227,10 +240,59 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     repairCandidates: undefined
   });
   markFailedTarget(evidence, selectors, options.failedAction);
-  tellWebLlmLookAlikesApart(evidence.elements, cues);
+  // Over the rendered elements only: a hidden copy of a control must not make
+  // a visible one read as a look-alike, which would change what it says.
+  tellWebLlmLookAlikesApart(evidence.elements.filter((element) => element.hidden !== true), cues);
   // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
   const pageQuery = [...url.searchParams];
   return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
+}
+
+/**
+ * Each described element's positional handle: the rendered elements numbered
+ * first, in document order, and the hidden ones after them (t223). A capture
+ * that includes hidden elements therefore gives every rendered element the
+ * number the same page's ordinary capture gives it, and the elements stay in
+ * document order in the packet. `undefined` where nothing was described.
+ */
+function positionalHandles(describedAt: ReadonlyArray<DescribedEvidenceElement | undefined>): Array<string | undefined> {
+  const rendered = describedAt.filter((described) => described !== undefined && described.element.hidden !== true).length;
+  let renderedSeen = 0;
+  let hiddenSeen = 0;
+  return describedAt.map((described) => {
+    if (!described) return undefined;
+    if (described.element.hidden === true) {
+      hiddenSeen += 1;
+      return `t${rendered + hiddenSeen}`;
+    }
+    renderedSeen += 1;
+    return `t${renderedSeen}`;
+  });
+}
+
+/**
+ * Each described element's parent, as the handle of its nearest described
+ * ancestor. The capture names the nearest listed ancestor by its place in the
+ * list; where that ancestor was not described (a sensitive control, one with
+ * no address) the walk goes on up through the ancestor's own parent. A parent
+ * must come before its child in the list, so a malformed index cannot loop.
+ */
+function rawParentHandles(rawElements: readonly unknown[], handleAt: ReadonlyArray<string | undefined>): Array<string | undefined> {
+  // The raw parent of every listed element, described or not: a dropped
+  // element still passes its own parent on.
+  const parentIndexAt = rawElements.map((raw) => (isJsonRecord(raw) ? countValue(raw.parent) : undefined));
+  return rawElements.map((_, index) => {
+    if (handleAt[index] === undefined) return undefined;
+    let below = index;
+    let at = parentIndexAt[index];
+    while (at !== undefined && at < below) {
+      const handle = handleAt[at];
+      if (handle !== undefined) return handle;
+      below = at;
+      at = parentIndexAt[at];
+    }
+    return undefined;
+  });
 }
 
 /**

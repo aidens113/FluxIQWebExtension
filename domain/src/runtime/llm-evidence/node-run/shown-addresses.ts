@@ -62,7 +62,7 @@ const TYPE_ACTION = "web.dom.type";
  * domain's own words and never the page's.
  */
 const INSTEAD = [
-  'web.output.dom-click with target: {"handle": "target.N"} of the link that goes there, from the packet',
+  'web.output.dom-click with target: {"handle": "tN"} of the link that goes there, from the packet',
   "web.output.browser-navigate with url: an address from the evidence -- a link's href, a page's location, a read's address, or the start location"
 ];
 

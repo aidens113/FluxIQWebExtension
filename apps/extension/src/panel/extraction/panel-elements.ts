@@ -19,6 +19,9 @@ export type ExtractionPanelElements = {
   panel: HTMLElement;
   status: HTMLElement;
   notice: HTMLElement;
+  entryRecovery: HTMLElement;
+  entryRecoveryText: HTMLElement;
+  sheetRecovery: HTMLElement;
   body: HTMLElement;
   label: HTMLInputElement;
   summary: HTMLElement;
@@ -46,14 +49,18 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
   });
   openButton.disabled = true;
 
-  const status = createElement("p", { id: "extractionStatus", className: "extraction-status", text: "Click one example item on the page." });
+  const status = createElement("p", { id: "extractionStatus", className: "extraction-status", text: "Click one example item on the page.", attrs: { role: "status", tabindex: "-1" } });
   const closeButton = createElement("button", {
     id: "extractionCloseButton",
     className: "icon-button",
     text: "x",
     attrs: { type: "button", title: "Close", "aria-label": "Close" }
   });
-  const notice = createElement("p", { id: "extractionNotice", className: "notice warning", hidden: true });
+  const notice = createElement("p", { id: "extractionNotice", className: "notice warning", hidden: true, attrs: { role: "alert" } });
+
+  const entryRecoveryText = createElement("p", { className: "notice warning", attrs: { role: "alert" } });
+  const entryRecovery = createElement("div", { id: "extractionEntryRecovery", hidden: true }, [entryRecoveryText]);
+  const sheetRecovery = createElement("div", { id: "extractionSheetRecovery", hidden: true });
 
   const label = createElement("input", {
     id: "extractionLabel",
@@ -95,23 +102,27 @@ export function buildExtractionPanel(host: HTMLElement): ExtractionPanelElements
     id: "extractionPanel",
     className: "extraction-panel",
     hidden: true,
-    attrs: { role: "dialog", "aria-modal": "true", "aria-labelledby": "extractionTitle" }
+    attrs: { role: "dialog", tabindex: "-1", "aria-modal": "true", "aria-labelledby": "extractionTitle" }
   }, [
     createElement("header", { className: "extraction-header" }, [
       createElement("div", {}, [createElement("h2", { id: "extractionTitle", text: "Extract Data From This Page" }), status]),
       closeButton
     ]),
     notice,
+    sheetRecovery,
     body,
     createElement("footer", { className: "extraction-actions" }, [cancelButton, confirmButton])
   ]);
 
-  host.append(openButton, panel);
+  host.append(openButton, entryRecovery, panel);
   return {
     openButton,
     panel,
     status,
     notice,
+    entryRecovery,
+    entryRecoveryText,
+    sheetRecovery,
     body,
     label,
     summary,

@@ -32,10 +32,10 @@ test("resolves a repair from the opaque handle the model was shown, fingerprint 
   const { evidence, selectors } = formBinding();
   const typeAction = { nodeId: "name", definitionId: "web.output.dom-type", recordedTarget: recordedName("textarea", "Name") };
 
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), typeAction, selectors), {
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), typeAction, selectors), {
     status: "resolved",
     target: {
-      handles: { element: "target.1" },
+      handles: { element: "t1" },
       handleResolution: "named",
       tagName: "textarea",
       accessibleName: "Name",
@@ -49,10 +49,10 @@ test("resolves a repair from the opaque handle the model was shown, fingerprint 
   // The identity is the name, the role and the tag. The selector is carried as
   // one more signal, which is what makes this a repair that survives a page
   // renumbering its DOM rather than a selector swap under a new name.
-  const resolved = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), { nodeId: "submit", definitionId: "web.output.dom-click", recordedTarget: recordedName("button", "Unique") }, selectors);
+  const resolved = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3" }), { nodeId: "submit", definitionId: "web.output.dom-click", recordedTarget: recordedName("button", "Unique") }, selectors);
   assert.equal(resolved.status, "resolved");
   assert.deepEqual(resolved.status === "resolved" ? resolved.target : undefined, {
-    handles: { element: "target.3" },
+    handles: { element: "t3" },
     handleResolution: "named",
     tagName: "button",
     accessibleName: "Unique",
@@ -67,10 +67,10 @@ test("resolves a repair from the opaque handle the model was shown, fingerprint 
 test("refuses a handle the verb cannot use rather than putting the one compatible element in its place", () => {
   const { evidence, selectors } = formBinding();
   const typeAction = { nodeId: "name", definitionId: "web.output.dom-type", recordedTarget: recordedName("textarea", "Name") };
-  // `target.2` is the select: a real handle, but not one typing can use, and
+  // `t2` is the select: a real handle, but not one typing can use, and
   // the textarea beside it is not what the model asked for.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.2" }), typeAction, selectors), { status: "absent", reason: "handle_incompatible" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.9" }), typeAction, selectors), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t2" }), typeAction, selectors), { status: "absent", reason: "handle_incompatible" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t9" }), typeAction, selectors), { status: "absent", reason: "handle_not_issued" });
 });
 
 test("a string that is a valid CSS selector is just an unminted handle: it never addresses the page", () => {
@@ -101,9 +101,9 @@ test("refuses a parameter the action never declared, as not offered", () => {
   const { evidence, selectors } = formBinding();
   const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click", recordedTarget: recordedName("button", "Unique") };
   const notOffered = { status: "absent", reason: "parameter_not_offered" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.3" }), clickAction, selectors), notOffered);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "t3" }), clickAction, selectors), notOffered);
   // Beside the right one, too: the model was working from something it was not shown.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3", extra: "target.1" }), clickAction, selectors), notOffered);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3", extra: "t1" }), clickAction, selectors), notOffered);
 });
 
 test("refuses a handle map that names no parameter, as a required one missing", () => {
@@ -122,7 +122,7 @@ test("refuses a target that is not a map of parameters to handles, as malformed"
   const targets: unknown[] = [
     {},
     { handles: [] },
-    { handles: "target.3" },
+    { handles: "t3" },
     { handles: { element: 3 } },
     { handles: { element: "" } },
     { selector: "#unique" },
@@ -137,7 +137,7 @@ test("refuses a handle the packet issued twice, as ambiguous", () => {
   // Only a packet that was altered after it was issued can name one handle twice.
   const doubled = { ...evidence, elements: [...evidence.elements, { ...evidence.elements[2]!, name: "Other" }] };
   assert.deepEqual(
-    validateWebRuntimeTargetOverrideEvidence(doubled, target({ element: "target.3" }), { nodeId: "submit", definitionId: "web.output.dom-click", recordedTarget: recordedName("button", "Unique") }, selectors),
+    validateWebRuntimeTargetOverrideEvidence(doubled, target({ element: "t3" }), { nodeId: "submit", definitionId: "web.output.dom-click", recordedTarget: recordedName("button", "Unique") }, selectors),
     { status: "ambiguous", reason: "handle_ambiguous" }
   );
 });
@@ -152,16 +152,16 @@ test("refuses a handle naming something the verb cannot use, and one the packet 
       { tagName: "button", selector: "#go", name: "Go" },
     ],
   });
-  // `target.3` is real, and it is a button: typing cannot use it.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "target.3" }), typeAction), { status: "absent", reason: "handle_incompatible" });
+  // `t3` is real, and it is a button: typing cannot use it.
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "t3" }), typeAction), { status: "absent", reason: "handle_incompatible" });
   // A handle the packet never issued, on the same page.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "target.9" }), typeAction), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(page, target({ element: "t9" }), typeAction), { status: "absent", reason: "handle_not_issued" });
 });
 
 test("an action with nothing to re-point says so in Core's word, whatever the target names", () => {
   const { evidence, selectors } = formBinding();
   const navigate = { nodeId: "n", definitionId: "web.output.browser-navigate", recordedTarget: recordedName("a", "Next") };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), navigate, selectors), NOT_REPAIRABLE);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3" }), navigate, selectors), NOT_REPAIRABLE);
   // The action is judged before the target is read, so a malformed one gets the same answer.
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {} as AutomationStudioRuntimeTargetOverrideTarget, navigate, selectors), NOT_REPAIRABLE);
 });
@@ -173,18 +173,18 @@ test("an action with nothing to re-point says so in Core's word, whatever the ta
 test("a recorded action is repaired as the verb its output names", () => {
   const { evidence, selectors } = formBinding();
   const recordedClick = { nodeId: "save", definitionId: "builtin.policy.action", outputId: "web.dom.click", recordedTarget: recordedName("button", "Unique") };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedClick, selectors), {
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3" }), recordedClick, selectors), {
     status: "resolved",
-    target: { handles: { element: "target.3" }, handleResolution: "named", tagName: "button", accessibleName: "Unique", selector: "#unique" },
+    target: { handles: { element: "t3" }, handleResolution: "named", tagName: "button", accessibleName: "Unique", selector: "#unique" },
     control: { name: "Unique", kind: "button" },
   });
   // The output decides the role: a recorded type cannot land on the button it
   // was pointed at, and nothing else is put there for it.
   const recordedType = { nodeId: "name", definitionId: "builtin.policy.action", outputId: "web.dom.type", recordedTarget: recordedName("textarea", "Name") };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), recordedType, selectors), { status: "absent", reason: "handle_incompatible" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3" }), recordedType, selectors), { status: "absent", reason: "handle_incompatible" });
   // A created node names its output as well, and the two agree.
   const createdClick = { nodeId: "submit", definitionId: "web.output.dom-click", outputId: "web.dom.click", recordedTarget: recordedName("button", "Unique") };
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), createdClick, selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3" }), createdClick, selectors).status, "resolved");
 });
 
 test("a failed action whose output names no repairable web verb, or contradicts its node, is refused", () => {
@@ -202,7 +202,7 @@ test("a failed action whose output names no repairable web verb, or contradicts 
     { nodeId: "ask", definitionId: "builtin.llm.prompt", outputId: "web.dom.click" },
   ];
   for (const failedAction of refusedIdentities) {
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), failedAction, selectors), NOT_REPAIRABLE, JSON.stringify(failedAction));
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t3" }), failedAction, selectors), NOT_REPAIRABLE, JSON.stringify(failedAction));
   }
 });
 
@@ -211,9 +211,9 @@ test("without the binding the repair is fingerprint-only, which is weaker rather
   // A packet that outlived the binding that issued its handles -- reloaded from
   // a stored run, say. It still names what the element is and what it is called,
   // which is what Core's matcher weights highest; it just cannot add the hint.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "name", definitionId: "web.output.dom-type", recordedTarget: recordedName("textarea", "Name") }), {
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), { nodeId: "name", definitionId: "web.output.dom-type", recordedTarget: recordedName("textarea", "Name") }), {
     status: "resolved",
-    target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "textarea", accessibleName: "Name" },
+    target: { handles: { element: "t1" }, handleResolution: "named", tagName: "textarea", accessibleName: "Name" },
     control: { name: "Name", kind: "textarea" },
   });
 });
@@ -221,11 +221,11 @@ test("without the binding the repair is fingerprint-only, which is weaker rather
 test("refuses a repair when nothing compatible was described, and says so rather than naming a handle", () => {
   const typeAction = { nodeId: "name", definitionId: "web.output.dom-type", recordedTarget: recordedName("textarea", "Name") };
   const noTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "select", selector: "#plan" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.9" }), typeAction), { status: "absent", reason: "no_compatible_element" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "t9" }), typeAction), { status: "absent", reason: "no_compatible_element" });
   // Named, and still nothing: the select is real but typing cannot use it.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.1" }), typeAction), { status: "absent", reason: "no_compatible_element" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "t1" }), typeAction), { status: "absent", reason: "no_compatible_element" });
   const twoTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "input", selector: "#first" }, { tagName: "textarea", selector: "#second" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "target.9" }), typeAction), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "t9" }), typeAction), { status: "absent", reason: "handle_not_issued" });
 });
 
 test("carries a child-frame element's frame beside the selector that works inside it", () => {
@@ -235,10 +235,10 @@ test("carries a child-frame element's frame beside the selector that works insid
       { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3" } },
     ],
   });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "card", definitionId: "web.output.dom-type", recordedTarget: recordedName("input", "Name on card") }, selectors), {
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), { nodeId: "card", definitionId: "web.output.dom-type", recordedTarget: recordedName("input", "Name on card") }, selectors), {
     status: "resolved",
     target: {
-      handles: { element: "target.1" },
+      handles: { element: "t1" },
       handleResolution: "named",
       tagName: "input",
       accessibleName: "Name on card",
@@ -268,11 +268,11 @@ test("a list extraction is refused as not repairable, whatever it names, before 
   const { evidence, selectors } = catalogueBinding();
   const extraction = { nodeId: "rows", definitionId: "web.output.dom-extract_list", recordedTarget: recordedName("a", "Widget") };
   const proposals: Array<Record<string, string>> = [
-    { item: "target.1", "field.price": "target.2" },
-    { item: "target.1" },
-    { item: "target.2" },
-    { "field.price": "target.2" },
-    { element: "target.1" },
+    { item: "t1", "field.price": "t2" },
+    { item: "t1" },
+    { item: "t2" },
+    { "field.price": "t2" },
+    { element: "t1" },
   ];
   for (const handles of proposals) {
     assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target(handles), extraction, selectors), NOT_REPAIRABLE, JSON.stringify(handles));
@@ -288,7 +288,7 @@ test("a list extraction is refused as not repairable, whatever it names, before 
     { nodeId: "rows", definitionId: "web.output.dom-extract_list", outputId: "web.dom.click" },
   ];
   for (const failedAction of identities) {
-    for (const handles of [{ item: "target.1" }, { element: "target.1" }]) {
+    for (const handles of [{ item: "t1" }, { element: "t1" }]) {
       assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target(handles), failedAction, selectors), NOT_REPAIRABLE, `${JSON.stringify(failedAction)} ${JSON.stringify(handles)}`);
     }
   }
@@ -296,10 +296,10 @@ test("a list extraction is refused as not repairable, whatever it names, before 
 
 test("a click on a list row still resolves flat, with the row's position as metadata", () => {
   const { evidence, selectors } = catalogueBinding();
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "open", definitionId: "web.output.dom-click", recordedTarget: recordedName("a", "Widget") }, selectors), {
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "t1" }), { nodeId: "open", definitionId: "web.output.dom-click", recordedTarget: recordedName("a", "Widget") }, selectors), {
     status: "resolved",
     target: {
-      handles: { element: "target.1" },
+      handles: { element: "t1" },
       handleResolution: "named",
       tagName: "a",
       accessibleName: "Widget",

@@ -83,6 +83,11 @@ the gear and Open FluxIQ) and, under it, exactly one screen
   "Extract Data From This Page"; a recording that just ended is reviewed at the
   top (analyze, preview, test, save), and the panel switches to this tab when
   a recording stops.
+  Review actions retain their mounted controls across phase changes, including
+  Done while analysis progresses into building. A removed focused action hands
+  focus to an available local control only while the visible review still owns
+  focus in the active document. Passive redraw and dismissal do not claim
+  external focus; reducer, request and review-epoch contracts remain unchanged.
 - **Settings**, opened by the gear in place of everything else: the two
   addresses and four switches with an explicit Save, Disconnect, the on-page
   status (Full, Small, Off), Report a problem, Forget this pairing, and Open
@@ -139,12 +144,30 @@ The names the Lab presses are kept: the gear's "Settings", the settings labels,
 the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
 Data From This Page". The old way back from settings, the "Simple" radio, is
 gone with the modes.
+Paused recording remains an active recording lifecycle: Start recording stays
+hidden and disabled, including during connection, page and workload changes.
+Getting Started keeps Connect and Cancel locked through acknowledgement. A
+late failure is reconciled with the latest rendered connection state so it
+cannot contradict an already confirmed goal; unmet-goal failures retain retry
+feedback. Unexpected rejection releases both controls without exposing its text.
 
 Pending chat sends and connection-settings saves preserve edits made after the
 request began. Completion clears or refills a draft only when its edit revision
 still matches the submitted revision. A successful earlier settings save reports
 that newer changes remain unsaved; reconnect uses the saved settings. Typing or
 filling an example while a chat send is pending never sends that newer draft.
+Connection settings share one pending mutation owner across Save/reconnect,
+Disconnect and Forget. Status pushes cannot enable another mutation during that
+sequence; form inputs remain editable. Failed Forget retains confirmation and
+offers retry. Successful asynchronous dismissal restores opener focus only while
+the initiating control still owns focus in a visible active document; explicit
+opening focuses Cancel when the opener owns focus.
+
+The Automations list reconciles rows by flow id. Refreshing status or changing
+workload state retains mounted rows, their controls and current activation data.
+Reordering preserves row focus; removing a focused row selects a surviving
+neighbour or a visible named fallback. Background refresh does not claim focus
+from other controls, hidden panels or a hidden document.
 
 A failed request's sentence stays where it was sent until the person acts
 again; a status update never wipes it. Earlier, a refused command's error was
@@ -1335,6 +1358,14 @@ a filter over rows already read:
   (`content/extraction/field-spec.ts`) answers `undefined` for an excluded field,
   so nothing on the page is read for it.
 
+The background store erases earlier rows as soon as a narrower or empty preview
+selection arrives. Empty selection sends no page read. Only the current session,
+proposal and preview operation may commit rows or clear a failed read; identical
+pending selections share one read. Replies copy at most twenty rows and retain
+only the proposal keys their caller requested. Deleted or replaced sessions do
+not publish captured replies. These are preview lifecycle safeguards; session
+binding and receiver mutation ownership are separate contracts.
+
 What *is* recorded is the exclusion itself: the field stays in the recorded
 request as `handling: "exclude"`, and Core's record schema declares it the same
 way. That is the record of a decision the user made — drop it, and the next field
@@ -1620,7 +1651,146 @@ from every other action's in three ways:
   sends the node's 5,000 ms default as the command timeout, which would cut a
   paginated read short at its first page.
 
+### Stable navigation controls
+
+Automation export controls retain their identity across status updates for the
+same flow, run, dataset and format. Notice openers retain pending/error state.
+When a focused control is removed, the strip selects a visible enabled neighbor
+or fallback only while the extension document owns focus. Refresh never pulls
+focus back from the browser page. Tab arrows and Home/End retain native roving
+navigation; modified and composing key events remain unconsumed.
+
+Explicit activation of a focused automation row opens its target, shows Chat,
+then hands keyboard focus to the visible enabled composer or selected Chat tab.
+Latest Back similarly chooses the composer or the labelled Chat container. These
+handoffs require the activating control to own focus in the visible active
+extension document. Passive status updates, reconnects and late replies do not
+claim focus. Local DOM/event tests cover the ownership rules; live browser and
+assistive-technology behavior remain unverified.
+
+Names from the refreshed automation list synchronize the open same-flow Chat
+context, placeholder and strip labels through a metadata update. This preserves
+conversation generation, history, draft selection and reading position, and does
+not request detail or claim focus. A flow absent from a confirmed current list
+keeps its conversation and remembered name with disabled Run and current-list
+unavailability feedback. Loading, offline and failed reads do not imply deletion.
+
+### Extraction dialog lifecycle
+
+The Open FluxIQ utility serializes pending requests and scopes refusal feedback
+to its initiating Core address. An already observed address change prevents a
+late refusal from installing stale feedback; same-address errors retain retry.
+
+Report a problem holds one lock through report generation, file preparation and
+clipboard acknowledgement. A new request hides the previous download until a
+current report is prepared. Copy failure retains the current file; file creation
+failure still attempts copying. Fixed recovery feedback handles unavailable
+browser delivery APIs. Report generation/redaction remains background-owned.
+
+The shared Activity feed orders read replies and observed pushes independently.
+An overlay acknowledgement cannot replace newer observed activity. Stopping the
+feed invalidates old listeners and local completions; a later direct read remains
+legal without starting a subscription. This fences presentation without claiming
+to cancel an already issued background mutation.
+
+Panel status reads publish only while they remain the latest requested read and
+no newer push or command acknowledgement has been observed. This prevents slow
+startup reads from rolling the displayed connection/recording state backwards;
+request results and command acknowledgement publication retain their contracts.
+
+Conversation reads invalidate old publications on thread or connection changes.
+Answers dispatch only for a pending ask in the confirmed current thread; each
+operation owns its completion and lock, so an old same-ID answer cannot release
+the new thread's pending answer. Injected request throws/rejections use fixed
+recoverable feedback and retain ordinary fulfilled relay failure behavior.
+Accepted sends retain their original destination across thread changes. A late
+refusal cannot place the newly opened thread into fallback; disconnected state
+takes precedence over fallback. Mounted Chat also observes gateway/Core address,
+client, project and pairing context. Owner replacement retires old thread/feed
+instances, history, subject callbacks and timers before announcing the latest
+target. Same-owner reconnect and passive names retain draft and reading state.
+After explicit inactivity, fresh reads wait for activation; the historical first
+initialization read remains supported. Unsupported relay capability stays tied
+to the mounted lifetime.
+
+The composer keeps a single versioned local UI draft with nonsecret owner
+metadata. Foreign or unowned legacy text remains visible and requires explicit
+Use draft here or Clear draft; typing and examples never silently adopt it.
+Matching owned text restores without repeated review. Writes install the atomic
+versioned record before removing the literal legacy key, and an empty record
+prevents legacy resurrection. Owner/edit leases prevent accepted old sends from
+clearing newer or adopted text. This convenience owns no durable project data.
+
+Automation metadata and controls use a local owner revision for confirmed
+gateway/Core address, client, project and pairing context. Missing optional
+settings retain the confirmed Core address; volatile runtime/session evidence
+does not reset an owner. Replacements retire foreign rows, details, notices and
+rendered callbacks. Connection epochs retire pending operations while retaining
+same-owner confirmed metadata. Current run/export operations verify their known
+flow/run/dataset tuple and own acknowledgement, delivery and lock release. A
+parsed detail summary that explicitly names another run or flow is withheld;
+legacy omitted summaries remain supported. Offline controls dispatch nothing,
+and a new active owner can recover from an old unsupported-list fallback using
+the existing cadence. These are frontend publication/activation guards and do
+not cancel or authorize commands already accepted by the background.
+
+The shell's separate working feed uses the same confirmed remote owner tuple.
+Owner changes retire its read/push instance before Record/Extract/Run consume
+activity, reset the prior raw/held state, then use current runtime fallback and
+current paced activity. Timer epochs reject canceled callbacks. Same-owner
+reconnect and existing tab/pagehide subscription behavior retain400ms-on and
+1200ms-off holding; unsupported capability stays tied to the mounted shell.
+
+Dataset export retains its operation lock through browser delivery. Preparation
+or click failure shows local Retry/Open FluxIQ feedback and releases the lock.
+Temporary download links and owned URLs are cleaned up on success and failure,
+with delayed URL revocation retained after the click. Issued exports are never
+automatically replayed and a click is not claimed to prove file persistence.
+
+The extraction sheet temporarily mounts at the extension document root while
+open, isolating other extension controls and preserving their prior inert state.
+It restores its current host and a visible extension control on close. Focus
+handling stays inside the active extension document; selecting the browser page
+does not cancel a pick or pull focus back. Field redraws preserve the logical
+control and text selection where possible.
+
+Column-name inputs retain raw typing independently of redraw, including spaces
+and temporary blanks. Explicit change or Confirm applies the existing trimmed,
+nonempty label policy. Current row callbacks belong to their draft and render
+generation; detached rows cannot edit a replacement draft or captured receipt.
+Column groups and name/read-kind/remove controls identify their current column
+through text-only accessible names. Preview privacy narrowing stays unchanged.
+
+Session, preview and pick-start failures expose explicit current-stage recovery.
+A hidden initial restore failure offers recovery near the entry without opening
+a sheet automatically. Reading retries preserve the existing session and do not
+prepare or start another pick; uncertain start retries first inspect that session
+and retain a successful preparation milestone. Preview operations and Retry
+controls own their selection/generation, so obsolete failures cannot replace a
+newer preview or clear mutation feedback. Background refusal provenance retains
+authored refusal text; unexpected read errors use fixed local feedback. Picker
+polling remains600ms and stops on failure until explicit recovery.
+
+Confirmation freezes editing until acknowledgement. Cancellation immediately
+clears preview values from memory and rendered cells, retaining a visible pending
+or retryable failure sheet until the background acknowledges it. Per-operation
+epochs reject obsolete mount, polling, preview and command completions. The
+background remains the session owner across Firefox popup recreation; polling
+and column privacy rules remain unchanged. Controlled DOM tests verify these
+transitions; live browser focus and assistive-technology behavior remain unverified.
+
 ## Default Endpoint
+
+Extraction binds each draft to its actual backend session ID, tab and form.
+Initial discovery selects the automation tab; subsequent reads, preview,
+Confirm and cancellation name the selected ID and do not follow a replacement.
+Missing selected sessions retire the draft; malformed or mismatching replies
+cannot publish executable controls. Recovery tickets and polling share that
+binding. Cancellation erases draft values immediately while retaining the ID
+for an explicit failed-cancellation retry. Receipt Close cleans local UI.
+Older optional low-level callers retain omitted-ID compatibility and its risk.
+IDs provide correlation, not authorization or ordering of content commands.
+Receiver lifecycle and confirmation idempotence require separate validation.
 
 The default development endpoints are:
 

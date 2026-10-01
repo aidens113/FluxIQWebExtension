@@ -202,13 +202,14 @@ export class ServerCommandChannel {
       sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId),
       // The look takes in every frame (t200), merged exactly as a recorded
       // event's snapshot is, around the top frame's own capture.
-      mergeFrameSnapshots: async (tabId, topSnapshot, waitMs) =>
+      // A search's look asks every child frame for its hidden elements too.
+      mergeFrameSnapshots: async (tabId, topSnapshot, waitMs, capture) =>
         await captureMergedTabSnapshot(
           { sendToTab, allTabFrames },
           tabId,
           topSnapshot as DomSnapshotPayload,
           TOP_FRAME_ID,
-          waitMs === undefined ? {} : { waitMs }
+          { ...(waitMs === undefined ? {} : { waitMs }), ...(capture.includeHidden === true ? { includeHidden: true } : {}) }
         ) as DomSnapshot | undefined
     });
   }

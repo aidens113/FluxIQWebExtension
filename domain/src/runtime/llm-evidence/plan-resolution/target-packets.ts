@@ -1,5 +1,6 @@
 // The target handles one Flow's authoring was shown, remembered per page, so a
-// plan that names `target.N` can be given the selector behind it.
+// plan that names `tN` can be given the selector behind it. A handle written
+// the old way, `target.N`, is looked up as the `tN` it means.
 //
 // This keeps, for each project and Flow, the newest packet the model was shown
 // for each page it visited -- a recapture of a page replaces that page's
@@ -14,7 +15,7 @@
 // The authoring tools number handles for the whole Flow (`../stable-handles.ts`),
 // so two pages they show never give one handle to different controls, and a
 // bare handle -- the way the Flow script format writes a step's target --
-// resolves. They used to number every page from `target.1`, and a bare handle
+// resolves. They used to number every page from `t1`, and a bare handle
 // was then ambiguous as soon as the exploration had seen two pages: 6 of E1
 // lane B's 12 builds on the realistic stores. The rule above stays, for a
 // packet numbered any other way and for a Flow whose numbers had to start
@@ -47,6 +48,7 @@
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
 // are for the extraction handles (`structure/handles.ts`).
 
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
 import { webPlanElementIdentity, type WebPlanElementIdentity } from "./element-identity";
@@ -107,7 +109,8 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
       for (const [handle, target] of seen) targets.set(handle, target);
       keep(flow, location, targets);
     },
-    resolve(scope, handle, location) {
+    resolve(scope, written, location) {
+      const handle = canonicalWebLlmTargetHandle(written) ?? written;
       const flow = flows.get(scopeKey(scope));
       if (!flow) return { ok: false, code: "unknown" };
       if (location !== undefined) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshot } from "..";
 import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
+import { WEB_LLM_WITHHELD_TEXT } from "../withheld";
 
 test("sanitizes extension snapshots: a secret control is dropped, a URL's secrets are withheld, the rest is carried whole", () => {
   const evidence = sanitizeWebLlmSnapshot({
@@ -20,10 +21,10 @@ test("sanitizes extension snapshots: a secret control is dropped, a URL's secret
     elements: [
       // A text field's own value is carried when the capture read it; a
       // password field is not described at all.
-      { target: "target.1", tag: "input", name: "Name", attributes: [["type", "text"]], value: "Ada" },
-      { target: "target.2", tag: "a", text: "Next", href: "https://example.test/next?ticket=(withheld)" },
+      { target: "t1", tag: "input", name: "Name", attributes: [["type", "text"]], value: "Ada" },
+      { target: "t2", tag: "a", text: "Next", href: "https://example.test/next?ticket=(withheld)" },
       // Another origin's link is the page's too.
-      { target: "target.3", tag: "a", text: "Away", href: "https://outside.test/" },
+      { target: "t3", tag: "a", text: "Away", href: "https://outside.test/" },
     ],
   });
   assert.doesNotMatch(JSON.stringify(evidence), /private|Password/u);
@@ -41,10 +42,10 @@ test("retains semantic labels, types, attributes, select options and result text
     ],
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", name: "Name", attributes: [["autocomplete", "off"]], hasValue: true, value: "Ada" },
-    { target: "target.2", tag: "select", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
-    { target: "target.3", tag: "button", name: "Submit", attributes: [["type", "submit"]], controlType: "submit" },
-    { target: "target.4", tag: "p", text: "Not submitted", attributes: [["aria-live", "polite"]] },
+    { target: "t1", tag: "input", name: "Name", attributes: [["autocomplete", "off"]], hasValue: true, value: "Ada" },
+    { target: "t2", tag: "select", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
+    { target: "t3", tag: "button", name: "Submit", attributes: [["type", "submit"]], controlType: "submit" },
+    { target: "t4", tag: "p", text: "Not submitted", attributes: [["aria-live", "polite"]] },
   ]);
 });
 
@@ -59,10 +60,10 @@ test("exposes non-secret completion state and never a sensitive control's", () =
     ],
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "textarea", hasValue: true, value: "my notes" },
+    { target: "t1", tag: "textarea", hasValue: true, value: "my notes" },
     // Not a field anybody types into, so what it holds is not carried.
-    { target: "target.2", tag: "input", inputType: "hidden" },
-    { target: "target.3", tag: "select", options: [{ value: "team", label: "Team" }] },
+    { target: "t2", tag: "input", inputType: "hidden" },
+    { target: "t3", tag: "select", options: [{ value: "team", label: "Team" }] },
   ]);
   assert.doesNotMatch(JSON.stringify(evidence), /private|unlisted|data-sensitive/u);
 });
@@ -78,7 +79,7 @@ test("carries the page selection whole and marks the focused element, but never 
     ],
   });
   assert.equal(focusedField.selectedText, "order reference 4471");
-  assert.deepEqual(focusedField.elements.map((element) => [element.target, element.focused]), [["target.1", true], ["target.2", undefined]]);
+  assert.deepEqual(focusedField.elements.map((element) => [element.target, element.focused]), [["t1", true], ["t2", undefined]]);
 
   const focusedSecret = sanitizeWebLlmSnapshot({
     url: "https://example.test/form",
@@ -116,12 +117,12 @@ test("carries where an element sits: its form, landmark, heading, list position 
   });
   assert.deepEqual(evidence.elements, [
     {
-      target: "target.1", tag: "button", name: "Add to cart",
+      target: "t1", tag: "button", name: "Add to cart",
       form: "checkout", landmark: "main", heading: "Recommended for you", item: { index: 3, total: 24 },
     },
-    { target: "target.2", tag: "td", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
+    { target: "t2", tag: "td", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
     // The heading only repeats the control's own name, so it is not said twice.
-    { target: "target.3", tag: "input", name: "Coupon", form: "discount" },
+    { target: "t3", tag: "input", name: "Coupon", form: "discount" },
   ]);
 });
 
@@ -138,15 +139,15 @@ test("reports child-frame elements with a selector that works inside the frame a
   const evidence = sanitizeWebLlmSnapshot(page);
   assert.deepEqual(evidence.frame, { isTop: true, childFrameIds: [3, 7] });
   // The selector is the binding's, not the packet's: the packet names the
-  // element `target.2` and says which frame it belongs to, and the selector that
+  // element `t2` and says which frame it belongs to, and the selector that
   // works inside that frame is what the domain kept behind.
   const bound = sanitizeWebLlmSnapshotWithBindings(page);
   assert.deepEqual(evidence.elements.map((element) => [element.target, element.frameId]), [
-    ["target.1", undefined],
-    ["target.2", 3],
-    ["target.3", 7],
+    ["t1", undefined],
+    ["t2", 3],
+    ["t3", 7],
   ]);
-  assert.deepEqual([...bound.selectors], [["target.1", "#place-order"], ["target.2", "#card-name"], ["target.3", "#zip"]]);
+  assert.deepEqual([...bound.selectors], [["t1", "#place-order"], ["t2", "#card-name"], ["t3", "#zip"]]);
   assert.doesNotMatch(JSON.stringify(evidence), /frame\[3\]/u);
   // The frame stamp is the extension's own, not the page's, so it is not
   // published among the element's attributes; the frame's address is.
@@ -178,7 +179,7 @@ test("carries all fifty of a fifty-element page, a text that repeats the name sa
   assert.equal(evidence.truncated, false);
   assert.equal(compactBytes < legacyBytes, true, `compact ${compactBytes} bytes versus duplicate-semantic ${legacyBytes} bytes`);
   // Each element is individually addressable by its opaque handle, in order.
-  assert.deepEqual(evidence.elements.map((element) => element.target), interactiveElements.map((_, index) => `target.${index + 1}`));
+  assert.deepEqual(evidence.elements.map((element) => element.target), interactiveElements.map((_, index) => `t${index + 1}`));
   assert.doesNotMatch(JSON.stringify(evidence), /selector|data-component/u);
 });
 
@@ -199,7 +200,7 @@ test("rejects a snapshot that is malformed or off the origin the caller expected
 // names the element and addresses nothing.
 test("a failure packet marks the failed action's element with its opaque handle, never with a selector", () => {
   const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" } });
-  assert.equal(evidence.failedTarget, "target.2");
+  assert.equal(evidence.failedTarget, "t2");
   assert.equal(evidence.elements[1]?.name, "Pay now", "the handle names the control the action addressed");
   assert.equal(evidence.failedTargetMissing, undefined);
   assert.equal(evidence.failedTargetUnknown, undefined);
@@ -241,7 +242,7 @@ test("a failure packet names the parameters a repair fills, as a copy of what th
   assert.deepEqual(evidence.repairParameters, ELEMENT_PARAMETER);
   // Beside a marked control as well.
   const marked = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay", repairParameters: ELEMENT_PARAMETER } });
-  assert.equal(marked.failedTarget, "target.2");
+  assert.equal(marked.failedTarget, "t2");
   assert.deepEqual(marked.repairParameters, ELEMENT_PARAMETER);
   assert.doesNotMatch(JSON.stringify(marked), /#pay|selector/u);
 });
@@ -275,8 +276,94 @@ test("the records an element's address carries are kept for exactly the handles 
   const page = { url: "https://fixture.test/inbox", title: "Inbox", interactiveElements: [{ tagName: "button", selector: "#compose", name: "Compose" }, ...[1, 2, 3, 4, 5, 6].map(row)] };
 
   const whole = sanitizeWebLlmSnapshotWithBindings(page);
-  assert.equal(whole.records.has("target.1"), false, "the compose button sits in no record");
-  assert.deepEqual([...whole.records.keys()], ["target.2", "target.3", "target.4", "target.5", "target.6", "target.7"]);
-  assert.notEqual(whole.records.get("target.2"), whole.records.get("target.3"));
+  assert.equal(whole.records.has("t1"), false, "the compose button sits in no record");
+  assert.deepEqual([...whole.records.keys()], ["t2", "t3", "t4", "t5", "t6", "t7"]);
+  assert.notEqual(whole.records.get("t2"), whole.records.get("t3"));
   assert.equal(whole.evidence.elements.length, 7);
+});
+
+// The structure the page view folds by (t223): an element's own words, the
+// handle of its nearest described ancestor, the hidden flag a search capture
+// sets, and the window the capture was taken in.
+
+const STRUCTURE_URL = "https://shop.test/results";
+
+test("own words are carried screened, and an element with no words of its own says so with the empty string", () => {
+  const evidence = sanitizeWebLlmSnapshot({
+    url: STRUCTURE_URL,
+    interactiveElements: [
+      { tagName: "li", selector: "#card", visibleText: "Kettle $39.99", ownText: "" },
+      { tagName: "p", selector: "#note", visibleText: "Ships today. Learn more", ownText: "  Ships   today. " },
+      { tagName: "p", selector: "#card-number", visibleText: "Card 4111111111111111 on file. Change", ownText: "Card 4111111111111111 on file." },
+      { tagName: "span", selector: "#plain", visibleText: "Plain" }
+    ]
+  });
+  const [card, note, key, plain] = evidence.elements;
+  assert.equal(card?.ownText, "", "an empty own text is kept: the card's words are its children's");
+  assert.equal(note?.ownText, "Ships today.", "collapsed to one line, as every page string is");
+  assert.equal(plain !== undefined && "ownText" in plain, false, "a capture that did not report own words leaves the field absent");
+  assert.equal(key?.ownText, `Card ${WEB_LLM_WITHHELD_TEXT} on file.`, "own words pass the same secret screen as every string");
+});
+
+test("a parent index becomes the parent's handle, passing over an ancestor the packet does not describe", () => {
+  const evidence = sanitizeWebLlmSnapshot({
+    url: STRUCTURE_URL,
+    interactiveElements: [
+      { tagName: "form", selector: "#login" },
+      // A sensitive control is never described, so it has no handle to name.
+      { tagName: "input", selector: "#password", inputType: "password", parent: 0 },
+      // Its listed child walks on up to the form.
+      { tagName: "span", selector: "#hint", visibleText: "8 or more", parent: 1 },
+      { tagName: "button", selector: "#go", visibleText: "Sign in", parent: 0 },
+      // A malformed parent (not before its child) names nothing.
+      { tagName: "span", selector: "#loop", visibleText: "Loop", parent: 9 }
+    ]
+  });
+  assert.deepEqual(evidence.elements.map((element) => [element.target, element.parent]), [
+    ["t1", undefined],
+    ["t2", "t1"],
+    ["t3", "t1"],
+    ["t4", undefined]
+  ]);
+  assert.equal("parent" in (evidence.elements[0] ?? {}), false, "an absent parent is a missing key, not a key holding undefined");
+});
+
+test("a hidden element is flagged, and the rendered elements are numbered first so their handles do not move", () => {
+  const rendered = [
+    { tagName: "div", selector: "#results" },
+    { tagName: "a", selector: "#first", visibleText: "First", href: "/first", parent: 0 },
+    { tagName: "a", selector: "#second", visibleText: "Second", href: "/second", parent: 0 }
+  ];
+  const withHidden = [
+    rendered[0],
+    { tagName: "div", selector: "#menu", hidden: true, parent: 0 },
+    { tagName: "a", selector: "#first", visibleText: "First", href: "/first", parent: 1 },
+    { tagName: "input", selector: "#trap", hidden: true, parent: 0 },
+    rendered[2]
+  ];
+  const plain = sanitizeWebLlmSnapshot({ url: STRUCTURE_URL, interactiveElements: rendered });
+  const searched = sanitizeWebLlmSnapshot({ url: STRUCTURE_URL, interactiveElements: withHidden });
+  assert.deepEqual(plain.elements.map((element) => element.target), ["t1", "t2", "t3"]);
+  assert.deepEqual(searched.elements.map((element) => [element.target, element.hidden, element.parent]), [
+    ["t1", undefined, undefined],
+    ["t4", true, "t1"],
+    // A rendered element inside a hidden one names the hidden one as its parent.
+    ["t2", undefined, "t4"],
+    ["t5", true, "t1"],
+    ["t3", undefined, "t1"]
+  ], "document order is kept; the handles of rendered elements are those of the ordinary capture");
+});
+
+test("the window the capture was taken in is carried whole, or not at all", () => {
+  const measured = sanitizeWebLlmSnapshotWithBindings({
+    url: STRUCTURE_URL,
+    viewport: { width: 1280, height: 720.4, scrollX: 0, scrollY: 1440, documentWidth: 1280, documentHeight: 5000, devicePixelRatio: 2 },
+    interactiveElements: []
+  }).evidence;
+  assert.deepEqual(measured.viewport, { width: 1280, height: 720, scrollX: 0, scrollY: 1440 });
+
+  const partial = sanitizeWebLlmSnapshot({ url: STRUCTURE_URL, viewport: { width: 1280, height: 720 }, interactiveElements: [] });
+  assert.equal("viewport" in partial, false, "a viewport without its scroll would put lines on the wrong side of the fold");
+  const empty = sanitizeWebLlmSnapshot({ url: STRUCTURE_URL, viewport: { width: 0, height: 720, scrollX: 0, scrollY: 0 }, interactiveElements: [] });
+  assert.equal("viewport" in empty, false);
 });

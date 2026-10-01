@@ -15,16 +15,26 @@
 // twice. A look addressed to one frame -- by id or by its document's path --
 // still describes that frame alone: whoever addressed it asked for that.
 //
+// A look asked with `includeHidden` (a search's, t223) asks every frame the
+// same: the top frame's capture already carries the option, since the action
+// reached it whole, and the merge passes it to each child frame it asks.
+//
 // The merge itself is the background worker's, and is handed in
 // (`BrowserActionRunRequest.mergeFrameSnapshots`) rather than imported: the
 // connection module imports this runtime, and importing it back would close a
 // cycle.
 
 import type { BrowserActionCommand, DomSnapshot } from "../shared/protocol";
+import { snapshotCaptureOptionsFor, type SnapshotCaptureOptions } from "../shared/snapshot-capture-options";
 import type { BrowserActionRunResult } from "./action-runner";
 
 /** The background worker's frame merge, seeded with the top frame's snapshot; `undefined` when it could not merge. */
-export type MergeFrameSnapshots = (tabId: number, topSnapshot: DomSnapshot, waitMs: number | undefined) => Promise<DomSnapshot | undefined>;
+export type MergeFrameSnapshots = (
+  tabId: number,
+  topSnapshot: DomSnapshot,
+  waitMs: number | undefined,
+  capture: SnapshotCaptureOptions
+) => Promise<DomSnapshot | undefined>;
 
 /**
  * `run` with its snapshot replaced by every frame's, when it is a look that
@@ -44,7 +54,7 @@ export async function lookAcrossFrames(
   if (action.actionType !== "web.dom.capture_snapshot" || addressed || merge === undefined) return run;
   const topSnapshot = run.result.snapshot;
   if (run.result.status !== "succeeded" || topSnapshot === undefined || run.tabId === undefined) return run;
-  const merged = await merge(run.tabId, topSnapshot, remainingWaitMs(action, startedAt));
+  const merged = await merge(run.tabId, topSnapshot, remainingWaitMs(action, startedAt), snapshotCaptureOptionsFor(action));
   return merged ? { ...run, result: { ...run.result, snapshot: merged } } : run;
 }
 

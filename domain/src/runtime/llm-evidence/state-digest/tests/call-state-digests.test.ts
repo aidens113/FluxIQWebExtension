@@ -18,15 +18,14 @@ import test from "node:test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   createWebAutomationLlmEvidenceRuntime,
-  webLlmStateDigest,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway,
-  type WebLlmEvidenceToolExecution,
-  type WebLlmPageEvidence
+  type WebLlmEvidenceToolExecution
 } from "../..";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
+import { shownHandle } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const SNAPSHOT = "web.output.dom-capture_snapshot";
@@ -113,10 +112,7 @@ async function asked(runtime: WebAutomationLlmEvidenceRuntime, callId: string): 
 }
 
 function handleOf(result: WebLlmEvidenceToolExecution, text: string): string {
-  const elements = (result.evidence as JsonObject & { elements: Array<{ target: string; text?: string }> }).elements;
-  const found = elements.find((element) => element.text === text);
-  assert.ok(found, `no element reading "${text}"`);
-  return found.target;
+  return shownHandle(result.evidence, text);
 }
 
 test("the binding says its calls report their own states", () => {
@@ -124,7 +120,7 @@ test("the binding says its calls report their own states", () => {
   assert.equal(runtime.stateDigestsOnCalls, true);
 });
 
-test("a look's digest is what captureStateDigest answers for the same page, and is the digest of the packet it returned", async () => {
+test("a look's digest is what captureStateDigest answers for the same page", async () => {
   const fake = fakeGateway(largePage());
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
   const looked = await look(runtime, "call.look");
@@ -132,9 +128,9 @@ test("a look's digest is what captureStateDigest answers for the same page, and 
 
   assert.ok(answer);
   assert.deepEqual(looked.stateDigests, { before: answer, after: answer });
-  // The packet is the whole page whatever the call (t200), so the digest of
-  // what the look returned and what the host reads are one value.
-  assert.equal(webLlmStateDigest(looked.evidence as unknown as WebLlmPageEvidence), answer);
+  // What the look returned is the compact view of that page (t223); the digest
+  // is of the structured packet behind it, the one the host reads.
+  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v3");
 });
 
 test("an action's digests are the page it found and the page it left, as captureStateDigest reads them", async () => {
@@ -177,7 +173,7 @@ test("a refusal before acting found and left the page it read; a failed action s
   const state = looked.stateDigests?.after;
   assert.ok(state);
 
-  const unobserved = await click(runtime, "call.unobserved", "target.999");
+  const unobserved = await click(runtime, "call.unobserved", "t999");
   assert.equal(unobserved.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(unobserved.stateDigests, { before: state, after: state });
 
@@ -199,7 +195,7 @@ test("a detection says the state it read the page in, on a refusal thrown after 
   assert.equal(detected.resultCode, "web.structure.detected");
   assert.deepEqual(detected.stateDigests, { before: state, after: state });
 
-  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "target.999" } });
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "t999" } });
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.stateDigests, { before: state, after: state });
 
@@ -235,7 +231,7 @@ test("a call that read no page reports no state", async () => {
   });
   assert.equal(went.effectApplied, true);
   assert.equal(went.stateDigests?.before, undefined);
-  assert.match(went.stateDigests?.after ?? "", /^web-state\.v2:/u);
+  assert.match(went.stateDigests?.after ?? "", /^web-state\.v3:/u);
 });
 
 /**
@@ -288,7 +284,7 @@ const DECISIONS: Decision[] = [
   {
     name: "action refused before acting",
     setUp: lookFirst,
-    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "target.999" } }, consequences: [] } }),
+    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "t999" } }, consequences: [] } }),
     bracketed: true, captures: { old: 3, now: 1 }, digests: "both"
   },
   {
@@ -333,11 +329,11 @@ for (const decision of DECISIONS) {
 
       assert.equal(spent, protocol === "digests-around-calls" ? decision.captures.old : decision.captures.now, protocol);
       if (decision.digests === "both") {
-        assert.match(result.stateDigests?.before ?? "", /^web-state\.v2:/u, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v2:/u, protocol);
+        assert.match(result.stateDigests?.before ?? "", /^web-state\.v3:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v3:/u, protocol);
       } else if (decision.digests === "after") {
         assert.equal(result.stateDigests?.before, undefined, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v2:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v3:/u, protocol);
       } else {
         assert.equal(result.stateDigests, undefined, protocol);
       }

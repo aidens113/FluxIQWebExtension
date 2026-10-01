@@ -14,6 +14,7 @@ import {
   type WebLlmEvidenceGateway
 } from "../..";
 import { webNodeRecordCount } from "../replay";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -25,7 +26,7 @@ test("a step that ran records where it found the page and what it read", async (
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
   const pressed = await runtime.executeTool({
     ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID,
     value: { node: CLICK, parameters: { target: { handle } }, consequences: [] }

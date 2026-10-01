@@ -32,7 +32,11 @@
 // An element's own facts cross the merge with it: a child frame's descriptors
 // are carried whole, only their selector, bounds and frame attributes restated
 // (`frame-geometry.ts`), so `frontLayer`, `leadStatement` and `repeatCount`
-// arrive on the merged list as the frame wrote them. A dialog's or a blocker's
+// arrive on the merged list as the frame wrote them, and so do `ownText` and
+// `hidden`. `parent` is the one an element's own fact the merge restates: it is
+// an index into its frame's list, and is moved to where that frame's block
+// starts on the merged one (t223). A look asked `includeHidden` asks every
+// frame for its hidden elements too. A dialog's or a blocker's
 // `kind` is restated key by key like the rest of its entry.
 //
 // A frame that does not answer is named, not dropped: its id goes on the
@@ -89,6 +93,8 @@ const FRAME_SNAPSHOT_WAIT_MS = 10_000;
 export type MergedSnapshotOptions = {
   /** How long to wait for the frame list and each frame; `FRAME_SNAPSHOT_WAIT_MS` when absent. */
   readonly waitMs?: number;
+  /** Ask every frame for its hidden elements too (`shared/snapshot-capture-options.ts`); a seed snapshot is taken as given. */
+  readonly includeHidden?: boolean;
 };
 
 // The tab-messaging calls this module needs, supplied by the caller so the
@@ -137,9 +143,12 @@ export async function captureSingleFrameSnapshot(
   transport: TabSnapshotTransport,
   tabId: number,
   frameId: number,
-  waitMs: number = FRAME_SNAPSHOT_WAIT_MS
+  waitMs: number = FRAME_SNAPSHOT_WAIT_MS,
+  includeHidden = false
 ): Promise<DomSnapshotPayload | undefined> {
-  const snapshot = await withTimeout(transport.sendToTab(tabId, { type: "captureSnapshot" }, frameId), waitMs, undefined);
+  // The flag rides only when set, so every other capture asks exactly as it always did.
+  const message = includeHidden ? { type: "captureSnapshot", includeHidden: true } : { type: "captureSnapshot" };
+  const snapshot = await withTimeout(transport.sendToTab(tabId, message, frameId), waitMs, undefined);
   return isDomSnapshotPayload(snapshot) ? snapshot : undefined;
 }
 
@@ -167,16 +176,17 @@ export async function captureMergedTabSnapshot(
   options: MergedSnapshotOptions = {}
 ): Promise<DomSnapshotPayload | undefined> {
   const waitMs = options.waitMs ?? FRAME_SNAPSHOT_WAIT_MS;
+  const includeHidden = options.includeHidden === true;
   const seed = seedSnapshot && seedFrameId !== undefined ? { frameId: seedFrameId, snapshot: seedSnapshot } : undefined;
   const topRead = seed?.frameId === TOP_FRAME_ID
     ? Promise.resolve(seed.snapshot)
-    : captureSingleFrameSnapshot(transport, tabId, TOP_FRAME_ID, waitMs);
+    : captureSingleFrameSnapshot(transport, tabId, TOP_FRAME_ID, waitMs, includeHidden);
   const listed = await withTimeout(transport.allTabFrames(tabId), waitMs, []);
   const childIds = [...new Set(listed.map((frame) => frame.frameId))]
     .filter((frameId) => frameId !== TOP_FRAME_ID && frameId !== seed?.frameId);
   const [topAnswer, ...childAnswers] = await Promise.all([
     topRead,
-    ...childIds.map((frameId) => captureSingleFrameSnapshot(transport, tabId, frameId, waitMs))
+    ...childIds.map((frameId) => captureSingleFrameSnapshot(transport, tabId, frameId, waitMs, includeHidden))
   ]);
 
   const answered: Array<{ frameId: number; snapshot: DomSnapshotPayload }> = [];
@@ -205,7 +215,10 @@ export async function captureMergedTabSnapshot(
       : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
     // One at a time rather than `push(...elements)`: a spread passes every
     // element as an argument, and a large frame has more than a call accepts.
-    for (const element of elements) collectedElements.push(element);
+    // Each frame's `parent` indexes its own list; on the merged list its block
+    // starts further down, so the index moves with it.
+    const blockStart = collectedElements.length;
+    for (const element of elements) collectedElements.push(withParentOffset(element, blockStart));
     const evidence = pageEvidenceOf(entry.snapshot);
     if (!evidence) continue;
     if (isTopEntry) topEvidence ??= evidence;
@@ -222,6 +235,17 @@ export async function captureMergedTabSnapshot(
   );
   if (evidence) merged.evidence = evidence;
   return merged;
+}
+
+/**
+ * The element with its `parent` -- an index into its own frame's list -- moved
+ * to where that frame's block starts on the merged list. The element itself is
+ * returned when there is nothing to move, so a single-frame look is unchanged.
+ */
+function withParentOffset(element: NonNullable<RecordingEventPayload["element"]>, blockStart: number): NonNullable<RecordingEventPayload["element"]> {
+  if (blockStart === 0 || typeof element.parent !== "number") return element;
+  // Copied whole, as the merge carries every element (the header): only `parent` is restated.
+  return Object.assign({}, element, { parent: element.parent + blockStart });
 }
 
 /** The page evidence on a snapshot, when what arrived under the domain input's `evidence` key is an object. */

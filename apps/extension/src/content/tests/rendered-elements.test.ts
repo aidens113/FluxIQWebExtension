@@ -30,6 +30,9 @@ class FakeElement {
   hasAttribute(name: string): boolean {
     return name in this.attributes;
   }
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
   checkVisibility(): boolean {
     return this.hasBox;
   }
@@ -157,4 +160,67 @@ test("a nesting deeper than a call stack is walked without one", () => {
   const found = withStyles(() => renderedElements(document));
   assert.equal(found.elements.length, 20_001);
   assert.equal(found.elements[20_000], deepest as unknown as Element);
+});
+
+/** The walk asked `includeHidden`, each element named as `listed` names it, with ` (hidden)` after the hidden ones. */
+function listedWithHidden(document: Document): string[] {
+  return withStyles(() => {
+    const found = renderedElements(document, { includeHidden: true });
+    return found.elements.map((element) => (element as unknown as FakeElement).tagName.toLowerCase() + tagSuffix(element) + (found.hidden?.has(element) ? " (hidden)" : ""));
+  });
+}
+
+/** A page holding every kind of element a default walk skips as not rendered, and a few it never lists at all. */
+function pageWithHiddenParts(): Document {
+  const noBox = el("div", {}, { id: "closed-details" });
+  noBox.hasBox = false;
+  return page(
+    el("nav").add(
+      el("ul", { display: "none" }, { id: "menu" }).add(el("li").add(el("a", {}, { id: "menu-link" }))),
+      el("button", {}, { id: "menu-toggle" })
+    ),
+    el("section", {}, { hidden: "", id: "panel" }).add(el("p", {}, { id: "panel-text" })),
+    el("div", { visibility: "hidden" }, { id: "faded" }).add(el("span", { visibility: "visible" }, { id: "shows-again" })),
+    noBox,
+    el("input", { display: "none" }, { type: "hidden", id: "token" }),
+    el("script").add(el("button", {}, { id: "in-script" })),
+    el("div", { display: "none" }, { "data-fluxiq-picker": "" }).add(el("button", {}, { id: "in-overlay" })),
+    el("main", {}, { id: "kept" })
+  ).document;
+}
+
+test("includeHidden lists a display:none subtree and a [hidden] one, every element flagged, in composed order", () => {
+  assert.deepEqual(listedWithHidden(pageWithHiddenParts()), [
+    "nav",
+    "ul#menu (hidden)",
+    "li (hidden)",
+    "a#menu-link (hidden)",
+    "button#menu-toggle",
+    "section#panel (hidden)",
+    "p#panel-text (hidden)",
+    "div#faded (hidden)",
+    "span#shows-again",
+    "div#closed-details (hidden)",
+    "main#kept"
+  ]);
+});
+
+test("includeHidden still never lists script, the extension's overlays, the head, a hidden input, html or body", () => {
+  const names = listedWithHidden(pageWithHiddenParts());
+  for (const never of ["button#in-script", "button#in-overlay", "input#token", "head", "title", "style", "html", "body"]) {
+    assert.ok(!names.some((name) => name.startsWith(never)), `${never} is not listed`);
+  }
+});
+
+test("without includeHidden the walk is the one it always was: the hidden walk less its hidden elements, the same count walked, and no hidden set", () => {
+  const document = pageWithHiddenParts();
+  const plain = withStyles(() => renderedElements(document));
+  const asked = withStyles(() => renderedElements(document, { includeHidden: false }));
+  const withHidden = withStyles(() => renderedElements(document, { includeHidden: true }));
+  assert.equal(plain.hidden, undefined);
+  assert.deepEqual(Object.keys(plain), ["elements", "walked"], "the default result has exactly the shape it had");
+  assert.deepEqual(asked, plain);
+  assert.deepEqual(plain.elements, withHidden.elements.filter((element) => !withHidden.hidden?.has(element)));
+  assert.equal(withHidden.walked, plain.walked, "a search's evidence totals count what a look counts");
+  assert.deepEqual(listed(document), ["nav", "button#menu-toggle", "span#shows-again", "main#kept"]);
 });

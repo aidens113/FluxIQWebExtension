@@ -123,7 +123,7 @@ test("a signal the normalizer does not know does not reach the page", () => {
 
 /** What `validateWebRuntimeTargetOverrideEvidence` resolves the renamed Save to (`renamed-save-override.test.ts`). */
 const repairedSave: JsonObject = {
-  handles: { element: "target.2" },
+  handles: { element: "t2" },
   handleResolution: "named",
   tagName: "button",
   accessibleName: "Apply changes",

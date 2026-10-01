@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.bigbox", flowId: "flow.bigbox" };
 const ORIGIN = "https://store.test";
@@ -35,7 +36,7 @@ test("a navigation to an item address no evidence showed is refused, and nothing
 
   assert.equal(went.resultCode, "web.action.rejected.address_not_shown");
   assert.equal(went.effectApplied, false);
-  const refusal = went.evidence as JsonObject & { code: string; detail: { reason: string; instead: string[] }; page?: { location: string; elements: Array<{ href?: string }> } };
+  const refusal = went.evidence as JsonObject & { code: string; detail: { reason: string; instead: string[] }; page?: { location: string; page: string } };
   assert.equal(refusal.code, "address_not_shown");
   assert.equal(refusal.detail.reason, "address_not_shown");
   // What to do instead, in this domain's words: press the link, or use an address the evidence gave.
@@ -44,7 +45,7 @@ test("a navigation to an item address no evidence showed is refused, and nothing
   // The page comes back, so the link that does go there can be pressed next.
   assert.equal(refusal.page?.location, START);
   // The link with its query, as the packet now shows it (t200).
-  assert.equal(refusal.page?.elements.some((element) => element.href === `${SHOWN_ITEM}?variant=1`), true);
+  assert.equal(shownPageLines(refusal).some((line) => line.line.includes("?variant=1")), true, refusal.page?.page);
   // Refused before the command went out, and never a step of the Flow.
   assert.equal(site.navigations().includes(MADE_UP_ITEM), false);
   assert.equal(went.draft?.ranWith, undefined);
@@ -184,9 +185,7 @@ function call(site: ReturnType<typeof bigbox>, callId: string, value: Call) {
 }
 
 function handleOf(looked: { evidence: unknown }, name: string): string {
-  const element = (looked.evidence as { elements: Array<{ target: string; name?: string; text?: string }> }).elements.find((candidate) => candidate.name === name || candidate.text === name);
-  assert.ok(element, `${name} is in the packet`);
-  return element.target;
+  return shownHandle(looked.evidence, name);
 }
 
 /**

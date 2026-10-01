@@ -47,6 +47,7 @@ export function createTopBar(parts: TopBarParts): TopBar {
   tabs.forEach((button, index) => {
     button.addEventListener("click", () => parts.onTab(TABS[index]!.tab));
     button.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || event.keyCode === 229) return;
       const last = tabs.length - 1;
       const target = event.key === "ArrowRight" ? (index + 1) % tabs.length
         : event.key === "ArrowLeft" ? (index + last) % tabs.length
