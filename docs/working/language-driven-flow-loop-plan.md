@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Labs stopped by the user for merge and audit (2026-09-30 ~19:20); integration round 3 nearly done, with five fix tasks open before a full validation, a push and supervised live runs; no working Flow yet (pass streak 0).
+Status detail: Handoff 2026-09-30: integration round 3 (the whole page, the three-phase build, the audit fixes, the chat UI) merged and pushed; Labs still stopped until t210 lands, then supervised live runs resume from the written briefs; no working Flow yet (pass streak 0).
 Created: 2026-09-24
 Last updated: 2026-09-30
 Owner: Senior supervisor agent
@@ -13,11 +13,13 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Labs stopped by the user (~19:20 PDT); integration round 3 nearly done. Read this first.** No Lab may run until the open
-tasks below merge, dev validates in full, and both dev branches are pushed; then supervised live runs resume on the new
-build with fresh lead briefs built from the audit's fix table. Afternoon live spend before the stop: $0.357 over five runs,
-all failed (ledger), plus lane C's run killed at the stop. The four audits and their fix table are in "The 2026-09-30 Audit
-And Its Fixes" below.
+**Handoff, 2026-09-30 late. Read this first.** Integration round 3 is merged and pushed (Core `37ff0989`, downstream
+`4586c957`). Labs are still stopped: no live run until t210 is merged (it removes the last caps, including the navigation
+memory that could refuse a shown link); then supervised live runs resume from
+[reports/supervisor-2026-09-30-live-briefs.md](./language-driven-flow-loop-plan/reports/supervisor-2026-09-30-live-briefs.md)
+(the four lanes' trees are already on pushed dev). Live spend today before the stop: $0.357 over five runs, all failed
+(ledger). The four audits and their fix table are in "The 2026-09-30 Audit And Its Fixes" below. Five Codex tasks for the
+user to assign are in [codex-tasks-2026-09-30.md](./codex-tasks-2026-09-30.md); integrate their branches when they arrive.
 
 History, in the Work Ledger: the overnight $9.46 of unattended relaunch loops and the balance stop (2026-09-30 "Stopped"); this
 afternoon's resume, where t193's `loop2.sh` was found still running and killed (kill the process tree and re-scan; renaming a
@@ -58,15 +60,15 @@ running script does not stop it).
   dropdown; and each action shows as a proper card with an icon for its kind, what it acted on, and its outcome, using the
   card and icon styles the importing repository or Core already defines.
 
-**On dev (round 3, local; last pushed Core `25c8b32f`, downstream `888386b0`).** Merged after each owner's validation was
+**On dev, pushed (Core `37ff0989`, downstream `4586c957`).** Merged after each owner's validation was
 re-run by the supervisor: lanes A-D (t174, t193, t194, t195) with their final fixes; t191 (the chat-first UI, every step a
 message with the model's reason, action cards with icons, one resolved event per ask); t196 (the authored draft, the
 instructed-act checklist, progress means the Flow advanced, replays only in judgement and repair, no forced start); t200 (the
 whole page, every frame and shadow root, no caps or ranking, covering layers flagged); t208 (a build never just ends: test,
 judge, repair rounds; `not_doable` with a reason; `evidence_budget_exhausted` with what was tried); t197, t198, t201-t207,
-t209, t212, t213. Last full validation (Core `fd2f7e6b`, downstream `ab9a352b`): Core build and check 0; web 1448/1448;
-downstream build and check 0; extension 1662/1662; domain 1038/1038; scenario-lab 620/620; test-runner 1713/1716 (the 3 fixed
-by t212, merged after); Core vitest 4395/4406 with the failures assigned below.
+t209, t211, t212, t213, t214. Last full validation (the 2026-09-30 "merged and pushed" ledger entry): every downstream
+suite clean; Core build, check, docs and web clean; Core vitest 4526/4536, the failures all 15 s timeouts in heavy service
+tests (t215).
 
 **Honest results.** No task has produced a working Flow end to end, and the real pass streak is 0. The audits found why
 (A1: 57 of 117 builds ended with no Flow); the merged fixes address the top causes, none proven live yet.
@@ -82,13 +84,12 @@ Left open: `run-bench.ts` rebuilds a resumed evaluation without the stop label.
 
 | Task | What | Status |
 | --- | --- | --- |
-| t191 | the resolved-ask events `waited_out` (a check that clears itself) and `cancelled` for an abandoned parked wait | in progress |
-| t206 | a run whose start throws leaves the operation lease held (`failed-start.test.ts` hangs); speed up scale-pages and the million-event stream test | in progress |
-| t210 | remove the remaining caps: Core's `maxTokensPerRun: 12000` default (with migration), F14's read-account caps, lane C's rejected-row samples (3 rows, 80 chars), and any lane cap merged after t200 | in progress |
-| t211 | an unreadable model reply is retried with a note, never a bare `evidence_invalid_decision`; root-cause the malformed replies (F16 cases) | in progress |
-| t214 | the extension chat's build path produces no adaptation (`extension-chat.test.ts`, a regression from the lifecycle merges); three `deepseek-bootstrap-exploration` ending tests against t208's endings | in progress |
+| t210 | rounds 1-2 committed on its branch (Core `b7305903`, downstream `371e6e7a`; verified Core 846/846, domain 1042/1042, extension 1662/1662, audits pass): no token-cap default, whole node catalog unranked, no instruction cuts, full navigation memory. Dev merged in: downstream clean (`9b676cbb`); in Core the merge's conflicts are resolved and staged (113 files, 0 unmerged) but the merge is not committed, and 9 unstaged files are an unfinished round 3 (context-packet 25/100/100 caps, conversation-turn caps). | worker ended with the session; read "State at stop" at the top of its report in `fxwork/t210`, verify, commit the merge |
+| t215 | the heavy Core service tests that time out at 15 s even alone. Measured, nothing changed: instruction-readiness 19.7 s and 6,992 round trips; preservation #1 14.5 s; execution-digest #2 11.8 s; adaptive-loop #1 10.0 s; subflow-pagination 8.9 s, mostly its own seed copy. Next: the four per-open setup statements in one exec; operation holds on saveFlowInstruction, saveFlow and the summary reads (102 fresh opens); statement caching for `run` and `all` only; the seed fixes | stopped at handoff, report in `fxwork/t215` |
+| Codex 1-5 | docs for round 3, Lab bookkeeping, extension cleanup and deep link, robot-check wait gaps, every ending's trace (`codex-tasks-2026-09-30.md`) | for the user to assign |
 
-The t191 screenshot defects 1-9 are fixed in code (round 2), not yet re-shot in a browser.
+Not yet exercised in a browser (Labs stopped): t191's UI and defects 1-9, t197's robot-check hand-off, t198's active-tab
+read, t200's page-size measurement on the ten scenarios.
 
 **Decisions made (supervisor; the user may override).**
 - Robot checks: FluxIQ never presses or solves one (t197).
@@ -113,12 +114,19 @@ The t191 screenshot defects 1-9 are fixed in code (round 2), not yet re-shot in 
 - Standing rule (user): stop orphaned Labs and dead agents' loops yourself and report it; never ask (t191's interactive Lab
   was stopped at ~19:03).
 
+- Process change proposed by the supervisor (the user asked whether branching was too slow): short-lived branches merged
+  within hours, dev merged into running branches every few hours, big cross-cutting changes landed first, narrow
+  verification per hand-back with one full validation per batch, fast tests (t215), and workers committing to their own task
+  branch (the supervisor still alone merges to dev and pushes). The last one changes `AGENTS.md`; the supervisor said it
+  would make it unless the user objects, and it is not yet made.
+
 **Next, in order.**
-1. Verify and merge t214, t206, t210, t211 and t191 as each hands back (the supervisor re-runs each claim first).
-2. One full validation of dev in both repositories (Core build, check, runtime+storage+ui vitest, web vitest; downstream build,
-   check, extension, domain, scenario-lab, test-runner), then push both dev branches together.
-3. Live runs resume, supervised: four `lead-xhigh` leads on slots 1-4, briefed from the audit fix table and the binding rules,
-   on the ten realistic scenarios; every run debugged with the screenshot UI review; stop at the first balance failure.
+1. Finish t210: read its "State at stop"; verify its staged Core merge (tsc, `pnpm docs:check`, the conversations and
+   deepseek-bootstrap-exploration tests) and commit it; merge t210 into dev and push; then finish its round 3.
+2. Merge dev into the four lane trees (`fxwork/t174`, `t193`, `t194`, `t195`), then dispatch the four `lead-xhigh` live leads
+   from the live briefs, on slots 1-4, the ten realistic scenarios only; every run debugged with the screenshot UI review.
+3. In parallel: finish t215; integrate the Codex branches as they arrive; make the `AGENTS.md` commit-rule change unless the
+   user objected.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
 
@@ -707,6 +715,15 @@ debug and partitioned so neither touches the other's files:
   t210 (the last caps: harness token defaults, the ranked 64-node catalog, the 512-address navigation memory) merges
   before live runs resume. Pass streak 0.
 
+### 2026-09-30 — Handoff: round 3 pushed, t210 and t215 stopped mid-task, Codex tasks written
+- Agent: supervisor. The user asked to wrap up in this window; t210 and t215 were told to stop and record their state.
+- Changed: this document's Current State; `codex-tasks-2026-09-30.md` (five Codex tasks, pushed `ee704db7`);
+  `reports/supervisor-2026-09-30-live-briefs.md` (pushed `4625fd99`). t210's branch holds rounds 1-2 committed and a
+  resolved, uncommitted Core dev merge plus an unfinished round 3; t215 measured the slow service tests and changed no code.
+- Validation: `node scripts/structure-audit.mjs` -> `structure-audit: passed` after `pnpm structure:baseline` (documents
+  only; no code changed since the round-3 validation recorded above).
+- Outcome: Handed off. Pass streak 0.
+
 ## Open Questions
 
 - Which complex scenario goes first? `everything-store` is the known multi-step
@@ -717,3 +734,13 @@ debug and partitioned so neither touches the other's files:
 - When a run's failure is in Core and in the extension at once, which side is
   fixed first? Owned by the supervisor, settled per run by which failure is
   earlier in the chain.
+
+### 2026-09-30 — Handoff: round 3 pushed, t210 and t215 stopped mid-task, Codex tasks written
+- Agent: supervisor, at the user's request to wrap up this window.
+- Changed: Current State rewritten for the next session; `codex-tasks-2026-09-30.md` (five Codex tasks) and
+  `reports/supervisor-2026-09-30-live-briefs.md` added; t210 rounds 1-2 committed on its branch (Core `b7305903`, downstream
+  `371e6e7a`) with dev merged in (Core conflicts left to its worker); the four lane trees fast-forwarded to pushed dev; t210 and
+  t215 told to stop and write "State at stop" in their reports.
+- Validation: `node scripts/structure-audit.mjs` (downstream, after `pnpm structure:baseline`) -> see the commit; the code on
+  dev was validated by the preceding entry and not re-run for this documentation-only handoff.
+- Outcome: Handed off. Pass streak 0.
