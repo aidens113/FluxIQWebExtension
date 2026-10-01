@@ -76,7 +76,7 @@ function isAddressedToThisFrame(message: { frameId?: number; topFrameOnly?: bool
 
 export function installMessageHandler(): void {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean };
+    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; extraction?: unknown; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean; includeHidden?: unknown };
     if (typed.type === "fluxiq.ping") {
       sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
       return false;
@@ -91,7 +91,8 @@ export function installMessageHandler(): void {
       return true;
     }
     if (typed.type === "captureSnapshot") {
-      void captureSnapshotForResponse().then(sendResponse);
+      // The frame merge of a search's look asks every frame for its hidden elements too.
+      void captureSnapshotForResponse(typed.includeHidden === true ? { includeHidden: true } : {}).then(sendResponse);
       return true;
     }
     if (typed.type === "executeAction" && typed.action) {

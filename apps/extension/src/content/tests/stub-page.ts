@@ -71,6 +71,10 @@ class StubElement extends StubNode {
     return this.attributeValues.get(name) ?? null;
   }
 
+  hasAttribute(name: string): boolean {
+    return this.attributeValues.has(name);
+  }
+
   /** `Element.attributes`: every attribute, in the order the page wrote them. */
   get attributes(): Array<{ name: string; value: string }> {
     return [...this.attributeValues].map(([name, value]) => ({ name, value }));

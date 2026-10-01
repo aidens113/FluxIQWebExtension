@@ -37,6 +37,7 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
   const { store } = context;
   let dirty = false;
   let editRevision = 0;
+  let mutation: "save" | "disconnect" | "forget" | undefined;
 
   const back = createElement("button", { className: "icon-button settings-back", text: "←", attrs: { type: "button", "aria-label": "Close settings", title: "Close settings" } });
   back.addEventListener("click", close);
@@ -107,6 +108,7 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
   }
 
   async function save(): Promise<void> {
+    if (mutation !== undefined) return;
     clearOutcome();
     const plan = savePlan(form.read(), store.current());
     if (!plan.ok) {
@@ -116,52 +118,78 @@ export function createSettingsView(context: PanelContext, close: () => void): Se
     }
     form.markInvalid(undefined);
     const submittedRevision = editRevision;
-    setSaving(true);
-    const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: plan.settings });
-    setSaving(false);
-    if (failed(saved)) return;
-    if (submittedRevision === editRevision) {
-      dirty = false;
-      draftLine.hidden = true;
-      writeConnectionDraft(undefined);
-      form.fill(plan.settings);
-      showSuccess("Saved.");
-    } else showSuccess("Saved the earlier settings. Your newer changes aren't saved yet.");
-    // The open socket still points at the old address; `connect` dials the stored one.
-    if (plan.reconnect) failed(await store.request({ type: RUNTIME_MESSAGES.connect }));
+    mutation = "save";
+    renderBusy();
+    try {
+      const saved = await store.request({ type: RUNTIME_MESSAGES.panelSaveSettings, settings: plan.settings });
+      if (failed(saved)) return;
+      if (submittedRevision === editRevision) {
+        dirty = false;
+        draftLine.hidden = true;
+        writeConnectionDraft(undefined);
+        form.fill(plan.settings);
+        showSuccess("Saved.");
+      } else showSuccess("Saved the earlier settings. Your newer changes aren't saved yet.");
+      // The open socket still points at the old address; `connect` dials the stored one.
+      if (plan.reconnect) failed(await store.request({ type: RUNTIME_MESSAGES.connect }));
+    } catch {
+      showFailure("Couldn't finish saving and connecting. Try Save again.");
+    } finally {
+      mutation = undefined;
+      renderBusy();
+    }
   }
 
   async function disconnect(): Promise<void> {
+    if (mutation !== undefined) return;
     clearOutcome();
-    disconnectButton.disabled = true;
-    const result = await store.request({ type: RUNTIME_MESSAGES.disconnect });
-    render();
-    failed(result);
+    mutation = "disconnect";
+    renderBusy();
+    try {
+      failed(await store.request({ type: RUNTIME_MESSAGES.disconnect }));
+    } catch {
+      showFailure("Couldn't disconnect. Try Disconnect again.");
+    } finally {
+      mutation = undefined;
+      renderBusy();
+    }
   }
 
-  async function forgetPairing(): Promise<void> {
+  async function forgetPairing(): Promise<boolean> {
+    if (mutation !== undefined) return false;
     clearOutcome();
-    forget.setBusy(true);
-    const result = await store.request({ type: RUNTIME_MESSAGES.resetSession });
-    forget.setBusy(false);
-    if (!failed(result)) showSuccess("Pairing forgotten. Connect again to pair this browser.");
+    mutation = "forget";
+    renderBusy();
+    try {
+      if (failed(await store.request({ type: RUNTIME_MESSAGES.resetSession }))) return false;
+      showSuccess("Pairing forgotten. Connect again to pair this browser.");
+      return true;
+    } catch {
+      showFailure("Couldn't forget this pairing. Try Forget again.");
+      return false;
+    } finally {
+      mutation = undefined;
+      renderBusy();
+    }
   }
 
-  function setSaving(saving: boolean): void {
-    saveButton.disabled = saving;
-    saveButton.textContent = saving ? "Saving..." : "Save";
+  function renderBusy(): void {
+    saveButton.disabled = mutation !== undefined;
+    saveButton.textContent = mutation === "save" ? "Saving..." : "Save";
+    disconnectButton.disabled = mutation !== undefined || store.current()?.connectionState === "disconnected";
+    forget.setBusy(mutation !== undefined);
   }
 
   saveButton.addEventListener("click", () => void save());
   disconnectButton.addEventListener("click", () => void disconnect());
 
   function render(): void {
+    renderBusy();
     const status = store.current();
     if (status === undefined) return;
     const copy = connectionCopy(status);
     dot.className = `dot dot-${copy.dot}`;
     stateLine.textContent = copy.sentence;
-    disconnectButton.disabled = status.connectionState === "disconnected";
     open.observe(status);
     if (!dirty) form.fill(savedSettings(status));
   }

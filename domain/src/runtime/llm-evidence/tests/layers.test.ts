@@ -56,7 +56,7 @@ test("a consent wall keeps document order, and every element says what it is to 
   const evidence = sanitizeWebLlmSnapshot(consentWall());
   const { elements } = evidence;
   // Document order, and every element in it: nothing was moved to the front.
-  assert.deepEqual(elements.map((element) => element.target), Array.from({ length: 9 }, (_, index) => `target.${index + 1}`));
+  assert.deepEqual(elements.map((element) => element.target), Array.from({ length: 9 }, (_, index) => `t${index + 1}`));
   assert.deepEqual(elements.map((element) => element.name ?? element.text ?? element.tag), ["Home", "Add to cart", "Buy now", "div", "We value your privacy", "We and our partners use cookies.", "Accept all", "Reject all", "Privacy policy"]);
 
   // The dialog is marked on itself.
@@ -66,7 +66,7 @@ test("a consent wall keeps document order, and every element says what it is to 
 
   // The backdrop covers the page's buttons, by handle, and says how many it covers in all.
   const backdrop = elements[3];
-  assert.deepEqual(backdrop?.covers, ["target.2", "target.3"]);
+  assert.deepEqual(backdrop?.covers, ["t2", "t3"]);
   assert.equal(backdrop?.coversCount, 3);
   assert.equal(backdrop?.kind, "consent");
 
@@ -74,7 +74,7 @@ test("a consent wall keeps document order, and every element says what it is to 
   // "Buy now" included, though its centre is under the dialog's box.
   for (const words of ["Add to cart", "Buy now"]) {
     const covered = named(elements, words);
-    assert.deepEqual(covered.coveredBy, ["target.4"], words);
+    assert.deepEqual(covered.coveredBy, ["t4"], words);
     assert.equal(covered.inDialog, undefined, words);
   }
 
@@ -93,15 +93,15 @@ test("a consent wall keeps document order, and every element says what it is to 
 
 test("the page-level dialog and blocker name the same elements by handle, with their kind", () => {
   const evidence = sanitizeWebLlmSnapshot(consentWall());
-  assert.deepEqual(evidence.dialogs, [{ role: "dialog", name: "We value your privacy", modal: true, target: "target.5", kind: "consent" }]);
-  assert.deepEqual(evidence.blockedBy, [{ blocks: 3, target: "target.4", kind: "consent" }]);
+  assert.deepEqual(evidence.dialogs, [{ role: "dialog", name: "We value your privacy", modal: true, target: "t5", kind: "consent" }]);
+  assert.deepEqual(evidence.blockedBy, [{ blocks: 3, target: "t4", kind: "consent" }]);
   assert.doesNotMatch(JSON.stringify(evidence), /#consent|#backdrop|#newsletter/u, "no selector reaches the packet");
 });
 
 test("the capture's front-layer and lead-statement flags are carried on the element", () => {
   const { elements } = sanitizeWebLlmSnapshot(consentWall());
-  assert.deepEqual(elements.filter((element) => element.frontLayer).map((element) => element.target), ["target.4", "target.5", "target.6", "target.7", "target.8"]);
-  assert.deepEqual(elements.filter((element) => element.statement).map((element) => element.target), ["target.6"]);
+  assert.deepEqual(elements.filter((element) => element.frontLayer).map((element) => element.target), ["t4", "t5", "t6", "t7", "t8"]);
+  assert.deepEqual(elements.filter((element) => element.statement).map((element) => element.target), ["t6"]);
   const results = sanitizeWebLlmSnapshot({
     url: "https://shop.test/search?q=widget",
     interactiveElements: [{ tagName: "h1", selector: "#lead", visibleText: "No results for \"widget\"", leadStatement: true }]
@@ -124,7 +124,7 @@ test("a non-modal dialog is marked, native and kind included, and holds nothing 
   });
   assert.deepEqual(elements[0]?.isDialog, { modal: false, native: true, kind: "assistant" });
   assert.equal(elements[1]?.inDialog, undefined);
-  assert.deepEqual(dialogs, [{ role: "dialog", name: "Chat with us", target: "target.1", kind: "assistant" }]);
+  assert.deepEqual(dialogs, [{ role: "dialog", name: "Chat with us", target: "t1", kind: "assistant" }]);
 });
 
 test("a robot check in a child frame is joined to its own frame's element, never to the top frame's", () => {
@@ -144,13 +144,13 @@ test("a robot check in a child frame is joined to its own frame's element, never
   assert.equal(elements[0]?.isDialog, undefined, "the top frame's #check is another element");
   assert.deepEqual(elements[1]?.isDialog, { modal: true, kind: "robot_check" });
   assert.equal(elements[1]?.frameId, 7);
-  assert.deepEqual(elements[1]?.covers, ["target.4"]);
+  assert.deepEqual(elements[1]?.covers, ["t4"]);
   assert.equal(elements[1]?.kind, "robot_check");
-  assert.equal(elements[2]?.inDialog, "target.2");
-  assert.deepEqual(elements[3]?.coveredBy, ["target.2"]);
+  assert.equal(elements[2]?.inDialog, "t2");
+  assert.deepEqual(elements[3]?.coveredBy, ["t2"]);
   assert.equal(elements[3]?.inDialog, undefined);
-  assert.equal(dialogs?.[0]?.target, "target.2");
-  assert.equal(blockedBy?.[0]?.target, "target.2");
+  assert.equal(dialogs?.[0]?.target, "t2");
+  assert.equal(blockedBy?.[0]?.target, "t2");
 });
 
 test("a blocker the capture did not describe covers by count, and a kind the contract does not name is not carried", () => {
@@ -192,15 +192,15 @@ test("a recapture renumbers the layer marks with the elements, and the state dig
     return element?.name ?? element?.text ?? element?.tag;
   };
   const backdrop = elements[3];
-  assert.equal(backdrop?.target, "target.9");
+  assert.equal(backdrop?.target, "t9");
   assert.deepEqual(backdrop?.covers?.map(wordsOf), ["Add to cart", "Buy now"]);
   assert.deepEqual(named(elements, "Buy now").coveredBy?.map(wordsOf), ["div"]);
   assert.equal(wordsOf(named(elements, "Accept all").inDialog), "We value your privacy");
   assert.equal(wordsOf(dialogs?.[0]?.target), "We value your privacy");
   assert.equal(blockedBy?.[0]?.target, backdrop?.target);
   // The binding passed in is left as it was.
-  assert.deepEqual(binding.evidence.elements[3]?.covers, ["target.2", "target.3"]);
-  assert.equal(binding.evidence.dialogs?.[0]?.target, "target.5");
+  assert.deepEqual(binding.evidence.elements[3]?.covers, ["t2", "t3"]);
+  assert.equal(binding.evidence.dialogs?.[0]?.target, "t5");
   assert.equal(webLlmStateDigest(restamped.evidence), webLlmStateDigest(binding.evidence));
 });
 

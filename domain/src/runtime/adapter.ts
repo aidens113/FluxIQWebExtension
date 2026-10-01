@@ -37,7 +37,7 @@ import {
   type WebAutomationFailureCode,
   type WebAutomationFailureRecord
 } from "./failure";
-import { sanitizeWebLlmSnapshot, screenedEvidenceUrl, screenedWebLlmText, type WebLlmPageEvidence } from "./llm-evidence";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshot, screenedEvidenceUrl, screenedWebLlmText, type WebLlmPageEvidence } from "./llm-evidence";
 
 export type WebAutomationRuntimeAdapterOptions = {
   fluxiq: FluxIQ;
@@ -117,7 +117,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     metadata: compact({
       outputId,
       ...(result.metadata ?? {}),
-      ...(diagnostics ? { failureDiagnostics: diagnostics.report, ...(diagnostics.evidence ? { failureEvidence: diagnostics.evidence as unknown as JsonObject } : {}) } : {})
+      ...(diagnostics ? { failureDiagnostics: diagnostics.report, ...(diagnostics.evidence ? { failureEvidence: publishedWebLlmPage(diagnostics.evidence) as unknown as JsonObject } : {}) } : {})
     })
   };
   if (result.payload !== undefined) {
@@ -374,7 +374,9 @@ function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObj
   const actionResult = jsonObject(payload?.result);
   if (!actionResult) return undefined;
   const evidence = sanitizedFailureEvidence(actionResult.snapshot, selectorOf(jsonObject(actionResult.element)?.selector));
-  const evidenceDigest = evidence === undefined ? undefined : createHash("sha256").update(JSON.stringify(evidence)).digest("hex");
+  // Of the page as it rides on the attempt, the compact view (t223), so the
+  // record names exactly what a reader of `metadata.failureEvidence` holds.
+  const evidenceDigest = evidence === undefined ? undefined : createHash("sha256").update(JSON.stringify(publishedWebLlmPage(evidence))).digest("hex");
   const report = compact({
     url: screenedEvidenceUrl(actionResult.url),
     title: screenedTitle(actionResult.title),

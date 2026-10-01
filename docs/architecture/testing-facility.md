@@ -78,7 +78,7 @@ values remain screened. Covering-layer facts (`isDialog`, `inDialog`, `covers`,
 what stands between it and a control without changing document order; see
 [page evidence](page-evidence.md#no-limits-on-the-way-to-a-model).
 
-Opaque `target.N` handles bind to observed elements; the runtime resolves and
+Opaque `tN` handles (`t1`, `t2`, ...; the older `target.N` spelling is still accepted) bind to observed elements; the runtime resolves and
 revalidates a handle before acting. Consequences are declared to Core's
 permission gate, including an empty declaration. Money, deletion and
 send/publish always require permission when not already permitted; an

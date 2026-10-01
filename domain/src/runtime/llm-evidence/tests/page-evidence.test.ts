@@ -161,8 +161,8 @@ test("carries element-level recency and change flags as fields, not as ordering 
     ]
   }));
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", name: "Quantity", recent: true, changed: true },
-    { target: "target.2", tag: "button", text: "Place order" }
+    { target: "t1", tag: "input", name: "Quantity", recent: true, changed: true },
+    { target: "t2", tag: "button", text: "Place order" }
   ]);
 });
 

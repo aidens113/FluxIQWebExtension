@@ -15,9 +15,9 @@ function input(overrides: Partial<CompletedWebReusableEvidenceInput> = {}): Comp
       trust: "untrusted-page-evidence",
       location: "https://example.test/form?secret=query#fragment",
       elements: [
-        { target: "target.1", tag: "textarea", name: "Name", hasValue: true },
-        { target: "target.2", tag: "input", inputType: "password", name: "Password" },
-        { target: "target.3", tag: "select", name: "Plan", selectedValue: "private-value", options: [{ value: "private-value", label: "Private label" }] },
+        { target: "t1", tag: "textarea", name: "Name", hasValue: true },
+        { target: "t2", tag: "input", inputType: "password", name: "Password" },
+        { target: "t3", tag: "select", name: "Plan", selectedValue: "private-value", options: [{ value: "private-value", label: "Private label" }] },
       ],
       truncated: false,
     },
@@ -42,7 +42,7 @@ test("maps completed sanitized evidence to the protected Core put contract", () 
   assert.equal(request.record.outcome, "failed");
   assert.match(request.record.compatibilityTags.find(tag => tag.name === "web.fingerprint")?.value ?? "", /^[a-f0-9]{64}$/u);
   const serialized = JSON.stringify(request);
-  assert.doesNotMatch(serialized, /secret=query|fragment|private-value|Private label|Password|adapted-name|#plan|#password|target\.1/iu);
+  assert.doesNotMatch(serialized, /secret=query|fragment|private-value|Private label|Password|adapted-name|#plan|#password|"t1"/iu);
   assert.doesNotMatch(serialized, /selector|selectedValue|hasValue|options|rawDom|cookie|headers/iu);
   const projection = request.record.promptProjection as { facts: Array<Record<string, unknown>>; compatibilityDigest: string };
   assert.ok(projection.facts.some(fact => fact.kind === "action" && fact.status === "failed"));

@@ -22,7 +22,7 @@ export type RecordControl = {
 
 /** "Start recording" for `status`, while FluxIQ is `working` or not. */
 export function recordControl(status: ExtensionStatus, working: boolean): RecordControl {
-  if (status.recordingState === "recording") return { hidden: true, disabled: true };
+  if (status.recordingState === "recording" || status.recordingState === "paused") return { hidden: true, disabled: true };
   const reason = status.connectionState !== "connected" ? "Connect to FluxIQ to record."
     : status.unsupportedPage !== undefined ? "FluxIQ can't record this page."
       : working ? "Wait for FluxIQ to finish."

@@ -58,7 +58,7 @@ export async function runTaskCommandLine({ argv, repositoryRoot, coreRepositoryR
   if (!id) throw new Error(`pnpm task ${command} needs a task id, for example "t042". Open tasks are listed by "pnpm task list".`);
 
   if (command === "finish") {
-    return { command, ...await finishTask({ ...shared, id, skipChecks: Boolean(flags["skip-checks"]), title: positional.slice(1).join(" ") || undefined }) };
+    return { command, ...await finishTask({ ...shared, id, skipChecks: Boolean(flags["skip-checks"]), fullCheck: Boolean(flags["full-check"]), title: positional.slice(1).join(" ") || undefined }) };
   }
 
   return { command, ...await abandonTask({ ...shared, id, force: Boolean(flags.force) }) };

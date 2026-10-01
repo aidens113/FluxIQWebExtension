@@ -40,6 +40,26 @@ export type WebLlmEvidenceElement = {
   label?: string;
   /** The element's text, where it differs from `name`: its own words, or all of them for a control or a semantic text element. */
   text?: string;
+  /**
+   * The element's own visible words, where `text` is all of its descendants'
+   * and the two differ (t223). The empty string is kept: it says the element
+   * has no words of its own, which is how the page view knows a list item's or
+   * a heading's words are its children's.
+   */
+  ownText?: string;
+  /**
+   * The handle of the nearest ancestor this packet describes, in the composed
+   * tree (t223). An ancestor the packet does not describe -- a sensitive
+   * control, an element with no address -- is passed over to the next one up.
+   */
+  parent?: string;
+  /**
+   * Only in a capture asked to include hidden elements (`includeHidden`): this
+   * one is not rendered. A hidden element never moves a visible element's
+   * handle (`./stable-handles.ts`) and never counts toward the page's state
+   * (`./state-digest/`).
+   */
+  hidden?: true;
   /** Every attribute the page gave the element, `[name, value]`, in the page's order. */
   attributes?: Array<[string, string]>;
   inputType?: string;
@@ -172,6 +192,11 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     name,
     label: rawLabel === name ? undefined : rawLabel,
     text,
+    ownText: ownWords(raw.ownText),
+    // Written by the packet (`./sanitize.ts`), which alone knows every
+    // element's handle: the capture names the parent by its place in the list.
+    parent: undefined,
+    hidden: trueFlag(raw.hidden),
     attributes: publishedAttributes(attributes, context.url),
     inputType: inputType || undefined,
     controlType: controlType || undefined,
@@ -215,6 +240,16 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     position: documentPosition(raw.documentBounds),
     shadowHosts: shadowHostChain(raw.context)
   };
+}
+
+/**
+ * The element's own words, screened, with the empty string kept: an element
+ * with no words of its own says so with `""`, and only a capture that did not
+ * report own words at all leaves the field absent.
+ */
+function ownWords(input: unknown): string | undefined {
+  if (typeof input !== "string") return undefined;
+  return screenedPageText(input) ?? "";
 }
 
 /** The element's open shadow host chain, whole or not at all: half a chain would scope the lookup to the wrong roots. */

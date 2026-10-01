@@ -60,10 +60,12 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     createElement("p", { className: "card-line", text: "Your saved automations are in FluxIQ." }),
     fallbackOpen.element
   ]);
+  const heading = createElement("h2", { className: "automations-title", text: "Your automations", attrs: { tabindex: "-1" } });
+  empty.setAttribute("tabindex", "-1");
   const element = createElement("section", { className: "automations-screen", hidden: true, attrs: { "aria-label": "Automations" } }, [
     createElement("div", { className: "automations-column" }, [
       hooks.review,
-      createElement("h2", { className: "automations-title", text: "Your automations" }),
+      heading,
       offline,
       loading,
       empty,
@@ -74,11 +76,19 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     ])
   ]);
 
+  const mountedRows = new Map<string, ReturnType<typeof automationRowElement>>();
+  let rowOrder: string[] = [];
+  let renderedOwner = controller.state().ownerRevision;
   let active = false;
   let timer: ReturnType<typeof setInterval> | undefined;
 
   function draw(): void {
     const state = controller.state();
+    if (renderedOwner !== state.ownerRevision) {
+      for (const mounted of mountedRows.values()) mounted.remove();
+      mountedRows.clear(); rowOrder = []; renderedOwner = state.ownerRevision;
+    }
+    const focusTarget = reconcileRows(state.mode === "list" ? state.rows : [], state.mode === "empty" ? empty : heading);
     offline.hidden = state.mode !== "offline";
     loading.hidden = state.mode !== "loading" || state.readError !== undefined;
     empty.hidden = state.mode !== "empty";
@@ -87,14 +97,55 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     readNotice.title = state.readError?.detail ?? "";
     readNotice.hidden = state.readError === undefined || state.mode === "offline";
     list.hidden = state.mode !== "list";
-    if (state.mode === "fallback") stopTimer();
-    list.replaceChildren(...(state.mode === "list" ? state.rows : []).map((row) => automationRowElement(row, hooks.choose)));
+    syncTimer();
     strip.draw();
+    if (focusTarget && active && !element.hidden && document.visibilityState === "visible" && document.activeElement !== focusTarget) {
+      focusTarget.focus({ preventScroll: true });
+    }
+  }
+
+  function reconcileRows(rows: readonly AutomationRowView[], fallbackTarget: HTMLElement): HTMLElement | undefined {
+    const previousOrder = rowOrder;
+    const focusedId = previousOrder.find((id) => mountedRows.get(id)?.button === document.activeElement);
+    const focusedIndex = focusedId === undefined ? -1 : previousOrder.indexOf(focusedId);
+    const ids = new Set(rows.map((row) => row.flowId));
+    for (const [id, mounted] of mountedRows) {
+      if (!ids.has(id)) { mounted.remove(); mountedRows.delete(id); }
+    }
+    for (const [index, row] of rows.entries()) {
+      let mounted = mountedRows.get(row.flowId);
+      if (mounted === undefined) {
+        const owner = renderedOwner;
+        const created = automationRowElement(row, (chosen) => {
+          const state = controller.state();
+          if (owner === state.ownerRevision && mountedRows.get(chosen.flowId) === created && state.mode === "list" && state.rows.some((current) => current.flowId === chosen.flowId)) hooks.choose(chosen);
+        });
+        mounted = created;
+        mountedRows.set(row.flowId, mounted);
+      } else mounted.update(row);
+      // Leave correctly placed nodes untouched; moving a focused node may blur it.
+      if (list.children[index] !== mounted) list.insertBefore(mounted, list.children[index] ?? null);
+    }
+    rowOrder = rows.map((row) => row.flowId);
+    if (focusedId === undefined) return undefined;
+    const nextId = mountedRows.has(focusedId) ? focusedId
+      : previousOrder.slice(focusedIndex + 1).find((id) => ids.has(id))
+        ?? previousOrder.slice(0, focusedIndex).reverse().find((id) => ids.has(id))
+        ?? rowOrder[0];
+    return (nextId === undefined ? undefined : mountedRows.get(nextId)?.button) ?? fallbackTarget;
   }
 
   function stopTimer(): void {
     if (timer !== undefined) clearInterval(timer);
     timer = undefined;
+  }
+
+  function syncTimer(): void {
+    const mode = controller.state().mode;
+    if (!active || document.visibilityState !== "visible" || mode === "fallback" || mode === "offline") { stopTimer(); return; }
+    if (timer === undefined) timer = setInterval(() => {
+      if (active && document.visibilityState === "visible") void controller.refresh();
+    }, REFRESH_MS);
   }
 
   draw();
@@ -105,7 +156,8 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     render(status) {
       fallbackOpen.observe(status);
       strip.render(status);
-      if (controller.observe(status) && active) void controller.refresh();
+      if (controller.observe(status) && active && document.visibilityState === "visible") void controller.refresh();
+      syncTimer();
     },
     setWorking: (working) => controller.setWorking(working),
     setActive(next) {
@@ -113,11 +165,8 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
       active = next;
       stopTimer();
       if (!next) return;
-      void controller.refresh();
-      if (controller.state().mode === "fallback") return;
-      timer = setInterval(() => {
-        if (document.visibilityState === "visible") void controller.refresh();
-      }, REFRESH_MS);
+      if (document.visibilityState === "visible") void controller.refresh();
+      syncTimer();
     }
   };
 }

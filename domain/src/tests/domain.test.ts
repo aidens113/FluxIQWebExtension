@@ -248,7 +248,7 @@ const evidencePage = {
   // Core refuses to carry a decision request that holds a denied key. Forty
   // elements was once the most a packet held; a packet is now the whole page
   // (t200), so this is simply a page of forty products, not a ceiling.
-  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", target: `target.${index}`, role: "button", name: `Product ${index}`, text: "Open this product result and inspect its available non-sensitive details." })),
+  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", target: `t${index}`, role: "button", name: `Product ${index}`, text: "Open this product result and inspect its available non-sensitive details." })),
   truncated: false
 };
 // The evidence request's limits, sized against Core's own per-request ceiling

@@ -19,11 +19,11 @@ test("pages that disagree make a bare handle ambiguous, and each page still answ
   const show = (url: string, element: JsonObject): void => targets.remember(scope, sanitizeWebLlmSnapshotWithBindings({ url, interactiveElements: [element] }));
   show("https://example.test/a", { tagName: "button", selector: "#renamed", visibleText: "Renamed" });
   show("https://example.test/b", { tagName: "button", selector: "#renamed", visibleText: "Renamed" });
-  assert.equal(targets.resolve(scope, "target.1", undefined).ok, true, "pages that agree leave it resolvable bare");
+  assert.equal(targets.resolve(scope, "t1", undefined).ok, true, "pages that agree leave it resolvable bare");
   show("https://example.test/c", { tagName: "a", selector: "#other", visibleText: "Other" });
-  assert.deepEqual(targets.resolve(scope, "target.1", undefined), { ok: false, code: "ambiguous" });
+  assert.deepEqual(targets.resolve(scope, "t1", undefined), { ok: false, code: "ambiguous" });
   const at = (location: string): string => {
-    const resolution = targets.resolve(scope, "target.1", location);
+    const resolution = targets.resolve(scope, "t1", location);
     return resolution.ok ? resolution.selector : resolution.code;
   };
   assert.equal(at("https://example.test/c"), "#other");

@@ -54,18 +54,39 @@
 //   may not be listening yet at its commit, so an unread answer is asked again
 //   for up to LANDING_READ_MS; one still unread leaves the click as it was.
 //
+// A landing served 429 or 503 is not a page refused for good but the site
+// saying "not now", as it is for a navigation (`rate-limited-landing.ts`): the
+// click fails RATE_LIMITED, retryable and stating its load did not happen, the
+// origin's page pace hears of the refusal, and `retryAfterMs` is the wait that
+// pace now imposes on the origin's next load. A robot check is judged first and
+// stays the person's whatever it was served with. Core repeats a retryable step
+// by sending the same command again (`executor/defensive/assess.ts`), and the
+// refusal page holds nothing that command can press -- the everything store's
+// 429 page is one link to the address it refused -- so the tab is then taken
+// back to the document the click was pressed on (`chrome.tabs.goBack`), which
+// is also what makes "unacted" true of the tab. The pace is not waited on
+// first: a history traversal is normally restored from the back/forward cache
+// and asks the site for nothing. The back landing is judged -- its address
+// against the one the tab showed before the click, its served status -- and the
+// record says whether the tab was returned; a failed or wrong return is said,
+// never hidden, and the click is still RATE_LIMITED.
+//
 // Not caught: a soft 404, served 200 with an error notice, which needs the
 // landing the recording saw (Week 2's landing marker). A sign-in page served
 // 401 would read `navigation_unexpected` rather than `auth_required`.
 
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import type { OriginPace } from "../background/page-pace";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
+import { readTabUrl } from "./automation-tab";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
 import { landedPath } from "./quoted-path";
 import { checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
 import { unloadedUnderDeliveredMessage } from "./navigating-page";
-import { servedStatus } from "./served-status";
+import { noteRateLimitedLanding, type RateLimitedLanding } from "./rate-limited-landing";
+import { servedStatus, type ServedStatus } from "./served-status";
 
 /** The id the browser always gives a tab's main frame. */
 const TOP_FRAME_ID = 0;
@@ -86,6 +107,21 @@ type Commit = { url: string; documentId: string | undefined };
 
 /** A landing the server refused: its status, and its path without query or fragment. */
 type RefusedLanding = { status: number; path: string };
+
+/** The page the click was pressed on, read before it was sent, and the pace a refusal for coming too fast is told to. */
+type PressedPage = { url: string | undefined; pace: OriginPace | undefined };
+
+/**
+ * Where going back took a tab whose click landed on a page refused for coming
+ * too fast, judged against the page the click was pressed on: back there; back
+ * to a page that cannot be matched, because the address before the click went
+ * unread; or not back, with why, and whether the tab still shows the refused
+ * page.
+ */
+type PressedPageReturn =
+  | { kind: "returned"; path: string }
+  | { kind: "unconfirmed"; path: string }
+  | { kind: "not_returned"; why: string; stayed: boolean };
 
 /**
  * What a committed landing says about the click: it failed, a self-clearing
@@ -112,24 +148,30 @@ const LANDING_READ_RETRY_MS = 150;
 /**
  * Sends the action and returns its result, with a click that took its own tab
  * to a robot check failed as USER_INTERVENTION_REQUIRED, once any check that
- * clears by itself has been waited out, and one that took it to a page the
- * server answered with HTTP 400 or above failed as `navigation_unexpected`.
- * Every other action is sent and returned untouched.
+ * clears by itself has been waited out; one that took it to a page served 429
+ * or 503 failed as RATE_LIMITED, told to `pace`, and its tab taken back to the
+ * page it was pressed on; and one that took it to a page the server answered
+ * with any other HTTP 400 or above failed as `navigation_unexpected`. Every
+ * other action is sent and returned untouched.
  */
 export async function sendClickCheckingLanding(
   action: BrowserActionCommand,
   tabId: number,
   send: () => Promise<BrowserActionResult>,
-  access: LandedTabAccess
+  access: LandedTabAccess,
+  pace?: OriginPace
 ): Promise<BrowserActionResult> {
   if (action.actionType !== "web.dom.click") return await send();
   const watch = watchTopFrameNavigation(tabId);
   try {
+    // Read before the click, since a click that navigates takes it away: a
+    // landing refused for coming too fast sends the tab back to it.
+    const pressed: PressedPage = { url: await readTabUrl(tabId), pace };
     let reply: BrowserActionResult;
     try {
       reply = await send();
     } catch (error) {
-      const verdict = await judgeLanding(action, tabId, watch, access);
+      const verdict = await judgeLanding(action, tabId, watch, access, pressed);
       if (verdict === undefined) throw error;
       if (verdict.kind === "failed") {
         const failed = workerActionResult(action, watch.startedAt, verdict.outcome);
@@ -143,7 +185,7 @@ export async function sendClickCheckingLanding(
       return verdict.kind === "check_cleared" ? clickAfterClearedCheck(navigated, verdict.wait) : navigated;
     }
     if (reply.status !== "succeeded") return reply;
-    const verdict = await judgeLanding(action, tabId, watch, access);
+    const verdict = await judgeLanding(action, tabId, watch, access, pressed);
     if (verdict === undefined || verdict.kind === "stood") return reply;
     if (verdict.kind === "failed") {
       const failed = failedClick(reply, verdict.outcome);
@@ -156,23 +198,32 @@ export async function sendClickCheckingLanding(
 }
 
 /**
- * The click's landing, judged: a robot check first, then the server's status.
- * Undefined when nothing committed; `stood` when what committed says nothing
- * against the click.
+ * The click's landing, judged: a robot check first, then the server's status
+ * -- a refusal for coming too fast, which takes the tab back to `pressed`, and
+ * then any other refusal. Undefined when nothing committed; `stood` when what
+ * committed says nothing against the click.
  */
 async function judgeLanding(
   action: BrowserActionCommand,
   tabId: number,
   watch: NavigationWatch,
-  access: LandedTabAccess
+  access: LandedTabAccess,
+  pressed: PressedPage
 ): Promise<LandingVerdict | undefined> {
   const commit = await watch.landing();
   if (commit === undefined) return undefined;
   const first = await readCommittedLanding(tabId, access.send);
   const settled = await settleLandedReading(first, tabId, access, checkWaitBudgetMs(action, watch.startedAt));
   if (settled.reading?.kind === "robot_check") return { kind: "failed", outcome: checkLandingOutcome(landedPath(commit.url), settled.checkWait) };
-  const refused = await refusedLanding(tabId, commit);
-  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused), ...(settled.checkWait?.outcome === "cleared" ? { wait: settled.checkWait } : {}) };
+  const cleared = settled.checkWait?.outcome === "cleared" ? { wait: settled.checkWait } : {};
+  const served = await servedStatus(tabId, commit.documentId);
+  const rateLimited = noteRateLimitedLanding(commit.url, settled.reading, served, pressed.pace);
+  if (rateLimited !== undefined) {
+    const back = await returnToPressedPage(tabId, pressed.url);
+    return { kind: "failed", outcome: rateLimitedLandingOutcome(landedPath(commit.url), rateLimited, back), ...cleared };
+  }
+  const refused = refusedLanding(served, commit);
+  if (refused !== undefined) return { kind: "failed", outcome: refusedLandingOutcome(refused), ...cleared };
   return settled.checkWait?.outcome === "cleared" ? { kind: "check_cleared", wait: settled.checkWait } : { kind: "stood" };
 }
 
@@ -256,10 +307,89 @@ function watchTopFrameNavigation(tabId: number): NavigationWatch {
   };
 }
 
-async function refusedLanding(tabId: number, commit: Commit): Promise<RefusedLanding | undefined> {
-  const served = await servedStatus(tabId, commit.documentId);
+function refusedLanding(served: ServedStatus, commit: Commit): RefusedLanding | undefined {
   if (!("status" in served) || served.status < FIRST_ERROR_STATUS) return undefined;
   return { status: served.status, path: landedPath(commit.url) };
+}
+
+/**
+ * Takes the tab back one history entry, to the page the click was pressed on,
+ * and judges where it went: its address against `pressedUrl` (the fragment
+ * aside), and the status it was served with. Nothing is waited on first, and a
+ * back landing whose status the browser will not give is not held against the
+ * return: missing evidence never becomes a failure.
+ */
+async function returnToPressedPage(tabId: number, pressedUrl: string | undefined): Promise<PressedPageReturn> {
+  const watch = watchTopFrameNavigation(tabId);
+  try {
+    try {
+      await chrome.tabs.goBack(tabId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.trim() : "";
+      return { kind: "not_returned", why: detail ? `the browser would not go back (${detail})` : "the browser would not go back", stayed: true };
+    }
+    const commit = await watch.landing();
+    if (commit === undefined) return { kind: "not_returned", why: "going back committed no page", stayed: true };
+    const path = landedPath(commit.url);
+    if (pressedUrl !== undefined && withoutFragment(commit.url) !== withoutFragment(pressedUrl)) {
+      return { kind: "not_returned", why: `going back landed on ${path}, not on ${landedPath(pressedUrl)}`, stayed: false };
+    }
+    const served = await servedStatus(tabId, commit.documentId);
+    if ("status" in served && served.status >= FIRST_ERROR_STATUS) {
+      return { kind: "not_returned", why: `the page it went back to (${path}) was served HTTP ${served.status}`, stayed: false };
+    }
+    return pressedUrl === undefined ? { kind: "unconfirmed", path } : { kind: "returned", path };
+  } finally {
+    watch.stop();
+  }
+}
+
+function withoutFragment(url: string): string {
+  const hash = url.indexOf("#");
+  return hash === -1 ? url : url.slice(0, hash);
+}
+
+/**
+ * A click whose landing the site refused for coming too fast: RATE_LIMITED,
+ * with the pace's wait as `retryAfterMs`, and a record naming the status, the
+ * landed path without its query, whether the tab was taken back, and the wait.
+ */
+function rateLimitedLandingOutcome(path: string, limited: RateLimitedLanding, back: PressedPageReturn): WorkerActionOutcome {
+  const { status, retryAfterMs } = limited;
+  const actual = `the server answered HTTP ${status} for ${path}: the site refused the load for now and nothing was loaded; ` +
+    `${returnWords(back)}; the same click may be made again after ${retryAfterMs} ms`;
+  return {
+    status: "failed",
+    message: `The click was refused by the site for now: HTTP ${status} for ${path}; ${returnMessage(back)} the click may be made again after ${retryAfterMs} ms.`,
+    validation: { status: "failed", expected: EXPECTED, actual },
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected: EXPECTED, actual, retryAfterMs })
+  };
+}
+
+/** The return as the record's `actual` says it. */
+function returnWords(back: PressedPageReturn): string {
+  switch (back.kind) {
+    case "returned":
+      return `the tab was taken back to the page the click was pressed on (${back.path})`;
+    case "unconfirmed":
+      return `the tab was taken back to ${back.path}, but whether that is the page the click was pressed on is unconfirmed, because the address before the click went unread`;
+    case "not_returned":
+      return `the tab was not taken back to the page the click was pressed on: ${back.why}${back.stayed ? ", so it still shows the refused page" : ""}`;
+  }
+}
+
+/** The return as the message says it, ending where the wait is joined on. */
+function returnMessage(back: PressedPageReturn): string {
+  switch (back.kind) {
+    case "returned":
+      return "the tab was taken back to the page it was pressed on, and";
+    case "unconfirmed":
+      return "the tab was taken back, though whether to the page it was pressed on is unconfirmed, and";
+    case "not_returned":
+      return back.stayed
+        ? "the tab could not be taken back to the page it was pressed on, so it still shows the refused page;"
+        : `the tab could not be taken back to the page it was pressed on: ${back.why};`;
+  }
 }
 
 function refusedLandingOutcome(landing: RefusedLanding): WorkerActionOutcome {

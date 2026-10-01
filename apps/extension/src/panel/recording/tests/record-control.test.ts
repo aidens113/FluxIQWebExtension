@@ -15,6 +15,16 @@ test("recording: hidden, because Stop recording is in the recording bar", () => 
   assert.equal(recordControl(statusWith({ ...connected, recordingState: "recording" }), true).hidden, true);
 });
 
+test("paused recording remains active across connection, page and workload states", () => {
+  for (const connectionState of ["connected", "disconnected", "reconnecting"] as const) {
+    for (const working of [false, true]) {
+      for (const unsupportedPage of [undefined, { reason: "Browser pages can't be automated." }]) {
+        assert.deepEqual(recordControl(statusWith({ ...connected, connectionState, recordingState: "paused", ...(unsupportedPage ? { unsupportedPage } : {}) }), working), { hidden: true, disabled: true });
+      }
+    }
+  }
+});
+
 test("not connected: disabled, saying so", () => {
   assert.deepEqual(recordControl(statusWith(), false), { hidden: false, disabled: true, reason: "Connect to FluxIQ to record." });
   assert.equal(recordControl(statusWith({ connectionState: "reconnecting" }), false).reason, "Connect to FluxIQ to record.");

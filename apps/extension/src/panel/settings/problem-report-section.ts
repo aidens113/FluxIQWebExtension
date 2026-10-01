@@ -13,26 +13,46 @@ export function createProblemReportSection(context: PanelContext): HTMLElement {
   const save = createElement("a", { id: "saveProblemReport", className: "small-button", text: "Save report", hidden: true });
   const line = createElement("p", { className: "card-line", hidden: true, attrs: { role: "status" } });
   let savedUrl: string | undefined;
+  let pending = false;
 
   async function report(): Promise<void> {
+    if (pending) return;
+    pending = true;
     button.disabled = true;
     line.hidden = true;
-    const outcome = problemReportOutcome(await context.store.request<{ report?: unknown }>({ type: RUNTIME_MESSAGES.panelReportProblem }));
-    button.disabled = false;
-    if (!outcome.ok) {
-      line.textContent = outcome.detail && outcome.detail !== outcome.sentence ? `${outcome.sentence} (${outcome.detail})` : outcome.sentence;
+    save.hidden = true;
+    try {
+      const outcome = problemReportOutcome(await context.store.request<{ report?: unknown }>({ type: RUNTIME_MESSAGES.panelReportProblem }));
+      if (!outcome.ok) {
+        line.textContent = outcome.detail && outcome.detail !== outcome.sentence ? `${outcome.sentence} (${outcome.detail})` : outcome.sentence;
+        line.hidden = false;
+        return;
+      }
+      let nextUrl: string | undefined;
+      try { nextUrl = URL.createObjectURL(new Blob([outcome.text], { type: "application/json" })); }
+      catch { /* best-effort: copying can deliver the report without a download */ }
+      if (savedUrl) {
+        try { URL.revokeObjectURL(savedUrl); }
+        catch { /* best-effort: failed browser URL cleanup cannot prevent report delivery */ }
+      }
+      savedUrl = nextUrl;
+      if (nextUrl) {
+        save.href = nextUrl;
+        save.download = outcome.fileName;
+        save.hidden = false;
+      }
+      let copied = false;
+      try { await navigator.clipboard.writeText(outcome.text); copied = true; }
+      catch { /* best-effort: the prepared download remains available when clipboard access fails */ }
+      line.textContent = copied ? PROBLEM_REPORT_COPIED : nextUrl ? PROBLEM_REPORT_SAVE_ONLY : "Couldn't copy or prepare the report here. Try again.";
       line.hidden = false;
-      save.hidden = true;
-      return;
+    } catch {
+      line.textContent = "Couldn't make the report here. Try again.";
+      line.hidden = false;
+    } finally {
+      pending = false;
+      button.disabled = false;
     }
-    if (savedUrl) URL.revokeObjectURL(savedUrl);
-    savedUrl = URL.createObjectURL(new Blob([outcome.text], { type: "application/json" }));
-    save.href = savedUrl;
-    save.download = outcome.fileName;
-    save.hidden = false;
-    const copied = await navigator.clipboard.writeText(outcome.text).then(() => true, () => false);
-    line.textContent = copied ? PROBLEM_REPORT_COPIED : PROBLEM_REPORT_SAVE_ONLY;
-    line.hidden = false;
   }
 
   button.addEventListener("click", () => void report());

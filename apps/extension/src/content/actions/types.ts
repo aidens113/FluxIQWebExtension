@@ -28,6 +28,7 @@ import type {
   WaitConditionRequest
 } from "../action-runtime";
 import type { ListExtractionOptions, ListExtractionOutcome } from "../extraction";
+import type { SnapshotCaptureOptions } from "../../shared/snapshot-capture-options";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
@@ -44,7 +45,8 @@ import type {
 } from "../types";
 
 export type ContentActionDependencies = {
-  captureSnapshot(): DomSnapshot;
+  /** The page as it is now; `includeHidden` also lists what is not rendered, flagged `hidden`. */
+  captureSnapshot(options?: SnapshotCaptureOptions): DomSnapshot;
   /**
    * The element an action acts on, with the measurement that chose it.
    *

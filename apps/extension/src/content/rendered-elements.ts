@@ -39,6 +39,18 @@
 // Everything else is listed: `aria-hidden`, `opacity: 0`, a one-pixel input, a
 // `<div>` with no name. Whether a reader can use an element is the reader's
 // question; this only says what is on the page.
+//
+// **`includeHidden`** (t223) is a search's capture: `web.find_on_page` and
+// `web.describe_element` look for words a closed menu or a collapsed panel
+// holds. With it, the walk also lists what it would skip as not rendered -- a
+// `hidden` or `display: none` subtree, a hidden-visibility element, an element
+// with no box -- and names each in `hidden`, in the same composed order. It
+// still never lists `script`, `style`, `noscript`, `template`, the extension's
+// overlays, `html` or `body`, nor two things that hold no words a person could
+// be shown: the document's `head` (its title and metadata) and an
+// `<input type="hidden">`, whose value is form plumbing -- often a token --
+// rather than anything on the page. `walked` counts what a capture without the
+// option would have counted, so a search's evidence totals read as a look's.
 
 import { ACTIVITY_OVERLAY_HOST_ATTRIBUTE, PICKER_HOST_ATTRIBUTE } from "./picker-host";
 
@@ -48,52 +60,100 @@ const NOT_RENDERED_TAGS = new Set(["script", "style", "noscript", "template"]);
 /** Elements with no box of their own that are still drawn, or still pressed. */
 const BOXLESS_RENDERED_TAGS = new Set(["area"]);
 
+/** What a caller may ask of the walk. */
+export type RenderedElementsOptions = {
+  /** Also list what is not rendered, each named in `hidden`. */
+  readonly includeHidden?: boolean | undefined;
+};
+
 /** What the walk found, and how many elements it looked at to find it. */
 export type RenderedElements = {
-  /** Every rendered element, in composed document order. */
+  /** Every rendered element, in composed document order -- and, asked with `includeHidden`, every hidden one among them. */
   elements: Element[];
   /** Elements the walk visited, the ones it pruned at included and their insides not. */
   walked: number;
+  /** Asked with `includeHidden`: the members of `elements` that are not rendered. Absent otherwise. */
+  hidden?: ReadonlySet<Element>;
 };
 
+/** How an element the walk reached stands: listed, the page itself, or present without being seen. */
+type Standing = "listed" | "page" | "unseen";
+
 /** Every rendered element of `root`, in composed document order. */
-export function renderedElements(root: Document = document): RenderedElements {
+export function renderedElements(root: Document = document, options: RenderedElementsOptions = {}): RenderedElements {
+  const includeHidden = options.includeHidden === true;
   const elements: Element[] = [];
+  const hidden = new Set<Element>();
   let walked = 0;
   const start = root.documentElement;
-  if (!start) return { elements, walked };
+  if (!start) return includeHidden ? { elements, walked, hidden } : { elements, walked };
   // A stack rather than recursion: a deeply nested page must not exhaust the
-  // call stack of the capture that is trying to describe it.
+  // call stack of the capture that is trying to describe it. The second stack
+  // says whether each pending element sits inside a subtree that is not
+  // rendered, which only an `includeHidden` walk ever enters.
   const pending: Element[] = [start];
+  const insideUnrendered: boolean[] = [false];
   for (let element = pending.pop(); element; element = pending.pop()) {
-    walked += 1;
+    const inside = insideUnrendered.pop() === true;
+    if (!inside) walked += 1;
     if (isPrunedWithItsSubtree(element)) continue;
-    const style = getComputedStyle(element);
-    if (style.display === "none") continue;
-    if (isListed(element, style, root)) elements.push(element);
+    let unrendered = inside || element.hasAttribute("hidden");
+    if (unrendered && !includeHidden) continue;
+    let standing: Standing;
+    if (unrendered) {
+      if (isNeverListedHidden(element)) continue;
+      standing = isPage(element, root) ? "page" : "unseen";
+    } else {
+      const style = getComputedStyle(element);
+      if (style.display === "none") {
+        if (!includeHidden || isNeverListedHidden(element)) continue;
+        unrendered = true;
+        standing = isPage(element, root) ? "page" : "unseen";
+      } else {
+        standing = standingOf(element, style, root);
+      }
+    }
+    if (standing === "listed") elements.push(element);
+    else if (standing === "unseen" && includeHidden) {
+      elements.push(element);
+      hidden.add(element);
+    }
     const children = composedChildren(element);
-    for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]!);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      pending.push(children[index]!);
+      insideUnrendered.push(unrendered);
+    }
   }
-  return { elements, walked };
+  return includeHidden ? { elements, walked, hidden } : { elements, walked };
 }
 
 /** The element draws nothing, and nothing inside it is drawn either. */
 function isPrunedWithItsSubtree(element: Element): boolean {
   if (NOT_RENDERED_TAGS.has(element.tagName.toLowerCase())) return true;
-  if (element.hasAttribute("hidden")) return true;
   // The host is asked, and its inside never reached: the walk is top down, so
   // the ancestor walk `isExtensionUiNode` makes would repeat on every element.
   return element.hasAttribute(PICKER_HOST_ATTRIBUTE) || element.hasAttribute(ACTIVITY_OVERLAY_HOST_ATTRIBUTE);
 }
 
-/** Whether a rendered element is one the list carries, rather than only a way to its children. */
-function isListed(element: Element, style: CSSStyleDeclaration, root: Document): boolean {
-  if (element === root.documentElement || element === root.body) return false;
-  if (style.visibility === "hidden" || style.visibility === "collapse") return false;
-  if (style.display === "contents" || BOXLESS_RENDERED_TAGS.has(element.tagName.toLowerCase())) return true;
+/** Not rendered, and not listed even by an `includeHidden` walk: the document's metadata, and a hidden input's value. */
+function isNeverListedHidden(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === "head") return true;
+  return tagName === "input" && element.getAttribute("type")?.trim().toLowerCase() === "hidden";
+}
+
+function isPage(element: Element, root: Document): boolean {
+  return element === root.documentElement || element === root.body;
+}
+
+/** Whether a rendered element is one the list carries, the page itself, or only a way to its children. */
+function standingOf(element: Element, style: CSSStyleDeclaration, root: Document): Standing {
+  if (isPage(element, root)) return "page";
+  if (style.visibility === "hidden" || style.visibility === "collapse") return "unseen";
+  if (style.display === "contents" || BOXLESS_RENDERED_TAGS.has(element.tagName.toLowerCase())) return "listed";
   // Absent where the browser predates it; every browser this extension ships
   // for has it, and a unit test's hand-built element does not.
-  return typeof element.checkVisibility !== "function" || element.checkVisibility();
+  return typeof element.checkVisibility !== "function" || element.checkVisibility() ? "listed" : "unseen";
 }
 
 /**

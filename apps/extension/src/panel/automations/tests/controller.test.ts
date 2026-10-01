@@ -8,13 +8,35 @@ import type { PanelMessage, PanelResult } from "../../state";
 import { statusWith } from "../../tests/status-fixture";
 import { createAutomationsController, type SaveFile } from "../controller";
 
-const connected = statusWith({ connectionState: "connected" });
+const connected = statusWith({ connectionState: "connected", paired: true });
 const UNSUPPORTED: PanelResult<unknown> = { ok: false, sentence: "This extension doesn't support that yet.", unsupported: true };
 const ok = (payload: unknown): PanelResult<unknown> => ({ ok: true, value: { ok: true, payload } });
 
+const exportDetail = ok({ runDetail: { datasets: [{ datasetId: "d1" }] } });
 const oldRun = { runId: "r0", flowId: "f1", status: "succeeded", startedAt: 0, finishedAt: 2_000, updatedAt: 2_000, interventionCount: 0, adaptationCount: 0 };
 const newRun = { runId: "r1", flowId: "f1", status: "succeeded", startedAt: 10_000, finishedAt: 24_200, updatedAt: 24_200, interventionCount: 1, adaptationCount: 1 };
 const list = (runs: unknown[]) => ok({ flows: [{ flowId: "f1", name: "Weekly orders", updatedAt: 1, nodeCount: 4 }], runs });
+
+test("failed browser export delivery gives local recovery and releases the lock", async () => {
+  let fail = true, deliveries = 0, changes = 0;
+  const request = (async (message: PanelMessage) => message.type === M.exportDataset
+    ? ok({ export: { tooLarge: false, fileName: "synthetic.csv", contentType: "text/csv", body: "synthetic" } }) : message.type === M.runDetail ? exportDetail : list([oldRun])) as import("../../state").PanelStore["request"];
+  const controller = createAutomationsController(request, { onChange: () => changes++, download: () => { deliveries++; if (fail) throw new Error("synthetic-private-error"); } });
+  controller.observe(connected); await controller.refresh(); await controller.focus("f1"); const before = changes;
+  await controller.exportDataset("f1", "r0", "d1", "csv");
+  assert.equal(controller.state().rows[0]?.exporting, false); assert.equal(controller.state().rows[0]?.notice?.openFluxIQ, true);
+  assert.match(controller.state().rows[0]?.notice?.sentence ?? "", /couldn't save/i); assert.equal(JSON.stringify(controller.state()).includes("synthetic-private-error"), false);
+  assert.ok(changes > before); fail = false; await controller.exportDataset("f1", "r0", "d1", "csv"); assert.equal(deliveries, 2); assert.equal(controller.state().rows[0]?.notice, undefined);
+});
+
+test("export lock remains held during reentrant synchronous delivery", async () => {
+  let exports = 0, reentered = false; const request = (async (message: PanelMessage) => {
+    if (message.type === M.exportDataset) { exports++; return ok({ export: { tooLarge: false, fileName: "synthetic.csv", contentType: "text/csv", body: "synthetic" } }); }
+    return message.type === M.runDetail ? exportDetail : list([oldRun]);
+  }) as import("../../state").PanelStore["request"];
+  const controller = createAutomationsController(request, { onChange() {}, download() { if (!reentered) { reentered = true; void controller.exportDataset("f1", "r0", "d1", "csv"); } } });
+  controller.observe(connected); await controller.refresh(); await controller.focus("f1"); await controller.exportDataset("f1", "r0", "d1", "csv"); assert.equal(exports, 1);
+});
 
 function setup(answer: (message: PanelMessage) => PanelResult<unknown>) {
   const sent: PanelMessage[] = [];
@@ -134,7 +156,7 @@ test("Run waits while FluxIQ runs something, and while offline", async () => {
   assert.equal(controller.state().working, true);
   await controller.run("f1");
   controller.setWorking(false);
-  controller.observe(statusWith({ connectionState: "disconnected" }));
+  controller.observe(statusWith({ connectionState: "disconnected", paired: true }));
   await controller.run("f1");
   assert.equal(types().includes(M.runAutomation), false);
 });
@@ -144,7 +166,7 @@ test("the runtime flipping to running is not \"working\": only the shell's held 
   controller.observe(connected);
   const before = changes();
   for (let flip = 0; flip < 20; flip++) {
-    controller.observe(statusWith({ connectionState: "connected", runtime: flip % 2 === 0 ? { state: "running" } : { state: "idle" } }));
+    controller.observe(statusWith({ connectionState: "connected", paired: true, runtime: flip % 2 === 0 ? { state: "running" } : { state: "idle" } }));
   }
   assert.equal(controller.state().working, false);
   assert.equal(changes(), before, "page reads never redraw the tab");
@@ -171,9 +193,10 @@ test("a failed Run says why in its row; an unsupported Run points to FluxIQ and 
 
 test("export: inline saves the file, too large points to FluxIQ, a failure says why", async () => {
   let exportAnswer = ok({ export: { tooLarge: false, fileName: "orders.csv", contentType: "text/csv", body: "a,b\n", rowCount: 1 } });
-  const { controller, sent, saved } = setup((message) => message.type === M.exportDataset ? exportAnswer : list([oldRun]));
+  const { controller, sent, saved } = setup((message) => message.type === M.exportDataset ? exportAnswer : message.type === M.runDetail ? exportDetail : list([oldRun]));
   controller.observe(connected);
   await controller.refresh();
+  await controller.focus("f1");
   await controller.exportDataset("f1", "r0", "d1", "csv");
   assert.deepEqual(sent.at(-1), { type: M.exportDataset, runId: "r0", datasetId: "d1", format: "csv" });
   assert.deepEqual(saved, [["orders.csv", "text/csv", "a,b\n"]]);

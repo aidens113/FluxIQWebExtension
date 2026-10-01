@@ -12,6 +12,7 @@ import {
 } from "../..";
 import { toolExecution, WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
 import { withClearedWait } from "../cleared-wait";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -55,7 +56,7 @@ async function pressWith(clickPayload: JsonObject) {
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
   assert.equal("clearedWait" in looked, false, "a look waits out nothing");
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
   return await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
 }
 

@@ -15,10 +15,11 @@
 //
 // A target handle is bound only through a packet this exploration returned,
 // never through a capture the model was not shown. Every packet returned is
-// also handed to the runtime's selector retention, so a repair that names one
-// of its handles -- Core writes it `explored.N:target.M` and strips the
-// qualifier before asking -- gets the selector hint behind exactly that
-// control.
+// also handed to the runtime's retention, so a repair that names one of its
+// handles -- Core writes it `explored.N:tM` and strips the qualifier before
+// asking -- finds the structured packet and the selector hint behind exactly
+// that control. What the model is handed is the compact view of the packet
+// (`web-llm-page.v3`, `../page-view/`), and the retention is keyed by it.
 //
 // A robot check met by any option -- a look of one, a press or an entry that
 // raises one, a navigation that lands on one -- comes back marked
@@ -45,11 +46,12 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
+import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { currentElementForReturnedTarget, pressControl } from "../press";
 import type { WebLlmSnapshotBinding } from "../sanitize";
-import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
 import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
@@ -143,7 +145,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
   return {
     [WEB_RECOVERY_INSPECT_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, []);
-      return toolExecution(shown(input, await capture(context, input)).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
+      return toolExecution(pageOf(shown(input, await capture(context, input))), false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_PRESS_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, ["target", "consequences"]);
@@ -166,7 +168,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // Recovery packets intentionally renumber each capture, so they cannot
       // prove a target from the decision packet kept its meaning across this
       // action. Stay conservative until recovery adopts stable handles.
-      return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
+      return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false);
     }),
     [WEB_RECOVERY_ENTER_FIELD_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, ["target", "value"]);
@@ -184,7 +186,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
         restamp: (binding) => binding
       });
       const snapshot = shown(input, entered);
-      return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
+      return toolExecution(pageOf(snapshot), true, WEB_LLM_ACTION_RESULT_CODE, false);
     }),
     // The authoring detection, bound through this exploration's packets and
     // keeping its handle in the runtime's store. It returns a structure packet,
@@ -205,7 +207,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // Nothing moved, so the wait bought nothing. Saying so is the point: a
       // packet identical to the last one reads to a model as fresh evidence.
       if (sameEvidence(before, after)) recoverable("no_progress", why("nothing_changed_while_waiting"));
-      return toolExecution(shown(input, after).evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
+      return toolExecution(pageOf(shown(input, after)), false, WEB_LLM_INSPECT_RESULT_CODE);
     }),
     [WEB_RECOVERY_NAVIGATE_OPTION_ID]: run(async (input) => {
       exactKeys(input.request.value, ["url"]);
@@ -220,7 +222,7 @@ export function webRecoveryHarnessImplementations(context: WebRecoveryHarnessCon
       // The recapture asserts it landed in the scope the policy allowed, not in
       // the one it started from: this is the one option permitted to move.
       const moved = await actAndCapture(context.gateway, input.sessionId, input.request, "web.browser.navigate", { url: destination.href }, current, input.request.signal, webAutomationExplorationScope(destination.href));
-      return toolExecution(shown(input, moved).evidence, true, WEB_LLM_ACTION_RESULT_CODE, false);
+      return toolExecution(pageOf(shown(input, moved)), true, WEB_LLM_ACTION_RESULT_CODE, false);
     })
   };
 }
@@ -257,6 +259,15 @@ async function capture(context: WebRecoveryHarnessContext, input: Handled): Prom
   return await captureEvidence(context.gateway, input.sessionId, input.request, input.request.signal);
 }
 
+/**
+ * The page an option hands the model: the compact view (`web-llm-page.v3`),
+ * never the structured packet, which stays here for the next press to bind its
+ * target through (t223).
+ */
+function pageOf(binding: WebLlmSnapshotBinding): JsonObject {
+  return publishedWebLlmPage(binding.evidence) as unknown as JsonObject;
+}
+
 function sameEvidence(left: WebLlmSnapshotBinding, right: WebLlmSnapshotBinding): boolean {
   return JSON.stringify(left.evidence) === JSON.stringify(right.evidence);
 }
@@ -273,17 +284,18 @@ function targetHandle(value: JsonObject): string {
   return handleIn(value);
 }
 
-/** The `target` handle in an input whose keys were already checked. */
+/**
+ * The `target` handle in an input whose keys were already checked, in the
+ * shape the options declare (`./options.ts`) and in the spelling the packets
+ * use: `target.N` is read as `tN`.
+ */
 function handleIn(value: JsonObject): string {
-  const target = value.target;
-  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) {
-    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof target === "string" ? target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  const target = canonicalWebLlmTargetHandle(value.target);
+  if (target === undefined) {
+    return recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof value.target === "string" ? value.target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
   }
   return target;
 }
-
-/** The handle shape the options declare (`./options.ts`), read the same way. */
-const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 
 function requestedUrl(input: unknown): URL {
   try {

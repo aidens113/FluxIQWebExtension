@@ -27,11 +27,13 @@
 //  - **A diff needs a snapshot on both sides.** With one side missing, every
 //    element on the other would read as added or removed, a claim about a page
 //    nobody observed, so `inspectStateDiff` declines instead.
-//  - **A snapshot is the sanitized packet.** `sanitizeWebLlmSnapshot` is what
-//    already decides what page evidence may travel -- every element, whole,
-//    with sensitive controls dropped and secrets screened (t200). Reusing it
-//    means a state ref cannot carry more, or more sensitive, page data than the
-//    LLM packet may.
+//  - **A snapshot is the page as the model reads it.** `sanitizeWebLlmSnapshot`
+//    is what already decides what page evidence may travel -- every element,
+//    whole, with sensitive controls dropped and secrets screened (t200) -- and
+//    the summary is that packet written as the compact view (`web-llm-page.v3`,
+//    t223), because Core returns it to a recovery model as `core.state_snapshot`.
+//    A state ref cannot carry more, or more sensitive, page data than a page the
+//    model is shown, and the diff (`./state-diff/`) is of the view's own lines.
 //  - **Snapshots are not stored here.** Core hands both refs back to
 //    `inspectStateDiff`, so the diff reads the summaries it was given. A cache
 //    keyed by `stateRef` would be a second copy of state Core already holds.
@@ -43,8 +45,9 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { webAutomationOutputNodeId } from "../output-nodes";
 import { createWebAutomationExpectationEvaluator, type WebAutomationExpectationDispatch } from "./expectation";
-import { sanitizeWebLlmSnapshot } from "./llm-evidence";
+import { publishedWebLlmPage, sanitizeWebLlmSnapshot } from "./llm-evidence";
 import { WEB_AUTOMATION_ROUTE_STATE_PATHS, webAutomationRouteState } from "./route-state";
+import { webAutomationStateDiff } from "./state-diff";
 
 /**
  * Core's `AutomationStudioHostRuntimeBoundary`. Core does not put the type on
@@ -62,9 +65,6 @@ type WebAutomationHostRuntimeDispatch = (
   request: Parameters<WebAutomationExpectationDispatch>[0] & { timeoutMs?: number }
 ) => ReturnType<WebAutomationExpectationDispatch>;
 export type WebAutomationHostRuntimeGateway = { dispatch: WebAutomationHostRuntimeDispatch };
-
-/** `web-state-diff.v1`, the shape `stateRefs.stateDiff` carries for a web attempt. */
-export const WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v2" as const;
 
 const SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 const HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
@@ -121,7 +121,9 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       // Throws when the client answered without a snapshot, which is the honest
       // outcome: Core catches it and the attempt carries no state ref, rather
       // than a ref pointing at nothing.
-      const summary = sanitizeWebLlmSnapshot(actionSnapshot(result.payload)) as unknown as JsonObject;
+      // The page as the model reads every page (t223): Core returns this summary
+      // to a recovery model as `core.state_snapshot`, and diffs two of them.
+      const summary = publishedWebLlmPage(sanitizeWebLlmSnapshot(actionSnapshot(result.payload))) as unknown as JsonObject;
       captures += 1;
       const stateSnapshotId = `web.state.${captures}`;
       return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary };
@@ -157,50 +159,6 @@ export function bindWebAutomationHostRuntime(fluxiq: FluxIQ): void {
   }));
 }
 
-/**
- * What changed between two page summaries: where the browser is, what the
- * document is called, and every element that appeared or left (t200: until
- * 2026-09-30 each side listed ten and counted the rest).
- *
- * `.v2` identifies an element by what it is and what it is called rather than
- * by a selector. The packet stopped carrying selectors when they stopped being
- * something a language model may read, and the opaque handle that replaced them
- * is positional -- `target.1` names the first element of whichever capture it
- * came from, so diffing handles would report that nothing ever changes. What is
- * listed is still element identity rather than page content, so the diff says
- * what moved without restating what the page says.
- */
-export function webAutomationStateDiff(
-  before: JsonObject | undefined,
-  after: JsonObject | undefined,
-  beforeStateRef?: string,
-  afterStateRef?: string
-): JsonObject {
-  const beforeElements = evidenceElements(before);
-  const afterElements = evidenceElements(after);
-  const beforeKeys = new Set(beforeElements.map(elementKey));
-  const afterKeys = new Set(afterElements.map(elementKey));
-  const added = afterElements.filter((element) => !beforeKeys.has(elementKey(element)));
-  const removed = beforeElements.filter((element) => !afterKeys.has(elementKey(element)));
-  const beforeLocation = evidenceText(before, "location");
-  const afterLocation = evidenceText(after, "location");
-  return {
-    schemaVersion: WEB_STATE_DIFF_SCHEMA_VERSION,
-    ...(beforeStateRef === undefined ? {} : { beforeStateRef }),
-    ...(afterStateRef === undefined ? {} : { afterStateRef }),
-    ...(beforeLocation === undefined ? {} : { beforeLocation }),
-    ...(afterLocation === undefined ? {} : { afterLocation }),
-    locationChanged: beforeLocation !== undefined && afterLocation !== undefined && beforeLocation !== afterLocation,
-    titleChanged: evidenceText(before, "title") !== evidenceText(after, "title"),
-    beforeElementCount: beforeElements.length,
-    afterElementCount: afterElements.length,
-    addedElementCount: added.length,
-    removedElementCount: removed.length,
-    addedElements: added,
-    removedElements: removed
-  };
-}
-
 /** The DOM snapshot inside a dispatched action's wrapped result payload. */
 function actionSnapshot(payload: JsonObject | undefined): unknown {
   const action = payload?.result;
@@ -212,40 +170,6 @@ function actsOnPage(node: { definitionId: string; parameterValues?: JsonObject }
   if (WEB_AUTOMATION_NODE_IDS.has(node.definitionId)) return true;
   const outputId = node.parameterValues?.outputId;
   return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
-}
-
-/**
- * How an element is identified across two captures: by what it is and what it
- * is called. Never by the opaque handle, which is positional and would make
- * every element look unchanged, and never by a selector, which the packet no
- * longer carries.
- */
-type WebStateDiffElement = { tag: string; role?: string; name?: string; text?: string; form?: string };
-
-function evidenceElements(summary: JsonObject | undefined): WebStateDiffElement[] {
-  const elements = summary?.elements;
-  if (!Array.isArray(elements)) return [];
-  const described: WebStateDiffElement[] = [];
-  for (const element of elements) {
-    if (!isRecord(element) || typeof element.tag !== "string" || !element.tag) continue;
-    described.push({
-      tag: element.tag,
-      ...(typeof element.role === "string" ? { role: element.role } : {}),
-      ...(typeof element.name === "string" ? { name: element.name } : {}),
-      ...(typeof element.text === "string" ? { text: element.text } : {}),
-      ...(typeof element.form === "string" ? { form: element.form } : {})
-    });
-  }
-  return described;
-}
-
-function elementKey(element: WebStateDiffElement): string {
-  return JSON.stringify([element.tag, element.role, element.name, element.text, element.form]);
-}
-
-function evidenceText(summary: JsonObject | undefined, field: string): string | undefined {
-  const value = summary?.[field];
-  return typeof value === "string" ? value : undefined;
 }
 
 function isRecord(value: unknown): value is JsonObject {

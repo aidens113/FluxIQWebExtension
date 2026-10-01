@@ -23,6 +23,7 @@
 // untaken once the page has been read: a tick left behind would turn the Flow's
 // own tick of that row into an untick. That is housekeeping, not a refusal.
 
+import { canonicalWebLlmTargetHandle } from "./handle-spelling";
 import { actAndCapture, type WebLlmEvidenceGateway, type WebLlmEvidenceToolRequest } from "./capture";
 import { webActionPermission } from "./permission";
 import type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
@@ -112,7 +113,8 @@ function isCheckbox(element: WebLlmEvidenceElement): boolean {
 }
 
 /** The one element a handle names, or a refusal: a handle that names none or several was never observed. */
-export function observedElement(evidence: WebLlmPageEvidence, target: string): WebLlmEvidenceElement {
+export function observedElement(evidence: WebLlmPageEvidence, written: string): WebLlmEvidenceElement {
+  const target = canonicalWebLlmTargetHandle(written) ?? written;
   const matches = evidence.elements.filter((element) => element.target === target);
   if (matches.length !== 1) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   return matches[0]!;
@@ -128,8 +130,10 @@ export function observedElement(evidence: WebLlmPageEvidence, target: string): W
 export function currentElementForReturnedTarget(
   returned: WebLlmSnapshotBinding | undefined,
   current: WebLlmSnapshotBinding,
-  target: string
+  written: string
 ): ResolvedWebLlmEvidenceElement {
+  // `target.N` is the `tN` the packet printed (`./handle-spelling/`).
+  const target = canonicalWebLlmTargetHandle(written) ?? written;
   const observedSnapshot = returned ?? current;
   if (observedSnapshot.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
   observedElement(observedSnapshot.evidence, target);
