@@ -324,8 +324,11 @@ A list may have one item, so a single record is read as a one-row table
   So does a lone record on a page where nothing repeats, which the page answers
   only after its 5 s wait for a run has passed.
 
-A one-item handle builds an extraction node like any other, including with
-`minItems` and `maxItems` of 1. The Flow keeps the record's item selector, and
+A one-item handle builds an extraction node like any other, but a handle that
+names one record (the record beside a run, a receipt, or a lone record) always
+reads at most one row: the node gets `maxItems: 1` whatever bound the plan
+wrote (`oneRecord` on the binding), because two rows from what the model chose
+as one record are a wrong table. The Flow keeps the record's item selector, and
 the handle store knows it as the Flow's own list, so a draft read back from the
 Flow is not refused as a guess. The record and receipt reads above are covered
 by provider-free tests on detection answers written from the scenarios' markup
