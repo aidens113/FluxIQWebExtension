@@ -129,6 +129,12 @@ the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
 Data From This Page". The old way back from settings, the "Simple" radio, is
 gone with the modes.
 
+Pending chat sends and connection-settings saves preserve edits made after the
+request began. Completion clears or refills a draft only when its edit revision
+still matches the submitted revision. A successful earlier settings save reports
+that newer changes remain unsaved; reconnect uses the saved settings. Typing or
+filling an example while a chat send is pending never sends that newer draft.
+
 A failed request's sentence stays where it was sent until the person acts
 again; a status update never wipes it. Earlier, a refused command's error was
 hidden in the same tick it was shown, because the re-render after every command

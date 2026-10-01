@@ -27,12 +27,20 @@ global operational panels, Studio surfaces and extension journeys inventoried
 in the three discovery reports. Supervisor independently confirmed missing
 session-recovery host, ignored onboarding intent, missing authoring-review
 callback, single-conversation prompt selection, and extension draft races.
-Initial fixes for session recovery and extension drafts are assigned and active.
-Next: verify those changes, run focused/full affected checks, and commit a
-reviewable first batch. The rest of the roadmap remains explicitly queued.
+Initial fixes are source-complete and frozen. Extension typecheck passes; full
+corrected TAP1685/1685 passes (outer PowerShell redirect exit1 documented);
+supervisor independently runs12draft regressions with native exit0. Downstream
+full structure passes135warnings/119baseline. Core web typecheck passes; full
+Core structure has only inherited unchanged service4506/4505. Focused recovery
+17/17, Core web production build (165872ms) and extension production build
+(42135ms; Chrome/Firefox/e2e22files each) pass. Supervisor full web suite88597
+is queued for a shared heavy slot; no Claude slot is changed to accelerate it.
+Next: observe that suite and commit the initial fixes with final reports.
+The rest of the roadmap remains explicitly queued.
 
-Original Claude workload is retained separately: t217/t219/t220/t221 are locally
-committed and verified; t216 final downstream checks and commit are still active.
+Original Claude workload is complete: all five tasks locally committed and
+verified; final t216 downstream3dc66aee/Core90dfd1db. Final handoff commitde2096b1
+on t221 follows the earlier checkpoint866a1601.
 Its durable handoff lives in t221 reports/codex-supervisor-handoff.md. The UI/UX
 task neither replaces those checks nor changes Claude's integration ownership.
 
@@ -136,7 +144,7 @@ layout changes should answer measured problems in these journeys.
 - Repository: paired FluxIQ Core t224; report in downstream t224.
 - Task: fix the confirmed global program session-recovery hang: mount one reauthentication host for authenticated app routes and ensure pending recovery settles when its host unmounts. Preserve workspace state and current login semantics.
 - Required reads: this Current State; Core docs/architecture/code-structure.md; apps/web/src/app/{AuthShell,layout}.tsx; features/programs/program-auth-recovery.ts and program-api.ts; existing AuthShell tests and component-test patterns.
-- Owns (may edit): apps/web/src/app/AuthShell.tsx; apps/web/src/app/layout.tsx; apps/web/src/app/tests/AuthShell.test.tsx; focused new reauthentication component tests under apps/web/src/app/tests/; downstream report reports/core-auth-ux-fix.md only.
+- Owns (may edit): apps/web/src/app/AuthShell.tsx; apps/web/src/app/layout.tsx; apps/web/src/app/tests/AuthShell.test.tsx; app/session-reauthentication/{SessionReauthentication.tsx,index.ts,tests/SessionReauthentication.test.tsx}; downstream report reports/core-auth-ux-fix.md only.
 - Must not touch: other product files, storage/runtime/conversation code, shared docs/indexes, Claude worktrees, git commits. If extraction/new host file is necessary, report proposed exact path before editing it.
 - Definition of done: global routes have one host; mocked expired request opens recovery, success retries and cancellation/unmount settles false; regression tests exercise behavior rather than source-string only. No live/browser/provider calls. Wait for supervisor source-edit clearance after task initialization, then run focused web tests through heavy.sh and report actual results.
 - Report to: docs/working/codex-ui-ux-review-2026-09-30/reports/core-auth-ux-fix.md
@@ -177,6 +185,38 @@ layout changes should answer measured problems in these journeys.
 - Validation: not validated; code discovery is underway.
 - Outcome: Partial
 - Follow-up: review source and worker reports; record implementable priorities.
+
+### 2026-09-30 — Durable review checkpoint and scoped fixes
+- Agent: supervisor
+- Changed: complete surface reports and roadmap; paired Core working record; generated indexes.
+- Why: user explicitly requested progress durability without dropping Claude's work.
+- Validation: both git staged diff checks passed; implementation tests remain pending.
+- Outcome: Partial
+- Follow-up: initial UX fixes and t216 gates continue. Checkpoint commits: downstream c0cf1bc9, Core 239a52bb; Claude handoff checkpoint 866a1601 on t221.
+
+### 2026-09-30 — Authentication host ownership correction
+- Agent: supervisor and core-auth worker
+- Changed: approved app/session-reauthentication module and owning tests in written brief.
+- Why: another AuthShell export would raise its legacy three-component ratchet.
+- Validation: source structure inspection; final revised implementation checks pending.
+- Outcome: Partial
+- Follow-up: extract focused host without raising baseline; rerun final source checks.
+
+### 2026-09-30 — Initial fix verification and original work completion
+- Agent: supervisor and workers
+- Changed: draft guards/tests/fake DOM; focused global recovery host; authored architecture paragraphs.
+- Why: prevent lost edits and unresolved expired requests, preserving existing UX contracts.
+- Validation: supervisor draft12/12native0; inspected full extension TAP1685/1685, wrapper ambiguity recorded; downstream full audit pass135/119; Core web tsc0, full audit only inherited service4506/4505. Web suite/builds running.
+- Outcome: Partial
+- Follow-up: resume root sessions88597(websuite),2726(webbuild),23308(extensionbuild); worker Core focused14460. All command paths/results belong to per-worker reports. Original five tasks final handoff committedde2096b1.
+
+### 2026-09-30 — Production verification complete
+- Agent: supervisor
+- Changed: no further product edits; all source frozen.
+- Why: verify compiled route composition and browser-target bundles after fixes.
+- Validation: root `pnpm --filter @fluxiq/web build` exit0,17pages; extension `build` exit0,22files per target; inspected focused Core17pass and exact sole inherited audit failure. Root full web tests88597 remain queued.
+- Outcome: Partial
+- Follow-up: allow shared slot scheduling; run full web suite without altering Claude jobs. Final local commits and generated indexes follow.
 
 ## Open Questions
 
