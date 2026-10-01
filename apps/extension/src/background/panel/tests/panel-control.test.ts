@@ -112,7 +112,7 @@ test("only the side panel and the popup may send any of the panel requests; ever
   for (const type of PANEL_TYPES) {
     for (const sender of senders) {
       const h = harness();
-      const result = await handlePanelControl({ type, overlay: "hidden", settings: { coreApiUrl: "https://attacker.test" }, text: "hi", runId: "r" }, sender, h.deps);
+      const result = await handlePanelControl({ type, flowId: "flow-1", projectId: "other-project", overlay: "hidden", settings: { coreApiUrl: "https://attacker.test" }, text: "hi", runId: "r" }, sender, h.deps);
       assert.deepEqual(result, { handled: true, response: { ok: false, code: "forbidden", error: "Only the FluxIQ panel can do that." } }, `${type} from ${sender.url}`);
       assert.deepEqual(h.touched, [], `${type} touched something for ${sender.url}`);
     }
@@ -159,6 +159,49 @@ test("Open FluxIQ never opens an address that is not http or https", async () =>
     const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ }, sidepanel, h.deps);
     assert.deepEqual(h.opened, [], coreApiUrl);
     assert.deepEqual(result, { handled: true, response: { ok: false, code: "invalid_request", error: "The FluxIQ address in settings is not a web address." } });
+  }
+});
+
+test("opening an automation uses the paired project's Core deep link and encodes the Flow ID", async () => {
+  installChrome();
+  const h = harness({ ...baseSettings, coreApiUrl: "https://core.test/old?view=stale#old" });
+  await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: " flow/one?&project=other ", projectId: "other-project", token: "ignored" }, popup, h.deps);
+  assert.equal(h.opened.length, 1);
+  const url = new URL(h.opened[0]!);
+  assert.equal(url.origin, "https://core.test");
+  assert.equal(url.pathname, "/programs/automation-studio");
+  assert.deepEqual([...url.searchParams], [["project", "project-1"], ["flow", "flow/one?&project=other"]]);
+  assert.equal(url.hash, "");
+  assert.deepEqual(h.calls, [], "opening the panel makes no authenticated program call");
+});
+
+test("a malformed automation ID is refused before settings or project context are read", async () => {
+  installChrome();
+  for (const flowId of [null, "", "  ", 1, {}, "x".repeat(2049)]) {
+    const h = harness();
+    const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId }, sidepanel, h.deps);
+    assert.equal((result as { response: { code: string } }).response.code, "invalid_request");
+    assert.deepEqual(h.touched, []);
+  }
+});
+
+test("opening an automation without a paired project refuses instead of opening a different automation", async () => {
+  installChrome();
+  const h = harness();
+  const deps = { ...h.deps, relay: { ...h.deps.relay, projectId: () => undefined } };
+  const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: "flow-1", projectId: "other-project" }, sidepanel, deps);
+  assert.equal((result as { response: { code: string } }).response.code, "no_project");
+  assert.deepEqual(h.opened, []);
+  assert.deepEqual(h.touched, []);
+});
+
+test("automation deep links preserve the HTTP(S) restriction", async () => {
+  installChrome();
+  for (const coreApiUrl of ["javascript:alert(1)", "file:///etc/passwd", "not a url"]) {
+    const h = harness({ ...baseSettings, coreApiUrl });
+    const result = await handlePanelControl({ type: RUNTIME_MESSAGES.panelOpenFluxIQ, flowId: "flow-1" }, sidepanel, h.deps);
+    assert.equal((result as { response: { code: string } }).response.code, "invalid_request");
+    assert.deepEqual(h.opened, []);
   }
 });
 

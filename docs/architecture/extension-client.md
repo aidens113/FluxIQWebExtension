@@ -102,6 +102,17 @@ panel lists the steps of a run; what FluxIQ decides and does is the chat's to
 show, and internal page reads are never shown as steps. Flow editing, run logs
 and everything richer are in FluxIQ, one Open FluxIQ away.
 
+The selected automation's Open in FluxIQ button carries its Flow ID to the
+background. The background takes the project from the paired browser's
+session and opens `/programs/automation-studio?project=...&flow=...` on the
+configured HTTP(S) Core address, with both IDs encoded as query parameters.
+It ignores a panel-supplied project or token and refuses an automation link
+when the session has no project. Generic Open FluxIQ buttons still open the
+configured panel address. Only the side panel and popup may request either
+kind of link; content pages are refused before settings or session context
+are read. Opening a link makes no authenticated program call and places no
+pairing token in the URL.
+
 | Directory under `apps/extension/src/panel/` | Owns |
 | --- | --- |
 | `shell/` | `mountPanel`, the top bar, the one `PanelStore`, and which screen shows (`screen-state.ts`, pure). |
@@ -183,8 +194,8 @@ it copies the report and offers it as a file. What it holds and withholds is in
 
 ## Panel Relays
 
-The panel's automation and recording requests (`SIMPLE_PANEL_MESSAGES` in `shared/protocol.ts`, the
-strings in `RUNTIME_MESSAGES`) are relayed by `background/simple-panel/` with
+The panel's automation and recording requests (`AUTOMATION_PANEL_MESSAGES` in `shared/protocol.ts`, the
+strings in `RUNTIME_MESSAGES`) are relayed by `background/automation-relay/` with
 the pairing token, and each sends Core only the fields named here, never the
 panel's message:
 

@@ -9,7 +9,7 @@ import { withTimeout } from "./with-timeout.js";
 export type ExtensionPanelCaptureInput = { context: BrowserContext; controlPage: Page; path: string; file: string; secrets: readonly string[]; timeoutMs: number };
 
 const PANEL_PATH = "/sidepanel/index.html";
-/** The panel's one element that shows the pairing approval code (`apps/extension/src/panel/simple/pairing-card.ts`). */
+/** The panel's approval-code element (`apps/extension/src/panel/getting-started/start-view.ts`). */
 const PAIRING_CODE = "#pairingReferenceCode";
 const MASK_ATTRIBUTE = "data-fluxiq-lab-ui-review-mask";
 

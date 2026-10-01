@@ -40,7 +40,7 @@ export const RUNTIME_MESSAGES = {
   panelStopRun: "fluxiq.panel.stopRun",
   // "Report Problem": a redacted diagnostic bundle (`background/diagnostics/`).
   panelReportProblem: "fluxiq.panel.reportProblem",
-  // Simple Mode's relays (`background/simple-panel/`); `SIMPLE_PANEL_MESSAGES`
+  // Automation panel's relays (`background/automation-relay/`); `AUTOMATION_PANEL_MESSAGES`
   // in `protocol.ts` names the same strings by their short names.
   panelListAutomations: "fluxiq.panel.listAutomations",
   panelRunAutomation: "fluxiq.panel.runAutomation",

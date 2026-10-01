@@ -26,8 +26,8 @@ export type OpenFluxIQStyle = { label: string; look: "primary" | "small" | "link
 const FAILED = "Couldn't open FluxIQ. Check its web address in Settings.";
 const LOOKS = { primary: "primary-button", small: "small-button", link: "link-button", icon: "icon-button" } as const;
 
-/** Creates an Open FluxIQ button that sends through `request`. */
-export function createOpenFluxIQButton(request: PanelStore["request"], style: OpenFluxIQStyle): OpenFluxIQButton {
+/** Sends through `request`; an optional Flow getter is read at click time. */
+export function createOpenFluxIQButton(request: PanelStore["request"], style: OpenFluxIQStyle, flowId?: () => string | undefined): OpenFluxIQButton {
   const error = createStickyError<ExtensionStatus>();
   const button = style.look === "icon"
     ? createElement("button", { className: LOOKS.icon, text: "↗", attrs: { type: "button", "aria-label": style.label, title: style.label } })
@@ -48,7 +48,10 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
     render();
     button.disabled = true;
     const failedAt = address;
-    void request({ type: RUNTIME_MESSAGES.panelOpenFluxIQ }).then((result) => {
+    const message: { type: string; flowId?: string } = { type: RUNTIME_MESSAGES.panelOpenFluxIQ };
+    const selectedFlowId = flowId?.();
+    if (selectedFlowId !== undefined) message.flowId = selectedFlowId;
+    void request(message).then((result) => {
       button.disabled = false;
       if (!result.ok) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt, result.detail);
       render();

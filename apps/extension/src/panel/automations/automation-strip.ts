@@ -23,7 +23,7 @@ export type AutomationStrip = {
 /** Builds the strip over `controller`. */
 export function createAutomationStrip(request: PanelStore["request"], controller: AutomationsController): AutomationStrip {
   const run = createElement("button", { className: "small-button strip-run", text: "Run", attrs: { type: "button" } });
-  const open = createOpenFluxIQButton(request, { label: "Open in FluxIQ", look: "link" });
+  const open = createOpenFluxIQButton(request, { label: "Open in FluxIQ", look: "link" }, () => shown?.flowId);
   const lines = createElement("p", { className: "strip-lines" });
   const hint = createElement("p", { className: "strip-hint", hidden: true });
   const exports = createElement("span", { className: "strip-exports", hidden: true });
@@ -82,7 +82,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       notice.append(row.notice.sentence);
       notice.title = row.notice.detail ?? "";
       if (row.notice.openFluxIQ) {
-        const button = createOpenFluxIQButton(request, { label: "Open FluxIQ", look: "link" });
+        const button = createOpenFluxIQButton(request, { label: "Open FluxIQ", look: "link" }, () => row.flowId);
         if (lastStatus !== undefined) button.observe(lastStatus);
         noticeButtons.push(button);
         notice.append(button.element);

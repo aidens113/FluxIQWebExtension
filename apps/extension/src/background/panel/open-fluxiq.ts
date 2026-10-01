@@ -1,14 +1,22 @@
 // "Open FluxIQ": the web panel's address, as a tab. It is the fallback for
-// anything the extension's panel cannot do itself, so it opens whatever address
-// the settings hold -- and only a web address, so a mistyped or hostile setting
-// can never open a `javascript:` or `file:` URL.
+// anything the extension's panel cannot do itself. An automation uses Core's
+// project/Flow route on that address; a generic button opens the address as
+// configured. Only HTTP(S) is accepted, including for automation links.
 
 import { DEFAULT_CORE_API_URL } from "../../shared/constants";
 
-/** The web panel's address to open, or undefined when the setting is not an http(s) address. */
-export function fluxIQWebAddress(coreApiUrl: string | undefined): string | undefined {
+/** The panel or automation address, without adding any authentication material. */
+export function fluxIQWebAddress(coreApiUrl: string | undefined, automation?: { projectId: string; flowId: string }): string | undefined {
   const url = parsedAddress(coreApiUrl?.trim() || DEFAULT_CORE_API_URL);
-  return url && (url.protocol === "http:" || url.protocol === "https:") ? url.toString() : undefined;
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) return undefined;
+  if (automation) {
+    url.pathname = "/programs/automation-studio";
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("project", automation.projectId);
+    url.searchParams.set("flow", automation.flowId);
+  }
+  return url.toString();
 }
 
 // `URL.canParse` would say this without a throw, but it arrived in Firefox 115
