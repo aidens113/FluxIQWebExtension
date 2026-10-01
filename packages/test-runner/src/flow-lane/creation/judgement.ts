@@ -1,14 +1,15 @@
 // Judging a created Flow by the records it stored. The recorded Flow lane pairs
 // each dataset with a recorded extract step by the recording's order; a created
 // Flow has no recording, so it is judged against the one extract step its task
-// names, with the datasets in Core's own order, through the same judgement and
-// the same record comparison the recorded lane uses.
+// names, paired with the dataset that answers it (`pairingOrder`), through the
+// same judgement and the same record comparison the recorded lane uses.
 
-import type { ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import type { ExpectedExtraction, ResolvedScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import { assertFlowExtraction, judgeFlowExtraction, type FlowExtractionJudgement } from "../expectations.js";
 import { extractionReadsByNode } from "../extraction-read.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
+import type { FlowRunDataset } from "../run-datasets.js";
 
 /**
  * The run's datasets against the expected dataset `stepId` names, which must
@@ -27,33 +28,80 @@ export function judgeCreatedFlowDataset(input: {
 }): FlowExtractionJudgement {
   const stepIndex = input.workflow.recordingScript.findIndex((step) => step.operation === "extract" && step.id === input.stepId);
   const step = input.workflow.recordingScript[stepIndex];
+  const expected = (input.workflow.expected.extracted ?? []).filter((entry) => entry.step === input.stepId);
+  const pairing = pairingOrder(input.run.extracted, expected, executionOrder(input.run.actions));
   const judgement = judgeFlowExtraction({
-    expected: (input.workflow.expected.extracted ?? []).filter((entry) => entry.step === input.stepId),
+    expected,
     script: step ? [step] : [],
-    datasets: input.run.extracted,
+    datasets: pairing.datasets,
     actionTypes: input.actionTypes,
-    // The order the Flow's own nodes ran in.
+    // **The dataset that answers the step, not the first one the Flow
+    // stored** (`pairingOrder`).
     //
-    // **It was an empty map, and an empty map is not "no order" — it is an
-    // arbitrary one.** Every dataset then sorts to the same position and
-    // `ordered[0]` is whichever set Core happened to return first, so a Flow
-    // with two extraction nodes had its expected step paired with either of
-    // them by chance. Measured on `run-muhrf6c4-9714939f`: Core stored "8
-    // records, across 2 record sets", the judged step measured **0**, and the
-    // 8 were in the other one. The Flow had found the answer and this scored
-    // the empty table, then reported the run as returning nothing.
-    //
-    // A created Flow has no recording to take an order from, which is why this
-    // was empty; it has its own execution instead. The node that ran first is
-    // first, which pairs the scenario's single expected step with the Flow's
-    // first extraction rather than with a coin toss.
-    candidateOrder: executionOrder(input.run.actions),
+    // Before that it was the order the Flow's own nodes ran in, and before
+    // that an empty map, which is not "no order" but an arbitrary one: on
+    // `run-muhrf6c4-9714939f` the judged step measured **0** while Core's other
+    // record set held the 8 records. First-run order fixed that and opened the
+    // opposite hole (t195-w19a V1, t195-w19b #3): a correct Flow that reads a
+    // list before its answer was judged on the list. confirm-requests reads the
+    // request listing -- already the four expected records -- before any
+    // Confirm, so a loop that confirmed nobody passed; pickup-order may read
+    // the cart before the confirmation, so a right Flow failed.
+    candidateOrder: pairing.candidateOrder,
     durationsByNode: input.run.extractionDurationsByNode,
     readsByNode: extractionReadsByNode(input.run.actions),
     scenarioOrigin: input.scenarioOrigin,
   });
   const steps = judgement.steps.map((judged) => ({ ...judged, stepIndex, measurement: { ...judged.measurement, stepIndex } }));
   return { ...judgement, steps, measurements: steps.map((judged) => judged.measurement) };
+}
+
+/**
+ * The run's datasets in the order the expected step should be paired with
+ * them, and a candidate order by node that keeps that order.
+ *
+ * First the datasets that carry the step's keys -- at least one record holding
+ * every field the expected records name, less `optionalFields` -- the one
+ * whose node ran **last** first: a Flow reads its answer after whatever it
+ * read on the way there, and the answer is what the task asked to see. A
+ * listing read again after the work (confirm-requests' accepted list) is the
+ * later of two reads with the same keys, so "last" holds there too. A record
+ * may carry no key the expectation does not name, so a candidate is not
+ * required to carry nothing else: a listing with a `status` column is still a
+ * candidate, and loses to the later answer only by running first.
+ *
+ * Then the rest, in the order their nodes first ran. With no candidate -- an
+ * empty dataset has no keys, nor does an expectation without records -- this
+ * is exactly that first-run order.
+ */
+function pairingOrder(
+  datasets: readonly FlowRunDataset[],
+  expected: readonly ExpectedExtraction[],
+  ranAt: ReadonlyMap<string, number>,
+): { datasets: FlowRunDataset[]; candidateOrder: ReadonlyMap<string, number> } {
+  const keys = requiredKeys(expected);
+  const position = (dataset: FlowRunDataset): number => Math.min(...dataset.nodeIds.map((nodeId) => ranAt.get(nodeId) ?? Number.POSITIVE_INFINITY), Number.POSITIVE_INFINITY);
+  const carriesKeys = (dataset: FlowRunDataset): boolean => keys.length > 0 && dataset.records.some((record) => keys.every((key) => Object.hasOwn(record, key)));
+  const candidates = datasets.filter(carriesKeys);
+  const rest = datasets.filter((dataset) => !carriesKeys(dataset));
+  // Latest first; a dataset whose node never ran is no evidence of being late.
+  const latest = (dataset: FlowRunDataset): number => { const at = position(dataset); return Number.isFinite(at) ? at : Number.NEGATIVE_INFINITY; };
+  const ordered = [...candidates.sort((left, right) => latest(right) - latest(left)), ...rest.sort((left, right) => position(left) - position(right))];
+  // `judgeFlowExtraction` orders by node; a node keeps the position of the
+  // first dataset it wrote here, and its stable sort keeps the rest as given.
+  const candidateOrder = new Map<string, number>();
+  ordered.forEach((dataset, index) => dataset.nodeIds.forEach((nodeId) => { if (!candidateOrder.has(nodeId)) candidateOrder.set(nodeId, index); }));
+  return { datasets: ordered, candidateOrder };
+}
+
+/** Every field the step's expected records name, less those `optionalFields` lets an item lack. */
+function requiredKeys(expected: readonly ExpectedExtraction[]): string[] {
+  const keys = new Set<string>();
+  for (const entry of expected) {
+    const optional = new Set(entry.optionalFields ?? []);
+    for (const record of entry.records ?? []) for (const key of Object.keys(record)) if (!optional.has(key)) keys.add(key);
+  }
+  return [...keys];
 }
 
 /**

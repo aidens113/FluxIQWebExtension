@@ -47,7 +47,7 @@ const gatewayFor = (url: string): WebLlmEvidenceGateway => ({
 test("the published tool ids cover what the runtime offers and what a recorded run may still name", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
   const offered = runtime.tools.map((tool) => tool.toolId);
-  assert.deepEqual(offered, [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_FIND_ON_PAGE_TOOL_ID]);
+  assert.deepEqual(offered, [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, WEB_LLM_FIND_ON_PAGE_TOOL_ID, "web.describe_element"]);
   // The library verb is Core's option, not one of this runtime's own tools, and
   // is published here because this domain is what carries out its calls.
   assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes(WEB_LLM_RUN_NODE_TOOL_ID), true);

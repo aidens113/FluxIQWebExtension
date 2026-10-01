@@ -26,9 +26,11 @@
 //
 //   verified        -- the step could run now. Its effect was withheld.
 //   present         -- the target is not on the page, and the page is the one
-//                      the step acted on (its recorded location, origin and
-//                      path). That is what an effect already in place looks
-//                      like: the line was saved while exploring and its save
+//                      the step acted on (its recorded location, compared
+//                      whole: `./missing-target.ts`, the same test a replayed
+//                      step answers `remembered` by). That is what an effect
+//                      already in place looks like: the line was saved while
+//                      exploring and its save
 //                      control is gone; the store was chosen and its card now
 //                      says "Your store" (t193-wH, `run-munri5gr-94d7f8a0`).
 //                      It passes.
@@ -60,12 +62,11 @@ import { resolveWebPlanNode } from "../plan-resolution";
 import { webLlmHandleRejectionReason } from "../tool-rejection";
 import { isJsonRecord } from "../untrusted-json";
 import { webRunnableNode } from "./catalog";
+import { webNodeReplayMissingTarget } from "./missing-target";
 import {
   WEB_NODE_REPLAY_RESULT_CODES,
   webNodeReplayAnswer,
-  webNodeReplayAnswerOnPage,
   webNodeReplayAnswerWithPage,
-  webNodeReplayPage,
   webNodeReplayPermissionReason,
   type WebNodeReplayFacts
 } from "./replay-answer";
@@ -131,7 +132,7 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
     // Nothing matched within the window: a wait in vain, which is how the
     // assertion reports a subject that never appeared.
     if (result.status === "timed_out" || code === WEB_AUTOMATION_FAILURE_CODES.TIMEOUT || code === WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND) {
-      return await missing(run, facts("handle_no_longer_on_page"));
+      return await webNodeReplayMissingTarget(run, "verify", facts("handle_no_longer_on_page"));
     }
     // The target was found and judged: it is there and not as a press needs it.
     if (code === WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH) {
@@ -141,39 +142,6 @@ export async function verifyWebOutputNode(run: WebNodeRun): Promise<WebLlmEviden
     return await webNodeReplayAnswerWithPage(run, WEB_NODE_REPLAY_RESULT_CODES.failed, `the step's target could not be checked (${refused.code})`, false, facts(refused.detail?.reason));
   }
   return passed(WEB_NODE_REPLAY_RESULT_CODES.verified, "the step's target is on the page, visible and enabled; it was not run", facts(undefined));
-}
-
-/**
- * A target that is not on the page: `present` when the page is the one the
- * step acted on, `unreproducible` otherwise (see the header). Either way the
- * answer carries the page, which is what a reader has to judge it from.
- */
-async function missing(run: WebNodeRun, about: WebNodeReplayFacts): Promise<WebLlmEvidenceToolExecution> {
-  const page = await webNodeReplayPage(run);
-  const actedOn = actedOnLocation(run.request.value);
-  if (page && actedOn !== undefined && page.evidence.location === actedOn) {
-    return webNodeReplayAnswerOnPage(run, page, {
-      code: WEB_NODE_REPLAY_RESULT_CODES.present,
-      said: "the step's target is gone from the page it acted on, which is how its effect already in place looks; it was not run",
-      acted: false,
-      ok: true,
-      about: { ...about, resultReason: undefined },
-      found: "missing"
-    });
-  }
-  return webNodeReplayAnswerOnPage(run, page, {
-    code: WEB_NODE_REPLAY_RESULT_CODES.unreproducible,
-    said: "the step's target is not on the page, and this is not the page it acted on; it was not run",
-    acted: false,
-    about,
-    found: "missing"
-  });
-}
-
-/** Where the step found the page, as this domain wrote it on the step (`./replay.ts`), and Core sent it back. */
-function actedOnLocation(value: JsonObject): string | undefined {
-  const from = isJsonRecord(value.from) ? value.from : undefined;
-  return typeof from?.location === "string" && from.location ? from.location : undefined;
 }
 
 /** A step that passed its check: `ok`, and nothing done to the page. */

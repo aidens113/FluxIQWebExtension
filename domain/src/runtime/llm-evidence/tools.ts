@@ -71,7 +71,7 @@ import {
   type WebPlanNodeResolution,
   type WebPlanNodeResolutionInput
 } from "./plan-resolution";
-import { runWebFindOnPage } from "./page-find";
+import { runWebDescribeElement, runWebFindOnPage } from "./page-find";
 import { publishedWebLlmPage, webLlmPageRetentionKey, webLlmResultRetentionKey, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
@@ -99,6 +99,7 @@ import {
   webLlmToolRejectionResultCode,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_FIND_ON_PAGE_TOOL_ID,
+  WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "./vocabulary";
 
@@ -291,8 +292,11 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
   // its own to check a handle against.
   const failurePackets = new Map<string, WebLlmSnapshotBinding>();
   const toolPackets = new Map<string, WebLlmSnapshotBinding>();
-  const retainIn = (window: Map<string, WebLlmSnapshotBinding>) => (binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
-    keepNewest(window, webLlmPageRetentionKey(publishedWebLlmPage(binding.evidence)), binding);
+  // `shownAs` is the result the model read the packet through when it was not
+  // the page itself -- a search's matches or one element's description -- so
+  // a repair naming a handle from it finds the packet behind it.
+  const retainIn = (window: Map<string, WebLlmSnapshotBinding>) => (binding: WebLlmSnapshotBinding, shownAs?: JsonObject): WebLlmSnapshotBinding => {
+    keepNewest(window, webLlmResultRetentionKey(shownAs) ?? webLlmPageRetentionKey(publishedWebLlmPage(binding.evidence)), binding);
     return binding;
   };
   const retain = retainIn(toolPackets);
@@ -346,6 +350,12 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
           required: ["query"],
           additionalProperties: false
         },
+        effect: "observe",
+      },
+      {
+        toolId: WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID,
+        description: "Everything the page holds about one element, named by the handle a page line or a find_on_page match printed (tN, copied exactly): its line, every attribute whole (id, class, name, test id, aria-*, ...), its box and where that is, and every other field the capture keeps (role, label, value, options, the list item or table cell it sits in, what covers it, ...). Use it when a line is not enough to tell two alike elements apart or to see why a control behaves as it does. Hidden elements a search found can be described too. Observes only, and is never a step of the Flow.",
+        inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, required: ["target"], additionalProperties: false },
         effect: "observe",
       },
     ],
@@ -413,6 +423,15 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
           // A search's capture is restamped and kept as a look, so a handle it
           // prints is one a press binds (`./page-find/`).
           return answered(await runWebFindOnPage({
+            gateway,
+            sessionId,
+            request: input,
+            restamp: (binding) => retain(stable(input, binding)),
+            looked: (binding) => looked(input, sessionId, binding)
+          }));
+        }
+        if (input.toolId === WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID) {
+          return answered(await runWebDescribeElement({
             gateway,
             sessionId,
             request: input,

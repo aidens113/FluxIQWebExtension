@@ -195,3 +195,78 @@ test("a page that shows items and never a pager ends on control_absent after a b
   assert.deepEqual(followed, []);
   assert.ok(tookMs >= 900 && tookMs < 3_000, `waited ${tookMs} ms`);
 });
+
+// And a load-more control the page keeps after its last page, hidden
+// (t195-w19c R1): Guildline's Sent invitations sets `hidden` on its "Show more"
+// once the last page is in (`professional-network/network/manager-client.ts`).
+// A hidden control is the list's ordinary end, read before the page bound, and
+// is never pressed.
+
+/** A load-more control, hidden by attribute or by having no box, that counts its presses. */
+function loadMoreControl(options: { hidden?: boolean; boxes?: number } = {}) {
+  const control = {
+    hidden: options.hidden ?? false,
+    boxes: options.boxes ?? 1,
+    clicks: 0,
+    isConnected: true,
+    getAttribute: (name: string): string | null => (name === "hidden" && control.hidden ? "" : null),
+    matches: (): boolean => false,
+    getClientRects: (): unknown[] => Array.from({ length: control.boxes }, () => ({})),
+    click: (): void => {
+      control.clicks += 1;
+    }
+  };
+  return control;
+}
+
+/** One `loadMore` advance with `control` as the page's only control, from `pagesRead` pages read of `maxPages`. */
+async function pressFrom(control: ReturnType<typeof loadMoreControl>, pagesRead: number, maxPages: number): Promise<{ advance: Awaited<ReturnType<typeof advancePage>>; tookMs: number }> {
+  const saved = (globalThis as Record<string, unknown>).document;
+  (globalThis as Record<string, unknown>).document = { querySelector: (selector: string) => (selector === ".more" ? control : null) };
+  try {
+    const progress: PaginationProgress = { item: ".row", shown: [], pagesRead, scrolls: 0, deadline: Date.now() + 20_000, hasUnreadItem: () => false };
+    const startedAt = Date.now();
+    const advance = await advancePage({ mode: "loadMore", control: ".more", maxPages }, progress);
+    return { advance, tookMs: Date.now() - startedAt };
+  } finally {
+    (globalThis as Record<string, unknown>).document = saved;
+  }
+}
+
+test("a load-more control that is present and hidden ends the list, unpressed, after a short grace", async () => {
+  const control = loadMoreControl({ hidden: true });
+  const { advance, tookMs } = await pressFrom(control, 2, 10);
+  assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
+  assert.equal(control.clicks, 0);
+  assert.ok(tookMs >= 900 && tookMs < 3_000, `waited ${tookMs} ms`);
+});
+
+test("a load-more control with no box is hidden too", async () => {
+  const control = loadMoreControl({ boxes: 0 });
+  const { advance } = await pressFrom(control, 2, 10);
+  assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
+  assert.equal(control.clicks, 0);
+});
+
+test("at the page bound a hidden load-more control ends the list rather than truncating it", async () => {
+  const control = loadMoreControl({ hidden: true });
+  const { advance } = await pressFrom(control, 3, 3);
+  assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
+});
+
+test("at the page bound a visible load-more control is still truncation", async () => {
+  const control = loadMoreControl();
+  const { advance, tookMs } = await pressFrom(control, 3, 3);
+  assert.deepEqual(advance, { outcome: "truncated", stop: "page_limit" });
+  assert.equal(control.clicks, 0);
+  assert.ok(tookMs < 500, `took ${tookMs} ms`);
+});
+
+test("a load-more control hidden only while the page settles is waited for, not read as the end", async () => {
+  const control = loadMoreControl({ hidden: true });
+  setTimeout(() => {
+    control.hidden = false;
+  }, 200);
+  const { advance } = await pressFrom(control, 3, 3);
+  assert.deepEqual(advance, { outcome: "truncated", stop: "page_limit" });
+});

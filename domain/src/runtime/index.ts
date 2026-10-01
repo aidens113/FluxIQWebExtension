@@ -3,6 +3,7 @@ export * from "./capabilities";
 export * from "./expectation";
 export * from "./failure";
 export * from "./host-runtime";
+export * from "./state-diff";
 export * from "./llm-evidence";
 export * from "./reusable-evidence";
 export * from "./reusable-evidence-coordinator";

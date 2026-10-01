@@ -56,6 +56,7 @@ import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
 import { resolveWebPlanNode } from "../plan-resolution";
+import { WEB_DECLINED_PRESS_INSTEAD } from "../press";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
 import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { withoutWebLlmDeniedKeys } from "../denied-keys";
@@ -321,7 +322,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     if (permission.kind === "refused") {
       return refusal(undefined, "permission_required", rejectionDetail({
         reason: permission.requestId === null ? "nobody_to_ask" : permission.declined ? "consequences_declined" : "consequences_not_granted",
-        target: undefined, instead: undefined, missing: permission.missing, requestId: permission.requestId ?? undefined
+        target: undefined, instead: permission.declined ? WEB_DECLINED_PRESS_INSTEAD : undefined, missing: permission.missing, requestId: permission.requestId ?? undefined
       }), record);
     }
     // Exploration stays where it started. The URL is the node's own parameter

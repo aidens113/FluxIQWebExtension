@@ -20,7 +20,7 @@ import type { WebNodeRun } from "./context";
  * The closed vocabulary a replay answers in.
  *
  * Core's own, because Core reads the answer and knows none of this domain's
- * codes (`AS/runtime/llm/node-tools/replay.ts` holds the same seven). What
+ * codes (`AS/runtime/llm/node-tools/replay.ts` holds the same eight). What
  * really happened, in this domain's words, goes in the evidence beside it.
  */
 export const WEB_NODE_REPLAY_RESULT_CODES = {
@@ -29,6 +29,8 @@ export const WEB_NODE_REPLAY_RESULT_CODES = {
   verified: "core.replay.verified",
   /** Checked, not run: the step's effect is already in place on the page it acted on (`./verify.ts`). */
   present: "core.replay.present",
+  /** Run again, and its target is gone from the page it acted on: the site remembers the step (`./missing-target.ts`). */
+  remembered: "core.replay.remembered",
   failed: "core.replay.failed",
   changed: "core.replay.changed",
   unreproducible: "core.replay.unreproducible",
