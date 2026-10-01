@@ -1,7 +1,7 @@
 # Core and extension UI/UX review
 
 Status: Active
-Status detail: Current-source review underway; improvements will be prioritized by task completion and clarity.
+Status detail: Current-source review and initial recovery/draft fixes verified and checkpointed; remaining UX phases queued.
 Created: 2026-09-30
 Last updated: 2026-09-30
 Owner: Codex senior supervisor
@@ -38,8 +38,12 @@ completed with1699pass/1fail: unchanged core-contract flow.build fixture rejects
 its pre-provider request budget. A fixture-only investigation is active. Core
 composer's matching draft-loss bug is being reproduced in session39465.
 Initial fix checkpoints: Coree6eb33f2, downstream21e915ee.
-Follow-up code checkpoint: Core95573296. Final web tests98054 and typecheck62339
-are queued; source frozen. Next: observe checks, build and finalize this batch.
+Follow-up code checkpoint: Core95573296. Final supervisor web suite98054 passed
+287files/1704tests, exit0,212.84s. Final web typecheck62339 passed,83544ms;
+production build71345 passed,17pages,248727ms. Core audit1037 has exactly the
+same inherited service4506/4505 failure; no new violation or baseline increase.
+Downstream documentation audit96080 passed,0warnings/2baselined.
+The initial fix batch is complete and source frozen for Claude integration.
 No Claude slot or source is changed to accelerate this work.
 The rest of the roadmap remains explicitly queued.
 
@@ -248,6 +252,37 @@ layout changes should answer measured problems in these journeys.
 - Outcome: Partial
 - Follow-up: bounded fixture/configuration diagnosis; do not mask refusal or edit Claude's context-packet work. Core composer reproduction/fix proceeds independently on its source/test pair.
 
+## Final batch handoff
+
+- Core task branch: task/t224-codex-ui-ux-review, checkpoints239a52bb,
+  e6eb33f2 (global recovery),95573296 (composer/fixture),07acd910 (resume record).
+- Downstream same task branch: c0cf1bc9 (audit),21e915ee (extension drafts),
+  061e8a70 (follow-up reports). Final records are committed after these.
+- Recovery host belongs once in authenticated root layout; preserve removal
+  from GlobalTopbar and app/session-reauthentication module together.
+- Draft guards rely on edit revisions, including identical retyped text;
+  preserve Core/extension regression tests and settings submitted-value reconnect.
+- fake-dom replaceChildren is identical to t219 cleanup's helper correction;
+  preserve one method when integrating both tasks.
+- Contract fixture uses the public provider token-default export. Scripted
+  provider, one-call/cost/timeout bounds and acceptance assertions are unchanged.
+- Original five tasks retain their separate finalized t221 supervisor handoff;
+  integration must retain both diagnostic and clearedWait wire keys from t220/t216.
+- No merge or push performed. Claude owns integration; no Claude worktree,
+  slot, private state, context-packet/runtime conversation/storage source changed.
+- Live browser, visual/accessibility certification and provider calls were not
+  exercised. The broader six-phase roadmap stays queued beyond this first batch.
+
+### 2026-09-30 - Final initial-batch verification
+- Agent: supervisor
+- Changed: final current state, resume and integration records; product source frozen.
+- Why: durable handoff must distinguish verified fixes from queued UX work.
+- Validation: root full web287files/1704tests pass; final web types/build pass;
+  downstream docs audit pass. Full Core audit has only inherited service4506/4505.
+  Extension full TAP1685/1685 and root focused12/12 recorded above; all target builds pass.
+- Outcome: Complete for current-source audit and initial recovery/draft batch.
+- Follow-up: Claude integrates local checkpoints; queued phases/live validation remain separate.
+
 ## Open Questions
 
 - Browser visual validation awaits authorization for panel/browser management.
@@ -260,3 +295,6 @@ layout changes should answer measured problems in these journeys.
 - Validation: supervisor reproduced two composer failures (2fail/8pass), then observed corrected10/10 exit0. Inspected worker raw contract completion60/60 exit0 and exact fixture diff. git diff --check0.
 - Outcome: Partial
 - Follow-up: root full web tests session98054 and web typecheck62339; source frozen. Production build and final documentation checks follow. Initial checkpoints Coree6eb33f2/downstream21e915ee remain recoverable. Claude integration ownership unchanged.
+
+
+Final documentation verification: supervisor session68649 exit0, docs-links and working-docs passed (0warnings/2baselined); paired Core session48994 passed (0warnings/16baselined). Final records/index checkpointed locally; no merge or push.

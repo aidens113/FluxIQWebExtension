@@ -1,6 +1,6 @@
 # Core composer draft preservation
 
-Status: Active; reproduction confirmed, corrected focused tests pass; broad checks pending.
+Status: Complete; supervisor reproduced the defect and verified the final correction.
 
 ## Current State
 
@@ -35,3 +35,12 @@ skip or weakened expected result.
 - Final full web suite session98054 and web typecheck session62339 are running
   through shared heavy slots. Build follows typecheck. Source is frozen.
 - No live browser/provider calls or product behavior certification.
+
+## Final supervisor verification
+
+Code checkpoint Core95573296. Final root full web suite98054 exit0:
+287files/1704tests passed,212.84s. Root web typecheck62339 exit0,83544ms;
+production build71345 exit0,17pages,248727ms. Final Core structure audit1037
+has only the inherited untouched service4506/4505 size violation; no new one.
+No merge/push; Claude owns integration. Pending entries above are historical;
+no root validation job remains active. Broader UX roadmap is separately queued.

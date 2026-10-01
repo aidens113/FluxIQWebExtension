@@ -30,6 +30,13 @@ Explicit `C:/Program Files/Git/bin/bash.exe` / `C:/Users/osrs_/FluxStuff/build-s
 
 ## Observed result and handoff
 
+Supervisor verification complete: inspected the exact public-default fixture
+diff and raw narrow60/60 completion, then independently ran final whole web suite
+session98054: exit0,287files/1704tests passed,212.84s. The original flow.build
+contract now passes there too,53/53variants across45capabilities accepted.
+Core95573296 checkpoints the approved fixture correction and separate composer
+fix. No runtime budget/assertion/timeout change, live call, merge or push.
+
 Session 97510 exited 0: one file / 60 tests passed, duration 75.21 seconds. Capability contract output records 53/53 variants accepted across 45 capabilities, including `flow.build [on a blank Flow] -> generate-flow-bootstrap-adaptation`. No failed or skipped tests. The original successful public-contract expectation now passes using the shipped provider profile; existing legitimate refusal cases remain unchanged.
 
 Full completion output saved at `C:/Users/osrs_/AppData/Local/Temp/codex-t224-core-contract-fixture.log` for independent supervisor inspection. Own source file and this report frozen. Required remaining supervisor work: independently inspect the narrow result, rerun whole web suite after its separate composer correction, and integrate/commit. Worker did not rerun broad suite/build or edit runtime packages, composer, other tests, shared plans or generated data.
