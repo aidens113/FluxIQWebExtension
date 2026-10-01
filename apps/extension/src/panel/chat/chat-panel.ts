@@ -119,7 +119,15 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   const feed = createActivityFeed({ request, listen: listenToRuntime }, () => onFeedChange());
   let clock = createTurnClock();
 
-  const context = createContextLine(() => open({ kind: "latest" }));
+  const context = createContextLine(() => {
+    const source = document.activeElement;
+    const handoff = source != null && source === context.element.querySelector(".chat-context-back") && navigationVisible(source as HTMLElement) && document.hasFocus() && document.visibilityState === "visible";
+    open({ kind: "latest" });
+    if (!handoff || !document.hasFocus() || document.visibilityState !== "visible" || !navigationVisible(element)) return;
+    const box = composer.element.querySelector<HTMLTextAreaElement>("#conversationInput");
+    if (box && !box.disabled && navigationVisible(box)) composer.focus();
+    else element.focus({ preventScroll: true });
+  });
   // The thread holding the question the work waits on, while it is not the one on screen.
   let answerIn: QuestionTarget | null = null;
   const thread = createThreadView(() => {
@@ -146,7 +154,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     createElement("p", { className: "chat-empty-title", text: "Talk to FluxIQ in the FluxIQ window." }),
     createElement("p", { className: "chat-empty-line", text: "This browser can't hold the conversation here. Open FluxIQ from the top of this panel." })
   ]);
-  const element = createElement("section", { className: "chat-panel", attrs: { "aria-label": "Chat with FluxIQ" } }, [
+  const element = createElement("section", { className: "chat-panel", attrs: { "aria-label": "Chat with FluxIQ", tabindex: "-1" } }, [
     context.element,
     main,
     dock,
@@ -318,4 +326,8 @@ function sameTarget(a: ChatTarget, b: ChatTarget): boolean {
   if (a.kind === "automation" && b.kind === "automation") return a.name === b.name;
   if (a.kind === "question" && b.kind === "question") return a.activityId === b.activityId && a.title === b.title;
   return true;
+}
+
+function navigationVisible(element: HTMLElement): boolean {
+  return element.isConnected && !element.closest("[hidden], [inert]") && element.getClientRects().length > 0;
 }

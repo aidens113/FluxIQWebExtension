@@ -178,7 +178,7 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 
 ## Active and next worker briefs
 
-### Extension explicit navigation focus worker brief (released after strip verification)
+### Extension explicit navigation focus worker brief (complete)
 - Worker: wait_gaps; downstream t224 only. Read Current State and frozen extension-navigation-audit.md.
 - Own panel/shell/mount-panel.ts, panel/shell/tests/mount-panel-navigation.test.ts (new), panel/chat/chat-panel.ts, panel/chat/tests/navigation-focus.test.ts (new), under apps/extension/src only.
 - Explicit focused automation row activation opens its target then shows Chat then focuses visible enabled composer; if unavailable use the selected visible Chat tab. Latest Back hands focus to visible enabled composer or an explicitly labelled chat container fallback.
@@ -245,7 +245,24 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Browser visual validation awaits authorization for panel/browser management.
 - Larger redesigns remain recommendations until user preference and observed defects justify scope.
 
+### Extension automation naming read-only worker brief
+- Worker: wait_gaps; downstream t224. Read Current State and frozen navigation-focus report.
+- Inspect panel/chat/{chat-panel.ts,context-line.ts,chat-target.ts if present}, panel/shell/mount-panel.ts and automations/automation-strip.ts plus directly owning tests only; use rg for actual target-contract file.
+- Trace automation rename/removal while its existing Chat conversation is open: title/context/strip consistency without resetting conversation generation, draft, scroll or history. Distinguish source-confirmed defects from visual assumptions.
+- Product source frozen during navigation full/types/build gates. Own reports/extension-automation-naming-audit.md only; propose exact next ownership/regressions, no source/shared docs/heavy/live/provider/panel/commits.
+
 ## Work Ledger
+
+### 2026-10-01 - Extension focus broad verification complete
+- Agent: supervisor
+- Validation: full6605 native0,1738/1738,111020.2786ms; types71900 native0,22390ms; build76352 native0,22422ms,22files per target. Independent related23 pass/native0,445.3732ms. Full structure80714 has no new source violation but found two ledger/index documentation defects; moved brief outside ledger, recorded validation bullet and regenerated index. Corrected working-docs/docs-links native0,0warnings/2baseline; inherited source warnings136/119baseline unchanged.
+- Outcome: Complete. Authored extension-client navigation paragraph updated. Local checkpoint follows before naming source is released.
+- Follow-up: passive naming consistency six-file implementation; Core clipboard corrected36/scoped initial0, final typing active; adapters still actively testing additional scope races.
+
+### 2026-10-01 - Extension focus independently reviewed
+- Agent: supervisor
+- Validation: supervisor reviewed explicit capture/consume/expiry and Back source ownership, visibility/inert/document-focus guards, composer and labelled fallback. Independent related23 native0,445.3732ms; source stays frozen for full6605/types71900/build76352.
+- Outcome: Partial pending whole extension gates and authored documentation/checkpoint. Worker now read-only audits naming consistency; Core fifth workers/root remain separate source paths.
 
 ### 2026-10-01 - Fourth Core batch independently verified; fifth released
 - Agent: supervisor

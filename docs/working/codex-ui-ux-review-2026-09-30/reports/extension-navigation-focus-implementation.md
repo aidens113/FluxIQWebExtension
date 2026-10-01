@@ -1,0 +1,26 @@
+# Extension explicit navigation focus implementation
+
+Status: Complete — source frozen; pending supervisor verification
+Owner: worker wait_gaps
+
+Read Current State, exact released four-path brief and frozen navigation audit. Source unchanged; two owning local-model suites added to reproduce row-to-Chat and Latest Back handoffs. No shared helpers or other product modules edited. Supervisor approved capture-phase exact row-source ownership, synchronous consumption and end-of-event clearing without external ownership API.
+
+Clean original-source reproduction:8tests/4pass/4fail, nativeexit1,407.041ms. Two row-to-Chat focus/selected-tab fallback failures and two Latest Back/composer/container failures; no-steal/late-reply cases already pass. Exact TEMP codex-t224-navigation-focus-before.log. Initial model run also reproduced four failures but failed-test cleanup allowed a pending chat read past document restoration; corrected local finally-drain before clean reproduction, no product change or timeout adjustment. Assert identities as booleans to avoid huge cyclic fake-object diffs.
+
+Implemented capture-phase actual row ownership and synchronous consumption/queueMicrotask clearing; opens target then shows Chat before visible enabled composer/selected Chat-tab fallback. Latest Back checks its exact focused button before open and chooses visible enabled composer or labelled tabindex-1 Chat container. Both guard visible connected non-inert source/destination and active visible document; general open/draw/status paths unchanged. Preparing focused/related checks.
+
+## Final change and limits
+
+- Exact product ownership: shell/mount-panel.ts and chat/chat-panel.ts. Exact new owning tests: shell/tests/mount-panel-navigation.test.ts and chat/tests/navigation-focus.test.ts, all under apps/extension/src/panel. Report is the only documentation write; no shared helper or other source/tests changed.
+- Shell's capture listener checks the actual clicked row (including descendant/native keyboard click), its equality to activeElement, visibility/connectivity/inert ancestry, visible document and hasFocus. The row hook consumes the capture synchronously, opens the target, shows Chat, then focuses a visible enabled composer or selected visible Chat tab. Unconsumed capture expires at the event's microtask boundary; later passive calls cannot reuse it.
+- Latest Back checks its exact focused button before navigation; after Latest opens, it chooses visible enabled composer or the existing named Chat section with tabindex-1. General open, target generation, reading/history/draft/scroll and background lifecycle behavior remain unchanged. No async completion focuses a destination.
+- Tests mount actual shell/chat components using local DOM/event/focus/Chrome reply models only. No factory injection or ownership API was added. Models include click capture/bubbling, document focus/visibility, connected hidden/inert ancestry, control disabled state and passive status pushes. Shared fake DOM untouched. This is component/source validation, not live Chrome/Firefox certification.
+
+## Validation
+
+- Final heavy label `codex t224 navigation focus related final`, session8909 nativeexit0:23tests/23pass/0fail/0skip/0cancelled,773.5619ms. Eleven new cases (shell6/chat5) plus twelve unchanged chat-panel/in-place-updates regressions imported sequentially in one Node process like actual extension runner.
+- Four-root scoped TypeScript exit0, empty types log; production git diff --check exit0. Earlier8-test intermediate run passed8 but scoped types found a test-local listener-event typing mismatch; corrected that type before final checks. An earlier two-failure corrected-source run exposed a nonexistent conversation-list fixture constant; fixture now uses the actual panelConversationRead/kind-list request, preserving the target assertion and exercising actual unsupported fallback.
+- Exact logs: `C:/Users/osrs_/AppData/Local/Temp/codex-t224-navigation-focus-{before,build,final,types}.log`.
+- Final command, package cwd apps/extension, explicit Git Bash through heavy.sh: esbuild src/panel/shell/tests/mount-panel-navigation.test.ts src/panel/chat/tests/navigation-focus.test.ts src/panel/chat/tests/chat-panel.test.ts src/panel/chat/tests/in-place-updates.test.ts with bundle/platform-node/target-node22/format-esm, external fluxiq and gateway package wildcards, CSS empty, .js=.mjs, outdir .test-build-scratch/codex-navigation-focus; then node .test-build-scratch/codex-navigation-focus/related-runner.mjs; then pnpm exec tsc -p .test-build-scratch/codex-navigation-focus/tsconfig.json --noEmit. Ignored scoped config extends tsconfig.test.json, four assigned roots only, empty include/exclude. Ignored runner imports those four generated entries in one process.
+- Independent execution from repository cwd: `node apps/extension/.test-build-scratch/codex-navigation-focus/related-runner.mjs`. Two new bundles at shell/tests/mount-panel-navigation.test.mjs and chat/tests/navigation-focus.test.mjs under that ignored output directory.
+- No broad suite/check/build/structure audit, browser/live, provider, panel management, commits/merges/pushes, Core or other-worktree changes. Extraction/strip/top-bar and Claude-owned integration untouched. Source and report frozen for supervisor review before broader gates.

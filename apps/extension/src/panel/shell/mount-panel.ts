@@ -59,12 +59,25 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   let recordingWas: RecordingState | undefined;
   let visible = true;
   let connected = false;
+  let activatedRow: HTMLElement | undefined;
 
   const recording = createRecordingControls(context);
   const review = createRecordingReview(context);
   const chat = createChatPanel(store.request, (style) => createOpenFluxIQButton(store.request, style));
   const automations = createAutomationsTab(context, {
-    choose: (row) => void chooseAutomation(row, { open: openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }) }),
+    choose: (row) => {
+      const source = activatedRow;
+      activatedRow = undefined;
+      chooseAutomation(row, { open: openInChat, showChat: () => dispatch({ type: "tab", tab: "chat" }) });
+      const doc = root.ownerDocument;
+      if (!source || !doc.hasFocus() || doc.visibilityState !== "visible" || screen !== "chat") return;
+      const box = chat.element.querySelector<HTMLTextAreaElement>("#conversationInput");
+      if (box && !box.disabled && navigationVisible(box)) chat.focusComposer();
+      else {
+        const tab = topBar.element.querySelector<HTMLButtonElement>(`#${tabId("chat")}`);
+        if (tab && !tab.disabled && tab.getAttribute("aria-selected") === "true" && navigationVisible(tab)) tab.focus({ preventScroll: true });
+      }
+    },
     review: review.element,
     newAutomation: recording.newAutomation
   });
@@ -103,6 +116,13 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
   automations.element.setAttribute("aria-labelledby", tabId("automations"));
   const main = createElement("main", { className: "app-main" }, [recording.bar, start.element, settings.element, chatScreen, automations.element]);
   root.replaceChildren(createElement("div", { className: "shell" }, [topBar.element, main]));
+  // Capture the actual activating row before its handler changes screens.
+  automations.element.addEventListener("click", (event) => {
+    const source = (event.target as Element).closest<HTMLElement>(".automation-row");
+    const doc = root.ownerDocument;
+    activatedRow = source && automations.element.contains(source) && source === doc.activeElement && navigationVisible(source) && doc.hasFocus() && doc.visibilityState === "visible" ? source : undefined;
+    queueMicrotask(() => { activatedRow = undefined; });
+  }, true);
 
   function openInChat(target: ChatTarget): void {
     chat.open(target);
@@ -190,4 +210,8 @@ function listenToPushes(listener: (message: unknown) => void): () => void {
   const handler = (message: unknown): void => listener(message);
   chrome.runtime.onMessage.addListener(handler);
   return () => chrome.runtime.onMessage.removeListener(handler);
+}
+
+function navigationVisible(element: HTMLElement): boolean {
+  return element.isConnected && !element.closest("[hidden], [inert]") && element.getClientRects().length > 0;
 }

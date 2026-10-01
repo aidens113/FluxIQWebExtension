@@ -1619,6 +1619,14 @@ or fallback only while the extension document owns focus. Refresh never pulls
 focus back from the browser page. Tab arrows and Home/End retain native roving
 navigation; modified and composing key events remain unconsumed.
 
+Explicit activation of a focused automation row opens its target, shows Chat,
+then hands keyboard focus to the visible enabled composer or selected Chat tab.
+Latest Back similarly chooses the composer or the labelled Chat container. These
+handoffs require the activating control to own focus in the visible active
+extension document. Passive status updates, reconnects and late replies do not
+claim focus. Local DOM/event tests cover the ownership rules; live browser and
+assistive-technology behavior remain unverified.
+
 ### Extraction dialog lifecycle
 
 The extraction sheet temporarily mounts at the extension document root while
