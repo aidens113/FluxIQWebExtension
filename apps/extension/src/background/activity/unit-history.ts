@@ -52,6 +52,8 @@ export class UnitHistory {
 }
 
 function tellsTheStory(event: ClientGatewayActivity): boolean {
+  // What the person asked the work, in their own words: the chat shows it as their message.
+  if (typeof event.request === "string" && event.request.trim() !== "") return true;
   const detail = event.detail;
   if (detail === undefined) return event.final === true;
   if (isInternalStep(detail)) return false;

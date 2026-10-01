@@ -144,7 +144,7 @@ test("units of work never share a message, and at most the limit are kept, the n
 test("messages keep their keys and order as events arrive; an unreadable time takes the one before", () => {
   const events = [thought(1, "Looking for the form", "It should be on the home page.")];
   const first = stepMessages(events, 100);
-  events.push(tool(2, "Looking for the form", "started"), activityEvent(3, { at: "not a time", phase: "exploring", detail: { kind: "note", title: "Found the form" } }));
+  events.push(tool(2, "Looking for the form", "started"), activityEvent(3, { at: "not a time", phase: "exploring", detail: { kind: "note", title: "Found the form", text: "It is under the header." } }));
   const later = stepMessages(events, 100);
   assert.equal(later[0]!.key, first[0]!.key);
   assert.equal(later[0]!.at, first[0]!.at);
@@ -262,4 +262,22 @@ test("a question's card and words never show a dotted id", () => {
       if (typeof value === "string") assert.doesNotMatch(value, /\b[a-z][\w-]*\.[a-z][\w-]*/u, value);
     }
   }
+});
+
+// Live runs 34 and 35: Core's look before the first decision is a `note` row
+// as it starts and as it ends, with no words, and the chat showed it as two
+// bare "Looking at the page" headings. The live line says it while it runs.
+test("a note with no words is not a message: Core's own look before the first decision, and the dry run's reset", () => {
+  const events = [
+    activityEvent(1, { phase: "exploring", label: "Looking at the page", detail: { kind: "note", title: "Looking at the page", status: "started", ref: "core.run_node" } }),
+    activityEvent(2, { phase: "exploring", label: "Looking at the page — didn't work", detail: { kind: "note", title: "Looking at the page", status: "failed", ref: "core.run_node", text: "Result: web.action.rejected.not_at_start_location · Node: web.output.dom-capture_snapshot" } }),
+    thought(3, "Opening the store", "The build has to start on the store's home page."),
+    tool(4, "Opening the store", "succeeded"),
+    activityEvent(5, { phase: "verifying", label: "Trying the Flow from the start", detail: { kind: "note", title: "Putting the page back to where the Flow starts", status: "started", ref: "core.run_node" } }),
+    activityEvent(6, { phase: "exploring", label: "Exploring again", detail: { kind: "note", title: "Exploring again", text: "Nothing is in the Flow yet. Exploring on from the page as it stands." } })
+  ];
+  assert.deepEqual(said(stepMessages(events, 100)), [
+    ["Opening the store", "The build has to start on the store's home page.", "done"],
+    ["Exploring again", "Nothing is in the Flow yet. Exploring on from the page as it stands.", null]
+  ]);
 });

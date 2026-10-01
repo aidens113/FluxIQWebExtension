@@ -80,3 +80,9 @@ test("a provider outage: each unanswered request and the build's stop are in the
   assert.deepEqual(kept, [false, true, false, true, true]);
   assert.equal(history.events().at(-1)?.detail?.text, "The build stopped because the AI model provider is not responding: 3 requests in a row got no answer.");
 });
+
+test("what the person asked the work is kept, though it is no row: the chat shows it as their message", () => {
+  const history = new UnitHistory();
+  assert.equal(history.accept(event("q", undefined, { phase: "building", label: "Building the Flow", request: "Switch my store to Millbrook." })), true);
+  assert.equal(history.accept(event("q", undefined, { phase: "building", label: "Building the Flow", request: "   " })), false);
+});
