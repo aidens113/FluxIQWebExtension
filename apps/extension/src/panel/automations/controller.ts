@@ -7,8 +7,8 @@
 //   offline   not connected: nothing is read
 //   loading   connected, no list read yet (a read error may show)
 //   fallback  the background does not relay the list: "Your saved automations
-//             are in FluxIQ." -- for as long as the panel lives, so a panel
-//             reopen is the only retry
+//             are in FluxIQ." -- for this confirmed owner; a replacement
+//             owner gets its own capability check
 //   empty     FluxIQ has no automations
 //   list      the rows, newest first
 //
@@ -47,6 +47,8 @@ export type AutomationRowView = {
 };
 
 export type AutomationsState = {
+  /** Local rendered-control lease; never sent to FluxIQ. */
+  ownerRevision: number;
   mode: AutomationsMode;
   rows: readonly AutomationRowView[];
   readError?: { sentence: string; detail?: string | undefined } | undefined;
@@ -60,16 +62,16 @@ export type ExportFormat = "csv" | "json";
 
 export type AutomationsController = {
   state(): AutomationsState;
-  /** Reads the connection from the status. Answers true when it just became connected. */
+  /** Reads the connection from the status. Answers true when a connected owner needs a fresh read. */
   observe(status: ExtensionStatus): boolean;
   /** Whether FluxIQ is working, held steady by the shell; `status.runtime` flips for every page read, so it is not read here. */
   setWorking(working: boolean): void;
   /** Reads the list, then the opened automation's run detail when it still needs it. Does nothing offline or after `fallback`. */
-  refresh(): Promise<void>;
+  refresh(owner?: number): Promise<void>;
   /** The automation the person opened, whose last run's detail is read; undefined for none. */
-  focus(flowId: string | undefined): Promise<void>;
-  run(flowId: string): Promise<void>;
-  exportDataset(flowId: string, runId: string, datasetId: string, format: ExportFormat): Promise<void>;
+  focus(flowId: string | undefined, owner?: number): Promise<void>;
+  run(flowId: string, owner?: number): Promise<void>;
+  exportDataset(flowId: string, runId: string, datasetId: string, format: ExportFormat, owner?: number): Promise<void>;
 };
 
 /** Saves a file for the person; the panel passes the Blob-and-link download. */
@@ -87,12 +89,22 @@ export function createAutomationsController(
   let listUnsupported = false;
   let runUnsupported = false;
   let detailUnsupported = false;
-  let reading = false;
+  // Owner changes retire foreign evidence; connection changes retire pending work.
+  // Object identity prevents an obsolete finally from unlocking a new same-ID operation.
+  type Operation = { owner: number; connection: number; focus: number };
+  let ownerRevision = 0;
+  let connectionRevision = 0;
+  let focusRevision = 0;
+  let ownerKey: string | undefined;
+  let coreAddress: string | undefined;
+  let reading: Operation | undefined;
+  let running: Operation | undefined;
+  const detailReads = new Map<string, Operation>();
   let rows: AutomationRow[] | undefined;
   let readError: AutomationsState["readError"];
   let runningFlowId: string | undefined;
   let focused: string | undefined;
-  const exporting = new Set<string>();
+  const exporting = new Map<string, Operation>();
   const notices = new Map<string, AutomationRowNotice>();
   const replies = new Map<string, RunReply>();
   const details = new Map<string, RunDetail>();
@@ -135,8 +147,8 @@ export function createAutomationsController(
   }
 
   function mode(): AutomationsMode {
-    if (listUnsupported) return "fallback";
     if (!connected) return "offline";
+    if (listUnsupported) return "fallback";
     if (rows === undefined) return "loading";
     return rows.length === 0 ? "empty" : "list";
   }
@@ -151,122 +163,165 @@ export function createAutomationsController(
     return (facts.learned ?? 0) > 0 && facts.validated === undefined && facts.futureRunsUpdated !== true;
   }
 
-  async function loadDetail(runId: string): Promise<void> {
+
+  const operation = (): Operation => ({ owner: ownerRevision, connection: connectionRevision, focus: focusRevision });
+  const current = (op: Operation): boolean => connected && op.owner === ownerRevision && op.connection === connectionRevision;
+  const leased = (owner: number | undefined): boolean => owner === undefined || owner === ownerRevision;
+  const rowFor = (flowId: string) => rows?.find((row) => row.flowId === flowId);
+  function invalidateOperations(): void {
+    reading = undefined;
+    running = undefined;
+    runningFlowId = undefined;
+    exporting.clear();
+    for (const id of detailReads.keys()) if (!details.has(id)) detailsAsked.delete(id);
+    detailReads.clear();
+  }
+
+  async function loadDetail(flowId: string, runId: string): Promise<void> {
+    if (!connected || detailReads.has(runId) || detailUnsupported) return;
+    const op = operation();
+    detailReads.set(runId, op);
     detailsAsked.add(runId);
-    const result = await request<unknown>({ type: MESSAGES.runDetail, runId });
-    if (!result.ok) {
-      if (result.unsupported) detailUnsupported = true;
+    try {
+      const result = await request<unknown>({ type: MESSAGES.runDetail, runId });
+      if (!current(op) || detailReads.get(runId) !== op || op.focus !== focusRevision || (rowFor(flowId) === undefined || lastRun(rowFor(flowId)!)?.runId !== runId)) return;
+      if (!result.ok) {
+        if (result.unsupported) detailUnsupported = true;
+        else detailsAsked.delete(runId);
+        return;
+      }
+      const detail = readRunReplies.detail(result.value);
+      if (detail !== undefined && (detail.run === undefined || detail.run.runId === runId && detail.run.flowId === flowId)) { details.set(runId, detail); hooks.onChange(); }
       else detailsAsked.delete(runId);
-      return;
-    }
-    const detail = readRunReplies.detail(result.value);
-    if (detail !== undefined) {
-      details.set(runId, detail);
-      hooks.onChange();
+    } catch {
+      if (current(op) && detailReads.get(runId) === op && op.focus === focusRevision && rowFor(flowId) !== undefined) {
+        detailsAsked.delete(runId);
+        notices.set(flowId, { sentence: "Couldn't read this run's details. Try again.", openFluxIQ: false });
+        hooks.onChange();
+      }
+    } finally {
+      if (detailReads.get(runId) === op) {
+        detailReads.delete(runId);
+        if (!details.has(runId)) detailsAsked.delete(runId);
+      }
     }
   }
 
-  async function refresh(): Promise<void> {
-    if (reading || listUnsupported || !connected) return;
-    reading = true;
-    const result = await request<unknown>({ type: MESSAGES.listAutomations });
-    reading = false;
-    if (!result.ok) {
-      if (result.unsupported) listUnsupported = true;
-      else readError = { sentence: result.sentence, detail: result.detail };
+  async function refresh(owner?: number): Promise<void> {
+    if (!leased(owner) || reading || listUnsupported || !connected) return;
+    const op = operation();
+    reading = op;
+    try {
+      const result = await request<unknown>({ type: MESSAGES.listAutomations });
+      if (!current(op) || reading !== op) return;
+      if (!result.ok) {
+        if (result.unsupported) listUnsupported = true;
+        else readError = { sentence: result.sentence, detail: result.detail };
+        hooks.onChange(); return;
+      }
+      const payload = readCore.record(readCore.record(result.value)?.payload);
+      if (payload === undefined || !Array.isArray(payload.flows)) {
+        readError = { sentence: "Couldn't read your automations from FluxIQ.", detail: "The list answer had no flows." };
+        hooks.onChange(); return;
+      }
+      rows = automationRows(payload);
+      readError = undefined;
+      reading = undefined;
       hooks.onChange();
-      return;
-    }
-    const payload = readCore.record(readCore.record(result.value)?.payload);
-    if (payload === undefined || !Array.isArray(payload.flows)) {
-      readError = { sentence: "Couldn't read your automations from FluxIQ.", detail: "The list answer had no flows." };
-      hooks.onChange();
-      return;
-    }
-    rows = automationRows(payload);
-    readError = undefined;
-    hooks.onChange();
-    await loadFocusedDetail();
+      if (current(op)) await loadFocusedDetail();
+    } catch {
+      if (current(op) && reading === op) {
+        readError = { sentence: "Couldn't read your automations from FluxIQ. Try again." };
+        hooks.onChange();
+      }
+    } finally { if (reading === op) reading = undefined; }
   }
 
   async function loadFocusedDetail(): Promise<void> {
     const row = rows?.find((candidate) => candidate.flowId === focused);
     const run = row === undefined ? undefined : lastRun(row);
-    if (run !== undefined && needsDetail(run)) await loadDetail(run.runId);
+    if (row !== undefined && run !== undefined && needsDetail(run)) await loadDetail(row.flowId, run.runId);
+  }
+
+  function exportable(flowId: string, runId: string, datasetId: string): boolean {
+    const row = rowFor(flowId);
+    return row !== undefined && lastRun(row)?.runId === runId && details.get(runId)?.datasets?.some((data) => data.datasetId === datasetId) === true;
   }
 
   return {
-    state: () => ({
-      mode: mode(),
-      rows: (rows ?? []).map(rowView),
-      readError: listUnsupported ? undefined : readError,
-      runInFlight: runningFlowId !== undefined,
-      working
-    }),
+    state: () => ({ ownerRevision, mode: mode(), rows: (rows ?? []).map(rowView), readError: listUnsupported ? undefined : readError, runInFlight: running !== undefined, working }),
     observe(status) {
-      const was = connected;
-      connected = status.connectionState === "connected";
-      if (was !== connected) hooks.onChange();
-      return connected && !was;
+      if (status.settings !== undefined) coreAddress = status.settings.coreApiUrl.trim();
+      // Omitted settings preserve the last confirmed HTTP address. Project absence
+      // represents the unscoped session; ordinary session/runtime churn is irrelevant.
+      const key = JSON.stringify([status.gatewayUrl.trim(), coreAddress, status.clientId, status.projectId ?? null, status.paired]);
+      const replaced = ownerKey !== key;
+      const nextConnected = status.connectionState === "connected" && status.paired;
+      const changedConnection = nextConnected !== connected;
+      if (replaced) {
+        ownerKey = key; ownerRevision++; focusRevision++;
+        rows = undefined; readError = undefined; focused = undefined;
+        listUnsupported = false; runUnsupported = false; detailUnsupported = false;
+        notices.clear(); replies.clear(); details.clear(); detailsAsked.clear();
+      }
+      if (replaced || changedConnection) { connectionRevision++; invalidateOperations(); }
+      connected = nextConnected;
+      if (replaced || changedConnection) hooks.onChange();
+      return connected && (replaced || changedConnection);
     },
-    setWorking(next) {
-      if (next === working) return;
-      working = next;
-      hooks.onChange();
-    },
+    setWorking(next) { if (next !== working) { working = next; hooks.onChange(); } },
     refresh,
-    async focus(flowId) {
-      focused = flowId;
+    async focus(flowId, owner) {
+      if (!leased(owner)) return;
+      if (focused !== flowId) {
+        focused = flowId; focusRevision++;
+        for (const id of detailReads.keys()) if (!details.has(id)) detailsAsked.delete(id);
+        detailReads.clear();
+      }
       if (connected && !listUnsupported) await loadFocusedDetail();
     },
-    async run(flowId) {
-      if (runningFlowId !== undefined || working || !connected) return;
-      if (runUnsupported) {
-        notices.set(flowId, { sentence: "Run it in FluxIQ.", openFluxIQ: true });
-        hooks.onChange();
-        return;
+    async run(flowId, owner) {
+      if (!leased(owner) || running || working || !connected || !rowFor(flowId)) return;
+      if (runUnsupported) { notices.set(flowId, { sentence: "Run it in FluxIQ.", openFluxIQ: true }); hooks.onChange(); return; }
+      const op = operation(); running = op; runningFlowId = flowId; notices.delete(flowId); hooks.onChange();
+      if (!current(op) || running !== op) return;
+      let reply: RunReply | undefined;
+      try {
+        const result = await request<unknown>({ type: MESSAGES.runAutomation, flowId });
+        if (!current(op) || running !== op || !rowFor(flowId)) return;
+        reply = result.ok ? readRunReplies.run(result.value) : undefined;
+        if (reply?.run.flowId !== flowId) reply = undefined;
+        if (!result.ok) {
+          if (result.unsupported) runUnsupported = true;
+          notices.set(flowId, result.unsupported ? { sentence: "Run it in FluxIQ.", openFluxIQ: true } : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
+        } else if (!reply) notices.set(flowId, { sentence: "It ran, but FluxIQ didn't say how it went.", openFluxIQ: true });
+        else { replies.set(flowId, reply); detailsAsked.delete(reply.run.runId); }
+      } catch {
+        if (current(op) && running === op) notices.set(flowId, { sentence: "Couldn't run this automation. Try again.", openFluxIQ: false });
+      } finally {
+        if (running === op) { running = undefined; runningFlowId = undefined; hooks.onChange(); }
       }
-      runningFlowId = flowId;
-      notices.delete(flowId);
-      hooks.onChange();
-      const result = await request<unknown>({ type: MESSAGES.runAutomation, flowId });
-      runningFlowId = undefined;
-      const reply = result.ok ? readRunReplies.run(result.value) : undefined;
-      if (!result.ok) {
-        if (result.unsupported) runUnsupported = true;
-        notices.set(flowId, result.unsupported
-          ? { sentence: "Run it in FluxIQ.", openFluxIQ: true }
-          : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
-      } else if (reply === undefined) {
-        notices.set(flowId, { sentence: "It ran, but FluxIQ didn't say how it went.", openFluxIQ: true });
-      } else {
-        replies.set(flowId, reply);
-        detailsAsked.delete(reply.run.runId);
-      }
-      hooks.onChange();
-      await refresh();
-      if (reply !== undefined && !detailsAsked.has(reply.run.runId) && !detailUnsupported) await loadDetail(reply.run.runId);
+      if (!current(op)) return;
+      await refresh(op.owner);
+      if (current(op) && op.focus === focusRevision && reply && !detailsAsked.has(reply.run.runId) && !detailUnsupported) await loadDetail(flowId, reply.run.runId);
     },
-    async exportDataset(flowId, runId, datasetId, format) {
-      if (exporting.has(flowId)) return;
-      exporting.add(flowId);
-      notices.delete(flowId);
-      hooks.onChange();
-      const result = await request<unknown>({ type: MESSAGES.exportDataset, runId, datasetId, format });
-      exporting.delete(flowId);
-      const exported = result.ok ? readRunReplies.export(result.value) : undefined;
-      if (!result.ok) {
-        notices.set(flowId, result.unsupported
-          ? { sentence: "Export it in FluxIQ.", openFluxIQ: true }
-          : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
-      } else if (exported === undefined) {
-        notices.set(flowId, { sentence: "Couldn't read the export from FluxIQ.", openFluxIQ: true });
-      } else if (exported.tooLarge) {
-        notices.set(flowId, { sentence: TOO_LARGE, openFluxIQ: true });
-      } else {
-        hooks.download(exported.fileName, exported.contentType, exported.body);
+    async exportDataset(flowId, runId, datasetId, format, owner) {
+      if (!leased(owner) || !connected || exporting.has(flowId) || !exportable(flowId, runId, datasetId)) return;
+      const op = operation(); exporting.set(flowId, op); notices.delete(flowId); hooks.onChange();
+      try {
+        if (!current(op) || exporting.get(flowId) !== op) return;
+        const result = await request<unknown>({ type: MESSAGES.exportDataset, runId, datasetId, format });
+        if (!current(op) || exporting.get(flowId) !== op || !exportable(flowId, runId, datasetId)) return;
+        const exported = result.ok ? readRunReplies.export(result.value) : undefined;
+        if (!result.ok) notices.set(flowId, result.unsupported ? { sentence: "Export it in FluxIQ.", openFluxIQ: true } : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
+        else if (!exported) notices.set(flowId, { sentence: "Couldn't read the export from FluxIQ.", openFluxIQ: true });
+        else if (exported.tooLarge) notices.set(flowId, { sentence: TOO_LARGE, openFluxIQ: true });
+        else hooks.download(exported.fileName, exported.contentType, exported.body);
+      } catch {
+        if (current(op) && exporting.get(flowId) === op) notices.set(flowId, { sentence: "Couldn't save the export here. Try again or open it in FluxIQ.", openFluxIQ: true });
+      } finally {
+        if (exporting.get(flowId) === op) { exporting.delete(flowId); hooks.onChange(); }
       }
-      hooks.onChange();
     }
   };
 }

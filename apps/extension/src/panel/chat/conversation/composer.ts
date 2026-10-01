@@ -19,6 +19,7 @@ import { createElement } from "../../dom";
 import { composerKeyAction } from "./composer-keys";
 import type { ConversationState } from "./controller";
 import { draftStorage } from "./draft-storage";
+import type { ChatOwner } from "../owner-context";
 
 /** The mounted composer. */
 export type Composer = {
@@ -29,6 +30,8 @@ export type Composer = {
   fill(text: string): void;
   /** Says who the box writes to, as its placeholder ("Message FluxIQ"). */
   setPlaceholder(text: string): void;
+  /** Binds the draft to observed context; foreign drafts require explicit adoption. */
+  setOwner(owner: ChatOwner): void;
 };
 
 const PLACEHOLDER = "Message FluxIQ";
@@ -52,12 +55,22 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     attrs: { type: "button", "aria-label": "Send", title: "Send (Enter)" }
   }, [arrowIcon()]);
   const notice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
-  const element = createElement("div", { className: "composer" }, [createElement("div", { className: "composer-field" }, [box, sendButton]), notice]);
+  const parkedNotice = createElement("p", { className: "notice", text: "Review this draft before sending it in this chat.", attrs: { role: "status" } });
+  let adopt = createElement("button", { className: "button", text: "Use draft here", attrs: { type: "button" } });
+  let clear = createElement("button", { className: "button", text: "Clear draft", attrs: { type: "button" } });
+  const parkedControls = createElement("div", { className: "composer-draft-review", hidden: true }, [parkedNotice, adopt, clear]);
+  const element = createElement("div", { className: "composer" }, [createElement("div", { className: "composer-field" }, [box, sendButton]), notice, parkedControls]);
   let enabled = false;
   let sending = false;
   let composing = false;
   let editRevision = 0;
   let placeholder = PLACEHOLDER;
+  let owner: ChatOwner | undefined;
+  let draftOwner: string | null = null;
+  let operation: object | undefined;
+  let parked = false;
+  const current = () => owner === undefined || owner.current();
+  function persist(): void { if (owner) draft.writeOwned(box.value, draftOwner); else draft.write(box.value); }
 
   function fit(): void {
     // A box not laid out (its view hidden) measures 0; it keeps its stylesheet height until it is.
@@ -76,44 +89,69 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
   }
 
   function syncButton(): void {
-    const disabled = !enabled || sending || box.value.trim() === "";
+    const disabled = !enabled || sending || operation !== undefined || parked || !current() || box.value.trim() === "";
     if (sendButton.disabled !== disabled) sendButton.disabled = disabled;
     const label = sending ? "Sending" : "Send";
     if (sendButton.getAttribute("aria-label") !== label) sendButton.setAttribute("aria-label", label);
     sendButton.dataset.sending = sending ? "true" : "false";
+    parkedControls.hidden = !parked;
+    adopt.disabled = clear.disabled = !enabled || !current();
   }
 
   function submit(): void {
-    if (!enabled || sending || box.value.trim() === "") return;
+    if (!enabled || sending || operation !== undefined || parked || !current() || box.value.trim() === "") return;
     const submittedRevision = editRevision;
-    void send(box.value).then((sent) => {
-      if (!sent || submittedRevision !== editRevision) return;
+    const submittedOwner = owner;
+    const submitted = {}; operation = submitted; syncButton();
+    let result: Promise<boolean>;
+    try { result = send(box.value); } catch { result = Promise.resolve(false); }
+    void result.then((sent) => {
+      if (operation === submitted) { operation = undefined; syncButton(); }
+      if (!sent || submittedOwner !== owner || !current() || submittedRevision !== editRevision) return;
       box.value = "";
-      draft.write("");
+      draftOwner = owner?.identity ?? null;
+      persist();
       fit();
       syncButton();
-    });
+    }).catch(/* best-effort: restore retry controls after completion failure; controller owns send feedback */ () => { if (operation === submitted) { operation = undefined; syncButton(); } });
   }
 
   sendButton.addEventListener("click", () => {
+    if (!current()) return;
     submit();
     box.focus();
   });
   box.addEventListener("input", () => {
+    if (!current()) return;
     editRevision += 1;
-    draft.write(box.value);
+    if (!parked) draftOwner = owner?.identity ?? null;
+    persist();
     fit();
     syncButton();
   });
   box.addEventListener("compositionstart", () => (composing = true));
   box.addEventListener("compositionend", () => (composing = false));
   box.addEventListener("keydown", (event) => {
+    if (!current()) return;
     if (composerKeyAction(event, composing) !== "send") return;
     event.preventDefault();
     submit();
   });
   // The box has its size once it is on screen; until then the browser measures nothing.
   globalThis.requestAnimationFrame?.(fit);
+  function reviewControls(captured: ChatOwner): void {
+    adopt = createElement("button", { className: "button", text: "Use draft here", attrs: { type: "button" } });
+    clear = createElement("button", { className: "button", text: "Clear draft", attrs: { type: "button" } });
+    adopt.addEventListener("click", () => {
+      if (owner !== captured || !captured.current() || !enabled || !parked) return;
+      editRevision++; draftOwner = captured.identity; parked = false; persist(); syncButton();
+    });
+    clear.addEventListener("click", () => {
+      if (owner !== captured || !captured.current() || !enabled || !parked) return;
+      editRevision++; box.value = ""; draftOwner = captured.identity; parked = false; persist(); fit(); syncButton();
+    });
+    parkedControls.replaceChildren(parkedNotice, adopt, clear);
+  }
 
   return {
     element,
@@ -135,9 +173,11 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
       fit();
     },
     fill(text) {
+      if (!current()) return;
       editRevision += 1;
       box.value = text;
-      draft.write(text);
+      if (!parked) draftOwner = owner?.identity ?? null;
+      persist();
       box.focus();
       box.setSelectionRange?.(text.length, text.length);
       fit();
@@ -146,6 +186,15 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     setPlaceholder(text) {
       placeholder = text.trim() || PLACEHOLDER;
       if (enabled && box.placeholder !== placeholder) box.placeholder = placeholder;
+    },
+    setOwner(next) {
+      if (owner?.token === next.token) return;
+      if (!owner && editRevision === 0) { const restored = draft.readOwned(); box.value = restored.text; draftOwner = restored.owner; }
+      owner = next; editRevision++; operation = undefined;
+      reviewControls(next);
+      parked = box.value !== "" && draftOwner !== next.identity;
+      if (!parked) draftOwner = next.identity;
+      fit(); syncButton();
     }
   };
 }

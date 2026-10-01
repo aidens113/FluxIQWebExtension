@@ -26,9 +26,12 @@
 
 import type { WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
 import { cancelExtraction, confirmExtraction, readExtractionSession, startExtractionPick } from "./client";
+import { createElement } from "../dom";
+import { createExtractionReadRecovery, type ExtractionRecoveryTicket } from "./read-recovery";
+import { createExtractionDialogFocus } from "./dialog-focus";
 import { extractionConfirmPayload } from "./confirm-payload";
 import { extractionFieldRowElement } from "./field-row";
-import type { ExtractionConfirmOutcome, ExtractionPreviewRow, ExtractionSessionRefusal, ExtractionSessionView } from "./messages";
+import type { ExtractionConfirmOutcome, ExtractionPreviewRow, ExtractionSessionRefusal, ExtractionSessionIdentity, ExtractionSessionView } from "./messages";
 import { buildExtractionPanel, type ExtractionPanelElements } from "./panel-elements";
 import { extractionPreviewColumns, extractionPreviewSelection, retainExtractionPreview } from "./preview";
 import { renderExtractionPreview } from "./preview-table";
@@ -60,7 +63,6 @@ export type ExtractionPanelHandle = {
  */
 export type ExtractionPanelOptions = { prepare?: (() => Promise<void>) | undefined };
 
-const POLL_MS = 600;
 const DEFAULT_LABEL = "Extracted data";
 const PICK_PROMPT = "Click one example item on the page -- a product, a row, a card. FluxIQ finds the rest.";
 const GENERIC_REFUSAL = "FluxIQ could not read a repeating list from that item.";
@@ -84,24 +86,68 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   const els = buildExtractionPanel(host);
   let draft: ExtractionDraft | undefined;
   let rows: ExtractionPreviewRow[] = [];
-  let polling: ReturnType<typeof setInterval> | undefined;
+  // Raw typing survives redraw without changing settled record names per keystroke.
+  const rawNames = new Map<string, string>();
+  let fieldGeneration = 0;
   let busy = false;
+  let epoch = 0;
+  let identity: ExtractionSessionIdentity | undefined;
+  let noticeOwner: object | undefined;
+  const refusalOwner = {};
+  let retryButton: HTMLButtonElement | undefined;
+  let retryTicket: ExtractionRecoveryTicket | undefined;
+  const dialog = createExtractionDialogFocus(els.panel, {
+    initial: () => draft && !busy ? els.label : els.status,
+    returnTo: () => !els.openButton.disabled && !els.openButton.closest("[hidden]") && els.openButton.getClientRects().length > 0 ? els.openButton : document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? undefined,
+    busy: () => busy,
+    dismiss: () => cancel()
+  });
 
-  function stopPolling(): void {
-    if (polling !== undefined) clearInterval(polling);
-    polling = undefined;
-  }
+  const recovery = createExtractionReadRecovery({ read: readExtractionSession, start: startExtractionPick, prepare: options.prepare }, {
+    epoch: () => epoch, identity: () => identity, acceptIdentity: next => { identity ??= next; }, busy: () => busy, selection: () => draft && extractionPreviewSelection(draft),
+    runBusy: (work) => run(async () => work()),
+    acceptSession: (session, restore) => { applySession(session); if (restore && (draft || session?.state === "picking" || session?.state === "picked")) { dialog.open(); drawRecovery(); } },
+    acceptPreview: (session) => { if (draft) { rows = retainExtractionPreview(session?.preview ?? [], draft); render(); } },
+    showError: (ticket, sentence) => { noticeOwner = ticket; els.notice.textContent = sentence; els.notice.hidden = false; },
+    clearError: (ticket) => { if (noticeOwner === ticket) { noticeOwner = undefined; els.notice.hidden = true; els.notice.textContent = ""; } },
+    onChange: () => drawRecovery()
+  });
 
-  function startPolling(): void {
-    if (polling === undefined) polling = setInterval(() => void refresh(), POLL_MS);
+  function drawRecovery(): void {
+    dialog.render(() => {
+      const { ticket, pending } = recovery.state();
+      if (ticket !== retryTicket) {
+        retryButton?.remove(); retryButton = undefined; retryTicket = ticket;
+        if (ticket) {
+          const captured = ticket;
+          retryButton = createElement("button", { id: "extractionReadRetry", className: "small-button", text: ticket.label, attrs: { type: "button" } });
+          const button = retryButton;
+          button.addEventListener("click", () => { if (button === retryButton && !button.disabled) void recovery.retry(captured); });
+        }
+      }
+      els.entryRecovery.hidden = !ticket || !els.panel.hidden;
+      els.sheetRecovery.hidden = !ticket || els.panel.hidden;
+      els.entryRecoveryText.textContent = ticket?.sentence ?? "";
+      if (retryButton) {
+        retryButton.disabled = pending;
+        retryButton.textContent = pending ? (ticket?.stage === "preview" ? "Refreshing preview..." : "Trying again...") : ticket?.label ?? "Retry";
+        const parent = els.panel.hidden ? els.entryRecovery : els.sheetRecovery;
+        parent.setAttribute("aria-busy", String(pending));
+        if (retryButton.parentElement !== parent) parent.append(retryButton);
+      }
+    });
   }
 
   /** Forgets the pick. Every previewed value leaves memory here, not on the next render. */
   function close(): void {
-    stopPolling();
+    epoch++;
+    busy = false;
+    recovery.reset();
+    identity = undefined;
     draft = undefined;
+    rawNames.clear();
     rows = [];
-    els.panel.hidden = true;
+    dialog.close();
     els.notice.hidden = true;
     render();
   }
@@ -117,8 +163,12 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
    * with the sentence until the person closes it or starts another pick.
    */
   function captured(outcome: ExtractionConfirmOutcome | undefined): void {
-    stopPolling();
+    epoch++;
+    busy = false;
+    recovery.reset();
+    identity = undefined;
     draft = undefined;
+    rawNames.clear();
     rows = [];
     els.notice.hidden = true;
     els.notice.textContent = "";
@@ -127,6 +177,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   }
 
   function fail(error: unknown): void {
+    noticeOwner = {};
     els.notice.hidden = false;
     els.notice.textContent = error instanceof Error ? error.message : "The extraction panel hit an unexpected problem.";
   }
@@ -137,42 +188,26 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
       close();
       return;
     }
-    // The notice is cleared when the session carries no refusal, so a sentence
-    // about a pick that failed does not sit beside the proposal from the pick
-    // that then worked.
     if (session.refused !== undefined) {
-      els.notice.hidden = false;
-      els.notice.textContent = refusalMessage(session.refused);
-    } else if (!els.notice.hidden) {
-      els.notice.hidden = true;
-      els.notice.textContent = "";
-    }
+      noticeOwner = refusalOwner; els.notice.hidden = false; els.notice.textContent = refusalMessage(session.refused);
+    } else if (noticeOwner === refusalOwner) { noticeOwner = undefined; els.notice.hidden = true; els.notice.textContent = ""; }
     if (session.state === "recorded") {
       close();
       return;
     }
     if (session.state !== "picked" || !session.proposal) {
       els.status.textContent = PICK_PROMPT;
-      startPolling();
+      recovery.startPolling();
       render();
       return;
     }
-    stopPolling();
+    recovery.stopPolling();
     if (!draft) {
       draft = extractionDraftFromProposal(session.proposal, DEFAULT_LABEL);
       rows = retainExtractionPreview(session.preview ?? [], draft);
     }
     els.status.textContent = "Check the columns, then confirm.";
     render();
-  }
-
-  async function refresh(): Promise<void> {
-    try {
-      applySession(await readExtractionSession());
-    } catch (error) {
-      stopPolling();
-      fail(error);
-    }
   }
 
   /**
@@ -189,45 +224,45 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   function edit(next: ExtractionDraft): void {
     const before = shownColumnsKey(draft);
     draft = next;
+    for (const key of rawNames.keys()) if (!next.fields.some(field => field.sourceKey === key)) rawNames.delete(key);
     rows = retainExtractionPreview(rows, next);
     render();
-    if (shownColumnsKey(next) !== before) void rereadPreview(next);
-  }
-
-  /**
-   * Replaces the rows with a fresh read under the columns `edited` may show.
-   *
-   * A reply for columns the user has since changed again is dropped rather than
-   * rendered: the rows the panel still holds are already narrowed to what may
-   * be shown, so the stale answer would add nothing and could add a column back.
-   */
-  async function rereadPreview(edited: ExtractionDraft): Promise<void> {
-    const key = shownColumnsKey(edited);
-    try {
-      const session = await readExtractionSession(extractionPreviewSelection(edited));
-      if (!draft || shownColumnsKey(draft) !== key) return;
-      rows = retainExtractionPreview(session?.preview ?? [], draft);
-      render();
-    } catch (error) {
-      fail(error);
-    }
+    if (shownColumnsKey(next) !== before) void recovery.refreshPreview(extractionPreviewSelection(next));
   }
 
   function render(): void {
-    els.body.hidden = !draft;
-    els.confirmButton.disabled = busy || !draft || draft.fields.length === 0;
-    els.cancelButton.disabled = busy;
-    if (!draft) return;
-    if (els.label.value !== draft.label) els.label.value = draft.label;
-    els.summary.textContent = summaryLabel(draft);
-    els.fields.replaceChildren(...draft.fields.map((field) => extractionFieldRowElement(field, {
-      rename: (key, label) => edit(renameExtractionField(requireDraft(), key, label)),
-      changeKind: (key, kind) => edit(setExtractionFieldKind(requireDraft(), key, kind)),
-      changeHandling: (key, handling) => edit(setExtractionFieldHandling(requireDraft(), key, handling)),
-      remove: (key) => edit(removeExtractionField(requireDraft(), key))
-    })));
-    renderPagination(els, draft);
-    renderPreview(els, draft, rows);
+    const token = epoch, generation = ++fieldGeneration;
+    const editable = (key: string) => token === epoch && generation === fieldGeneration && !busy && draft?.fields.some(field => field.sourceKey === key) === true;
+    dialog.render(() => {
+      els.body.hidden = !draft;
+      els.confirmButton.disabled = busy || !draft || draft.fields.length === 0;
+      els.cancelButton.disabled = busy;
+      els.closeButton.disabled = busy;
+      if (!draft) {
+        els.label.value = "";
+        els.fields.replaceChildren();
+        els.previewHead.replaceChildren();
+        els.previewBody.replaceChildren();
+        return;
+      }
+      if (els.label.value !== draft.label) els.label.value = draft.label;
+      els.summary.textContent = summaryLabel(draft);
+      els.fields.replaceChildren(...draft.fields.map((field) => extractionFieldRowElement({ ...field, label: rawNames.get(field.sourceKey) ?? field.label }, {
+        inputName: (key, raw) => { if (editable(key)) rawNames.set(key, raw); },
+        rename: (key, label) => {
+          if (!editable(key)) return;
+          const settled = (rawNames.get(key) ?? label).trim() || requireDraft().fields.find(field => field.sourceKey === key)!.label;
+          rawNames.delete(key); edit(renameExtractionField(requireDraft(), key, settled));
+        },
+        changeKind: (key, kind) => { if (editable(key)) edit(setExtractionFieldKind(requireDraft(), key, kind)); },
+        changeHandling: (key, handling) => { if (editable(key)) edit(setExtractionFieldHandling(requireDraft(), key, handling)); },
+        remove: (key) => { if (editable(key)) edit(removeExtractionField(requireDraft(), key)); }
+      })));
+      for (const control of els.body.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, button")) control.disabled = busy;
+      renderPagination(els, draft);
+      renderPreview(els, draft, rows);
+    });
+    drawRecovery();
   }
 
   function requireDraft(): ExtractionDraft {
@@ -235,61 +270,74 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     return draft;
   }
 
-  async function run(work: () => Promise<void>): Promise<void> {
+  async function run(work: (token: number) => Promise<void>): Promise<void> {
     if (busy) return;
+    const token = epoch;
     busy = true;
     render();
     try {
-      await work();
+      await work(token);
     } catch (error) {
-      fail(error);
+      if (token === epoch) fail(error);
     } finally {
-      busy = false;
-      render();
+      if (token === epoch) { busy = false; render(); }
     }
   }
 
-  els.openButton.addEventListener("click", () => void run(async () => {
-    els.panel.hidden = false;
+  els.openButton.addEventListener("click", () => {
+    if (busy || !els.panel.hidden) return;
+    epoch++;
+    identity = undefined;
     els.notice.hidden = true;
     els.status.textContent = PICK_PROMPT;
     draft = undefined;
+    rawNames.clear();
     rows = [];
-    await options.prepare?.();
-    await startExtractionPick();
-    startPolling();
-  }));
+    dialog.open();
+    recovery.reset();
+    void recovery.beginPick();
+  });
 
   els.label.addEventListener("input", () => {
-    if (draft) draft = { ...draft, label: els.label.value };
+    if (draft && !busy) draft = { ...draft, label: els.label.value };
   });
 
   els.paginate.addEventListener("change", () => {
-    if (draft) edit(setExtractionPaginate(draft, els.paginate.checked));
+    if (draft && !busy) edit(setExtractionPaginate(draft, els.paginate.checked));
   });
 
-  els.confirmButton.addEventListener("click", () => void run(async () => {
-    captured(await confirmExtraction(extractionConfirmPayload(requireDraft())));
-  }));
-
-  for (const button of [els.cancelButton, els.closeButton]) {
-    button.addEventListener("click", () => void run(async () => {
-      close();
-      await cancelExtraction();
-    }));
-  }
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || els.panel.hidden) return;
-    void run(async () => {
-      close();
-      await cancelExtraction();
+  els.confirmButton.addEventListener("click", () => {
+    if (busy || !draft || !identity) return;
+    draft = { ...draft, fields: draft.fields.map(field => ({ ...field, label: rawNames.has(field.sourceKey) ? rawNames.get(field.sourceKey)!.trim() || field.label : field.label })) };
+    rawNames.clear();
+    const payload = extractionConfirmPayload(draft), selected = identity;
+    epoch++;
+    recovery.reset();
+    void run(async (token) => {
+      const outcome = await confirmExtraction(payload, selected);
+      if (token === epoch) captured(outcome);
     });
   });
 
-  void refresh().then(() => {
-    if (draft || polling !== undefined) els.panel.hidden = false;
-  });
+  function cancel(): void {
+    if (busy) return;
+    const selected = identity;
+    if (!selected) { close(); return; }
+    epoch++;
+    recovery.reset();
+    draft = undefined;
+    rawNames.clear();
+    rows = [];
+    els.notice.hidden = true;
+    els.status.textContent = "Cancelling extraction...";
+    void run(async (token) => {
+      await cancelExtraction(selected);
+      if (token === epoch) close();
+    });
+  }
+  for (const button of [els.cancelButton, els.closeButton]) button.addEventListener("click", cancel);
+  void recovery.refresh(true);
+
   render();
 
   return {
