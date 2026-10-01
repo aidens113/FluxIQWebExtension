@@ -60,10 +60,12 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     createElement("p", { className: "card-line", text: "Your saved automations are in FluxIQ." }),
     fallbackOpen.element
   ]);
+  const heading = createElement("h2", { className: "automations-title", text: "Your automations", attrs: { tabindex: "-1" } });
+  empty.setAttribute("tabindex", "-1");
   const element = createElement("section", { className: "automations-screen", hidden: true, attrs: { "aria-label": "Automations" } }, [
     createElement("div", { className: "automations-column" }, [
       hooks.review,
-      createElement("h2", { className: "automations-title", text: "Your automations" }),
+      heading,
       offline,
       loading,
       empty,
@@ -74,11 +76,14 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     ])
   ]);
 
+  const mountedRows = new Map<string, ReturnType<typeof automationRowElement>>();
+  let rowOrder: string[] = [];
   let active = false;
   let timer: ReturnType<typeof setInterval> | undefined;
 
   function draw(): void {
     const state = controller.state();
+    const focusTarget = reconcileRows(state.mode === "list" ? state.rows : [], state.mode === "empty" ? empty : heading);
     offline.hidden = state.mode !== "offline";
     loading.hidden = state.mode !== "loading" || state.readError !== undefined;
     empty.hidden = state.mode !== "empty";
@@ -88,8 +93,36 @@ export function createAutomationsTab(context: PanelContext, hooks: AutomationsTa
     readNotice.hidden = state.readError === undefined || state.mode === "offline";
     list.hidden = state.mode !== "list";
     if (state.mode === "fallback") stopTimer();
-    list.replaceChildren(...(state.mode === "list" ? state.rows : []).map((row) => automationRowElement(row, hooks.choose)));
     strip.draw();
+    if (focusTarget && active && !element.hidden && document.visibilityState === "visible" && document.activeElement !== focusTarget) {
+      focusTarget.focus({ preventScroll: true });
+    }
+  }
+
+  function reconcileRows(rows: readonly AutomationRowView[], fallbackTarget: HTMLElement): HTMLElement | undefined {
+    const previousOrder = rowOrder;
+    const focusedId = previousOrder.find((id) => mountedRows.get(id)?.button === document.activeElement);
+    const focusedIndex = focusedId === undefined ? -1 : previousOrder.indexOf(focusedId);
+    const ids = new Set(rows.map((row) => row.flowId));
+    for (const [id, mounted] of mountedRows) {
+      if (!ids.has(id)) { mounted.remove(); mountedRows.delete(id); }
+    }
+    for (const [index, row] of rows.entries()) {
+      let mounted = mountedRows.get(row.flowId);
+      if (mounted === undefined) {
+        mounted = automationRowElement(row, hooks.choose);
+        mountedRows.set(row.flowId, mounted);
+      } else mounted.update(row);
+      // Leave correctly placed nodes untouched; moving a focused node may blur it.
+      if (list.children[index] !== mounted) list.insertBefore(mounted, list.children[index] ?? null);
+    }
+    rowOrder = rows.map((row) => row.flowId);
+    if (focusedId === undefined) return undefined;
+    const nextId = mountedRows.has(focusedId) ? focusedId
+      : previousOrder.slice(focusedIndex + 1).find((id) => ids.has(id))
+        ?? previousOrder.slice(0, focusedIndex).reverse().find((id) => ids.has(id))
+        ?? rowOrder[0];
+    return (nextId === undefined ? undefined : mountedRows.get(nextId)?.button) ?? fallbackTarget;
   }
 
   function stopTimer(): void {

@@ -135,6 +135,12 @@ still matches the submitted revision. A successful earlier settings save reports
 that newer changes remain unsaved; reconnect uses the saved settings. Typing or
 filling an example while a chat send is pending never sends that newer draft.
 
+The Automations list reconciles rows by flow id. Refreshing status or changing
+workload state retains mounted rows, their controls and current activation data.
+Reordering preserves row focus; removing a focused row selects a surviving
+neighbour or a visible named fallback. Background refresh does not claim focus
+from other controls, hidden panels or a hidden document.
+
 A failed request's sentence stays where it was sent until the person acts
 again; a status update never wipes it. Earlier, a refused command's error was
 hidden in the same tick it was shown, because the re-render after every command

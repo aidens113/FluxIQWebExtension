@@ -1,9 +1,9 @@
 # Core and extension UI/UX review
 
 Status: Active
-Status detail: Current-source review and initial recovery/draft fixes verified and checkpointed; remaining UX phases queued.
+Status detail: Continuous Core/extension audit and implementation resumed with three workers; remaining phases execute in file-partitioned batches.
 Created: 2026-09-30
-Last updated: 2026-09-30
+Last updated: 2026-10-01
 Owner: Codex senior supervisor
 Scope: All Core web panels and the extension, focusing on user journeys, accessible controls, feedback and recovery.
 Paired document: codex-ui-ux-review-2026-09-30.md in the sibling FluxIQ Core worktree.
@@ -34,18 +34,28 @@ full structure passes135warnings/119baseline. Core web typecheck passes; full
 Core structure has only inherited unchanged service4506/4505. Focused recovery
 17/17, Core web production build (165872ms) and extension production build
 (42135ms; Chrome/Firefox/e2e22files each) pass. Supervisor full web suite88597
-completed with1699pass/1fail: unchanged core-contract flow.build fixture rejects
-its pre-provider request budget. A fixture-only investigation is active. Core
-composer's matching draft-loss bug is being reproduced in session39465.
+completed with1699pass/1fail: unchanged core-contract flow.build fixture rejected
+its obsolete pre-provider request budget. The published-default fixture correction
+and matching Core composer draft guard were then verified and checkpointed.
 Initial fix checkpoints: Coree6eb33f2, downstream21e915ee.
 Follow-up code checkpoint: Core95573296. Final supervisor web suite98054 passed
 287files/1704tests, exit0,212.84s. Final web typecheck62339 passed,83544ms;
 production build71345 passed,17pages,248727ms. Core audit1037 has exactly the
 same inherited service4506/4505 failure; no new violation or baseline increase.
 Downstream documentation audit96080 passed,0warnings/2baselined.
-The initial fix batch is complete and source frozen for Claude integration.
+The initial fix batch is complete and checkpointed for Claude integration.
+On 2026-10-01 the user explicitly requested continuous execution of the remaining
+UX work with subagents, followed by other useful nonconflicting work when UX is
+exhausted. Do not stop at a batch boundary. Three file-partitioned workers resume
+authoring review navigation, honest Problems query states and stable extension
+automation rows. Supervisor owns Production Runner operations next. Source is
+unfrozen only in those assigned files; broad validation waits for a coordinated
+freeze. Keep recording and checkpointing as work proceeds. No merge/push, live
+provider calls or panel management; Claude integration boundaries remain intact.
 No Claude slot or source is changed to accelerate this work.
-The rest of the roadmap remains explicitly queued.
+The remaining roadmap is now authorized for execution. Browser/visual validation
+still respects the standing no-live/panel-management boundary; continue useful
+source audits, component tests and fixes independently of that limitation.
 
 Original Claude workload is complete: all five tasks locally committed and
 verified; final t216 downstream3dc66aee/Core90dfd1db. Final handoff commitde2096b1
@@ -69,7 +79,7 @@ Detailed source references and surface inventories:
 [extension](./codex-ui-ux-review-2026-09-30/reports/extension-ux.md).
 These are source-based findings, not visual/browser certification.
 
-### Phase 1 — Protect work and restore interrupted requests (active)
+### Phase 1 — Protect work and restore interrupted requests (complete)
 
 1. Mount a single authenticated Core reauthentication host at root. Remove the
    duplicate topbar composition. Check pending recovery on mount and settle it
@@ -79,7 +89,7 @@ These are source-based findings, not visual/browser certification.
 3. Run component regressions, web/extension type checks and affected full suites.
    Review final source independently before committing locally for Claude.
 
-### Phase 2 — Complete creation and review journeys (queued)
+### Phase 2 — Complete creation and review journeys (active)
 
 1. Thread existing openAdaptation navigation from the Steps connector through
    FlowEditorView/start pane into both authoring panels. Add a durable visible
@@ -90,7 +100,7 @@ These are source-based findings, not visual/browser certification.
 3. For each creation/improvement path, test returned proposal navigation,
    unsuccessful generation, missing prerequisites and preserved user input.
 
-### Phase 3 — Honest diagnostics and reliable operations (queued)
+### Phase 3 — Honest diagnostics and reliable operations (active)
 
 1. ProblemsView owns query loading/error/stale/retry states. Show a clean result
    only after a successful response; reject old scoped/filter responses.
@@ -104,7 +114,7 @@ These are source-based findings, not visual/browser certification.
 5. Test duplicate activation, failure/retry, stale completion after target change,
    external run completion, permission refusal and disconnected refresh.
 
-### Phase 4 — Accessible navigation and questions (queued)
+### Phase 4 — Accessible navigation and questions (active)
 
 1. Reconcile extension automation rows by flowId so refresh retains focused
    buttons and handlers use current data. Define focus behavior for removed rows.
@@ -253,6 +263,106 @@ layout changes should answer measured problems in these journeys.
 - Follow-up: bounded fixture/configuration diagnosis; do not mask refusal or edit Claude's context-packet work. Core composer reproduction/fix proceeds independently on its source/test pair.
 
 ## Final batch handoff
+
+The entries below describe the completed initial batch. Execution resumed on
+2026-10-01; consult Current State and the following briefs for active ownership.
+
+## Worker Briefs — 2026-10-01 continuation
+
+### Brief: onboarding-entry-audit
+- Repository: paired Core t224.
+- Task: read-only scoped implementation design for Phase2.2 discoverable setup and consumed onboarding start intents.
+- Required reads: Current State; core-shell-ux.md finding9/core-studio-ux.md S5; app/page.tsx,ProgramLauncher.tsx,get-started/GetStartedClient.tsx; Studio route; live/hooks/useAutomationBrowserEntry.ts, navigation.ts and referenced entry commands/tests.
+- Owns (may edit): downstream reports/onboarding-entry-audit.md under this effort only.
+- Must not touch: all product source/tests/shared docs, runtime packages or other worktrees.
+- Definition of done: exact emitted intents and supported initial catalog/project states, safe create/connect/record paths; refresh/back/idempotence behavior; minimal exact file ownership list and meaningful synthetic tests; preserve existing deep-link project/flow/subflow/view/detail and domain scope.
+- No heavy tests/builds/live/browser/provider/panel calls/commits. Report a concrete architecture-compatible proposal and source references for immediate next implementation brief; no approval needed for discovery.
+
+### Brief: extraction-dialog-audit
+- Repository: downstream t224.
+- Task: read-only focused audit/implementation proposal for Phase4.2 extraction dialog focus and background interaction.
+- Required reads: this Current State; extension-ux.md dialog finding; panel/extraction/panel.ts,panel-elements.ts,field-row.ts,preview.ts; panel/recording/extract-control.ts; relevant shell composition and existing extraction tests.
+- Owns (may edit): only docs/working/codex-ui-ux-review-2026-09-30/reports/extraction-dialog-audit.md.
+- Must not touch: all product source/tests/shared docs, Core and other worktrees; extension source is frozen for root broad gates.
+- Definition of done: trace actual open/close/select/preview/disconnect/tab-reopen lifecycle; design focus entry/trap/Escape/return/background inertness with source references and exact minimal ownership list, preserving real-page extraction selection and Firefox reopening. Identify meaningful synthetic regression cases and risks; no live claim.
+- No tests/build/provider/panel/browser/Lab/commits/push. Return durable findings for next implementation brief; ask if required context missing.
+
+### Supervisor ownership: Compute visible selection
+- Owns Core live-views/compute-control.tsx and tests/compute-selection.test.tsx.
+- Reconcile selected node against visible search/health/capability result using existing helper; filtered-out/removed/all-empty cases cannot retain stale detail/activity. Focused red-to-green verification, no runtime changes.
+
+### Brief: global-question-queue
+- Repository: paired Core C:/Users/osrs_/FluxStuff/fxwork/t224/!FluxIQ.
+- Task: Phase4.4 fix global question starvation across candidate conversations.
+- Required reads: this Current State; core-shell-ux.md finding2; app/GlobalConversationPrompt.tsx, its owning tests and referenced public conversation summaries/contracts.
+- Owns (may edit): Core apps/web/src/app/GlobalConversationPrompt.tsx and app/tests/GlobalConversationPrompt.test.tsx only (create owning test if absent).
+- Must not touch: runtime packages/conversations/storage/context-packets, Studio views, other source/tests, shared/architecture docs or other worktrees. Request exact additional file clearance if needed.
+- Definition of done: newer idle or dismissed conversation cannot mask older waiting ask; bounded candidate/page scan, no full-history reads; dismiss/answer advances; safe permission failure/retry/obsolete response/unmount behavior. Reproduce then focused regression tests.
+- Report to: downstream docs/working/codex-ui-ux-review-2026-09-30/reports/global-question-queue.md.
+- No commits/broad checks/live/browser/provider/panel calls; all heavy commands through bash heavy.sh. Freeze/report observed outputs. Source-only bounded iteration; do not change backend ownership/API.
+
+### Brief: authoring-review-navigation
+- Repository: paired Core C:/Users/osrs_/FluxStuff/fxwork/t224/!FluxIQ.
+- Task: implement Phase2.1 authoring completion and explicit proposal review.
+- Required reads: this Current State; core-studio-ux.md S1; Core boundary and code structure; named source/tests below.
+- Owns (may edit): flow-editor/components/FlowEditorView.tsx and tests/flow-editor-start-pane.test.tsx; live/view-host/useAutomationConnectorCommands.ts and tests/authoring-review-navigation.test.tsx; authoring/BlankFlowAuthoringPanel.tsx, ImproveFlowPanel.tsx and their owning tests. All source paths under Core apps/web/src/features/automation-studio/.
+- Must not touch: other files, runtime package/conversations/storage/context-packets, shared documents, architecture docs, other worktrees. Request extra exact files if needed.
+- Definition of done: Steps connector navigates to returned proposal for blank/improve; explicit recoverable Review action; failures preserve input; no automatic apply. Reproduce and run focused owning tests through heavy.sh; no whole suites until supervisor freeze.
+- Additional supervisor requirement: deferred generation followed by project/flow change or unmount must not publish proposal/navigation/error/phase into a new scope; add request-generation guards and regressions in the same owned files.
+- Report to: downstream docs/working/codex-ui-ux-review-2026-09-30/reports/authoring-review-navigation.md.
+- No commits/push, live/browser/provider/panel calls. Use bash heavy.sh for all heavy commands, report observed exit/counts and frozen source. Keep brief/report progress durable.
+
+### Brief: problems-query-feedback
+- Repository: paired Core C:/Users/osrs_/FluxStuff/fxwork/t224/!FluxIQ.
+- Task: implement Phase3.1 honest Problems loading/error/stale/retry and request races.
+- Required reads: this Current State; core-studio-ux.md S2; Core boundary; problems/ProblemsView.tsx and owning tests.
+- Owns (may edit): Core apps/web/src/features/automation-studio/problems/ProblemsView.tsx and problems/tests/problems-query-feedback.test.tsx only.
+- Must not touch: other source/tests, runtime packages, shared/architecture documents, other worktrees. Request exact additional files if needed.
+- Definition of done: initial failure cannot claim clean validation; filtered failed results explicitly stale; retry success; denied permissions and delayed scope/filter/unmount completions safe. Tests reproduce defect and pass without skips/timeout/expectation relaxation.
+- Report to: downstream docs/working/codex-ui-ux-review-2026-09-30/reports/problems-query-feedback.md.
+- Run narrow owning tests through bash heavy.sh only; no whole suites yet, no commits/push/live/browser/provider/panel calls. Report frozen source and exact outcomes.
+
+### Brief: stable-automation-rows
+- Repository: downstream C:/Users/osrs_/FluxStuff/fxwork/t224/!FluxIQWebExtension.
+- Task: implement Phase4.1 keyed extension automation rows, focus continuity/current handlers.
+- Required reads: this Current State; extension-ux.md EXT03; panel/automations/automations-tab.ts,row-element.ts,controller.ts; existing fake DOM and tests.
+- Owns (may edit): apps/extension/src/panel/automations/automations-tab.ts,row-element.ts,tests/automations-tab.test.ts,tests/row-element.test.ts only.
+- Must not touch: shared fake DOM, other sources/tests/docs, Core, any other worktree. Request exact additions if necessary.
+- Definition of done: refresh/update retains row/button identity and focus; changed data used on activation; reorder preserves focus; removed focused row moves to predictable visible next/previous button or named empty/heading fallback. No focus stealing for background refresh.
+- Report to: docs/working/codex-ui-ux-review-2026-09-30/reports/stable-automation-rows.md.
+- Run narrow tests through bash heavy.sh, no full suite until freeze. No commits/push/live/browser/provider/panel calls. Report actual checks and source freeze.
+
+### 2026-10-01 - Continuous execution resumed
+- Agent: supervisor
+- Changed: active scope and written file ownership; initial commits remain intact.
+- Why: user explicitly requested continued work and subagents, including useful follow-on work after UX.
+- Validation: both t224 worktrees clean at start; previous final records read.
+- Outcome: Partial
+- Follow-up: dispatch three workers, independently inspect Production Runner; checkpoint each verified step and continue remaining phases.
+
+### 2026-10-01 - Production operation regressions corrected
+- Agent: supervisor
+- Changed: Production Runner launch/per-run locks, local failure feedback, target-bound drafts and snapshot-generation guard; two owning test files and own report.
+- Why: repeated activation issued duplicate mutations; target type/removal reused another target's values.
+- Validation: initial reproduction5fail; corrected initial9pass; expanded final session49742 exit0,2files/11tests,15.77s. Exact failure diagnostics and commands in production-runner-operations.md.
+- Outcome: Partial pending coordinated web types/build/full-suite review.
+- Follow-up: source frozen in supervisor files; authoring worker adds scoped async fencing after supervisor review, Problems and extension workers continue. No whole-tree checks until all editors frozen.
+
+### 2026-10-01 - Independent feature verification
+- Agent: supervisor and three workers
+- Changed: authoring review navigation/scope guards; Problems remote-query feedback; stable keyed extension rows; Compute visible selection.
+- Why: complete user journeys, prevent misleading diagnostics and preserve keyboard focus/selection.
+- Validation: supervisor authoring55/55 exit0(1473,19.32s); Problems30/30 exit0; rows10/10 exit0; Compute reproduced4fail then6/6pass(38824,9.58s). Extension check54177 exit0,62980ms. Full extension tests19704 and build73717 active against frozen downstream product source.
+- Outcome: Partial pending coordinated broad gates.
+- Follow-up: global-question worker implements bounded scans; other workers audit onboarding/extraction read-only. Continue through roadmap; no batch-boundary stop. Production checkpoint c71aa0fd.
+
+### 2026-10-01 - Extension rows broad validation complete
+- Agent: supervisor
+- Changed: stable keyed automation rows and owning tests; authored extension UX contract paragraph.
+- Why: keep focus and current activation data while status and polling update the list.
+- Validation: independently reviewed source and10focusedtests; full extension19704 exit0,1695pass/0fail/0skip,115774ms; extension54177 types0; build73717 exit0,19004ms,Chrome/Firefox/e2e22files each.
+- Outcome: Accepted for source/component/bundle verification; live focus certification remains unexercised.
+- Follow-up: checkpoint rows and frozen reports, then implement extraction-dialog plan when read-only audit completes. Core focused checkpoints c71aa0fd/3d90046b/b2eb277f/2594f6c9. No merge/push; continue remaining roadmap.
 
 - Core task branch: task/t224-codex-ui-ux-review, checkpoints239a52bb,
   e6eb33f2 (global recovery),95573296 (composer/fixture),07acd910 (resume record).
