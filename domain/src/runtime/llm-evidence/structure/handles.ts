@@ -83,6 +83,14 @@ export type WebLlmExtractionBinding = {
   extractList: WebAutomationExtractListRequest;
   /** How many items the structure held when it was detected. */
   itemCount: number;
+  /**
+   * Set when the handle names one record: the record beside a run, a label/value
+   * receipt, or a lone record where nothing repeats (`./packet.ts`). A plan that
+   * names it reads at most one row (`plan-resolution/extraction/slot.ts`): two
+   * rows from what the model chose as one record are wrong, even when a second
+   * card that looks the same appears later (supervisor, 2026-10-01).
+   */
+  oneRecord?: true;
 };
 
 export type WebLlmExtractionHandleResolution =
@@ -189,6 +197,7 @@ function copyBinding(binding: WebLlmExtractionBinding): WebLlmExtractionBinding 
     frameId: binding.frameId,
     frameUrlPath: binding.frameUrlPath,
     extractList: structuredClone(binding.extractList),
-    itemCount: binding.itemCount
+    itemCount: binding.itemCount,
+    oneRecord: binding.oneRecord
   });
 }

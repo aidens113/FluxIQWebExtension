@@ -307,6 +307,39 @@ apply-quillmark and moon-jar.
     dev.
   Both should clear with the next dev merge.
 
+**Ready to commit (session 4c, F33-F34, downstream only), after F30-F32 merged (`f163c374`) and dev merged into this
+tree (`36b0099e`).**
+- **F33. A one-record handle reads one row** (supervisor's decision on F31's open question).
+  - `WebLlmExtractionBinding` gains `oneRecord?: true` (`structure/handles.ts`, copied in `copyBinding`).
+  - `structure/packet.ts` sets it on the record beside a run, and on a primary proposal of one item with no pagination,
+    which by construction is only the `<dl>` receipt or a lone record.
+  - `plan-resolution/extraction/slot.ts` writes `maxItems: 1` after the plan's own bound, so it always wins.
+  - Tests:
+    - `plan-resolution/tests/one-record.test.ts`: the record handle resolves with `maxItems: 1` and no bound written; the
+      run beside it has none; a new case shows `{}`, `{maxItems: 5}` and `{maxItems: 1}` all resolve to 1.
+    - `structure/tests/record.test.ts` pins `oneRecord: true` on the record binding and its absence on the run.
+  - `docs/architecture/page-evidence.md` says so.
+  - Revert check: slot line removed -> `one-record.test` pass 1, fail 2; restored -> pass.
+- **F34. Every action test loads on its own.** `content/frame-geometry.ts` read `window` while it loaded, to seed the
+  top frame's offset. So `actions/tests/{click, execute, page-identity}.test.ts` passed only after another test file had
+  left a `window` on the global (lane A hit `click.test.ts` too).
+  - Fix: the cache starts `undefined`. The top frame's offset is already computed per call in
+    `currentFrameViewportOffset`, and a child frame's was already `undefined` until its parent answered, so behaviour is
+    unchanged.
+  - New `content/tests/frame-geometry.test.ts` loads the module with no `window` at all.
+  - Revert check: the old seed restored -> `frame-geometry`, `click`, `execute` and `page-identity` each `pass 0, fail 1`
+    alone. Restored -> click 30/30, execute 7/7, page-identity 6/6, each run alone.
+- **Validation, after the last edit:**
+  - Domain `structure/tests` + `plan-resolution/tests` -> 68/68.
+  - Extension `content/tests/frame-geometry.test.ts` + `content/actions/tests` + `content/action-runtime/tests` -> 195/195,
+    each file in its own process; this includes `store-chooser-replay`, now passing after the dev merge.
+  - Domain check -> `domain-check-exit=0`. Extension check -> `ext-check-exit=0` (the panel TS2610 errors are gone with
+    dev). Structure audit -> `passed (150 warning(s), 118 baselined)`.
+- **To make the rule mechanical (supervisor's call; shared runner, and needs one full sweep, which I am not allowed to
+  run):** `apps/extension/scripts/test-extension.mjs` and `domain/scripts/test-domain.mjs` import every test bundle into
+  ONE process. That is why load-order dependence stayed hidden. Running each bundle in its own process (`node --test`
+  over the bundle list) would fail any test that cannot run alone.
+
 **Next.**
 - For t223 (its files): `tool-rejection.ts` rewords `consequences_declined`. F29's `run.ts` line is done. The frame URL is
   still reachable (w20h checked).

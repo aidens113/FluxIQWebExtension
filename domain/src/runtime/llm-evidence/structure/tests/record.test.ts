@@ -91,8 +91,12 @@ test("the record beside the run gets a second handle, and the packet names it wi
         span_x1s0c7au_x1xkdpo7_xdd3vo9: { kind: "text", selector: REPLY_CARD.note, required: true }
       }
     },
-    itemCount: 1
+    itemCount: 1,
+    // It names one record, so a plan that names it reads one row (`../handles.ts`).
+    oneRecord: true
   });
+  // The run beside it is a list, and reads every row.
+  assert.equal(run.binding.oneRecord, undefined);
   // Another Flow was shown neither.
   assert.deepEqual(runtime.resolveExtractionHandle({ projectId: "project.one", flowId: "flow.two", handle: "extraction.2" }), { ok: false, code: "unknown_handle" });
 });

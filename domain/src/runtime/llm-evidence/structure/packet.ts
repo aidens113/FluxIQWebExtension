@@ -140,7 +140,7 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
   const recordReadable = record === undefined || input.recordHandle === undefined ? [] : readableFields(record);
   const recordBinding = record === undefined || input.recordHandle === undefined || recordReadable.length === 0
     ? undefined
-    : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false));
+    : boundList(input, input.recordHandle, record, recordReadable, boundPagination(record.pagination, false), true);
 
   const packet = present<WebLlmRepeatingStructure>({
     schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
@@ -159,7 +159,11 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       note: RECORD_NOTE
     }
   });
-  const binding = boundList(input, input.handle, proposal, readable, boundPagination(proposal.pagination, infiniteScroll));
+  const paginate = boundPagination(proposal.pagination, infiniteScroll);
+  // A primary proposal of one item with no way to continue is a record by
+  // construction: a list needs a run of three or a record pair, so only the
+  // label/value receipt and a lone record are sent with one item.
+  const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined);
   return { packet, binding, recordBinding };
 }
 
@@ -176,7 +180,8 @@ function boundList(
   handle: string,
   proposal: WebAutomationExtractionProposal,
   readable: ReadableField[],
-  paginate: WebAutomationExtractListPagination | undefined
+  paginate: WebAutomationExtractListPagination | undefined,
+  oneRecord: boolean
 ): WebLlmExtractionBinding {
   return present<WebLlmExtractionBinding>({
     handle,
@@ -197,7 +202,8 @@ function boundList(
       dedupe: undefined,
       sort: undefined
     }),
-    itemCount: proposal.itemCount
+    itemCount: proposal.itemCount,
+    oneRecord: oneRecord ? true : undefined
   });
 }
 

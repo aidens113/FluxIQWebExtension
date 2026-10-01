@@ -143,6 +143,10 @@ export function resolveWebExtractionSlot(value: unknown, scope: WebLlmExtraction
   if (paginate !== undefined) request.paginate = paginate as unknown as JsonObject;
   if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
   if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
+  // A handle that names one record reads one row, whatever the plan wrote: two
+  // rows from what the model chose as one record would be a wrong table
+  // (`../../structure/handles.ts`, `oneRecord`).
+  if (binding.oneRecord === true) request.maxItems = 1;
   // The request is held to the reader a dispatch is refused by, so a handle
   // never resolves into one the page would not run, clamp or read otherwise.
   const checked = webAutomationExtractListRequestValue(request);

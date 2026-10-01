@@ -67,20 +67,25 @@ test("the record's handle with two of its columns resolves to the card's item an
         fields: {
           item: { kind: "text", selector: REPLY_CARD.name, required: true },
           price: { kind: "text", selector: REPLY_CARD.price, required: true }
-        }
+        },
+        // One record reads one row, though the plan wrote no bound.
+        maxItems: 1
       }
     }
   });
 
-  // The run's handle still names the thread rows, which carry no price.
+  // The run's handle still names the thread rows, which carry no price, and
+  // reads every one of them.
   const run = await resolve(runtime, { handle: packet.extraction });
   assert.equal(run.status, "resolved");
-  assert.equal(((run as { parameters: JsonObject }).parameters.extractList as JsonObject).item, "a.x1ui8mjl.x1unrdkg.x1xae3z8");
+  const runList = (run as { parameters: JsonObject }).parameters.extractList as JsonObject;
+  assert.equal(runList.item, "a.x1ui8mjl.x1unrdkg.x1xae3z8");
+  assert.equal(runList.maxItems, undefined);
 
   // The Flow keeps the resolved request; read back as a draft, with each
   // selector withheld, it is the Flow's own list and gets them back.
   const kept = (resolved as { parameters: { extractList: JsonObject } }).parameters.extractList;
-  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: true }, price: { kind: "text", required: true } } };
+  const draft = { item: kept.item as string, fields: { item: { kind: "text", required: true }, price: { kind: "text", required: true } }, maxItems: 1 };
   assert.deepEqual(await resolve(runtime, draft), { status: "resolved", parameters: { extractList: kept } });
 });
 
@@ -106,4 +111,22 @@ test("a receipt detected as a list of one builds an extract node that reads exac
       }
     }
   });
+});
+
+// Supervisor, 2026-10-01: a handle the model chose as one record reads one row.
+// A plan that wrote no bound, or a larger one, still gets one row: a second
+// card that looks the same, appearing later, must not turn a one-row answer
+// into two.
+test("a one-record handle reads at most one row, whatever bound the plan wrote", async () => {
+  const runtime = pageRuntime("job-board-receipt", []);
+  const detected = await runtime.executeTool({ ...SCOPE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  const packet = detected.evidence as WebLlmRepeatingStructure;
+  const fields = { role: "role", company: "company", reference: "reference" };
+
+  for (const bound of [{}, { maxItems: 5 }, { maxItems: 1 }]) {
+    const resolved = await resolve(runtime, { handle: packet.extraction, fields, ...bound });
+    if (resolved.status !== "resolved") assert.fail(`the plan wrote ${JSON.stringify(bound)} and was refused: ${JSON.stringify(resolved)}`);
+    const extractList = resolved.parameters.extractList as JsonObject;
+    assert.equal(extractList.maxItems, 1, `the plan wrote ${JSON.stringify(bound)}`);
+  }
 });
