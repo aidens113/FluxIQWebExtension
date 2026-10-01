@@ -5,7 +5,7 @@ import { targetCore } from "../../chat/conversation/tests/target-core";
 import { statusWith } from "../../tests/status-fixture";
 import { ACTIVITY_MESSAGES as A, type ExtensionActivityState } from "../../../shared/activity/index";
 import { RUNTIME_MESSAGES as M } from "../../../shared/constants";
-import { SIMPLE_PANEL_MESSAGES as S, type ExtensionStatus } from "../../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES as S, type ExtensionStatus } from "../../../shared/protocol";
 import { mountPanel } from "../mount-panel";
 import { fakeClock } from "./fake-clock";
 

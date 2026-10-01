@@ -4,7 +4,7 @@ import { FakeElement, fake, withFakeDocument } from "../../chat/tests/fake-dom";
 import { targetCore } from "../../chat/conversation/tests/target-core";
 import { statusWith } from "../../tests/status-fixture";
 import { RUNTIME_MESSAGES as M } from "../../../shared/constants";
-import { SIMPLE_PANEL_MESSAGES as S } from "../../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES as S } from "../../../shared/protocol";
 import { mountPanel } from "../mount-panel";
 
 const settle = async () => { for (let i = 0; i < 25; i++) await Promise.resolve(); };

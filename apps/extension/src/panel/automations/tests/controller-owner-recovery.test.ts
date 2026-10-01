@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SIMPLE_PANEL_MESSAGES as M } from "../../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES as M } from "../../../shared/protocol";
 import type { PanelMessage, PanelResult, PanelStore } from "../../state";
 import { statusWith } from "../../tests/status-fixture";
 import { createAutomationsController } from "../controller";

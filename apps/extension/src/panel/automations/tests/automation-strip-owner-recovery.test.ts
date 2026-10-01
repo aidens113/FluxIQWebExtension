@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { FakeElement, fake, withFakeDocument } from "../../chat/tests/fake-dom";
-import { SIMPLE_PANEL_MESSAGES as M } from "../../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES as M } from "../../../shared/protocol";
 import { statusWith } from "../../tests/status-fixture";
 import { createAutomationsController } from "../controller";
 import type { PanelMessage, PanelStore } from "../../state";

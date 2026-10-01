@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { FakeElement, fake, withFakeDocument } from "../../../chat/tests/fake-dom";
 import { statusWith } from "../../../tests/status-fixture";
-import { SIMPLE_PANEL_MESSAGES } from "../../../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES } from "../../../../shared/protocol";
 import { createRecordingReview } from "../recording-review";
 
 const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
@@ -81,12 +81,12 @@ test("Done retains identity, focus and one handler through Test and Save", async
     const done = button("Done"); done.focus();
     const testButton = button("Test the generated automation"); testButton.dispatch("click");
     assert.ok(button("Done") === done); assert.ok(doc.activeElement === done); assert.equal(root.getAttribute("aria-busy"), "true");
-    assert.deepEqual(calls[1], { type: SIMPLE_PANEL_MESSAGES.testGeneratedAutomation, proposalId: "p1", flowId: "f1" });
+    assert.deepEqual(calls[1], { type: AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation, proposalId: "p1", flowId: "f1" });
     testButton.dispatch("click"); assert.equal(calls.length, 2);
     finish({ ok: true, value: { payload: { runSummary: { status: "succeeded" }, interventionCount: 1 } } }); await tick();
     assert.ok(button("Done") === done); assert.equal(root.getAttribute("aria-busy"), "false");
     button("Save").dispatch("click");
-    assert.deepEqual(calls[2], { type: SIMPLE_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "p1", flowId: "f1" });
+    assert.deepEqual(calls[2], { type: AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "p1", flowId: "f1" });
     assert.ok(button("Done") === done); assert.ok(doc.activeElement === done);
     finish({ ok: true, value: {} }); await tick();
     assert.ok(button("Done") === done); assert.ok(doc.activeElement === done);
@@ -113,9 +113,9 @@ test("a failed generation has current retry copy and Generate handler", async ()
     const retry = button("Try again"); assert.ok(retry); assert.equal(retry.disabled, false); assert.equal(retry.className, "primary-button");
     old.dispatch("click"); assert.equal(calls.length, 1);
     retry.dispatch("click"); retry.dispatch("click"); assert.equal(calls.length, 2);
-    assert.deepEqual(calls[1], { type: SIMPLE_PANEL_MESSAGES.generateFromRecording });
+    assert.deepEqual(calls[1], { type: AUTOMATION_PANEL_MESSAGES.generateFromRecording });
     finish(generated("2")); await tick(); button("Save").dispatch("click");
-    assert.deepEqual(calls[2], { type: SIMPLE_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "p2", flowId: "f2" });
+    assert.deepEqual(calls[2], { type: AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "p2", flowId: "f2" });
   });
 });
 
@@ -183,7 +183,7 @@ test("dismiss hides review, clears its timer and ignores old replies/controls", 
     oldDone.dispatch("click"); assert.equal(root.hidden, false); assert.equal(calls.length, 1);
     button("Turn this recording into an automation").dispatch("click");
     finish(generated("fresh"), 1); await tick(); button("Save").dispatch("click");
-    assert.deepEqual(calls[2], { type: SIMPLE_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "pfresh", flowId: "ffresh" });
+    assert.deepEqual(calls[2], { type: AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "pfresh", flowId: "ffresh" });
   });
 });
 
@@ -206,7 +206,7 @@ test("old reply arriving during a fresh review cannot replace its preview or han
     assert.equal(root.getAttribute("aria-busy"), "true"); assert.equal(button("Save"), undefined); assert.ok(doc.activeElement === done);
     finish(generated("current"), 1); await tick();
     assert.ok(button("Done") === done); button("Save").dispatch("click");
-    assert.deepEqual(calls[2], { type: SIMPLE_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "pcurrent", flowId: "fcurrent" });
+    assert.deepEqual(calls[2], { type: AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation, proposalId: "pcurrent", flowId: "fcurrent" });
   });
 });
 
