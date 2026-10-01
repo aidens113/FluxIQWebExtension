@@ -33,6 +33,25 @@ export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizatio
   authorizationPassword: string;
   authorizationPin?: string;
 }): Promise<LiveLlmAuthorization> {
+  const key = await installLiveLlmSessionKey(control, input);
+  await configureFlowLiveLlmExecution(control, { projectId: input.projectId, flowId: input.flowId, plan: input.plan, secretKeyId: key.secretKeyId });
+  return key;
+}
+
+/**
+ * Puts the run's key in the person's Secret Keys and makes sure their session
+ * can release it, and nothing else. This is all a build started from the
+ * extension's chat can be given beforehand: the paired extension's chat runs
+ * on the person's own unlocked session (`conversations/commands/caller.ts` in
+ * Core), and its Flow is created and built inside one Core command, so there is
+ * no Flow to pin settings to before it.
+ */
+export async function installLiveLlmSessionKey(control: Pick<LiveLlmAuthorizationControl, "secretKeysCall" | "reauthenticate">, input: {
+  plan: LiveLlmPlan;
+  credentialValue: string;
+  authorizationPassword: string;
+  authorizationPin?: string;
+}): Promise<LiveLlmAuthorization> {
   const key = await ensureLiveLlmSecretKey(control, {
     secretValue: input.credentialValue,
     authorizationPassword: input.authorizationPassword,
@@ -43,8 +62,7 @@ export async function authorizeFlowLiveLlmExecution(control: LiveLlmAuthorizatio
   // that existed then, and Core releases a key to a model call only from the
   // caller's own unlocked session. A key this call just installed is exactly
   // one that session cannot decrypt, so the session is replaced before the
-  // Flow's first model call could need it.
+  // first model call could need it.
   if (key.created) await control.reauthenticate();
-  await configureFlowLiveLlmExecution(control, { projectId: input.projectId, flowId: input.flowId, plan: input.plan, secretKeyId: key.id });
   return Object.freeze({ secretKeyId: key.id, secretKeyName: key.name });
 }

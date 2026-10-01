@@ -42,6 +42,8 @@ export type PersonHandOff = Readonly<{
   cleared: boolean;
   /** The option the person pressed, or `null` when the answer did not reach Core. */
   answer: "person_done" | "person_stop" | null;
+  /** Where it was pressed, when it reached Core: in the extension's chat, or through Core's `answer-ask`. */
+  via?: "chat" | "core";
   /** From the ask being raised to the person's answer, to a tenth of a second. */
   secondsWaited: number;
   /** The Lab's own reason for anything but `cleared`, bounded; never page text. */

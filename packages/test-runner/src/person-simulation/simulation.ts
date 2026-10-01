@@ -1,6 +1,6 @@
 import type { ExpectedPersonHandOff, ScenarioPersonChecks } from "@fluxiq-web-extension/test-contracts";
 import type { LabPersonSnapshot, PersonHandOff } from "./hand-off-record.js";
-import { answerPersonAsk, pendingPersonAsks, PERSON_DONE, PERSON_STOP, type PendingPersonAsk, type PersonAskControl, type PersonAskScope } from "./asks.js";
+import { answerPersonAsk, pendingPersonAsks, PERSON_DONE, PERSON_STOP, type PendingPersonAsk, type PersonAnswerVia, type PersonAskControl, type PersonAskScope, type PersonChatAnswerer } from "./asks.js";
 import { answerPermissionAskAsPerson, type PermissionPlay, type PersonPermissionAnswer } from "./permission-answer.js";
 import type { PersonTab } from "./tab.js";
 import { playPersonCheck, type PlayedCheck } from "./play-person-check.js";
@@ -20,6 +20,8 @@ export type PersonSimulationInput = {
   permissions?: PermissionPlay | undefined;
   /** Told of each permission answer as it is given. */
   onPermissionAnswer?: (answer: PersonPermissionAnswer) => Promise<void>;
+  /** Answers an ask on the extension's chat thread in the chat window itself, as the person at it would; absent, every ask is answered through Core. */
+  answerInChat?: PersonChatAnswerer;
   /** How often Core's threads are read. Core itself waits in two-second steps, so one second answers within its next look. */
   pollMs?: number;
   lookForMs?: number;
@@ -77,7 +79,7 @@ export function startPersonSimulation(input: PersonSimulationInput): PersonSimul
         if (ask.kind === "permission") {
           if (!input.permissions) continue;
           handled.add(ask.askId);
-          const answer = await answerPermissionAskAsPerson({ control: input.control, scope: input.scope, play: input.permissions, now }, ask);
+          const answer = await answerPermissionAskAsPerson({ control: input.control, scope: input.scope, play: input.permissions, now, answerInChat: input.answerInChat }, ask);
           permissionAnswers.push(answer);
           if (input.onPermissionAnswer) {
             await input.onPermissionAnswer(answer).catch((error: unknown) => { lastPollFailure = `publishing a permission answer failed: ${firstLine(error)}`; });
@@ -124,15 +126,17 @@ async function handOffOne(input: PersonSimulationInput, ask: PendingPersonAsk, n
   const option = playedCheck.cleared ? PERSON_DONE : PERSON_STOP;
   let answer: PersonHandOff["answer"] = option;
   let note = playedCheck.note;
+  let via: PersonAnswerVia = "core";
   try {
-    await answerPersonAsk(input.control, input.scope, ask.askId, option);
+    if (input.answerInChat && await input.answerInChat(ask, { kind: "choice", value: option })) via = "chat";
+    else await answerPersonAsk(input.control, input.scope, ask.askId, option);
   } catch (error) {
     answer = null;
     note = [note, `the answer did not reach Core: ${firstLine(error)}`].filter((part) => part !== null).join("; ");
   }
   return Object.freeze({
     askId: ask.askId, stage: ask.stage, subject: ask.subject, scenarioId: input.scenarioId,
-    check: playedCheck.check, did: playedCheck.did, cleared: playedCheck.cleared, answer,
+    check: playedCheck.check, did: playedCheck.did, cleared: playedCheck.cleared, answer, ...(answer === null ? {} : { via }),
     secondsWaited: Math.max(0, Math.round((now() - ask.createdAt) / 100) / 10),
     note,
   });

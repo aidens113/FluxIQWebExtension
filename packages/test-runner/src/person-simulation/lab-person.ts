@@ -4,7 +4,7 @@ import { RunnerFailure } from "../failure.js";
 import { LAB_PROJECT_DOMAIN_ID } from "../flow-lane/index.js";
 import { expectedPersonHandOff } from "./expected-hand-off.js";
 import type { LabPersonSnapshot, PersonHandOff } from "./hand-off-record.js";
-import type { PersonAskControl } from "./asks.js";
+import type { PersonAskControl, PersonChatAnswerer } from "./asks.js";
 import type { PermissionPlay, PersonPermissionAnswer } from "./permission-answer.js";
 import { loadPersonChecks } from "./check-module.js";
 import { startPersonSimulation } from "./simulation.js";
@@ -38,6 +38,12 @@ export type LabPersonInput = {
   publish: (handOff: PersonHandOff) => Promise<unknown>;
   /** Puts each permission answer on the run's timeline as it is given. */
   publishPermission?: (answer: PersonPermissionAnswer) => Promise<unknown>;
+  /**
+   * Answers an ask on the extension's chat thread in the chat window itself:
+   * a build started from the chat asks there, and the person sitting at the
+   * panel answers there. Absent, every ask is answered through Core.
+   */
+  answerInChat?: PersonChatAnswerer;
 };
 
 /** The person a run is playing, until the run is done with it. */
@@ -75,6 +81,7 @@ export async function startLabPerson(input: LabPersonInput): Promise<LabPerson> 
     onHandOff: async (handOff) => { await input.publish(handOff); },
     ...(input.permissions ? { permissions: input.permissions } : {}),
     ...(input.publishPermission ? { onPermissionAnswer: async (answer: PersonPermissionAnswer) => { await input.publishPermission?.(answer); } } : {}),
+    ...(input.answerInChat ? { answerInChat: input.answerInChat } : {}),
   });
   let writeFailure: unknown;
   let finished: Promise<void> | undefined;

@@ -1,8 +1,8 @@
-import type { ApprovalFlow } from "./approval-flow.js";
-import type { ObservedCoreCall } from "./core-recording-proxy.js";
-import { sendChatMessage } from "./send-chat-message.js";
-import type { ThreadTurn } from "./thread-reader.js";
-import type { ChatCheckContext } from "./types.js";
+import type { ApprovalFlow } from "../approval-flow.js";
+import type { ObservedCoreCall } from "../core-recording-proxy.js";
+import { sendChatMessage } from "../send-chat-message.js";
+import type { ThreadTurn } from "../thread-reader.js";
+import type { ChatCheckContext } from "../types.js";
 
 export type AskAnswerObservation = {
   conversationId: string;

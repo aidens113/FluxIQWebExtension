@@ -9,7 +9,7 @@
 // the ask: nothing a page showed beyond that.
 
 import { judgeCreatedFlowPermissionStop, type CreatedFlowPermissionStop, type LiveInstructionTask } from "../flow-lane/index.js";
-import { answerPermissionAsk, type PendingPersonAsk, type PermissionAskAnswer, type PersonAskControl, type PersonAskScope } from "./asks.js";
+import { answerPermissionAsk, type PendingPersonAsk, type PermissionAskAnswer, type PersonAnswerVia, type PersonAskControl, type PersonAskScope, type PersonChatAnswerer } from "./asks.js";
 import type { PersonHandOffStage } from "./hand-off-record.js";
 
 /**
@@ -35,6 +35,8 @@ export type PersonPermissionAnswer = Readonly<{
   reason: Extract<CreatedFlowPermissionStop, { verdict: "elsewhere" }>["reason"] | null;
   /** What the person answered; `null` when they left it (a task that says to ask first) or the answer did not reach Core. */
   answer: PermissionAskAnswer | null;
+  /** Where it was answered, when it was: in the extension's chat, or through Core's `answer-ask`. */
+  via?: PersonAnswerVia;
   /** From the ask being raised to the person's answer, to a tenth of a second. */
   secondsWaited: number;
   /** The Lab's own reason for anything but a grant at the point, bounded; never page text. */
@@ -46,6 +48,8 @@ export type PermissionAnswerInput = {
   scope: PersonAskScope;
   play: PermissionPlay;
   now: () => number;
+  /** Answers an ask on the extension's chat thread in the chat itself; absent, every ask is answered through Core. */
+  answerInChat?: PersonChatAnswerer | undefined;
 };
 
 /**
@@ -76,13 +80,15 @@ export async function answerPermissionAskAsPerson(input: PermissionAnswerInput, 
     : stop.verdict === "at_declared_point"
       ? "Core named no control, so the person cannot tell it is the task's act and refuses it"
       : `not the task's permission point (${judged.reason})`;
+  let via: PersonAnswerVia = "core";
   try {
-    await answerPermissionAsk(input.control, input.scope, ask.askId, decided);
+    if (input.answerInChat && await input.answerInChat(ask, { kind: decided })) via = "chat";
+    else await answerPermissionAsk(input.control, input.scope, ask.askId, decided);
   } catch (error) {
     answer = null;
     note = [note, `the answer did not reach Core: ${(error instanceof Error ? error.message : String(error)).split("\n", 1)[0]!.slice(0, 160)}`].filter((part) => part !== null).join("; ");
   }
-  return Object.freeze({ ...judged, answer, secondsWaited: waited(input.now, ask), note });
+  return Object.freeze({ ...judged, answer, ...(answer === null ? {} : { via }), secondsWaited: waited(input.now, ask), note });
 }
 
 function waited(now: () => number, ask: PendingPermissionAsk): number {

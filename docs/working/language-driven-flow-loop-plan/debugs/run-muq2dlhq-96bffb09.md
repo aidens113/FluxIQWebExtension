@@ -1,0 +1,21 @@
+# run-muq2dlhq-96bffb09: the first chat-driven live run built nothing (2026-10-01, t227)
+
+- **Run:** `everything-store` / `everything-store-plus-earbuds-under-50`, headed, isolated Core from `fxwork/t227/!FluxIQ`. This was the first run that started its build from the extension's chat window (`buildEntry: chat`).
+- **What it did:**
+  - The Lab installed the person's DeepSeek key and opened the real side panel (`live panel: side-panel (verified open)`). It typed the task's instruction into the chat and pressed Send.
+  - Core received it: the chat thread holds the person's turn 1 and FluxIQ's answer, turn 2.
+  - FluxIQ answered "I could not tell what you wanted done from that on my own. ... (I read your message without the model, because the model did not answer in time. ...)". This is in the UI review's `05-failure-panel.png`.
+  - No Flow was made and no build ran: `snapshots/flow-lane.json` has `stoppedAt: build`, `build.chat.became: no_build` and `readWithoutModel: true`. It cost $0 (`live-guard` recorded `totalEstimatedCostUsd: 0`).
+- **Why:**
+  - Core gives the chat model 24 s to read a message: three attempts, each cut at 15 s (`conversations/instructions/interpret.ts`). DeepSeek, just back from its outage, did not answer inside that time.
+  - The words-only fallback then matched no capability, because the instruction names none ("Find every pair of wireless earbuds ..."). So it answered in words.
+  - **This is a product gap:** a person on a shopping site who typed a whole job got nothing built, because the model was slow to read one message.
+- **Where the Lab misreported it:**
+  - The run's failure read "Live LLM run reached no provider ... (lab.chat_started_no_build)". The build settlement's no-provider check ran before the lane could say what the chat said.
+- **Fix (t227):**
+  - Core `instructions/fallback.ts` (`describedJobDecision`) changes the words-only reading. When nothing matches, a page is open, `flow.createHere` is offered, and the message is a job (not a question, and at least 6 words once filler is left out), it is built from that page with the message as the instruction. The thread still says it was read without the model.
+  - Lab `flow-lane/creation/lane.ts` (`startChatBuild`) no longer lets that settlement error hide the chat's answer. A chat that built nothing raises "FluxIQ's chat did not build a Flow ... it said: ...", with the settlement as its cause. An overspend still outranks it.
+- **Stages 1-6:** NO EVIDENCE: no stage after the chat's answer ran.
+- **UI review:**
+  - The chat showed the person's message and FluxIQ's answer, with no "working" state. That is correct for a reply.
+  - The fallback's sentence did tell the person why it read the message without the model.

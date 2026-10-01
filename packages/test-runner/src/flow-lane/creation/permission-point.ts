@@ -60,7 +60,10 @@ const MAX_PAGES = 20;
 
 /**
  * Every permission question on the Flow's own thread (subject `flow` and the
- * Flow's id), oldest first, each judged against the task's point.
+ * Flow's id), and on the chat the build was started from when it was
+ * (`conversationId`), oldest first, each judged against the task's point. A
+ * build started from the extension's chat asks in that chat, because Core runs
+ * the chat's command inside the chat's own thread.
  *
  * Read from Core after the build, because the answer that let the build go on
  * lives on the ask Core settled (`answer-ask` against the request's own id),
@@ -70,13 +73,13 @@ const MAX_PAGES = 20;
  */
 export async function readCreatedFlowPermissionAsks(
   control: CreatedFlowPermissionThreadControl,
-  scope: Readonly<{ projectId: string; domainId: string; flowId: string }>,
+  scope: Readonly<{ projectId: string; domainId: string; flowId: string; conversationId?: string }>,
   task: Pick<LiveInstructionTask, "permissionPoint">,
   bounds: FluxIQHttpOptions = {},
 ): Promise<CreatedFlowPermissionAsked[]> {
   const listed = record(await control.automationStudioCall("list-conversations", { projectId: scope.projectId }, bounds, scope.domainId));
   const threads = (Array.isArray(listed.conversations) ? listed.conversations.filter(isRecord) : [])
-    .filter((thread) => typeof thread.conversationId === "string" && isRecord(thread.subject) && thread.subject.kind === "flow" && thread.subject.id === scope.flowId);
+    .filter((thread) => typeof thread.conversationId === "string" && ((isRecord(thread.subject) && thread.subject.kind === "flow" && thread.subject.id === scope.flowId) || thread.conversationId === scope.conversationId));
   const asked: Array<CreatedFlowPermissionAsked & { createdAt: number }> = [];
   for (const thread of threads) {
     let sinceTurnId: string | undefined;
