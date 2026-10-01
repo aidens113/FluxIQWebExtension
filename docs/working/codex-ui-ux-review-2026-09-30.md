@@ -70,6 +70,15 @@ checkpoint. Core types/build passed, full2547pass/1login-lock EPERM failed;
 full certification remains incomplete. All slots assigned: extraction recovery,
 shared environment implementation and bounded login-lock fix. Root turn Open
 FluxIQ lease tests-first2fail, corrected32pass/native0/276.3537ms; typing pending.
+
+Latest tenth Core Complete: corrected full61471 native0,340files2629tests/194.11s;
+types50626 native0/95150ms and build45474 native0/202003ms. Final structure only
+protected4506/4505 after comment-only cleanup rationale markers. Core source
+checkpoints687ddc58/2d9306b6/a466c972. Extension checkpoints9126ba06/425f58af/
+b3be2c24/9714f9a2; root shell60/native0/955.8845ms and strict4roots0, extraction
+102/scoped6roots0 and turn Open32/scoped4roots0. Full extension79670/types85639/
+build87286/structure79422 active on frozen source. Maximum slots now assigned:
+Core Combobox, Core Field and read-only extraction backend preview preparation.
 [Tenth verification](./codex-ui-ux-review-2026-09-30/reports/tenth-supervisor-verification.md)
 records limits; [shell working owner audit](./codex-ui-ux-review-2026-09-30/reports/shell-working-owner-audit.md)
 is read-only backlog. Broad gates follow owning source freeze; no Claude integration.

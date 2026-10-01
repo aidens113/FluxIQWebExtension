@@ -34,6 +34,7 @@ import { RUNTIME_MESSAGES } from "../../shared/constants";
 import type { ExtensionStatus, RecordingState } from "../../shared/protocol";
 import { chooseAutomation, createAutomationsTab } from "../automations";
 import { createActivityFeed, createChatPanel, type ActivityFeed, type ChatTarget } from "../chat";
+import { createChatOwnerContext } from "../chat/owner-context";
 import { createElement } from "../dom";
 import { createStartView, startGuide } from "../getting-started";
 import { createOpenFluxIQButton } from "../open-fluxiq";
@@ -88,12 +89,37 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
       automations.setWorking(now);
     }
   );
-  const activity: ActivityFeed = createActivityFeed({ request: store.request, listen: listenToPushes }, observeWorking);
-  activity.start();
-  void activity.read();
+  const workingOwner = createChatOwnerContext(store.request);
+  let activity: ActivityFeed | undefined;
+  let activityCurrent = () => false;
+  let activityUnsupported = false;
+  replaceWorkingFeed();
+
+  function replaceWorkingFeed(): void {
+    const previous = activity;
+    activity = undefined;
+    previous?.stop();
+    working.reset();
+    const lease = workingOwner.capture();
+    const next = createActivityFeed({
+      request: <T>(message: Parameters<typeof store.request>[0]) => current()
+        ? lease.request<T>(message)
+        : Promise.resolve({ ok: false as const, sentence: "This context has changed. Try again." }),
+      listen: listener => listenToPushes(message => { if (current()) listener(message); })
+    }, () => {
+      if (!current()) return;
+      if (next.snapshot().reach === "unsupported") activityUnsupported = true;
+      observeWorking();
+    });
+    function current(): boolean { return activity === next && lease.current(); }
+    activity = next;
+    activityCurrent = current;
+    if (!activityUnsupported) { next.start(); void next.read(); }
+    observeWorking();
+  }
 
   function observeWorking(): void {
-    working.observe(workingInput(store.current(), activity.snapshot()));
+    working.observe(workingInput(store.current(), activityCurrent() ? activity?.snapshot() : undefined));
   }
 
   const start = createStartView(context, () => dispatch({ type: "gear" }));
@@ -178,16 +204,19 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
 
   store.subscribe((status: ExtensionStatus) => {
     noAnswer = false;
+    const owner = workingOwner.observe(status);
+    const replaced = owner.changed || owner.initial;
+    if (replaced) replaceWorkingFeed();
+    else observeWorking();
     topBar.render(status);
     openIcon.observe(status);
     recording.render(status);
     review.render(status);
     chat.render(status);
     automations.render(status);
-    observeWorking();
     // The relay forgets its state when the worker restarts; read it again on reconnecting.
     const nowConnected = status.connectionState === "connected";
-    if (nowConnected && !connected) void activity.read();
+    if (nowConnected && !connected && !replaced && !activityUnsupported) void activity?.read();
     connected = nowConnected;
     const ended = (recordingWas === "recording" || recordingWas === "paused") && status.recordingState === "idle";
     recordingWas = status.recordingState;

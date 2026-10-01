@@ -1710,6 +1710,13 @@ and a new active owner can recover from an old unsupported-list fallback using
 the existing cadence. These are frontend publication/activation guards and do
 not cancel or authorize commands already accepted by the background.
 
+The shell's separate working feed uses the same confirmed remote owner tuple.
+Owner changes retire its read/push instance before Record/Extract/Run consume
+activity, reset the prior raw/held state, then use current runtime fallback and
+current paced activity. Timer epochs reject canceled callbacks. Same-owner
+reconnect and existing tab/pagehide subscription behavior retain400ms-on and
+1200ms-off holding; unsupported capability stays tied to the mounted shell.
+
 Dataset export retains its operation lock through browser delivery. Preparation
 or click failure shows local Retry/Open FluxIQ feedback and releases the lock.
 Temporary download links and owned URLs are cleaned up on success and failure,
