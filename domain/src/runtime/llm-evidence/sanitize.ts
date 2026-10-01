@@ -134,15 +134,13 @@ export type WebLlmSnapshotBinding = {
    * The captured page's own query, as key and value pairs, unscreened. The
    * packet's `location` carries the query too, but with a secret-named
    * parameter's value withheld (`./location.ts`), so it is not what the page
-   * really had. Like the selectors this never leaves the domain: it is kept
-   * only so a build may run a site search it performed again with other words
-   * (`node-run/shown-addresses.ts`). Absent for a page with no query.
+   * really had. Every pair is kept. Like the selectors this never leaves the
+   * domain: it is kept only so a build may go back to the page, or run a site
+   * search it performed again with other words (`node-run/shown-addresses.ts`).
+   * Absent for a page with no query.
    */
   pageQuery?: ReadonlyArray<readonly [string, string]>;
 };
-
-/** How many of a page's query pairs a binding keeps. */
-const MAX_PAGE_QUERY_PAIRS = 16;
 
 export type WebLlmSanitizeOptions = {
   expectedOrigin?: string;
@@ -230,7 +228,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   });
   markFailedTarget(evidence, selectors, options.failedAction);
   tellWebLlmLookAlikesApart(evidence.elements, cues);
-  const pageQuery = [...url.searchParams].slice(0, MAX_PAGE_QUERY_PAIRS);
+  // Every pair: a page whose query was cut would not match its own address (`node-run/shown-addresses.ts`).
+  const pageQuery = [...url.searchParams];
   return present<WebLlmSnapshotBinding>({ evidence, selectors, records, shadowHosts, stateDigest: undefined, routeState: undefined, pageQuery: pageQuery.length > 0 ? pageQuery : undefined });
 }
 

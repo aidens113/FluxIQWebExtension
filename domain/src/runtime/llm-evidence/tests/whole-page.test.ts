@@ -161,3 +161,10 @@ test("every dialog, every blocker, each loading indicator with its label, the na
   assert.deepEqual(evidence.frame, { isTop: true, unansweredFrameIds: [4, 9] });
   assert.doesNotMatch(JSON.stringify(evidence), /#d0|#b0|#list|zzz/u);
 });
+
+test("the binding keeps every pair of the page's own query, not the first sixteen", () => {
+  const pairs = Array.from({ length: 40 }, (_, index) => [`f${index}`, `v${index}`] as const);
+  const url = `https://shop.test/results?${new URLSearchParams(pairs.map(([key, value]) => [key, value])).toString()}`;
+  const bound = sanitizeWebLlmSnapshotWithBindings(page([{ tagName: "button", selector: "#go", visibleText: "Go" }], { url }));
+  assert.deepEqual(bound.pageQuery, pairs.map(([key, value]) => [key, value]));
+});

@@ -142,6 +142,35 @@ test("a new build of the flow forgets what the last one was shown and searched",
   assert.equal(again.resultCode, "web.action.rejected.address_not_shown");
 });
 
+// The guard remembers everything a build was shown (2026-09-30). It kept the
+// newest 512 addresses, 16 typed texts and the first 256 address strings of a
+// read six levels deep, so on a whole page a link the model had been shown
+// could be refused as unshown.
+test("every link of a page with 1,200 of them may be followed, the first as well as the last", async () => {
+  const site = bigbox({ extraLinks: 1_200 });
+  await arrive(site);
+
+  const first = await call(site, "call.first", { node: NAVIGATE, parameters: { url: `${ORIGIN}${itemLink(0)}` } });
+  assert.equal(first.resultCode, "web.action.succeeded");
+  const last = await call(site, "call.last", { node: NAVIGATE, parameters: { url: `${ORIGIN}${itemLink(1_199)}` } });
+  assert.equal(last.resultCode, "web.action.succeeded");
+});
+
+test("every address a read returned may be followed, however many and however deep", async () => {
+  const deep = (index: number): JsonObject => {
+    let row: JsonObject = { url: `/scenarios/bigbox-retail/ip/read-${index}/${700_000 + index}` };
+    for (let level = 0; level < 10; level += 1) row = { nested: row };
+    return row;
+  };
+  const site = bigbox({ readRows: Array.from({ length: 400 }, (_unused, index) => deep(index)) });
+  await arrive(site);
+  const read = await call(site, "call.read", { node: "web.output.dom-wait_for_text", parameters: { text: "Napkins" } });
+  assert.equal(read.resultCode, "web.inspect.succeeded");
+
+  const went = await call(site, "call.read-last", { node: NAVIGATE, parameters: { url: `${ORIGIN}/scenarios/bigbox-retail/ip/read-399/700399` } });
+  assert.equal(went.resultCode, "web.action.succeeded");
+});
+
 /** The build's opening look, then the move to the start location. */
 async function arrive(site: ReturnType<typeof bigbox>): Promise<void> {
   const opening = await call(site, "initial.core.run_node", { node: SNAPSHOT, parameters: {} });
@@ -165,7 +194,7 @@ function handleOf(looked: { evidence: unknown }, name: string): string {
  * product, a search box whose button goes to a results address carrying the
  * typed words and the chosen store, and whatever a read is told to return.
  */
-function bigbox(options: { readRows?: JsonObject[] } = {}) {
+function bigbox(options: { readRows?: JsonObject[]; extraLinks?: number } = {}) {
   let location: string | undefined;
   let typed = "";
   const navigated: string[] = [];
@@ -180,7 +209,7 @@ function bigbox(options: { readRows?: JsonObject[] } = {}) {
       if (command.actionType === "web.dom.capture_snapshot") {
         return location === undefined
           ? { status: "failed", error: "Browser and extension pages cannot be automated." }
-          : { status: "succeeded", payload: { snapshot: page(location) } };
+          : { status: "succeeded", payload: { snapshot: page(location, options.extraLinks ?? 0) } };
       }
       if (command.actionType === "web.dom.type") {
         typed = String(command.parameters.text);
@@ -201,12 +230,18 @@ function bigbox(options: { readRows?: JsonObject[] } = {}) {
   };
 }
 
-function page(url: string): JsonObject {
+/** A link to one more product, as a whole page of results shows it. */
+function itemLink(index: number): string {
+  return `/scenarios/bigbox-retail/ip/item-${index}/${500_000 + index}`;
+}
+
+function page(url: string, extraLinks = 0): JsonObject {
   return {
     url,
     title: "Bigbox",
     viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 },
     interactiveElements: [
+      ...Array.from({ length: extraLinks }, (_unused, index) => ({ tagName: "a", selector: `#item-${index}`, accessibleName: `Item ${index}`, href: itemLink(index), bounds: { x: 1, y: 60 + index, width: 10, height: 1 } })),
       { tagName: "a", selector: "#napkins", accessibleName: "Kitchen napkins", href: "/scenarios/bigbox-retail/ip/kitchen-napkins/418831402?variant=1", bounds: { x: 1, y: 1, width: 10, height: 10 } },
       { tagName: "input", selector: "#q", inputType: "search", accessibleName: "Search", bounds: { x: 1, y: 20, width: 10, height: 10 } },
       { tagName: "button", selector: "#go", visibleText: "Go", attributes: { type: "button" }, bounds: { x: 1, y: 40, width: 10, height: 10 } }

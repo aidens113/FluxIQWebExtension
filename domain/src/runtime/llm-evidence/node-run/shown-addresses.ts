@@ -48,13 +48,13 @@ import { WEB_NAVIGATION_ACTION } from "./start-location";
 
 /** How many builds are remembered at once, as arrival remembers them. */
 const REMEMBERED_BUILDS = 16;
-/** How many distinct addresses one build remembers; the oldest goes first. */
-const REMEMBERED_ADDRESSES = 512;
-/** How many texts one build remembers typing. */
-const REMEMBERED_TYPED = 16;
-/** How deep, and how many strings of, one read are looked through for addresses. */
-const MAX_READ_DEPTH = 6;
-const MAX_READ_STRINGS = 256;
+// A build remembers every address it was shown, every text it typed and every
+// address a read returned, for as long as the build lasts (a new build of the
+// flow forgets them, `opening`). Until 2026-09-30 it kept the newest 512
+// addresses, 16 typed texts and the first 256 address strings of a read six
+// levels deep. Now that a packet carries the whole page, a page with more links
+// than that pushed earlier ones out, and a navigation to a link the model had
+// been shown was refused as unshown.
 const TYPE_ACTION = "web.dom.type";
 
 /**
@@ -114,7 +114,7 @@ export function createWebNodeShownAddresses(): WebNodeShownAddresses {
       const held = memory(build);
       const text = step.actionType === TYPE_ACTION ? step.parameters.text : undefined;
       if (typeof text === "string" && normalised(text) !== "") {
-        held.typed = [normalised(text), ...held.typed.filter((typed) => typed !== normalised(text))].slice(0, REMEMBERED_TYPED);
+        held.typed = [normalised(text), ...held.typed.filter((typed) => typed !== normalised(text))];
       }
       if (step.read === undefined) return;
       for (const written of addressStrings(step.read)) {
@@ -141,17 +141,11 @@ export function webUnshownAddressRefusal(startLocation: string | undefined): Web
   return rejectionDetail({ reason: "address_not_shown", instead: INSTEAD, startLocation });
 }
 
-/** Keep an address, as the newest, letting the oldest go past the bound. */
+/** Keep an address for the rest of the build. */
 function remember(held: BuildMemory, url: URL | undefined, query: Query): void {
   if (url === undefined) return;
   const address: Address = { path: pathKey(url), query: [...query] };
-  const slot = `${address.path}?${JSON.stringify(address.query)}`;
-  held.addresses.delete(slot);
-  held.addresses.set(slot, address);
-  for (const oldest of held.addresses.keys()) {
-    if (held.addresses.size <= REMEMBERED_ADDRESSES) break;
-    held.addresses.delete(oldest);
-  }
+  held.addresses.set(`${address.path}?${JSON.stringify(address.query)}`, address);
 }
 
 /**
@@ -209,18 +203,22 @@ function normalised(text: string): string {
   return text.replace(/\s+/gu, " ").trim().toLowerCase();
 }
 
-/** The strings of a read that could be addresses, bounded in depth and count. */
+/**
+ * Every string of a read that could be an address, at any depth. Walked with a
+ * stack rather than by recursion, so a deeply nested read cannot overflow it.
+ */
 function addressStrings(value: JsonValue): string[] {
   const found: string[] = [];
-  const walk = (entry: JsonValue, depth: number): void => {
-    if (depth > MAX_READ_DEPTH || found.length >= MAX_READ_STRINGS || entry === null) return;
+  const pending: JsonValue[] = [value];
+  while (pending.length > 0) {
+    const entry = pending.pop()!;
+    if (entry === null) continue;
     if (typeof entry === "string") {
       if (entry.startsWith("/") || /^https?:\/\//iu.test(entry)) found.push(entry);
-      return;
+      continue;
     }
-    if (typeof entry !== "object") return;
-    for (const child of Array.isArray(entry) ? entry : Object.values(entry)) walk(child as JsonValue, depth + 1);
-  };
-  walk(value, 0);
+    if (typeof entry !== "object") continue;
+    for (const child of Array.isArray(entry) ? entry : Object.values(entry)) pending.push(child as JsonValue);
+  }
   return found;
 }

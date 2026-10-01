@@ -71,13 +71,12 @@ export type ExtractionCheckpoint = {
    */
   conditions?: ExtractionCheckpointConditions | undefined;
   /**
-   * Up to three rows each condition rejected so far, one list per condition, for
-   * a read the exploring model's node run asked to keep them
+   * Every row each condition rejected so far, one list per condition, for a
+   * read the exploring model's node run asked to keep them
    * (`content/extraction/rejected-samples.ts`). They travel for the reason the
    * counts do: a multi-page read would otherwise show only its last document's
-   * samples, and a condition that rejected true answers on page one would look
-   * as if it had rejected nothing. The page holds them to their bounds, carried
-   * or not, so the samples are bounded by the conditions rather than the pages.
+   * rows, and a condition that rejected true answers on page one would look as
+   * if it had rejected nothing. Nothing caps them.
    *
    * Absent for a read that was not asked for samples.
    */

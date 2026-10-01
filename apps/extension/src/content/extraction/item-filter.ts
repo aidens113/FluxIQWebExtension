@@ -49,9 +49,9 @@
 // `attribute aria-label is present` is all the judge of `run-munw7ffn-fe1cecd2`
 // was told of the store's Brightaisle Plus badge, and it advised adding a Plus
 // condition the Flow already had. So the filter writes, into the caller's `seen`,
-// the first value each such condition read on an item it held of, cut to 60
-// characters (`domain/src/actions/extraction/seen-values.ts`, which cuts to
-// the same bound at the wire). A condition over a column leaves `null`: its
+// the first value each such condition read on an item it held of, whole
+// (`domain/src/actions/extraction/seen-values.ts` copies it at the wire,
+// uncut). A condition over a column leaves `null`: its
 // values are the records.
 
 import { webAutomationExtractConditionHolds } from "@fluxiq-web-extension/domain/client";
@@ -97,9 +97,6 @@ export type ExtractItemFilter = ((item: Element, record: ReadRecord, seen?: (str
 /** No condition rejected the item, shared because it is the answer for every row a read keeps. */
 const KEPT: ExtractItemRejections = [];
 
-/** Characters kept of a value a condition read; the domain's reader cuts to the same bound. */
-const SEEN_CHARS = 60;
-
 /**
  * The filter the request's `where` describes, or `undefined` for a request
  * that names none -- an absent `where`, and an empty one, which says the same
@@ -116,7 +113,7 @@ export function itemFilterFor(request: WebAutomationExtractListRequest): Extract
     for (const [index, entry] of conditions.entries()) {
       const value = valueOf(entry, item, record);
       if (webAutomationExtractConditionHolds(entry.says, value)) {
-        if (seen?.[index] === null && entry.value.kind === "read" && value) seen[index] = value.slice(0, SEEN_CHARS);
+        if (seen?.[index] === null && entry.value.kind === "read" && value) seen[index] = value;
         continue;
       }
       rejectedBy ??= [];

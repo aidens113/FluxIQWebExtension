@@ -8,7 +8,7 @@
 // well-formed field key, a word outside its set, or a missing field that is not
 // one of the read's own fields, drops the whole summary rather than letting
 // page text ride on a field nothing redacts. Two exceptions carry page text,
-// each bounded: `rejectedSamples`, only when an exploring model's node run asks
+// uncut, and are screened where they become evidence: `rejectedSamples`, only when an exploring model's node run asks
 // (`./rejected-samples.ts`), and `conditions.seen` (`./seen-values.ts`).
 
 import { webAutomationExtractionConditionSeenValue, type WebAutomationExtractionConditionSeen } from "./seen-values";
@@ -69,7 +69,7 @@ export type WebAutomationExtractionSummary = {
   listWait?: WebAutomationExtractionListWait | undefined;
   /** What `where` did, or absent for a read whose request named no conditions. */
   conditions?: WebAutomationExtractionConditionReport | undefined;
-  /** A few rows each condition rejected, one list per condition; only when asked for (`./rejected-samples.ts`). */
+  /** Every row each condition rejected, one list per condition; only when asked for (`./rejected-samples.ts`). */
   rejectedSamples?: WebAutomationExtractionRejectedRow[][] | undefined;
   /** Why a read that pages stopped paging, in one closed word, or absent for a read that did not page. */
   paginationStop?: WebAutomationExtractionPaginationStop | undefined;

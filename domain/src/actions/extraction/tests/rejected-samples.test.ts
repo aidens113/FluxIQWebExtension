@@ -1,11 +1,10 @@
 // The summary's one page-valued member: rows each condition rejected, carried
-// only beside the counts, only of declared fields, and cut to their bounds at
+// only beside the counts, only of declared fields, and every one whole at
 // the wire whatever the page sent (`../rejected-samples.ts`).
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { webAutomationExtractionSummaryValue } from "../summary";
-import { WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_CHARS, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS } from "../rejected-samples";
 
 const SUMMARY = {
   recordCount: 8,
@@ -23,12 +22,12 @@ test("samples beside the counts they illustrate arrive, one list per condition",
   assert.equal("rejectedSamples" in (webAutomationExtractionSummaryValue(SUMMARY) ?? {}), false);
 });
 
-test("samples are cut to three rows per condition and eighty characters per value", () => {
-  const long = "x".repeat(500);
-  const flooded = [Array.from({ length: 9 }, () => ({ name: long })), []];
+test("every sampled row arrives, every value whole: no row count and no character cut", () => {
+  const long = "x".repeat(5_000);
+  const flooded = [Array.from({ length: 200 }, (_unused, index) => ({ name: `${index} ${long}` })), []];
   const copied = webAutomationExtractionSummaryValue({ ...SUMMARY, rejectedSamples: flooded })?.rejectedSamples;
-  assert.equal(copied?.[0]?.length, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS);
-  assert.equal(copied?.[0]?.[0]?.name?.length, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_CHARS);
+  assert.equal(copied?.[0]?.length, 200);
+  assert.deepEqual(copied?.[0], flooded[0]);
   assert.deepEqual(copied?.[1], []);
 });
 

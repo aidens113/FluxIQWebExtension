@@ -21,6 +21,7 @@ import {
 import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webNodeReadWithRejectedRows } from "../rejected-rows";
+import { WEB_LLM_WITHHELD_TEXT } from "../../withheld";
 
 const CATALOG_CAPTURE = CAPTURED_DETECTIONS["product-catalog-largest"];
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -134,12 +135,27 @@ test("the samples and the kept rows come back whole, with no byte budget, and th
   // Every kept row and every sampled row: nothing is dropped to fit (t200).
   assert.equal(whole.extracted.length, 40);
   assert.deepEqual(whole.rejectedRows.map((entry) => entry.rows.length), [3, 3, 3, 3]);
-  // The page's sampling contract still bounds what a page may send: a page that
-  // sent more than three, or a value past 80 characters, is read to that bound
-  // by the summary (`actions/extraction/rejected-samples.ts`).
+  // Nothing bounds what a page sends either (user, 2026-09-30): every rejected
+  // row the page sent reaches the model, every value whole
+  // (`actions/extraction/rejected-samples.ts`).
   const flooded = structuredClone(payload) as { extraction: { rejectedSamples: unknown[][] } };
-  flooded.extraction.rejectedSamples[0] = Array.from({ length: 9 }, () => ({ name: "y".repeat(500) }));
-  const cut = webNodeReadWithRejectedRows(flooded as unknown as JsonObject).read as { rejectedRows: Array<{ rows: Array<{ name: string }> }> };
-  assert.equal(cut.rejectedRows[0]?.rows.length, 3);
-  assert.equal(cut.rejectedRows[0]?.rows[0]?.name.length, 80);
+  flooded.extraction.rejectedSamples[0] = Array.from({ length: 300 }, (_unused, index) => ({ name: `${index} ${"y".repeat(5_000)}` }));
+  const all = webNodeReadWithRejectedRows(flooded as unknown as JsonObject).read as { rejectedRows: Array<{ rows: Array<{ name: string }> }> };
+  assert.equal(all.rejectedRows[0]?.rows.length, 300);
+  assert.equal(all.rejectedRows[0]?.rows[299]?.name, `299 ${"y".repeat(5_000)}`);
+});
+
+test("with every cap gone the screen still holds: a card number in a rejected row is withheld, and the rest of the row is whole", () => {
+  const long = `Gift card ${"with a long description ".repeat(200)}`.trim();
+  const payload: JsonObject = {
+    extracted: [{ name: "Basic Earbuds", price: "$19" }],
+    extraction: {
+      recordCount: 1, pagesRead: 1, truncated: false, missingFields: [], fieldNames: ["name", "price"],
+      conditions: { applied: 2, kept: 1, rejected: [1], unfiltered: false },
+      rejectedSamples: [[{ name: long, price: "4111 1111 1111 1111" }]]
+    }
+  };
+  const read = webNodeReadWithRejectedRows(payload).read as { rejectedRows: Array<{ rows: Array<{ name: string; price: string }> }> };
+  assert.equal(read.rejectedRows[0]?.rows[0]?.price, WEB_LLM_WITHHELD_TEXT);
+  assert.equal(read.rejectedRows[0]?.rows[0]?.name, long);
 });

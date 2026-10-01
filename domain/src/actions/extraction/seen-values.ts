@@ -10,27 +10,24 @@
 // already had. One value the read produced says what the condition is about.
 //
 // **The first value the condition's read produced on an item that condition
-// held of**, cut to `WEB_AUTOMATION_EXTRACT_CONDITION_SEEN_CHARS` characters,
-// and `null` when it has none: a condition that names a column of the read
-// (whose values are the records themselves), one that held of no item, or one
-// that held only where its value was absent. One value per condition and
+// held of**, whole (no character cut, user 2026-09-30), and `null` when it
+// has none: a condition that names a column of the read (whose values are the
+// records themselves), one that held of no item, or one that held only where
+// its value was absent. One value per condition and
 // collected on every read, unlike the rejected samples (`./rejected-samples.ts`),
-// because it is one short string rather than rows. It is page text, so Core
+// because it is one string rather than rows. It is page text, so Core
 // screens it before anything says it (`result-verification/read-account`).
-
-/** Characters kept of the value: an accessible name or a badge's label, not a description. */
-export const WEB_AUTOMATION_EXTRACT_CONDITION_SEEN_CHARS = 60;
 
 /** One value per condition, positionally, beside `conditions.rejected`; `null` where the condition's read produced none on an item it held of. */
 export type WebAutomationExtractionConditionSeen = (string | null)[];
 
 /**
- * The values copied and cut to their bound, or `undefined` when they are not
+ * The values copied whole, or `undefined` when they are not
  * well formed: not one entry per condition, or an entry that is neither a
  * string nor `null`.
  */
 export function webAutomationExtractionConditionSeenValue(value: unknown, conditions: number): WebAutomationExtractionConditionSeen | undefined {
   if (!Array.isArray(value) || value.length !== conditions) return undefined;
   if (!value.every((entry) => entry === null || typeof entry === "string")) return undefined;
-  return (value as (string | null)[]).map((entry) => (entry !== null && entry.length > WEB_AUTOMATION_EXTRACT_CONDITION_SEEN_CHARS ? entry.slice(0, WEB_AUTOMATION_EXTRACT_CONDITION_SEEN_CHARS) : entry));
+  return [...(value as (string | null)[])];
 }

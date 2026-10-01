@@ -1,4 +1,4 @@
-// A few of the rows each `where` condition turned down, for the model that is
+// The rows each `where` condition turned down, for the model that is
 // still writing the conditions -- and for nobody else.
 //
 // Counts cannot tell a condition that removed advertisements from one that
@@ -18,10 +18,11 @@
 //   parameters the Flow keeps (`runtime/llm-evidence/node-run/rejected-rows.ts`).
 //   A Flow played back asks for none, so no stored result, dataset, bundle or
 //   run artifact of a playback can carry one.
-// - **Bounded.** At most `WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS` rows per
-//   condition, each value at most `WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_CHARS`
-//   characters. The reader below cuts to those bounds whatever the producer
-//   sent, so the bound holds at the wire rather than by agreement.
+// - **Every row, whole.** No row count and no character cut (user, 2026-09-30:
+//   "Remove ANY AND ALL LIMITS ON THE NUMBER OF ELEMENTS PASSED TO MODEL. DO NOT
+//   HIDE INFORMATION"). What keeps a secret out is the screen the node run puts
+//   every row through, the kept rows' own (`runtime/llm-evidence/node-run/
+//   rejected-rows.ts`), not a bound.
 // - **Declared fields only.** A row carries keys of the read's own
 //   `fieldNames` and nothing else, exactly as a kept row does; an excluded
 //   column is never read (D12), and a sensitive one refuses the whole read (D2)
@@ -35,17 +36,11 @@ import type { WebAutomationExtractionSummary } from "./summary";
 /** The parameter, and the summary member, that ask for and carry the samples: one name, so the two cannot drift. */
 export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY = "rejectedSamples" satisfies keyof WebAutomationExtractionSummary;
 
-/** Rows kept per condition. Three is enough to see a pattern and too few to be a second answer. */
-export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS = 3;
-
-/** Characters kept per value: a product name, not a description. */
-export const WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_CHARS = 80;
-
 /** One rejected row: a declared field's value, or `null` where an optional field was unreadable. */
 export type WebAutomationExtractionRejectedRow = Record<string, string | null>;
 
 /**
- * The samples copied and cut to their bounds, or `undefined` when they are not
+ * The rows copied whole, or `undefined` when they are not
  * well formed: not one list per condition, a row that is not a record of
  * strings or `null`, or a key the read does not declare.
  */
@@ -62,7 +57,7 @@ export function webAutomationExtractionRejectedSamplesValue(
     for (const row of rows) {
       const copied = rowValue(row, fieldNames);
       if (copied === undefined) return undefined;
-      if (kept.length < WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS) kept.push(copied);
+      kept.push(copied);
     }
     out.push(kept);
   }
@@ -75,7 +70,7 @@ function rowValue(value: unknown, fieldNames: readonly string[]): WebAutomationE
   for (const [key, cell] of Object.entries(value)) {
     if (!fieldNames.includes(key)) return undefined;
     if (cell === null) row[key] = null;
-    else if (typeof cell === "string") row[key] = cell.length > WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_CHARS ? cell.slice(0, WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_CHARS) : cell;
+    else if (typeof cell === "string") row[key] = cell;
     else return undefined;
   }
   return row;
