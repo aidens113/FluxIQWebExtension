@@ -30,6 +30,14 @@ afternoon's resume, where t193's `loop2.sh` was found still running and killed (
 running script does not stop it).
 
 **Binding rules (user, all in force).**
+- **The page view is compact, and the rest is searchable (user, 2026-09-30 night; revises the whole-page rule below).** The
+  user rejected t200's form of the page: every rendered element as JSON with all its attributes, a pixel box and context
+  fields, about 500 KB a page. Quotes: "ITS NOT SUPPOSED TO FEED IN THE ENTIRE PAGE JUST RAW", "theres literally no
+  fucking reason it should be 500kb", and "only giving model elements that have visible text/buttons/etc with the least
+  possible data in terms of format. Then allow the model to search the page for certain things by visible or any other text
+  (id, class, name, etc)". The model's default view is every visible element that carries text or is interactive, in
+  document order, in the fewest bytes that identify it. A page-search tool reaches everything else by text or by any
+  attribute. There are still no caps or ranking among qualifying elements. Owned by t223. Live runs are held until it lands.
 - **The model sees the whole page (user, 2026-09-30, after watching a run spend 53 s trying steps and fail with no repair):**
   "Remove ANY AND ALL LIMITS ON THE NUMBER OF ELEMENTS PASSED TO MODEL. DO NOT HIDE INFORMATION OR USE ANY RANKING
   ALGORITHM." No element caps, top-N, ranking, byte budgets that drop elements, or withheld summaries anywhere from the DOM
@@ -746,6 +754,20 @@ debug and partitioned so neither touches the other's files:
 - Outcome: pushed as below. Open defect: the naive-paths idle hang. Not done: workers committing to their own task
   branch — the brain's `worker-git-guard` change was refused by the permission classifier as self-modification; left for
   the user. Pass streak 0.
+
+### 2026-09-30 night — Every Lab stopped: the page view is 500 KB of raw JSON; t223 owns the compact view
+- Agent: supervisor, on the user's orders. The four live leads (t174, t193, t194, t195) were dispatched on slots 1-4 at
+  ~22:00, then held. Lane B's run `run-mup2i28c-6c7fc209` (bigbox cart redesigned) failed, exit 1, after 4.5 min.
+- Changed: the user rejected the page evidence (every rendered element as JSON with every attribute, a pixel box and
+  context fields, about 500 KB a page), gave the compact-view-plus-search design (Binding rules, first bullet), and ordered:
+  "make sure you fix that context issue BEFORE running any labs", "stop every single lab till you figure that out NOW". The
+  supervisor killed the two runs in flight (lane A crossborder, lane D social-feed), told every lead to run no Lab of any
+  kind, and started a watchdog that kills any `run-lab.mjs` process until the stop is lifted. t223 (`fxwork/t223`, Core-
+  paired, `lead-xhigh`) owns the compact page view, the page search and the before/after page sizes.
+- Validation: not validated; no code changed. Observed: no `chrome.exe` and no `run-lab.mjs` process after the kill; the
+  watchdog log reads "watchdog start 22:22:13". Headless is off: the Lab launches `headless: false`, and
+  `FLUXIQ_DEMO_HEADLESS` is unset in every lane's `.env.local` and the environment.
+- Outcome: Labs stopped until t223 is merged and its measured page size is sane. Pass streak 0.
 
 ## Open Questions
 
