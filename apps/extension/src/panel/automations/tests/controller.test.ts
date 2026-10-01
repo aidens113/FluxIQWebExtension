@@ -16,6 +16,27 @@ const oldRun = { runId: "r0", flowId: "f1", status: "succeeded", startedAt: 0, f
 const newRun = { runId: "r1", flowId: "f1", status: "succeeded", startedAt: 10_000, finishedAt: 24_200, updatedAt: 24_200, interventionCount: 1, adaptationCount: 1 };
 const list = (runs: unknown[]) => ok({ flows: [{ flowId: "f1", name: "Weekly orders", updatedAt: 1, nodeCount: 4 }], runs });
 
+test("failed browser export delivery gives local recovery and releases the lock", async () => {
+  let fail = true, deliveries = 0, changes = 0;
+  const request = (async (message: PanelMessage) => message.type === M.exportDataset
+    ? ok({ export: { tooLarge: false, fileName: "synthetic.csv", contentType: "text/csv", body: "synthetic" } }) : list([oldRun])) as import("../../state").PanelStore["request"];
+  const controller = createAutomationsController(request, { onChange: () => changes++, download: () => { deliveries++; if (fail) throw new Error("synthetic-private-error"); } });
+  controller.observe(connected); await controller.refresh(); const before = changes;
+  await controller.exportDataset("f1", "r0", "d1", "csv");
+  assert.equal(controller.state().rows[0]?.exporting, false); assert.equal(controller.state().rows[0]?.notice?.openFluxIQ, true);
+  assert.match(controller.state().rows[0]?.notice?.sentence ?? "", /couldn't save/i); assert.equal(JSON.stringify(controller.state()).includes("synthetic-private-error"), false);
+  assert.ok(changes > before); fail = false; await controller.exportDataset("f1", "r0", "d1", "csv"); assert.equal(deliveries, 2); assert.equal(controller.state().rows[0]?.notice, undefined);
+});
+
+test("export lock remains held during reentrant synchronous delivery", async () => {
+  let exports = 0, reentered = false; const request = (async (message: PanelMessage) => {
+    if (message.type === M.exportDataset) { exports++; return ok({ export: { tooLarge: false, fileName: "synthetic.csv", contentType: "text/csv", body: "synthetic" } }); }
+    return list([oldRun]);
+  }) as import("../../state").PanelStore["request"];
+  const controller = createAutomationsController(request, { onChange() {}, download() { if (!reentered) { reentered = true; void controller.exportDataset("f1", "r0", "d1", "csv"); } } });
+  controller.observe(connected); await controller.refresh(); await controller.exportDataset("f1", "r0", "d1", "csv"); assert.equal(exports, 1);
+});
+
 function setup(answer: (message: PanelMessage) => PanelResult<unknown>) {
   const sent: PanelMessage[] = [];
   const saved: Parameters<SaveFile>[] = [];

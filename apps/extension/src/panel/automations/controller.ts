@@ -252,21 +252,26 @@ export function createAutomationsController(
       exporting.add(flowId);
       notices.delete(flowId);
       hooks.onChange();
-      const result = await request<unknown>({ type: MESSAGES.exportDataset, runId, datasetId, format });
-      exporting.delete(flowId);
-      const exported = result.ok ? readRunReplies.export(result.value) : undefined;
-      if (!result.ok) {
-        notices.set(flowId, result.unsupported
-          ? { sentence: "Export it in FluxIQ.", openFluxIQ: true }
-          : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
-      } else if (exported === undefined) {
-        notices.set(flowId, { sentence: "Couldn't read the export from FluxIQ.", openFluxIQ: true });
-      } else if (exported.tooLarge) {
-        notices.set(flowId, { sentence: TOO_LARGE, openFluxIQ: true });
-      } else {
-        hooks.download(exported.fileName, exported.contentType, exported.body);
+      try {
+        const result = await request<unknown>({ type: MESSAGES.exportDataset, runId, datasetId, format });
+        const exported = result.ok ? readRunReplies.export(result.value) : undefined;
+        if (!result.ok) {
+          notices.set(flowId, result.unsupported
+            ? { sentence: "Export it in FluxIQ.", openFluxIQ: true }
+            : { sentence: result.sentence, detail: result.detail, openFluxIQ: false });
+        } else if (exported === undefined) {
+          notices.set(flowId, { sentence: "Couldn't read the export from FluxIQ.", openFluxIQ: true });
+        } else if (exported.tooLarge) {
+          notices.set(flowId, { sentence: TOO_LARGE, openFluxIQ: true });
+        } else {
+          hooks.download(exported.fileName, exported.contentType, exported.body);
+        }
+      } catch {
+        notices.set(flowId, { sentence: "Couldn't save the export here. Try again or open it in FluxIQ.", openFluxIQ: true });
+      } finally {
+        exporting.delete(flowId);
+        hooks.onChange();
       }
-      hooks.onChange();
     }
   };
 }

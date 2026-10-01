@@ -1669,6 +1669,17 @@ feed invalidates old listeners and local completions; a later direct read remain
 legal without starting a subscription. This fences presentation without claiming
 to cancel an already issued background mutation.
 
+Panel status reads publish only while they remain the latest requested read and
+no newer push or command acknowledgement has been observed. This prevents slow
+startup reads from rolling the displayed connection/recording state backwards;
+request results and command acknowledgement publication retain their contracts.
+
+Dataset export retains its operation lock through browser delivery. Preparation
+or click failure shows local Retry/Open FluxIQ feedback and releases the lock.
+Temporary download links and owned URLs are cleaned up on success and failure,
+with delayed URL revocation retained after the click. Issued exports are never
+automatically replayed and a click is not claimed to prove file persistence.
+
 The extraction sheet temporarily mounts at the extension document root while
 open, isolating other extension controls and preserving their prior inert state.
 It restores its current host and a visible extension control on close. Focus

@@ -16,7 +16,8 @@ worker slots are assigned. Claude owns integration: no dev/main merge or push,
 protected runtime/storage/conversation/context-packet edits, panel management,
 Lab/browser/provider operations or actual private data inspection.
 
-Seventh Core Complete: local source checkpoint e75c6fcc. Supervisor focused
+Seventh Core Complete: local source checkpoint e75c6fcc, gates/progress a992f6d8.
+Extension utility and seventh reports checkpoint151fbd2e. Supervisor focused
 12files150tests/native0/9.43s; full68081 native0,325files2199tests/185.26s;
 types72364 native0/92993ms; production76550 native0,17pages/202949ms.
 Structure65986 native1 solely inherited protected service4506/4505. No baseline
@@ -34,7 +35,10 @@ Extension utility Complete: Open/report/Activity four-suite41 pass/native0/
 22files per Chrome/Firefox/e2e target/12269ms. Earlier
 sixth recording/settings/Start/paused fixes pass full1791/types/build/structure.
 Current utility controls preserve protocol/redaction ownership; no browser
-certification is claimed. Next extension unit awaits current gates and audit.
+certification is claimed. Root next export/status six-path unit is frozen:
+export18/status13 and six-root strict1135 pass. Full50040 native0,1833tests/
+114224.7451ms; types90037/build15517/structure66791 all native0. Controller
+Core-address ownership is source-audit backlog and remains outside this unit.
 
 Original Claude workload remains complete: t216/t217/t219/t220/t221 were locally
 verified/checkpointed; t221 handoff de2096b1 records exact commits and validation.
@@ -389,6 +393,29 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 
 ## Work Ledger
 
+### 2026-10-01 - Eighth extension complete and Core review in progress
+
+- Validation: extension full50040 native0,1833tests/114224.7451ms; actual-config typing90037 native0/29248ms; production15517 native0,Chrome/Firefox/e2e22files each/24631ms; full structure66791 native0,136warnings119baseline. Status/export narrow13/18 and strict1135 passed first. Both exact partitions independently inspected and ready for local checkpoint; no browser certification.
+- Validation: supervisor Docs tree96439 observed5files42pass/native0/10.79s with unchanged request/status9, helper4 and1,250-page completeness. Reviewed focused/selected/expansion/window/deferred-focus guards and truthful relocated source assertions. Root removed obsolete user-facing implementation hint; authored architecture updated. Full Core gates wait for Identity/Secret freeze.
+- Identity worker60/scoped claim source-reviewed, subject label correction requested within its exact view/test before root verification; Secret worker74/scoped checks still active with additional boundary coverage. Other slot prepares exact held operational payload recovery design, and Studio navigation audit report preserves ongoing source findings. Current parent/report state persists checks and pending limitations, no Claude interference or integration.
+
+### 2026-10-01 - Panel status read ordering supervisor brief
+
+- Exact root-owned source apps/extension/src/panel/state/store.ts and existing owning tests/store.test.ts; own reports/panel-status-read-ordering.md. No shared helpers/protocol/transport/callers/shell or command publication changes.
+- Source-confirmed initial and explicit getStatus replies publish unconditionally after newer status pushes or command acknowledgements. Two boot reads can also complete out of order. Shell already consumes store.current rather than a successful request payload, so narrow store correction is sufficient.
+- Capture read generation and observation revision before getStatus dispatch; publish a returned status only if this read is latest and no newer status was published. Command replies retain existing acknowledgement semantics; rejected reads/failures never mutate status. Return each PanelResult unchanged, no new request/retry or disposal API.
+- Deferred synthetic Chrome tests first for push-over-read, command-over-read and out-of-order reads, preserving all original store/request tests. Actual-config narrow types/focused tests and combined export/status extension gates follow source freeze. No actual status/private data, browser/provider/panel activity or other source paths.
+- Validation: planning/source inspection only before reproduction. Export recovery18/native0 and four-root scoped typing native0 already pass; seventh1821/type/build/structure checkpoint preserved.
+- Validation: original status owning13tests10pass3fail/native1/156.86ms; narrow two-path read generation/observation fix13/13/native0/157.1158ms. Only getStatus publication fences changed; command acknowledgements, request results, listeners and transport remain unchanged. Export original18tests12pass6fail/native1/168.8642ms corrected18/native0/147.9789ms and strict38479 native0. Combined extension six-source/test paths now frozen for scoped/full gates.
+
+### 2026-10-01 - Extension export delivery recovery supervisor brief
+
+- Exact root-owned source: apps/extension/src/panel/automations/controller.ts and download-file.ts; existing owning tests/controller.test.ts and new tests/download-file.test.ts. Own reports/extension-export-delivery-recovery.md. No concurrent worker owns these files.
+- Source inspection confirms download preparation/click exceptions escape exportDataset with no local failure notice; URL is not reclaimed if link creation/append fails before try. Preserve successful download behavior and delayed URL revocation, wire/export format/too-large handling.
+- Hold export lock through delivery and finally release; browser delivery failure gives fixed retry/Open FluxIQ feedback without exposing body/error content. Preserve existing fulfilled request failures; transport rejection catch is defensive under never-throwing PanelStore. Never auto replay export/mutation.
+- Reproduce through synthetic throwing injected download and owned URL/link fakes, then scoped/focused checks. No actual datasets/browser/provider/panel, protocol/readers/storage/styles/shared helpers or other source changes. Controller Core-address ownership is a separate audit and excluded from this narrow unit.
+- Validation: planning/source inspection only before implementation; seventh full1821/types/build/structure remain passed. Shared working doc indexes regenerate before checks/checkpoint.
+
 ### 2026-10-01 - Seventh Core complete and eighth workers released
 
 - Validation: full68081 native0,325files2199tests/185.26s; actual-config web types72364 native0/92993ms; production76550 native0,17pages/202949ms. Full structure65986 native1 solely inherited protected service4506/4505. Root150 focused passed before full gates; e75c6fcc saved source/architecture/progress locally.
@@ -396,6 +423,7 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Validation: utility root41 pass/native0/604.5906ms; full extension typing5771 native0/51888ms; full structure37957 native0,136warnings119baseline. Full28915/build18201 pending. Core/extension gates do not certify browser behavior.
 - Current State rewritten to current evidence and prior detailed state archived without losing progress. Original Claude workload/handoff and integration boundaries retained. No merge/push, live/provider/panel activity or protected-tree edits.
 - Validation: extension full28915 native0,1821tests/113849.9263ms; production18201 native0,Chrome/Firefox/e2e22files each/12269ms. Types/structure passed above. Utility unit Complete; original Firefox submission-id placeholder warning unchanged. No live browser certification.
+- Checkpoints: Core source e75c6fcc, seventh gates/eighth release a992f6d8; downstream utility/reports151fbd2e. Authored docs and rewritten Current States passed focused docs audits (downstream0warnings2baseline/Core0warnings16baseline). Three eighth Core workers execute own paths; root audits extension export/download next. No push: Claude owns integration.
 
 ### 2026-10-01 - Seventh narrow supervisor verification and next briefs
 

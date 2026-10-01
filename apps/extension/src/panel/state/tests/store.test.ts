@@ -43,6 +43,39 @@ function status(connectionState: ExtensionStatus["connectionState"], extra: Part
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+function deferredChrome(t: TestContext) {
+  const holder = globalThis as { chrome?: unknown }, previous = holder.chrome;
+  t.after(() => { holder.chrome = previous; });
+  const calls: Array<{ type: string; reply(value: unknown): void }> = [], pushes: Array<(message: unknown) => void> = [];
+  holder.chrome = { runtime: { sendMessage(message: { type: string }, reply: (value: unknown) => void) { calls.push({ type: message.type, reply }); }, onMessage: { addListener(listener: (message: unknown) => void) { pushes.push(listener); } } } };
+  return { calls, push(next: ExtensionStatus) { for (const listener of pushes) listener({ type: RUNTIME_MESSAGES.statusChanged, status: next }); } };
+}
+
+test("a delayed initial read cannot roll back a newer pushed status", async (t) => {
+  const stub = deferredChrome(t), store = createPanelStore(); const seen: string[] = []; store.subscribe(next => seen.push(next.connectionState));
+  stub.push(status("connected")); stub.calls[0]!.reply({ ok: true, status: status("disconnected") }); await settle();
+  assert.equal(store.current()?.connectionState, "connected"); assert.deepEqual(seen, ["connected"]);
+});
+
+test("latest requested status read wins when replies complete out of order", async (t) => {
+  const stub = deferredChrome(t), store = createPanelStore(); const reading = store.request({ type: RUNTIME_MESSAGES.getStatus });
+  stub.calls[1]!.reply({ ok: true, status: status("connected") }); await reading;
+  stub.calls[0]!.reply({ ok: true, status: status("disconnected") }); await settle(); assert.equal(store.current()?.connectionState, "connected");
+});
+
+test("acknowledged command status cannot be overwritten by an older status read", async (t) => {
+  const stub = deferredChrome(t), store = createPanelStore(); const command = store.request({ type: RUNTIME_MESSAGES.connect });
+  stub.calls[1]!.reply({ ok: true, status: status("connecting") }); await command;
+  stub.calls[0]!.reply({ ok: true, status: status("disconnected") }); await settle(); assert.equal(store.current()?.connectionState, "connecting");
+});
+
+test("fresh read after a push publishes and returns its original result", async (t) => {
+  const stub = deferredChrome(t), store = createPanelStore(); stub.push(status("connecting"));
+  const reading = store.request<{ status: ExtensionStatus }>({ type: RUNTIME_MESSAGES.getStatus }); const answer = { ok: true, status: status("connected") };
+  stub.calls[1]!.reply(answer); const result = await reading; assert.deepEqual(result, { ok: true, value: answer }); assert.equal(store.current()?.connectionState, "connected");
+  stub.calls[0]!.reply({ ok: false }); await settle(); assert.equal(store.current()?.connectionState, "connected");
+});
+
 test("panelRequest answers ok with the reply as its value", async (t) => {
   stubChrome(t, { ok: true, status: status("connected") });
   const result = await panelRequest<{ status: ExtensionStatus }>({ type: RUNTIME_MESSAGES.getStatus });
