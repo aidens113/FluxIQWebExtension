@@ -81,6 +81,8 @@ export type ChatPanel = {
   focusComposer(): void;
   /** Shows `target`'s thread; what the person sends from then on goes there. */
   open(target: ChatTarget): void;
+  /** Updates only the current automation's name, preserving the reading position. */
+  updateAutomationName(automation: { readonly flowId: string; readonly name: string }): void;
   /** The thread shown now. */
   target(): ChatTarget;
   /** Hears every change of target, including the person's own "Latest chat". Answers an unsubscribe. */
@@ -172,7 +174,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
   let timer: ReturnType<typeof setInterval> | undefined;
   let debounce: ReturnType<typeof setTimeout> | undefined;
 
-  function open(next: ChatTarget): void {
+  function open(next: ChatTarget, follow = true): void {
     if (sameTarget(next, shownTarget)) return;
     const threadChanges = !sameThread(next, shownTarget);
     shownTarget = next;
@@ -185,7 +187,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     context.update(next);
     composer.setPlaceholder(next.kind === "automation" ? `Message FluxIQ about ${next.name.trim() || "this automation"}` : "Message FluxIQ");
     controller.setTarget(next);
-    follower.followNow();
+    if (follow) follower.followNow();
     renderAll();
     for (const listener of [...targetListeners]) listener(next);
   }
@@ -310,6 +312,10 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
       composer.focus();
     },
     open,
+    updateAutomationName(automation) {
+      if (shownTarget.kind !== "automation" || shownTarget.flowId !== automation.flowId) return;
+      open({ kind: "automation", ...automation }, false);
+    },
     target() {
       return shownTarget;
     },

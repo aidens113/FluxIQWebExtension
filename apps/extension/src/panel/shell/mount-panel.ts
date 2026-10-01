@@ -129,12 +129,21 @@ export function mountPanel(root: HTMLElement, surface: PanelSurface): void {
     showTarget(chat.target());
   }
 
-  /** The strip follows the chat's thread, whoever changed it (the chat has its own "Latest chat"). */
+  let passiveName: { readonly flowId: string; readonly name: string } | undefined;
+  /** The strip follows navigation; passive names already came from its own drawn row. */
   function showTarget(target: ChatTarget): void {
+    if (target.kind === "automation" && passiveName && target.flowId === passiveName.flowId && target.name === passiveName.name) return;
     automations.strip.show(target.kind === "automation" ? target : undefined);
     draw();
   }
   chat.onTargetChange(showTarget);
+  automations.strip.onNameChange((automation) => {
+    const target = chat.target();
+    if (target.kind !== "automation" || target.flowId !== automation.flowId) return;
+    const previous = passiveName;
+    passiveName = automation;
+    try { chat.updateAutomationName(automation); } finally { passiveName = previous; }
+  });
 
   function dispatch(event: ShellEvent): void {
     const next = reduceShell(state, event);

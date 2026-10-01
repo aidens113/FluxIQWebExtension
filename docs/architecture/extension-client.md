@@ -1627,6 +1627,13 @@ extension document. Passive status updates, reconnects and late replies do not
 claim focus. Local DOM/event tests cover the ownership rules; live browser and
 assistive-technology behavior remain unverified.
 
+Names from the refreshed automation list synchronize the open same-flow Chat
+context, placeholder and strip labels through a metadata update. This preserves
+conversation generation, history, draft selection and reading position, and does
+not request detail or claim focus. A flow absent from a confirmed current list
+keeps its conversation and remembered name with disabled Run and current-list
+unavailability feedback. Loading, offline and failed reads do not imply deletion.
+
 ### Extraction dialog lifecycle
 
 The extraction sheet temporarily mounts at the extension document root while

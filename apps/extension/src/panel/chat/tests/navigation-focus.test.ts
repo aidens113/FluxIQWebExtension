@@ -89,3 +89,70 @@ test("fallback-hidden composer hands Back to the visible named container", async
   assert.ok(doc.activeElement === root);
   assert.equal(root.getAttribute("aria-label"), "Chat with FluxIQ");
 }));
+
+test("passive name updates empty copy/controller metadata without read/draft/selection/focus/scroll changes", async () => mounted(async ({ chat, root, box, core, doc }) => {
+  const scroller = root.byClass("chat-scroll")[0]!;
+  scroller.scrollHeight = 900; scroller.clientHeight = 200; scroller.scrollTop = 80; scroller.dispatch("scroll");
+  box.value = "Unsent draft"; Object.assign(box, { selectionStart: 2, selectionEnd: 7 }); box.focus();
+  const calls = core.sent.length;
+  const focusCalls = doc.calls.length;
+  chat.updateAutomationName({ flowId: "f", name: "<New orders>" });
+  assert.deepEqual(chat.target(), { kind: "automation", flowId: "f", name: "<New orders>" });
+  assert.equal(root.byClass("chat-context-name")[0]!.textContent, "<New orders>");
+  assert.equal(root.byClass("chat-context-name")[0]!.getAttribute("title"), "<New orders>");
+  assert.equal(root.byClass("chat-empty-title")[0]!.textContent, "Ask about <New orders>");
+  assert.equal(box.value, "Unsent draft");
+  assert.equal((box as unknown as HTMLTextAreaElement).selectionStart, 2);
+  assert.equal((box as unknown as HTMLTextAreaElement).selectionEnd, 7);
+  assert.equal(scroller.scrollTop, 80);
+  assert.equal(core.sent.length, calls);
+  assert.equal(doc.calls.length, focusCalls);
+  assert.ok(doc.activeElement === box);
+  box.dispatch("input"); box.dispatch("keydown", { key: "Enter", shiftKey: false, isComposing: false, keyCode: 13, preventDefault: () => {} }); await settle();
+  const sent = core.sent.find((message) => message.type === M.panelConversationSend)!;
+  assert.equal(sent.title, "<New orders>", "controller's first-send metadata is current");
+  assert.equal(sent.subjectId, "f");
+}));
+
+test("no-op/old-flow names are fenced; explicit open still follows", async () => mounted(({ chat, root, core, doc }) => {
+  let changes = 0; chat.onTargetChange(() => changes++);
+  const scroller = root.byClass("chat-scroll")[0]!;
+  scroller.scrollHeight = 1000; scroller.clientHeight = 200; scroller.scrollTop = 90; scroller.dispatch("scroll");
+  const calls = core.sent.length;
+  const focusCalls = doc.calls.length;
+  chat.updateAutomationName({ flowId: "f", name: "Orders" });
+  chat.updateAutomationName({ flowId: "old", name: "Old" });
+  assert.equal(changes, 0);
+  assert.equal(core.sent.length, calls);
+  assert.equal(scroller.scrollTop, 90);
+  chat.open({ kind: "automation", flowId: "f", name: "Explicit rename" });
+  assert.equal(scroller.scrollTop, 1000);
+  assert.equal(changes, 1);
+  chat.open({ kind: "latest" });
+  chat.updateAutomationName({ flowId: "f", name: "Stale" });
+  assert.deepEqual(chat.target(), { kind: "latest" });
+  chat.open({ kind: "question", subjectKind: "flow", subjectId: "f", activityId: "build:f", title: "Question" });
+  chat.updateAutomationName({ flowId: "f", name: "Stale" });
+  assert.equal(chat.target().kind, "question");
+  assert.equal(doc.calls.length, focusCalls);
+}));
+
+test("passive rename preserves generation so the pending same-flow read still lands", async () => mounted(async ({ chat, root, box, core, doc }) => {
+  core.threads.push({ conversationId: "pending-conv", subjectKind: "flow", subjectId: "pending", revision: 1, touched: 10, turns: [{ turnId: "held", author: "person", text: "Pending history" }] });
+  core.hold = true;
+  chat.open({ kind: "automation", flowId: "pending", name: "Before" });
+  box.value = "Still typing"; box.focus();
+  const scroller = root.byClass("chat-scroll")[0]!;
+  scroller.scrollHeight = 1000; scroller.clientHeight = 200; scroller.scrollTop = 70; scroller.dispatch("scroll");
+  const calls = core.sent.length;
+  const focusCalls = doc.calls.length;
+  chat.updateAutomationName({ flowId: "pending", name: "After" });
+  assert.equal(core.sent.length, calls);
+  core.hold = false; core.release(); await settle();
+  assert.equal(root.byClass("chat-context-name")[0]!.textContent, "After");
+  assert.match(root.byClass("chat-msg")[0]!.textContent, /Pending history/u);
+  assert.equal(box.value, "Still typing");
+  assert.equal(scroller.scrollTop, 70);
+  assert.equal(doc.calls.length, focusCalls);
+  assert.ok(doc.activeElement === box);
+}));

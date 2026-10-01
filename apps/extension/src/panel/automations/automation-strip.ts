@@ -10,11 +10,15 @@ import { createOpenFluxIQButton, type OpenFluxIQButton } from "../open-fluxiq";
 import type { PanelStore } from "../state";
 import type { AutomationRowView, AutomationsController, ExportFormat } from "./controller";
 
+type AutomationName = { readonly flowId: string; readonly name: string };
+
 /** The mounted strip. */
 export type AutomationStrip = {
   readonly element: HTMLElement;
   /** Shows `automation`, or hides the strip for undefined. */
-  show(automation: { readonly flowId: string; readonly name: string } | undefined): void;
+  show(automation: AutomationName | undefined): void;
+  /** Passive metadata for the shown flow; never a navigation request. */
+  onNameChange(listener: (automation: AutomationName) => void): () => void;
   /** Draws again from the controller's state. */
   draw(): void;
   render(status: ExtensionStatus): void;
@@ -34,7 +38,8 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     createElement("div", { className: "strip-links" }, [exports, open.element]),
     notice
   ]);
-  let shown: { readonly flowId: string; readonly name: string } | undefined;
+  let shown: AutomationName | undefined;
+  const nameListeners = new Set<(automation: AutomationName) => void>();
   let lastStatus: ExtensionStatus | undefined;
   const datasets = new Map<string, { element: HTMLElement; label: HTMLElement; buttons: HTMLButtonElement[] }>();
   const noticeText = createElement("span");
@@ -100,8 +105,11 @@ export function createAutomationStrip(request: PanelStore["request"], controller
     element.hidden = false;
     const state = controller.state();
     const row = state.rows.find((candidate) => candidate.flowId === shown?.flowId);
+    const renamed = row && row.name !== shown.name ? { flowId: row.flowId, name: row.name } : undefined;
+    if (renamed) shown = renamed;
+    const unavailable = (state.mode === "list" || state.mode === "empty") && state.readError === undefined;
     lines.textContent = row === undefined
-      ? (state.mode === "offline" ? "Connect to FluxIQ to see its runs." : "")
+      ? (state.mode === "offline" ? "Connect to FluxIQ to see its runs." : unavailable ? "This automation is unavailable in the current list." : "")
       : row.running || row.runId === undefined ? row.lines.join(" · ") : `Last run: ${row.lines.join(" · ")}`;
     const blocked = row?.running ? undefined : state.working || state.runInFlight ? "Wait for FluxIQ to finish." : undefined;
     run.textContent = row?.running ? "Running..." : "Run";
@@ -140,6 +148,7 @@ export function createAutomationStrip(request: PanelStore["request"], controller
           ?? current.find(available) ?? (available(run) ? run : open.element.querySelector<HTMLButtonElement>("button"));
       if (target !== null && target !== undefined && available(target) && element.ownerDocument.activeElement !== target) target.focus({ preventScroll: true });
     }
+    if (renamed) for (const listener of [...nameListeners]) listener(renamed);
   }
 
   return {
@@ -150,6 +159,10 @@ export function createAutomationStrip(request: PanelStore["request"], controller
       draw();
     },
     draw,
+    onNameChange(listener) {
+      nameListeners.add(listener);
+      return () => { nameListeners.delete(listener); };
+    },
     render(status) {
       lastStatus = status;
       open.observe(status);

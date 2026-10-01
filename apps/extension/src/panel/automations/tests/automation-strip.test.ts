@@ -47,7 +47,7 @@ function setup() {
   const root = fake(strip.element);
   const exports = () => root.byClass("strip-exports")[0]!.descendants().filter((el) => el.tagName === "BUTTON");
   const update = (patch: Partial<AutomationsState["rows"][number]>) => { state = { ...state, rows: [{ ...state.rows[0]!, ...patch }] }; strip.draw(); };
-  return { strip, root, exports, calls, update, working: () => { state = { ...state, working: true }; strip.draw(); }, requestCalls: () => requestCalls };
+  return { strip, root, exports, calls, update, setState: (next: AutomationsState) => { state = next; strip.draw(); }, working: () => { state = { ...state, working: true }; strip.draw(); }, requestCalls: () => requestCalls };
 }
 
 test("polls, label changes and export pending preserve controls and current activation", async () => focused((doc) => {
@@ -119,11 +119,11 @@ test("notice opener and failed request survive unchanged strip refresh", async (
   const opener = view.root.byClass("open-fluxiq")[1]!.children[0]!;
   opener.focus();
   opener.dispatch("click");
-  view.strip.draw();
+  view.update({ name: "Pending rename" });
   assert.equal(view.root.byClass("open-fluxiq")[1]!.children[0], opener);
   assert.equal(opener.disabled, true, "pending request remains the same disabled button");
   await Promise.resolve();
-  view.update({ notice: { sentence: "Updated details", detail: "More", openFluxIQ: true } });
+  view.update({ name: "After-error rename", notice: { sentence: "Updated details", detail: "More", openFluxIQ: true } });
   assert.equal(view.root.byClass("open-fluxiq")[1]!.children[0], opener);
   assert.equal(doc.activeElement, opener);
   assert.match(view.root.textContent, /Couldn't open FluxIQ/u);
@@ -166,4 +166,36 @@ test("visible panel with remembered active control never claims browser-page foc
   assert.equal(doc.focusCalls, calls, "reordering cannot reclaim document focus");
   view.update({ datasets: [] });
   assert.equal(doc.focusCalls, calls, "removal cannot reclaim document focus");
+}));
+
+test("only confirmed complete list absence explains unavailable automation", async () => focused(() => {
+  const view = setup();
+  for (const mode of ["list", "empty", "loading", "offline", "fallback"] as const) {
+    view.setState({ mode, rows: [], working: false, runInFlight: false });
+    const text = view.root.byClass("strip-lines")[0]!.textContent;
+    if (mode === "list" || mode === "empty") assert.match(text, /unavailable in the current list/u);
+    else assert.doesNotMatch(text, /unavailable/u);
+    assert.equal(view.root.byClass("strip-run")[0]!.disabled, true);
+  }
+  view.setState({ mode: "list", rows: [], working: false, runInFlight: false, readError: { sentence: "Could not read" } });
+  assert.doesNotMatch(view.root.byClass("strip-lines")[0]!.textContent, /unavailable/u);
+}));
+
+test("passive matching-flow names emit once after draw, keep controls, and unsubscribe", async () => focused((doc) => {
+  const view = setup();
+  const heard: Array<{ flowId: string; name: string }> = [];
+  const buttons = view.exports(); buttons[0]!.focus();
+  const stop = view.strip.onNameChange((automation) => {
+    assert.equal(view.root.byClass("strip-run")[0]!.getAttribute("aria-label"), `Run ${automation.name}`);
+    heard.push(automation);
+    view.strip.show(automation);
+  });
+  view.update({ name: "<New orders>" });
+  view.strip.draw();
+  assert.deepEqual(heard, [{ flowId: "f", name: "<New orders>" }]);
+  assert.deepEqual(view.exports(), buttons);
+  assert.ok(doc.activeElement === buttons[0]);
+  assert.equal(doc.focusCalls, 1);
+  stop(); view.update({ name: "Another" });
+  assert.equal(heard.length, 1);
 }));

@@ -25,12 +25,14 @@ consumer briefs now released in disjoint paths. Extension extraction checkpointc
 full1716/types/build/audit. Strip related21/full1727/types/build/structure pass,
 checkpoint5e162c36. Explicit navigation focus is Complete41f3df0b (full1738/
 types/build and corrected docs pass). Naming consistency worker owns six next
-downstream paths. Core fifth independently combined103/native0; clipboard
-95004f19 and launcher62a8532f saved, adapters frozen. Full77112 running,
-types53622 passed65366ms. Structure79891 reports protected service baseline,
-optional-history catch lacking required policy marker, and stale doc index.
-Index regenerated; documented optional-write marker correction awaits full
-suite completion. No configuration/baseline changes or UI navigation warning.
+downstream paths. Core fifth Complete: combined103/full314files1987tests,
+final types35028 and production69313 passed17pages/131107ms. Clipboard95004f19,
+launcher62a8532f and adapters1cd44425 saved; strict comment/contract correction
+checkpoint follows. Structure has only protected inherited service4506/4505
+after optional-write marker and index fixes; no config/baseline changes.
+Extension naming Complete: related48/full1747/types/build/structure pass.
+Next sixth Core database/runtime-log/logout briefs released in disjoint paths;
+extension settings/recording worker audits read-only.
 Continue working beyond every batch.
 
 The user requested a primary focus on Core framework UI/UX across all web panels
@@ -278,7 +280,7 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Trace snapshot/metadata/list/get-record rejection, malformed pages, stale render/context/query callbacks and retry/loading feedback. Propose cohesive exact source/test ownership; preserve Core durable storage/security ownership.
 - Own reports/database-request-recovery-audit.md only. No backend/storage/auth contracts, source/shared docs/heavy/live/provider/panel/commits during source freeze.
 
-### Runtime log recovery implementation brief (held until fifth Core gates complete)
+### Runtime log recovery implementation brief (released)
 - Worker: trace_endings; paired t224 Core. Read Current State and runtime-log-recovery-audit.md.
 - Own runtime/RunActionLogView.tsx, new runtime/audit-export/{runtimeAuditBlob.ts,index.ts,tests/runtimeAuditBlob.test.ts}, new runtime/tests/runtime-log-recovery.test.tsx only. Preserve compatibility runtimeAuditBlob export from existing view. No existing detail test edits without exact-path release.
 - Owner is project/run/commands identity; mask obsolete state during render and reject old captured select/retry/pager/close/export callbacks before requests, state writes or aborting current work. Abort/fence reads on replacement/unmount; old finally cannot release new busy state.
@@ -289,14 +291,44 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Focused new tests + unchanged detail8/refresh tests, scoped types then freeze. Own reports/runtime-log-recovery-implementation.md; no backend/runtime/service/datasets/storage/conversations/shared docs/broad/live/provider/panel/commits.
 
 
-### Logout acknowledgement supervisor brief (held until fifth Core gates complete)
+### Logout acknowledgement supervisor brief (released)
 - Read-only source review: AuthStatus awaits fetch but navigates home regardless of HTTP refusal; rejected transport has no caught feedback/pending lock. Menu supports disabled options and closes on selection.
 - Exact next Core ownership: app/AuthShell.tsx and new app/tests/AuthStatus.test.tsx only. Preserve login/setup/global topbar contracts; no auth API/backend/session library edits.
 - Add synchronous pending lock, acknowledged success navigation and fixed retryable local failure. Refused/rejected requests retain current workspace; component teardown/owner replacement fences obsolete feedback/navigation. Issued logout is not claimed cancellable.
 - Reproduce native response refusal/rejection, duplicate activation, retry success and unmount/captured callbacks with synthetic response data. Preserve account link and role display; no secret/error payload logging or unnecessary modal.
 - Source held during fifth full/type gates; focused existing AuthShell plus owning new tests, scoped types then coordinated broader verification. Root owns report/documentation/checkpoint.
 
+### Database request recovery implementation brief (released)
+- Worker: lab_bookkeeping; paired t224 Core. Read Current State and database-request-recovery-audit.md.
+- Own live-views/database-manager.tsx, new programs/database-records/{useDatabaseRecords.ts,index.ts,tests/useDatabaseRecords.test.tsx}, new live-views/tests/database-manager-recovery.test.tsx, existing live-views/tests/database-manager.test.ts only for truthful moved-source assertions. Existing authorization14 tests unchanged and required.
+- Focused hook owns metadata/list/detail read lifecycle and response validators; API/store/effective query/grant authority identify owner. No authorization write, password/grant storage, polling loop or backend/framework request replacement inside hook.
+- Mask foreign metadata/page/detail/dialog/credentials during render. Read start/response/finally/captured callbacks require current lifecycle/query/store and actual grant validity at Date.now; grant expiry, lock, API replacement and teardown abort/invalidate reads and clear authorized presentation, including inspector. Closing an old dialog must not dismiss a newer authorization epoch.
+- Catch unexpected rejection and refuse malformed envelopes/records/paging/returned identity; fixed local metadata/list/detail errors with separate usable Retry. Valid empty/missing record differs from unavailable. Preserve successful current context and existing authorizations, store contracts and bounded query parameters.
+- Separate requested query/page from confirmed rows/offset/cursor; pending or failed navigation never labels old rows as a confirmed new page. Retry same requested page; large total shrink clamps once. Debounce/query changes mask old records before effects; removed stores reconcile only from confirmed metadata.
+- First reproduce expiry-late-list/detail, API render masking, old callbacks/dismissal and rejected/malformed read/pager cases. Synthetic data only; no private exception/payload logs, new durable copies or browser calls. Backend remains authoritative; this fixes stale frontend presentation.
+- Focused hook/view + unchanged auth14/pure tests, scoped types then freeze; own reports/database-request-recovery-implementation.md. Ask before extra paths. No shared operational hook/ProgramApi/auth backend/runtime/storage/conversations/styles/shared docs/broad/live/provider/panel/commits.
+
+### Extension connection and recording recovery read-only worker brief
+- Worker: wait_gaps; downstream t224. Read Current State; naming source/report frozen during full/types/build checks.
+- Inspect settings/{settings-view.ts,address-form.ts,forget-confirmation.ts}, getting-started/start-view.ts, recording/{record-control.ts,review/recording-review.ts} and directly owning tests only.
+- Audit user-triggered refusal/rejection/duplicates, busy/retry feedback and selection/draft/focus across async state changes, cancel/forget and popup/side-panel contract parity. Preserve saved-setting draft and extraction fixes.
+- Propose source-confirmed defects and exact independent source/test ownership, not visual redesign. Own reports/extension-connection-recording-recovery-audit.md only; no source/shared docs/heavy/live/provider/panel/commits during freeze.
+
 ## Work Ledger
+
+### 2026-10-01 - Fifth Core and extension naming gates complete; sixth released
+- Agent: supervisor
+- Validation: corrected Core66758 native0,314files/1987tests,155.23s; final types35028 native0,20432ms; production69313 native0,17pages/131107ms. Targeted source/docs rules pass0warnings/47baseline; full structure's sole remaining failure is inherited protected service4506/4505. No limit/config/baseline relaxation.
+- Extension naming66735 native0,1747/1747,116175.3907ms; types27533 native0,37359ms; build22753 native0,75072ms,22files per target; full structure passed136warnings/119baseline. Six-path source review/related48 independently observed native0,526.6323ms.
+- Outcome: Complete fifth Core/naming batches. Local checkpoints follow, with full logs in TEMP and frozen reports/architecture in authored docs. No live browser certification or Claude integration mutations.
+- Follow-up: release exact sixth Core briefs: trace_endings runtime log5paths, lab_bookkeeping Database6paths, root logout2paths; extension worker continues source-only settings/recording audit. No batch stop.
+
+### 2026-10-01 - Fifth corrected contract and naming source verification
+- Agent: supervisor
+- Validation: original fifth full77112 native1,314files/1987tests,1986pass/1copy wording source failure,132.40s. Owning assertion follows shared acknowledged status/manual-failure boundary; unchanged download assertions. Corrected launcher/contracts/consumers7files60tests native0,2.84s. Optional history write uses rule's documented best-effort reason; targeted rules passed0warnings/47baseline after index regeneration. No config/baseline change.
+- Final web types35028 native0,20432ms; corrected full and production69313 active. Extension naming independently reviewed six paths and48/native0,526.6323ms; types27533 native0,37359ms. Full naming and production22753 active; both source trees frozen.
+- Outcome: Partial until final whole gates. Database late authorized-read/expiry has held six-path brief; runtime log/logout held. Extension settings/recording read-only audit follows.
+- Follow-up: finish builds/full runs, checkpoint/docs audits, then release sixth Core work; preserve original Claude workload/integration ownership.
 
 ### 2026-10-01 - Fifth broad strict follow-up
 - Agent: supervisor
