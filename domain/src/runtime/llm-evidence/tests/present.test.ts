@@ -31,7 +31,7 @@ test("an optional field given undefined is absent, not present-and-undefined", (
 test("false, 0 and the empty string are values and survive", () => {
   const element = present<WebLlmEvidenceElement>({
     target: "t1", tag: "input", frameId: 0, role: "", implicitRole: undefined, name: undefined, label: undefined, text: undefined,
-    ownText: undefined, parent: undefined, hidden: undefined,
+    ownText: undefined, readable: undefined, parent: undefined, hidden: undefined,
     attributes: undefined, inputType: undefined, controlType: undefined, hasValue: false, value: undefined, checked: false,
     selectedValue: "", href: undefined, hasClickHandler: undefined, box: undefined, onViewport: false,
     options: undefined, revealKind: undefined, expanded: false, focused: undefined, recent: undefined,
