@@ -126,7 +126,7 @@ test("a node this domain cannot run is refused with the ones it can, and nothing
   assert.equal(evidence.ok, false);
   assert.equal(evidence.detail.reason, "node_not_runnable_here");
   assert.equal(evidence.detail.instead.includes(CLICK), true);
-  assert.equal(refused.diagnostic?.target, "target.1");
+  assert.equal(refused.diagnostic?.target, "t1");
   assert.equal(refused.diagnostic?.pageObserved, false);
   assert.deepEqual(stubbed.commands, []);
 });

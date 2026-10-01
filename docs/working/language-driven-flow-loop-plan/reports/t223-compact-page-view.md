@@ -95,10 +95,33 @@ Reported by workers and **not yet re-run by the lead**:
 3. Then W6 (find and describe) and W7 (registration, descriptions).
 4. Then measure the whole request after: `node <scratch>/t223-request-measure.mjs --publish <adapter>`. Finish with the full validation listed in the brief.
 
+## Phase A: re-validation on the merged base (2026-10-01)
+
+The supervisor committed W1–W4 (downstream `303bb5fd`, Core `776377d0`) and merged dev into both trees: downstream `f1fa3dd1`, Core `3e3df9ee`. Dev carried integration round 4. Phase A re-runs W3's and W4's claims on that base and fixes what the merge broke. Wiring (W5) waits for integration round 5.
+
+**What the merge broke: t220's refusal diagnostic spells handles `target.N`.**
+
+- `refusal-diagnostic/from-page.ts` and `screen.ts` each define a private `/^target\.[1-9][0-9]{0,15}$/u`. The domain now mints `t1`, so the producer drops the target (`diagnostic.target` is `undefined`). That fails `node-run/tests/run.test.ts` "a declared consequence nobody permitted refuses the run", 1 of 1,135 tests.
+- `run.test.ts:124-129` (t220) passes only because of the same pattern: a model-written `target.1` is echoed back as `target.1`, which is a second spelling.
+- Readers:
+  - test-runner's `publishable-step-value.ts` re-screens with the domain's `screenWebBuildRefusalDiagnostic`.
+  - Its fixtures, test-runner's `build-proposal.test.ts` and the Lab's `scripts/lab/live-campaign/row/tests/bundle.test.mjs` all spell `target.1`. The bundle reader itself passes diagnostics through unscreened.
+- **Core is unaffected.** `evidence-diagnostic/diagnostic.ts` accepts any `^[A-Za-z0-9_.:-]{1,128}$` string.
+- **No other `target.N` in the merged base.** Everything else in the domain, the extension, packages, scripts, Core source and both trees' architecture docs is a comment about the legacy spelling. Core's `target.N` test fixtures are generic handle strings, as W3 decided.
+- **Fix (A1, `worker-high`, report `t223-a1-diagnostic-handles.md`; diff reviewed and re-run by the lead).**
+  - `from-page.ts` and `screen.ts` now use `canonicalWebLlmTargetHandle`:
+    - the producer records the requested handle and the covering targets as `tN`;
+    - the screen admits either spelling and returns `tN`.
+  - Tests:
+    - `diagnostic.test.ts` is re-spelled, with three new tests: legacy input becomes `tN`; a legacy record is screened to `tN` and a `tN` record round-trips; `t0`, `t1234567` and `target.0` are rejected.
+    - `run.test.ts:129` now expects `t1` for a model-written `target.1`.
+    - The three downstream fixtures are re-spelled.
+  - **Narrowing.** Handles now allow at most 6 digits; the old regex allowed 16. A stored diagnostic with a longer handle is rejected, but the domain never mints one.
+
 ## Current state
 
-- Stopped by order; see "State at stop" above.
-- W1, W2, W3, W4 and W8 are done. W5, W6 and W7 have not been dispatched.
+- **Phase A is done and checkpointed** for integration round 5. On the merged base, every suite the brief names passes, and so does the root `pnpm check`. W3's and W4's claims are confirmed.
+- W1, W2, W3, W4 and W8 are done. W5, W6 and W7 have not been dispatched. W5 waits for the supervisor to merge round 5 (lane B's W1 removes `read.snapshot` from press outcomes).
 
 ## Baseline (W1, verified by re-running the script)
 
@@ -327,6 +350,7 @@ A line whose element sits under a heading that has no line of its own gets that 
 | W6 | high | new `page-find/` (find, describe), `capture.ts` capture options, capture action schema | not started (stop) |
 | W7 | high | tool registration, recovery options, model-facing descriptions | not started (stop) |
 | W8 | high | whole decide request measured before, with a `--publish` hook for after | Done; not re-run by lead |
+| A1 | high | `refusal-diagnostic/` `from-page.ts`, `screen.ts` and its test; `run.test.ts:129`; three downstream diagnostic fixtures | Done; diff reviewed, suites re-run by lead |
 
 ## Every path an element reaches a model (supervisor's requirement, 2026-10-01)
 
@@ -354,6 +378,24 @@ Core's own recovery context is metadata only: `targetResolutionSection` and `rec
 - W2: re-ran `heavy.sh pnpm --filter @fluxiq-web-extension/extension test` → `# tests 1692 # pass 1692 # fail 0`.
 - W3: changed files reviewed. The canonicaliser `handle-spelling/canonical-target-handle.ts` is used at the input sites in `run.ts`, `execute.ts`, `detect.ts`, `press.ts`, `target-packets.ts`, `resolve-plan-node.ts` and `override.ts`.
 - The Core structure audit fails on `runtime/service.ts` at 4,506 lines against a baseline of 4,505. This predates t223: `git show e5b8f015:.../service.ts | wc -l` → 4506, and t223 does not touch the file.
+- Phase A on the merged base (downstream `f1fa3dd1`, Core `3e3df9ee`), run by the lead through `heavy.sh`:
+  - Core `pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build` → exit 0 (fluxiq rebuilt, 39,958 ms).
+  - `pnpm --filter @fluxiq-web-extension/domain build` → exit 0 (`rewrite-dist-specifiers: 1049 specifier(s) in 318 file(s)`).
+  - `pnpm --filter @fluxiq-web-extension/domain check` → exit 0.
+  - `pnpm --filter @fluxiq-web-extension/extension check` → exit 0.
+  - Core `packages/fluxiq` `npx tsc --noEmit -p .` → exit 0, no output. This confirms W3's claim.
+  - Core `npx vitest run src/programs/automation-studio/runtime/llm src/programs/automation-studio/runtime/flow-bootstrap` → `Test Files 136 passed (136)`, `Tests 1615 passed (1615)`. This confirms W3's claim on the merged base, which has two more files than W3's 134.
+  - `pnpm --filter @fluxiq-web-extension/extension test` → `# tests 1728 # pass 1728 # fail 0`.
+  - `pnpm --filter @fluxiq-web-extension/domain test` (unlabelled) → `# tests 1135 # pass 1134 # fail 1`. The failure is `not ok 599 - a declared consequence nobody permitted refuses the run`, `undefined !== 't1'` at `run.test.mjs:7237`. That is the t220 diagnostic defect above, and A1 fixes it.
+- After A1, re-run by the lead:
+  - `pnpm --filter @fluxiq-web-extension/domain build` → exit 0.
+  - `pnpm --filter @fluxiq-web-extension/domain check` → exit 0.
+  - `pnpm --filter @fluxiq-web-extension/domain test` → `# tests 1138 # pass 1138 # fail 0`. These pass: `ok 598`, `ok 599` ("a declared consequence nobody permitted ...") and `ok 747`–`749`, the new diagnostic tests.
+  - `pnpm --filter @fluxiq-web-extension/test-runner test` → `# tests 1731 # pass 1731 # fail 0`.
+  - `node --test scripts/lab/live-campaign/row/tests/bundle.test.mjs` → `# tests 1 # pass 1 # fail 0`. This is a unit test, not a Lab run.
+  - `node scripts/structure-audit.mjs` → `structure-audit: passed (137 warning(s), 118 baselined).`
+  - Root `pnpm check` → exit 0. Its scripts tests gave `# tests 549 # pass 548 # fail 0 # skipped 1`. The skip is the environmental Core-probe test (`no FluxIQ Core build output under ...\t223\!FluxIQWebExtension\scripts\!FluxIQ`). Every package check printed `Done`, the domain, extension and test-runner included.
+  - The extension and Core suites above were not re-run after A1, which touched neither.
 
 ## Not verified
 
