@@ -77,18 +77,26 @@ Chat33/native0/169.5105ms passed after reconciliation. Strict four-root types0 a
 actual scoped imports/swallowed-failure rules0; next full structure follows backend freeze.
 No baseline or compiler relaxation.
 
-Maximum slots assigned: runtime_contracts owns Core floating entry-focus two-file
-unit after Combobox freeze; deployment_docs_audit owns Core lazy database JSON
-two-file unit after Field freeze; recording_controls owns downstream backend preview
-three-file implementation. Exact written briefs are their reports. Session-ID
-adoption plan is Complete but held for serial implementation after backend
-preview. Root owns integration, verification and durable paired documents. Backend preview
-independent52/native0/856.2527ms; current downstream product/tests frozen for
-eleventh full gates. Combobox/Field independent54/strict4roots0 checkpoint10ce95a7.
+Eleventh Complete: Core10ce95a7/0e868679 independently reviewed54/51/101;
+full80759 native0,344files2706tests/207.22s; types14622 native0/48883ms;
+build69790 native0/199764ms. Structure37927 only inherited protected4506/4505.
+Downstream integration92decca0/backend86913bca; root52 plus shell60/Chat33/
+strict4roots0. Full65344 native0,2028tests/140843.4272ms; types7103 native0/
+31290ms; build45496 native0/172562ms/22files each; structure94504 native0/
+137warnings119baseline. Every session closed before next source release.
+
+Maximum three implementation slots released: recording_controls owns seven
+session-binding sources, four NEW tests and five fixture-only adaptations;
+runtime_contracts owns floating dismissal exact five paths; deployment_docs_audit
+owns Tooltip exact three paths, CSS selector-local only. Exact written briefs
+are extraction-session-id-implementation.md, floating-close-intent-implementation.md
+and core-tooltip-interaction-implementation.md under this effort's reports.
+No shared overlapping source ownership; root owns integration and verification.
+Receiver stale-command/final recording proof remains held; genuine fixture and
+receiver plans Complete. No Claude/main integration, private/live/browser work.
 [Eleventh verification](./codex-ui-ux-review-2026-09-30/reports/eleventh-supervisor-verification.md)
-owns current results; receiver plan read-only while real-ID implementation waits.
-[Tenth verification](./codex-ui-ux-review-2026-09-30/reports/tenth-supervisor-verification.md)
-preserves failures and limitations. No Claude integration or browser certification.
+preserves exact gates and original limitations. Next full gates require all new
+owning source to freeze, not worker claims alone.
 
 Earlier batch evidence stays in the ledger, worker reports and first-four archive.
 [Superseded Current State](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-pre-eighth-current-state.md)
@@ -533,6 +541,15 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
 
 ## Work Ledger
+
+### 2026-10-01 - Eleventh integrated gates complete; three implementations released
+- Agent: supervisor
+- Changed: verified Core controls/database/floating source and extraction preview checkpoints; next exact briefs and paired current state.
+- Why: complete integrated verification and continue coordinated UI work with maximum workers.
+- Validation: Core344files2706tests/types/build native0, structure only protected4506/4505; extension2028/types/build/structure native0. Exact sessions/timings in eleventh report. No browser certification.
+- Outcome: Accepted locally; Core10ce95a7/0e868679 and downstream92decca0/86913bca. No merge/push; Claude owns integration. Read-only main status clean, original task doc stale unstarted text superseded by preserved t221 handoff.
+- Follow-up: bound extraction ID, floating close intent and non-exclusive Tooltip interaction workers execute exact released scopes; receiver/idempotence contracts remain separate.
+
 
 ### 2026-10-01 - Maximum slots renewed after closed extension gates
 - Agent: supervisor

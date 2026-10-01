@@ -1,10 +1,14 @@
 # Eleventh UI and extraction verification
 
-Status: Active
+Status: Complete (integrated owning gates observed; next exact units released separately)
 Owner: senior supervisor
 Date: 2026-10-01
 
-## Current independently observed state
+## Final current state
+
+Core full80759 native0,344files2706tests/207.22s; types14622 native0/48883ms; production69790 native0/199764ms. Structure37927 native1 solely inherited protected4506/4505. Source checkpoints10ce95a7/0e868679. Extension full65344 native0,2028tests/140843.4272ms; types7103 native0/31290ms; build45496 native0/172562ms/22files each; structure94504 native0/137warnings119baseline. Source86913bca and integration92decca0. All sessions closed before next source release. No baseline/compiler/timeout relaxation, browser certification, merge or push. Original/provisional evidence below remains chronological history superseded by this final state.
+
+## Independently observed source and narrow evidence
 
 Core Combobox/Field full source and diffs reviewed; three owning/shared suites54/54/native0/3.03s, exact four-root actual-config types0diagnostics. Includes21 Combobox,13 Field and unchanged20 shared contracts. Core local checkpoint10ce95a7 includes source/tests/authored architecture. No full eleventh Core gate yet; database JSON and floating entry-focus workers are active in disjoint exact two-path partitions. Browser IME/label activation remain untested.
 
@@ -15,3 +19,7 @@ Backend preview exact control/store diff, complete ownership methods and NEW tes
 ## Active verification and next work
 
 Extension product/test source is frozen for supervisor full tests, typing, build and structure. recording_controls owns read-only receiver ownership plan; real session-ID adoption remains held until these gates close. Core two workers continue disjoint web changes. Root owns shared docs, integration, verification and local checkpoints; Claude owns integration. No dev/main merge/push or protected/private/live operations.
+
+Root database full source/diff and new tests reviewed: actual five owning suites51/native0/21.44s observed, preserving original34 plus17 new. Current instance/query/grant/eligibility generation masks old expansion synchronously; complete605-items/depth12/tail output verified with serialization counts, not browser latency claims. Both Core product units now frozen; all three workers read-only next plans. Extension build45496/native0/172562ms and structure94504/native0/137warnings119baseline observed; full65344/types7103 still active.
+
+Root floating source/effect and complete new26-case test reviewed. Independent command selected actual existing three suites101/native0/1.18s: new26, unchanged hardening10 and environment65. Three other requested filters were incorrect paths and selected no files; no121 claim is made from this run. Worker121 includes correct overlay-architecture5 and ModalContent-focus15; root full Core now covers all, pending observation. Owner-document registration/capture and eligible tier selection remain source-scoped; positioning and close intent unchanged. Core full80759/types14622/build69790/structure37927 active; current indexes regenerated in both repositories. No product/test edits during gates.
