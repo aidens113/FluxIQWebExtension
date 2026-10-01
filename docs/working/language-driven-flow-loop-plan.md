@@ -30,6 +30,23 @@ afternoon's resume, where t193's `loop2.sh` was found still running and killed (
 running script does not stop it).
 
 **Binding rules (user, all in force).**
+- **The page view is compact, and the rest is searchable (user, 2026-09-30 night; revises the whole-page rule below).** The
+  user rejected t200's form of the page: every rendered element as JSON with all its attributes, a pixel box and context
+  fields, about 500 KB a page. Quotes: "ITS NOT SUPPOSED TO FEED IN THE ENTIRE PAGE JUST RAW", "theres literally no
+  fucking reason it should be 500kb", and "only giving model elements that have visible text/buttons/etc with the least
+  possible data in terms of format. Then allow the model to search the page for certain things by visible or any other text
+  (id, class, name, etc)". The model's default view is every visible element that carries text or is interactive, in
+  document order, in the fewest bytes that identify it. A page-search tool reaches everything else by text or by any
+  attribute. There are still no caps or ranking among qualifying elements. Owned by t223. Live runs are held until it lands.
+  **Format approved by the user** ("The format you sent me looks perfect. Its very small"). The format is the one in
+  `reports/t223-format-example.md` on t223's branch:
+  - a PAGE/URL/VIEW/COVERING header;
+  - `[region]` lines and `- i/n` item markers;
+  - one `<handle> <kind> "<words>" <state>` line per element, links on a `~` base;
+  - `find_on_page` over text and every attribute;
+  - `describe` for one element.
+
+  Measured with the prototype: 32.8 KB to 3.5 KB, 123.7 KB to 7.1 KB, and 340.5 KB to 22.3 KB on the three recorded pages.
 - **The model sees the whole page (user, 2026-09-30, after watching a run spend 53 s trying steps and fail with no repair):**
   "Remove ANY AND ALL LIMITS ON THE NUMBER OF ELEMENTS PASSED TO MODEL. DO NOT HIDE INFORMATION OR USE ANY RANKING
   ALGORITHM." No element caps, top-N, ranking, byte budgets that drop elements, or withheld summaries anywhere from the DOM
@@ -610,97 +627,16 @@ debug and partitioned so neither touches the other's files:
 - Outcome: Accepted
 - Follow-up: superseded by the entries below.
 
-### 2026-09-28 to 2026-09-29 — t173: the crash-landed work audited, finished and gated
-- Agent: supervisor with t173-B, C, EF, G, I, J, K7, K8, and the audits [gate-baseline-0928](./language-driven-flow-loop-plan/reports/gate-baseline-0928.md) and [inflight-audit-0928](./language-driven-flow-loop-plan/reports/inflight-audit-0928.md)
-- Changed: task/t173-audit-close in both repositories. Downstream: domain compiles again (packet.ts dedupe/sort); dedupe and sort applied end to end ([t173-ef](./language-driven-flow-loop-plan/reports/t173-ef-dedupe-sort.md)); in-place effect sees open shadow roots ([report](./language-driven-flow-loop-plan/reports/in-place-effect-shadow.md)); Lab selectors synced to the renamed panel and a creation build's default token budget no longer caps its decisions, while a typed `--llm-max-run-tokens` still binds ([report](./manual-panel-test-findings/reports/lab-selector-sync.md)). Core: incomplete-draft record for an exhausted build and wrap-up refusing unoffered tools ([t173-c](./language-driven-flow-loop-plan/reports/t173-c-incomplete-draft.md)); stale tests and the structure audit ([t173-b](./language-driven-flow-loop-plan/reports/t173-b-core-tests.md)); every chat capability through Core's real handlers ([t173-i](./manual-panel-test-findings/reports/t173-i-capability-contracts.md)).
-- Why: the 2026-09-28 crash committed seven workers' partial work ungated; both dev heads failed their gates, and ranks 2-6 of the round-2 causes were open or partial.
-- Validation: supervisor observed downstream `pnpm check` EXIT=0; domain test 881/881; extension test 1017/1017; test-runner live-llm 97/97; Core focused deepseek-bootstrap-exploration + exploration-reduction 36/36. Core full gates and scenario-lab pending.
-- Outcome: Done on 2026-09-29: K7 and K8 landed, Core and downstream full gates green, merged and pushed (Core `259a11b`, downstream `c6c9f395`).
-
-### 2026-09-29 — Parallel lanes toward day 30; live run 1 blocked inside Core
-- Agent: supervisor, dispatching lane leads t174 (live runs, debug and fixes; the only lane allowed live runs), t175 (build-loop convergence through provider-free replays of recorded failures), t176 (refutation, repair, persistence, zero-provider replay and post-replay judgement, provider-free end to end), t177 (Lab observability gaps), and a read-only program gap map for further lanes. Each lane is a Core-paired worktree under `C:/Users/osrs_/FluxStuff/fxwork/t17N`.
-- Changed: both repositories re-cloned to `C:/Users/osrs_/FluxStuff`, because the F: drive came from another machine and its files were locked to that machine's accounts. Every local branch, and Core's `supervisor-inflight` stash as `archive/stash-supervisor-inflight`, were pushed first.
-- Validation: both clones `pnpm check` exit 0; downstream `pnpm build` exit 0; Lab dry run `status: ready` with zero provider calls. Live run `run-mun5e1ie-5aeefbbd` (everything-store-kettle-to-cart) failed on its first provider call with `flow_bootstrap.provider_transport_unknown`; an authenticated `GET /models` with the same key returned 200 listing `deepseek-flash`, so the throw is inside Core (assigned to t174).
-- Outcome: In progress. Pass streak 0.
-
-### 2026-09-30 — Checkpoint before a machine restart (pagefile fix); where every lane stands
-- Agent: supervisor. All lanes were told to save state to their reports and stop; the machine restarts to apply a fixed 16-24 GB pagefile (the "memory" crashes were the Windows commit limit, 15.7 GB with a 3.9 GB system-managed pagefile, not physical RAM at 65%).
-- Merged and pushed to dev: t173, t175 (amendment-stall fixes), t177 (observability), t178 (improve an existing Flow), t179 (Week 2 metrics; its ui:e2e journeys run on non-ten fixtures and must not run until moved onto the ten), t180 (pause/resume), t181 (Simple Mode), t183 (packaging, CI, /get-started), t184 (55 live tasks on the ten audited, 54 ready), t182 downstream half. Downstream dev `5aedc85e`, Core dev `e85a02a`.
-- Pending integration: t176 (repair→persist→zero-provider replay chain; 3 downstream conflicts) and t182's Core half (service.ts 1 line over its 4558 ratchet) are with worker integrate-0930; state in `reports/integrate-0930.md`.
-- In progress, resume from each report: t174 live lane (`fxwork/t174`, uncommitted file-level merges of dev plus fixes: grant-refusal naming, Lab long request to 675 s, side-panel crash re-open, throw stage, summary truncation, ambiguous-target replay; runs 1-10 in `reports/t174-live-lane.md`); t185 live activity overlay + extension chat (`fxwork/t185`, `docs/working/live-activity-chat-plan.md`); t186 remove LLM call grants (`fxwork/t186`, B1/C/W/D/E done, B2 test fixes and t176 follow-ups remain); t187 Lab startup speed (`fxwork/t187`); t188 remove every 16-node cap, default 100 per Subflow configurable in UI (report `reports/t188-node-limits.md`, worktree not yet created); t189 decision context — why the model repeats itself (report `reports/t189-decision-context.md`, worktree not yet created).
-- Binding rules now in force (memory and AGENTS.md): one live run at a time in `lab-slots/slot-1`, headed; Lab/browser runs only on the ten realistic scenarios; no heavy builds/tests from other lanes while slot-1 exists; no LLM call grants; all agents Opus 5.5 with per-task effort (`lead`, `lead-xhigh`, `worker-low`, `worker`, `worker-high`).
-- Validation: not validated; a state checkpoint written before a restart, and nothing ran.
-- Outcome: Paused for restart. Pass streak 0.
-
-### 2026-09-29 — After the restart: t182 Core merged, lanes re-dispatched with leads
-- Agent: supervisor. Pagefile fix confirmed: commit limit 28,604 MB, 21,278 MB free, slots empty.
-- Changed: Core dev `af385f7` (Merge task t182) pushed with downstream `6cdc9abb`; worktrees t188 and t189 created (Core-paired); t174, t185 and t186 work in progress committed on their task branches and dev merged in (conflicts left to each lane's lead); leads dispatched for t187, t188 and t189.
-- Validation: in the t182 Core tree, `node scripts/structure-audit.mjs` -> `structure-audit: passed (197 warning(s), 355 baselined).`; `npx tsc -p tsconfig.json --noEmit` (packages/fluxiq) -> exit 0; vitest `service/indexes/tests/without-recording.test.ts` -> 2 passed; vitest `runtime/tests/service-recordings` -> 7 files, 42 passed; Core `pnpm task finish t182` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, merged. First `pnpm task finish t176` (downstream) -> `structure-audit: 3 violation(s)`, all this document's (Current State 153 lines, a ledger entry without validation, stale index); fixed here.
-- Build time measured today: `pnpm task start --worktree --core` 151 s and 156 s; Core `pnpm check` 110 s (fluxiq tsc 39 s, structure audit 43 s against 8 s downstream). Given to t187.
-- t176 (a refuted answer is repaired, persisted and replayed with no provider call) merged in both repositories and pushed: downstream `pnpm task finish t176` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, 118 s, `02d95259`; Core `pnpm task finish t176` -> the same, 79 s, `528f52d`. Not live-proven.
-- dev (with t176) merged into t185 (both clean) and t174 downstream (`b1a82a21`: seven hand-applied dev files taken from dev, one import kept from both; test-runner `tsc --noEmit` exit 0).
-- t188 (a Flow's size is one setting, 100 nodes per Subflow by default, changed in Flow Settings) merged and pushed in both repositories. Supervisor check in the t188 Core tree: vitest flow-size end-to-end + `flow-bootstrap/plan` + `model/flow-size` -> `12 passed (12)`, `121 passed (121)`. Downstream `pnpm task finish t188` -> `"validation":{"ran":true,"command":"pnpm check","passed":true}`, `37379fe3`; Core `pnpm task finish t188` -> the same, `c961f4a`. Lead's run: affected Core suites 1191 tests passed, web settings 59 passed. Not exercised in a browser or live.
-- The live slot sat idle for over an hour after the restart (the live lane was briefed to finish full validation first, and t187's bench held a build slot); the user noticed. Corrected: the first live run since the restart claimed slot-1 at 19:30:58 (`crossborder-marketplace-hub-to-cart`), Chromium up at 19:35:43, 4 min 45 s of Lab prelude builds. Benchmarks pause while slot-1 is held.
-- Live runs 11 (`run-munhpy2m-036e9572`) and 12 (`run-muni3pdr-80225d3f`) died before pairing, with 0 provider calls: the first `fluxiq.connect` went unanswered for 15 s, then `ERR_ABORTED` loading the side panel after 11 s, at 100% CPU from other lanes' tests. The extension start has failed in 6 of 9 launches. A CPU priority governor now runs during live runs. t174's throw fix (`befca2f`: `draft-shown.ts` rejected t175's `did_not_work` rows; supervisor re-run 2 files / 24 tests passed) and source-mapped Lab frames (`259b0df2`) are committed, and dev with t188 is merged into both t174 trees; the fix is not yet live-proven.
-- Merged and pushed in both repositories, each through `pnpm task finish` whose `pnpm check` printed `"passed":true` on both sides: t185 (live activity overlay, extension chat, Lab live panel; supervisor re-run Core api + client-gateway 126/126 on a verbose re-run), t186 (no model call needs a grant; supervisor: session-key-provider + repair-replay-chain 5/5, runtime-patches 3/3, grant symbols left only in absence assertions), t190 (instructed acts name their act, one act per object, arrival step, navigating actions report applied; supervisor: instructed-acts + reachability 77/77, domain 900/900).
-- The user found `$0.001` as a cost ceiling. It was only the `runtime-patches.test.ts` fixture, which the grant's $0.25 used to override; the fixture now uses the product's $0.25 (the lane had used $0.15). Every product default is $0.25.
-- The user rejected machine load as the cause of the extension-start failures. The priority governor was stopped, and the lane is root-causing the start as a product defect: probe `t174-w7`, ten headed starts, which is the Chromium window the user sees opening and closing.
-- t189 merged and pushed (every decision gets a durable history of what it tried and what Core answered; repeats are grouped and named; `evidence-loop.ts` split 800 to 668 lines). Supervisor: decision-context + decision-handlers + draft-shown 8 files, 61 passed; on the merged tree Core `pnpm check` exit 0 and vitest `runtime/llm` 68 files, 651 passed; both `pnpm task finish t189` -> `"passed":true`.
-- The extension-start cause found by probe `t174-w7` (a Lab defect): the network guard's canary, run inside the extension's service worker as it starts, stops the first `fluxiq.connect` from being answered. The unchanged Lab gave 1 of 10 clean starts, the guard off 3 of 3, and the canary gated until the extension is ready 5 of 5. The fix and the merge of dev into t174 are next.
-- t187 merged and pushed (`4afa80fc`), answering the user's question of why builds became slow. The code grew about four times in three weeks (Core `packages/fluxiq/src` 386 to 1,479 files) while every build started clean, and September added redundant builds: four Lab builds per run, test-contracts built twice, a full build in `task start`, a serial `pnpm check` in `task finish`, and `coreHead` in the Core web build key. Now every package build and check is reused when its content fingerprint and output digest match. Lead, before to after with nothing changed: `pnpm build` 82.6 s to 4.5 s, `pnpm check` 181 s to 34 s, the finish check 314 s to 36 s, the Lab prelude 81 s to 7 s. Supervisor on the merged tree: first build 52 s; repeat 5 s with 11 of 11 reused; after a `domain/src` edit exactly domain, extension and test-runner rebuilt (35 s); after the revert 11 of 11 reused (7 s); `pnpm check` exit 0; `pnpm task finish t187` 40 s in total. Core's own build (162 s) is untouched; t187's proposal for it needs a paired Core branch.
-- Integration round 1 (four live lanes, iterating on their own branches): t196, t191 (round 1), t174 (A), t193 (B) and t195 (D) merged into dev in both repositories; t194 (C) joins when ready. Conflicts were `run-scenario.ts` hooks (t174's UI review, t193's window capture, and the lanes' hand-applied copies of t174's older lines): both hooks were kept and the imports unioned, with `tsc --noEmit` 0 and the audit passing after each. On the merged dev: Core `pnpm check` 0 (82 s), downstream `pnpm check` 0 (106 s), and the vitest of flow-bootstrap, service-bootstrap and llm at 841 passed, 6 failed. The 6 are all in `rejections.test.ts`, where t174's thrown-issue-codes tag typed refusals; the push of dev is held until t174 fixes it. No task has passed twice yet: A run 18 built a 9-node bigbox Flow blocked by the consent wall (t195 F1 is now in); D run 6 built the first real loop (For Each, per-row Confirm, rate limit waited out).
-- The Flow builder, traced from the code (`reports/flow-builder-walkthrough.md`), is 25 steps. It found five disagreements: the extension chat cannot start a build (capabilities `[]`; the executor lives only in the web panel), assigned to new lane t198; send/publish is not gated (only money and delete, since 2026-09-28), so t195 is fixing it per `mvp-today-plan.md:150`; a build's real cost bound is $1-$2 and the $0.25 per-call cap is never enforced, so t193 is making $0.25 the enforced build total; a route-state full capture still runs before most decisions, so t196 is removing it; and the panel sends no start location, which stays by design.
-- Round 1 finished and pushed (Core `838667e9`, downstream `6e6a5a28`): t174's rejections fix (`e75dcf29`: `thrown.*` codes only on unrecognised throws) and t194 (C) merged too. Final verification on the merged dev: Core `pnpm check` 0 (245 s), Core build 0, downstream `pnpm check` 0 (335 s), domain `# pass 948 # fail 0`, extension `# pass 1348 # fail 0`, and Core vitest (flow-bootstrap, service-bootstrap, llm) 1,529 of 1,536. The 7 failures are all `Test timed out in 15000ms` (plus one EBUSY on a SQLite `-shm`) in `runtime/tests/service-bootstrap`, with no assertion failures. Alone at one worker, that directory gave a different 3 timeouts and took 673 s, so the tests run too close to their limit. That is assigned to the t192 lead as test speed, not a raised timeout. Rung-1 first: run 4 reached refute, re-author, applied and re-run.
-- t192 merged and pushed: Core's build and check reuse unchanged steps. On the merged dev, a repeat `pnpm build` reused all 4 steps in about 4.1 s of step time (contracts 464 ms, fluxiq 1,538 ms, gateway 509 ms, web 1,618 ms); Core `pnpm check` 0 (136 s); downstream `pnpm check` 0 (174 s).
-- Robot checks (`reports/robot-check-behaviour.md`): the "refresh" the user saw was FluxIQ's own same-address navigations (`chrome.tabs.reload`) onto a robot-check page that reported success. Decision (supervisor, user may override): FluxIQ never presses or solves a check; a self-clearing check is waited out; any other check pauses, asks the person, and resumes, with the Lab playing the person. New lane t197.
-- Held for t186: t174's run-4 reservation of three calls for the grant (`loop-limits/flow-bootstrap-evidence-loop.ts`, `llm/resolver-contract.ts`) fails 4 tests in `deepseek-bootstrap-exploration.test.ts`. The lead's git restore of those files to `259a11b` was refused by its permission check. The supervisor did not do it on its behalf; the files are resolved when t186 removes grants.
-- Outcome: In progress. Pass streak 0.
-
-### 2026-09-30 — Stopped: the DeepSeek balance ran out, unsupervised relaunch loops were killed, and this handoff
-- Agent: supervisor. Changed: dev pushed at Core `f4feb028`, downstream `379763fb`. Integration round 2 merged t174 (A), t193 (B), t195 (D), t192 (the Core build cache), t196 (route state from each call), t197 (robot-check hand-off) and t198 (the extension chat builds). The Click node's site-specific "click again" sentence was reverted (it broke the domain catalog-budget test, and it had no effect live). The lead agents all ended on a Claude session limit at about 04:00; launcher loops then relaunched live runs with nobody debugging. The supervisor killed every live `run-lab`, launcher and loop process at 10:22 and renamed the scratchpad's `live-run*.sh`, `t193/loop*.sh` to `*.disabled`.
-- Validation: the round-2 dev check (`pnpm build`, `pnpm check` and vitest of llm, flow-bootstrap, recovery, action-permissions and flow-draft in Core; `pnpm build`, `pnpm check` and the domain and extension tests downstream) printed `CORE_BUILD=0`, `CORE_CHECK=0`, `CORE_VITEST=0 Tests 2075 passed (2075)`, `DS_BUILD=0`, `DS_CHECK=0`, `EXT=0 # pass 1452 # fail 0`, and a domain load failure (`src/tests/domain.test.ts`: `missingRequiredTerms` `['end']`) that was traced to the Click description; after the revert, `pnpm --filter @fluxiq-web-extension/domain test` -> `# pass 976 # fail 0`. Spend, from each run's `snapshots/live-llm.json` `observed.totalEstimatedCostUsd`: `{"realRunsWithSpend":112,"totalUsd":9.46,"byLane":{"t174":3.86,"t193":2.65,"t194":0.25,"t195":2.7},"lastSpendingRunUtc":"2026-09-30T12:18:40.705Z"}`; split before and after 11:00Z: `{"before0400local":{"runs":65,"usd":5.21},"after0400local":{"runs":47,"usd":4.25}}`. Lane D's 12 "passed" runs have `evaluation.json` `flowCreated=false` (permission stops), so the real pass streak is 0. Not run: any check of the lane trees' uncommitted work (listed in Current State), and the two in-flight workers (Lab spend guards; the honest pass verdict), which were still editing when this was written.
-- Outcome: Stopped for handoff. No live run may start until the guards are merged, a budget is set and DeepSeek is topped up. Pass streak 0.
-
-### 2026-09-30 — Resumed: a live relaunch loop found still running, every lane committed and rebased, ten agents dispatched
-- Agent: supervisor. The user topped up DeepSeek and said go.
-- Found: t193's `scratchpad/t193/loop2.sh` still running as bash PID 23332, from 03:06. The morning's rename to `*.disabled` had
-  not stopped it. Killed with the user's explicit permission, after the permission check refused the supervisor's own attempt.
-  Also found: t191's provider-free interactive Lab still running (PIDs 26548, 7468, 1764), left for the user; and stale slot owner
-  files, whose removal the permission check refused.
-- Changed: a WIP commit of each lane tree's uncommitted work on its own task branch, then dev merged in; hashes and conflicts are
-  in the Current State table. New task t199 (`pnpm task start honest-pass-followups --worktree`, 2 min 46 s).
-- Validation: `taskkill //PID 23332 //T //F` -> `SUCCESS: The process with PID 23332 (child process of PID 9144) has been
-  terminated.`; a re-scan of process command lines for `loop\d?\.sh|live-run|lab:campaign|live-campaign|run-lab` found only
-  t191's interactive Lab. The guards' admission code (`scripts/lab/live-guards/admit-live-run.mjs`, `rules/debug.mjs`,
-  `rules/unchanged.mjs`) finds a previous run only in `lab-slots/spend-ledger.jsonl`, which does not exist yet, so each lane's
-  first run is admitted and the debug and unchanged rules bind from then on. No lane work validated yet.
-- Merges committed after each lead staged its resolution: t194 downstream `0d5b62c4`, t191 downstream `2faa7dc5` (with one
-  extra staged test, `panel/chat/conversation/tests/ask-copy.test.ts`), t174 Core `4e42d7ef`. The t174 merge also carries eight
-  of the lead's own staged edits beyond the merge (`flow-draft/dry-run.ts`, `flow-draft/verify-only.ts` and its test,
-  `decision-handlers/completion.ts`, and others), the lead's resolution of the `dry-run-gate.ts` conflict; reconcile them with
-  t196's dry-run design at integration.
-- Outcome: In progress. Pass streak 0.
-
-### 2026-09-30 — Integration round 3 begun, the user's four orders, and Labs stopped for merge and audit
-- Agent: supervisor.
-- User orders, each recorded in Binding rules and in memory: the whole page to the model (t200); the three-phase build with an
-  authored draft and replays only in judgement and repair (t196); every chat step its own message with the model's reasoning
-  (t191); stop orphaned Labs without asking. At ~19:20: stop all Labs, merge everything, then audit and fix.
-- Changed: dev merged t191 round 2 (ds `1c48605b`, Core `9d343d3b`) and t198 (`9d3461a3`, the user accepted its security
-  change); dev merged into lanes A and B (both repositories) and D's Core; D's downstream merge was refused (its uncommitted
-  `lane.ts`, `permission-point.test.ts` and report overlap dev) and aborted. Committed on branches after re-running each
-  claim: t174 `ab3b1381` (domain 983/983) and Core `c013b547` (9/9); t191 `106b86f1` (extension 1480/1480); t192 Core
-  `9515d875` (22/23, the one failure pre-existing); t194 `0f412b99` (debugs); t197 `5888524e` (domain 985/985); t198
-  `f5cc4b41`. New tasks: t200 (whole page), t201 (dev's red tests).
-- Validation: merged dev (`bash heavy.sh ...`): `CORE_BUILD=0`, `CORE_CHECK=0`; Core vitest activity/executor/conversations
-  `1 failed | 406 passed`, the failure `conversations/commands/tests/execute.test.ts` pre-existing (fails identically at
-  `f4feb028`, 9/10); Core web conversation vitest `3 failed | 214 passed`: `registry.test.ts` pinned the old two asking
-  classes (Core's `destructive.ts` gates three since the user's rule), updated to three -> `Tests 11 passed (11)`, and two
-  `core-contract.test.ts` 5 s timeouts, re-run alone; `DS_BUILD=0`; `DS_CHECK=1` only on this document's Current State budget
-  and index (fixed here); extension `# pass 1484 # fail 0`; domain `# pass 976 # fail 0`. Also pre-existing on dev:
-  test-runner `runner-wiring.test.ts` and `demo-workspace.test.ts` (34/36 at dev and on t198), Core
-  `service-bootstrap/tests/permission.test.ts` (lane D). t201 owns the first three.
-- Outcome: In progress. Pass streak 0.
+### 2026-09-28 to 2026-09-30 — Archived: t173 gated, lanes re-dispatched, the balance stop, integration round 3 begun
+- Agent: supervisor, with lane leads t174, t193, t194, t195 and workers t173 to t214
+- Full entries moved to [archive/ledger-2026-09-28-to-30.md](./language-driven-flow-loop-plan/archive/ledger-2026-09-28-to-30.md)
+  on 2026-09-30 under the compaction threshold, with a duplicate handoff entry that had landed under Open Questions.
+- What they settled: t173's crash-landed work was audited and gated; the lanes ran with leads after the restart; the
+  overnight unattended relaunch loops spent $9.46 and ended at the DeepSeek balance stop; the user's four orders started
+  integration round 3, with Labs stopped for the merge and audit.
+- Validation: recorded in each archived entry (run ids, commands and observed figures); nothing here is re-validated.
+- Outcome: Accepted
+- Follow-up: superseded by the entries below.
 
 ### 2026-09-30 — Integration round 3 merged and pushed: the whole page, the three-phase build, the audit's fixes
 - Agent: supervisor, with t191, t196, t200, t202-t214 and lanes A-D; each owner's claim re-run by the supervisor before
@@ -747,6 +683,43 @@ debug and partitioned so neither touches the other's files:
   branch — the brain's `worker-git-guard` change was refused by the permission classifier as self-modification; left for
   the user. Pass streak 0.
 
+### 2026-09-30 night — Every Lab stopped: the page view is 500 KB of raw JSON; t223 owns the compact view
+- Agent: supervisor, on the user's orders. The four live leads (t174, t193, t194, t195) were dispatched on slots 1-4 at
+  ~22:00, then held. Lane B's run `run-mup2i28c-6c7fc209` (bigbox cart redesigned) failed, exit 1, after 4.5 min.
+- Changed: the user rejected the page evidence (every rendered element as JSON with every attribute, a pixel box and
+  context fields, about 500 KB a page), gave the compact-view-plus-search design (Binding rules, first bullet), and ordered:
+  "make sure you fix that context issue BEFORE running any labs", "stop every single lab till you figure that out NOW". The
+  supervisor killed the two runs in flight (lane A crossborder, lane D social-feed), told every lead to run no Lab of any
+  kind, and started a watchdog that kills any `run-lab.mjs` process until the stop is lifted. t223 (`fxwork/t223`, Core-
+  paired, `lead-xhigh`) owns the compact page view, the page search and the before/after page sizes.
+- Validation: not validated; no code changed. Observed: no `chrome.exe` and no `run-lab.mjs` process after the kill; the
+  watchdog log reads "watchdog start 22:22:13". Headless is off: the Lab launches `headless: false`, and
+  `FLUXIQ_DEMO_HEADLESS` is unset in every lane's `.env.local` and the environment.
+- Outcome: Labs stopped until t223 is merged and its measured page size is sane. Pass streak 0.
+
+### 2026-09-30 night — t210 rounds 3-3b merged; a Windows build-lock race fixed; the compact format approved
+- Agent: supervisor; t210 by its `worker-high`.
+- Changed:
+  - t210 rounds 3 and 3b merged into dev (Core `6af7e6cd`, downstream `5df252a2`). The whole conversation, context packet,
+    instruction set and adaptation records now reach the model, read page by page.
+  - The build-cache step lock (`scripts/build-cache/lock/acquire-step-lock.mjs`, the same code in both repositories)
+    crashed with EPERM when it read a lock another process was deleting. Windows refuses to open a delete-pending file.
+    `readHolder` now retries EPERM, EACCES and EBUSY briefly.
+  - The user approved the compact format in t223's `reports/t223-format-example.md`.
+- Validation:
+  - At t210's `4b3fced7`: `npx tsc --noEmit -p .` EXIT=0; structure-audit passed; docs:check current.
+  - vitest over conversations, llm, recovery, result-verification, flow-bootstrap, service and storage/project:
+    `Tests 5 failed | 2815 passed`, all 5 "Test timed out in 15000ms". The 3 files re-run with `--testTimeout=120000`:
+    `Tests 40 passed (40)`.
+  - On merged dev: Core lib build EXIT=0; web check EXIT=0; domain `# pass 1061 # fail 0`; extension `# pass 1673 # fail 0`.
+  - Downstream `pnpm check` first failed `step-lock.test.mjs` ("a live, recent lock is waited on until it is released",
+    EPERM). It passed 5 of 5 alone.
+  - After the fix: downstream build-cache tests `# pass 53 # fail 0`; Core `pnpm build-cache:test` `# pass 61 # fail 0`;
+    the lock test 40 times, 8 at a time: 0 failures. The failure was never reproduced before the fix, so this shows no
+    regression, not the cure.
+  - Full downstream `pnpm check` EXIT=0 with `# pass 547 # fail 0`.
+- Outcome: pushed as below. Labs remain stopped for t223. Pass streak 0.
+
 ## Open Questions
 
 - Which complex scenario goes first? `everything-store` is the known multi-step
@@ -757,13 +730,3 @@ debug and partitioned so neither touches the other's files:
 - When a run's failure is in Core and in the extension at once, which side is
   fixed first? Owned by the supervisor, settled per run by which failure is
   earlier in the chain.
-
-### 2026-09-30 — Handoff: round 3 pushed, t210 and t215 stopped mid-task, Codex tasks written
-- Agent: supervisor, at the user's request to wrap up this window.
-- Changed: Current State rewritten for the next session; `codex-tasks-2026-09-30.md` (five Codex tasks) and
-  `reports/supervisor-2026-09-30-live-briefs.md` added; t210 rounds 1-2 committed on its branch (Core `b7305903`, downstream
-  `371e6e7a`) with dev merged in (Core conflicts left to its worker); the four lane trees fast-forwarded to pushed dev; t210 and
-  t215 told to stop and write "State at stop" in their reports.
-- Validation: `node scripts/structure-audit.mjs` (downstream, after `pnpm structure:baseline`) -> see the commit; the code on
-  dev was validated by the preceding entry and not re-run for this documentation-only handoff.
-- Outcome: Handed off. Pass streak 0.
