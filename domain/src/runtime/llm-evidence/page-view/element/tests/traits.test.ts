@@ -50,6 +50,8 @@ test("the line an element gets: control, then layer, then text, then image", () 
   assert.equal(webLlmViewTraits(el({ tag: "a", href: "https://shop.test/", covers: ["t3"] })).lineRole, "control");
   assert.equal(webLlmViewTraits(el({ tag: "div", isDialog: { modal: true } })).lineRole, "layer");
   assert.equal(webLlmViewTraits(el({ tag: "span", text: "★" })).lineRole, "text", "a symbol is meaningful");
+  // A quantity stepper's plus and minus and a close glyph, drawn as plain text (bigbox, run 39).
+  for (const glyph of ["+", "−", "×"]) assert.equal(webLlmViewTraits(el({ tag: "span", text: glyph })).lineRole, "text", `${glyph} is meaningful`);
   assert.equal(webLlmViewTraits(el({ tag: "span", text: "(—)" })).lineRole, undefined, "punctuation alone is not");
   assert.equal(webLlmViewTraits(el({ tag: "img", name: "Kettle" })).lineRole, "image");
   assert.equal(webLlmViewTraits(el({ tag: "img" })).lineRole, undefined, "an image without an alt says nothing");

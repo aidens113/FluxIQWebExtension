@@ -38,6 +38,8 @@ type PageBehaviour = {
   prevent: boolean;
   /** The handler moves the address before the click event returns, as a hash link or a synchronous router push does. */
   moveTo?: string;
+  /** The target is no command control -- a text box, a line of text -- so no selector but a link's finds it. */
+  plain?: boolean;
 };
 
 type FakePage = { element: Element; events: string[] };
@@ -62,7 +64,10 @@ function fakePage(behaviour: PageBehaviour): FakePage {
   const anchor = { href: LINK_HREF, protocol: "http:", focus: () => undefined };
   const target = {
     ownerDocument: { location, defaultView: {} },
-    closest: (selector: string) => (selector === "a[href]" && !behaviour.link ? null : behaviour.link ? anchor : target),
+    closest: (selector: string) => {
+      if (selector === "a[href]") return behaviour.link ? anchor : null;
+      return behaviour.plain ? null : target;
+    },
     focus: () => undefined,
     dispatchEvent(event: { type: string }): boolean {
       events.push(event.type);
@@ -475,6 +480,13 @@ test("a press the page ignored twice is not a success: it fails as not observed,
     actual: "the point 10,20 landed on the target; the page ignored the first press, so it was pressed once more, and it ignored that press too: no request, no change inside the control or its section, no navigation and no focus move"
   });
   assert.deepEqual(ignored, { made: 2, settledWith: [800, 800], stopped: 2 });
+});
+
+test("a press on something that is no command control, ignored twice, passes as before: a text box or a line of text is pressed for no change", async (t) => {
+  const { result, events } = await click(t, { link: false, prevent: false, plain: true }, undefined, CLICK, undefined, undefined, 1_000, { seen: [], secondSeen: [] });
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS]);
+  assert.match(result.validation.status === "passed" ? result.validation.actual : "", /pressed once more$/u);
 });
 
 test("a press made once more that the page answered in any way passes, as the press made once more", async (t) => {
