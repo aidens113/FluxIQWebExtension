@@ -26,6 +26,7 @@ import {
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
   type WebAutomationExtractionRejectedRow
 } from "../../../actions/extraction";
+import { webNodeWithoutPageRecord } from "./page-record";
 import { webNodeReadResult } from "./read-result";
 
 /** The only verb whose rows a condition decides. */
@@ -47,7 +48,8 @@ export function webNodeDispatchParameters(node: { actionType: string; proposes: 
 /**
  * The read the model is shown -- the kept rows whole, as `./read-result.ts`
  * returns them, with `rejectedRows` beside them when a condition turned rows
- * down -- and the payload with the samples taken out.
+ * down, and never the page's own record (`./page-record.ts`) -- and the
+ * payload with the samples taken out.
  *
  * Nothing is fitted to a byte budget (t200): the samples are as many as the
  * page's sampling returned (`actions/extraction/rejected-samples.ts`), and both
@@ -57,7 +59,9 @@ export function webNodeDispatchParameters(node: { actionType: string; proposes: 
 export function webNodeReadWithRejectedRows(payload: JsonValue | undefined): WebNodeReadWithRejectedRows {
   const recorded = withoutSamples(payload);
   const shown = rejectedRows(payload);
-  const read = webNodeReadResult(recorded);
+  // The page's own record never reaches the model (`./page-record.ts`); the
+  // replay keeps the payload as the node answered it.
+  const read = webNodeReadResult(webNodeWithoutPageRecord(recorded));
   if (shown === undefined) return { read, recorded };
   if (read === undefined) return { read: { rejectedRows: shown }, recorded };
   if (typeof read !== "object" || read === null || Array.isArray(read)) return { read, recorded };
