@@ -79,7 +79,8 @@ Two flags are easy to misread and are worth stating plainly:
   leaves the page while one stands. A persistent `true` means the override is
   not installed.
 - `elements.truncated` reports that the **browser capture** itself left
-  elements out, and nothing else. See the caps below.
+  elements out, and nothing else. Current capture has no element cap; the
+  flag remains readable for older snapshots.
 
 `forms` carries value *presence* and never a value. It carries the raw
 `autocomplete` tokens deliberately, so a consumer can ask the shared
@@ -113,9 +114,9 @@ Merging is per item, not per snapshot:
   page's and there is no honest average of two `readyState`s. A merged
   snapshot can therefore read `complete` and still be `busy` — the right
   answer for a page whose iframe is mid-load. The rest of `loading` merges.
-- **Each merged collection has a budget of its own**, roughly twice the
-  per-frame cap, so ten frames cannot contribute ten times the cap to a
-  payload built on every recorded event.
+- **Every collection merges whole.** There is no per-frame or merged element,
+  dialog, blocker, region, form or loading-item cap. Frame order and each
+  frame's document order are preserved; merging does not rank or sample.
 
 Both the merge and the per-frame restatement are written with `present<T>()`
 over every contract key, so a ninth key on the contract stops them compiling
@@ -133,11 +134,10 @@ frame's own snapshot.
 
 <a id="the-four-caps"></a>
 
-## The Caps
+## Stored Recording State Bounds
 
-A flag that says only `truncated` does not say which cap bit, so each cap on
-this path has its own flag. The canonical statement, with the remedy for each,
-is in
+A flag that says only `truncated` does not identify what was omitted. The
+recording-state projection keeps separate flags, interpreted in
 [`domain/src/recording/web-state/evidence/input.ts`](../../domain/src/recording/web-state/evidence/input.ts).
 The rule: a bare `truncated` is legal only inside the structure whose own cap
 set it, beside that structure's counts; anywhere a flag would summarise more
@@ -145,33 +145,29 @@ than one cap it is named for the cap instead.
 
 | Cap | Flag | What is missing | Remedy |
 | --- | --- | --- | --- |
-| The browser capture, when it leaves elements out | `captureTruncated` (`evidence.elements.truncated` at source) | Elements never left the page | Capture less of the page: one frame, one region |
+| An older browser capture that reported omissions | `captureTruncated` (`evidence.elements.truncated` at source) | Elements never left that capture | Recapture with the current uncapped producer |
 | The state projection's element cap | `stateTruncated` | Eligible elements absent from `elements.*` | Raise the cap, or narrow what is recorded |
 | A per-collection cap in the projection | that collection's own `truncated`, beside its `count` | Items of one collection | Read `count` for the true total |
 
 `elements.truncated` in the state projection is the summary of the first two.
-The two projection caps are on the recording path's stored state, not on what a
+The current browser capture and frame merge have no count or byte cap. The
+two projection caps are on the recording path's stored state, not on what a
 model is shown. The sanitized packet has no cap of its own: its
 `elementsTruncated` and `budgetTruncated` flags, and its `elementTotal`,
 were retired with the element bound and the byte budget they reported (t200).
 
 ## Repeated Controls
 
-A page built from a repeated template would otherwise fill the head of the
-element list with the template. On the Lab's 280-row social scheduler the
-packet held three filter selects and a column of row checkboxes, and none of
-the page's own buttons, so the bulk bar's Retry was never shown to a model.
-
-The snapshot therefore keeps one example per repeated control
+Repeated controls carry an annotation, without changing the element list
 ([`content/repeat-exemplars.ts`](../../apps/extension/src/content/repeat-exemplars.ts)).
 A run is a record by the rule a replay already checks
 ([`identity/record.ts`](../../apps/extension/src/content/identity/record.ts)) —
 `tr`, `li`, `article`, the ARIA row and item roles, or a keyed element — whose
 parent holds at least three of its tag; a kind is one position inside that
 record (the tag and same-tag index at each level, with role and input type).
-The first member keeps its rank and carries the run's size as the descriptor's
-`repeatCount`; every other member is ranked after every distinct element, not
-removed. Two things are exempt: something to act on that is its record's whole
+An exemplar carries the run's size as the descriptor's `repeatCount`; every
+member remains in composed document order. Two things are exempt from the
+annotation: something to act on that is its record's whole
 content, such as a navigation `li > a`, which is a distinct destination; and an
 element a person or an action has just touched. The packet carries the count as the
 element's `repeats`. Every member is in the packet, in its own place: the
@@ -231,8 +227,9 @@ task:
   element the capture sent, in document order. There is no element bound (it
   was 40), no front-layer reordering (an open modal's controls used to be moved
   to the front), no byte budget (6,000 bytes for exploration, Core's gate for a
-  failure packet, 12,000 at most) and no trim. `evidence_budget_exhausted` is
-  no longer a refusal. A capture of a child frame's elements and the frame
+  failure packet, 12,000 at most) and no trim. The domain's former byte-budget
+  refusal is gone; Core's build ending `flow_bootstrap.evidence_budget_exhausted`
+  names an actual spend, time, token, call or round limit. A capture of a child frame's elements and the frame
   merge's `unansweredFrameIds` ride on `frame`.
 - **Every string whole.** Text, names, labels, headings, a row's words, every
   option of a select (100 of them as readily as 20, empty labels kept), the
@@ -316,3 +313,10 @@ route state (`route-state/project.ts`) are read off the same whole packet, so a
 call's own capture answers for them exactly as `captureStateDigest` and
 `observeRouteState` would. The route state names every dialog, every blocker
 and every control.
+
+Core carries every evidence entry in call order beside the complete draft and
+history. The request's only page-information bound is the model's
+1,000,000-token window (992,000 input and 8,000 reserved output). A request
+that exceeds it is refused before sending with its measured size; no page
+entry is ranked, sampled or trimmed to make it fit. Spend, deadlines and call
+counts still bound how long a build runs, not which captured elements it sees.

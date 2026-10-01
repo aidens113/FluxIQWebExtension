@@ -473,8 +473,8 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     action of the moment, the newest card of the unit of work that is running
     or waiting on the person; "Waiting for you" shows on every card of that
     unit still waiting on the person. An action that never said it ended
-    shows no outcome once the work moved on, and neither does a wait Core
-    never settled once its unit of work is over.
+    shows no outcome once the work moved on. A wait Core never settled keeps
+    "Waiting for you", even after its unit of work ends.
   - **Questions to the person** (`stream/step/messages.ts`). A robot-check or
     permission card is over only when Core says so: the ask row that settles
     the wait carries the same ask id (`activityActionKey` from `fluxiq/ui`,
@@ -488,6 +488,10 @@ run asked its question in) and FluxIQ's work in one stream, like a chat app:
     card, whichever came first. An ask row with no ask id while another ask's
     card waits only restates that wait (a parked run's "Run is waiting for an
     answer") and adds nothing. These are the Core panel's rules.
+    Core's closed resolutions are `waited_out` (the check cleared itself),
+    `answered` (the person continued), `allowed` (permission granted),
+    `declined`, `timed_out` and `cancelled`. The first three settle successfully;
+    the last three settle as failed. A later action cannot imply any of them.
   - **Accessibility.** The card is a labelled group ("Click, Get a free
     quote: Done"), and its icon is `aria-hidden`.
   - **Styling.** The panel's tokens only, so light and dark follow them: the
@@ -1086,17 +1090,18 @@ under the `web` namespace, including page URL/title, viewport bounds, scroll
 position, focused target, selected text, and a capped set of interactive
 elements.
 
-Element state is intentionally filtered. The extension does not record every
-DOM element. An element is kept only when it is rendered and says something
-about itself — meaningful text, an accessible name, a value, media, or, for an
-interactable control, one of those or a stable public identifier such as
-`data-testid`, `aria-label`, `name`, or `id`. Controls the user has touched
-rank first, then primary controls, then other interactables, then semantic
-text. The generic sweep walks at most 50,000 nodes, a capture returns at most
-2,000 descriptors, and the state projection then keeps at most 1,500 of them. Each cap reports itself, and which flag names which is in
-[page evidence](page-evidence.md#the-four-caps). This gives FluxIQ enough
-factual target data for mining without bloating recordings with anonymous DOM
-structure.
+The browser capture lists every rendered element in composed document order,
+across open shadow roots and every responding frame, with no count cap,
+ranking, text cut or attribute allowlist (`content/rendered-elements.ts`,
+`dom-snapshot.ts`, `describe-element.ts`). Nameless, transparent, small and
+`aria-hidden` elements remain represented when rendered. Repetition,
+front-layer and lead-statement facts annotate elements rather than reorder
+them. Hidden/non-rendered subtrees and the extension's own UI are excluded.
+The separate stored-state projection still selects at most 1,500 useful
+elements for recording state paths; it does not bound the model's packet.
+Its omission flags are in [page evidence](page-evidence.md#the-four-caps).
+The model receives the complete screened packet, bounded only by Core's
+1,000,000-token request window; an oversized request is refused before sending.
 
 Beside the elements, a snapshot carries page-level evidence: the dialogs in
 front of the page, what is painted over its controls, whether it is still
