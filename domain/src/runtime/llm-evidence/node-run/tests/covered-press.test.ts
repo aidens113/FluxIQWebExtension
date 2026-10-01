@@ -14,7 +14,7 @@ const LOOK = "web.output.dom-capture_snapshot";
 const CLICK = "web.output.dom-click";
 
 /** `banner`: a layer beside the main column that covers nothing, as a cookie banner at the foot of the page. */
-type Layer = "none" | "popup" | "dialog" | "banner";
+type Layer = "none" | "popup" | "dialog" | "banner" | "overlap";
 
 /** The store page with the main column under `body`, and the layer the test opens beside it. */
 function store(): { gateway: WebLlmEvidenceGateway; clicks: string[]; open(layer: Layer): void } {
@@ -49,7 +49,7 @@ function snapshot(layer: Layer): JsonObject {
     : { tagName: "div", selector: cover, accessibleName: "Get $10 off your first pickup order" };
   const popup: JsonObject[] = [layerElement, { tagName: "button", selector: `${cover} > button`, visibleText: "No thanks" }];
   const evidence: JsonObject = layer === "banner" ? {} : {
-    overlays: { tested: 3, blockedCount: 2, blockers: [{ selector: cover, label: layer === "dialog" ? "Choose a store" : "Get $10 off your first pickup order", blocks: 2, blocked: [storeButton, `${main} > main > a`], kind: layer === "dialog" ? "consent" : "promotion" }] }
+    overlays: { tested: 3, blockedCount: 2, blockers: [{ selector: cover, label: layer === "dialog" ? "Choose a store" : "Get $10 off your first pickup order", blocks: 2, blocked: [storeButton, `${main} > main > a`], ...(layer === "overlap" ? {} : { kind: layer === "dialog" ? "consent" : "promotion" }) }] }
   };
   if (layer === "dialog") evidence.dialogs = { open: [{ selector: cover, role: "dialog", label: "Choose a store", modal: true }] };
   return {
@@ -143,4 +143,16 @@ test("a handle the page no longer has is refused with the page as it now stands,
   assert.equal(evidence.page?.location, URL);
   const pressed = await call(runtime, CLICK, { target: { handle: shownHandle(evidence, "Wireless earbuds") } });
   assert.equal(pressed.resultCode, "web.action.succeeded");
+});
+
+test("an element that merely overlaps the control, no dialog and no recognised layer, does not refuse the press", async () => {
+  // Live: a price's aria-hidden twin, a floating field label and a card's stretched
+  // link each mark what they overlap `coveredBy`; refusing them refused presses that work.
+  const page = store();
+  const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
+  const storeButton = shownHandle((await call(runtime, LOOK, {})).evidence, "Pickup or delivery?");
+  page.open("overlap");
+  const pressed = await call(runtime, CLICK, { target: { handle: storeButton } });
+  assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
+  assert.deepEqual(page.clicks, ["body > div:nth-of-type(2) > header > button"]);
 });
