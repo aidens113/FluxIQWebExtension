@@ -16,6 +16,25 @@ worker slots are assigned. Claude owns integration: no dev/main merge or push,
 protected runtime/storage/conversation/context-packet edits, panel management,
 Lab/browser/provider operations or actual private data inspection.
 
+Latest twelfth work: root independently observed floating139/native0/22.78s,
+extraction208/native0/2070.6012ms and extraction seventeen-root strict0.
+Core frozen source checkpoint91a29dd2 (Tooltip/floating/JsonViewer) plus
+CodeViewer cleanup checkpoint Core1d4d2000 passed19/strict0; JsonViewer missing
+long-string notice reproduced3fail/4pass then combined Tooltip/JsonViewer/
+download/shared contracts55/native0. Core scoped nine-root check0diagnostics.
+Tooltip/floating/binding frozen; downstream full58454 failed2062pass1lazy-tail
+failure. Unchanged narrow6pass doesn't waive it; deterministic probe plan active.
+Types15426/build23524 exposed original public state alias removed; root restored
+it. Corrected types1691/build11533 native0. Structure12361 now native0 after
+NEW test barrel import fix. Core DataInspector/settings workers frozen;
+root owning22293 native0 fivefiles79/21.19s and strict80956 fourroots0.
+Core full31117/types65532/build34521 active; structure46579 only protected
+4506/4505. Two workers own AskControls two-path unit and test-only lazy-tail
+ordering probe; third refines hierarchy dialog readiness. Core source frozen.
+Extension broad checks await new owning source freeze.
+Exact current progress and
+original failures persist in reports/twelfth-supervisor-verification.md.
+
 Seventh Core Complete: local source checkpoint e75c6fcc, gates/progress a992f6d8.
 Extension utility and seventh reports checkpoint151fbd2e. Supervisor focused
 12files150tests/native0/9.43s; full68081 native0,325files2199tests/185.26s;
@@ -543,6 +562,14 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
 
 ## Work Ledger
+
+### 2026-10-01 - Twelfth independent checks and continued implementation
+- Agent: supervisor and three workers
+- Changed: real extraction session binding; root NEW test barrel import reconciliation; Core tooltip/floating/download/preview validation and disjoint recovery briefs.
+- Why: drafts must keep their selected session, and stale callbacks must not affect replacement UI. Continue auditing all UI surfaces with durable progress.
+- Validation: independent extraction208/native0/2070.6012ms and strict17roots0; floating139/native0/22.78s; combined Core55/native0. Structure91073 found one new import and root corrected it; recheck pending. Full58454/types15426/build23524 active, not accepted yet.
+- Outcome: Frozen binding reviewed with legacy optional-ID and receiver/idempotence limits recorded. Two Core workers implement DataInspector and settings navigation; third read-only audits receiver reset semantics.
+- Follow-up: observe owning gates, rerun structure after import fix, local checkpoint; no Claude integration or private/live operations.
 
 ### 2026-10-01 - Eleventh integrated gates complete; three implementations released
 - Agent: supervisor

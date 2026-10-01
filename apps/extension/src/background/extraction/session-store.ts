@@ -74,6 +74,11 @@ export class ExtractionSessions {
   }
 
   /** The session named, or the most recently started one when the caller names none. */
+  /** Initial panel discovery is limited to the actual automation tab. */
+  getForTab(tabId: number | undefined): ExtractionSession | undefined {
+    return tabId === undefined ? undefined : [...this.sessions.values()].find(session => session.tabId === tabId);
+  }
+
   get(sessionId?: string | undefined): ExtractionSession | undefined {
     const id = sessionId ?? this.latestId;
     return id === undefined ? undefined : this.sessions.get(id);

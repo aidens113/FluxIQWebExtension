@@ -6,7 +6,7 @@ import { proposalFixture } from "./proposal-fixture";
 import { withDialogDom } from "./dialog-dom";
 
 type World = Parameters<Parameters<typeof withDialogDom>[0]>[0];
-const picked = { state: "picked", proposal: proposalFixture(), preview: [{ name: "Synthetic name", price: "Synthetic price" }] };
+const picked = { sessionId: "s1", tabId: 11, form: "list", state: "picked", proposal: proposalFixture(), preview: [{ name: "Synthetic name", price: "Synthetic price" }] };
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: Error) => void;

@@ -31,7 +31,7 @@ import { createExtractionReadRecovery, type ExtractionRecoveryTicket } from "./r
 import { createExtractionDialogFocus } from "./dialog-focus";
 import { extractionConfirmPayload } from "./confirm-payload";
 import { extractionFieldRowElement } from "./field-row";
-import type { ExtractionConfirmOutcome, ExtractionPreviewRow, ExtractionSessionRefusal, ExtractionSessionView } from "./messages";
+import type { ExtractionConfirmOutcome, ExtractionPreviewRow, ExtractionSessionRefusal, ExtractionSessionIdentity, ExtractionSessionView } from "./messages";
 import { buildExtractionPanel, type ExtractionPanelElements } from "./panel-elements";
 import { extractionPreviewColumns, extractionPreviewSelection, retainExtractionPreview } from "./preview";
 import { renderExtractionPreview } from "./preview-table";
@@ -91,6 +91,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   let fieldGeneration = 0;
   let busy = false;
   let epoch = 0;
+  let identity: ExtractionSessionIdentity | undefined;
   let noticeOwner: object | undefined;
   const refusalOwner = {};
   let retryButton: HTMLButtonElement | undefined;
@@ -103,7 +104,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   });
 
   const recovery = createExtractionReadRecovery({ read: readExtractionSession, start: startExtractionPick, prepare: options.prepare }, {
-    epoch: () => epoch, busy: () => busy, selection: () => draft && extractionPreviewSelection(draft),
+    epoch: () => epoch, identity: () => identity, acceptIdentity: next => { identity ??= next; }, busy: () => busy, selection: () => draft && extractionPreviewSelection(draft),
     runBusy: (work) => run(async () => work()),
     acceptSession: (session, restore) => { applySession(session); if (restore && (draft || session?.state === "picking" || session?.state === "picked")) { dialog.open(); drawRecovery(); } },
     acceptPreview: (session) => { if (draft) { rows = retainExtractionPreview(session?.preview ?? [], draft); render(); } },
@@ -142,6 +143,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     epoch++;
     busy = false;
     recovery.reset();
+    identity = undefined;
     draft = undefined;
     rawNames.clear();
     rows = [];
@@ -164,6 +166,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     epoch++;
     busy = false;
     recovery.reset();
+    identity = undefined;
     draft = undefined;
     rawNames.clear();
     rows = [];
@@ -284,6 +287,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   els.openButton.addEventListener("click", () => {
     if (busy || !els.panel.hidden) return;
     epoch++;
+    identity = undefined;
     els.notice.hidden = true;
     els.status.textContent = PICK_PROMPT;
     draft = undefined;
@@ -303,20 +307,22 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   });
 
   els.confirmButton.addEventListener("click", () => {
-    if (busy || !draft) return;
+    if (busy || !draft || !identity) return;
     draft = { ...draft, fields: draft.fields.map(field => ({ ...field, label: rawNames.has(field.sourceKey) ? rawNames.get(field.sourceKey)!.trim() || field.label : field.label })) };
     rawNames.clear();
-    const payload = extractionConfirmPayload(draft);
+    const payload = extractionConfirmPayload(draft), selected = identity;
     epoch++;
     recovery.reset();
     void run(async (token) => {
-      const outcome = await confirmExtraction(payload);
+      const outcome = await confirmExtraction(payload, selected);
       if (token === epoch) captured(outcome);
     });
   });
 
   function cancel(): void {
     if (busy) return;
+    const selected = identity;
+    if (!selected) { close(); return; }
     epoch++;
     recovery.reset();
     draft = undefined;
@@ -325,7 +331,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     els.notice.hidden = true;
     els.status.textContent = "Cancelling extraction...";
     void run(async (token) => {
-      await cancelExtraction();
+      await cancelExtraction(selected);
       if (token === epoch) close();
     });
   }

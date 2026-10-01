@@ -6,7 +6,7 @@ import { proposalFixture } from "./proposal-fixture";
 import { withDialogDom } from "./dialog-dom";
 
 type World = Parameters<Parameters<typeof withDialogDom>[0]>[0];
-const picked = { state: "picked", proposal: proposalFixture(), preview: [{ name: "Synthetic name", price: "Synthetic price", sku: "Synthetic sku" }] };
+const picked = { sessionId: "s1", tabId: 11, form: "list", state: "picked", proposal: proposalFixture(), preview: [{ name: "Synthetic name", price: "Synthetic price", sku: "Synthetic sku" }] };
 function deferred<T>() { let resolve!: (value: T) => void, reject!: (reason: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 function exclude(world: World, key: string) {
   const row = world.get("extractionFields").querySelectorAll(".extraction-field").find(row => row.dataset.field === key)!;
@@ -53,7 +53,7 @@ test("explicit hidden recovery reads existing picked session without prepare/sta
 }));
 
 test("picking read failure stops600ms polling and direct retry resumes one timer", async () => withDialogDom(async world => {
-  let failed = false; world.reply = () => failed ? Promise.reject(new Error("diagnostic")) : { ok: true, session: { state: "picking" } };
+  let failed = false; world.reply = () => failed ? Promise.reject(new Error("diagnostic")) : { ok: true, session: { sessionId: "s1", tabId: 11, form: "list", state: "picking" } };
   mountExtractionPanel(world.native(world.host)); await world.flush(); assert.equal(world.timers.size, 1); failed = true; await world.tick();
   assert.equal(world.timers.size, 0); const retry = world.get("extractionReadRetry"); assert.equal(retry.parentElement, world.get("extractionSheetRecovery"));
   failed = false; retry.dispatch("click"); await world.flush(); assert.equal(world.timers.size, 1); assert.equal(world.sent.filter(message => message.type === M.start).length, 0);
@@ -122,7 +122,7 @@ test("actual fulfilled background refusal remains user-facing while unexpected r
 }));
 
 test("restored picked session awaiting proposal keeps the original sheet/polling recovery", async () => withDialogDom(async world => {
-  world.reply = () => ({ ok: true, session: { state: "picked" } });
+  world.reply = () => ({ ok: true, session: { sessionId: "s1", tabId: 11, form: "list", state: "picked" } });
   mountExtractionPanel(world.native(world.host)); await world.flush();
   assert.equal(world.get("extractionPanel").hidden, false);
   assert.equal(world.timers.size, 1);

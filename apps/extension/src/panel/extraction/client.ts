@@ -24,14 +24,17 @@ import type {
   ExtractionConfirmResponse,
   ExtractionPreviewColumn,
   ExtractionSessionResponse,
+  ExtractionSessionIdentity,
   ExtractionSessionView
 } from "./messages";
 
 const NO_LISTENER = "FluxIQ's background worker did not answer. Reopen the panel and try again.";
 
 /** Begins a pick: the overlay goes up on the active tab and the next click chooses the example item. */
-export async function startExtractionPick(): Promise<void> {
-  await command({ type: EXTRACTION_RUNTIME_MESSAGES.start });
+export async function startExtractionPick(): Promise<ExtractionSessionIdentity | undefined> {
+  const response = await command({ type: EXTRACTION_RUNTIME_MESSAGES.start });
+  if (response.sessionId === undefined && response.tabId === undefined && response.form === undefined) return undefined;
+  return identityOf(response);
 }
 
 /**
@@ -43,8 +46,8 @@ export async function startExtractionPick(): Promise<void> {
  * did it actually get my rows? -- and `undefined` means the worker recorded the
  * definition without saying, which an older build does.
  */
-export async function confirmExtraction(request: ExtractionConfirmRequest): Promise<ExtractionConfirmOutcome | undefined> {
-  const response = await runtimeSendMessage<ExtractionConfirmResponse | undefined>({ type: EXTRACTION_RUNTIME_MESSAGES.confirm, request });
+export async function confirmExtraction(request: ExtractionConfirmRequest, identity?: ExtractionSessionIdentity): Promise<ExtractionConfirmOutcome | undefined> {
+  const response = await runtimeSendMessage<ExtractionConfirmResponse | undefined>({ type: EXTRACTION_RUNTIME_MESSAGES.confirm, request, ...(identity ? { sessionId: identity.sessionId } : {}) });
   if (!response) throw new Error(NO_LISTENER);
   if (!response.ok) throw refusalError(response.error);
   return capturedOutcome(response);
@@ -61,8 +64,8 @@ function capturedOutcome(response: { ok: true } & Partial<ExtractionConfirmOutco
 }
 
 /** Abandons the pick: the overlay comes down and the session, with whatever preview it held, is dropped. */
-export async function cancelExtraction(): Promise<void> {
-  await command({ type: EXTRACTION_RUNTIME_MESSAGES.cancel });
+export async function cancelExtraction(identity?: ExtractionSessionIdentity): Promise<void> {
+  await command({ type: EXTRACTION_RUNTIME_MESSAGES.cancel, ...(identity ? { sessionId: identity.sessionId } : {}) });
 }
 
 /**
@@ -78,18 +81,29 @@ export async function cancelExtraction(): Promise<void> {
  * rows the excluded column is absent from rather than present and hidden (D12).
  * Sending none means "as the proposal named them", which is the first read.
  */
-export async function readExtractionSession(columns?: readonly ExtractionPreviewColumn[]): Promise<ExtractionSessionView | undefined> {
-  const message = { type: EXTRACTION_RUNTIME_MESSAGES.getSession, ...(columns === undefined ? {} : { fields: columns }) };
+export async function readExtractionSession(columns?: readonly ExtractionPreviewColumn[], identity?: ExtractionSessionIdentity): Promise<ExtractionSessionView | undefined> {
+  const message = { type: EXTRACTION_RUNTIME_MESSAGES.getSession, ...(identity ? { sessionId: identity.sessionId } : {}), ...(columns === undefined ? {} : { fields: columns }) };
   const response = await runtimeSendMessage<ExtractionSessionResponse | undefined>(message);
   if (!response) throw new Error(NO_LISTENER);
   if (!response.ok) throw refusalError(response.error);
-  return response.session ?? undefined;
+  const session = response.session ?? undefined;
+  if (!session) return undefined;
+  const actual = identityOf(session);
+  if (identity && (actual.sessionId !== identity.sessionId || actual.tabId !== identity.tabId || actual.form !== identity.form)) throw new Error("The extraction session changed. Reopen the panel to choose another item.");
+  if (!["picking", "picked", "recorded"].includes(session.state)) throw new Error("The extraction session could not be read.");
+  return session;
 }
 
-async function command(message: { type: string }): Promise<void> {
+async function command(message: { type: string; sessionId?: string }): Promise<{ ok: true } & Partial<ExtractionSessionIdentity>> {
   const response = await runtimeSendMessage<ExtractionCommandResponse | undefined>(message);
   if (!response) throw new Error(NO_LISTENER);
   if (!response.ok) throw refusalError(response.error);
+  return response;
+}
+
+function identityOf(value: Partial<ExtractionSessionIdentity>): ExtractionSessionIdentity {
+  if (typeof value.sessionId !== "string" || !value.sessionId.trim() || !Number.isInteger(value.tabId) || value.tabId! < 0 || (value.form !== "list" && value.form !== "value")) throw new Error("The extraction session identity could not be read.");
+  return Object.freeze({ sessionId: value.sessionId, tabId: value.tabId!, form: value.form });
 }
 
 // Presentation provenance lets recovery preserve the background's authored

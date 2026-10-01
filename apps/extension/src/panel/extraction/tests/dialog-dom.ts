@@ -101,7 +101,7 @@ function makeWorld() {
   const world = {
     document: doc, host, timers,
     sent: [] as Record<string, unknown>[],
-    reply: (_message: Record<string, unknown>): unknown | Promise<unknown> => ({ ok: true }),
+    reply: (message: Record<string, unknown>): unknown | Promise<unknown> => message.type === "fluxiq.extractionStart" ? { ok: true, sessionId: "s1", tabId: 11, form: "list" } : { ok: true },
     get(id: string): DialogElement { const found = doc.body.descendants().find((element) => element.id === id); if (!(found instanceof DialogElement)) throw new Error(`missing ${id}`); return found; },
     native: (element: DialogElement) => element as unknown as HTMLElement,
     flush: async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); },

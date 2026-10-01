@@ -40,7 +40,7 @@ import {
 test("start puts the overlay in frame 0 of the automation tab", async () => {
   const h = harness();
   const response = responseOf(await handleExtractionControl({ type: EXTRACTION_RUNTIME_MESSAGES.start }, sidepanel, h.manager, h.deps));
-  assert.deepEqual(response, { ok: true, sessionId: "s1", tabId: AUTOMATION_TAB });
+  assert.deepEqual(response, { ok: true, sessionId: "s1", tabId: AUTOMATION_TAB, form: "list" });
   assert.deepEqual(h.sent, [{
     tabId: AUTOMATION_TAB,
     frameId: 0,

@@ -6,7 +6,7 @@ import { proposalFixture } from "./proposal-fixture";
 import { withDialogDom } from "./dialog-dom";
 
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (reason: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
-const picked = { sessionId: "s1", tabId: 11, state: "picked", proposal: proposalFixture(), preview: [{ name: "Fixture name", price: "12" }] };
+const picked = { sessionId: "s1", tabId: 11, form: "list", state: "picked", proposal: proposalFixture(), preview: [{ name: "Fixture name", price: "12" }] };
 
 test("entry opens a root-mounted modal and leaves browser page selection alone", async () => withDialogDom(async (world) => {
   const handle = mountExtractionPanel(world.native(world.host));
@@ -171,7 +171,7 @@ test("host move and unavailable opener close to current visible selected tab", a
 }));
 
 test("page-cancelled session closes without duplicate cancel", async () => withDialogDom(async (world) => {
-  let session: unknown = { sessionId: "s1", state: "picking" };
+  let session: unknown = { sessionId: "s1", tabId: 11, form: "list", state: "picking" };
   world.reply = () => ({ ok: true, session });
   mountExtractionPanel(world.native(world.host)); await world.flush();
   session = undefined; await world.tick();
@@ -234,7 +234,7 @@ test("restored recorded session never opens a modal or leaves inert background",
 }));
 
 test("Firefox document recreation resumes background pick without prepare/start/cancel", async () => {
-  let session: unknown = { sessionId: "s1", state: "picking" };
+  let session: unknown = { sessionId: "s1", tabId: 11, form: "list", state: "picking" };
   await withDialogDom(async (world) => {
     world.reply = () => ({ ok: true, session });
     mountExtractionPanel(world.native(world.host)); await world.flush();

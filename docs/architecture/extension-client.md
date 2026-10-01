@@ -1765,6 +1765,17 @@ transitions; live browser focus and assistive-technology behavior remain unverif
 
 ## Default Endpoint
 
+Extraction binds each draft to its actual backend session ID, tab and form.
+Initial discovery selects the automation tab; subsequent reads, preview,
+Confirm and cancellation name the selected ID and do not follow a replacement.
+Missing selected sessions retire the draft; malformed or mismatching replies
+cannot publish executable controls. Recovery tickets and polling share that
+binding. Cancellation erases draft values immediately while retaining the ID
+for an explicit failed-cancellation retry. Receipt Close cleans local UI.
+Older optional low-level callers retain omitted-ID compatibility and its risk.
+IDs provide correlation, not authorization or ordering of content commands.
+Receiver lifecycle and confirmation idempotence require separate validation.
+
 The default development endpoints are:
 
 ```text

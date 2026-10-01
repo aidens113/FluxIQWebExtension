@@ -35,9 +35,10 @@ import {
   type ExtractionPickedMessage,
   type ExtractionPreviewColumn,
   type ExtractionPreviewRow,
-  type ExtractionSessionRefusal
+  type ExtractionSessionRefusal,
+  type ExtractionSessionView as SharedExtractionSessionView
 } from "../../shared/extraction-messages";
-import type { WebAutomationExtractionProposal, WebAutomationRecordedExtraction } from "@fluxiq-web-extension/domain/client";
+import type { WebAutomationRecordedExtraction } from "@fluxiq-web-extension/domain/client";
 import type { FluxIQConnection } from "../connection";
 import { isControlPage } from "../control-page";
 import { confirmExtraction } from "./confirm";
@@ -50,16 +51,7 @@ type ControlResult = { readonly handled: false } | { readonly handled: true; rea
 type ControlMessage = { readonly type?: string; readonly [key: string]: unknown };
 
 /** The session as the panel sees it. It carries the proposal and the preview, and never a records array. */
-export type ExtractionSessionView = {
-  sessionId: string;
-  tabId: number;
-  state: ExtractionSession["state"];
-  form: ExtractionSession["form"];
-  proposal?: WebAutomationExtractionProposal | undefined;
-  /** Why there is nothing to confirm: the frame proposed nothing for the element, or the pick was for a form this worker cannot land. */
-  refused?: ExtractionSessionRefusal | undefined;
-  preview: ExtractionPreviewRow[];
-};
+export type ExtractionSessionView = SharedExtractionSessionView & { preview: ExtractionPreviewRow[] };
 
 /** Why a message was refused, and the sentence the panel shows for it. */
 const REFUSALS = {
@@ -97,7 +89,7 @@ export async function handleExtractionControl(
   if (runtime === undefined) return { handled: false };
   if (!isControlPage(sender)) return { handled: true, response: refuse("forbidden") };
   if (runtime === EXTRACTION_RUNTIME_MESSAGES.start) return { handled: true, response: await startPick(message, manager, deps) };
-  if (runtime === EXTRACTION_RUNTIME_MESSAGES.getSession) return { handled: true, response: await readSession(message, deps) };
+  if (runtime === EXTRACTION_RUNTIME_MESSAGES.getSession) return { handled: true, response: await readSession(message, manager, deps) };
   if (runtime === EXTRACTION_RUNTIME_MESSAGES.cancel) return { handled: true, response: await cancelPick(message, deps) };
   if (runtime === EXTRACTION_RUNTIME_MESSAGES.confirm) return { handled: true, response: await confirmPick(message, manager, deps) };
   return { handled: true, response: await defineForTest(message, manager, deps) };
@@ -141,7 +133,7 @@ async function startPick(message: ControlMessage, manager: FluxIQConnection, dep
     deps.sessions.clear(sessionId);
     return refuse("page_refused", error instanceof Error ? error.message : undefined);
   }
-  return { ok: true, sessionId, tabId };
+  return { ok: true, sessionId, tabId, form };
 }
 
 /**
@@ -221,8 +213,9 @@ async function rearmPick(session: ExtractionSession, deps: ExtractionControlDeps
  * and hidden (D12). The panel drops the values from its own copy in the same
  * turn, so neither half is left holding them.
  */
-async function readSession(message: ControlMessage, deps: ExtractionControlDeps): Promise<unknown> {
-  const session = deps.sessions.get(sessionIdOf(message));
+async function readSession(message: ControlMessage, manager: FluxIQConnection, deps: ExtractionControlDeps): Promise<unknown> {
+  const requestedId = sessionIdOf(message);
+  const session = requestedId === undefined ? deps.sessions.getForTab(manager.status().activeTabId) : deps.sessions.get(requestedId);
   if (session === undefined) return { ok: true };
   const proposal = session.proposal;
   const preview = session.state === "picked" && proposal ? extractionPreviewRequest(proposal, columnsOf(message)) : undefined;

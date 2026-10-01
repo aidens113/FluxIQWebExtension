@@ -3,15 +3,15 @@ import test from "node:test";
 import { createExtractionReadRecovery, type ExtractionRecoveryTicket } from "../index";
 import type { ExtractionPreviewColumn, ExtractionSessionView } from "../../messages";
 function deferred<T>() { let resolve!: (value: T) => void, reject!: (reason: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
-const picked: ExtractionSessionView = { state: "picked" };
+const picked: ExtractionSessionView = { sessionId: "s1", tabId: 11, form: "list", state: "picked" };
 const columns = (key = "a"): ExtractionPreviewColumn[] => [{ key, handling: "include" }];
 function fixture(read: (selection?: readonly ExtractionPreviewColumn[]) => Promise<ExtractionSessionView | undefined> = async () => picked) {
   let epoch = 0, busy = false, selection = columns(), starts = 0, preparations = 0;
   let owner: object | undefined, sentence = "", changed: () => void = () => {}, cleared: () => void = () => {};
   const reads: (readonly ExtractionPreviewColumn[] | undefined)[] = [], accepted: unknown[][] = [];
   let starting: () => Promise<void> = async () => {}, preparing: () => Promise<void> = async () => {};
-  const helper = createExtractionReadRecovery({ read: async selection => { reads.push(selection); return read(selection); }, start: async () => { starts++; await starting(); }, prepare: async () => { preparations++; await preparing(); } }, {
-    epoch: () => epoch, busy: () => busy, selection: () => selection,
+  const helper = createExtractionReadRecovery({ read: async selection => { reads.push(selection); return read(selection); }, start: async () => { starts++; await starting(); return picked; }, prepare: async () => { preparations++; await preparing(); } }, {
+    epoch: () => epoch, identity: () => picked, acceptIdentity: () => {}, busy: () => busy, selection: () => selection,
     runBusy: async work => { busy = true; try { await work(); } finally { busy = false; } },
     acceptSession: (session, restore) => accepted.push(["session", session, restore]), acceptPreview: session => accepted.push(["preview", session]),
     showError: (ticket, text) => { owner = ticket; sentence = text; }, clearError: ticket => { if (owner === ticket) { owner = undefined; sentence = ""; } cleared(); }, onChange: () => changed()

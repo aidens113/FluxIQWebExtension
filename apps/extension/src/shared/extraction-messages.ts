@@ -94,6 +94,17 @@ export const EXTRACTION_RUNTIME_MESSAGES = {
 /** Which shape of extraction a pick is for: a list of records, or one value. */
 export type ExtractionPickForm = "list" | "value";
 
+/** Immutable backend pick identity; unrelated to the recording protocol session. */
+export type ExtractionSessionIdentity = Readonly<{ sessionId: string; tabId: number; form: ExtractionPickForm }>;
+
+/** A discovery or explicitly selected session returned to the panel. */
+export type ExtractionSessionView = ExtractionSessionIdentity & {
+  state: "picking" | "picked" | "recorded";
+  proposal?: WebAutomationExtractionProposal | undefined;
+  preview?: ExtractionPreviewRow[] | undefined;
+  refused?: ExtractionSessionRefusal | undefined;
+};
+
 /**
  * Why a pick session has nothing to confirm, as the panel is told it.
  *
