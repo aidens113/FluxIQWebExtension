@@ -15,6 +15,8 @@
 // test is the value's shape and not its name, a member Core adds later is
 // carried through with no change here and the guarantee still holds.
 
+import { screenWebBuildRefusalDiagnostic } from "@fluxiq-web-extension/domain/node";
+
 /**
  * The most members one row may carry, counting its `toolId`, and the most one
  * nested record or list inside it.
@@ -132,6 +134,7 @@ export function publishableStepFields(entry: Record<string, unknown>): Record<st
  * build readers. Every other member retains the generic legacy shape rule.
  */
 function publishableNamedStepField(field: string, value: unknown): PublishableStepValue | undefined {
+  if (field === "diagnostic") return screenWebBuildRefusalDiagnostic(value);
   if (field === "progress") return progressRecord(value);
   if (field === "draftChange") return draftChangeRecord(value);
   if (field === "draft") return draftRecord(value);

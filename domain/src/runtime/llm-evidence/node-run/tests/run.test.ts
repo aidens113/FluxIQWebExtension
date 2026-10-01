@@ -101,11 +101,13 @@ test("a node that fails is a result, under its own name, and never a step of the
 test("a node this domain cannot run is refused with the ones it can, and nothing is captured", async () => {
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
-  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "builtin.logic.and", parameters: {}, consequences: [] } });
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "builtin.logic.and", parameters: { target: { handle: "target.1" } }, consequences: [] } });
   const evidence = refused.evidence as JsonObject & { detail: { reason: string; instead: string[] } };
   assert.equal(evidence.ok, false);
   assert.equal(evidence.detail.reason, "node_not_runnable_here");
   assert.equal(evidence.detail.instead.includes(CLICK), true);
+  assert.equal(refused.diagnostic?.target, "target.1");
+  assert.equal(refused.diagnostic?.pageObserved, false);
   assert.deepEqual(stubbed.commands, []);
 });
 
@@ -125,6 +127,9 @@ test("a declared consequence nobody permitted refuses the run, and nothing is di
   const evidence = refused.evidence as JsonObject & { code: string; detail: { requestId: string } };
   assert.equal(evidence.code, "permission_required");
   assert.equal(evidence.detail.requestId, "request.one");
+  assert.equal(refused.diagnostic?.target, handle);
+  assert.equal(refused.diagnostic?.targetObserved, true);
+  assert.equal(refused.diagnostic?.phase, "before_action");
   // Only the look the refusal itself took; nothing was clicked.
   assert.equal(stubbed.commands.some((command, index) => index >= before && command.actionType === "web.dom.click"), false);
 });

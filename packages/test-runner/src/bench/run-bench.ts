@@ -6,6 +6,7 @@ import type { EvidenceMode } from "../commands.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../run-scenario.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "../facility-failure/index.js";
+import { PERMISSION_STOP_INVARIANT } from "../run-evaluation/permission-stop/index.js";
 import { parseBenchReceiptJson } from "./bench-receipt.js";
 import { actionsExecuted, aggregateBenchReport, benchResultsByLane, groupBenchResults } from "./aggregate-report.js";
 import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, acquireCampaignLease, assertCampaignCompatibility, campaignPlanSha256, canonicalJson, createCampaignPlan, createCampaignPlanShards, loadCampaignCheckpointChain, loadCampaignManifest, preserveInterruptedStaging, writeCampaignCheckpoint, writeCampaignManifest, type ActiveCampaignAttempt, type CampaignCheckpoint, type CampaignCompatibility, type CampaignLease, type CampaignLeaseOptions, type CampaignManifest, type CampaignPlanCell, type CampaignRequest, type CompletedCampaignCell } from "./campaign/index.js";
@@ -444,7 +445,12 @@ function reconstructBenchEvaluation(cell: CampaignPlanCell, active: ActiveCampai
   const result = { runId: active.runId, verdict: source.verdict === "passed" ? "passed" as const : "failed" as const, ...(source.failureCategory ? { failureCategory: source.failureCategory } : {}) };
   const observed = { ...identity, facilityFailure: source.facilityFailure, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs: source.durationMs };
   if (cell.lane === "recording") return evaluateRecordingRun(observed);
-  return evaluateFlowRun({ ...observed, result: { ...result, path: bundlePath, observation: { lane: "flow", flowCreated: source.flowCreated === true, oracleVerdict: source.oracleVerdict, reportedVerdict: source.reportedVerdict, automationFailureReported: source.automationFailureReported, automationFailureExpected: source.automationFailureExpected, harnessActivations: source.harnessActivations, actions: source.actions, extraction: source.extraction } } });
+  const evaluation = evaluateFlowRun({ ...observed, result: { ...result, path: bundlePath, observation: { lane: "flow", flowCreated: source.flowCreated === true, oracleVerdict: source.oracleVerdict, reportedVerdict: source.reportedVerdict, automationFailureReported: source.automationFailureReported, automationFailureExpected: source.automationFailureExpected, harnessActivations: source.harnessActivations, actions: source.actions, extraction: source.extraction } } });
+  // The finalized bundle records this hand-off as an invariant, not a
+  // RunScenarioResult field. Preserve its validated evidence when rebuilding
+  // the benchmark evaluation rather than parsing the invariant's sentence.
+  const stop = source.invariants.find((invariant) => invariant.id === PERMISSION_STOP_INVARIANT && !invariant.passed);
+  return stop ? { ...evaluation, verdict: "failed", failureCategory: evaluation.failureCategory ?? "runtime.behavior", invariants: [...evaluation.invariants.filter((invariant) => invariant.id !== PERMISSION_STOP_INVARIANT), structuredClone(stop)] } : evaluation;
 }
 
 async function persistEvaluation(directory: string, cell: CampaignPlanCell, evaluation: RunEvaluation, observed: { problems: string[]; cause?: string }): Promise<Omit<AcceptedCell, "bundle">> {

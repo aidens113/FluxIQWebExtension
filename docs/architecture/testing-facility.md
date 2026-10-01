@@ -121,15 +121,23 @@ runtime resolves the handle to its last-returned selector and revalidates that
 selector against fresh sanitized evidence before sending it to the browser.
 Reveal guidance limits choices to observed controls that expose otherwise
 unavailable structure required to author the instruction. The
-`web-llm-evidence.v1` response is capped by Core's per-call allowance and a
-12 KB downstream hard ceiling (6 KB when Core provides no allowance), with at
-most 40 elements. It excludes
-input values, sensitive controls, selected text, unrestricted attributes, and
-URL queries/fragments. Ordinary non-sensitive input and textarea controls may
-expose only a `hasValue` boolean so later evidence can distinguish empty from
-completed fields without revealing entered text. A non-sensitive select may
-expose its current `selectedValue` only when that value exactly matches one of
-the same descriptor's already-sanitized bounded options.
+`web-llm-evidence.v2` response describes every rendered element in document
+order, across frames and open shadow roots, without element caps, ranking or
+packet trimming. Strings, attributes, input values and URLs are screened for
+secrets; sensitive controls are withheld. The model's 1,000,000-token input
+window bounds what a request can accept. Covering layers remain attached to
+their elements through `coveredBy`, `covers`, dialog and layer-kind marks.
+
+A refused node call also records a structural `diagnostic` on its evidence
+trace row, retained in `snapshots/flow-lane.json` under
+`build.evidenceLoop.steps`. It states the refusal code/reason, requested opaque
+target handle, whether that target was observed before the action, and its
+covering handles/kinds/count. `pageObserved: false` explicitly records a call
+that had no pre-call capture; no later page state is substituted. The domain
+producer and the bundle reader share a strict field/value allowlist. Labels,
+page text, selectors, URLs, input values and arbitrary refusal prose cannot
+travel on this account. Core transports the optional object generically and
+does not interpret browser handles or covering layers.
 
 Neither production nor Testing Lab web code resolves a provider or invokes a
 model itself. Generic provider selection, secret access, budgets,
@@ -1533,9 +1541,15 @@ and nothing that judges a created Flow reads it. Failing the run for its absence
 threw away a complete product result: on `run-mudslg9p-c59266aa` a Flow was
 built, ran, failed, Core's repair made its two calls, no record arrived, and the
 run spent ten minutes waiting before being reported `performance.budget`. It
-now takes its own bound, `RECOVERY_RECORD_WAIT_MS`, five minutes measured from
-the first terminal read — half of the live run's deadline, and long
-enough for any recovery this facility has been observed to complete.
+For older details without a recovery-state marker, `RECOVERY_RECORD_WAIT_MS`
+keeps the five-minute fallback; a run with no failed execution attempt gets the
+shorter grace. When Core marks recovery `running`, the live-run deadline bounds
+the wait. A marker of `ended` or `threw` settles it immediately and names the
+missing record. A terminal `metadata.repairedRerun.status` also settles the
+failed repaired re-run immediately: no further recovery follows that re-run.
+An active `resultRepair.phase` of `reauthoring` or `rerunning` still keeps the
+run in flight. Fake-clock tests cover a failed repair settling on its first
+terminal read after one polling interval.
 
 ### The adversarial lane
 
@@ -1917,6 +1931,11 @@ bundle is preserved under that serial/child campaign's `interrupted/` directory
 and the cell gets a new deterministic attempt id. A lease refuses a concurrent
 live owner and archives/reclaims only an owner proven stale by machine-boot and
 process-start identities, so a reboot or PID reuse needs no lock-file edit.
+
+Reconstructing a finalized Flow evaluation preserves its failed
+`stopped-for-permission` invariant and evidence references. A permission stop
+therefore remains `stopped_for_permission` through reconciliation and repeated
+resumes, and can never become a passing benchmark row.
 
 After every child is terminal, the parent validates their exact partition and
 authenticated evaluations, then publishes parent-ordered `runs.json`,

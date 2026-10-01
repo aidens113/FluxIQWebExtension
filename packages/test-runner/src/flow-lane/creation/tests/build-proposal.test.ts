@@ -16,6 +16,16 @@ import { DEFAULT_LLM_MODEL } from "@fluxiq-web-extension/test-contracts";
  */
 
 const INSTRUCTION = "Scrape the first page with columns name and price.";
+
+test("proposed and refused builds both preserve the screened call-time refusal account", async () => {
+  const diagnostic = { schemaVersion: "web-build-refusal.v1", phase: "before_action", code: "blocked_by_dialog", pageObserved: true, target: "target.1", targetObserved: true, coveringTargets: ["target.2"], coveringKinds: ["consent"], coveringCount: 1 };
+  const steps = [{ toolId: "core.run_node", iteration: 1, effectApplied: false, resultCode: "web.action.rejected.blocked_by_dialog", diagnostic }];
+  const proposed = await build({ evidenceLoop: { providerCallCount: 1, decisionCount: 1, traceStepCount: 1, iterationCount: 1, toolCallCount: 1, evidenceBytes: 100, toolIds: ["core.run_node"], steps } });
+  assert.deepEqual(proposed.record.evidenceLoop?.steps?.[0]?.diagnostic, diagnostic);
+  const refused = await build({ generation: { kind: "refused", status: 400, payload: { diagnostic: { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation", retryable: true, providerInvocation: "attempted", providerResponse: "received", evidenceLoop: { iterationCount: 1, decisionCount: 1, toolCallCount: 1, evidenceBytes: 100, steps } } } } });
+  assert.deepEqual(refused.record.evidenceLoop?.steps?.[0]?.diagnostic, diagnostic);
+});
+
 const PROGRESS_STEP = {
   toolId: "core.decision_amend_draft",
   iteration: 2,
