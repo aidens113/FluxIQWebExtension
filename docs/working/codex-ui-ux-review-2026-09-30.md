@@ -64,9 +64,12 @@ failures, refinements and exact full gates; no browser certification.
 
 Tenth Active: extraction draft/control frozen and independently verified66/66,
 native0/654.7189ms, strict four-root typing0. Core database semantic refinement
-passes existing three suites25/native0/8.70s. Menu frozen pending root130-test
-verification; mounted Chat remains active. All slots assigned: Chat source,
-extraction read recovery planning and shared overlay executable planning.
+passes existing three suites25/native0/8.70s. Menu independent130 pass and local
+Core687ddc58 checkpoint; Chat independent118/strict8roots0 and downstream425f58af
+checkpoint. Core types/build passed, full2547pass/1login-lock EPERM failed;
+full certification remains incomplete. All slots assigned: extraction recovery,
+shared environment implementation and bounded login-lock fix. Root turn Open
+FluxIQ lease tests-first2fail, corrected32pass/native0/276.3537ms; typing pending.
 [Tenth verification](./codex-ui-ux-review-2026-09-30/reports/tenth-supervisor-verification.md)
 records limits; [shell working owner audit](./codex-ui-ux-review-2026-09-30/reports/shell-working-owner-audit.md)
 is read-only backlog. Broad gates follow owning source freeze; no Claude integration.
@@ -514,6 +517,14 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
 
 ## Work Ledger
+
+### 2026-10-01 - Turn Open FluxIQ dispatch lease supervisor brief
+- Agent: supervisor
+- Changed: release exact chat/chat-panel.ts, chat/tests/chat-owner-recovery.test.ts, open-fluxiq/open-fluxiq-button.ts and its existing tests/open-fluxiq-button.test.ts.
+- Why: turn factory creation checks its subject lease but the retained native button can still dispatch after that lease retires.
+- Validation: root inspected actual shell factory forwarding and actual leaf request listener. Tests-first current/retired mounted turn and optional leaf dispatch predicate regressions pending; all existing assertions remain unchanged.
+- Outcome: Released optional canOpen presentation predicate passed by Chat and checked by the leaf before any request/lock/focus-feedback mutation; preserve standalone callers, current native activation and issued acknowledgements. Require current mounted control plus subject/owner/active lease.
+- Follow-up: root narrow owning/component tests and scoped typing, then freeze. No shell/protocol/background/wire/shared harness changes, automatic retry or cancellation claim.
 
 ### 2026-10-01 - Menu checkpoint and mounted Chat independent review
 - Agent: supervisor

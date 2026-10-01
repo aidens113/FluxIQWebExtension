@@ -8,6 +8,7 @@ import { RUNTIME_MESSAGES as M } from "../../../shared/constants";
 import { ACTIVITY_MESSAGES } from "../../../shared/activity/index";
 import { activityEvent, relayState } from "./activity-fixture";
 import type { PanelMessage, PanelStore } from "../../state";
+import { createOpenFluxIQButton } from "../../open-fluxiq/open-fluxiq-button";
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 const status = (projectId = "project-1", coreApiUrl = "http://core-a.invalid") => statusWith({ connectionState: "connected", paired: true, projectId, settings: { coreApiUrl, gatewayUrl: "ws://gateway.invalid", autoReconnect: true, captureMutations: false, captureInputValues: false, captureSnapshots: false } });
 for (const changed of ["project", "core"] as const) test(`confirmed ${changed} replacement immediately retires old target and turns`, async () => withFakeDocument(async () => {
@@ -25,6 +26,24 @@ async function runtime(body: (listeners: Set<(message: unknown) => void>) => Pro
   try { await withFakeDocument(() => body(listeners)); } finally { if (before) Object.defineProperty(globalThis, "chrome", before); else Reflect.deleteProperty(globalThis, "chrome"); }
 }
 const opener = () => ({ element: document.createElement("a"), observe() {} });
+
+test("retired turn Open FluxIQ controls cannot dispatch after owner or active replacement", async () => runtime(async () => {
+  let core = thread("Only FluxIQ can answer", true), opens = 0;
+  core.threads[0]!.turns[0]!.ask!.kind = "unsupported-kind";
+  const request: PanelStore["request"] = <T>(message: PanelMessage) => message.type === M.panelOpenFluxIQ
+    ? (opens++, Promise.resolve({ ok: true, value: {} as T })) : core.request<T>(message);
+  const chat = createChatPanel(request, style => createOpenFluxIQButton(request, style));
+  try {
+    chat.render(status()); chat.setActive(true); await settle();
+    const old = fake(chat.element).byClass("open-fluxiq")[0]!.children[0]!;
+    core = thread("Current unsupported question", true); core.threads[0]!.turns[0]!.ask!.kind = "unsupported-kind";
+    chat.render(status("project-2")); await settle(); old.dispatch("click"); await settle(); assert.equal(opens, 0);
+    const current = fake(chat.element).byClass("open-fluxiq")[0]!.children[0]!;
+    current.dispatch("click"); await settle(); assert.equal(opens, 1);
+    chat.setActive(false); chat.setActive(true); await settle(); current.dispatch("click"); await settle(); assert.equal(opens, 1);
+    fake(chat.element).byClass("open-fluxiq")[0]!.children[0]!.dispatch("click"); await settle(); assert.equal(opens, 2);
+  } finally { chat.setActive(false); }
+}));
 const thread = (text: string, ask = false) => targetCore([{ conversationId: "same-id", subjectKind: "project", subjectId: "project-1", turns: [{ turnId: "same-turn", author: "automation", text, ...(ask ? { ask: { askId: "same-ask", kind: "confirm", status: "pending" } } : {}) }] }]);
 test("historical first initialization reads once; later never-activated replacement waits for activation", async () => runtime(async () => {
   let core = thread("First owner"); const calls: PanelMessage[] = []; const request: PanelStore["request"] = (message) => { calls.push(message); return core.request(message); };

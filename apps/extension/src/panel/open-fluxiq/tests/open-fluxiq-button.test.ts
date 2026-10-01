@@ -71,3 +71,12 @@ test("a later address change clears real failure and preserves icon naming", asy
     view.observe(state("http://second.invalid")); assert.equal(notice.hidden, true);
   });
 });
+
+test("optional current-control predicate refuses retired dispatch and preserves standalone activation", async () => withFakeDocument(async () => {
+  let current = true, calls = 0;
+  const style = { label: "Open FluxIQ", look: "small" as const, canOpen: () => current };
+  const view = createOpenFluxIQButton((async () => { calls++; return { ok: true, value: {} }; }) as PanelStore["request"], style);
+  const button = fake(view.element).children[0]!;
+  current = false; button.dispatch("click"); await flush(); assert.equal(calls, 0); assert.equal(button.disabled, false);
+  current = true; button.dispatch("click"); await flush(); assert.equal(calls, 1);
+}));

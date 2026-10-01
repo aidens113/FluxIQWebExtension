@@ -21,7 +21,7 @@ export type OpenFluxIQButton = {
  * small one, a link, or the top bar's icon (the words are then its name and
  * tooltip).
  */
-export type OpenFluxIQStyle = { label: string; look: "primary" | "small" | "link" | "icon" };
+export type OpenFluxIQStyle = { label: string; look: "primary" | "small" | "link" | "icon"; canOpen?: () => boolean };
 
 const FAILED = "Couldn't open FluxIQ. Check its web address in Settings.";
 const LOOKS = { primary: "primary-button", small: "small-button", link: "link-button", icon: "icon-button" } as const;
@@ -45,7 +45,7 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
   }
 
   async function open(): Promise<void> {
-    if (pending) return;
+    if (pending || style.canOpen?.() === false) return;
     pending = true;
     error.clear();
     render();

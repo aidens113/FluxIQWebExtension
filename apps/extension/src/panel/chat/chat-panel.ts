@@ -98,7 +98,7 @@ export type OpenFluxIQControl = { readonly element: HTMLElement; observe(status:
  * FluxIQ can show. The panel passes its own (`panel/open-fluxiq/`), so the
  * chat does not reach into it.
  */
-export type OpenFluxIQFactory = (style: { label: string; look: "small" | "link" }) => OpenFluxIQControl;
+export type OpenFluxIQFactory = (style: { label: string; look: "small" | "link"; canOpen?: () => boolean }) => OpenFluxIQControl;
 
 /** How the panel mounts the chat. */
 export type ChatPanelOptions = {
@@ -328,7 +328,7 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
         },
         openFluxIQ: () => {
           if (!eligible()) return createElement("span");
-          const made = openFluxIQ({ label: "Open FluxIQ", look: "link" });
+          const made: OpenFluxIQControl = openFluxIQ({ label: "Open FluxIQ", look: "link", canOpen: () => eligible() && made.element.isConnected });
           if (latestStatus !== undefined) made.observe(latestStatus);
           turnOpeners.push(made);
           return made.element;
