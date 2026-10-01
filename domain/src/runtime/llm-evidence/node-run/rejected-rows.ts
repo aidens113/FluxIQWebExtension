@@ -38,6 +38,7 @@ import {
   WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLES_KEY,
   type WebAutomationExtractionRejectedRow
 } from "../../../actions/extraction";
+import { present } from "../present";
 import { webNodeWithoutPageRecord } from "./page-record";
 import { webNodeReadResult } from "./read-result";
 
