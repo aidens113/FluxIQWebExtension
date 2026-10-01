@@ -11,73 +11,41 @@ Related: [working document index](./README.md)
 
 ## Current State
 
-Latest continuation checkpoint (2026-10-01): Core sixth Complete, root full
-319files2078tests/native0/187.86s, types native0, production17pages/native0/
-203827ms. Full structure has only inherited protected service4506/4505/native1,
-no config/baseline relaxation. Database e2f9f9dd and Runtime/layout5c28bdb3
-saved; root Runtime source-contract104passed before full rerun. All three
-seventh Core workers now released: Production parameters, Deployment and Docs,
-exact disjoint paths; source is unfrozen only within those briefs.
+Continuous execution is active in paired isolated task t224 worktrees. All three
+worker slots are assigned. Claude owns integration: no dev/main merge or push,
+protected runtime/storage/conversation/context-packet edits, panel management,
+Lab/browser/provider operations or actual private data inspection.
 
-Extension recording review verified: full1791/native0/121040.1252ms, types0,
-build22files per browser/native0/96138ms, full structure0/136warnings119baseline.
-Root shell45 and strict recording types independently pass. Prior settings
-5c61a4ba, Start0a861fd9 and pausedfb66ce0b remain protected. Recording review
-checkpoint follows; root Open FluxIQ utility two-path fix is now released.
-Original Claude task ids/handoff remain preserved below. No merge/push, live
-provider/browser/panel activity or protected-tree edits; continue beyond batches.
+Seventh Core Complete: local source checkpoint e75c6fcc. Supervisor focused
+12files150tests/native0/9.43s; full68081 native0,325files2199tests/185.26s;
+types72364 native0/92993ms; production76550 native0,17pages/202949ms.
+Structure65986 native1 solely inherited protected service4506/4505. No baseline
+or config relaxation. Production parameters, Deployment and Docs recovery are
+implemented, independently reviewed and covered by these gates.
 
-The user requested a primary focus on Core framework UI/UX across all web panels
-and the extension. Existing Core UX plans describe older implementations and lack
-live browser certification; they are background, not evidence of current behavior.
+Eighth three Core implementations released: Identity owner/subject recovery,
+Secret owner/reveal/catalog recovery and Docs tree navigation. Exact disjoint
+briefs and own reports below. Supervisor owns shared contracts, authored docs,
+review, integration and verification; broad Core checks wait for source freeze.
 
-Work is isolated in task/t224-codex-ui-ux-review, with a paired Core worktree.
-Discovery is read-only for product source; bounded confirmed fixes are specified below. No panel startup, browser, Lab or model
-provider calls are authorized in this session. No dev merge or push: Claude owns
-integration. Claude's existing worktrees and excluded runtime/storage areas stay
-untouched. Findings must name current source and distinguish observed code from
-visual/browser hypotheses.
+Extension utility Complete: Open/report/Activity four-suite41 pass/native0/
+604.5906ms. Full types5771 native0/51888ms; structure37957 native0,136warnings/
+119baseline. Full28915 native0,1821tests/113849.9263ms; build18201 native0,
+22files per Chrome/Firefox/e2e target/12269ms. Earlier
+sixth recording/settings/Start/paused fixes pass full1791/types/build/structure.
+Current utility controls preserve protocol/redaction ownership; no browser
+certification is claimed. Next extension unit awaits current gates and audit.
 
-Done: current indexes and relevant prior UX Current State sections read; all
-global operational panels, Studio surfaces and extension journeys inventoried
-in the three discovery reports. Supervisor independently confirmed missing
-session-recovery host, ignored onboarding intent, missing authoring-review
-callback, single-conversation prompt selection, and extension draft races.
-Initial fixes are source-complete and frozen. Extension typecheck passes; full
-corrected TAP1685/1685 passes (outer PowerShell redirect exit1 documented);
-supervisor independently runs12draft regressions with native exit0. Downstream
-full structure passes135warnings/119baseline. Core web typecheck passes; full
-Core structure has only inherited unchanged service4506/4505. Focused recovery
-17/17, Core web production build (165872ms) and extension production build
-(42135ms; Chrome/Firefox/e2e22files each) pass. Supervisor full web suite88597
-completed with1699pass/1fail: unchanged core-contract flow.build fixture rejected
-its obsolete pre-provider request budget. The published-default fixture correction
-and matching Core composer draft guard were then verified and checkpointed.
-Initial fix checkpoints: Coree6eb33f2, downstream21e915ee.
-Follow-up code checkpoint: Core95573296. Final supervisor web suite98054 passed
-287files/1704tests, exit0,212.84s. Final web typecheck62339 passed,83544ms;
-production build71345 passed,17pages,248727ms. Core audit1037 has exactly the
-same inherited service4506/4505 failure; no new violation or baseline increase.
-Downstream documentation audit96080 passed,0warnings/2baselined.
-The initial fix batch is complete and checkpointed for Claude integration.
-On 2026-10-01 the user explicitly requested continuous execution of the remaining
-UX work with subagents, followed by other useful nonconflicting work when UX is
-exhausted. Do not stop at a batch boundary. Three file-partitioned workers resume
-authoring review navigation, honest Problems query states and stable extension
-automation rows. Supervisor owns Production Runner operations next. Source is
-unfrozen only in those assigned files; broad validation waits for a coordinated
-freeze. Keep recording and checkpointing as work proceeds. No merge/push, live
-provider calls or panel management; Claude integration boundaries remain intact.
-No Claude slot or source is changed to accelerate this work.
-The remaining roadmap is now authorized for execution. Browser/visual validation
-still respects the standing no-live/panel-management boundary; continue useful
-source audits, component tests and fixes independently of that limitation.
+Original Claude workload remains complete: t216/t217/t219/t220/t221 were locally
+verified/checkpointed; t221 handoff de2096b1 records exact commits and validation.
+Its file is docs/working/language-driven-flow-loop-plan/reports/codex-supervisor-handoff.md
+in t221. Main downstream checkout is untouched and read-only status clean at the
+latest check. Keep progress/report/checkpoint records as work happens and continue
+beyond batches; remaining UI/UX and other useful nonconflicting work is authorized.
 
-Original Claude workload is complete: all five tasks locally committed and
-verified; final t216 downstream3dc66aee/Core90dfd1db. Final handoff commitde2096b1
-on t221 follows the earlier checkpoint866a1601.
-Its durable handoff lives in t221 reports/codex-supervisor-handoff.md. The UI/UX
-task neither replaces those checks nor changes Claude's integration ownership.
+Earlier batch evidence stays in the ledger, worker reports and first-four archive.
+[Superseded Current State](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-pre-eighth-current-state.md)
+retains the prior detailed continuation record.
 
 ## Review criteria
 
@@ -405,13 +373,45 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Reproduce late failed reply after observed address change; reconcile against current observed address immediately, preserving real same-address failures until retry or later address change. Add synchronous pending guard and finally release controls; exception catch is defensive under PanelStore never-throwing contract, fixed text only.
 - Preserve native labels/icon/styles/message/notice details and no automatic retry/new request. Tests synthetic only; no shared helper, caller, transport, status, storage or focus changes. Scoped checks then freeze; no browser/provider/panel management.
 
+### Problem report recovery supervisor brief (released)
+
+- Exact source: apps/extension/src/panel/settings/problem-report-section.ts; new owning tests/problem-report-section.test.ts. Supervisor report: extension-utility-recovery-implementation.md.
+- Reproduce native reactivation during pending clipboard work and missing clipboard API. Hold one synchronous operation lock through request, download preparation and clipboard acknowledgement; always release controls. Catch browser API failures with fixed local feedback, preserve valid download when copying fails and preserve copied success when download creation fails.
+- Hide the prior download during a new request; replace/revoke only the old owned URL. Preserve report schema, background redaction, wire message, existing labels and pure plan. No actual diagnostics, new lifecycle API, helper/caller/transport/storage changes or automatic retry.
+- Synthetic component regressions and actual-config scoped types through heavy wrapper, then freeze. Broader extension gates after utility partitions. No live/browser/provider/panel management or merge/push.
+
+### Activity feed recovery worker brief (released)
+
+- Worker recording_controls; exact apps/extension/src/panel/chat/feed/activity-feed.ts and existing owning tests/activity-feed.test.ts. Own reports/activity-feed-recovery-implementation.md.
+- Reproduce out-of-order reads without intervening push, stop/restart stale completion and overlay acknowledgement replacing a newer push. Preserve direct read/setOverlay without start, synchronous overlay lock, unsupported semantics and existing API/messages.
+- Separate request generation and lifecycle fences; stop invalidates old callbacks/results, fresh direct reads remain legal. Successful overlay acknowledgement cannot overwrite newer observed push; release saving only for its current operation. Preserve explicit retries and fixed defensive rejection feedback under never-throwing production PanelStore.
+- Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
+
 ## Work Ledger
+
+### 2026-10-01 - Seventh Core complete and eighth workers released
+
+- Validation: full68081 native0,325files2199tests/185.26s; actual-config web types72364 native0/92993ms; production76550 native0,17pages/202949ms. Full structure65986 native1 solely inherited protected service4506/4505. Root150 focused passed before full gates; e75c6fcc saved source/architecture/progress locally.
+- Released three exact Core briefs in own prepared reports: identity-recovery-implementation.md (runtime_contracts), secret-recovery-implementation.md (recording_controls), docs-tree-navigation-implementation.md (deployment_docs_audit). Prepared report path lists are binding ownership; no shared source across workers. Product-held phase is now superseded by this explicit release. Root owns global contracts/authored docs and final verification.
+- Validation: utility root41 pass/native0/604.5906ms; full extension typing5771 native0/51888ms; full structure37957 native0,136warnings119baseline. Full28915/build18201 pending. Core/extension gates do not certify browser behavior.
+- Current State rewritten to current evidence and prior detailed state archived without losing progress. Original Claude workload/handoff and integration boundaries retained. No merge/push, live/provider/panel activity or protected-tree edits.
+- Validation: extension full28915 native0,1821tests/113849.9263ms; production18201 native0,Chrome/Firefox/e2e22files each/12269ms. Types/structure passed above. Utility unit Complete; original Firefox submission-id placeholder warning unchanged. No live browser certification.
+
+### 2026-10-01 - Seventh narrow supervisor verification and next briefs
+
+- Validation: root seventh corrected focused9856 native0,12files150tests/9.43s. Original root command65131 passed103 but named a nonexistent freshness test path; corrected command includes actual production-freshness10 plus all required owning suites. No omitted test path treated as verification.
+- Validation: Docs local acknowledgement test failed on worker-frozen source,1fail/native1/1.96s. Root exact docs.tsx/test correction retains local status after successful rebuild plus failed page reload; combined150 includes this regression. Global request source assertions now follow Docs hook and Deployment workspace controller/layout guards; other views/coordinator preserved.
+- Validation: extension report original selected2fail/3pass/native1/130.5643ms; corrected9/9/native0/149.9905ms. Four-root Open/report actual-config strict typing native0/no diagnostics. No actual diagnostics or live browser certification.
+- All seventh Core source is frozen for full gates. All three worker slots remain useful: Identity and Docs tree write exact held implementation designs in own reports; Activity feed executes its separate released downstream two-path unit. Claude prior handoff/protected trees remain untouched. No merge/push or live/provider/panel activity.
+- Validation: Core full68081/types72364/build76550 active on frozen source; structure65986 native1 only inherited protected service4506/4505. No source/config/baseline relaxation. Logs retain NATIVE_EXIT for recovery if the terminal session is lost.
+- Core seventh source checkpoint e75c6fcc saved locally with authored architecture and paired progress. Root independently reviewed Activity lifecycle/generation/observation fences and owning source; corrected utility4bundles41tests/native0/604.5906ms includes all original feed9/plan2. Full extension gates follow frozen utility source; next Secret worker design is held in own report.
 
 ### 2026-10-01 — Sixth Core complete; recording review verified; seventh lanes released
 
 - Validation: persisted resumed Core full53911 native0,319files2078tests/187.86s; types93193 native0; build89166 native0,17pages/203827ms. Full structure59396 native1 solely inherited protected service4506/4505; no config/baseline relaxation. Source-only six failures were corrected with preserved requirements and root104pass before successful full rerun.
 - Validation: resumed extension full62696 native0,1791tests/121040.1252ms; types23542 native0; build83952 native0,22files per Chrome/Firefox/e2e target/96138ms; full structure22975 native0,136warnings119baseline. Root recording review shell45 and strict typing independently passed. No live browser certification.
 - Released all three prepared Core implementation lanes in disjoint paths: production parameters, Deployment and Docs. Root continues Open FluxIQ utility recovery in downstream two-path unit. Completed reports/checkpoints saved locally; Claude integration ownership and protected trees remain untouched, no merge/push.
+- Checkpoints: Core source-contract4b1cbe07 and downstream recording-review4397c31a saved with frozen evidence. Root Open FluxIQ original targeted2fail/2pass corrected5pass/native0/143.6335ms; strict scoped two-root typing native0/no diagnostics. Own extension-utility-recovery-implementation report records defensive-vs-production distinction and remaining report/feed queue. Three Core workers are executing released paths.
 
 ### 2026-10-01 — Resume recovered actual gate results and worker briefs
 

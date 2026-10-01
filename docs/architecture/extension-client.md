@@ -1653,6 +1653,22 @@ unavailability feedback. Loading, offline and failed reads do not imply deletion
 
 ### Extraction dialog lifecycle
 
+The Open FluxIQ utility serializes pending requests and scopes refusal feedback
+to its initiating Core address. An already observed address change prevents a
+late refusal from installing stale feedback; same-address errors retain retry.
+
+Report a problem holds one lock through report generation, file preparation and
+clipboard acknowledgement. A new request hides the previous download until a
+current report is prepared. Copy failure retains the current file; file creation
+failure still attempts copying. Fixed recovery feedback handles unavailable
+browser delivery APIs. Report generation/redaction remains background-owned.
+
+The shared Activity feed orders read replies and observed pushes independently.
+An overlay acknowledgement cannot replace newer observed activity. Stopping the
+feed invalidates old listeners and local completions; a later direct read remains
+legal without starting a subscription. This fences presentation without claiming
+to cancel an already issued background mutation.
+
 The extraction sheet temporarily mounts at the extension document root while
 open, isolating other extension controls and preserving their prior inert state.
 It restores its current host and a visible extension control on close. Focus

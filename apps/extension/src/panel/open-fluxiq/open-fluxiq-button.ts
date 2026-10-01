@@ -35,6 +35,7 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
   const notice = createElement("p", { className: "notice", hidden: true, attrs: { role: "status" } });
   const element = createElement("span", { className: "open-fluxiq" }, [button, notice]);
   let address: string | undefined;
+  let pending = false;
 
   function render(): void {
     const shown = error.current();
@@ -43,17 +44,25 @@ export function createOpenFluxIQButton(request: PanelStore["request"], style: Op
     notice.hidden = shown === undefined;
   }
 
-  button.addEventListener("click", () => {
+  async function open(): Promise<void> {
+    if (pending) return;
+    pending = true;
     error.clear();
     render();
     button.disabled = true;
     const failedAt = address;
-    void request({ type: RUNTIME_MESSAGES.panelOpenFluxIQ }).then((result) => {
+    try {
+      const result = await request({ type: RUNTIME_MESSAGES.panelOpenFluxIQ });
+      if (!result.ok && address === failedAt) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt, result.detail);
+    } catch {
+      if (address === failedAt) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt);
+    } finally {
+      pending = false;
       button.disabled = false;
-      if (!result.ok) error.show(FAILED, (status) => status.settings?.coreApiUrl !== failedAt, result.detail);
       render();
-    });
-  });
+    }
+  }
+  button.addEventListener("click", () => void open());
 
   return {
     element,
