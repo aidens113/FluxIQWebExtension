@@ -278,7 +278,10 @@ test("a press refused by the person's own no says it was declined, and one still
     await assert.rejects(pressControl(press), (error: unknown) => {
       assert.ok(error instanceof RecoverableToolRejection);
       assert.equal(error.code, "permission_required");
-      assert.deepEqual(error.detail, { reason: declined ? "consequences_declined" : "consequences_not_granted", missing: ["move_money"], requestId: "permission-request:checkout" });
+      assert.deepEqual(error.detail, declined
+        // Told what to declare instead, so a press wrongly declared as money is re-declared rather than the order abandoned (t195-w19b #6).
+        ? { reason: "consequences_declined", instead: ["declare only what this press itself does", "[] for a press that only opens a page or a form"], missing: ["move_money"], requestId: "permission-request:checkout" }
+        : { reason: "consequences_not_granted", missing: ["move_money"], requestId: "permission-request:checkout" });
       return true;
     });
     assert.deepEqual(lab.clicked, [], "a refused press did not happen");

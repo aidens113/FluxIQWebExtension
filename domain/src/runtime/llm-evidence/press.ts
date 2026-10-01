@@ -29,6 +29,20 @@ import type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./ele
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 import { recoverable, rejectionDetail } from "./tool-rejection";
 
+/**
+ * What a model told a press was declined should do next. The person said no to
+ * the classes the press was declared with, and that is often a wrong
+ * declaration rather than a wrong press: "Continue to checkout" declared as
+ * money is only a page opening. Told nothing but `consequences_declined`, whose
+ * meaning includes finishing without it, a build abandoned the order
+ * (t195-w19b #6). Declared as what it does, the same press goes through, and the
+ * press that really moves money is asked about on its own.
+ */
+export const WEB_DECLINED_PRESS_INSTEAD: readonly string[] = Object.freeze([
+  "declare only what this press itself does",
+  "[] for a press that only opens a page or a form"
+]);
+
 /** One press a tool has already bound to a live element. */
 export type WebControlPress = {
   gateway: WebLlmEvidenceGateway;
@@ -69,7 +83,7 @@ export async function pressControl(press: WebControlPress): Promise<WebLlmSnapsh
     recoverable("permission_required", rejectionDetail({
       reason: permission.requestId === null ? "nobody_to_ask" : permission.declined ? "consequences_declined" : "consequences_not_granted",
       target: undefined,
-      instead: undefined,
+      instead: permission.declined ? WEB_DECLINED_PRESS_INSTEAD : undefined,
       missing: permission.missing,
       requestId: permission.requestId ?? undefined
     }));
