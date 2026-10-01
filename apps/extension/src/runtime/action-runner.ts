@@ -447,7 +447,13 @@ async function runActionInFrame(
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
   const send = () => sendAction(action, tabId, message, targetFrameId, pace);
-  return withTarget(await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace), tabId, targetFrameId);
+  const drivenBefore = currentAutomationTabId();
+  const result = await sendClickCheckingLanding(action, tabId, send, LANDED_TAB_ACCESS, pace);
+  // A click that opened its page in a tab of its own made that tab the one the
+  // run drives (`click-landing.ts`), and the result names it, top frame.
+  const drivenAfter = currentAutomationTabId();
+  if (drivenAfter !== undefined && drivenAfter !== drivenBefore && drivenAfter !== tabId) return withTarget(result, drivenAfter, undefined);
+  return withTarget(result, tabId, targetFrameId);
 }
 
 /**

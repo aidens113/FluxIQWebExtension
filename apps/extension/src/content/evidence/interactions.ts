@@ -57,5 +57,8 @@ function trackInteractions(): void {
 // Installed on load rather than from `content/index.ts`: the ledger has to be
 // listening before the first action runs, and the entry point wires behaviour
 // the recorder owns, not evidence the snapshot owns. The guard keeps the module
-// importable from a Node test, which has no document.
-if (typeof document !== "undefined") trackInteractions();
+// importable from a Node test, which has no document, or has a test's stand-in
+// document that takes no listeners: a test that loads this module while
+// another test's stand-in is installed must not fail to load (lane D's
+// `actions/tests/gate-refusal.test.ts` did, depending on run order).
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") trackInteractions();

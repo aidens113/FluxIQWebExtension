@@ -33,10 +33,22 @@
 // layer drawn that way could be neither classified nor cleared. The hit test
 // descends (`deepElementFromPoint`), and every walk up or down crosses the
 // boundary (`../../shadow-dom`). A closed root still presents only its host.
+//
+// **A layer that holds the action's own target is never in the way of it.**
+// Both answers take that target (`spare`) and leave out every layer that holds
+// it. A form drawer, a consent wall or a dialog the step is working inside is
+// declared modal and painted, so until 2026-10-01 it came first in both lists:
+// a press on the consent wall's "Accept all" under a chat greeting had the
+// defence decline the wall itself, so the button vanished and consent was
+// answered inside a refused step, and a field typed under a newsletter offer
+// had the defence press the quote drawer's own close glyph (company-website,
+// lane A `t174-w35`). A sibling layer -- the greeting, the offer -- is still
+// found and cleared. A target that cannot be resolved spares nothing, so a
+// wall that hides a target not yet drawn is cleared as before (`presence.ts`).
 
 import { isExtensionUiNode } from "../../picker-host";
 import { deepElementFromPoint } from "../../selector";
-import { composedClosest, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
+import { composedClosest, composedContains, composedDescendants, composedParent, composedRoots, queryComposed } from "../../shadow-dom";
 import { probePoints } from "./probe-points";
 import { hasDismissalControl } from "./way-out";
 
@@ -51,12 +63,13 @@ const DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="tru
 
 /**
  * The dialogs that explain a refusal of this target: every painted modal, and
- * the covering layer at `blockedAt` when one was given.
+ * the covering layer at `blockedAt` when one was given -- less any that holds
+ * `spare`, the target itself (see the file comment).
  */
-export function overlaysAt(blockedAt?: Point): Element[] {
+export function overlaysAt(blockedAt?: Point, spare?: Element): Element[] {
   const modals = renderedModals();
   const layer = blockedAt ? coveringDialog(blockedAt) : undefined;
-  return layer && !modals.includes(layer) ? [...modals, layer] : modals;
+  return withoutHolders(layer && !modals.includes(layer) ? [...modals, layer] : modals, spare);
 }
 
 /**
@@ -66,17 +79,24 @@ export function overlaysAt(blockedAt?: Point): Element[] {
  *
  * Order matters: a painted modal comes first, because a modal is over
  * everything by contract and closing it is what unblocks the page. The probed
- * layers follow in probe order (`probe-points.ts`), deduplicated.
+ * layers follow in probe order (`probe-points.ts`), deduplicated. A layer that
+ * holds `spare`, the action's own target, is left out (see the file comment).
  */
-export function overlaysOverPage(blockedAt?: Point): Element[] {
+export function overlaysOverPage(blockedAt?: Point, spare?: Element): Element[] {
   const found = renderedModals();
   const view = typeof window === "undefined" ? undefined : window;
-  if (!view) return found;
+  if (!view) return withoutHolders(found, spare);
   for (const point of probePoints(view.innerWidth, view.innerHeight, blockedAt)) {
     const layer = coveringDialog(point);
     if (layer && !found.includes(layer)) found.push(layer);
   }
-  return found;
+  return withoutHolders(found, spare);
+}
+
+/** The layers, less every one that holds `spare` across shadow roots; all of them when there is nothing to spare. */
+function withoutHolders(layers: Element[], spare: Element | undefined): Element[] {
+  if (!spare || !spare.isConnected) return layers;
+  return layers.filter((layer) => !composedContains(layer, spare));
 }
 
 /** Every modal the page declares and the browser paints: ARIA's first, then `<dialog>`s opened with `showModal()`. */

@@ -23,10 +23,14 @@
 import { overlaysOverPage } from "./overlays";
 import { pressableWayOut } from "./pressable-way-out";
 
-/** Whether any layer over the page carries a way out the defence may press. */
-export function clearableLayerOverPage(): boolean {
+/**
+ * Whether any layer over the page carries a way out the defence may press,
+ * leaving out a layer that holds `spare`, the action's own target, as the
+ * clearing does (`clear.ts`).
+ */
+export function clearableLayerOverPage(spare?: Element): boolean {
   try {
-    return overlaysOverPage().some((overlay) => pressableWayOut(overlay) !== undefined);
+    return overlaysOverPage(undefined, spare).some((overlay) => pressableWayOut(overlay) !== undefined);
   } catch {
     return false;
   }

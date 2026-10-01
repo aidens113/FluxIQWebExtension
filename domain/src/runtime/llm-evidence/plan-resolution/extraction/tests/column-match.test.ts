@@ -233,3 +233,49 @@ test("the resolved slot carries every assumption its columns and its conditions 
   const exact = resolveWebExtractionSlot({ handle, fields: { name: "product-name" }, where: [{ field: "product-price", lessThan: 50 }] }, scope, handles);
   assert.deepEqual(exact.status === "resolved" ? exact.assumed : undefined, []);
 });
+
+// The everything store's cart, detected over hashed class names (lane A, cause
+// #15, `t174-w34` F2): its columns' labels are paths, completed with the shape
+// the page side read in every value (`(number)`, `(currency amount)`), and the
+// keys are those labels'. The read the instruction asks for -- item, quantity
+// and price -- named no detected column and was refused.
+const CART_ITEM = "div_a_css-0y6s4m2_span";
+const CART_QUANTITY = "div_div_css-0hhnejr_span_css-1o6vlrv_span_css-1gf1s47_number";
+const CART_PRICE = "p_css-10muxo3_span_currency_amount";
+const CART = {
+  "data-line": { kind: "attribute", attribute: "data-line", required: true },
+  img_src: { kind: "attribute", selector: "img", attribute: "src", required: true },
+  img_alt: { kind: "attribute", selector: "img", attribute: "alt", required: true },
+  "div_a_css-0y6s4m2_url": { kind: "link", selector: "div > a.css-0y6s4m2", required: true },
+  [CART_ITEM]: { kind: "text", selector: "div > a.css-0y6s4m2 > span", required: true },
+  "div_p_css-08ulstx": { kind: "text", selector: "div > p.css-08ulstx", required: true },
+  "div_div_css-0hhnejr_span_css-1o6vlrv_span_1": { kind: "text", selector: "div > div.css-0hhnejr > span.css-1o6vlrv > span:nth-of-type(1)", required: true },
+  [CART_QUANTITY]: { kind: "text", selector: "div > div.css-0hhnejr > span.css-1o6vlrv > span.css-1gf1s47", required: true },
+  "div_div_css-0hhnejr_span_2": { kind: "text", selector: "div > div.css-0hhnejr > span:nth-of-type(2)", required: true },
+  [CART_PRICE]: { kind: "text", selector: "p.css-10muxo3 > span", required: true }
+} as const satisfies Record<string, WebAutomationExtractField>;
+
+test("a cart read in the instruction's own words resolves each name to the one column of its kind, as a guess", () => {
+  const kept = keptColumns({ item: "item", quantity: "quantity", price: "price" }, CART);
+  if (!kept.ok) assert.fail(`refused ${JSON.stringify(kept)}`);
+  assert.deepEqual(kept.fields, { item: CART[CART_ITEM], quantity: CART[CART_QUANTITY], price: CART[CART_PRICE] });
+  assert.deepEqual(kept.assumed, [
+    { path: ["fields", "item"], written: "item", field: CART_ITEM, how: "nearest", score: 0, among: "detected" },
+    { path: ["fields", "quantity"], written: "quantity", field: CART_QUANTITY, how: "nearest", score: 0, among: "detected" },
+    // Core's own matcher relates "price" to the currency key above its floor, so price is a name match.
+    { path: ["fields", "price"], written: "price", field: CART_PRICE, how: "nearest", score: 0.397, among: "detected" }
+  ]);
+  // The other words for the same kinds, in any case and with any separator.
+  const other = keptColumns({ a: "Product Name", b: "qty", c: "unit_price" }, CART);
+  if (!other.ok) assert.fail(`refused ${JSON.stringify(other)}`);
+  assert.deepEqual(other.fields, { a: CART[CART_ITEM], b: CART[CART_QUANTITY], c: CART[CART_PRICE] });
+});
+
+test("a name of a kind two columns have, or none has, is still refused: a kind decides only when it names one column", () => {
+  const twoQuantities = { ...CART, "div_span_css-7q_number": { kind: "text", selector: "div > span.css-7q", required: true } } as const;
+  assert.deepEqual(keptColumns({ quantity: "quantity" }, twoQuantities), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "quantity"] });
+  // A detection with no column of the kind: the catalog labels nothing as a number.
+  assert.deepEqual(keptColumns({ quantity: "qty" }), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "quantity"] });
+  // A word that means no kind is refused as before.
+  assert.deepEqual(keptColumns({ name: "wombat" }, CART), { ok: false, issue: "web.handle.unknown_field", path: ["fields", "name"] });
+});

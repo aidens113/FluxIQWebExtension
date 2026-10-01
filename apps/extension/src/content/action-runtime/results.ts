@@ -109,6 +109,13 @@ export type ActionResultEvidence = {
    * `setCheckedState`, or `upload.ts` after `setInputFiles`, leaves it out.
    */
   refusedBeforeDispatch?: true | undefined;
+  /**
+   * The refused element itself, for a target refused as `covered` or `hidden`:
+   * a dialog that holds it is the one the step is working in, never the one in
+   * its way (`blocking-dialog.ts`). It never leaves the page: `buildResult`
+   * copies only the fields above it by name.
+   */
+  target?: Element | undefined;
 };
 
 /**
@@ -222,7 +229,7 @@ export function actionRejected(
 ): BrowserActionResult {
   const validation = boundValidation({ status: "failed", expected, actual });
   const observed = validation.status === "failed" ? validation.actual : actual;
-  const dialog = blockingDialog(reason, evidence.blockedAt);
+  const dialog = blockingDialog(reason, evidence.blockedAt, evidence.target);
   if (dialog) {
     const code = dialog.kind === "person"
       ? WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED
