@@ -7,6 +7,76 @@ production profile, 48k in / 8k out / 56k per call, $0.25 cap. Launcher: scratch
 (t174's `live-run.sh` with slot-4, the t195 instance and tree, and a full log per run). From run 5 it passes
 `--llm-max-calls 64`, as t174's L1 does, because Core ignores the configured call limit (t193's cause B).
 
+## Session 3 (2026-10-01, from ~05:00Z): live after round 3 + t210
+
+Trees fast-forwarded to pushed dev (downstream `58fd0cd3`, Core `e5b8f015`); dev carries L1, F20, R1+R2, F21, F22
+and t196's fix for run 33's orphaned `over` (`rerun-replacement.ts`, audit A1). Rule now on dev
+(`lane-rules/built-flow.ts`): a permission stop is `stopped_for_permission` and never a pass; F3's exemption is gone.
+
+Launcher (session `58ff9269` scratchpad `live-run-d.sh`): one run per invocation, no loop; refuses on `STOP-balance` or
+an owned slot-4; writes and clears `slot-4/owner` with the reason (the fix under test). Command, from this tree:
+`FLUXIQ_LAB_INSTANCE=t195-slot-4 FLUXIQ_BUILD_PROGRESS_TRACE=1 FLUXIQ_LAB_KEEP_RUN_STATE=1
+FLUXIQ_BUILD_DECISION_DUMP=<tree>/test-runs/instances/t195-slot-4/decision-dumps node scripts/lab/run-lab.mjs run
+<scenario> --live-llm --llm-profile production --llm-provider deepseek --llm-model deepseek-flash --llm-task create-flow
+--instruction-task <task> --llm-max-input-tokens 992000 --llm-max-output-tokens 8000 --llm-max-total-tokens 1000000
+--llm-max-calls 64 --llm-max-cost-usd 0.25 --evidence events`. The token limits follow t210 and the campaign's
+`CREATE_LIMITS` (the old 48k input cap made a whole page undescribable); `--evidence events` turns on t193's window
+captures.
+
+**Stage 1, confirm-requests (written before run 34).** Instruction: confirm every friend request with at least five
+mutual friends, leave the rest, then table every request the list shows as accepted, in list order, `name` and
+`mutualFriends` as written. Seed (`content/requests.ts`): Tom Becker 1, Amara Osei 23, Priya Nair 4, Jonas Weber "Aisha
+Khan and 4 other mutual friends" (5), Diego Alvarez (no line, 0), Lin Zhao 11, Freya Holm 5, Marta Kowalczyk 3. Expected
+dataset: Amara Osei / "23 mutual friends", Jonas Weber / "Aisha Khan and 4 other mutual friends", Lin Zhao / "11 mutual
+friends", Freya Holm / "5 mutual friends". Chain: (1) open Friends, then "See all" to `friends/requests/` (the Friends home
+shows only 4); (2) a list read of the request cards with name and mutual line, `where` mutual >= 5 (F8 reads "X and 4
+other" as 5); (3) a For Each over the kept rows whose body presses that row's Confirm; the fourth confirm meets "You're
+going too fast" and is pressed again after the countdown (F7); (4) a list read of the accepted cards (`name`,
+`mutualFriends`). A wrong answer that looks right: Tom Becker or Priya Nair confirmed (an act before the filter), Jonas
+Weber dropped (his line has no leading number), or Freya Holm missing (the rate limit swallowed her confirm).
+
+**Run 34 (killed before it started) and the supervisor's HOLD and STOP (2026-10-01 ~05:20Z).**
+- First Core rebuilt (contracts, fluxiq, client-gateway-websocket via `heavy.sh`): exit 0 (fluxiq built in 216 s; queued
+  ~10 min behind four other lanes' heavy jobs).
+- Run 34, confirm-requests, launched 05:15:50Z: the guards admitted it (fingerprint `sha256:ab782e93...`); the prelude
+  rebuilt scenario-lab, the domain host, the domain and the three extension bundles; then the Lab exited 1 with no message
+  (05:19-05:20Z). No ledger `start` line, so no run id, no model call, **$0**. This matches the supervisor's kill of every
+  Lab process. Nothing to debug beyond the launcher log (scratchpad `runs/20261001T051550Z-...confirm-requests.log`).
+- **HOLD, then STOP (user's direct order via the supervisor):** no Lab of any kind, live or provider-free, until the
+  supervisor lifts it. Task t223 (compact page view plus page search) lands first. This lane does not edit
+  `domain/src/runtime/llm-evidence/` page serialization (elements, capture, page-evidence, present, attributes, tools):
+  t223 owns it. Only non-Lab work continues: debugs, workers, unit tests.
+
+**Cause P1, recorded first here (2026-10-01, from dev code; fits runs 19, 20, 25, 30, 32 and top cause 5): the first
+declined ask blocks every later ask in the build, including the one at the task's declared point.**
+- Core `runtime/flow-bootstrap/action-permissions.ts:166-184`: `asked` is build-wide, set at the first ask "whatever they
+  answer". Every later refusal returns without asking.
+- Core `runtime/action-permissions/gate.ts:165-166`: `settle("refused")` keeps `raised`, and `checkFor` (`if (this.raised)
+  return ... requestId: this.raised.requestId`) refuses every later gated action with that first request's id. No new
+  request is ever raised.
+- `parking/permission-ask.ts:106` returns only `answer?.kind === "grant"`, so a person's "no" and a timeout look the same.
+- Effect: on pickup-order, a `move_money` declared on "Continue to checkout" (runs 20, 25, 30) or on an unnamed control
+  (runs 19, 32) is denied by the Lab (L1, correctly). After that, "Place order", the declared point, can never be asked
+  about, so the task cannot pass. The model keeps pressing and is told `consequences_not_granted`, "the request now in
+  front of the person", which is false after a decline (top cause 5: 8-21 wasted decisions).
+- Rule kept: a build nobody answers still costs one wait. Rule changed: after a person's decline, a different control is
+  a new question and is asked; the same control and classes are refused without asking again.
+- Related wording (top cause 6): the `core.run_node` example says a filter press is `[]`. It gains "or opens checkout":
+  the description is 1,972 of its 2,000 characters, and 1,990 after.
+- Worker t195-w18 (`worker-high`), report `reports/t195-w18-declined-ask-not-final.md`.
+
+**Hand-back, 2026-10-01 (under the STOP).** Nothing is in progress: no worker is running, no Lab, slot-4 has no owner, and
+there is no `STOP-balance`. P1 and P2 are validated and Ready to commit (fix log).
+- w18's open question, whether a declined request should hold a proposal, is settled by the lead's adjustment. It is
+  carried only while a Flow step needs it.
+- Open, routed:
+  - `recovery/runtime-exploration.ts` still settles a person's no as silence, so a repair's first decline blocks its
+    later asks. It is t193's recovery area: hand it to t193, or to t195 once t193 is not editing it.
+  - Top cause 9 (a lasting act on a non-qualifying row during exploration) needs a run on the three-phase build before
+    any fix.
+- Next live step, once the supervisor lifts the STOP after t223: confirm-requests with P1 and P2, from Stage 1 above. Then
+  pickup-order, which P1 targets directly.
+
 ## Session 2 status (2026-09-30, ~19:45Z): stopped by the supervisor's order
 
 No Lab run is in flight and none will be started: the supervisor stopped all Lab runs (the user's order) for a cross-lane
@@ -58,6 +128,8 @@ Protocol (supervisor, 2026-09-30): loop continuously, fix in this branch, valida
 | R1+R2 | (lane A's) The interference probes include the four viewport corners, inset 6% (bigbox's support-chat card); recovery clears a covering layer on `target_absent` when a clearable layer stands over the page (company-website s2 behind consent). | extension `content/action-runtime/interference/{probe-points.ts (new), presence.ts (new), pressable-way-out.ts (new), overlays.ts, clear.ts, index.ts}`, `recovery/{attempt.ts, fault.ts, index.ts}` + `interference/tests/probe-points.test.ts` (new), `recovery/tests/attempt.test.ts` | lane A runs 20, 22, 26, 31 | w13 (`reports/t195-w13-probes-and-walls.md`): each test fails with its change reverted. Lead: extension units 1500/1500, `tsc` 0 | validated (unit), live pending |
 | F22 | The permission sentence a person reads in the panel's chat is plainer: "The Flow would press \"Place order\" (button) each time it runs. That would spend, refund or move money, and that always needs your permission, even when your instruction asks for it." (run 16's UI review). | Core `action-permissions/request.ts`; tests `action-permissions/tests/{destructive, gate}.test.ts`, `recovery/annotation/tests/{patches, recovery-permissions}.test.ts` (the last a stale pin fixed this session); domain `plan-resolution/tests/plan-step-permission.test.ts` | run 16 UI | Core vitest action-permissions + recovery + parking + permission-defaults 43 files 557/557; Core build 0; domain 976/976 | validated (unit) |
 | L1 | **The Lab plays the person at a permission ask.** A pending `kind: "permission"` ask on the build's or run's thread is answered `grant` only at the task's declared point on the **named** control (class in `missing`, label equal). It is answered `deny` elsewhere, on a control Core left unnamed, or when no point is declared; the lead added the unnamed rule after `run-munzbfbj` and `run-muo2fscr` asked for money on unnamed controls on the cart and home pages. An `askFirst` task's ask is left for Core's timeout. Answers are recorded as `permissionAnswers`, apart from the hand-offs. The lane then applies a consequential task's Flow only if Core's own record on the Flow's thread shows a grant at the point on the named control (otherwise `permissionPoint: "not_asked"`), unless the operator permitted the class. Finding: a saved Flow replays with no permission gate (Core `adaptation.ts:344-346`); only a repair's exploration is gated, and it parks on the run's thread and is answered by the same rule. | test-runner `person-simulation/{asks, simulation, lab-person, hand-off-record, index, permission-answer (new)}.ts` + `tests/{asks, simulation}.test.ts`; `run-scenario.ts` (the creation-branch `startLabPerson` call); `flow-lane/creation/{lane, permission-point, index}.ts` + `tests/{lane, permission-point}.test.ts`, `tests/fake-creation-core.ts`; `docs/architecture/testing-facility.md` | honest verdict (dev `f2f80024`): every consequential task stopped, so none could pass | w14 (`reports/t195-w14-lab-answers-permission.md`): each new test fails with its change reverted. Lead: test-runner `tsc --noEmit` 0. Private build, `node --test` over person-simulation, flow-lane/creation, lane-rules and run-evaluation: 207/208; the one failure is runner-wiring's redaction pin, t174's recorded stale pin. With the unnamed rule reverted in the compiled JS: 2 failures (lane.test #22, simulation.test #28). Structure audit passed | validated (unit); live unproven |
+| P1 | **A person's decline no longer blocks every later ask in the build.** Nobody answering stays as before: one wait, then every gated action is refused with that request. A decline is remembered per question (control name, kind, classes): that question is refused unasked with `declined: true`, and a different control is a new request that is asked. The domain tells the model `consequences_declined` ("the person declined this press; do it another way or finish without it") instead of "a request in front of the person". A declined request rides on the build only while a Flow step needs it (lead's adjustment: otherwise a stalled round ended as that question and a Flow without the control was unapprovable). `core.run_node`'s example now says the press that "opens checkout" is `[]` (1,990 of 2,000 characters). **Compatibility:** `AutomationStudioActionPermissionVerdict` gains optional `declined?: true`; `gate.settle` accepts `declined`/`unanswered` beside `granted`/`refused` (repair path unchanged); new export `automationStudioPermissionAskOutcome`; `gate.request` is the latest refusal's request, not the first raised. | Core `runtime/action-permissions/{gate.ts, declaration.ts, tests/gate.test.ts}`, `runtime/flow-bootstrap/{action-permissions.ts, tests/action-permissions.test.ts (new)}`, `runtime/parking/{permission-ask.ts, index.ts}`, `runtime/llm/node-tools/{run-node.ts, tests/run-node.test.ts}`, `runtime/tests/service-bootstrap/tests/permission-ask.test.ts`, `docs/architecture/automation-studio/llm-flow-bootstrap.md`. Downstream domain `runtime/llm-evidence/{permission.ts, press.ts, tool-rejection.ts, node-run/run.ts (reason line), node-run/replay-answer.ts (lead)}`, tests `llm-evidence/tests/{press, tool-rejection-detail}.test.ts`, `node-run/tests/replay-permission-reason.test.ts (new, lead)` | dev code (Session 3 "Cause P1"); runs 19, 20, 25, 30, 32; top causes 5, 6 | w18 (`reports/t195-w18-declined-ask-not-final.md`); lead re-ran after its adjustment, see Ready to commit | validated (unit); live pending (Lab stopped) |
+| P2 | The `flow_draft.repeat_span_unknown` refusal names the reference that is wrong. `over` not in the Flow, `through` not in the Flow, and `through` before the step were one sentence that blamed `through`. Each case now gets its own message: it says the step was dropped or never added and which `amend_draft repeat` to resend, or that a `reorder` comes first. The code is unchanged, so no list of codes moves. This is the remainder of top cause 7; t196 fixed the rerun that orphaned `over`. | Core `runtime/flow-bootstrap/authoring/draft-routing.ts`, `authoring/tests/draft-routing.test.ts` (new case) | run 33 `run-muog33va` (nine refusals that blamed `through`) | Lead: draft-routing 16/16; dev's file restored -> `Tests 1 failed / 15 passed`; Core vitest over flow-bootstrap, flow-draft, llm/evidence-loop, llm/tests, action-permissions, parking, tests/service-bootstrap -> `Test Files 120 passed (120)`, `Tests 1466 passed (1466)`; `tsc-exit=0`; Core build `build-exit=0`; Core audit: only dev's `service.ts` violation | validated (unit); live pending |
 | T1 | Core's service-bootstrap permission test stated the pre-F10 rule (an instructed refund goes ahead unasked) and failed on dev. F10 changed that behaviour on purpose, so the test was wrong. It is now two cases: "still asks before moving money with nothing permitted, carrying what the instruction asked for on the request", and "keeps what the instruction asked for with the proposal and the Flow once the person permits the money". | Core `runtime/tests/service-bootstrap/tests/permission.test.ts` | supervisor, 2026-09-30 | w16 (`reports/t195-w16-permission-test.md`). Lead: `vitest run` over permission.test.ts and recovery/annotation, 10 files 122/122 | validated |
 
 Owned elsewhere (recorded by another lane first, taken at the next round):
@@ -71,7 +143,31 @@ Owned elsewhere (recorded by another lane first, taken at the next round):
 - The panel's "Done" mid-build and "Add an AI model key: To do" during a live build, and no on-page overlay in
   any screenshot of runs 2-5: **t191** (UI evidence: scratchpad `t195-shots/*-r2-*.png` .. `*-r5-*.png`).
 
-**Ready to commit.** Lead-validated this session. The Core `request.ts` change and the extension F20/R1/R2 changes are already
+**Ready to commit (session 3, P1).** Exactly the dirty files of both trees, minus this report's other edits. Lead's own runs,
+after the lead's gate adjustment:
+- Core (`fxwork/t195/!FluxIQ`, `task/t195-live-control-flow`): the P1 files above.
+  - `npx vitest run` (packages/fluxiq) over `runtime/{action-permissions, parking, flow-bootstrap, recovery,
+    tests/service-bootstrap, tests/permission-defaults.test.ts, llm/node-tools}` -> `Test Files 118 passed (118)`,
+    `Tests 1539 passed (1539)`.
+  - `npx tsc --noEmit -p tsconfig.json` -> `tsc-exit=0`.
+  - Core 3-package build -> all `Done`, exit 0.
+  - Revert check: the lead's two `gate.ts` lines undone -> `Tests 2 failed | 23 passed`; restored byte-identical.
+  - `node scripts/structure-audit.mjs` -> 1 violation, `runtime/service.ts` 4,506 lines against a 4,505 baseline. That
+    file is unchanged here and is 4,506 lines at HEAD `e5b8f015`, so it is dev's, not this lane's.
+- Downstream (`fxwork/t195/!FluxIQWebExtension`): the P1 domain files above.
+  - `heavy.sh ... pnpm --filter @fluxiq-web-extension/domain test` -> `# tests 1066 # pass 1066 # fail 0`.
+  - `... domain check` -> exit 0, 0 `error TS`.
+  - `node scripts/structure-audit.mjs` -> `passed (135 warning(s), 119 baselined)`.
+- Docs: this report and `reports/t195-w18-declined-ask-not-final.md`.
+
+**Ready to commit (session 3, P2), Core:** `packages/fluxiq/src/programs/automation-studio/runtime/flow-bootstrap/authoring/
+{draft-routing.ts, tests/draft-routing.test.ts}`. Validation is in P2's fix-log row: Core vitest 120 files, 1466/1466; tsc 0;
+build 0. Together with P1, these are all of the dirty files in Core.
+
+**Session 2's list below is already on dev** (checked 2026-10-01: L1 `068613f4`, F20 in `c22646d0`, T1 merged with t196 in
+`957a0226`); kept as the record, not to be taken again.
+
+**Ready to commit (session 2).** Lead-validated this session. The Core `request.ts` change and the extension F20/R1/R2 changes are already
 in the WIP commits `b6bf5eb0` and `c22646d0`; their validation is below.
 
 - Ready to commit (Core, `task/t195-live-control-flow`): `packages/fluxiq/src/programs/automation-studio/runtime/recovery/annotation/tests/recovery-permissions.test.ts` (F22's stale pin) and `packages/fluxiq/src/programs/automation-studio/runtime/tests/service-bootstrap/tests/permission.test.ts` (T1). This also validates the WIP's F22 (`action-permissions/request.ts` and its test pins). Validation:

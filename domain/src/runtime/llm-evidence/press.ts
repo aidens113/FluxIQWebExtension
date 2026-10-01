@@ -67,7 +67,7 @@ export async function pressControl(press: WebControlPress): Promise<WebLlmSnapsh
     // Which classes, and whether anybody was asked. A bare code left the model
     // with nothing to route around and the trace with nothing to explain.
     recoverable("permission_required", rejectionDetail({
-      reason: permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted",
+      reason: permission.requestId === null ? "nobody_to_ask" : permission.declined ? "consequences_declined" : "consequences_not_granted",
       target: undefined,
       instead: undefined,
       missing: permission.missing,

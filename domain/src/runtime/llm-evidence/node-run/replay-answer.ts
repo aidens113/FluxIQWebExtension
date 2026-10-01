@@ -143,10 +143,12 @@ export async function webNodeReplayAnswerWithPage(
   return webNodeReplayAnswerOnPage(run, await webNodeReplayPage(run), { code, said, acted, about, found });
 }
 
-/** Which of the three permission refusals this was, in this domain's own words. */
-export function webNodeReplayPermissionReason(permission: { kind: "refused"; requestId: string | null } | { kind: "invalid" }): WebLlmToolRejectionReason {
+/** Which of the four permission refusals this was, in this domain's own words. */
+export function webNodeReplayPermissionReason(permission: { kind: "refused"; requestId: string | null; declined?: true } | { kind: "invalid" }): WebLlmToolRejectionReason {
   if (permission.kind === "invalid") return "consequences_unreadable";
-  return permission.requestId === null ? "nobody_to_ask" : "consequences_not_granted";
+  if (permission.requestId === null) return "nobody_to_ask";
+  // A question the person already answered no is not in front of anybody (t195-w18).
+  return permission.declined ? "consequences_declined" : "consequences_not_granted";
 }
 
 /**

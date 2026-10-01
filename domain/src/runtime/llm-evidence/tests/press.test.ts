@@ -18,7 +18,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AutomationStudioActionPermissionVerdict } from "fluxiq/automation-studio";
 import type { WebLlmEvidenceGateway } from "../capture";
+import { pressControl, type WebControlPress } from "../press";
+import { RecoverableToolRejection } from "../tool-rejection";
 import { createWebAutomationLlmEvidenceRuntime } from "../tools";
 import { WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 
@@ -250,4 +253,34 @@ test("reports a press that changed nothing as a page that did not change, and ke
   // Lane t195, run-munuxns5-833f4313: bigbox's first press after a load only wakes the page.
   assert.match(String((pressed.evidence as { unchangedPress?: string }).unchangedPress), /press the same control once more/u);
   assert.deepEqual(clicked, ["#inert"]);
+});
+
+// The repair path presses through `pressControl` directly. A press the person
+// already declined is told as that, `consequences_declined`, and not as a
+// request still in front of them; one Core is still asking about keeps
+// `consequences_not_granted` (t195-w18).
+test("a press refused by the person's own no says it was declined, and one still being asked says so", async () => {
+  for (const declined of [true, false]) {
+    const lab = queueLab();
+    const verdict: AutomationStudioActionPermissionVerdict = { permitted: false, missing: ["move_money"], requestId: "permission-request:checkout" };
+    if (declined) verdict.declined = true;
+    const permission = async () => verdict;
+    const press = {
+      gateway: lab.gateway,
+      sessionId: "session.one",
+      request: { ...BASE, callId: "call.press", toolId: "web.recovery.press", value: {}, permission },
+      current: undefined,
+      element: { tag: "button", name: "Continue to checkout", selector: "#checkout" },
+      restamp: (binding: unknown) => binding,
+      consequences: ["move_money"],
+    } as unknown as WebControlPress;
+
+    await assert.rejects(pressControl(press), (error: unknown) => {
+      assert.ok(error instanceof RecoverableToolRejection);
+      assert.equal(error.code, "permission_required");
+      assert.deepEqual(error.detail, { reason: declined ? "consequences_declined" : "consequences_not_granted", missing: ["move_money"], requestId: "permission-request:checkout" });
+      return true;
+    });
+    assert.deepEqual(lab.clicked, [], "a refused press did not happen");
+  }
 });

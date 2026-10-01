@@ -48,6 +48,7 @@
 
 import type { AutomationStudioActionConsequence, AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import { automationStudioDestructiveConsequences, isAutomationStudioActionConsequence } from "fluxiq/automation-studio";
+import { present } from "./present";
 
 /**
  * How an action a model declared stands: nothing to ask, asked and allowed,
@@ -56,12 +57,15 @@ import { automationStudioDestructiveConsequences, isAutomationStudioActionConseq
  * `refused` always means: do not take it. `missing` is the classes this run
  * does not hold, in Core's own words, and `requestId` names the request Core
  * raised for the person -- `null` where there was no check to ask, so nothing
- * was raised and nobody can answer it.
+ * was raised and nobody can answer it. `declined` is present when Core says
+ * the person already answered this very question no: the request is not in
+ * front of anybody any more, and the model is told so (`consequences_declined`)
+ * rather than that a person is being asked (t195-w18).
  */
 export type WebActionPermission =
   | { kind: "no_consequence" }
   | { kind: "permitted" }
-  | { kind: "refused"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null }
+  | { kind: "refused"; missing: readonly AutomationStudioActionConsequence[]; requestId: string | null; declined?: true }
   | { kind: "invalid" };
 
 /**
@@ -103,7 +107,7 @@ export async function webActionPermission(input: {
   const name = boundedName(input.control.name) || `an unlabelled ${input.control.kind}`;
   const verdict = await input.check({ consequences: declared, control: { name, kind: input.control.kind }, verb: boundedVerb(input.verb), effect: input.effect });
   if (verdict.permitted) return { kind: "permitted" };
-  return { kind: "refused", missing: verdict.missing, requestId: verdict.requestId };
+  return present<Extract<WebActionPermission, { kind: "refused" }>>({ kind: "refused", missing: verdict.missing, requestId: verdict.requestId, declined: verdict.declined });
 }
 
 /**
