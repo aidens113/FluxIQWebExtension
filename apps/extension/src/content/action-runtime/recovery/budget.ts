@@ -22,6 +22,10 @@
 // clear, and 3.75 s spent on a frame that has already gone is 3.75 s a live run
 // does not get back. That class gets 250 and 500 ms and then answers honestly.
 //
+// A control the gate refused as disabled has a third ladder, a tick at a time,
+// because what it waits for is the control's own countdown, and the loop reads
+// that countdown by comparing one attempt with the one a tick before it.
+//
 // **The worst case, stated.** Waiting is bounded at 3.75 s for a target and
 // 0.75 s for a blip, and a retry is started only while the elapsed time is still
 // inside `RECOVERY_BUDGET_MS`, so the last attempt may begin at 4.99 s and run
@@ -60,16 +64,30 @@ export const RECOVERY_BLIP_BACKOFF_MS: readonly number[] = Object.freeze([250, 5
  */
 export const RECOVERY_INTERFERENCE_BACKOFF_MS: readonly number[] = Object.freeze([150, 400, 800]);
 
+/**
+ * The pauses between attempts at a control the gate refused as disabled.
+ *
+ * Every rung is one tick of a one-second countdown with room for a late timer,
+ * because the loop keeps waiting only while the control looks different from
+ * the previous attempt (`refused-control.ts`): two attempts closer together than
+ * a tick would see "Please wait 2" twice and give up on a control that was
+ * counting down. The first rung is also the whole cost of a control that is
+ * simply disabled -- one look, then the refusal -- so it stays near a second.
+ * Four rungs reach 4.4 s, which covers job-board's 3 s shield; the budget below
+ * still caps it.
+ */
+export const RECOVERY_DISABLED_BACKOFF_MS: readonly number[] = Object.freeze([1_100, 1_100, 1_100, 1_100]);
+
 /** The whole defence's wall-clock budget, measured from the command's start. */
 export const RECOVERY_BUDGET_MS = 5_000;
 
 /**
- * The ladder a fault is waited on: the page's for a target, the dialog's for an obstruction, the short one for everything
- * else. A control the page has disabled for a moment before anything was dispatched ("I'm a person" reads "Please wait N"
- * for 3 s) waits on the page's ladder, as a target that has not appeared yet does.
+ * The ladder a fault is waited on: the page's for a target, the dialog's for an obstruction, a tick at a time for a
+ * disabled control, the short one for everything else.
  */
 export function recoveryBackoffLadder(fault: RecoveryFault): readonly number[] {
-  if (fault === "target_absent" || fault === "disabled_target") return RECOVERY_TARGET_BACKOFF_MS;
+  if (fault === "target_absent") return RECOVERY_TARGET_BACKOFF_MS;
+  if (fault === "disabled_target") return RECOVERY_DISABLED_BACKOFF_MS;
   if (faultNeedsInterference(fault)) return RECOVERY_INTERFERENCE_BACKOFF_MS;
   return RECOVERY_BLIP_BACKOFF_MS;
 }

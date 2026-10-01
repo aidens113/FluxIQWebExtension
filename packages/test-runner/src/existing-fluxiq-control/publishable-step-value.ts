@@ -50,7 +50,7 @@ const AMENDMENT_REFUSAL_FIELDS = new Set(["step", "reason", "nodeId"]);
  * `flow-bootstrap/evidence-loop-steps.ts`, `EVIDENCE_STEP_AMENDMENT_REFUSAL_REASONS`).
  * A reason outside it refuses the whole list, as Core's reader of a stored step does.
  */
-const AMENDMENT_REFUSAL_REASONS: readonly string[] = ["no_such_step", "already_so", "no_such_position", "run_by_the_loop", "no_step_before_it", "over_not_before", "not_a_kept_step", "did_not_work", "already_in_flow", "already_out"];
+const AMENDMENT_REFUSAL_REASONS: readonly string[] = ["no_such_step", "already_so", "no_such_position", "run_by_the_loop", "no_step_before_it", "over_not_before", "not_a_kept_step", "did_not_work", "already_in_flow", "already_out", "changes_nothing", "act_on_a_read", "act_already_named"];
 /** Core's own bounds on one step's refusals: the most amendments one decision may carry, and the largest position a refusal may name. */
 const MAX_AMENDMENT_REFUSALS = 16;
 const MAX_AMENDED_POSITION = 9_999;

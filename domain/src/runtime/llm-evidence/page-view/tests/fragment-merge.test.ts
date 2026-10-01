@@ -59,3 +59,14 @@ test("one fragment alone is not a run, and without parent no run joins", () => {
   assert.deepEqual(bodyLines([{ tag: "span", text: "Rating" }, { tag: "span", text: "4.5" }]), ["t1 \"Rating\"", "t2 \"4.5\""]);
   assert.deepEqual(bodyLines([{ tag: "span", text: "$" }, { tag: "span", text: "39." }, { tag: "span", text: "99" }]), ["t1 \"$\"", "t2 \"39.\"", "t3 \"99\""]);
 });
+
+test("a quantity stepper drawn as plain spans keeps its minus and plus as lines of their own, each with its handle", () => {
+  // bigbox's stepper: `−`, `1`, `+` under one holder. Joined, it read `− 1 +`
+  // on the holder and the plus had no handle a press could name (run 39).
+  assert.deepEqual(bodyLines([
+    { tag: "div" },
+    { tag: "span", text: "−", parent: "t1" },
+    { tag: "span", text: "1", parent: "t1" },
+    { tag: "span", text: "+", parent: "t1" }
+  ]), ["t2 \"−\"", "t3 \"1\"", "t4 \"+\""]);
+});

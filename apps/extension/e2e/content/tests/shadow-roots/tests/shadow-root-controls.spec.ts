@@ -70,14 +70,15 @@ async function addClosedWall(page: Page): Promise<void> {
 }
 
 test.describe("job-board: the consent wall in rf-consent's open shadow root", () => {
-  test("its buttons are in the snapshot near the head, with the host chain beside them", async ({ openHarness }) => {
+  test("its buttons are in the snapshot, marked as on the layer painted over the page, with the host chain beside them", async ({ openHarness }) => {
     const harness = await openHarness("job-board");
     for (const name of ["Accept all", "Reject non-essential", "Manage choices"]) {
-      const { element, rank } = await described(harness, name);
+      const { element } = await described(harness, name);
       expect(element, `${name} is described`).toMatchObject({ tagName: "button", context: { shadowHosts: ["body > rf-consent"] } });
-      // The wall is painted over the page, so its controls rank with the
-      // page-state controls, ahead of the page's own.
-      expect(rank, `${name} ranks near the head`).toBeLessThan(15);
+      // The wall is painted over the page. The snapshot no longer ranks
+      // anything (t200: every element where the page put it), so what the
+      // order used to say is a fact on the element itself.
+      expect(element?.frontLayer, `${name} is on the layer painted over the page`).toBe(true);
     }
   });
 
@@ -90,16 +91,17 @@ test.describe("job-board: the consent wall in rf-consent's open shadow root", ()
     await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ consent: "rejected" });
   });
 
-  test("a click on the search box behind it is refused as covered, names the wall's controls, and the runtime answers nothing", async ({ openHarness }) => {
+  test("a click on the search box behind it has the defence decline optional cookies, never accept them, and then lands", async ({ openHarness }) => {
+    // Since 2026-09-30 declining optional cookies is a way out of a consent
+    // layer, and accepting never is (`interference/vocabulary.ts`): declining
+    // consents to nothing, so it gives nothing away on the person's behalf. The
+    // defence presses the wall's own Reject non-essential, and the click then
+    // reaches the search box, which a press only focuses -- no failure for
+    // changing nothing (`actions/click.ts`, `expectsAnswer`).
     const harness = await openHarness("job-board");
-    const reply = await harness.runAction({ commandId: "shadow:search-behind-wall", actionType: "web.dom.click", selector: SEARCH_BOX, timeoutMs: 1_000 });
-    expect(reply).toMatchObject({
-      status: "failed",
-      failure: { code: WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED }
-    });
-    expect(reply.failure?.actual).toMatch(/^covered: the point \d+,\d+ landed on div\.scrim, which covers the target; it is part of rf-consent headed "We value your privacy", a layer over the page whose controls are "Accept all", "Reject non-essential", "Manage choices"; /u);
-    // A choice about the person's data is not a way out the runtime takes.
-    expect((await harness.finalState()).state).toMatchObject({ consent: "pending" });
+    const reply = await harness.runAction({ commandId: "shadow:search-behind-wall", actionType: "web.dom.click", selector: SEARCH_BOX });
+    expect(reply, reply.message).toMatchObject({ status: "succeeded" });
+    await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ consent: "rejected" });
   });
 });
 

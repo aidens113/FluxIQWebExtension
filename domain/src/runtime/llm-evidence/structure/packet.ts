@@ -32,6 +32,16 @@
 // are. One with no field left (which the wire reader already refuses, in
 // `extraction/structure-detection.ts`) would be left out, and the run answered
 // alone.
+//
+// **A list whose section links to more says so.** Circleway's Friends home
+// shows four of eight friend requests under a header whose "See all" opens the
+// rest; the top bar's badge says 4, and the model read the four cards as the
+// whole list (live run 36, `run-muq3uozx-3153564b`, cause 11). The page now
+// sends that link beside the run as `continues`
+// (`apps/extension/src/content/extraction/section-link/`), and the packet
+// carries it with one closed sentence. The model already sees the link in the
+// page view; the sentence tells it what the link means. It is never pagination:
+// the handle's binding does not follow it.
 
 import {
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
@@ -59,6 +69,11 @@ export type WebLlmStructurePaginationMode = (typeof WEB_LLM_STRUCTURE_PAGINATION
 /** What the packet says of a `record`: domain text, never the page's. */
 const RECORD_NOTE = "record is the one item you aimed at, read as a one-row table; name its handle in extractList when the instruction is about that item";
 
+/** What the packet says of a section's link to more: domain text around the link's closed-phrase label. */
+function continuesNote(label: string): string {
+  return `this section links to more items ("${label}"); the list here may be partial -- open it to read every item`;
+}
+
 export type WebLlmStructureField = {
   /** The record field key the handle's extraction writes this column under (D16). */
   key: string;
@@ -72,6 +87,16 @@ export type WebLlmStructureField = {
   kind: WebAutomationExtractFieldKind;
   /** The share of items that have the field, from 0 to 1. Below 1, a record without it carries `null`. */
   coverage: number;
+};
+
+/** The run's own section linking to more of it, outside its items and its pagination. */
+export type WebLlmStructureContinues = {
+  /** The link's label, one of a closed set of phrases ("See all", "View more"). */
+  label: string;
+  /** The link's path on the page's origin, when it is a link. */
+  path?: string;
+  /** What the link means. A sentence of this module around the label. */
+  note: string;
 };
 
 /** The one item the detection was aimed at, beside the run it found outward, under its own handle. */
@@ -100,6 +125,8 @@ export type WebLlmRepeatingStructure = {
   confidence: number;
   /** The one item the target belongs to, when it lies outside the list above. */
   record?: WebLlmStructureRecord;
+  /** The section's link to more items, when the list here may be partial. */
+  continues?: WebLlmStructureContinues;
 };
 
 /** A detection split into what the model sees and what each handle keeps. */
@@ -157,7 +184,8 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
       itemCount: recordBinding.itemCount,
       fields: recordReadable.map((field) => field.shown),
       note: RECORD_NOTE
-    }
+    },
+    continues: continuesOf(input.detection.continues)
   });
   const paginate = boundPagination(proposal.pagination, infiniteScroll);
   // A primary proposal of one item with no way to continue is a record by
@@ -165,6 +193,14 @@ export function splitDetectedStructure(input: WebLlmStructurePacketInput): WebLl
   // label/value receipt and a lone record are sent with one item.
   const binding = boundList(input, input.handle, proposal, readable, paginate, proposal.itemCount === 1 && paginate === undefined);
   return { packet, binding, recordBinding };
+}
+
+/** The section link as the model is shown it, or `undefined` when the page sent none or its label screens to nothing. */
+function continuesOf(continues: DetectedStructure["continues"]): WebLlmStructureContinues | undefined {
+  if (continues === undefined) return undefined;
+  const label = screenedPageText(continues.label);
+  if (label === undefined) return undefined;
+  return present<WebLlmStructureContinues>({ label, path: continues.path, note: continuesNote(label) });
 }
 
 /** The proposal's fields a model may be shown and a handle may read: every one not proposed `exclude`. */

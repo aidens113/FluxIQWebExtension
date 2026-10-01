@@ -61,6 +61,11 @@ export type WebAutomationStructureDetectionRefusal = (typeof WEB_AUTOMATION_STRU
  * proposal's run -- a product card in a message thread, past which the nearest
  * list is the inbox's threads. It is sent beside the run and never instead of
  * it; a page with no run at all answers that record as the proposal itself.
+ *
+ * `continues` is the run's own section linking to more of it: a "See all"
+ * beside a home page's four friend requests, of eight (t195 w22e). It is a
+ * hint for the model and never pagination a read follows by itself; see
+ * `WebAutomationSectionContinuation`.
  */
 export type WebAutomationStructureDetection =
   | {
@@ -68,8 +73,47 @@ export type WebAutomationStructureDetection =
       proposal: WebAutomationExtractionProposal;
       infiniteScroll?: true | undefined;
       record?: WebAutomationExtractionProposal | undefined;
+      continues?: WebAutomationSectionContinuation | undefined;
     }
   | { ok: false; refused: WebAutomationStructureDetectionRefusal };
+
+/**
+ * A link or button in the run's own section, outside every item and apart from
+ * the run's pagination, whose whole label is a closed "see all" phrase
+ * (`webAutomationSectionLinkLabel`).
+ *
+ * Until t195 w22e nothing said so: Circleway's Friends home shows four of eight
+ * requests under a header whose "See all" opens the rest, the top bar's badge
+ * says 4, and a model read the four cards as the whole list (live run 36,
+ * `run-muq3uozx-3153564b`, cause 11).
+ *
+ * `label` is that phrase as the page wrote it -- one of six, so no page value
+ * crosses -- and `path` the link's same-origin path, when it is a link.
+ */
+export type WebAutomationSectionContinuation = { label: string; path?: string | undefined };
+
+/**
+ * The phrases a section's "more" control is labelled with, whole: see, view or
+ * show, then all or more, with nothing after but an arrow or punctuation.
+ * "See all 8 requests" and "Show more like this" are not one of them.
+ */
+const SECTION_LINK_LABEL = /^(?:see|view|show)\s+(?:all|more)[^\p{L}\p{N}]*$/iu;
+
+/** The longest label a section link may carry: the longest phrase with room for an arrow. */
+export const WEB_AUTOMATION_SECTION_LINK_LABEL_MAX_LENGTH = 16;
+
+/** The longest path a section link may carry. */
+const SECTION_LINK_PATH_MAX_LENGTH = 256;
+
+/**
+ * A control's label as a section link carries it -- whitespace collapsed, ends
+ * trimmed -- or `undefined` when its whole label is not one of the closed
+ * phrases or is longer than the bound.
+ */
+export function webAutomationSectionLinkLabel(label: string): string | undefined {
+  const text = label.replace(/\s+/gu, " ").trim();
+  return text.length <= WEB_AUTOMATION_SECTION_LINK_LABEL_MAX_LENGTH && SECTION_LINK_LABEL.test(text) ? text : undefined;
+}
 
 /** The request copied, or `undefined` when it is not one. A selector that is sent must be a non-empty string. */
 export function webAutomationStructureDetectionRequestValue(value: unknown): WebAutomationStructureDetectionRequest | undefined {
@@ -105,7 +149,22 @@ export function webAutomationStructureDetectionValue(value: unknown): WebAutomat
     if (!record || record.itemCount !== 1) return undefined;
     copied.record = record;
   }
+  if (detection.continues !== undefined) {
+    const continues = sectionContinuationValue(detection.continues);
+    if (!continues) return undefined;
+    copied.continues = continues;
+  }
   return copied;
+}
+
+/** The section link copied, or `undefined` when its label is not a closed phrase as carried or its path is not a bounded path. */
+function sectionContinuationValue(value: unknown): WebAutomationSectionContinuation | undefined {
+  const continues = record(value);
+  if (!continues || typeof continues.label !== "string" || webAutomationSectionLinkLabel(continues.label) !== continues.label) return undefined;
+  if (continues.path === undefined) return { label: continues.label };
+  const path = continues.path;
+  const wellFormed = typeof path === "string" && path.startsWith("/") && path.length <= SECTION_LINK_PATH_MAX_LENGTH && !/[\s\p{Cc}]/u.test(path);
+  return wellFormed ? { label: continues.label, path } : undefined;
 }
 
 function proposalValue(value: unknown): WebAutomationExtractionProposal | undefined {
