@@ -39,14 +39,18 @@ import { isSensitiveFormControl } from "./element-traits";
  * The element's text with every sensitive control's contents left out, and
  * `""` when the element is, or sits inside, a sensitive control. `"all"` reads
  * as `textContent` does; `"own"` reads only the element's own text nodes,
- * joined by a space, so a container does not inherit its children's words.
- * Whitespace is returned as found; collapsing it is the caller's.
+ * joined by a space, so a container does not inherit its children's words;
+ * `"readable"` reads as `"all"` does, but with a space where the page lays a
+ * child out as a block of its own (`readableText`). Whitespace is returned as
+ * found; collapsing it is the caller's.
  */
-export function textOutsideSensitiveControls(element: Element, extent: "all" | "own" = "all"): string {
+export function textOutsideSensitiveControls(element: Element, extent: "all" | "own" | "readable" = "all"): string {
   const text = extent === "own" ? ownText(element) : element.textContent ?? "";
   if (!/\S/u.test(text)) return text;
   if (isWithinSensitiveControl(element)) return "";
-  if (extent === "own" || !hasTextBearingSensitiveDescendant(element)) return text;
+  if (extent === "own") return text;
+  if (extent === "readable" && laidOut(element)) return readableText(element);
+  if (!hasTextBearingSensitiveDescendant(element)) return text;
   return textSkippingSensitiveSubtrees(element);
 }
 
@@ -74,6 +78,59 @@ function hasTextBearingSensitiveDescendant(root: Element): boolean {
     if (descendant.firstChild && isSensitiveFormControl(descendant)) return true;
   }
   return false;
+}
+
+/**
+ * The text a reader sees as words: `textContent`, less every subtree rooted at
+ * a sensitive control, with a space wherever the page lays a child out as a
+ * block of its own -- a block, a flex or grid item, a list item, a table part,
+ * a line break -- and the text on either side would otherwise run together.
+ * `textContent` joins every piece with nothing between, so a store chip drawn
+ * as two stacked lines read "Pickup or delivery?Carden Falls Supercenter" and a
+ * cart link "🛒1$3.97" (lane B's bigbox run, 2026-10-01). Inline pieces stay
+ * joined, as a reader sees them: `$10<sup>47</sup>`, `Ultra<b>Strong</b>`.
+ * Without a window -- a Node test -- nothing is laid out, and the text is
+ * `textContent`'s.
+ */
+function readableText(root: Element): string {
+  const view = root.ownerDocument?.defaultView ?? undefined;
+  let text = "";
+  let breakBefore = false;
+  const add = (piece: string): void => {
+    if (!piece) return;
+    if (breakBefore && text !== "" && !/\s$/u.test(text) && !/^\s/u.test(piece)) text += " ";
+    breakBefore = false;
+    text += piece;
+  };
+  const walk = (parent: Node): void => {
+    for (const child of [...parent.childNodes]) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        add(child.nodeValue ?? "");
+        continue;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE || isSensitiveFormControl(child as Element)) continue;
+      const block = laidOutAsBlock(child as Element, view);
+      if (block) breakBefore = true;
+      walk(child);
+      if (block) breakBefore = true;
+    }
+  };
+  walk(root);
+  return text;
+}
+
+/** Whether the element is in a window that lays pages out, so how a child is laid out can be asked; a Node test's stand-in is not. */
+function laidOut(element: Element): boolean {
+  const view = element.ownerDocument?.defaultView;
+  return Boolean(view && typeof view.getComputedStyle === "function" && (element.childNodes?.length ?? 0) > 0);
+}
+
+/** Whether the page lays the element out as a block of its own: anything but an inline, `contents` or undrawn box, and a line break. */
+function laidOutAsBlock(element: Element, view: Window | undefined): boolean {
+  if (element.tagName === "BR") return true;
+  if (!view || typeof view.getComputedStyle !== "function") return false;
+  const display = view.getComputedStyle(element)?.display;
+  return typeof display === "string" && display !== "" && !display.startsWith("inline") && display !== "contents" && display !== "none";
 }
 
 /** `textContent`, less every subtree rooted at a sensitive control, in document order. */

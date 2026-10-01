@@ -111,3 +111,14 @@ test("4: outside an item an image compares only with the lines next to it", () =
   ]), ["t1 h1 \"Kettles\"", "t2 \"Gooseneck kettle\"", "t3 img \"Kettles\"", "t4 img \"Gooseneck kettle in steel\"", "t5 img \"Gooseneck kettle in steel\""],
   "two alike images do not remove each other, and a line further away does not remove one");
 });
+
+test("words the capture read from separate blocks print apart; an authored name prints as it is", () => {
+  // lane B's bigbox run (2026-10-01): the store chip and the account link, each
+  // two stacked lines, read "Pickup or delivery?Carden Falls Supercenter" and
+  // "Sign InAccount". The capture sends the readable words beside them.
+  assert.deepEqual(bodyLines([
+    { tag: "button", name: "Pickup or delivery?Carden Falls Supercenter", readable: "Pickup or delivery? Carden Falls Supercenter" },
+    { tag: "p", text: "Sign InAccount", readable: "Sign In Account" },
+    { tag: "button", name: "Close dialog", readable: "× Close" }
+  ]), ["t1 button \"Pickup or delivery? Carden Falls Supercenter\"", "t2 \"Sign In Account\"", "t3 button \"Close dialog\""]);
+});

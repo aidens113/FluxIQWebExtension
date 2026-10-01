@@ -34,7 +34,7 @@ import { compactObject } from "./compact-object";
 import { frontLayerTest, isLeadStatement, pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { observedEventElementQueue } from "./event-elements";
-import { describeElement, ownTextBeside } from "./describe-element";
+import { describeElement, ownTextBeside, readableTextBeside } from "./describe-element";
 import { isSensitiveFormControl } from "./element-traits";
 import { listedParentIndexes } from "./listed-parents";
 import { renderedElements } from "./rendered-elements";
@@ -241,6 +241,8 @@ function hiddenDescriptor(element: Element, parent: number | undefined): DomElem
 function withStructure(element: Element, descriptor: DomElementDescriptor, parent: number | undefined): DomElementDescriptor {
   const ownText = ownTextBeside(element, descriptor.text);
   if (ownText !== undefined) descriptor.ownText = ownText;
+  const readableText = readableTextBeside(element, descriptor.text);
+  if (readableText !== undefined) descriptor.readableText = readableText;
   if (parent !== undefined) descriptor.parent = parent;
   return descriptor;
 }
