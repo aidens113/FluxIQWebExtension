@@ -1,6 +1,6 @@
 // T1 coverage of the rows a read keeps aside for the exploring model: which
-// condition rejected them, only when asked, bounded, and carried across the
-// documents of a multi-page read (`../rejected-samples.ts`).
+// condition rejected them, only when asked, every one whole, and carried across
+// the documents of a multi-page read (`../rejected-samples.ts`).
 //
 // The page is the stand-in `list-reader.test.ts` uses: items that answer
 // `getAttribute` under `.row`. A continued read is used so the reader goes
@@ -105,22 +105,25 @@ test("a read nobody asked for samples keeps none, in its outcome or its checkpoi
   }
 });
 
-test("at most three rows per condition, each value cut to eighty characters, and a row seen twice is one sample", async () => {
-  const long = (index: number) => ({ name: `Earbuds charging case ${index} ${"x".repeat(200)}`, price: "$1" });
-  const page = fakePage([long(1), long(1), long(2), long(3), long(4), long(5)]);
+test("every rejected row is kept, every value whole, and a row seen twice is one row", async () => {
+  const long = (index: number) => ({ name: `Earbuds charging case ${index} ${"x".repeat(5_000)}`, price: "$1" });
+  const many = Array.from({ length: 40 }, (_unused, index) => long(index + 2));
+  const page = fakePage([long(1), long(1), ...many]);
   try {
     const outcome = await extractList(EARBUDS, { resume: START, sampleRejected: true });
     const rows = outcome.rejectedSamples?.[1] ?? [];
-    assert.equal(rows.length, 3);
-    assert.deepEqual(rows.map((row) => row.name?.slice(0, 24)), ["Earbuds charging case 1 ", "Earbuds charging case 2 ", "Earbuds charging case 3 "]);
-    assert.ok(rows.every((row) => (row.name ?? "").length === 80));
+    // Forty-one distinct rows, the duplicate said once: no count cap.
+    assert.equal(rows.length, 41);
+    assert.deepEqual(rows.map((row) => row.name), [long(1), ...many].map((row) => row.name));
+    // No character cut.
+    assert.ok(rows.every((row) => (row.name ?? "").length > 5_000));
     assert.deepEqual(outcome.rejectedSamples?.[0], []);
   } finally {
     page.restore();
   }
 });
 
-test("samples survive a multi-page read: the checkpoint carries them and the next document goes on from them, still bounded", async () => {
+test("samples survive a multi-page read: the checkpoint carries them and the next document goes on from them, all of them", async () => {
   const taken: ExtractionCheckpoint[] = [];
   const page = fakePage(PAGE, [{ name: "Silicone ear tips", price: "$4" }]);
   try {
@@ -133,12 +136,12 @@ test("samples survive a multi-page read: the checkpoint carries them and the nex
   } finally {
     page.restore();
   }
-  // The next document: it starts from what was carried and stops at three.
+  // The next document: it starts from what was carried and adds every new row.
   const carried: ExtractionCheckpoint = { ...START, pagesRead: 1, rejectedSamples: taken[0]?.rejectedSamples ?? [], conditions: { applied: 4, kept: 1, rejected: [1, 2] } };
   const next = fakePage([{ name: "Silicone ear tips", price: "$4" }, { name: "Earbuds charging case", price: "$5" }]);
   try {
     const outcome = await extractList(EARBUDS, { resume: carried, sampleRejected: true });
-    assert.deepEqual(outcome.rejectedSamples?.[1]?.map((row) => row.name), ["Pro Earbuds Wireless Charging Case", "Foam ear tips", "Silicone ear tips"]);
+    assert.deepEqual(outcome.rejectedSamples?.[1]?.map((row) => row.name), ["Pro Earbuds Wireless Charging Case", "Foam ear tips", "Silicone ear tips", "Earbuds charging case"]);
     assert.deepEqual(outcome.rejectedSamples?.[0]?.map((row) => row.name), ["Sponsored earbuds"]);
   } finally {
     next.restore();

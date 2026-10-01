@@ -38,7 +38,7 @@
 // until the Encrypt column is built, is another, carrying NOT_IMPLEMENTED.
 //
 // **A command that carries `rejectedSamples: true` beside `extractList` also
-// gets a few of the rows each `where` condition rejected**, on the summary's
+// gets every row each `where` condition rejected**, on the summary's
 // `rejectedSamples`. Only the exploring model's own node run sends it, so the
 // model that wrote a condition can see which rows it turned down
 // (`domain/src/runtime/llm-evidence/node-run/rejected-rows.ts`); a Flow played

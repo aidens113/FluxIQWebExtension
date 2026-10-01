@@ -1,8 +1,8 @@
 // T1 coverage of who gets a read's rejected-row samples: a command that asks
 // for them (the exploring model's node run adds `rejectedSamples: true` beside
 // `extractList`) and nobody else -- a Flow played back never asks, so its
-// summary stays counts alone. The samples that are sent survive the domain's
-// wire copy, cut to its bounds.
+// summary stays counts alone. The rows that are sent survive the domain's
+// wire copy whole: nothing cuts them.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -54,7 +54,7 @@ async function run(command: BrowserActionCommand): Promise<{ options: ListExtrac
   return { options, evidence };
 }
 
-test("a command that asks for samples gets them on the summary, and they survive the wire copy cut to its bounds", async () => {
+test("a command that asks for samples gets them on the summary, and they survive the wire copy whole", async () => {
   const { options, evidence } = await run({ ...COMMAND, options: { extractList: {}, rejectedSamples: true } });
   assert.equal(options?.sampleRejected, true);
   assert.equal(evidence?.extraction?.rejectedSamples?.[0]?.[0]?.name?.startsWith("Pro Earbuds Wireless Charging Case"), true);
@@ -67,7 +67,7 @@ test("a command that asks for samples gets them on the summary, and they survive
     startedAt: 1,
     finishedAt: 2
   }).extraction as { rejectedSamples?: Array<Array<{ name: string }>> } | undefined;
-  assert.equal(wire?.rejectedSamples?.[0]?.[0]?.name.length, 80);
+  assert.equal(wire?.rejectedSamples?.[0]?.[0]?.name, `Pro Earbuds Wireless Charging Case ${"x".repeat(200)}`);
   // The kept rows are the records, untouched by the samples beside them.
   assert.deepEqual(evidence?.extracted, [{ name: "Basic Earbuds" }]);
 });

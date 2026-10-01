@@ -79,9 +79,8 @@ function withoutSamples(payload: JsonValue | undefined): JsonValue | undefined {
  * many it rejected and every row the page sampled for it.
  *
  * The samples are read through the summary's own copy, so only the read's
- * declared fields arrive, as many rows as the page's sampling contract gives
- * (`WEB_AUTOMATION_EXTRACT_REJECTED_SAMPLE_ROWS`); the same screen as the kept
- * rows then drops a key Core denies in evidence and withholds a
+ * declared fields arrive, every row the page rejected, whole; the same screen
+ * as the kept rows then drops a key Core denies in evidence and withholds a
  * credential-shaped string (`./read-result.ts`).
  */
 function rejectedRows(payload: JsonValue | undefined): JsonValue | undefined {

@@ -132,7 +132,8 @@ test("a condition with its own read keeps the first value it read on an item it 
   }
   const long = fakePage([{ name: "A", price: "$1", label: "x".repeat(100) }]);
   try {
-    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["x".repeat(60), null]);
+    // Whole: no character cut.
+    assert.deepEqual((await extractList(PLUS, { resume: START })).conditions?.seen, ["x".repeat(100), null]);
   } finally {
     long.restore();
   }

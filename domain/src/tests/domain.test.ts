@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
 import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import type { JsonObject } from "fluxiq/core";
 import { IoRegistry } from "fluxiq/io";
@@ -185,30 +185,26 @@ for (const definition of outputNodeDefinitions) bootstrapRegistry.register(defin
 const coreBuiltinNodeCount = new AutomationStudioNodeRegistry().list(bootstrapResolution).length;
 assert.ok(coreBuiltinNodeCount > 0);
 assert.equal(bootstrapRegistry.list(bootstrapResolution).length, coreBuiltinNodeCount + outputNodeDefinitions.length);
-const bootstrapCatalogBudget = automationStudioFlowBootstrapCatalogByteBudget({
-  maxInputTokens: 3_000,
-  instructionBytes: Buffer.byteLength(bootstrapInstruction, "utf8")
-});
+// The catalog is every offered node, whole, with no byte budget (Core, 2026-09-30).
 const bootstrapContext = buildAutomationStudioFlowBootstrapContext({
   registry: bootstrapRegistry,
   resolution: bootstrapResolution,
-  instructionText: bootstrapInstruction,
-  maxCatalogBytes: bootstrapCatalogBudget
+  instructionText: bootstrapInstruction
 });
 assert.deepEqual(bootstrapContext.catalogSelection.missingRequiredTerms, []);
 const bootstrapWithoutHostPermissions = buildAutomationStudioFlowBootstrapContext({
   registry: bootstrapRegistry,
   resolution: { ...bootstrapResolution, permissions: [] },
-  instructionText: bootstrapInstruction,
-  maxCatalogBytes: bootstrapCatalogBudget
+  instructionText: bootstrapInstruction
 });
 assert.deepEqual(
   bootstrapWithoutHostPermissions.catalogSelection.missingRequiredTerms,
   ["submit"],
   "the live catalog projection must retain the web host's granted permissions"
 );
-assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
-assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffer.byteLength(bootstrapInstruction, "utf8") + 1_800 <= 3_000 * 4, true);const bootstrapHarnessInput = {
+assert.equal(bootstrapContext.nodeCatalog.length, bootstrapRegistry.list(bootstrapResolution).length, "every offered node is in the catalog");
+assert.equal(bootstrapContext.catalogSelection.usedBytes, Buffer.byteLength(JSON.stringify(bootstrapContext.nodeCatalog), "utf8"));
+assert.equal(bootstrapContext.catalogTruncated, false);const bootstrapHarnessInput = {
   taskKind: "flow_bootstrap" as const,
   projectId: "project.catalog-acceptance",
   flowId: "flow.catalog-acceptance",
@@ -226,16 +222,18 @@ assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffe
     updatedAt: 1
   }],
   flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution },
-  tokenLimits: { maxInputTokens: 3_000, maxOutputTokens: 512, maxTotalTokens: 4_000 },
+  // The model's window with the 8,000-token reply reserve: the only bound on a request (Core, 2026-09-30).
+  // It was 3,000 input tokens, which the whole node catalog no longer fits.
+  tokenLimits: { maxInputTokens: AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST - 8_000, maxOutputTokens: 8_000, maxTotalTokens: AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST },
   maxEstimatedCostUsd: 0.25,
   timeoutMs: 20_000
 };
 const bootstrapDryRun = await runAutomationStudioLlmHarness({ ...bootstrapHarnessInput, dryRun: true });
-assert.equal(bootstrapDryRun.request.estimatedInputTokens <= 3_000, true);
-assert.equal(bootstrapDryRun.request.estimatedInputTokens + 512 <= 4_000, true);
-assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
+assert.equal(bootstrapDryRun.ok, true);
+assert.equal(bootstrapDryRun.request.context.flowBootstrap?.nodeCatalog.length, bootstrapRegistry.list(bootstrapResolution).length, "the request carries every offered node");
+assert.equal(bootstrapDryRun.request.estimatedInputTokens + 8_000 <= AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
 const bootstrapDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(bootstrapDryRun.request);
-assert.equal(bootstrapDeepSeekBodyTokens <= 3_000, true);
+assert.equal(bootstrapDeepSeekBodyTokens <= AUTOMATION_STUDIO_LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST - 8_000, true);
 const evidenceRuntime = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) });
 const evidenceTools = evidenceRuntime.tools;
 const bootstrapPlanSchema = (bootstrapContext.outputSchema.properties as JsonObject | undefined)?.plan;
@@ -270,7 +268,7 @@ const evidenceDryRun = await runAutomationStudioLlmHarness({
   // Core carries no evidence without the keys the bound domain declares, so
   // the loop's own request declares this domain's, exactly as production does.
   deniedEvidenceKeys: evidenceRuntime.deniedEvidenceKeys,
-  flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution, maxInputTokens: 5_000 },
+  flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution },
   evidenceLoop: {
     iteration: 2,
     tools: evidenceTools,
@@ -286,18 +284,17 @@ const evidenceDryRun = await runAutomationStudioLlmHarness({
 const evidenceDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(evidenceDryRun.request);
 assert.equal((evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length ?? 0) > 0, true);
 assert.deepEqual(evidenceDryRun.request.context.flowBootstrap?.catalogSelection.missingRequiredTerms, []);
-assert.equal(evidenceDeepSeekBodyTokens <= EVIDENCE_TOKEN_LIMITS.maxInputTokens, true, `evidence DeepSeek input estimate ${evidenceDeepSeekBodyTokens}; catalog ${evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length} entries, ${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.usedBytes}/${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.byteBudget} bytes`);
+assert.equal(evidenceDeepSeekBodyTokens <= EVIDENCE_TOKEN_LIMITS.maxInputTokens, true, `evidence DeepSeek input estimate ${evidenceDeepSeekBodyTokens}; catalog ${evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length} entries, ${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.usedBytes} bytes`);
 assert.equal(evidenceDeepSeekBodyTokens + EVIDENCE_TOKEN_LIMITS.maxOutputTokens <= EVIDENCE_TOKEN_LIMITS.maxTotalTokens, true);
 const selectedBootstrapActions = new Set(bootstrapContext.nodeCatalog.flatMap((entry) => entry.outputAction?.fixed ? [entry.outputAction.fixed] : []));
-for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}/${bootstrapContext.catalogSelection.byteBudget}`);
+for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}`);
 assert.equal(["web.dom.wait_for_text", "web.dom.wait_for_selector", "web.dom.extract"].some((action) => selectedBootstrapActions.has(action)), true, "bootstrap catalog omitted a verify/assert equivalent");
 
 const missingSelectRegistry = new AutomationStudioNodeRegistry(outputNodeDefinitions.filter((definition) => definition.outputAction?.fixedOutputId !== "web.dom.select"));
 const incompleteBootstrapContext = buildAutomationStudioFlowBootstrapContext({
   registry: missingSelectRegistry,
   resolution: bootstrapResolution,
-  instructionText: bootstrapInstruction,
-  maxCatalogBytes: bootstrapCatalogBudget
+  instructionText: bootstrapInstruction
 });
 assert.equal(incompleteBootstrapContext.catalogSelection.missingRequiredTerms.includes("choose"), true);let incompleteProviderCalls = 0;
 const incompleteHarness = await runAutomationStudioLlmHarness({

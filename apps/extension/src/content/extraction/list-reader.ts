@@ -221,7 +221,7 @@ export type ListExtractionOutcome = {
   filtered: number;
   /** What the request's conditions did, in counts alone, or absent for a request that named none. */
   conditions?: ListExtractionConditionReport | undefined;
-  /** Up to three rows each condition rejected, one list per condition, only for a read asked for them (`rejected-samples.ts`). */
+  /** Every row each condition rejected, one list per condition, only for a read asked for them (`rejected-samples.ts`). */
   rejectedSamples?: ExtractedListRecord[][] | undefined;
   /**
    * Why a read that pages stopped paging, or absent for a read that did not page.
@@ -256,7 +256,7 @@ export type ListExtractionOptions = {
   checkpoint?: ((progress: ExtractionCheckpoint) => Promise<void>) | undefined;
   /** How the document says how it was served, and is waited on and reloaded: the browser's own unless a test stands it in. */
   pageHost?: RefusedPageHost | undefined;
-  /** Keep a few rows each condition rejected, for the exploring model's own node run only (`rejected-samples.ts`). */
+  /** Keep every row each condition rejected, for the exploring model's own node run only (`rejected-samples.ts`). */
   sampleRejected?: boolean | undefined;
 };
 
