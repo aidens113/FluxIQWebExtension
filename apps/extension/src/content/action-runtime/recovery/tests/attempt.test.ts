@@ -5,11 +5,12 @@
 // and the waiting is still asserted rather than merely survived.
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
+import type { ActionResultEvidence } from "../../results";
 import { runWithRecovery } from "../attempt";
-import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_TARGET_BACKOFF_MS } from "../budget";
-import type { BrowserActionCommand, BrowserActionResult } from "../../../types";
+import { RECOVERY_BLIP_BACKOFF_MS, RECOVERY_BUDGET_MS, RECOVERY_INTERFERENCE_BACKOFF_MS, RECOVERY_TARGET_BACKOFF_MS } from "../budget";
+import type { BrowserActionCommand, BrowserActionResult, DomSnapshot } from "../../../types";
 
 function command(actionType: string, timeoutMs?: number): BrowserActionCommand {
   return { commandId: "c1", actionType, ...(timeoutMs === undefined ? {} : { timeoutMs }) } as unknown as BrowserActionCommand;
@@ -394,4 +395,122 @@ test("a wall that will not clear does not stretch the missing target's ladder or
   assert.equal(account.outcome, "exhausted");
   assert.equal(account.dismissed, 0);
   assert.deepEqual(paused, [...RECOVERY_TARGET_BACKOFF_MS]);
+});
+
+
+// --- A control the page disables for a moment ------------------------------
+//
+// job-board's applicant tracker shows "I'm a person" disabled, reading "Please
+// wait N", for three seconds after Submit, and a Flow reaches that step well
+// inside three seconds (reports/t195-w19d-audit-apply-quillmark.md, C5). The
+// gate refused it ACTION_REJECTED and nothing waited. These rows build each
+// refusal with the real `actionRejected`, from exactly what the verb hands it,
+// so what is asserted is the line from the verb's statement to the loop's
+// decision: a gate refusal says the act did not happen (`effect: "unacted"`),
+// and only that `disabled` is waited out. Which verbs make the statement, and
+// that `check.ts` does not make it after `setCheckedState`, is held by
+// `actions/tests/gate-refusal.test.ts`, which runs the verbs themselves.
+
+type RejectAction = typeof import("../../results").actionRejected;
+
+/**
+ * The page globals `actionRejected` reads on its way to a result: the address
+ * and title it stamps, the `querySelector` its sign-in and challenge rules
+ * would ask -- which a command naming no selector never reaches -- and the
+ * `window` its snapshot module reads as it loads. The previous globals, usually
+ * none, are put back when the test ends.
+ *
+ * `results.ts` is imported only after this, by the rows themselves: its import
+ * chain reads `window` at load (`frame-geometry.ts`), and a static import would
+ * make this file pass only when another test file had left a `window` on the
+ * global first.
+ */
+async function installRejectionPage(t: TestContext): Promise<RejectAction> {
+  const scope = globalThis as unknown as Record<string, unknown>;
+  const before = { document: scope.document, location: scope.location, window: scope.window };
+  const view: Record<string, unknown> = { innerWidth: 1280, innerHeight: 800, addEventListener: () => undefined };
+  view.top = view;
+  scope.window = view;
+  scope.document = { title: "Apply", body: null, querySelector: () => null, addEventListener: () => undefined };
+  scope.location = { href: "http://127.0.0.1:4000/scenarios/job-board/apply" };
+  t.after(() => {
+    scope.document = before.document;
+    scope.location = before.location;
+    scope.window = before.window;
+  });
+  return (await import("../../results")).actionRejected;
+}
+
+/** A command with no selector, so the page-decided codes in `results.ts` are never asked. */
+function bare(actionType: string): BrowserActionCommand {
+  return { commandId: "c1", actionType } as BrowserActionCommand;
+}
+
+/** The evidence every refusal here carries: a snapshot already taken, so none is captured from the stub page. */
+const TAKEN: ActionResultEvidence = { snapshot: {} as DomSnapshot };
+
+/** The click gate's refusal of a control the page has disabled, as `actions/click.ts` hands it over. */
+function gateDisabled(actionRejected: RejectAction): BrowserActionResult {
+  return actionRejected(bare("web.dom.click"), Date.now(), "disabled", "a target that can be clicked", "the element is disabled", { ...TAKEN, refusedBeforeDispatch: true });
+}
+
+/** `check.ts`'s refusal after `setCheckedState` answered `disabled`: the same word, and no statement about the act. */
+function checkedDisabled(actionRejected: RejectAction): BrowserActionResult {
+  return actionRejected(bare("web.dom.check"), Date.now(), "disabled", "the control is checked", "the checkbox is disabled", TAKEN);
+}
+
+test("a click the gate refused because the control was disabled for a moment is waited out, and lands", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const refusal = gateDisabled(actionRejected);
+  assert.equal(refusal.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, "the code is unchanged: the statement is the effect, not a new code");
+  assert.equal(refusal.failure?.effect, "unacted");
+
+  const shield = page("web.dom.click", [refusal]);
+  const pressed: string[] = [];
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), Date.now(), shield.attempt, pause, Date.now, (fault) => { pressed.push(fault); return 1; }, () => true);
+  assert.equal(result.status, "succeeded");
+  assert.equal(shield.calls(), 2);
+  assert.deepEqual(account, { attempts: 2, absorbed: ["disabled_target"], waitedMs: RECOVERY_BLIP_BACKOFF_MS[0], dismissed: 0, outcome: "recovered" });
+  assert.deepEqual(pressed, [], "nothing stands over a disabled control, so nothing on the page is pressed");
+});
+
+test("a disabled control check.ts found after setCheckedState is refused, not waited out", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  const refusal = checkedDisabled(actionRejected);
+  assert.equal(refusal.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.ok(refusal.failure?.actual?.startsWith("disabled:"), "the same reason word the gate writes");
+  assert.equal(refusal.failure?.effect, undefined, "written after setCheckedState, so it states nothing about the act");
+
+  const checked = page("web.dom.check", [refusal]);
+  const { result, account } = await runWithRecovery(bare("web.dom.check"), Date.now(), checked.attempt, pause);
+  assert.equal(result, refusal);
+  assert.equal(checked.calls(), 1, "the verb ran once and was not run again");
+  assert.equal(account.attempts, 1);
+  assert.deepEqual(paused, []);
+});
+
+test("a control that stays disabled past the budget fails as it did before, with the page's own refusal", async (t) => {
+  const actionRejected = await installRejectionPage(t);
+  let clock = 0;
+  const advancingPause = async (ms: number): Promise<void> => {
+    paused.push(ms);
+    clock += ms;
+  };
+  const refusals: BrowserActionResult[] = [];
+  let dispatchedAt = 0;
+  const attempt = async (): Promise<BrowserActionResult> => {
+    dispatchedAt = clock;
+    // Each attempt itself takes most of a second, as a hit test on a busy page can.
+    clock += 900;
+    const refusal = gateDisabled(actionRejected);
+    refusals.push(refusal);
+    return refusal;
+  };
+  const { result, account } = await runWithRecovery(bare("web.dom.click"), 0, attempt, advancingPause, () => clock);
+  assert.equal(result.status, "failed");
+  assert.equal(result, refusals.at(-1), "the reported result must be the last attempt's own");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.equal(account.outcome, "exhausted");
+  assert.ok(dispatchedAt < RECOVERY_BUDGET_MS, `an attempt was dispatched at ${dispatchedAt} ms, past the budget`);
+  assert.ok(account.absorbed.length >= 2 && account.absorbed.every((fault) => fault === "disabled_target"));
 });

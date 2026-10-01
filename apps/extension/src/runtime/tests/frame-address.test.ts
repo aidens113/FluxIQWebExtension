@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { chooseFrame, type ListedFrame } from "../frame-address";
+import { chooseFrame, FRAME_APPEAR_WAIT_MS, waitForFrameChoice, type FrameWaitInputs, type ListedFrame } from "../frame-address";
 
 const TOP: ListedFrame = { frameId: 0, url: "http://127.0.0.1:4173/scenarios/iframe-checkout/" };
 /** Served from a second loopback port, with a query, as a cross-origin fixture frame is. */
@@ -84,4 +84,73 @@ test("a path never matches a frame whose URL is not http(s) or cannot be parsed"
   const choice = chooseFrame(frames, 3, "/srcdoc");
   assert.ok("refused" in choice);
   assert.equal(choice.refused.failure?.code, "web.target.not_found");
+});
+
+// -- Waiting for the frame at the path (t195 C1) ------------------------------
+//
+// apply-quillmark's dry run opens a new tab, which loads the careers page and
+// only then its application frame; a step addressed to that frame by path was
+// refused before the frame existed. The choice now lists the frames again while
+// none is at the path, and refuses only after the wait.
+
+/** A tab whose frame list is `listing(poll)` on each poll, on a clock only `sleep` moves. */
+function fakeTab(listing: (poll: number) => readonly ListedFrame[]): FrameWaitInputs & { polls(): number; slept(): number } {
+  let polls = 0;
+  let clock = 1_000;
+  const startedAt = clock;
+  return {
+    listFrames: async () => listing(++polls),
+    now: () => clock,
+    sleep: async (ms) => { clock += ms; },
+    polls: () => polls,
+    slept: () => clock - startedAt
+  };
+}
+
+test("a frame that appears at the path on the third poll is the one chosen", async () => {
+  const tab = fakeTab((poll) => (poll < 3 ? [TOP, SHIPPING] : [TOP, SHIPPING, PAY]));
+  const choice = await waitForFrameChoice(tab, { recordedFrameId: 4, urlPath: PAY_PATH, timeoutMs: undefined, startedAt: tab.now() });
+  assert.deepEqual(choice, { frameId: 6 });
+  assert.equal(tab.polls(), 3);
+  assert.equal(tab.slept(), 200, "two pauses of 100 ms");
+});
+
+test("a frame that never appears at the path is target_not_found once the wait has passed, in the same words", async () => {
+  const tab = fakeTab(() => [TOP, SHIPPING]);
+  const choice = await waitForFrameChoice(tab, { recordedFrameId: 4, urlPath: PAY_PATH, timeoutMs: undefined, startedAt: tab.now() });
+  assert.deepEqual(choice, chooseFrame([TOP, SHIPPING], 4, PAY_PATH));
+  assert.ok("refused" in choice);
+  assert.equal(choice.refused.failure?.code, "web.target.not_found");
+  assert.equal(tab.slept(), FRAME_APPEAR_WAIT_MS);
+  assert.equal(tab.polls(), FRAME_APPEAR_WAIT_MS / 100 + 1);
+});
+
+test("the wait fits inside the command's own timeout, less the reply margin", async () => {
+  const tab = fakeTab(() => [TOP, SHIPPING]);
+  // A 3 s command that has already spent 500 ms leaves 1.5 s once 1 s is kept back for the reply.
+  const choice = await waitForFrameChoice(tab, { recordedFrameId: 4, urlPath: PAY_PATH, timeoutMs: 3_000, startedAt: tab.now() - 500 });
+  assert.ok("refused" in choice);
+  assert.equal(tab.slept(), 1_500);
+  // One already past its budget is refused on the first listing.
+  const spent = fakeTab(() => [TOP, SHIPPING]);
+  await waitForFrameChoice(spent, { recordedFrameId: 4, urlPath: PAY_PATH, timeoutMs: 2_000, startedAt: spent.now() - 1_500 });
+  assert.equal(spent.polls(), 1);
+  assert.equal(spent.slept(), 0);
+});
+
+test("an action without a path never lists frames or waits; a final choice is not waited on", async () => {
+  const tab = fakeTab(() => [TOP, SHIPPING]);
+  assert.deepEqual(await waitForFrameChoice(tab, { recordedFrameId: 4, urlPath: undefined, timeoutMs: undefined, startedAt: tab.now() }), { frameId: 4 });
+  assert.equal(tab.polls(), 0);
+  assert.equal(tab.slept(), 0);
+  // Several frames at the path, and a browser that will not list them, are answers rather than an absence.
+  const twin: ListedFrame = { frameId: 9, url: `http://127.0.0.1:4174${PAY_PATH}` };
+  const ambiguous = fakeTab(() => [TOP, PAY, twin]);
+  const choice = await waitForFrameChoice(ambiguous, { recordedFrameId: 4, urlPath: PAY_PATH, timeoutMs: undefined, startedAt: ambiguous.now() });
+  assert.ok("refused" in choice);
+  assert.equal(choice.refused.failure?.code, "web.target.ambiguous");
+  assert.equal(ambiguous.slept(), 0);
+  const unlisted = fakeTab(() => []);
+  assert.deepEqual(await waitForFrameChoice(unlisted, { recordedFrameId: 4, urlPath: PAY_PATH, timeoutMs: undefined, startedAt: unlisted.now() }), { frameId: 4 });
+  assert.equal(unlisted.slept(), 0);
 });

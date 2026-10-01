@@ -299,6 +299,56 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assert.equal(binding.ok && binding.binding.frameId, 7);
 });
 
+/**
+ * t195 C2 (apply-quillmark): the confirmation is shown inside a frame served
+ * from the Lab's other loopback port. A detection addressed to that frame
+ * captures the frame's own document, whose address is the frame's, and was held
+ * to the top page's origin -- "web DOM snapshot escaped the expected origin",
+ * a fault, so the receipt could never be read. It is held to the origin of the
+ * frame document the element was shown in, which is still a guard.
+ */
+test("a target in a cross-origin child frame is detected in that frame's document, held to the origin it was shown with", async () => {
+  const top = "http://127.0.0.1:4173/scenarios/job-board/careers/quillmark/jobs/QM-4471";
+  const frameUrl = "http://127.0.0.1:4999/scenarios/job-board/embed/confirmation?app=app-1";
+  const receipt = (selector: string): JsonObject => ({ tagName: "a", selector, accessibleName: "Application TL-ABCD", visibleText: "Application TL-ABCD", attributes: { href: "/scenarios/job-board/embed/application/app-1" } });
+  const shown = receipt('frame[7] >> [data-testid="product-link"]');
+  shown.attributes = { href: "/scenarios/job-board/embed/application/app-1", "data-fluxiq-frame-id": "7", "data-fluxiq-frame-url": frameUrl };
+  const structure = captured("product-catalog-largest").structure as JsonValue;
+  /** Where frame 7's own capture says it is; the second half moves it to another origin. */
+  let frameAnswersFrom = frameUrl;
+  const commands: Array<{ actionType: string; parameters: JsonObject }> = [];
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    structureDetectionSessionIds: () => ["session.one"],
+    executeAction: async (_sessionId, command) => {
+      commands.push({ actionType: command.actionType, parameters: command.parameters });
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const snapshot: JsonObject = command.parameters.browserFrameId === 7
+        ? { url: frameAnswersFrom, title: "Application received", interactiveElements: [receipt('[data-testid="product-link"]')] }
+        : { url: top, title: "Careers", interactiveElements: [shown] };
+      return { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot } : { snapshot, structure } };
+    }
+  });
+  const packet = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.cross-origin", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
+  const handle = shownPageLines(packet.evidence)[0]!.target;
+
+  commands.length = 0;
+  const detected = await detect(runtime, { target: handle });
+  assert.equal(detected.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+  assert.deepEqual(commands.map((command) => command.parameters.browserFrameId ?? null), [null, 7]);
+  const binding = runtime.resolveExtractionHandle({ ...SCOPE, handle: (detected.evidence as WebLlmRepeatingStructure).extraction });
+  assert.ok(binding.ok);
+  assert.equal(binding.binding.frameId, 7);
+  assert.equal(new URL(binding.binding.location).origin, "http://127.0.0.1:4999", "the list is where the frame's document is");
+  assert.equal(new URL(binding.binding.location).pathname, "/scenarios/job-board/embed/confirmation");
+  assert.equal(binding.binding.frameUrlPath, "/scenarios/job-board/embed/confirmation");
+
+  // A frame capture from an origin other than the one the element was shown
+  // with is still a capture that escaped where it was addressed: a fault.
+  frameAnswersFrom = "http://127.0.0.1:5000/scenarios/job-board/embed/confirmation?app=app-1";
+  await assert.rejects(detect(runtime, { target: handle }), /escaped the expected origin/u);
+});
+
 /** A control, with whatever the case under test needs the capture to say about it. */
 function control(name: string, extra: JsonObject = {}): JsonObject {
   const element: JsonObject = { tagName: "button", selector: `#${name.toLowerCase().replaceAll(" ", "-")}`, accessibleName: name };

@@ -31,6 +31,13 @@
 // model added to save them, whose record output did not parse
 // (`run-mu4yk4u1-60a1c3a4`). "Saved without a recordOutput" had not said that
 // no other node is needed, so the description now does.
+//
+// **One record is a list too.** Detection now answers one record -- a reply
+// card beside a thread list, a label/value receipt -- as a list of one item
+// under its own handle (`runtime/llm-evidence/structure/packet.ts`). A node
+// described as scraping only "a repeating list or table" reads as the wrong
+// node for "the price on that card", so the first sentence names one record,
+// within the 80 characters Core keeps of it.
 
 import type { JsonObject } from "fluxiq/core";
 import {
@@ -81,7 +88,7 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
  * above them was.
  */
 export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
-  "Scrape the items of a repeating list or table into a dataset, one page or many.",
+  "Scrape a repeating list, table or one record into a dataset, one page or many.",
   "Detect the list with web.detect_repeating_structure; name it in extractList by its handle.",
   "It saves its rows itself: no recordOutput or save node needed."
 ].join(" ");
