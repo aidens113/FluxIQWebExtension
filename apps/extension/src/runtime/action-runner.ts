@@ -1,7 +1,15 @@
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, webBrowserApiFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { allTabFrames, ensureContentScript, sendToTab, unreachableFrameReason } from "../background/tabs";
-import { paceNavigation, withPagePace, withPaceNote, type OriginPace } from "../background/page-pace";
+import {
+  PAGE_LOAD_PACE_SETTINGS,
+  PAGE_REFUSAL_STATUSES,
+  originOf,
+  paceNavigation,
+  withPagePace,
+  withPaceNote,
+  type OriginPace
+} from "../background/page-pace";
 import {
   navigationChallengeFailure,
   navigationUnexpectedFailure,
@@ -35,10 +43,12 @@ import {
   type LandedCheckWait,
   type LandedTabAccess
 } from "./landed-check-wait";
+import { landedPath } from "./quoted-path";
 import { lookAcrossFrames, type MergeFrameSnapshots } from "./look-across-frames";
 import { metNavigatingPage } from "./navigating-page";
 import { compareNavigatedUrl, judgeTabMovement } from "./navigation-outcome";
 import { navigationTargetTab } from "./navigation-target";
+import { servedStatus, type ServedStatus } from "./served-status";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
 export type BrowserActionRunRequest = {
@@ -115,14 +125,18 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     // read here is where the browser actually committed the navigation -- and
     // the top frame says whether what it committed was the page or Chrome's
     // own error page, which keeps the requested URL in the address bar. A page
-    // that did load is asked whether it is a robot check; Chrome's error page
-    // runs no content script and is no challenge.
+    // that did load is asked whether it is a robot check -- Chrome's error page
+    // runs no content script and is no challenge -- and which HTTP status it
+    // was served with, from the document the drive landed on when it named one.
     const loadFailed = (await allTabFrames(tabId)).some((frame) => frame.frameId === TOP_FRAME_ID && frame.errorOccurred);
     const firstReading = loadFailed ? undefined : await readLandedPage(tabId, sendToTab);
     // A check that clears by itself is waited out where it stands, before the
     // landing is judged: what the navigation reached is the page behind it.
     const { reading, checkWait } = await settleLandedReading(firstReading, tabId, LANDED_TAB_ACCESS, checkWaitBudgetMs(action, startedAt));
-    const landing = { landed: await readTabUrl(tabId), title: await readTabTitle(tabId), loadFailed, reading, checkWait, drive };
+    const served = loadFailed ? undefined : await servedStatus(tabId, drive?.documentAfter);
+    const landed = await readTabUrl(tabId);
+    const rateLimited = noteRateLimitedLanding(landed, reading, served, request.pace);
+    const landing = { landed, title: await readTabTitle(tabId), loadFailed, reading, checkWait, served, rateLimited, drive };
     const result = navigationResult(action, startedAt, action.url, landing);
     const clearedWait = clearedCheckWait(landing.checkWait);
     if (clearedWait) result.checkWait = clearedWait;
@@ -226,12 +240,56 @@ type NavigationLanding = {
   reading: LandedPageReading | undefined;
   /** The wait on a self-clearing check, when the landed page first read as one (`landed-check-wait.ts`). */
   checkWait: LandedCheckWait | undefined;
+  /** The HTTP status the landed document was served with (`served-status.ts`); absent when the page did not load. */
+  served: ServedStatus | undefined;
+  /** The landing's refusal for coming too fast, already told to the pace (`noteRateLimitedLanding`); absent when it is none. */
+  rateLimited: RateLimitedLanding | undefined;
   drive: TabDriveRecord | undefined;
 };
 
+/** A landing served 429 or 503: the status, and how long until the same load may be made again. */
+type RateLimitedLanding = { status: number; retryAfterMs: number };
+
 /**
- * A navigation's post-condition, in two halves, after one question that
- * overrides both.
+ * A landing the site refused for coming too fast, or while it cannot serve
+ * (429, 503 -- `PAGE_REFUSAL_STATUSES`), told to the pace of the origin it
+ * landed on, and answered with the wait before the same load may be made
+ * again; undefined for any other landing.
+ *
+ * job-board and the everything store serve their rate-limit page as a document,
+ * at the address asked for, with HTTP 429. Read as a refused page, the model was
+ * told the navigation went wrong for good, and the pace that a paginated read
+ * tells of the same refusal (`content/extraction/pagination.ts`) never heard of
+ * it, so the next load on the site went as soon as ever and was refused again.
+ *
+ * - A robot check is judged first and stays the person's, whatever it was
+ *   served with, and is not told to the pace: it is not a refusal to wait out.
+ * - The wait is the one the pace now imposes on the origin's next load, which a
+ *   refusal sets to at least `refusalWaitMs` from now. Without a pace, or for a
+ *   landed address that is not paced, it is that same `refusalWaitMs` -- the
+ *   pagination's first retry wait (`FIRST_RETRY_WAIT_MS`, 8.5 s), which
+ *   `pace-settings.ts` keeps equal to it.
+ */
+function noteRateLimitedLanding(
+  landed: string | undefined,
+  reading: LandedPageReading | undefined,
+  served: ServedStatus | undefined,
+  pace: OriginPace | undefined
+): RateLimitedLanding | undefined {
+  if (reading?.kind === "robot_check" || served === undefined || !("status" in served)) return undefined;
+  if (!PAGE_REFUSAL_STATUSES.has(served.status)) return undefined;
+  const origin = originOf(landed);
+  if (pace === undefined || origin === undefined) return { status: served.status, retryAfterMs: PAGE_LOAD_PACE_SETTINGS.refusalWaitMs };
+  pace.noteRefusal(origin, served.status);
+  return { status: served.status, retryAfterMs: pace.waitBeforeNextLoad(origin) };
+}
+
+/** The lowest HTTP status that means the server refused the page. */
+const FIRST_ERROR_STATUS = 400;
+
+/**
+ * A navigation's post-condition, in two halves, after two questions that
+ * override both.
  *
  * A landed page that is a robot check is the person's, wherever it is and
  * whatever the drive did: it fails USER_INTERVENTION_REQUIRED and is never a
@@ -243,8 +301,20 @@ type NavigationLanding = {
  * must answer, or one that did not clear in time; one that did clear leaves
  * the page behind it to be judged, and the validation says it was waited out.
  *
+ * Next, a landing served 429 or 503 is the site saying "not now", wherever it
+ * landed: it fails RATE_LIMITED, which is retryable and states the navigation
+ * did not happen, with the wait before it may be made again as `retryAfterMs`
+ * (`noteRateLimitedLanding` has already told the pace). It is not
+ * NAVIGATION_UNEXPECTED, which is never retried: the same request after the
+ * wait is the one that works.
+ *
  * Then the destination is judged, because landing somewhere else explains
- * everything after it. Then the movement: a navigation that left the tab on
+ * everything after it. Then the server's answer: a page served HTTP 400 or
+ * above (other than the two above) is a page the server refused, though it
+ * loaded at the address asked for -- bigbox answers an item it does not know with 404 and a line of JSON,
+ * and lane A run 23 reported that navigation a success. A check served 403 was
+ * judged above, and stays the person's. A status the browser would not give
+ * leaves the navigation as it was. Then the movement: a navigation that left the tab on
  * the document it already held did nothing, however right its address reads,
  * and reporting that as success is how a Flow carried on against a page it
  * believed it had replaced. Only positive evidence of a no-op fails --
@@ -273,6 +343,19 @@ function navigationResult(
       ...page
     });
   }
+  if (landing.rateLimited !== undefined) {
+    const { status, retryAfterMs } = landing.rateLimited;
+    const path = landedPath(landed ?? requested);
+    const expected = `the page at ${requested}`;
+    const actual = `the server answered HTTP ${status} for ${path}: the site refused the load for now and nothing was loaded; the same navigation may be made again after ${retryAfterMs} ms`;
+    return workerActionResult(action, startedAt, {
+      status: "failed",
+      message: `Navigation refused by the site for now: HTTP ${status} for ${path}; it may be made again after ${retryAfterMs} ms.`,
+      validation: { status: "failed", expected, actual },
+      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.RATE_LIMITED, { expected, actual, retryAfterMs }),
+      ...page
+    });
+  }
   const comparison = compareNavigatedUrl(requested, landed, loadFailed);
   if (!comparison.matched) {
     return workerActionResult(action, startedAt, {
@@ -280,6 +363,17 @@ function navigationResult(
       message: loadFailed ? `The browser could not load ${comparison.expected}.` : `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
       validation: { status: "failed", expected: comparison.expected, actual: comparison.actual },
       failure: navigationUnexpectedFailure(comparison.expected, comparison.actual),
+      ...page
+    });
+  }
+  if (landing.served !== undefined && "status" in landing.served && landing.served.status >= FIRST_ERROR_STATUS) {
+    const path = landedPath(comparison.actual);
+    const actual = `the server answered HTTP ${landing.served.status} for ${path}`;
+    return workerActionResult(action, startedAt, {
+      status: "failed",
+      message: `Navigation landed on ${path}, which the server answered with HTTP ${landing.served.status}.`,
+      validation: { status: "failed", expected: comparison.expected, actual },
+      failure: navigationUnexpectedFailure(comparison.expected, actual),
       ...page
     });
   }

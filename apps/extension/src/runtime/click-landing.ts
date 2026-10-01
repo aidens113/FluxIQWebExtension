@@ -43,7 +43,8 @@
 //   the page cancels) is returned as it was too.
 // - The status is read from the committed document itself, addressed by the
 //   `documentId` its commit named, so a document that replaced it cannot answer
-//   for it. Anything that stops the read -- Firefox keeps no `responseStatus`, a
+//   for it (`served-status.ts`, which a navigation's landing reads too).
+//   Anything that stops the read -- Firefox keeps no `responseStatus`, a
 //   replaced document refuses the injection -- leaves the click as it was:
 //   missing evidence never becomes a failure.
 // - The record names the status and the landed path without its query or
@@ -61,8 +62,10 @@ import type { BrowserActionCommand, BrowserActionResult } from "../shared/protoc
 import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
+import { landedPath } from "./quoted-path";
 import { checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
 import { unloadedUnderDeliveredMessage } from "./navigating-page";
+import { servedStatus } from "./served-status";
 
 /** The id the browser always gives a tab's main frame. */
 const TOP_FRAME_ID = 0;
@@ -254,37 +257,9 @@ function watchTopFrameNavigation(tabId: number): NavigationWatch {
 }
 
 async function refusedLanding(tabId: number, commit: Commit): Promise<RefusedLanding | undefined> {
-  const status = await servedStatus(tabId, commit);
-  if (status === undefined || status < FIRST_ERROR_STATUS) return undefined;
-  return { status, path: landedPath(commit.url) };
-}
-
-/** The status the committed document was served with, or undefined when the browser will not say. */
-async function servedStatus(tabId: number, commit: Commit): Promise<number | undefined> {
-  const target: chrome.scripting.InjectionTarget = commit.documentId !== undefined
-    ? { tabId, documentIds: [commit.documentId] }
-    : { tabId, frameIds: [TOP_FRAME_ID] };
-  try {
-    const [injection] = await chrome.scripting.executeScript({ target, func: readServedStatus });
-    const status: unknown = injection?.result;
-    return typeof status === "number" && Number.isInteger(status) && status > 0 ? status : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Runs inside the landed document, so it must stand alone: the status its response carried. */
-function readServedStatus(): number | undefined {
-  const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
-  return entry?.responseStatus;
-}
-
-function landedPath(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return "(unknown)";
-  }
+  const served = await servedStatus(tabId, commit.documentId);
+  if (!("status" in served) || served.status < FIRST_ERROR_STATUS) return undefined;
+  return { status: served.status, path: landedPath(commit.url) };
 }
 
 function refusedLandingOutcome(landing: RefusedLanding): WorkerActionOutcome {
