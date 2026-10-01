@@ -66,7 +66,11 @@ content loop does not see it in practice. When that failure reaches Core, the
 defensive executor treats its outcome as ambiguous and replays a mutating node
 only when the node positively says repetition is safe; read-only work may be
 repeated. `BLOCKED_BY_DIALOG` is a stable page state that needs a different
-action, not a retry. `BROWSER_PERMISSION_DENIED` is a browser capability/policy
+action, not a retry. A dialog that holds the refused target itself -- the
+open form drawer, the consent wall whose own button is pressed -- is the
+layer the step is working in, never the one blocking it: it neither makes a
+refusal `BLOCKED_BY_DIALOG` nor is cleared by the page-side defence
+(`content/action-runtime/interference/overlays.ts`, since 2026-10-01). `BROWSER_PERMISSION_DENIED` is a browser capability/policy
 refusal that must be resolved before dispatch, unlike `ACTION_REJECTED`, which
 is the actionability decision about a particular target on a drivable page.
 

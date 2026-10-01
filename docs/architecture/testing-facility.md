@@ -58,25 +58,31 @@ Production composition binds `domain/src/runtime/llm-evidence/` through
 advertises its runnable web node library; Core offers `core.run_node` to run
 those registered nodes and `core.flow_draft` to author the Flow. The domain's
 additional `web.detect_repeating_structure` observation names an extraction structure
-without publishing selectors or values. A free initial observation gives the
-first decision the page already in front of it (`tools.ts`, `runsNodes.initial`).
+without publishing selectors or values; `web.find_on_page` searches the whole
+page, hidden elements and every attribute included, and `web.describe_element`
+prints one element in full (`page-find/`). All three observe only. A free
+initial observation gives the first decision the page already in front of it
+(`tools.ts`, `runsNodes.initial`).
 These operations use the production gateway bridge and require exactly one
 ready, trusted extension with an idle recorder, failing closed on ambiguity.
 The old inspect/navigate/press-only catalog is no longer the build's surface:
 typing, selecting and reading are available through the registered nodes too.
 
-The model receives `web-llm-evidence.v2`: every rendered element from the
-composed tree, every responding frame and open shadow root, in document order.
-The look merges all frames unless a frame is explicitly addressed. A frame
-that does not answer is named in `unansweredFrameIds`. No element count,
-text length, option count, attribute allowlist, byte budget or ranking hides
-page information. Non-sensitive values that were captured, full option lists,
-attributes as pairs, and screened locations/links arrive whole. Sensitive
-controls, secret-shaped strings, card numbers and secret-named URL parameter
-values remain screened. Covering-layer facts (`isDialog`, `inDialog`, `covers`,
-`coversCount`, `coveredBy`, `kind`, `frontLayer`, `statement`) tell the model
-what stands between it and a control without changing document order; see
-[page evidence](page-evidence.md#no-limits-on-the-way-to-a-model).
+The model receives every page as the compact view, `web-llm-page.v3` (t223):
+header lines (`PAGE`, `URL` on a `~` base, `VIEW`, and `COVERING`, `DIALOG`,
+`LOADING` for what stands in front of the page), then one line per element
+that has visible words or is a control, in document order, across every
+responding frame and open shadow root: `<handle> <kind> "<words>" <state>`,
+with `[landmark]`, `- i/n` item and `--- below the fold ---` markers. The
+look merges all frames unless a frame is explicitly addressed; a frame that
+does not answer is named in a `FRAMES` header line. No element that qualifies
+is capped, ranked or cut, and everything else on the page is reached through
+`web.find_on_page` and `web.describe_element`. The structured packet the view
+is written from (`web-llm-evidence.v2`) stays in the domain, where plan
+resolution, stable handles, the state digest and the repair check read it;
+the same screens apply to both: sensitive controls, secret-shaped strings,
+card numbers and secret-named URL parameter values. See
+[page evidence](page-evidence.md#what-a-model-reads-the-compact-page-view).
 
 Opaque `tN` handles (`t1`, `t2`, ...; the older `target.N` spelling is still accepted) bind to observed elements; the runtime resolves and
 revalidates a handle before acting. Consequences are declared to Core's

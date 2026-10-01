@@ -27,7 +27,8 @@
 //
 // **What it does not claim.** In the inert shape there is no hit point, so a
 // target that is hidden for its own reasons on a page with a painted modal is
-// put down to the modal. A cookie banner with no close glyph and no way to
+// put down to the modal -- unless the modal holds the target, which is then the
+// layer the step is working in and is never named (`blockingDialog`). A cookie banner with no close glyph and no way to
 // decline optional cookies is not a dialog here, so a refusal under one stays
 // ACTION_REJECTED; one that can be declined is, because declining gives nothing
 // away (`interference/vocabulary.ts`).
@@ -57,15 +58,19 @@ export type BlockingDialog =
  * `reason` is the refusal's word; only `covered` and `hidden` can be a dialog's
  * doing (`disabled`, `not_checkable` and the rest describe the target itself).
  * `blockedAt` is where the hit test landed on something other than the target,
- * which only a `covered` refusal has.
+ * which only a `covered` refusal has. `target` is the refused element: a dialog
+ * that holds it is the one the step is working in, not one in its way, so it
+ * never explains the refusal -- a hidden option inside an open form drawer is
+ * the drawer's own state, not the drawer blocking it (company-website, lane A
+ * `t174-w35`).
  *
  * Which layers count is `interference/overlays.ts`, and what counts as a way
  * out is `interference/way-out.ts`: the defence that presses one reads the same
  * two, so a layer this calls a dialog is exactly a layer that can be cleared.
  */
-export function blockingDialog(reason: string, blockedAt?: Point): BlockingDialog | undefined {
+export function blockingDialog(reason: string, blockedAt?: Point, target?: Element): BlockingDialog | undefined {
   if (reason !== "covered" && reason !== "hidden") return undefined;
-  const dialogs = overlaysAt(reason === "covered" ? blockedAt : undefined);
+  const dialogs = overlaysAt(reason === "covered" ? blockedAt : undefined, target);
   if (dialogs.length === 0) return undefined;
   for (const dialog of dialogs) {
     const challenge = challengeIn(dialog, "dialog");

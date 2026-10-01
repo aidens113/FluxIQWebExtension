@@ -79,7 +79,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../../types";
  * *command* finally reported, and a reader tallying one must not be able to
  * mistake it for the other.
  */
-export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "rate_limited";
+export type RecoveryFault = "target_absent" | "output_not_observed" | "page_changed" | "timeout" | "action_failed" | "transport" | "blocking_dialog" | "obstructed_target" | "disabled_target" | "rate_limited";
 
 /**
  * Each retryable code's fault word. Total over the retryable half of the closed
@@ -129,9 +129,10 @@ const ABSORBED_ELSEWHERE: ReadonlySet<RecoveryFault> = new Set<RecoveryFault>(["
  * touches the page, so a retry cannot repeat an act. `disabled` is produced
  * there too -- but also by `actions/check.ts` after `setCheckedState` failed, by
  * `actions/upload.ts` after `setInputFiles` failed, and by `actions/select.ts`
- * for an option that will be disabled however often it is asked. Absorbing it
- * would mean retrying a verb that had already dispatched, which is exactly what
- * the mutation rule above forbids.
+ * for an option that will be disabled however often it is asked. Absorbing the
+ * word alone would mean retrying a verb that had already dispatched, which is
+ * exactly what the mutation rule above forbids; `disabledBeforeDispatch` below
+ * absorbs it only where the record says nothing was dispatched.
  */
 const OBSTRUCTION_REASONS: readonly string[] = Object.freeze(["covered", "hidden"]);
 
@@ -159,6 +160,36 @@ const OBSTRUCTION_FAULTS: Readonly<Partial<Record<WebAutomationFailureCode, Reco
   [WEB_AUTOMATION_FAILURE_CODES.BLOCKED_BY_DIALOG]: "blocking_dialog",
   [WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED]: "obstructed_target"
 } as const);
+
+/** The refusal reason word for a control the page will not let anything use yet. */
+const DISABLED_REASON = "disabled";
+
+/**
+ * A control the page disabled, refused by the actionability gate before the
+ * verb dispatched anything.
+ *
+ * The case it exists for: job-board's applicant tracker shows its "I'm a
+ * person" button disabled, reading "Please wait N", for three seconds after
+ * Submit, and a Flow reaches that step well inside three seconds -- so the step
+ * failed ACTION_REJECTED on a control that was about to be usable
+ * (reports/t195-w19d-audit-apply-quillmark.md, C5). Waiting it out is safe only
+ * because of where the refusal was decided, which the word cannot say and the
+ * record does: a gate refusal states Core's closed `effect: "unacted"`
+ * (`results.ts`, set by the gate call sites in `actions/`), and a `disabled`
+ * written after a verb acted -- `check.ts` after `setCheckedState`, `upload.ts`
+ * after `setInputFiles` -- or for a select's option states nothing, and stays a
+ * refusal. No sentence is read: the reason token and the effect are both
+ * closed vocabularies.
+ *
+ * Not an obstruction: nothing stands over the control, so the loop waits and
+ * does not press any layer's way out.
+ */
+function disabledBeforeDispatch(code: WebAutomationFailureCode, result: BrowserActionResult): boolean {
+  if (code !== WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED) return false;
+  const failure = result.failure;
+  if (failure?.effect !== "unacted" || typeof failure.actual !== "string") return false;
+  return failure.actual.startsWith(`${DISABLED_REASON}:`);
+}
 
 /** Every fault word an obstruction can be reported as, for the totality check the tests make. */
 export const RECOVERY_OBSTRUCTION_FAULTS: readonly RecoveryFault[] = Object.freeze(["blocking_dialog", "obstructed_target"]);
@@ -282,6 +313,7 @@ export function recoverableFault(result: BrowserActionResult, action: Pick<Brows
   if (!isWebAutomationFailureCode(code)) return undefined;
   const obstruction = obstructionFault(code, result);
   if (obstruction !== undefined) return obstruction;
+  if (disabledBeforeDispatch(code, result)) return "disabled_target";
   if (!WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code].retryable) return undefined;
   const fault = RECOVERY_FAULT_BY_CODE[code];
   if (fault === undefined || ABSORBED_ELSEWHERE.has(fault)) return undefined;

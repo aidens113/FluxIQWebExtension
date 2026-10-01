@@ -120,13 +120,15 @@ test("each way a handle stops naming one control is a different reason, and the 
   // reason: the page remembered under that location no longer carries the
   // handle, so nothing is left for the resolver to call stale.
   //
-  // And because it is the same answer, byte for byte, it now says so as well:
-  // `repeatedAnswer` is what the model is told the second time it is handed a
-  // reply it already holds (`../repeated-refusal.ts`). The reason itself is
-  // unchanged -- the count is beside it, not instead of it.
+  // Each refusal carries the page it found (t223, C3 of
+  // `run-mup2i28c-6c7fc209`), so this one is not the same answer as the one
+  // before: it holds the page the tab is on now, where the handles to use
+  // instead are. A repeat is counted only when the whole reply, page and all,
+  // is one the model already holds (`../repeated-refusal.ts`).
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
   const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], repeatedAnswer: 2 });
+  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.equal((moved.evidence as { page?: { location?: string } }).page?.location, "https://scheduler.example.test/queue/page/2");
 
   // Not a handle this domain issues at all.
   const malformed = await runtime.executeTool({ ...BASE, callId: "call.malformed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "the schedule button" } }, consequences: [] } });
@@ -247,7 +249,7 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   assert.deepEqual(detailOf(unreadable), { reason: "consequences_unreadable" });
 });
 
-test("no refusal carries a word of the page, whatever it refused", async () => {
+test("no refusal carries a word of the page outside the page it hands back, whatever it refused", async () => {
   const pages = standingPage(QUEUE);
   const { gateway } = labWith(pages);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
@@ -267,9 +269,17 @@ test("no refusal carries a word of the page, whatever it refused", async () => {
   // (`observeRouteState`), and it is the page's words by construction -- the
   // title and the control names a Router tests. It is held to its own
   // contract in `./call-route-states.test.ts`.
+  //
+  // And the page a refusal the page caused hands back (`page`): a handle that
+  // no longer names a control comes back with the page as it now stands, the
+  // compact view the model reads every page in, so it holds the page's words by
+  // design. Everything else on the refusal -- its code and its detail -- holds
+  // none.
   const said = refusals.map((refusal) => {
-    const { routeState: _left, ...rest } = refusal as { routeState?: unknown };
-    return rest;
+    const { routeState: _left, evidence, ...rest } = refusal as { routeState?: unknown; evidence: { page?: { schemaVersion?: string } } };
+    if (evidence.page !== undefined) assert.equal(evidence.page.schemaVersion, "web-llm-page.v3");
+    const { page: _page, ...spoken } = evidence;
+    return { ...rest, evidence: spoken };
   });
   const serialized = JSON.stringify(said);
   for (const word of PAGE_WORDS) assert.equal(serialized.includes(word), false, word);

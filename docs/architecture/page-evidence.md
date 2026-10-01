@@ -205,23 +205,173 @@ as a dialog's Close, is dispatched unchanged on every pass.
   `domain/src/recording/domain.ts`, from `evidence.elements.scanned` to
   `evidence.forms` — which is what Core stores and what a policy condition can
   read.
-- **The sanitized LLM packet** (`domain/src/runtime/llm-evidence/`) exposes
-  the same items to a model, whole: see below.
+- **The sanitized packet** (`domain/src/runtime/llm-evidence/`,
+  `web-llm-evidence.v2`) holds the same items, whole: see "No Limits On The Way
+  To A Model". It is the domain's own form of a page, which plan resolution,
+  stable handles, the state digest, route state, shown addresses and the repair
+  check read. A model never reads it: every page leaves the domain as the
+  compact view, below.
 - **The host runtime boundary** (`domain/src/runtime/host-runtime.ts`) reuses
-  the packet's sanitizer for the state snapshots Core stores on an attempt, so
-  a state ref cannot carry more page data, or more sensitive page data, than
-  the LLM packet may. It snapshots only nodes that act on a page: a web output
-  node, or a recorded action, which Core runs as `builtin.policy.action` naming
-  its web output in `parameterValues.outputId`. It computes a state diff only
-  when both the before and after snapshots were captured, and the diff lists
-  every element that appeared or left.
+  the packet's sanitizer for the state snapshots Core stores on an attempt, and
+  stores the snapshot as the compact view (`summary`, `web-llm-page.v3`), so a
+  state ref cannot carry more page data, or more sensitive page data, than a
+  page the model is shown; Core returns it to a recovery model as
+  `core.state_snapshot`. It snapshots only nodes that act on a page: a web
+  output node, or a recorded action, which Core runs as `builtin.policy.action`
+  naming its web output in `parameterValues.outputId`. It computes a state diff
+  (`domain/src/runtime/state-diff/`, `web-state-diff.v3`) only when both the
+  before and after snapshots were captured: the view's element lines that
+  appeared or left, handle-free and compared as a multiset, as text. A summary
+  stored before t223 as a packet is written as the view first.
+
+## What A Model Reads: The Compact Page View
+
+The user's order of 2026-09-30 (t223): only elements with visible text or that
+are controls, in the least possible format, and a search over everything else.
+Every page leaves the domain as `web-llm-page.v3`
+(`llm-evidence/page-view/published-page.ts`):
+
+```text
+{ schemaVersion: "web-llm-page.v3", trust, location, truncated,
+  failedTarget?, failedTargetMissing?, failedTargetUnknown?, repairParameters?, repairCandidates?,
+  page }   // header lines, a blank line, then one line per element, joined by "\n"
+```
+
+- **Header lines**, each only when it has something to say: `PAGE "<title>"`,
+  `URL <location on a ~ base>   (~ = <base>)`, `VIEW <w>x<h> at the top · <n>
+  elements ...`, `COVERING`, `DIALOG`, `LOADING`, `FRAMES ... did not answer`,
+  `ARRIVED`, `SELECTED`, and `CAPTURE incomplete`.
+- **Which elements get a line**, in document order (`page-view/line-choice.ts`):
+  every visible control, every visible layer, every visible element with
+  meaningful words of its own, and an image whose alt says something no line
+  near it says. "Visible" is not a search capture's `hidden`, and a box, when
+  there is one, that reaches into the document (an off-page honeypot does not).
+  Words already printed by the control or semantic element a text sits in, a
+  label repeating its control, and a line repeating the one before are folded;
+  letterless fragments of one value (`$`, `39.`, `99`) are joined. No element
+  that qualifies is capped, ranked or cut.
+- **A line** is `<handle> [<heading>] [<kind>] ["<words>"] <state>`: the `tN`
+  handle, the kind (`link`, `button`, `field[:type]`, `select`, `checkbox`,
+  `radio`, `toggle`, `tab`, `img`, `h1`-`h6`, `clickable`, `dialog`, `layer`,
+  ...), the words in quotes, and states (`="value"`, a select's options,
+  `checked`, `open`, `disabled`, a table cell's column, a link's address,
+  `covered-by tA`, `focused`). Links are written on the page's `~` base, and a
+  repeated address is written `same href`.
+- **Structure markers** on lines of their own: `[landmark]` (with frame, modal
+  dialog and form), `- i/n` for a list item, `- row r`, and
+  `--- below the fold ---` and its kin where the screen zone changes.
+- **Search and detail.** `web.find_on_page` (`llm-evidence/page-find/`) takes a
+  fresh capture that also lists what is not rendered (`includeHidden`) and
+  matches a query, case-insensitively, against every element's words, label,
+  value, options and address and every attribute's name and value, hidden,
+  off-page and text-less elements included; matches come in page order, fifty
+  to a page, each printed as the view prints it plus the attribute that
+  matched and where the element is (`web-llm-find.v1`).
+  `web.describe_element` prints one element whole: its line, every attribute,
+  its box and where it is, and every other field (`web-llm-describe.v1`). Both
+  are authoring tools and recovery options (`web.recovery.find_on_page`,
+  `web.recovery.describe_element`); a hidden element never moves a visible
+  element's handle, and the state digest leaves hidden elements out.
+- **Every path a page reaches a model** goes through `publishedWebLlmPage`: a
+  node run's look or action result (`node-run/run.ts`), a refusal's `page`
+  (`tool-rejection.ts`), a replay or verify answer, every recovery option, the
+  failure evidence (`captureSanitizedFailureEvidence`), the adapter's
+  `metadata.failureEvidence`, and the host runtime's state summary and diff.
+  A node's read never carries the extension's page record (`snapshot`,
+  `element`, `visualTarget`, `resolution`, `structure`;
+  `node-run/page-record.ts`).
+- **A handle outlives a layer.** A popup, dialog or cookie banner the page
+  puts beside its main column shifts every positional selector
+  (`body > div` becomes `body > div:nth-of-type(2)`), and handles used to be
+  keyed on the selector, so the whole page renumbered each time one opened or
+  closed (`run-mup2i28c-6c7fc209`, C1). `stable-handles.ts` now finds an
+  element whose exact address is new by its address with positions removed,
+  its tag, record and words, so every control behind the layer keeps its
+  handle, and the layer's controls get their own. A changed list is not paired
+  up by position: new items get new handles.
+- **A press through a cover is not sent.** When the look a press takes before
+  acting shows its control `coveredBy` a layer, the press is refused
+  `target_covered` (`blocked_by_dialog` under a modal) with the reason
+  `covered_by_layer`, the covering handles in `instead`, and the page, whose
+  `COVERING` or `DIALOG` line names the layer (`node-run/covered-target.ts`).
+  A refusal for a handle the page no longer has carries the page too, and
+  both pages become the shown packet, so the next call can use their handles
+  (C3, C4, C9).
+- **The repair check reads what the model read.** A shown page, search or
+  description is retained under `location + " " + text`
+  (`page-view/result-retention-key.ts`) with the structured packet behind it,
+  24 per window (Core's default recovery budget), and
+  `validateTargetOverrideEvidence` checks a repair's handle against that
+  packet. One that was let go, or edited, is `evidence_unrecognized`.
+
+Measured on 20 scenario pages (t223), the packets' 2,248,731 bytes are 117,929
+bytes of view (5.2%), the largest page 15,056 bytes; one whole decide request on
+everything-store results went from 1,414,167 bytes (471,405 tokens) to 159,997
+bytes (53,349 tokens).
+
+## Detecting A List, Or One Record
+
+`web.detect_repeating_structure` asks the page for the list around an element
+the model was shown, or for the page's largest list (`web.dom.capture_snapshot`
+with `detectStructure`; the page side is `apps/extension/src/content/extraction/`).
+The domain splits the answer (`domain/src/runtime/llm-evidence/structure/`):
+the model gets an opaque `extraction.N` handle with each column's key, label,
+kind and coverage, the item count and how the list continues; the handle store
+keeps the selectors. A plan names the handle in an extraction node's
+`extractList`, and the node is built from what the handle keeps
+(`plan-resolution/extraction/slot.ts`).
+
+A list may have one item, so a single record is read as a one-row table
+(t195). The page answers in one of three forms:
+
+- **A run.** The items that repeat around the target, as before.
+- **A run with the record beside it.** When the target lies outside every
+  item of the run, the page also sends the one record the target belongs to as
+  `record` (one item, no pagination). On photo-social's message thread that is
+  the reply card (name, price, note), and the run is the inbox's three thread
+  rows, which carry no price. The record gets a second handle in the same
+  scope and frame, and the packet carries it as
+  `record: {handle, itemCount: 1, fields, note}`, where `note` is one closed
+  sentence: name that handle when the instruction is about that item. A lone
+  record never replaces a run, so a model aimed at a cart's subtotal still
+  gets the cart lines.
+- **One record as the list.** A label/value `<dl>` (job-board's application
+  receipt: Role, Company, Reference, Submitted, each read from its `dd` and
+  labelled by its `dt`) comes back as the proposal itself with `itemCount: 1`.
+  So does a lone record on a page where nothing repeats, which the page answers
+  only after its 5 s wait for a run has passed.
+
+A one-item handle builds an extraction node like any other, but a handle that
+names one record (the record beside a run, a receipt, or a lone record) always
+reads at most one row: the node gets `maxItems: 1` whatever bound the plan
+wrote (`oneRecord` on the binding), because two rows from what the model chose
+as one record are a wrong table. The Flow keeps the record's item selector, and
+the handle store knows it as the Flow's own list, so a draft read back from the
+Flow is not refused as a guess. The record and receipt reads above are covered
+by provider-free tests on detection answers written from the scenarios' markup
+(`structure/tests/record-detections.ts`), not on captures; the page-side walk
+has not yet been run in a browser.
+
+**In a child frame**, detection captures that frame's own document and holds
+it to the origin the element was shown with (`data-fluxiq-frame-url`), not the
+top page's. The handle keeps the path of that frame's document, and every node
+a model builds in a child frame — an extraction node from a handle, or a
+click, type or other action on an element shown in the frame — carries
+`browserFrameUrlPath` (the pathname only, with no origin or query) beside
+`browserFrameId`. A reload renumbers frames, so when a command names a path,
+the extension waits up to 5 s for a frame at that path to appear, polling every
+100 ms, before it refuses `web.target.not_found`. The wait is cut to the
+command's own timeout less a 1 s margin
+(`apps/extension/src/runtime/frame-address.ts`, `waitForFrameChoice`). An
+ambiguous or empty frame list is answered at once.
 
 ## No Limits On The Way To A Model
 
 The user's order of 2026-09-30 (t200): "Remove ANY AND ALL LIMITS ON THE NUMBER
 OF ELEMENTS PASSED TO MODEL. DO NOT HIDE INFORMATION OR USE ANY RANKING
-ALGORITHM." What the domain does with a capture on its way to Core, as of that
-task:
+ALGORITHM." What the domain does with a capture, as of that task -- the
+structured packet below is what the compact view is written from, and what
+`web.describe_element` and `web.find_on_page` read:
 
 - **Every element, in the capture's order.** `sanitize.ts` describes every
   element the capture sent, in document order. There is no element bound (it
@@ -311,14 +461,17 @@ What still never reaches a model:
 - **An address.** No selector, xpath or record key is published; the opaque
   `tN` handle is the only way to name an element.
 
-The state digest (`state-digest/state-digest.ts`, `web-state.v2`) and the
-route state (`route-state/project.ts`) are read off the same whole packet, so a
-call's own capture answers for them exactly as `captureStateDigest` and
-`observeRouteState` would. The route state names every dialog, every blocker
-and every control.
+The state digest (`state-digest/state-digest.ts`, `web-state.v3`) and the
+route state (`route-state/project.ts`) are read off the same whole packet, with
+a search capture's hidden elements left out, so a call's own capture answers
+for them exactly as `captureStateDigest` and `observeRouteState` would, and a
+search reads as the same state as a look. The route state names every dialog,
+every blocker and every control.
 
 Core carries every evidence entry in call order beside the complete draft and
-history. The request's only page-information bound is the model's
+history; the domain declares `page` (and the packet's `elements`, `dialogs` and
+`blockedBy`) as its observed-state keys, so each earlier page is replaced by
+`supersededBy` once a newer one is shown. The request's only page-information bound is the model's
 1,000,000-token window (992,000 input and 8,000 reserved output). A request
 that exceeds it is refused before sending with its measured size; no page
 entry is ranked, sampled or trimmed to make it fit. Spend, deadlines and call

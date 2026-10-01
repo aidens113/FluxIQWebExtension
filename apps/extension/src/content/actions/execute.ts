@@ -74,7 +74,9 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
-import { recordRecovery, runWithRecovery } from "../action-runtime/recovery";
+import { TargetResolutionError } from "../action-runtime";
+import { clearableLayerOverPage, clearInterference } from "../action-runtime/interference";
+import { faultMayHideBehindLayer, recordRecovery, runWithRecovery } from "../action-runtime/recovery";
 import { observePageIdentity, reportPageChange } from "./page-identity";
 import { captureSnapshotAction } from "./capture-snapshot";
 import { waitForSelectorAction } from "./wait-for-selector";
@@ -130,11 +132,42 @@ class UnsupportedActionTypeError extends Error implements WebAutomationFailureCa
  */
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
   const startedAt = Date.now();
-  const { result, account } = await runWithRecovery(action, startedAt, async () => {
-    const startedOn = observePageIdentity();
-    return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
-  });
+  const { result, account } = await runWithRecovery(
+    action,
+    startedAt,
+    async () => {
+      const startedOn = observePageIdentity();
+      return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+    },
+    undefined,
+    undefined,
+    // A target the page has not drawn (`target_absent`) has no layer to spare,
+    // and the wall that hides it is what the loop clears (`presence.ts`); the
+    // layer probe is asked for that fault alone, so it spares nothing either.
+    (fault) => clearInterference(faultMayHideBehindLayer(fault) ? undefined : ownTarget(action, deps)),
+    () => clearableLayerOverPage()
+  );
   return recordRecovery(result, account);
+}
+
+/**
+ * The action's own target as the page holds it now, which the defence between
+ * attempts must not clear the layer of (`interference/overlays.ts`): the form
+ * drawer a field is typed in, the consent wall whose "Accept all" is pressed.
+ * Resolved afresh, as each attempt resolves it, so no element reference is
+ * carried between attempts. An action that names no target (no selector and no
+ * recorded element), or a target that no longer resolves, spares nothing.
+ */
+function ownTarget(action: BrowserActionCommand, deps: ContentActionDependencies): Element | undefined {
+  if (!action.selector && !action.element && !action.options?.element) return undefined;
+  try {
+    return deps.resolveTarget(action).element;
+  } catch (error) {
+    // Not found or ambiguous: there is no one element to spare, which is an
+    // answer. Anything else is a fault in the resolution itself, and is thrown.
+    if (error instanceof TargetResolutionError) return undefined;
+    throw error;
+  }
 }
 
 /**
