@@ -46,7 +46,8 @@ export const WEB_LLM_EVIDENCE_TOOL_IDS = [
   "web.navigate_same_origin",
   "web.press_control",
   "web.enter_field",
-  "web.find_on_page"
+  "web.find_on_page",
+  "web.describe_element"
 ] as const;
 
 export type WebLlmEvidenceToolId = (typeof WEB_LLM_EVIDENCE_TOOL_IDS)[number];
@@ -64,6 +65,8 @@ export const WEB_LLM_ENTER_FIELD_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[5];
  * this finds the rest.
  */
 export const WEB_LLM_FIND_ON_PAGE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[6];
+/** Everything the page holds about one element, named by its handle (t223, `./page-find/`). */
+export const WEB_LLM_DESCRIBE_ELEMENT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[7];
 
 /** An observation succeeded: evidence was captured and nothing on the page moved. */
 export const WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded" as const;
