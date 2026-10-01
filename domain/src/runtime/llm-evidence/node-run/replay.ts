@@ -87,13 +87,101 @@ export type WebNodeReplayStatement = { from?: JsonObject; produced?: JsonObject 
  * one fact about a read that survives the values changing between runs: an
  * extraction that read sixteen rows while exploring and none on replay is the
  * defect this whole check exists for (`run-mudavyub-d34e3c9b`).
+ *
+ * For a list read, `produced` is the read's own account (`webNodeProduced`).
  */
 export function webNodeReplayStatement(input: { location: string; payload: JsonValue | undefined; reads: boolean }): WebNodeReplayStatement {
-  const records = input.reads ? webNodeRecordCount(input.payload) : undefined;
+  const produced = input.reads ? webNodeProduced(input.payload) : undefined;
   return present<WebNodeReplayStatement>({
     from: { location: input.location },
-    produced: records === undefined ? undefined : { records }
+    produced: produced as JsonObject | undefined
   });
+}
+
+/**
+ * What a step read, as the replay compares it: how many rows, and for a list
+ * read how many items the list showed and whether its conditions were kept.
+ */
+type WebNodeProduced = {
+  records: number;
+  /** The items the list's selector matched before any condition: `0` is a list that was not there (`actions/extraction/summary.ts`). */
+  itemsSeen?: number | undefined;
+  /** Whether the read answered with rows its conditions rejected, because they kept none. Absent from a read with no conditions. */
+  unfiltered?: boolean | undefined;
+};
+
+/**
+ * What a step's payload says it read.
+ *
+ * **A list read is counted from its own account, never from the payload's
+ * longest array.** A live `extract_list` payload always carries other lists --
+ * `extraction.fieldNames`, `extraction.conditions.rejected`, and the snapshot's
+ * `interactiveElements`, which is attached to every list read -- so the longest
+ * one is at least the column count and usually the page's controls. t227's run
+ * `run-muq310ht-ab80eed0` replayed a read on a "No results" page, `now` came
+ * back as six, and the collapse to nothing was never seen; run 11's dry run
+ * recorded 638 "records" for a read of 94 items (t194-d227). The account is
+ * the page's own count (`recordCount`, `itemsSeen`, `conditions.unfiltered`).
+ * Every other payload keeps the longest-list count it always had.
+ */
+function webNodeProduced(payload: JsonValue | undefined): WebNodeProduced | undefined {
+  const account = extractionAccount(payload);
+  if (account) return account;
+  const records = webNodeRecordCount(payload);
+  return records === undefined ? undefined : { records };
+}
+
+/** The list read's own account of what it read, or nothing when the payload carries none. */
+function extractionAccount(payload: JsonValue | undefined): WebNodeProduced | undefined {
+  const extraction = isJsonRecord(payload) && isJsonRecord(payload.extraction) ? payload.extraction : undefined;
+  if (!extraction || !isCount(extraction.recordCount)) return undefined;
+  const conditions = isJsonRecord(extraction.conditions) ? extraction.conditions : undefined;
+  return present<WebNodeProduced>({
+    records: extraction.recordCount,
+    itemsSeen: isCount(extraction.itemsSeen) ? extraction.itemsSeen : undefined,
+    unfiltered: typeof conditions?.unfiltered === "boolean" ? conditions.unfiltered : undefined
+  });
+}
+
+/** `produced` as a step recorded it: each count absent from a statement written before it was recorded. */
+type RecordedProduced = { records: number | undefined; itemsSeen: number | undefined; unfiltered: boolean | undefined };
+
+/** `produced` as the step recorded it, read back off the replay call. */
+function recordedProduced(value: JsonValue | undefined): RecordedProduced {
+  if (!isJsonRecord(value)) return { records: undefined, itemsSeen: undefined, unfiltered: undefined };
+  return {
+    records: typeof value.records === "number" ? value.records : undefined,
+    itemsSeen: typeof value.itemsSeen === "number" ? value.itemsSeen : undefined,
+    unfiltered: typeof value.unfiltered === "boolean" ? value.unfiltered : undefined
+  };
+}
+
+/**
+ * How a replayed read differs from the step's own run, in the one way that is
+ * the step and not the page, or nothing.
+ *
+ * Read something, then read nothing: the step ran and the Flow would still
+ * answer with an empty hand. A list that was there and now is not
+ * (`itemsSeen` to 0) is the same defect seen one step earlier, and holds even
+ * where the build's conditions kept no row. A read whose conditions kept rows
+ * and now kept none, so it answered with the rows they rejected
+ * (`unfiltered`), is a read whose answer is no longer the one the build
+ * proposed: run 11's duplicate read passed its dry run returning eleven rows
+ * every condition had turned down (`run-muq4oaof-464f5bce`). A list that is
+ * shorter or in another order between two runs is the page, not the step, and
+ * is not judged.
+ */
+function readChange(before: RecordedProduced, now: WebNodeProduced | undefined): string | undefined {
+  if (now === undefined) return undefined;
+  if (before.records !== undefined && before.records > 0 && now.records === 0) return `the step read nothing where it read ${before.records}`;
+  if (before.itemsSeen !== undefined && before.itemsSeen > 0 && now.itemsSeen === 0) return `the step found no list where it found ${before.itemsSeen} items`;
+  if (before.unfiltered === false && before.records !== undefined && before.records > 0 && now.unfiltered === true) return "the step's conditions kept no row, so it answered with rows they rejected, where they kept rows before";
+  return undefined;
+}
+
+/** A non-negative whole number, as every count in a read's account is. */
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
 /** What Core may ask of a replay call. */
@@ -238,14 +326,12 @@ async function replayStep(run: WebNodeRun): Promise<WebLlmEvidenceToolExecution>
     // so it carries no draft statement.
     return refused.personNeeded ? withPersonNeeded(answered, undefined) : answered;
   }
-  const produced = isJsonRecord(value.produced) ? value.produced : undefined;
-  const before = typeof produced?.records === "number" ? produced.records : undefined;
-  const now = webNodeRecordCount(result.payload as JsonValue | undefined);
-  // Read something, then read nothing: the step ran and the Flow would still
-  // answer with an empty hand. Only the collapse is judged, because a list that
-  // is shorter or in another order between two runs is the page, not the step.
-  if (before !== undefined && before > 0 && now === 0) {
-    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, `the step read nothing where it read ${before}`, true, { resultReason: undefined, nodeId: node.definitionId, assumed });
+  // What the step read then and what it reads now, each counted the same way:
+  // from a list read's own account, and otherwise the longest list
+  // (`webNodeProduced`). What counts as a change is `readChange`.
+  const changed = readChange(recordedProduced(value.produced), webNodeProduced(result.payload as JsonValue | undefined));
+  if (changed !== undefined) {
+    return await answerWithPage(run, REPLAY_RESULT_CODES.changed, changed, true, { resultReason: undefined, nodeId: node.definitionId, assumed });
   }
   // A step that replayed refuses nothing and tells nothing apart, so it says
   // neither of those; the answers above it are the ones a reader has to
