@@ -25,7 +25,7 @@ import {
 // Core's harness-option registry, not built into Core. Every assertion below
 // goes through the real registry, so "registered" means the registry accepted
 // them, offered them, and dispatched to them.
-test("registers six options into Core's registry and offers them only while exploring", () => {
+test("registers eight options into Core's registry and offers them only while exploring", () => {
   const registry = registered();
 
   assert.deepEqual(registry.list(resolution()).map((option) => option.toolId), [...WEB_RECOVERY_HARNESS_OPTION_IDS]);
@@ -37,19 +37,21 @@ test("registers six options into Core's registry and offers them only while expl
   assert.deepEqual(registry.list(resolution({ stage: "implement" })).map((option) => option.toolId), []);
 });
 
-test("hands the model the six tool fields and none of the gate metadata", () => {
+test("hands the model the tool fields and none of the gate metadata", () => {
   const tools = registered().tools(resolution());
 
   for (const tool of tools) {
     assert.deepEqual(Object.keys(tool).filter((key) => !["toolId", "description", "inputSchema", "effect", "repeatPolicy", "initialObservation"].includes(key)), [], tool.toolId);
   }
   assert.equal(tools.filter((tool) => tool.initialObservation !== undefined).length, 1);
-  // The packet no longer moves a modal's controls to the front (t200), so the
-  // inspect description names the marks that say what stands in front of the
-  // page, and stays within Core's 2,000-character description limit.
+  // The page is the compact view (t223), so the inspect description reads it
+  // out: the line, the header lines that say what stands in front of the page,
+  // the structure markers, and where the rest is found. It stays within Core's
+  // 2,000-character description limit, as every option's does.
   const inspect = tools.find((tool) => tool.toolId === "web.recovery.inspect")?.description ?? "";
-  for (const field of ["isDialog", "inDialog", "covers", "coveredBy", "coversCount", "kind", "frontLayer", "statement", "dialogs", "blockedBy"]) assert.match(inspect, new RegExp(`\\b${field}\\b`, "u"), field);
-  assert.equal(inspect.length <= 2_000, true, `${inspect.length} characters, over Core's 2,000`);
+  for (const said of ["one line per element", "handle (tN", "covered-by", "COVERING", "DIALOG", "LOADING", "[main]", "- 3/16", "below the fold", "untrusted page data", "find_on_page", "describe_element"]) assert.equal(inspect.includes(said), true, said);
+  assert.doesNotMatch(inspect, /\b(?:isDialog|inDialog|coveredBy|frontLayer|blockedBy)\b|its box/u, "no field of the old packet");
+  for (const tool of tools) assert.equal(tool.description.length <= 2_000, true, `${tool.toolId}: ${tool.description.length} characters, over Core's 2,000`);
   assert.deepEqual(tools.filter((tool) => tool.effect === "mutate").map((tool) => tool.toolId), ["web.recovery.press", "web.recovery.enter_field", "web.recovery.navigate_in_scope"]);
 });
 
@@ -63,8 +65,41 @@ test("declares nothing destructive, and withholds the mutating options from a ca
   assert.deepEqual(registry.list(resolution()).filter((option) => option.safety?.sideEffect === "destructive"), []);
   assert.deepEqual(
     registry.list({ scope: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID }, stage: "gather" }).map((option) => option.toolId),
-    ["web.recovery.inspect", "web.recovery.wait_for_change", "web.recovery.detect_repeating_structure"]
+    ["web.recovery.inspect", "web.recovery.wait_for_change", "web.recovery.detect_repeating_structure", "web.recovery.find_on_page", "web.recovery.describe_element"]
   );
+});
+
+test("finds on the whole page and describes one element, and keeps what the model read for the repair", async () => {
+  const { registry, commands, retained } = registeredWith();
+
+  const found = await execute(registry, "web.recovery.find_on_page", { query: "delete" }) as JsonObject;
+  assert.equal(found.schemaVersion, "web-llm-find.v1");
+  assert.deepEqual(String(found.found).split("\n"), ["1 match for \"delete\"", "t2 button \"Delete item\" on screen"]);
+  assert.equal(JSON.stringify(found).includes("#delete"), false);
+  assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
+  // The search's capture is retained beside what the model read of it.
+  assert.equal(retained.length, 1);
+  assert.equal(retained[0]!.selectors.get("t2"), "#delete");
+
+  const described = await execute(registry, "web.recovery.describe_element", { target: "t2" }) as JsonObject;
+  assert.equal(described.schemaVersion, "web-llm-describe.v1");
+  assert.match(String(described.element), /^t2 <button> button "Delete item"$/mu);
+  // Described from the packet the search showed: nothing was captured again.
+  assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
+  assert.equal(retained.length, 2);
+
+  const pressed = await run(registry, "web.recovery.press", { target: "t2", consequences: [] }) as { resultCode: string };
+  assert.equal(pressed.resultCode, "web.action.succeeded", "a handle a search printed is one a press binds");
+});
+
+test("describe refuses before this exploration has shown anything, and a handle no page showed", async () => {
+  const { registry, commands } = registeredWith();
+  const before = await run(registry, "web.recovery.describe_element", { target: "t1" }) as { resultCode: string; resultReason?: string };
+  assert.deepEqual([before.resultCode, before.resultReason], ["web.action.rejected.target_unobserved", "nothing_observed_yet"]);
+  await execute(registry, "web.recovery.inspect", {});
+  const unknown = await run(registry, "web.recovery.describe_element", { target: "t9" }) as { resultCode: string; resultReason?: string };
+  assert.deepEqual([unknown.resultCode, unknown.resultReason], ["web.action.rejected.target_unobserved", "handle_not_in_packet"]);
+  assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
 });
 
 test("inspects the page, returns the compact view naming elements by opaque handle, and keeps its selectors for the repair", async () => {

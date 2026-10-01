@@ -13,8 +13,10 @@ export {
 export { WEB_RECOVERY_WAIT_BOUNDS, type WebRecoveryHarnessContext } from "./execute";
 export { webAutomationExplorationRefusalClassifier, webAutomationExplorationScope } from "./exploration-terms";
 export {
+  WEB_RECOVERY_DESCRIBE_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_ENTER_FIELD_OPTION_ID,
+  WEB_RECOVERY_FIND_OPTION_ID,
   WEB_RECOVERY_HARNESS_OPTION_IDS,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
