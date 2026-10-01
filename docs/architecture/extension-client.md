@@ -128,6 +128,8 @@ The names the Lab presses are kept: the gear's "Settings", the settings labels,
 the recording bar's "Stop recording" (`#stopRecordingButton`), and "Extract
 Data From This Page". The old way back from settings, the "Simple" radio, is
 gone with the modes.
+Paused recording remains an active recording lifecycle: Start recording stays
+hidden and disabled, including during connection, page and workload changes.
 
 Pending chat sends and connection-settings saves preserve edits made after the
 request began. Completion clears or refills a draft only when its edit revision

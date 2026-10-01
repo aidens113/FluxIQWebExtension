@@ -314,7 +314,28 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Audit user-triggered refusal/rejection/duplicates, busy/retry feedback and selection/draft/focus across async state changes, cancel/forget and popup/side-panel contract parity. Preserve saved-setting draft and extraction fixes.
 - Propose source-confirmed defects and exact independent source/test ownership, not visual redesign. Own reports/extension-connection-recording-recovery-audit.md only; no source/shared docs/heavy/live/provider/panel/commits during freeze.
 
+### Settings and Forget recovery implementation brief (released)
+
+- Worker: wait_gaps. Branch/worktree: existing paired t224; no other checkout.
+- Read Current State and own frozen extension-connection-recording-recovery-audit report; implement findings 1–3 only.
+- Exact source: apps/extension/src/panel/settings/settings-view.ts and settings/forget-confirmation.ts.
+- Exact new tests: settings/tests/settings-recovery.test.ts and settings/tests/forget-confirmation.test.ts, under the same panel directory.
+- Preserve and run existing settings/tests/settings-draft.test.ts unchanged; preserve Save/Saved./Forget labels and ids, editable persistent drafts and submitted revision guards.
+- One synchronous connection mutation lock spans Save plus reconnect, Disconnect and Forget; status refresh must not release it. Catch unexpected rejection with fixed local retry feedback, never raw exception content. Keep inputs editable.
+- Forget callback reports acknowledged success; refusal retains confirmation and permits explicit retry. Guard duplicate activation internally. Restore asynchronous focus only while the initiating confirmation still owns focus in a visible active document; hidden/external focus must stay untouched. Explicit open still focuses Cancel.
+- Do not redesign transport, background, protocol, address form, recording, other settings, shared DOM helpers or storage; no extra paths without release.
+- Write findings/reproduction/decisions/check results progressively to own reports/settings-forget-recovery.md. Supervisor owns shared docs, integration and verification.
+- Narrow tests/scoped types via shared heavy wrapper only. No broad gates, live/browser/provider/panel activity, commit or push. Freeze exact source when ready for supervisor review.
+
 ## Work Ledger
+
+### 2026-10-01 — Logout reproduced and fixed; extension recovery released
+
+- Supervisor reproduced duplicate logout POST and navigation despite HTTP refusal: two targeted failures on original source. AuthStatus now locks activation synchronously, navigates only after acknowledged success, shows fixed local retry feedback, and ignores obsolete completion/activation after teardown. Component instance owns the request; display-name changes are not invented authentication identity boundaries.
+- Validation: heavy-wrapped `pnpm --filter @fluxiq/web exec vitest run src/app/tests/AuthStatus.test.tsx src/app/tests/AuthShell.test.tsx` printed 32 tests passed, native exit0, 2.41s (AuthStatus6 plus unchanged AuthShell26). Full Core gates wait for database/runtime-log workers to freeze.
+- Extension read-only audit frozen with six source findings. Supervisor confirmed Settings render releases pending Disconnect and Save releases before reconnect; Forget currently closes on refusal. Exact four-file Settings/Forget implementation released to wait_gaps; remaining start/review/paused partitions remain queued.
+- All work remains isolated in t224; no merge, push, live execution or Claude changes.
+- Logout scoped types passed against actual web configuration, native0. Paused recording regression reproduced enabled Start on original source (6pass/1fail); two-file correction plus architecture note now passes all7 owning tests, native0/119.8275ms. Reports preserve exact evidence; broader gates await worker freeze.
 
 ### 2026-10-01 - Fifth Core and extension naming gates complete; sixth released
 - Agent: supervisor
