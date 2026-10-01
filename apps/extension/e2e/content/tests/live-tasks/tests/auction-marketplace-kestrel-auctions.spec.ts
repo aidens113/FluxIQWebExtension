@@ -16,21 +16,28 @@
 //   and every site trap on the way is met by the product: the overlays, the
 //   condition filter's format reset, the bot check, Enter in the price box
 //   submitting nothing, the sort button's ignored first press, the skeletons;
-// - **G1** a read built from the structure detection cannot return the badged
-//   listing's title: no proposed column is the title alone
-//   (`content/extraction/infer-fields.ts` `pathStep`);
-// - **G2** the keyword results' numbered pager is not detected, so a read
-//   from the detection's handle reads page one and stops
+// - **G1** (fixed by t194-w28) a read built from the structure detection could
+//   not return the badged listing's title: no proposed column was the title
+//   alone (`content/extraction/infer-fields.ts` `pathStep`). The title's own
+//   span is now a column, in the list and the gallery. The title link, whose
+//   words glue the "New listing" badge to the title, is still offered beside
+//   it under a label that cannot tell them apart, so the filter-route row
+//   picks the title by the values of one exploratory read (`cleanTitle`);
+// - **G2** (fixed by t194-w29) the keyword results' numbered pager was not
+//   detected, so a read from the detection's handle read page one and
+//   stopped; it is now proposed as numbered pages naming every number in the
+//   pager's `nav`, and the handle's read goes across the three documents
 //   (`content/extraction/detect-pagination.ts`);
-// - **G3** a bound over a price written the continental way reads the wrong
-//   number (`domain/src/actions/extraction/condition-match.ts` `NUMBER`);
-// - **G4** (grid-view row) a read whose every record is empty still passes its
-//   post-condition (`content/actions/extract-list.ts` `validationFor`);
+// - **G3** (fixed by t194-w32) a bound over a price written the continental way
+//   read the wrong number (`domain/src/actions/extraction/condition-match.ts`
+//   `NUMBER`);
+// - **G4** (fixed by the lead, the supervisor's decision) a read whose every
+//   record is empty passed its post-condition; it now fails
+//   (`content/actions/extract-list.ts` `validationFor`);
 // - and not a gap: the Next arrow that reloads page two does not trap a read,
 //   which takes the pager's next number instead (`extraction/pagination.ts`).
 //
-// A row marked `test.fail` asserts the correct answer and is expected to fail
-// until its gap is fixed; Playwright reports it the moment it starts passing.
+// No row is marked `test.fail`; G1-G4 are fixed.
 //
 // Cross-document reads: a numbered link loads a new document and the harness's
 // page script dies with it. `readAcrossDocuments` is the worker's half
@@ -85,7 +92,7 @@ const TITLE_WITHOUT_BADGE = ":scope > div:nth-child(2) > a span:not([class])";
 
 type Row = Record<string, string | null>;
 type Detected = Extract<WebAutomationStructureDetection, { ok: true }>;
-type Packet = { extraction: string; itemCount: number; fields: Array<{ key: string; label: string; coverage: number }> };
+type Packet = { extraction: string; itemCount: number; fields: Array<{ key: string; label: string; kind: string; coverage: number }> };
 type Acted = BrowserActionResult | "document replaced";
 
 let command = 0;
@@ -296,6 +303,39 @@ function taskColumns(fields: readonly { key: string; label: string; coverage: nu
 }
 
 /**
+ * The title column a model picks from the rows of one exploratory read: of the
+ * text columns on every card whose values name a Kestrel on most cards -- the
+ * instruction says what the titles look for -- and that tell most cards apart
+ * (a title does; a brand line reading "Kestrel" on every card does not), the
+ * one whose words are the title alone, which is the one whose every value is
+ * found inside each other candidate's value on the same card. A candidate that
+ * reads more, such as the title link whose words glue a "New listing" badge to
+ * the title, loses.
+ */
+function cleanTitle(fields: Packet["fields"], rows: readonly Row[]): string {
+  const values = (key: string): string[] => rows.map((row) => row[key] ?? "");
+  const candidates = fields.filter((field) => field.kind === "text" && field.coverage === 1
+    && values(field.key).filter((value) => /kestrel/iu.test(value)).length * 2 > rows.length
+    && new Set(values(field.key)).size * 2 > rows.length);
+  const cleanest = candidates.filter((field) => candidates.every((other) => values(field.key).every((value, index) => values(other.key)[index]!.includes(value))));
+  note("title candidates", candidates.map((field) => `${field.label}: ${values(field.key).find((value) => /new listing/iu.test(value)) ?? values(field.key)[0]}`));
+  expect(cleanest.length, `one column reads the title alone: ${candidates.map((field) => field.label).join(" | ")}`).toBe(1);
+  return cleanest[0]!.key;
+}
+
+/** One read of `handle` with every detected column, as a model runs one to see the values before it chooses. */
+async function exploreHandle(runtime: ReturnType<typeof evidenceRuntime>, dispatched: Array<{ actionType: string; reply: BrowserActionResult }>, handle: string): Promise<Row[]> {
+  const explored = await runtime.executeTool({
+    ...BASE,
+    callId: "call.explore",
+    toolId: WEB_LLM_RUN_NODE_TOOL_ID,
+    value: { node: EXTRACT_LIST_NODE, parameters: { extractList: { handle } }, consequences: [] }
+  });
+  expect(explored.resultCode, JSON.stringify(explored.evidence).slice(0, 2_000)).toBe("web.inspect.succeeded");
+  return (dispatched.filter((entry) => entry.actionType === "web.dom.extract_list").at(-1)?.reply.extracted ?? []) as Row[];
+}
+
+/**
  * The domain's authoring runtime over this harness, as `list-completeness.spec.ts`
  * builds it: every detection and read is the page's, the decisions are the
  * test's, and no model is attached. `send` carries a read into other
@@ -502,7 +542,6 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
   });
 
   test("filter route, G1: a read built from the detection through the evidence runtime returns the ten owed rows", async ({ openHarness }) => {
-    test.fail(true, "G1: no detected column is the title alone; the badged listing m9 reads \"New listing\" (content/extraction/infer-fields.ts pathStep)");
     const harness = await openHarness("auction-marketplace");
     await walkFilterRoute(harness);
     const dispatched: Array<{ actionType: string; parameters: JsonObject; reply: BrowserActionResult }> = [];
@@ -510,8 +549,12 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     const detected = await runtime.executeTool({ ...BASE, callId: "call.detect", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
     expect(detected.resultCode, JSON.stringify(detected.evidence)).toBe("web.structure.detected");
     const packet = detected.evidence as unknown as Packet;
-    note("filtered packet", packet.fields.map((field) => `${field.key} | ${field.label} | ${field.coverage}`));
-    const columns = taskColumns(packet.fields);
+    note("filtered packet", packet.fields.map((field) => `${field.key} | ${field.label} | ${field.kind} | ${field.coverage}`));
+    // G1 (fixed in t194-w28): the heading's title span is a detected column of
+    // its own. The packet's labels cannot tell it from the title link, whose
+    // words glue the badge to the title, so the title is chosen as a model
+    // chooses it: by the values one exploratory read shows.
+    const columns = { ...taskColumns(packet.fields), title: cleanTitle(packet.fields, await exploreHandle(runtime, dispatched, packet.extraction)) };
     const read = await runtime.executeTool({
       ...BASE,
       callId: "call.read",
@@ -529,7 +572,6 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
   });
 
   test("keyword route, G2: the detection says how the results continue", async ({ openHarness }) => {
-    test.fail(true, "G2: the numbered pager inside nav[aria-label=\"Results pagination\"] is not detected (content/extraction/detect-pagination.ts:107)");
     const harness = await openHarness("auction-marketplace");
     await answerArrivals(harness);
     await search(harness);
@@ -537,9 +579,12 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     const { proposal } = await detect(harness);
     note("keyword proposal", { item: proposal.item, itemCount: proposal.itemCount, pagination: proposal.pagination ?? null });
     expect(proposal.pagination, "a numbered pagination over the pager's page links").toMatchObject({ mode: "numbered" });
+    // Exactly the page numbers, the current page among them, and neither arrow.
+    const pages = await harness.page.evaluate((selector) => Array.from(document.querySelectorAll(selector), (element) => element.textContent?.trim() ?? ""), (proposal.pagination as { pages: string }).pages);
+    expect(pages).toEqual(["1", "2", "3"]);
   });
 
-  test("keyword route: through the evidence runtime the read stops at page one, then read across documents with G1 and G2 supplied it returns the ten owed rows", async ({ openHarness }) => {
+  test("keyword route: through the evidence runtime the handle's read carries the detected pager, and read across documents with G1 supplied it returns the ten owed rows", async ({ openHarness }) => {
     const harness = await openHarness("auction-marketplace");
     await answerArrivals(harness);
     await search(harness);
@@ -563,22 +608,24 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     const request = sent.parameters.extractList as unknown as WebAutomationExtractListRequest;
     note("keyword runtime request", request);
     note("keyword runtime summary", sent.reply.extraction);
-    // G2 as the person would meet it: no pagination, one page, and nothing says the list went on.
-    expect(request.paginate, "the handle carries no pagination, so the read cannot ask for one").toBeUndefined();
+    // The handle carries the detected pager, at the one page a proposal asks
+    // for (detect-pagination.ts PROPOSED_MAX_PAGES): page one is read and the
+    // read says the list went on rather than answering short in silence.
+    expect(request.paginate, "the handle carries the detected numbered pager").toMatchObject({ mode: "numbered", maxPages: 1 });
     const pageOne = (sent.reply.extracted ?? []) as Row[];
     expect(pageOne.length, "page one holds only some of the owed rows").toBeLessThan(OWED.length);
-    expect(sent.reply.extraction?.truncated, "and the read does not say it stopped short").toBe(false);
+    expect(sent.reply.extraction, "and the read says it stopped at its bound with pages left").toMatchObject({ pagesRead: 1, truncated: true });
     // Every condition was resolved into a read of its own column: the estimate
     // and the condition line are tested without becoming columns of the table.
     expect(Object.keys(request.fields).sort()).toEqual([...OWED_COLUMNS].sort());
 
-    // The same literal request, with G2's pagination and G1's title supplied,
-    // carried across the documents its numbered links load: page 2, the bot
-    // check the fourth results view meets, and page 3.
+    // The same request, its detected pager unchanged but allowed every page,
+    // with G1's title supplied, carried across the documents its numbered links
+    // load: page 2, the bot check the fourth results view meets, and page 3.
     const whole: WebAutomationExtractListRequest = {
       ...request,
       fields: { ...request.fields, title: TITLE_WITHOUT_BADGE },
-      paginate: { mode: "numbered", pages: `${PAGER} > a`, maxPages: 5 }
+      paginate: { mode: "numbered", pages: (request.paginate as { pages: string }).pages, maxPages: 5 }
     };
     const across = await readAcrossDocuments(harness, whole, 90_000);
     note("keyword across documents", { documents: across.documents, checkpoints: across.checkpoints, status: across.reply.status, extraction: across.reply.extraction, validation: across.reply.validation });
@@ -610,7 +657,7 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
   });
 
   test("G3: a bound over a price written the continental way reads the amount the page states", () => {
-    test.fail(true, "G3: NUMBER in domain/src/actions/extraction/condition-match.ts reads '169,00' as 16900 and '1.165,00' as 1.165");
+    // G3 (fixed in t194-w32): NUMBER read '169,00' as 16900 and '1.165,00' as 1.165.
     // m9 and x7 as their cards write them (cameras.ts:28,37 via money.ts:18-24).
     const m9 = OWED.find((row) => row.price?.startsWith("EUR 169"))!.price!;
     expect(webAutomationExtractConditionNumber(m9)).toBe(169);
@@ -642,14 +689,15 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
     return { walk, manifestRead, proposal, offered };
   }
 
-  test("grid-view: price, bids and postage are detected columns, and the list layout's read comes back empty rather than failing", async ({ openHarness }) => {
+  test("grid-view: price, bids and postage are detected columns, and the list layout's read of the gallery fails, its rows reading nothing", async ({ openHarness }) => {
     const harness = await openHarness("auction-marketplace");
     const { manifestRead, proposal, offered } = await variantWalk(harness, "grid-view");
     // The Flow built on the list layout meets the gallery: its positions name
-    // no element, and the read says so only in its sentence (G4).
-    expect(manifestRead.status).toBe("succeeded");
+    // no element, and the read fails rather than answering ten empty rows (G4).
+    expect(manifestRead.status).toBe("failed");
     expect(manifestRead.extraction).toMatchObject({ recordCount: OWED.length, emptyRecords: OWED.length });
-    expect(manifestRead.validation?.status).toBe("passed");
+    expect(manifestRead.validation?.status).toBe("failed");
+    expect(JSON.stringify(manifestRead.validation)).toContain("every returned record is empty");
     for (const column of ["price", "bids", "postage"] as const) expect(offered[column], `a detected column is the owed ${column}`).not.toEqual([]);
     // G1's fix reads the gallery's titles too.
     const fixed = succeeded(await act(harness, {
@@ -661,7 +709,8 @@ test.describe("auction-marketplace-kestrel-auctions on the fixture", () => {
   });
 
   test("grid-view, G1: a detected column holds every owed title", async ({ openHarness }) => {
-    test.fail(true, "G1 in the gallery: the heading link reads the badge and the title run together, its span the badge alone (content/extraction/infer-fields.ts pathStep)");
+    // G1 in the gallery (fixed in t194-w28): the heading link reads the badge
+    // and the title run together; the title's own span is now a column.
     const harness = await openHarness("auction-marketplace");
     const { offered } = await variantWalk(harness, "grid-view");
     expect(offered.title).not.toEqual([]);

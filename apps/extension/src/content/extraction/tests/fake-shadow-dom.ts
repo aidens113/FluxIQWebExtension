@@ -2,8 +2,9 @@
 // open shadow roots and slots: elements with attributes, text nodes, light
 // `textContent` that -- as in a browser -- never enters a shadow root, and a
 // `querySelectorAll` that understands the selectors inference writes (`*`,
-// `[attr]`, `[attr="v"]`, `tag.class`, `tag:nth-of-type(n)` and `:scope > a > b`
-// chains) and, as in a browser, never crosses a shadow boundary.
+// `[attr]`, `[attr="v"]`, `tag.class`, `tag:nth-of-type(n)`, `tag:not([class])`,
+// `:scope > a > b` chains and a `:scope a` descendant step) and, as in a
+// browser, never crosses a shadow boundary.
 //
 // `fakeShadowDom()` installs the globals the readers ask (`Node` and the form
 // control classes they test `instanceof` against) and returns the builders.
@@ -43,6 +44,7 @@ class FakeParentNode {
       for (const step of steps.slice(1)) current = current.flatMap((element) => element.children.filter((child) => child.matchesStep(step)));
       return current;
     }
+    if (selector.startsWith(":scope ")) return this.querySelectorAll(selector.slice(":scope ".length));
     const found: FakeElement[] = [];
     const walk = (element: FakeElement): void => {
       if (selector === "*" || element.matchesStep(selector)) found.push(element);
@@ -63,7 +65,7 @@ class FakeShadowRoot extends FakeParentNode {
   }
 }
 
-const STEP = /^([a-z][a-z0-9-]*)?((?:\.[\w-]+)*)(?:\[([\w-]+)(?:="([^"]*)")?\])?(?::nth-of-type\((\d+)\))?$/u;
+const STEP = /^([a-z][a-z0-9-]*)?((?:\.[\w-]+)*)(?:\[([\w-]+)(?:="([^"]*)")?\])?(?::nth-of-type\((\d+)\))?(:not\(\[class\]\))?$/u;
 
 class FakeElement extends FakeParentNode {
   readonly nodeType = 1;
@@ -115,7 +117,8 @@ class FakeElement extends FakeParentNode {
   matchesStep(step: string): boolean {
     const parsed = STEP.exec(step);
     if (!parsed) throw new SyntaxError(`fake-shadow-dom cannot read the selector ${step}`);
-    const [, tag, classes, attribute, value, nth] = parsed;
+    const [, tag, classes, attribute, value, nth, unclassed] = parsed;
+    if (unclassed !== undefined && this.attrs.has("class")) return false;
     if (tag !== undefined && this.tagName !== tag.toUpperCase()) return false;
     if (classes && !classes.slice(1).split(".").every((name) => this.classList.includes(name))) return false;
     if (attribute !== undefined && (!this.attrs.has(attribute) || (value !== undefined && this.attrs.get(attribute) !== value))) return false;

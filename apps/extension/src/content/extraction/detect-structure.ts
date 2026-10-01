@@ -29,6 +29,17 @@
 // region and an ambiguous target are facts about the page as authored, so they
 // are answered at once.
 //
+// **Nor has a page that is still drawing its list as skeletons.** A run found
+// while a larger run of empty placeholders stands elsewhere on the page is
+// whatever else the page holds, not the list it is drawing
+// (`placeholder-run/`): on the Spain hubs' results the grid is nineteen
+// skeletons for 600 ms after load and the sidebar's five filter groups were
+// answered at once, as final (t194 G3). Such an answer is waited on within the
+// same window, and the run that fills in then outranks the sidebar. When the
+// window closes first, the last answer stands, as for a refusal. Placeholders
+// inside the detected items or beside them are that list filling in, and
+// settle nothing either way.
+//
 // Live, this ended a build rather than spoiling an answer: on `company-website`
 // the model detected one moment too early, was told `no_repeating_structure`,
 // asked again five times and was answered `already_answered` by the loop's
@@ -80,6 +91,7 @@ import { isDeclaredFeed } from "./feed-signal";
 import { inferListFromElement } from "./infer-list";
 import { largestRunsFirst } from "./largest-runs";
 import { waitUntil } from "./list-wait";
+import { largestPlaceholderRunApartFrom } from "./placeholder-run";
 import { loneRecordAround } from "./single-record";
 
 type Refusal = Extract<WebAutomationStructureDetection, { ok: false }>;
@@ -110,7 +122,7 @@ export function detectStructure(request: WebAutomationStructureDetectionRequest)
 }
 
 function attempt(request: WebAutomationStructureDetectionRequest): Attempt {
-  return request.selector === undefined ? settledUnlessRefused(detectLargest()) : detectAround(request.selector);
+  return request.selector === undefined ? attemptOf(detectLargest()) : detectAround(request.selector);
 }
 
 /**
@@ -137,9 +149,15 @@ export async function detectStructureWhenPresent(
   return current.answer;
 }
 
-/** The answer, improvable only when it is a refusal a moment later could stop being true. */
-function settledUnlessRefused(answer: WebAutomationStructureDetection): Attempt {
-  return { answer, improvable: !answer.ok && WORTH_WAITING_FOR.has(answer.refused) };
+/**
+ * The answer, improvable when waiting could still change it: a refusal a moment
+ * later could stop being true, or a run beside which a larger list is still
+ * being drawn as placeholders (see the header).
+ */
+function attemptOf(answer: WebAutomationStructureDetection): Attempt {
+  if (!answer.ok) return { answer, improvable: WORTH_WAITING_FOR.has(answer.refused) };
+  const drawing = document.body === null ? 0 : largestPlaceholderRunApartFrom(queryAll(answer.proposal.item), document.body);
+  return { answer, improvable: answer.proposal.itemCount < drawing };
 }
 
 /**
@@ -160,16 +178,16 @@ function settledUnlessRefused(answer: WebAutomationStructureDetection): Attempt 
 function detectAround(selector: string): Attempt {
   const elements = queryAll(selector);
   const first = elements[0];
-  if (!first) return settledUnlessRefused(refused("target_not_found"));
-  if (elements.some(isWithinSensitiveControl)) return settledUnlessRefused(refused("sensitive_region"));
+  if (!first) return attemptOf(refused("target_not_found"));
+  if (elements.some(isWithinSensitiveControl)) return attemptOf(refused("sensitive_region"));
   const run = runAround(first, elements);
-  if (run && !run.ok) return settledUnlessRefused(run);
-  if (run && allInsideItems([first], queryAll(run.proposal.item))) return settledUnlessRefused(run);
+  if (run && !run.ok) return attemptOf(run);
+  if (run && allInsideItems([first], queryAll(run.proposal.item))) return attemptOf(run);
   const lone = loneRecordAround(first);
   const record = lone && allInsideItems(elements, queryAll(lone.item)) ? detected(lone) : undefined;
   const readable = record?.ok === true ? record.proposal : undefined;
   if (run) return { answer: readable ? withRecord(run, readable) : run, improvable: false };
-  return readable ? { answer: { ok: true, proposal: readable }, improvable: true } : settledUnlessRefused(refused("no_repeating_run"));
+  return readable ? { answer: { ok: true, proposal: readable }, improvable: true } : attemptOf(refused("no_repeating_run"));
 }
 
 /** The run the target belongs to or the nearest rich run past it, a refusal for a target that names no one run, or `undefined` when the page holds no readable run. */

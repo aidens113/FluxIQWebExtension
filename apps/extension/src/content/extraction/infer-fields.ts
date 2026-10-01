@@ -86,7 +86,14 @@
 // the columns detection proposes and may only keep and rename them, so the
 // answer it could build was wrong before it chose anything. A path anchored at
 // the item (`:scope > div > h2 > a > span`) names one element by construction,
-// so a nested value is a field like any other.
+// so a nested value is a field like any other. Since 2026-10-01 an element whose
+// own class or `itemprop` names it alone in the item is read by that, anywhere
+// in the item, before its path, so a layout that moves it keeps the column
+// (`selectorWithinItem`); the label is still the path.
+//
+// **A value the page draws in pieces is one column** -- a price written as
+// sibling spans for its whole number, decimals and currency -- offered as the
+// element that holds the pieces (`composed-value/composed-value.ts`).
 
 import {
   webAutomationExtractionFieldKey,
@@ -97,6 +104,7 @@ import {
 import { testIdFor } from "../describe-element";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import { badgeNaming, constantBadgeName } from "./badge-name";
+import { composesValue, isComposedPiece } from "./composed-value";
 import { readField } from "./field-reader";
 import { recordControlType } from "./record-control";
 import { valueShape } from "./value-shape";
@@ -277,25 +285,52 @@ export function proposedFieldSpec(source: FieldSource, coverage: number): WebAut
  * values two items share keep the order the page draws them in. The item the
  * caller named is walked first, so a run whose items are all alike proposes
  * exactly what it proposed before this existed.
+ *
+ * A source read by the element's own name (`ownName`) is offered by items
+ * whose paths to it differ -- an advertisement with a "Sponsored" row above
+ * the title, a layout that moves the price -- and is labelled with the path
+ * most of the walked items have, so its label, and the key derived from it,
+ * are the ones the run's usual item gives rather than whichever item came
+ * first.
  */
 function fieldSources(item: Element, run: readonly Element[]): FieldSource[] {
   const columns = columnSources(item);
   if (columns.length > 0) return columns;
-  const taken = new Set<string>();
-  const collected: Array<{ source: FieldSource; position: number }> = [];
-  for (const candidate of [item, ...run.slice(0, MAX_SCANNED_ITEMS)]) {
-    if (collected.length >= MAX_CANDIDATE_FIELDS) break;
+  const collected = new Map<string, { source: FieldSource; position: number; labels: Map<string, number> }>();
+  // The items a field's own name is checked against: one that names two
+  // elements in any of them is not taken as the element's name (`ownName`).
+  const peers = [item, ...run.slice(0, MAX_SCANNED_ITEMS).filter((candidate) => candidate !== item)];
+  for (const candidate of peers) {
+    if (collected.size >= MAX_CANDIDATE_FIELDS) break;
     let position = 0;
-    for (const source of [...itemAttributeSources(candidate), ...elementSources(candidate)]) {
+    for (const source of [...itemAttributeSources(candidate), ...elementSources(candidate, peers)]) {
       position += 1;
       const identity = [source.kind, source.selector ?? "", source.attribute ?? "", source.header ?? ""].join("\u0000");
-      if (taken.has(identity)) continue;
-      taken.add(identity);
-      if (collected.length >= MAX_CANDIDATE_FIELDS) break;
-      collected.push({ source, position });
+      const seen = collected.get(identity);
+      if (seen) {
+        seen.labels.set(source.label, (seen.labels.get(source.label) ?? 0) + 1);
+        continue;
+      }
+      if (collected.size >= MAX_CANDIDATE_FIELDS) break;
+      collected.set(identity, { source, position, labels: new Map([[source.label, 1]]) });
     }
   }
-  return collected.sort((left, right) => left.position - right.position).map(({ source }) => source);
+  return [...collected.values()]
+    .sort((left, right) => left.position - right.position)
+    .map(({ source, labels }) => ({ ...source, label: mostGiven(labels) }));
+}
+
+/** The label the most items gave a source, the first given on a tie. */
+function mostGiven(labels: ReadonlyMap<string, number>): string {
+  let best = "";
+  let count = 0;
+  for (const [label, given] of labels) {
+    if (given > count) {
+      best = label;
+      count = given;
+    }
+  }
+  return best;
 }
 
 /**
@@ -343,7 +378,7 @@ function columnSources(item: Element): FieldSource[] {
 }
 
 /** What the item's descendants offer, in document order, one source per element but for an image. */
-function elementSources(item: Element): FieldSource[] {
+function elementSources(item: Element, peers: readonly Element[]): FieldSource[] {
   const sources: FieldSource[] = [];
   for (const element of item.querySelectorAll("*")) {
     if (sources.length >= MAX_CANDIDATE_FIELDS) break;
@@ -356,7 +391,10 @@ function elementSources(item: Element): FieldSource[] {
     // stopped reading as the form it is (`detect-structure.ts`,
     // `isFormNotData`).
     if (withinValueControl(item, element)) continue;
-    const named = selectorWithinItem(item, element);
+    // A piece of a value the page draws in pieces is that value's, which its
+    // parent offers whole (`composed-value/composed-value.ts`).
+    if (isComposedPiece(item, element)) continue;
+    const named = selectorWithinItem(item, element, peers);
     if (named === undefined) continue;
     const { selector, label } = named;
     const pathLabel = named.path;
@@ -380,9 +418,9 @@ function elementSources(item: Element): FieldSource[] {
     } else {
       // An icon badge has no words, so it is never a text leaf, and a text
       // leaf is never a badge: the two branches cannot both apply.
-      const badge = badgeSource(item, element, named, sensitive);
+      const badge = badgeSource(item, element, named, sensitive, peers);
       if (badge !== undefined) sources.push(badge);
-      else if ((isTextLeaf(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
+      else if ((isTextLeaf(element) || composesValue(element) || drawsShadowText(item, element, selector, label, sensitive)) && !statedMoreTightly(item, element)) sources.push({ kind: "text", label, selector, sensitive, pathLabel });
     }
   }
   return sources;
@@ -394,13 +432,13 @@ function elementSources(item: Element): FieldSource[] {
  * path until `describedLabel` has the whole run to judge whether its name is
  * the same in every item.
  */
-function badgeSource(item: Element, element: Element, name: ElementName, sensitive: boolean): FieldSource | undefined {
+function badgeSource(item: Element, element: Element, name: ElementName, sensitive: boolean, peers: readonly Element[]): FieldSource | undefined {
   const naming = badgeNaming(element);
   if (naming === undefined) return undefined;
   if ("attribute" in naming) {
     return { kind: "attribute", label: `${name.label} ${naming.attribute}`, selector: name.selector, attribute: naming.attribute, sensitive, accessibleName: true };
   }
-  const title = selectorWithinItem(item, naming.title);
+  const title = selectorWithinItem(item, naming.title, peers);
   if (title === undefined) return undefined;
   return { kind: "text", label: title.label, selector: title.selector, sensitive, pathLabel: title.path, accessibleName: true };
 }
@@ -477,18 +515,67 @@ type ElementName = FieldName & { path: boolean };
 const MAX_PATH_STEPS = 8;
 
 /**
- * A selector that finds exactly this element inside the item: its test id, or
- * the path from the item down to it, anchored with `:scope` so the first step
- * is the item's own child rather than any descendant. An element neither names
- * uniquely is left out rather than proposed as a field that would read a
- * different element in another item.
+ * A selector that finds exactly this element inside the item: its test id, its
+ * own name anywhere in the item (`ownName`), or the path from the item down to
+ * it, anchored with `:scope` so the first step is the item's own child rather
+ * than any descendant. An element none of them names uniquely is left out
+ * rather than proposed as a field that would read a different element in
+ * another item.
+ *
+ * **A field read by its own name survives a layout change, and until
+ * 2026-10-01 none was.** Every field was anchored through each of its
+ * ancestors, so the cross-border marketplace's rating was read as
+ * `:scope > div.<body> > div:nth-of-type(3) > span.<rating>`: the rating row
+ * shares its class with the original-price row, so its step was positional.
+ * The site's list layout moves the price and the store into an aside and the
+ * rating row up a place, and a Flow built on the grid and replayed on the list
+ * read titles and nothing else (`t194-w26-spain-hubs-fixture.md`, G2). The span
+ * carries the same class in both layouts, and that class names it alone in the
+ * card, so `:scope span.<rating>` reads it in both.
+ *
+ * The label stays the element's path through the item that offered it, so the
+ * column a model is shown, and the key derived from it, are what they were;
+ * only what the field reads by changes.
  */
-function selectorWithinItem(item: Element, element: Element): ElementName | undefined {
+function selectorWithinItem(item: Element, element: Element, peers: readonly Element[]): ElementName | undefined {
   const testId = testIdName(element);
   if (testId && namesOnly(item, testId.selector, element)) return { ...testId, path: false };
   const path = pathWithinItem(item, element);
+  const own = ownName(item, element, peers);
+  if (own) return { selector: own.selector, label: path?.label ?? own.label, path: true };
   if (path && namesOnly(item, path.selector, element)) return { ...path, path: true };
   return undefined;
+}
+
+/**
+ * The element named by what it is rather than where it sits: its schema.org
+ * property or the classes it is styled by, as one step anywhere in the item
+ * (`:scope span.<rating>`). Taken only when that step names this element and
+ * nothing else in the item, and at most one element in each of the run's
+ * scanned items, so a class two elements of some card share is never a name
+ * that would read the wrong one of them there. A bare tag, an unclassed
+ * element and a position say nothing about what an element is, so they are
+ * left to the path.
+ */
+function ownName(item: Element, element: Element, peers: readonly Element[]): FieldName | undefined {
+  const tag = element.tagName.toLowerCase();
+  if (!PLAIN_TAG.test(tag)) return undefined;
+  const classes = stepClasses(element);
+  for (const step of [itemProperty(element), classes === "" ? undefined : named(`${tag}${classes}`)]) {
+    if (step === undefined) continue;
+    const selector = `:scope ${step.selector}`;
+    if (namesOnly(item, selector, element) && peers.every((peer) => namesAtMostOne(peer, selector))) return { selector, label: step.label };
+  }
+  return undefined;
+}
+
+/** Whether the selector names at most one element inside the item. */
+function namesAtMostOne(item: Element, selector: string): boolean {
+  try {
+    return item.querySelectorAll(selector).length <= 1;
+  } catch {
+    return false;
+  }
 }
 
 /** The element's test id as a field name: the attribute selector that finds it, shown under the id itself. */
@@ -548,6 +635,17 @@ function pathWithinItem(item: Element, element: Element): FieldName | undefined 
  * resolved in the four sponsored cards of a twenty-card run and in none of the
  * sixteen results -- coverage 0.2, and a title that read `null` for every row
  * a person actually asked for. The class step names the same element in both.
+ *
+ * **An element the page gave no class is named as such** (`span:not([class])`,
+ * labelled `span` as before), and until 2026-10-01 it was named by its bare
+ * tag. The auction marketplace writes a card's heading as
+ * `<div><span>Title</span></div>`, and a listing under a day old as
+ * `<div><span class="<badge>">New listing</span><span>Title</span></div>`. Off
+ * an unbadged card the title's step was the bare `span`; coverage counts
+ * presence, so on the badged card that selector silently resolved to the badge,
+ * and the one column every card filled read "New listing" for that listing's
+ * title (`t194-w25-kestrel-fixture.md`, G1). The unclassed step names the title
+ * on both cards.
  */
 function pathStep(element: Element): FieldName | undefined {
   const tag = element.tagName.toLowerCase();
@@ -556,7 +654,8 @@ function pathStep(element: Element): FieldName | undefined {
   if (!PLAIN_TAG.test(tag)) return undefined;
   const testId = testIdName(element);
   const property = itemProperty(element);
-  for (const candidate of [testId, property, named(`${tag}${stepClasses(element)}`), named(tag)]) {
+  const unclassed = element.hasAttribute("class") ? undefined : { selector: `${tag}:not([class])`, label: tag };
+  for (const candidate of [testId, property, unclassed, named(`${tag}${stepClasses(element)}`), named(tag)]) {
     if (candidate !== undefined && namesOnlyChild(element, candidate.selector)) return candidate;
   }
   const siblings = Array.from(element.parentElement?.children ?? []).filter((child) => child.tagName === element.tagName);

@@ -5,6 +5,7 @@
 export { watchIgnoredPress } from "./ignored-press-watch";
 export { MAX_EXTRA_PRESSES, pressAgain } from "./press-again";
 export { pressScope } from "./press-scope";
+export { scopeRoots } from "./scope-roots";
 
 export type { IgnoredPressAnswer, IgnoredPressProbe, IgnoredPressWatch } from "./ignored-press-watch";
 export type { PressListener, PressPage } from "./page-press-listener";

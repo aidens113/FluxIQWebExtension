@@ -191,13 +191,20 @@ test("the handle keeps every detected column and the detected pagination unless 
   assert.deepEqual(Object.keys(request.fields as JsonObject), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
   assert.deepEqual(request.paginate, NEXT);
 
-  // A pagination the model wrote names controls it was never shown: the detected one is read, bounded as the model said when the mode agrees.
+  // A pagination the model wrote names controls it was never shown: the detected one is read, bounded as the model said whatever mode it named.
+  // Until 2026-10-01 a bound under another mode was dropped for the detected one, and detection
+  // now proposes one page: a plan that saw Guildline's numbered pager and asked for five pages
+  // read one, truncated (t194-w27 G2).
   const rows: Array<[JsonValue, JsonObject]> = [
     [true, NEXT],
     [{ mode: "next", next: "a.next" }, NEXT],
     [{ mode: "next", next: "a.next", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
     [{ maxPages: 1 }, { ...NEXT, maxPages: 1 }],
-    [{ mode: "numbered", pages: "button.page", maxPages: 2 }, NEXT]
+    [{ mode: "numbered", pages: "button.page", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
+    [{ mode: "numbered", pages: "button.page" }, NEXT],
+    // A scroll count says how far to read as a page count does.
+    [{ mode: "scroll", maxScrolls: 2 }, { ...NEXT, maxPages: 2 }],
+    [{ mode: "numbered", maxPages: 4, maxScrolls: 2 }, { ...NEXT, maxPages: 4 }]
   ];
   for (const [paginate, expected] of rows) {
     assert.deepEqual(
@@ -286,6 +293,10 @@ test("a table's columns may be named by header, and a feed's by attribute, with 
     })
   );
   assert.deepEqual(await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll", maxScrolls: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
+  // A bound under a mode the detection did not find bounds the detected scroll, and is held to the same cap.
+  const scrolled = await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "next", maxPages: 4 } } });
+  assert.deepEqual(scrolled.status === "resolved" ? (scrolled.parameters.extractList as JsonObject).paginate : scrolled, { mode: "scroll", maxScrolls: 4 });
+  assert.deepEqual(await resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "numbered", maxPages: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
 });
 
 test("a Run Output node naming a web output resolves its payload as that output's own node would", async () => {

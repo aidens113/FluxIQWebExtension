@@ -50,6 +50,38 @@ test("a number is read off the value in the formats the fixtures write it in", (
   for (const [value, number] of rows) assert.equal(webAutomationExtractConditionNumber(value), number, value);
 });
 
+// Kestrel Auctions writes its euro prices "EUR 169,00" and "EUR 1.165,00": until
+// 2026-10-01 they read as 16900 and 1.165, so a bound on the price column kept
+// and dropped the wrong lots (t194-w25 G3).
+test("a continental amount is read as written, and every English form as before", () => {
+  const rows: Array<[string, number | undefined]> = [
+    ["EUR 169,00", 169],
+    ["EUR 109,00", 109],
+    ["EUR 1.165,00", 1165],
+    ["16,49 €", 16.49],
+    ["+EUR 14,50 postage", 14.5],
+    ["4,5 von 5 Sternen", 4.5],
+    ["-12,50", -12.5],
+    ["1.234.567,89 €", 1234567.89],
+    ["1.165.000", 1165000],
+    // English forms read as they always have.
+    ["£1,165.00", 1165],
+    ["$1,299.00", 1299],
+    ["12,345", 12345],
+    ["1,234,567", 1234567],
+    ["1.5", 1.5],
+    // A lone group of three could be either, and keeps its old reading.
+    ["1,165", 1165],
+    ["1.165", 1.165],
+    // A sentence's comma after a number is not a decimal.
+    ["169, plus postage", 169]
+  ];
+  for (const [value, number] of rows) assert.equal(webAutomationExtractConditionNumber(value), number, value);
+  // The bound a model writes on a euro price keeps the lots under it.
+  assert.equal(holds({ lessThan: 500 }, "EUR 169,00"), true);
+  assert.equal(holds({ lessThan: 500 }, "EUR 1.165,00"), false);
+});
+
 // Lane t195: Circleway writes five mutual friends as "Aisha Khan and 4 other
 // mutual friends", and "at least five" must keep that request.
 test("a named one and N others counts N + 1, and only when no digit comes first", () => {

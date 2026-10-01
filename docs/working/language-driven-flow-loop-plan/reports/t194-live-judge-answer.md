@@ -89,6 +89,80 @@ one; `pagination.ts` + `list-wait.ts` + `load-retry.ts` (bikes GAP 2, rotterdam 
 `ignored-press/page-press-listener.ts` + `press-scope.ts` (bikes GAP 1) one; domain `plan-resolution/extraction/slot.ts`
 (rotterdam G2) and `actions/extraction/condition-match.ts` (kestrel G3) one. Each worker report holds its proposed diff.
 
+## Session 5b (2026-10-01, from 20:50 UTC): live again
+
+The supervisor committed F21-F22 and merged dev (Core `ede2bd94`, downstream `ea19946f`; trees at `90ad1972` / `a6369044`,
+with t223's compact page view and lane B's B1) and lifted the Lab stop for this lane: slot-3, headed, the ten realistic
+scenarios only; earbuds first until it passes twice; between runs, fix the F22 gaps and turn each `test.fail` into a pass.
+- Core libraries rebuilt: `heavy.sh "t194 core-libs s5b" pnpm --filter @fluxiq/contracts --filter fluxiq --filter
+  @fluxiq/client-gateway-websocket build` -> contracts and gateway reused from stamp, fluxiq built (54.5 s), rc 0.
+- Run 10 (earbuds) launched 20:52:17 UTC through `scratchpad/t194/live-run-c.sh` (log `scratchpad/t194/run10.log`); the reason:
+  first live test of t223's compact page view, lane B's B1 and F17-F21 on the task whose run 9 failed only on the purse.
+- **Run 10 `run-muq0in9r-0793b448`: stage 0, killed 20:54:41 UTC, 23 s after admission, $0.00, 0 provider calls** (debug
+  `debugs/run-muq0in9r-0793b448.md`, t194-d10). Not a product result: the supervisor's `taskkill /T /F` on every process
+  matching `run-lab\.mjs` (meant for lane B's stuck run during the DeepSeek outage: every decide timed out at 45 s, a 5-token
+  ping took 60 s) took it down. Found on the way, this lane's area: a killed run leaves only `.staging-run-*`, so the spend
+  ledger's reconciled finish records no run and no cost (`packages/test-runner/src/run-scenario.ts:603,681`,
+  `scripts/lab/live-guards/run-outcomes.mjs:21`, `close-launch.mjs:34-36`, `ledger-queries.mjs:30-45`); not fixed (next).
+- **Supervisor, after run 10: no Lab until DeepSeek answers again, and no new direct-API run at all: live builds must start by
+  typing the instruction into the real extension chat (t227 builds that launcher).** Meanwhile the F22 gaps were fixed, F23-F27,
+  by t194-w28..w32 in parallel (partitioned by file), then t194-w33 turned the probe rows green (F28).
+
+**Session-5b validation (2026-10-01 ~21:30-22:35 UTC, narrow; logs `scratchpad/t194s5/v-*.log`, `t2-sweep.log`):** extension
+`heavy.sh npx tsc -p apps/extension/tsconfig.json --noEmit` rc 0; `-p apps/extension/tsconfig.test.json` 3 errors, all TS2610
+`ownerDocument` in unmodified `src/panel/{extraction/tests/dialog-dom.ts, recording/review/tests/recording-review.test.ts,
+settings/tests/forget-confirmation.test.ts}` over `panel/chat/tests/fake-dom.ts` (from the dev merge; not this lane's, for the
+supervisor); domain `npx tsc -p domain/tsconfig.json` and `-p domain/tsconfig.test.json` rc 0; narrow unit runs
+(`scratchpad/t194s5/narrow-tests.mjs`, the package's own esbuild settings): extension `content/extraction` +
+`content/action-runtime/ignored-press` 29 files `# tests 235 # pass 235 # fail 0`, domain `actions/extraction` +
+`runtime/llm-evidence/plan-resolution/extraction` 14 files `# tests 100 # pass 100 # fail 0`; T2 `heavy.sh pnpm --filter
+@fluxiq-web-extension/extension test:content -- e2e/content/tests/extraction/tests e2e/content/tests/live-tasks/tests`
+**"106 passed (4.5m)", rc 0**, no `test.fail` left; downstream structure audit "passed (145 warning(s), 118 baselined)".
+Not run: `e2e/content/tests/shadow-roots/tests/shadow-root-controls.spec.ts:73` fails (rank 37, under 15 expected) with
+F26 reverted too (w31), so not this lane's; owner likely t223 (handle ranking), for the supervisor.
+
+**Ready to commit (fix set 6: F23-F28), exactly `git status`; Core unchanged.** Extension `content/extraction/{infer-fields,
+detect-pagination, detect-structure, item-selector, list-reader, list-wait, load-retry, order-rows, pagination}.ts`,
+`content/extraction/{composed-value/, placeholder-run/}` (new), `content/extraction/tests/{detect-pagination.test.ts,
+fake-shadow-dom.ts, infer-fields.test.ts, item-selector.test.ts, load-retry.test.ts, pagination.test.ts, store-pager.ts,
+selector-page.ts (new)}`, `content/action-runtime/ignored-press/{index.ts, page-press-listener.ts, scope-roots.ts (new),
+tests/page-press-listener.test.ts, tests/scope-roots.test.ts (new)}`, `e2e/content/tests/live-tasks/tests/*.spec.ts` (4),
+`e2e/content/tests/extraction/tests/job-board-listing.spec.ts`; domain `actions/extraction/{condition-match.ts,
+tests/condition-match.test.ts}`, `runtime/llm-evidence/plan-resolution/extraction/{slot.ts, tests/slot.test.ts}`; docs
+`debugs/run-muq0in9r-0793b448.md`, `reports/t194-w28..w32,w34-*.md`, this report. Validation: session-5b validation above.
+
+**Next:** earbuds live through t227's chat launcher once dev is merged; first, the cause of t227's `run-muq310ht-ab80eed0`
+(earbuds, $0.277, 0 of 13 records, `core.result.does_not_answer_request`). Open: kestrel G4 (an all-empty read passes,
+`content/actions/extract-list.ts:164`; the grid-view manifest read returns 10 empty records as `passed`): a policy call for
+the supervisor; killed runs unaccounted in the spend ledger (run 10's debug); F21's Core publication of `budgetBreaches`
+(a wire change); the link-text column glued to a badge is still offered beside the clean title span (a model may pick it).
+
+## Session 5c (2026-10-01, from ~22:45 UTC): the dev merge, and G4
+
+The supervisor committed F23-F28 (`32c764c3`) and merged dev (Core `83a6cc3a` clean; downstream stopped on 4 conflicts
+against lane A's F16, lane D's F20/F28/F31/F33). Resolved by the lead, both sides kept:
+- `ignored-press/page-press-listener.ts` (+ test): one implementation, `scopeRoots` (the roots the scope walk crossed,
+  closed ones too, plus every open root beneath the scope through dev's `openRootsWithin`), which is a superset of lane A's
+  `shadowRootsWithin`; lane A's guard for a scope that cannot be searched moved into `scope-roots.ts`. The test keeps both
+  rows (our chip-inside-a-root row, lane A's nested-widget row) over one fake page.
+- `extraction/detect-structure.ts`: lane D's `Attempt {answer, improvable}` with lone records, and our placeholder wait:
+  `attemptOf` (was `settledUnlessRefused`) also marks an answer improvable while a larger placeholder run is being drawn.
+- `extraction/tests/pagination.test.ts`: both appended blocks kept.
+- The merged tree failed the structure audit (`pagination.ts` 802 lines; `extraction/tests/` 26 files), so the pager
+  reading moved to `extraction/pager-reading/` (pagination.ts 685 lines) and `list-reader-lazy-tail.test.ts` folded into
+  `list-reader.test.ts`. Staged with the resolution.
+- **G4, the supervisor's decision: an all-empty read fails** (`content/actions/extract-list.ts` `validationFor`: rows came
+  back and every declared field of every row read nothing -> `failed`, whatever `minItems`; the domain already names it
+  `records_have_no_fields`); `actions/tests/extract-list.test.ts` (the old row now fails; a new row covers `minItems: 0`, 9 of
+  10 empty passes, 0 rows with `minItems: 0` passes); the kestrel grid-view row now expects the failure. Not staged.
+- Validation: Core libraries rebuilt rc 0; extension `tsc -p tsconfig.json` and `-p tsconfig.test.json` rc 0; narrow units
+  `content/extraction` + `ignored-press` 32 files `# pass 269 # fail 0`, `content/actions` 13 files `# pass 106 # fail 0`;
+  structure audit "passed (154 warning(s), 118 baselined)"; T2 extraction + live-tasks + click `122 passed, 2 failed`, the 2
+  in `click.spec.ts`; `press-answers` (lane A's) 3/3 and `shadow-roots` with 3 failures. **The 5 failures are dev's, not the
+  resolution's:** with dev's own `page-press-listener.ts` swapped in, the same 5 fail (`click.spec.ts:119` a press that
+  changes nothing now fails `output_not_observed`, lane A F16; `:132` a disabled target retried 5 times, lane D F32;
+  `shadow-root-controls.spec.ts:73` pre-existing; `:93,:163` clicks on a search box fail `output_not_observed`, lane A F16).
+
 ## Session 4 (2026-10-01, from 05:00 UTC), after round 3 and t210 rounds 1-2
 
 Trees fast-forwarded to pushed dev (downstream `58fd0cd3`, Core `e5b8f015`); every lane C fix set (F0-F16) is on dev.
@@ -125,6 +199,12 @@ Newest first. Status: validated (the named checks ran and passed), or in progres
 
 | Fix | Files | Exposed by | Validation | Status |
 | --- | --- | --- | --- | --- |
+| F28 The probe specs after F23-F27: no `test.fail` left; the bikes read leaves adverts out by the column reading "Sponsored" (a title now reads on an advert too, F24), the kestrel read picks its title as a model would (the text column that names a Kestrel and tells cards apart whose words lie inside every other such column's: the new title span, not the badge-glued link) (t194-w33, which stalled before its report, and the lead); `job-board-listing.spec.ts:90` rewritten to F10's contract: "names nothing" stops `control_absent` on the board's last page, and on page one follows the board's own Next (t194-w34) | extension `e2e/content/tests/live-tasks/tests/*.spec.ts`, `e2e/content/tests/extraction/tests/job-board-listing.spec.ts`; `content/extraction/order-rows.ts` (comment: the continental number rule) | F22; `job-board-listing:90` had failed on dev since F10 | session-5b validation (below) | validated |
+| F27 A plan's own page bound is kept whatever mode it names (within the cap; only the detected control is ever pressed), so `{mode: numbered, maxPages: 5}` reads every page; a number written the continental way is read as written ("169,00" -> 169, "1.165,00" -> 1165) where it can only be continental, English forms unchanged, ambiguous lone groups as before (t194-w32) | domain `runtime/llm-evidence/plan-resolution/extraction/{slot.ts, tests/slot.test.ts}`, `actions/extraction/{condition-match.ts, tests/condition-match.test.ts}` | F22 probes: rotterdam G2, kestrel G3 | w32: new rows 3 fail on HEAD's sources; session-5b validation (below) | validated |
+| F26 The ignored-press watch also observes every shadow root the press's scope walk crossed and every open root beneath the scope, so a click that opens a panel inside a shadow root is not pressed a second time (Kerbfind's radius chip) (t194-w31) | extension `content/action-runtime/ignored-press/{scope-roots.ts (new), page-press-listener.ts, index.ts, tests/scope-roots.test.ts (new), tests/page-press-listener.test.ts}` | bikes GAP 1 | w31: the new listener row fails with the root observation removed; session-5b validation | validated |
+| F25 Detection: a numbered pager whose current page carries an extra class, and whose links sit inside a pager element, is detected (shared classes, not the first control's); Next still preferred where it reads every page; a detection made while the results are skeleton cards waits for them rather than settling on the sidebar (t194-w29) | extension `content/extraction/{detect-pagination.ts, item-selector.ts, detect-structure.ts, placeholder-run/ (new), tests/{detect-pagination,item-selector}.test.ts, tests/selector-page.ts (new)}` | kestrel G2, spain G3/G4 | w29: 6 new tests fail on HEAD; session-5b validation | validated |
+| F24 Detected columns: a classless element is named by `tag:not([class])`, so a title span is its own column without the "New listing" badge; a value drawn in sibling spans ("16" ",49" " €") is offered as one column; field selectors name the element by its own class anywhere in the card before its position, so a Flow built on the grid reads the list layout; keys and labels unchanged, only newly built Flows get the new selectors (t194-w28) | extension `content/extraction/{infer-fields.ts, composed-value/ (new), tests/{infer-fields.test.ts, fake-shadow-dom.ts}}` | kestrel G1, spain G1/G2 | w28: the 4 gap rows fail with HEAD's infer-fields; session-5b validation | validated |
+| F23 Paging reads: the one-page reveal and a scroll-paged read press the list's own "Try again" under it (a bare focusable span counts; whole-label rule; at most 2 per read), so a failed lazy batch is read; a Next with no address of its own (a script button) is swapped for the pager's next number, and a read that stops `page_repeated` while the pager showed a later page ends `truncated: true`; with no `aria-current`, the current page is the numbered control linking to this document, never a position (t194-w30) | extension `content/extraction/{load-retry.ts, list-wait.ts, pagination.ts, list-reader.ts (800 lines), tests/{load-retry,pagination}.test.ts, tests/store-pager.ts}` | bikes GAP 2, rotterdam G1, spain G5 | w30: every new row fails on HEAD; session-5b validation | validated |
 | F22 Four T2 probe specs, one per live task (bikes, kestrel, spain hubs, rotterdam): the Stage 1 chain walked with the content script's own actions on the real scenario site, reads through `extract_list` and the domain evidence runtime with scripted decisions; every gap row asserts the correct answer, marked `test.fail` with its cause (t194-w24..w27; the bikes and spain-hubs markers added by the lead) | extension `e2e/content/tests/live-tasks/tests/{local-classifieds-bike-search, auction-marketplace-kestrel-auctions, crossborder-marketplace-spain-hubs, professional-network-rotterdam-data-engineers}.spec.ts` (new) | Stage 1 of the four tasks (w18); the Lab stop | session-5 validation (below) | validated; the gaps they prove are next |
 | F21 F17's leftovers: a purse refusal's closing message states the spend and the refused call's worst case ("…limit of $0.25 before the Flow was finished: it had spent $0.154, and its next call could have cost up to $0.146."; whole-build figures, repairs included; message only, no wire field); `budgetBreaches` is summed across rounds (`phases.ts`), and the Lab reads Core's count when published (`build-proposal.ts` `accountingOf`, `build-usage.ts:56`; absent = 0), so its budget check flags a build's breaches as a run's (t194-w23) | Core `runtime/flow-bootstrap/unfinished-build/{budget-exhausted.ts, phases.ts, tests/budget-figures.test.ts (new)}`; test-runner `src/flow-lane/creation/build-proposal.ts`, `src/live-llm/{build-usage.ts, tests/build-usage.test.ts}` | run 9 (F17 follow-ups) | w23: new Core test 5 of 7 fail on the old source; new downstream test `expected: 2, actual: 0` on the old line; session-5 validation (below) | validated. **Not done:** Core does not publish breaches (`service.ts:1558-1560`; then `review-projection.ts:18-41`, `diagnostic-parse.ts:132-159`, a wire change; downstream `existing-fluxiq-control.ts:110,470-477`) |
 | F20 A live run whose product failed (a build without a Flow) is never labelled a facility failure when the Lab's budget check also fails it: the `performance.budget` breach carries the lane's `runtime.behavior` failure as its `cause`, and `productFailureOf` reads through it; the category stays `performance.budget` (t194-w22) | test-runner `src/live-llm/{budget-over-product-failure.ts (new), live-llm-run.ts, lane-settlement.ts, index.ts}`, `src/run-scenario/product-failure.ts` + tests (`run-scenario/tests/product-failure.test.ts`, `live-llm/tests/{live-llm-run,lane-settlement}.test.ts`) | run 9: `facilityFailure: scenario.execute/unclassified` on a no-Flow, over-ceiling build | w22: new tests 3 fail on the old source, 32/32 after; test-runner check rc 0; session-4 combined validation (below) | validated (worker); see combined |
@@ -227,6 +307,7 @@ Taken from other lanes, not fixed here: the dry run's `core.replay.unreproducibl
 | 7 | `run-munw7ffn-fe1cecd2` ($0.086: Lab reported $0.0418, the re-author's $0.0425 missing) | same | 6: refuted correctly, re-author applied, re-run stopped on the optional press | 11 of 13 read, 9 true: each page's lazy last four never read (4 expected rows missing); no accessory rule (kept Ear Tips, Charging Case Replacement); positional Next read pages 1,2,5,3,4 and a false `truncated`; judge told "aria-label present" for the Plus badge; re-author explored from page 4; 13/35 re-author replies malformed; Lab idle 306 s after the re-run; re-author spend absent from `live-llm.json` | F13 (lazy tail); F10-F12 landed after it; others open below | debug `debugs/run-munw7ffn-fe1cecd2.md` |
 | 8 | `run-muohgblr-ed6ddc49` (cost NO EVIDENCE: killed before the Lab's accounting; 24 decisions, roughly $0.04-0.05) | same | 2: build iteration 24, **stopped by the supervisor at the user's order** (19:19:57 UTC, 7 min in) | the first paged read took 13.7 s and the frame shows the page revealed to its last row (F13 acting); then 16 `amend_draft rerun`s of the extraction in 80 s with 3 malformed replies, the same rerun loop as runs 5-7 | none (Lab runs stopped) | debug `debugs/run-muohgblr-ed6ddc49.md` |
 | 9 | `run-mup2u8o3-6697c4be` (**$0.2969**, 9 calls, 1,624,763 input tokens; over the $0.25 ceiling) | same | 3: draft complete, completion check ok; the test from the start refused s3 (cookie Accept `unreproducible`, the reset kept the build's consent: t196/t174 D1) and the build ended `evidence_budget_exhausted` with no money left | **the build's read held 10 of 13, all true and in order**: F7 badge, F10 label Next, F13 lazy tail and F9 pace all worked live; the 3 missing were true "… with Wireless Charging Case" pairs dropped by `name not contains "charging case"` (cause #2). Cost: page view ~300-500 KB a page (t223), raw `read.snapshot` 471 KB in the extract result (t193 W1), prompt cache lost after an amend (t193 W2: 1,792 of 477,506 cached), ceiling enforced after the fact (F17); a working Go press refused `tool_result_invalid` (F18); facility mislabel (F20) | F17, F18, F19, F20 | debug `debugs/run-mup2u8o3-6697c4be.md` |
+| 10 | `run-muq0in9r-0793b448` ($0.00, 0 calls) | same | 0: killed 23 s after admission | the supervisor's blanket `taskkill` on `run-lab.mjs` during the DeepSeek outage (operator action); killed runs go unaccounted in the spend ledger (Lab gap, next) | none | debug `debugs/run-muq0in9r-0793b448.md` |
 
 ## UI evidence for t191
 

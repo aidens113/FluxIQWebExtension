@@ -9,9 +9,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
-import type { WebAutomationExtractListPagination } from "../../types";
+import type { WebAutomationExtractListPagination, WebAutomationExtractListRequest } from "../../types";
+import { extractList } from "../list-reader";
 import { advancePage, BROWSER_PAGE_HOST, deadlineFor, MAX_PAGE_RETRIES, pageRefusalOf, paginationBound, PaginationFault, paginationStopOf, refusedPageWaitMs, type PaginationProgress } from "../pagination";
-import { nthPagerLink, STORE_ITEM, storePage } from "./store-pager";
+import { NEXT_BUTTON, nthPagerLink, PAGE_COUNT, PAGE_ITEM, STORE_ITEM, storePage, type PagerStyle } from "./store-pager";
 
 /** A requested bound, and what the page holds it to. */
 const BOUNDS: ReadonlyArray<readonly [requested: number, held: number]> = [
@@ -194,6 +195,140 @@ test("a page that shows items and never a pager ends on control_absent after a b
   assert.deepEqual(advance, { outcome: "ended", stop: "control_absent" });
   assert.deepEqual(followed, []);
   assert.ok(tookMs >= 900 && tookMs < 3_000, `waited ${tookMs} ms`);
+});
+
+// And the pager drawn the way two other sites draw theirs (`store-pager.ts`,
+// `PagerStyle`). Guildline's people search (t194-w27 G1) draws every page
+// control as a `<button>`, and its Next loads the page after the one the
+// document opened on, so from page two it loads page two: a `next` read
+// followed it and stopped on page two with 20 of 23 people, because only a
+// Next that is a *link* to its own page was swapped for the pager's following
+// number. The marketplace's unfiltered search (t194-w26 G5) marks no page
+// `aria-current`, and from page two its Previous shares the numbers' class, so
+// a numbered read that picked the control after the pages read by position
+// picked "2" from page two and re-read it as page three.
+
+/** One advance from page `page` of a pager drawn in `style`, as a read that has read `pagesRead` pages. */
+async function advanceStyled(page: number, paginate: WebAutomationExtractListPagination, style: PagerStyle, pagesRead = 1): Promise<{ advance: Awaited<ReturnType<typeof advancePage>>; followed: number[]; laterPageShown: boolean | undefined }> {
+  const shown = storePage(page, style);
+  const first = shown.cards[0];
+  try {
+    const progress: PaginationProgress = {
+      item: STORE_ITEM,
+      shown: shown.cards as unknown as Element[],
+      pagesRead,
+      scrolls: 0,
+      deadline: Date.now() + 20_000,
+      hasUnreadItem: () => first?.isConnected === false
+    };
+    const advance = await advancePage(paginate, progress);
+    return { advance, followed: shown.followed, laterPageShown: progress.laterPageShown };
+  } finally {
+    shown.restore();
+  }
+}
+
+test("a script's Next that loads page two again from page two is swapped for the pager's page three, as a link back to its own page is", async () => {
+  const { advance, followed, laterPageShown } = await advanceStyled(2, { next: NEXT_BUTTON, maxPages: 10 }, { controls: "buttons" });
+  assert.deepEqual(advance, { outcome: "advanced" });
+  assert.deepEqual(followed, [3], "not page two again, which the script's Next loads");
+  assert.equal(laterPageShown, true, "the pager showed pages after two");
+});
+
+test("a script's Next goes where the pager's following number goes, and an advance from a page the read cannot leave still says the pager showed a later one", async () => {
+  // Page four of five: the pager shows 5, so the swap goes there. Page four's own Next loads five too.
+  const { followed, laterPageShown } = await advanceStyled(4, { next: NEXT_BUTTON, maxPages: 10 }, { controls: "buttons" });
+  assert.deepEqual(followed, [5]);
+  assert.equal(laterPageShown, true);
+  const stuck = await advanceStyled(2, { next: NEXT_BUTTON, maxPages: 10 }, { controls: "buttons", stuckOn: 2 });
+  assert.deepEqual(stuck.followed, [2], "page three's control loads page two here, which the read cannot know before pressing it");
+  assert.equal(stuck.laterPageShown, true, "and the pager did show a later page");
+});
+
+test("a numbered read on a pager that marks no page current finds page two by its link to this document, and follows three, not two again", async () => {
+  const { advance, followed, laterPageShown } = await advanceStyled(2, { mode: "numbered", pages: PAGE_ITEM, maxPages: 10 }, { current: "self-link" }, 2);
+  assert.deepEqual(advance, { outcome: "advanced" });
+  assert.deepEqual(followed, [3], "Previous shares the numbers' mark, so the third control is page two");
+  assert.equal(laterPageShown, true);
+});
+
+test("a numbered read on a pager that says nothing of the current page counts its numbers, not its controls", async () => {
+  const { followed } = await advanceStyled(2, { mode: "numbered", pages: PAGE_ITEM, maxPages: 10 }, { current: "unmarked" }, 2);
+  assert.deepEqual(followed, [3]);
+  const third = await advanceStyled(3, { mode: "numbered", pages: PAGE_ITEM, maxPages: 10 }, { current: "unmarked" }, 3);
+  assert.deepEqual(third.followed, [4]);
+});
+
+test("a numbered read on the last page of a pager that marks no page current ends there rather than going back", async () => {
+  const { advance, followed } = await advanceStyled(5, { mode: "numbered", pages: PAGE_ITEM, maxPages: 10 }, { current: "self-link" }, 5);
+  assert.deepEqual(advance, { outcome: "ended", stop: "no_following_page" });
+  assert.deepEqual(followed, []);
+});
+
+// Whole `next` and numbered reads over pagers other sites draw (`store-pager.ts`,
+// `PagerStyle`), and what a read that cannot move on says of itself.
+//
+// - Guildline's people search (t194-w27 G1): every page control a `<button>`,
+//   and a script's Next that from page two loads page two. A `next` read
+//   stopped there on `page_repeated`, 20 of 23 people, `truncated: false` --
+//   an incomplete answer reported as a complete one.
+// - The marketplace's unfiltered search (t194-w26 G5): no `aria-current`, and
+//   from page two a Previous that shares the numbers' class. A numbered read
+//   picked page two again as "page three".
+// - A page every control of which loads that page again, while the pager shows
+//   pages after it: the read cannot move on, and must say it is cut short.
+
+/** A read of each card's id, which is what says which page and which place a record came from. */
+const CARDS: Pick<WebAutomationExtractListRequest, "item" | "fields"> = {
+  item: STORE_ITEM,
+  fields: { card: { kind: "attribute", attribute: "data-card" } }
+};
+
+/** The ids of the four cards of each of `pages`. */
+function cardIds(...pages: number[]): string[] {
+  return pages.flatMap((page) => [1, 2, 3, 4].map((index) => `${page}-${index}`));
+}
+
+const EVERY_PAGE = Array.from({ length: PAGE_COUNT }, (_, index) => index + 1);
+
+test("a next read over a pager of buttons whose script Next loads page two again reads every page, and ends on the disabled Next", async () => {
+  const page = storePage(1, { controls: "buttons" });
+  try {
+    const outcome = await extractList({ ...CARDS, paginate: { mode: "next", next: NEXT_BUTTON, maxPages: 10 } }, { timeoutMs: 30_000 });
+    assert.deepEqual(outcome.records.map((record) => record.card), cardIds(...EVERY_PAGE));
+    assert.equal(outcome.pagesRead, PAGE_COUNT);
+    assert.equal(outcome.paginationStop, "control_disabled");
+    assert.equal(outcome.truncated, false);
+    assert.deepEqual(page.followed, [2, 3, 4, 5]);
+  } finally {
+    page.restore();
+  }
+});
+
+test("a read that cannot leave a page while the pager shows later ones stops on page_repeated as truncated, never as complete", async () => {
+  const page = storePage(1, { controls: "buttons", stuckOn: 2 });
+  try {
+    const outcome = await extractList({ ...CARDS, paginate: { mode: "next", next: NEXT_BUTTON, maxPages: 10 } }, { timeoutMs: 30_000 });
+    assert.deepEqual(outcome.records.map((record) => record.card), cardIds(1, 2));
+    assert.equal(outcome.paginationStop, "page_repeated");
+    assert.equal(outcome.truncated, true, "pages three to five were on the pager and never read");
+  } finally {
+    page.restore();
+  }
+});
+
+test("a numbered read on a pager that marks no page current, whose Previous shares the numbers' mark, reads every page once", async () => {
+  const page = storePage(1, { current: "self-link" });
+  try {
+    const outcome = await extractList({ ...CARDS, paginate: { mode: "numbered", pages: PAGE_ITEM, maxPages: 10 } }, { timeoutMs: 30_000 });
+    assert.deepEqual(outcome.records.map((record) => record.card), cardIds(...EVERY_PAGE));
+    assert.equal(outcome.pagesRead, PAGE_COUNT);
+    assert.equal(outcome.paginationStop, "no_following_page");
+    assert.equal(outcome.truncated, false);
+    assert.deepEqual(page.followed, [2, 3, 4, 5]);
+  } finally {
+    page.restore();
+  }
 });
 
 // And a load-more control the page keeps after its last page, hidden
