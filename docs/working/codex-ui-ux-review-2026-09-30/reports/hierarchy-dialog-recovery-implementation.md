@@ -1,6 +1,6 @@
 # Hierarchy dialog transaction recovery
 
-Status: Active
+Status: Complete - exact source/test paths frozen for supervisor verification
 Owner: deployment_docs_audit
 Date: 2026-10-01
 
@@ -28,3 +28,34 @@ Date: 2026-10-01
 - Review also identified an implementation-created StrictMode risk: incrementing generation during effect cleanup can retire live render handlers during development effect replay. Added a meaningful StrictMode mount/edit/submit regression and launched its failing reproduction alongside the local retry assertion before correction. Do not claim this iteration passed yet.
 - Root approved replacing this dialog's two global-only StatusText usages with one conditional local VisualAlert inside Modal and removing the dialog import, avoiding duplicate announcements. Intentional feedback change: meaningful declared failure or fixed uncertainty remains visible beside the retained draft; shared StatusText/global notification system stays untouched. Correction remains held until the actual StrictMode baseline closes; its heavy-wrapper session is queued with no slot banner, not passing evidence.
 - Root operational read established all four heavy slots belong to other lanes; this wrapper is non-FIFO. The queued baseline is not a stale-slot diagnosis. No bypass/reclamation/duplicate command was attempted. Scoped review confirms cleanup can use mounted=false on the retired instance's ref while store changes continue incrementing the generation. After the observed StrictMode reproduction, add a real remount-with-the-same-store regression to prove a new instance cannot revive callbacks from the retired instance.
+
+## Recovery checkpoint and reproducible commands
+
+Second tests-first baseline is now observed and CLOSED: selected two cases both failed, 33 skipped, native exit 1, 18.76s. StrictMode's current field handler failed to update the actual store; local retry retained its declared failed snapshot but rendered no error text. Only after that result, removed generation increment from lifetime cleanup (real retired instance stays mounted=false; store generations still fence A-B-A) and replaced dialog StatusText usages with one local VisualAlert. Added real same-store remount coverage; owning suite now has 36 cases. Waiting-interval flow-editor audit completed separately without source/tests/checks. Final owning/type evidence still pending.
+
+Final stable-tree commands queued independently through heavy wrappers: four-suite owning session 22298 and exact actual-config three-root strict session 7893. No source/test edits while either runs. Exact-path git diff --check observed native 0. Physical line counts including blanks: dialog 145, reducer 136, new test 146; all below the 400-line advisory. Temporary config still exists until native type outcome is observed, then it will be removed. No broad gates were started.
+
+The new untracked test was additionally inspected with git diff --no-index --check against NUL: no whitespace errors, native 1 for the present-file difference and an LF-to-CRLF normalization notice. Repeating with --no-exit-code kept the same no-index outcome; no file/config change or suppression was made. Tracked-source whitespace command remained native 0. The final owning command has now acquired a slot; strict remains queued.
+
+Final owning session 22298 CLOSED native 0: four suites / 56 tests passed (new recovery 36, unchanged interaction 9, phase7 8, ProjectModal 3), 35.26s. StrictMode/current callbacks, actual same-store remount retirement, pending native controls, local failure visibility/explicit retry, immutable PIN and captured issued-store completion all passed. React-test-renderer emits its existing deprecation notices; there were no unhandled errors. Strict session 7893 has acquired b1 and is running; no source edits or diagnostics filtering while it completes.
+
+Final strict session 7893 CLOSED native 0 with no diagnostics. Actual paired web tsconfig, three exact roots, incremental disabled, all imported dependency diagnostics included without filters/options relaxation. Removed the external temporary config and observed Test-Path=false. Source and owning test are now frozen; no pending worker commands remain.
+
+## Final implementation and limits
+
+- Exactly two existing source paths and the one new owning test changed. No old assertions, dialog store/caller/ProjectModal, shared UI/notifications, PIN/capability/auth rules, API/backend/helpers/styles/barrels/baselines changed. Workers made no commits or pushes.
+- New component actions require mounted current store generation and rendered transaction ID; ordinary execute/node updates keep the transaction usable and use latest execute at a new valid invocation. Pending edits/type/step/preset/location/PIN/resume and duplicate start stay locked; actual Modal receives busy/escape guards and native controls are disabled.
+- Already issued work settles its captured unchanged same-ID submitting external store even if its UI unmounts or switches stores/callbacks. Synchronous publication replacement issues nothing and does not modify the replacement. Pre-issue UI retirement releases only the original unchanged pending transaction with truthful not-submitted feedback. No mutation replay/cancellation or rollback claim.
+- Current failure retains draft/PIN and meaningful declared refusal. Thrown/malformed/missing-error outcomes display fixed uncertainty inside Modal, and retry requires another explicit action. The intentional local error route replaces this dialog's global-only StatusText notification to avoid duplicate announcements; the shared notification system is untouched.
+- Verification is synthetic mounted component/store/helper behavior through a typed Modal seam, plus unchanged owning contracts and actual-config strict diagnostics. No live browser/AT/graph/provider/panel/private state or backend actor/API authority behavior was exercised. The opaque execute callback still carries no explicit true backend owner contract; callback identity is not treated as authority. Root owns independent review, broader gates, unrelated full auth/capability failures and integration.
+
+Historical pre-correction checkpoint: source was the first correction, with the cleanup-generation bug deliberately unchanged until reproduction. New test file had 35 cases; only StrictMode plus local retry were selected by second baseline session 5560, now closed native 1. First baseline session 68912 closed native 1; first corrected four-suite session 77368 closed native 1. No active scoped type command yet.
+
+All commands run from paired `C:/Users/osrs_/FluxStuff/fxwork/t224/!FluxIQ`, with `C:/Program Files/Git/bin/bash.exe` executing `C:/Users/osrs_/FluxStuff/build-slots/heavy.sh`, followed by one label argument and the command below:
+
+```text
+pnpm --filter @fluxiq/web exec vitest run src/features/automation-studio/hierarchy/tests/AutomationHierarchyDialog-recovery.test.tsx -t "StrictMode|explicit mounted retry"
+pnpm --filter @fluxiq/web exec vitest run src/features/automation-studio/hierarchy/tests/AutomationHierarchyDialog-recovery.test.tsx src/features/automation-studio/hierarchy/tests/interaction-contracts.test.ts src/features/automation-studio/hierarchy/tests/phase7-contracts.test.ts src/features/automation-studio/hierarchy/tests/ProjectModal.test.ts
+```
+
+Prepared external `C:/Users/osrs_/AppData/Local/Temp/codex-hierarchy-recovery-tsconfig.json` extends the actual paired `apps/web/tsconfig.json`, sets only incremental=false and include=[], and supplies absolute files for the exact two source paths and new owning test. No diagnostics are filtered, dependencies excluded or options weakened. After final source corrections, use the heavy wrapper for `pnpm --filter @fluxiq/web exec tsc --project <that config> --noEmit`; then remove the temporary config and record the observed native outcome. Exact-path whitespace/module budgets remain required after final correction.

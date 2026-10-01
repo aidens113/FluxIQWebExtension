@@ -1,6 +1,6 @@
 # Project tree keyboard ownership implementation
 
-Status: Active
+Status: Complete
 Owner: runtime_contracts
 Date: 2026-10-01
 
@@ -22,3 +22,33 @@ Read Current State tail, completed keyboard plan and released exact two-path bri
 Initial new owning suite heavy session70522 active, product unchanged. Guard implementation awaits observed baseline; no baseline/config/harness weakening. Prior Core deletion audit remains Complete/protected handoff, no actual fixtures or backend inspected.
 
 New suite25cases; unchanged product tests-first70522 remains pending with buffered final output. Await result, do not bypass shared heavy admission or infer fixture/defect success. Direct control presence assertions will distinguish fixture mismatch from event-boundary failures. Temporary actual-config strict2root type script prepared; no additional checks started or product edits before red.
+
+Supervisor read-only admission observation confirms all four shared slots currently active (three supervisor r6 lanes and another task lane); root scoped/full also queued. No stale-slot conclusion, process action or bypass. Own red log is still empty before admission. Product remains original until genuine result.
+
+Planned exact guard order: handled/modifier/synthetic-or-native composition/native229 return before tree lookup/helper; resolved item must be the event target itself and contained in current tree. Preserve helper's pure mappings, native descendant clicks, public callbacks and viewport focus scheduling unchanged. New fixture separately asserts live native control declarations and uses synthetic closest/contains targets; it does not claim actual browser event propagation/default prevention or synthesized-click timing. Editable/icon descendants are policy simulations rather than current text-edit fields in the hierarchy. Core delete failure remains independently protected and unrelated to this UI guard.
+
+Initial red22b42c/native1:25tests22fail3pass/34.29s/463ms tests.20 failures confirm consumed native/handled/IME/modifier events; two Add inside cases had a fixture mismatch (flow itself has no Add inside). Inspected unchanged owning ProjectTree generated Subflows fixture and corrected only NEW fixture to use actual metadata flowStructure=subflows folder for Add inside, preserving boundary assertions; ordinary traversal fixture unchanged. Expanded compatibility click proof to actual Add inside and Load more. Product remains unchanged, corrected25-case baseline queued next. No helper/controller/capabilities/source edits or assertion weakening.
+
+Corrected-fixture baseline20903 remains queued/pending; own buffered red log empty before admission. Product still unchanged. Next action is await genuine corrected red (no source mutation while command active), then apply only accepted pre-helper event-owner guard, then owning new+original2 suites and actual-config strict2roots, freeze. Source-owned Add inside Subflows shape came from unchanged original ProjectTree test, not a helper mock. No slot/process intervention or redundant test command started.
+
+Corrected baseline702d63/native1:25tests22fail3pass/53.29s/650ms tests; failures now all intended event-prevention/ownership assertions (no missing-control fixture errors). Applied accepted exact pre-helper handled/modifier/synthetic/native composing/native229 guard and target===resolved treeitem ownership. Existing mappings/clicks/focus/public contracts unchanged. Owning/strict checks next with source held during validation.
+
+Implementation source300lines/new suite116lines; exact tracked-source whitespace734a87/native0. Final heavy three owning suites73687 and strict2root48974 active; scoped types admitted b1. Product held. Guard changes neither command snapshots nor controller/store lifetimes; direct current treeitem behavior protected by actual mounted compatibility assertions. No claims about stale external retained handlers/detached DOM beyond this event boundary or native browser click synthesis.
+
+Strict actual web config exact2roots plus2config declarations/all dependency diagnostics completed705e3d/native0/0diagnostics. Owning three-suite73687 still pending, so no final completion claim or root broad gate readiness inferred yet. Exact source/test held.
+
+Supervisor independently read guard/full116-line new suite and requested test-only strengthening after current owning73687 closes: clear all focus mocks before each traversal event and assert only that expected target/focusOnce after RAF drain (avoid earlier iteration call reuse); ignored key shapes assert zero queued RAF. No product change requested. Do not edit while current suite reads. Then run final owning once and scoped types as required for changed fixture, preserve earlier assertions/compatibility and record chronology.
+
+Initial final owning closedf44aaa/native0:3files57pass/44.57s/764ms tests. Only after closure applied supervisor-required test-only strengthening: focus mocks reset each traversal and expected target alone/focusOnce after RAF; each ignored shape/key asserts no newly queued frames (initial fixture frames cleared before sequence). Existing assertions retained, product guard unchanged. Final owning and scoped type repeats next; no source/test mutation during reads.
+
+Strengthened final owning ac6068/native0:3files57pass/29.76s/724ms tests (new25+unchanged owning32); no original assertions changed. New suite122lines/source300; final tracked-source whitespace277d7a/native0. Final exact2root strict71168 admittedb4, native completion pending; earlier strict705e3d0 remains chronology only until new fixture check closes.
+
+## Frozen worker completion claim
+
+Exact two paired Core paths FROZEN for independent review: apps/web/src/features/automation-studio/hierarchy/components/ProjectTree.tsx (300lines) and NEW components/tests/ProjectTree-keyboard-ownership.test.tsx (122lines). Only this own downstream report additionally edited. TreeRows, keyboard helper, commands/store/controller/hooks/shared/CSS/original test paths unchanged; no public API or browser native click remapping.
+
+Final heavy owning command FROM Core/apps/web: `pnpm exec vitest run src/features/automation-studio/hierarchy/components/tests/ProjectTree-keyboard-ownership.test.tsx src/features/automation-studio/hierarchy/components/tests/ProjectTree.test.tsx src/features/automation-studio/hierarchy/tests/interaction-contracts.test.ts`, label codex tree keyboard final owning:ac6068/native0,3files57pass/29.76s/724ms tests. Final actual-config2roots+2globals/all dependency diagnostics/noEmit/incrementalfalse `node C:/Users/osrs_/AppData/Local/Temp/codex-t224-tree-keyboard-types.mjs`, label codex tree keyboard final types:b855bd/native0/0diagnostics. Tracked-source whitespace277d7a/native0. Chronology includes initial mixed fixture baseline, corrected genuine22fail3pass baseline, first57pass and supervisor-required per-event focus/zero-RAF strengthening, then final57pass; no assertion/compiler/config/baseline/timeout weakening.
+
+Eligible direct treeitem keys retain existing helper behavior; native descendant/handled/composition/native229/modifier events return before action and cancellation. New mounted compatibility verifies actual Add Flow/Add inside/Load more clicks, direct root Enter/Space and row activation, exact per-event expected focus alone after RAF for traversal/wrapping. Ignored shape sequences schedule no RAF and trigger no action/prevention/propagation. Original owning32 tests preserved.
+
+Limits: minimal synthetic closest/contains/focus/RAF nodes with actual mounted tree/helper/callbacks prove local event ownership and command/focus eligibility; native control declarations are real, but tests do not synthesize actual browser bubbling/Enter-Space click order/IME or screen-reader event delivery. Editable/icon descendant cases are deliberate policy simulations, not invented current text-edit controls. Existing React-test-renderer deprecation warning remains. No broad gates/live/browser/Lab/provider/panel/private data/protected implementation/actual fixture commands or commits/pushes. Prior Core deletion audit remains Complete/protected handoff. This worker completion claim awaits supervisor independent verification and integration.

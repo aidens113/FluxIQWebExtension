@@ -1,10 +1,19 @@
 # Twelfth coordinated UI verification
 
-Status: Active
+Status: Paused
+Status detail: User credit wind-down; latest units independently verified and checkpointed, fresh full Core gates deferred.
 Owner: senior supervisor
 Date: 2026-10-01
 
 ## Current State
+
+Paused at the user's6% credit wind-down request. All workers/check commands are closed; no new dispatch is active. Corec4683b61 contains the final three UI units and authored contract updates. Root combined84908 observed eightfiles146/nativeChildExit0/30.59s; actual-config44039 observed sevenroots+twodeclarations/ALLdiagnostics0. Structure89301 native1 ONLY inherited protected service4506 vsbaseline4505, no new violation or waiver. Fresh current full Core tests/types/build were not started; old full/narrow failures remain explicit handoffs.
+
+Extension full45050 CLOSED native0:2088/124773.5574ms; recursive types63587 native0 (extension107864ms), build93194 native0 (extension159203ms),22files each Chrome/Firefox/e2e. Source3a55a8b1/28ee7f6a checkpointed. Current structure49096 native0/137warnings119baseline. Caret source/test never changed: its written brief was revoked before dispatch and is Paused. No merge/push/browser/AT/private/protected-runtime claim.
+
+[Resume handoff](./2026-10-01-credit-wind-down-handoff.md) is authoritative for next work. The following paragraphs preserve earlier chronological checkpoints, not active assignments.
+
+## Historical checkpoints
 
 Latest supervisor snapshot: all three workers are assigned to lazy-list completion, hierarchy-dialog recovery and read-only Core deletion-fixture audit. Root reviewed both new product diffs and regression suites. AskControls source/test independently reviewed; root session50377 observed54/54 native0/338.26ms, session8459 observed actual-config two-root strict native0/0diagnostics. Worker baseline and ambient-resolution correction remain in its report. No broad pass is claimed: original full failures and protected structure violations remain unresolved. Root does not alter Claude integration or protected implementation.
 
