@@ -12,8 +12,15 @@ import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts"
 import { array, integer, invalid, record, stringArray, text, type JsonRecord } from "./api-readings.js";
 import { publishableStepFields, type PublishableStepValue } from "./publishable-step-value.js";
 
-/** Core's own ceiling on a build's decisions: its evidence-loop iterations, plus the deterministic iteration 0. */
-const MAX_EVIDENCE_LOOP_STEPS = 65;
+/**
+ * Core's live rounds in one build (`AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_ROUNDS`):
+ * the exploration, then each repair or exploring-again. A Flow accepted after a
+ * repair publishes every round's decisions, numbered across the build (Core
+ * t214), so each ceiling below is one round's times this.
+ */
+const CORE_MAX_BUILD_ROUNDS = 6;
+/** Core's own ceiling on a build's decisions: 64 evidence-loop iterations a round, plus the deterministic iteration 0. */
+const MAX_EVIDENCE_LOOP_STEPS = 64 * CORE_MAX_BUILD_ROUNDS + 1;
 /**
  * Core's ceiling on the *rows* of a published trace, which is a different
  * number from the decisions above. One decision writes one row, except the kind
@@ -23,7 +30,7 @@ const MAX_EVIDENCE_LOOP_STEPS = 65;
  * `traceStepCount` and `steps` are held to that rather than to the decision
  * count.
  */
-const MAX_EVIDENCE_LOOP_TRACE_ROWS = 129;
+const MAX_EVIDENCE_LOOP_TRACE_ROWS = (64 * 2 + 1) * CORE_MAX_BUILD_ROUNDS;
 /** Core's ceiling on the evidence one build may accumulate, in bytes. */
 const MAX_EVIDENCE_BYTES = 7_340_032;
 
@@ -132,7 +139,10 @@ function outsideItsContract(loop: ExistingAdaptationEvidenceLoop): boolean {
     // and re-ran it published more rows than iterations and was rejected here
     // as malformed, although it was the first record of the two that was right.
     || (loop.traceStepCount !== undefined && (loop.traceStepCount < loop.iterationCount || loop.traceStepCount > MAX_EVIDENCE_LOOP_TRACE_ROWS))
-    || (loop.providerCallCount !== undefined && (loop.iterationCount < loop.providerCallCount || loop.iterationCount > loop.providerCallCount + 1))
+    // The decisions plus each live round's opening observation: one for a
+    // build of one round, one more for each repair that opened with its own
+    // look (Core t214).
+    || (loop.providerCallCount !== undefined && (loop.iterationCount < loop.providerCallCount || loop.iterationCount > loop.providerCallCount + CORE_MAX_BUILD_ROUNDS))
     // Core's own ceiling, not a number of our own. A build now explores by
     // running the node library's nodes, so it makes one tool call per step it
     // tries rather than a handful before writing a script: 16 was measured

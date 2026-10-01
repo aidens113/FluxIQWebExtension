@@ -138,3 +138,100 @@ All Core commands ran from `packages/fluxiq` through `heavy.sh`.
    of the record may find the two counts confusing.
 4. A successful build after repairs has the same last-round-only gap in its stored `evidenceTrace` (see Not verified).
    It may deserve the same whole-build numbering.
+
+## Round 2: the merge with t211, then the two trace gaps
+
+### Merge fix (Core checkout `C:/Users/osrs_/FluxStuff/!FluxIQ`, staged by me; the supervisor committed it as `ef7cdf4d`)
+
+- Six unreadable replies in a row ending as `flow_bootstrap.model_replies_unreadable` is the right combined behaviour.
+  Each reply is asked again with a note. The ending carries a readable message and is retryable. It fires at 6 of 12
+  calls, before the 8-decision no-progress guard.
+- The combination had a defect. The staged `phases.ts` recorded only "unfinished" and "budget" rounds, so the unreadable
+  ending published 6 paid calls with no steps and `decisionCount` 0. Fixed: every round except "finished"/"other" is
+  recorded.
+- Test changes:
+  - The guard test is renamed "ends six unreadable replies in a row as exactly that while the run still has calls, with
+    a named outcome". It pins iterations [1..6], the code, stage, `retryable: true`, accounting 7,200 / 900 / 8,100,
+    six steps (iterations 1-6, `content_unclosed`), the ending and its exact message.
+  - `replies-unreadable.test.ts` asserts that the unreadable round's trace and accounting are published.
+- Validation there: the vitest run over the exploration test, unfinished-build and both unreadable-replies tests gave 5
+  files and 38 passed. With generation-failure added, 12 files and 381 passed. Core tsc exit 0.
+
+### Gap 1: the 20th decision of a 20-decision run left no trace row
+
+- Cause: in `llm/evidence-loop.ts`, the last decision a budget allows is offered only completion. One spent on a tool
+  call returned `exhausted("budget")` without recording a row. The decision was paid and counted
+  (`iterationCount` 20), but the trace had only 19 decisions.
+- Fix: the new module `llm/evidence-loop/final-decision-row.ts` builds that row: `tool_call`, the tool,
+  `llm_evidence_loop.not_offered` and its usage.
+  - A tool the model made up is recorded as an `unusable` row, so the published record is never refused for a non-Core
+    identifier.
+  - I moved the logic out of `evidence-loop.ts` because adding it inline took the file to 803 lines, past the
+    structure audit's 800-line limit. It is back at 794.
+- Tests:
+  - The exploration test now pins `decisionCount: 20`, `not_offered` steps at iterations [18, 19, 20], and the 20th
+    step's tool and usage.
+  - The new `final-decision-row.test.ts` covers the known-tool and made-up-tool cases.
+
+### Gap 2: a build that finishes after a repair stored only its last round's trace
+
+- Cause: the service stored `built.loop.trace`, which is the repair round's alone.
+- Fix, Core:
+  - `phases.ts`: every round's rows are recorded, the finished round included. The `finished` outcome gains `trace`:
+    every round's rows, numbered across the build. `loop.trace` is still the last round's.
+  - `service.ts`: stores `built.trace` when the build finished.
+  - `service/flow-bootstrap-commands/evidence-trace.ts`: a stored trace's row and iteration bounds are one round's ×
+    `AUTOMATION_STUDIO_FLOW_BOOTSTRAP_MAX_ROUNDS`, computed at call time.
+  - The audit detail's `iterationCount` now counts each round's opening iteration-0 look, since every round makes its
+    own. Counting it once would publish more tool calls than iterations for a repaired build.
+- Fix, downstream, the cross-repo contract:
+  - `packages/test-runner/src/existing-fluxiq-control/adaptation-evidence-loop.ts`: rows ceiling
+    (64×2+1)×6, decisions ceiling 64×6+1, and `iterationCount ≤ providerCallCount + 6`. The old 129-row and
+    `+1` rules would have rejected a repaired build's record.
+  - The per-run Lab call cap of 64 still bounds `providerCallCount`.
+- Tests:
+  - `phases.test.ts`: the new case "finishes with every round's record...".
+  - `tests/service-bootstrap/tests/unfinished-build.test.ts`: a repaired build stores decisions 1..N across both rounds,
+    and its audit `decisionCount` equals the number of loop requests.
+  - `evidence-trace.test.ts`: six-round bounds, and the new opening-look count.
+  - The downstream `adaptation-evidence-loop.test.ts`: six-round bounds and the opening-look rule.
+
+### Ready to commit
+
+- Core (`fxwork/t214/!FluxIQ`, under `packages/fluxiq/src/programs/automation-studio/runtime/`):
+  - `llm/evidence-loop.ts`
+  - `llm/evidence-loop/final-decision-row.ts` (new)
+  - `llm/evidence-loop/index.ts`
+  - `llm/evidence-loop/tests/final-decision-row.test.ts` (new)
+  - `flow-bootstrap/unfinished-build/phases.ts`
+  - `flow-bootstrap/unfinished-build/tests/phases.test.ts`
+  - `service.ts`
+  - `service/flow-bootstrap-commands/evidence-trace.ts`
+  - `service/flow-bootstrap-commands/tests/evidence-trace.test.ts`
+  - `tests/deepseek-bootstrap-exploration.test.ts`
+  - `tests/service-bootstrap/tests/unfinished-build.test.ts`
+- Downstream (`fxwork/t214/!FluxIQWebExtension`):
+  - `packages/test-runner/src/existing-fluxiq-control/adaptation-evidence-loop.ts`
+  - `packages/test-runner/src/existing-fluxiq-control/tests/adaptation-evidence-loop.test.ts`
+  - this report
+
+### Validation, observed
+
+- Core:
+  - `npx tsc --noEmit -p tsconfig.json` (packages/fluxiq): exit 0.
+  - vitest over conversations, tests/deepseek-bootstrap-exploration, flow-bootstrap, llm, tests/service-bootstrap and
+    service (`--maxWorkers=2 --minWorkers=1`): `Test Files 205 passed (205)`, `Tests 2125 passed | 1 skipped (2126)`.
+  - `node scripts/structure-audit.mjs`: `passed (203 warning(s), 354 baselined)`.
+- Downstream:
+  - `pnpm run check` (test-runner): exit 0.
+  - `node --test "dist/existing-fluxiq-control/**/*.test.js"` after `pnpm run build`: 30 pass, 0 fail.
+  - `node scripts/structure-audit.mjs`: `passed (135 warning(s), 119 baselined)`.
+
+### Not done or not verified
+
+- The `ended` outcome (cancelled, a refused configuration, the evidence backstop) still publishes its loop's last-round
+  trace. It was not asked for.
+- No Lab or browser run.
+- No full `pnpm check`, `pnpm test` or `pnpm build` in either repository.
+- The downstream `MAX_EVIDENCE_BYTES` of 7,340,032 was not revisited. Since t200 a build's evidence is whole pages and is
+  now summed over rounds, so it may be low.
