@@ -7,10 +7,12 @@
 import { FRAME_GEOMETRY_REQUEST, FRAME_GEOMETRY_RESPONSE } from "./messages";
 import type { RectDescriptor } from "./types";
 
-// A child frame's offset as its parent last answered; a top frame's own is read
-// fresh wherever it is needed. Nothing is read from `window` while the module
-// loads, so a module that imports this one can be loaded where there is no
-// window (the unit tests, which run in Node).
+// The child frame's cached offset. Nothing here reads `window` while the module
+// loads: the top frame's offset is computed whenever it is asked for
+// (`currentFrameViewportOffset`), so seeding it here bought nothing and made
+// every module that imports this one unloadable without a `window` -- the
+// extension's unit tests ran only when another test file had left one on the
+// global first.
 let frameViewportOffset: RectDescriptor | undefined;
 let frameGeometryRequestId = 0;
 

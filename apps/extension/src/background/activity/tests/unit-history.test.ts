@@ -63,3 +63,26 @@ test("past the unit bound, the unit heard from longest ago goes first", () => {
   copy.pop();
   assert.equal(history.events().length, 3, "the caller's copy is its own");
 });
+
+// A model provider outage, as Core now tells it (live run `run-muq05kas-058193f0`):
+// each unanswered request is said in words, and the build's own ending closes
+// the story with Core's message. The bare "Deciding the next step" rows never show.
+test("a provider outage: each unanswered request and the build's stop are in the story, the bare decision rows are not", () => {
+  const history = new UnitHistory();
+  const unanswered = { kind: "thought" as const, title: "Deciding the next step", status: "failed" as const, text: "The AI model provider did not answer this request. Asking it again; the build stops if it keeps not answering." };
+  const kept = [
+    history.accept(event("o", { kind: "thought", title: "Deciding the next step", status: "started" }, { phase: "thinking" })),
+    history.accept(event("o", unanswered, { phase: "thinking", label: "The AI model provider did not answer" })),
+    history.accept(event("o", { kind: "thought", title: "Deciding the next step", status: "started" }, { phase: "thinking" })),
+    history.accept(event("o", unanswered, { phase: "thinking", label: "The AI model provider did not answer" })),
+    history.accept(event("o", { kind: "step", title: "Build stopped: the AI model provider is not responding", status: "failed", text: "The build stopped because the AI model provider is not responding: 3 requests in a row got no answer." }, { phase: "failed", final: true }))
+  ];
+  assert.deepEqual(kept, [false, true, false, true, true]);
+  assert.equal(history.events().at(-1)?.detail?.text, "The build stopped because the AI model provider is not responding: 3 requests in a row got no answer.");
+});
+
+test("what the person asked the work is kept, though it is no row: the chat shows it as their message", () => {
+  const history = new UnitHistory();
+  assert.equal(history.accept(event("q", undefined, { phase: "building", label: "Building the Flow", request: "Switch my store to Millbrook." })), true);
+  assert.equal(history.accept(event("q", undefined, { phase: "building", label: "Building the Flow", request: "   " })), false);
+});

@@ -45,7 +45,7 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {
-    return deps.rejected(action, startedAt, report.code, "a target that can be typed into", report.detail, { ...evidence(), blockedAt: report.point, target: element });
+    return deps.rejected(action, startedAt, report.code, "a target that can be typed into", report.detail, { ...evidence(), blockedAt: report.point, target: element, refusedBeforeDispatch: true });
   }
 
   if (!holdsText(element)) {

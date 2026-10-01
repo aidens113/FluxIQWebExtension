@@ -35,6 +35,25 @@
 // `docs/working/language-driven-flow-loop-plan/reports/cart-extraction.md`).
 // The content script now searches outward itself; this is the same rule held
 // on this side of the wire, so it holds for any client.
+//
+// **A target in a child frame is detected in that frame's own document**, which
+// is captured alone and answers with its own address. A cross-origin frame --
+// an application form served from the Lab's other loopback port -- is held to
+// the origin of the document the element was shown in, which the frame merge
+// published with it (`data-fluxiq-frame-url`), never to the top page's: that
+// refused every such detection as a capture that escaped its origin. With no
+// frame address known the top page's origin is still required, so the guard is
+// never dropped. The kept binding also carries that document's path, which a
+// Flow node needs to find the frame again after a reload (`./handles.ts`).
+//
+// **One answer can name two lists.** When the target lies outside the run the
+// page answered, the page sends the one record the target belongs to beside it
+// (`record`, one item). It gets a second handle, reserved after the run's and
+// retained in the same scope and frame, so a plan can name either, and a Flow
+// read back as a draft finds the record's item as its own list as it finds the
+// run's (`../plan-resolution/own-extraction-list.ts`). A one-item proposal --
+// a label/value receipt, or a lone record where nothing repeats -- needs
+// nothing of its own here: it is the run, with one item (`./packet.ts`).
 
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationStructureDetectionValue, type WebAutomationStructureDetection } from "../../../extraction";
@@ -56,6 +75,8 @@ import { webActionNeedsPerson } from "../action-failure";
 import { recoverable, RecoverableToolRejection, rejectionDetail } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
 import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
+import { webAutomationUrlPath } from "../../../output-nodes";
+import type { WebLlmEvidenceElement } from "../elements";
 import type { WebLlmExtractionHandles } from "./handles";
 import { splitDetectedStructure } from "./packet";
 import { webLlmStructureRefusal } from "./refusal";
@@ -94,14 +115,14 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   const current = target === undefined ? undefined : await captureEvidence(gateway, sessionId, request, request.signal);
   if (current !== undefined) context.observed?.(current);
   const element = current === undefined || target === undefined ? undefined : boundTarget(context.returned, current, target);
-  let { detection, page } = await capturedDetection(context, element?.selector, element?.frameId, current, target);
+  let { detection, page } = await capturedDetection(context, element?.selector, element, current, target);
   // With no target the detection is page-wide and is itself the page's state.
   if (current === undefined) context.observed?.(page);
   let searchedPage = false;
   // Nothing around the target: the page is asked once more, as a whole, before
   // anything is refused (see the header). A page-wide answer names no target.
   if (!detection.ok && detection.refused === "no_repeating_run" && element !== undefined) {
-    ({ detection, page } = await capturedDetection(context, undefined, element.frameId, current, target));
+    ({ detection, page } = await capturedDetection(context, undefined, element, current, target));
     searchedPage = true;
   }
   // The page sends one of four words; which of them means what to the model,
@@ -109,15 +130,22 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
   if (!detection.ok) webLlmStructureRefusal({ refused: detection.refused, target, page, searchedPage });
 
   const handle = context.handles.reserve();
+  // The record beside the run gets a handle of its own (see the header). A
+  // record left out for having only sensitive fields leaves its number unused.
+  const recordHandle = detection.record === undefined ? undefined : context.handles.reserve();
   const split = splitDetectedStructure({
     detection,
     handle,
+    recordHandle,
     location: page.evidence.location,
     target: searchedPage ? undefined : target,
-    frameId: element?.frameId
+    frameId: element?.frameId,
+    frameUrlPath: element?.frameDocument?.path
   });
   if (!split) recoverable("sensitive_value");
-  context.handles.retain({ projectId: request.projectId, flowId: request.flowId }, split.binding);
+  const scope = { projectId: request.projectId, flowId: request.flowId };
+  context.handles.retain(scope, split.binding);
+  if (split.recordBinding !== undefined) context.handles.retain(scope, split.recordBinding);
   return toolExecution(split.packet, false, WEB_LLM_STRUCTURE_RESULT_CODE);
 }
 
@@ -125,16 +153,18 @@ export async function detectRepeatingStructure(context: WebLlmStructureDetection
  * One capture with a detection: around `selector` when there is one, page-wide
  * otherwise, in the target's frame. Throws a `RecoverableToolRejection` for a
  * page that could not be captured or that moved away from where the target was
- * bound, and a plain error for a client that answered without a detection.
+ * bound, and a plain error for a client that answered without a detection or
+ * with a capture from an origin it was not addressed to.
  */
 async function capturedDetection(
   context: WebLlmStructureDetectionContext,
   selector: string | undefined,
-  frameId: number | undefined,
+  bound: BoundTarget | undefined,
   current: WebLlmSnapshotBinding | undefined,
   target: string | undefined
 ): Promise<{ detection: WebAutomationStructureDetection; page: WebLlmSnapshotBinding }> {
   const { gateway, sessionId, request } = context;
+  const frameId = bound?.frameId;
   const detectStructure: JsonObject = selector === undefined ? {} : { selector };
   const parameters: JsonObject = frameId === undefined ? { detectStructure } : { detectStructure, browserFrameId: frameId };
   const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
@@ -143,7 +173,9 @@ async function capturedDetection(
   if (result.status !== "succeeded" && webActionNeedsPerson(result)) throw new RecoverableToolRejection("needs_person", undefined, undefined, true);
   if (result.status !== "succeeded") recoverable("page_unreadable");
   const payload = jsonRecord(result.payload, "web structure detection payload");
-  const expectedOrigin = current === undefined ? undefined : new URL(current.evidence.location).origin;
+  // A frame's capture is its own document's, held to the origin that document
+  // was shown with; the top page's origin when that is not known (see the header).
+  const expectedOrigin = current === undefined ? undefined : (frameId === undefined ? undefined : bound?.frameDocument?.origin) ?? new URL(current.evidence.location).origin;
   const sanitized = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     expectedOrigin,
     failedAction: undefined
@@ -179,7 +211,7 @@ async function capturedDetection(
  * the page itself refuses it as `ambiguous_target` when its matches are not
  * all in the one run.
  */
-function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLlmSnapshotBinding, target: string): { selector: string; frameId: number | undefined } {
+function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLlmSnapshotBinding, target: string): BoundTarget {
   const observed = returned ?? current;
   if (observed.evidence.location !== current.evidence.location) recoverable("target_unobserved", handleRefusal("page_moved_since_packet", target));
   const element = observedElement(observed.evidence, target);
@@ -187,7 +219,30 @@ function boundTarget(returned: WebLlmSnapshotBinding | undefined, current: WebLl
   if (!selector) recoverable("target_unobserved", handleRefusal("handle_not_in_packet", target));
   const stillThere = current.evidence.elements.some((candidate) => candidate.frameId === element.frameId && current.selectors.get(candidate.target) === selector);
   if (!stillThere) recoverable("target_unobserved", handleRefusal("handle_no_longer_on_page", target));
-  return { selector, frameId: element.frameId };
+  return { selector, frameId: element.frameId, frameDocument: frameDocumentOf(element) };
+}
+
+/** A target as it was bound: its selector, its frame, and that frame's document when the element was shown in a child frame. */
+type BoundTarget = { selector: string; frameId: number | undefined; frameDocument: FrameDocument | undefined };
+
+/** The origin and the path of the document a child frame held, as the element was shown with it. */
+type FrameDocument = { origin: string; path: string | undefined };
+
+/** The attribute the frame merge publishes a child frame's element with: its frame document's URL, screened as a link is. */
+const FRAME_URL_ATTRIBUTE = "data-fluxiq-frame-url";
+
+/**
+ * The http(s) document a child frame's element was shown in; nothing for the
+ * top frame, or for an element published without a readable frame address.
+ * The path follows the rule a recorded node's does (`output-nodes/url-path.ts`).
+ */
+function frameDocumentOf(element: WebLlmEvidenceElement): FrameDocument | undefined {
+  if (element.frameId === undefined || element.frameId <= 0) return undefined;
+  const url = element.attributes?.find(([name]) => name.toLowerCase() === FRAME_URL_ATTRIBUTE)?.[1];
+  if (url === undefined || !URL.canParse(url)) return undefined;
+  const parsed = new URL(url);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return undefined;
+  return { origin: parsed.origin, path: webAutomationUrlPath(parsed.pathname) };
 }
 
 /** Which of the ways a handle stops naming one control happened here, and the handle it was. */

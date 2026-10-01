@@ -47,7 +47,10 @@ export function checkAction(action: BrowserActionCommand, deps: ContentActionDep
       snapshot: deps.captureSnapshot(),
       resolution,
       ...(report.point ? { blockedAt: report.point } : {}),
-      target: element
+      target: element,
+      // Refused by the gate before `setCheckedState`, so nothing was pressed;
+      // the `disabled` below, written after it, carries no such statement.
+      refusedBeforeDispatch: true
     });
   }
 
