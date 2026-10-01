@@ -212,7 +212,9 @@ export function createChatPanel(request: PanelStore["request"], openFluxIQ: Open
     const stamped = clock.stamp(state.turns, historyTaken ? Date.now() : Number.NEGATIVE_INFINITY);
     if (state.mode === "thread" || state.mode === "empty") historyTaken = true;
     // The unit of work of the moment: running, or waiting on the person, whose
-    // newest action card says "Working on it" or "Waiting for you".
+    // newest action card says "Working on it", and whose cards Core has not
+    // settled a wait for say "Waiting for you". Once the unit ends, a wait
+    // Core never settled says nothing rather than claiming how it went.
     const display = activity.display;
     const working = display && (display.working || display.outcome === "waiting") ? display.activityId : null;
     const anything = thread.render(

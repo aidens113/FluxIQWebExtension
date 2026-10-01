@@ -17,6 +17,7 @@
 import type { AutomationStudioActionPermissionCheck } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import type { WebAutomationClearedCheckWait } from "../../actions/cleared-check-wait";
 import { webActionFailureRefusal, webActionNeedsPerson, type WebActionRefusal, type WebFailedActionResult } from "./action-failure";
 import type { WebLlmNameAssumption } from "./name-assumption";
 import { present } from "./present";
@@ -163,6 +164,15 @@ export type WebLlmEvidenceToolExecution = {
    */
   routeState?: JsonObject;
   /**
+   * The node's command landed on a robot check that cleared by itself,
+   * untouched, after `waitedMs`: the client's `checkWait`, copied
+   * (`actions/cleared-check-wait.ts`, `./node-run/cleared-wait.ts`). Core reads
+   * it to close the run's robot-check card as cleared on its own. Absent when
+   * no check stood, and on every refusal: a check that needed a person is
+   * `personNeeded`.
+   */
+  clearedWait?: WebAutomationClearedCheckWait;
+  /**
    * What this one call did, for the draft Core is accruing.
    *
    * One tool runs whichever node of the library the call names, so the name to
@@ -270,7 +280,7 @@ type WebLlmEvidenceToolCallFacts = {
  * never before. `tests/name-assumption.test.ts` holds the two together.
  */
 export const WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS: readonly string[] = [
-  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "draft"
+  "kind", "evidence", "effectApplied", "targetsUnchanged", "resultCode", "resultReason", "repeatedAnswer", "personNeeded", "nodeId", "stateDigests", "routeState", "clearedWait", "draft"
 ];
 
 export function toolExecution(
@@ -300,6 +310,9 @@ export function toolExecution(
     // Written afterwards, by `withCallStates`, from the captures the call made.
     stateDigests: undefined,
     routeState: undefined,
+    // Written afterwards, by `withClearedWait` (`./node-run/cleared-wait.ts`),
+    // onto a node run whose command waited out a check that cleared by itself.
+    clearedWait: undefined,
     draft
   }));
 }

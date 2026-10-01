@@ -19,6 +19,7 @@ import {
 import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, type WebAutomationExtractListRequest } from "../actions/extraction";
 import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
+import { webAutomationClearedCheckWaitValue } from "../actions/cleared-check-wait";
 import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
@@ -292,6 +293,10 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * else a producer added. `structure` is copied the same way
  * (`extraction/structure-detection.ts`): selectors, structural labels, counts
  * and coverage, and nothing else a producer put beside them.
+ *
+ * `checkWait` is copied the same way (`actions/cleared-check-wait.ts`): a whole
+ * number of milliseconds within ten minutes, said only when a robot check stood
+ * on the landed page and cleared by itself, untouched.
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   return compactJsonObject({
@@ -310,6 +315,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     dialog: observedDialogValue(result.dialog),
     structure: webAutomationStructureDetectionValue(result.structure),
     resolution: result.resolution,
+    checkWait: webAutomationClearedCheckWaitValue(result.checkWait),
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });

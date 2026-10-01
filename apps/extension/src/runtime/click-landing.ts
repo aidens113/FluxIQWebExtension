@@ -61,7 +61,7 @@ import type { BrowserActionCommand, BrowserActionResult } from "../shared/protoc
 import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
-import { checkWaitBudgetMs, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
+import { checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
 import { unloadedUnderDeliveredMessage } from "./navigating-page";
 
 /** The id the browser always gives a tab's main frame. */
@@ -332,10 +332,14 @@ function failedClick(reply: BrowserActionResult, outcome: WorkerActionOutcome): 
   };
 }
 
-/** The frame's reply, standing, with its validation saying the landing's check was waited out untouched. */
+/**
+ * The frame's reply, standing, saying the landing's check was waited out
+ * untouched: as a fact (`checkWait`), and in its validation when it has one.
+ */
 function clickAfterClearedCheck(reply: BrowserActionResult, wait: LandedCheckWait): BrowserActionResult {
+  const stood = { ...reply, checkWait: clearedCheckWait(wait), finishedAt: Date.now() };
   const validation = reply.validation;
-  if (validation.status !== "passed") return reply;
+  if (validation.status !== "passed") return stood;
   const actual = `${validation.actual}; the page it landed on was a robot check that cleared by itself after ${wait.waitedMs} ms, untouched`;
-  return { ...reply, validation: boundWorkerValidation({ ...validation, actual }), finishedAt: Date.now() };
+  return { ...stood, validation: boundWorkerValidation({ ...validation, actual }) };
 }

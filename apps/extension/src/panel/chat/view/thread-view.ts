@@ -24,7 +24,8 @@ export type ThreadView = {
   /**
    * Shows `stream`, and `live` as the live line (null hides it). `working` is
    * the unit of work still under way or waiting on the person, if any, so only
-   * its newest action says it is working or waiting for you. Answers whether
+   * its newest action says it is working, and only its cards Core has not yet
+   * settled a wait for say waiting for you. Answers whether
    * anything shows.
    */
   render(stream: ChatStream, live: LiveLineModel | null, controls: (turn: CoreTurn) => TurnControls, working?: string | null): boolean;

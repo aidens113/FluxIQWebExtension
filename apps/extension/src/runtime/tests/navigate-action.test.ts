@@ -245,6 +245,7 @@ test("a navigation onto an ordinary page the top frame vouches for still succeed
   installNavigationStub({ 41: { url: STORE, page: { challenge: null } } });
   const run = await navigate(RESULTS, 41);
   assert.equal(run.result.status, "succeeded");
+  assert.equal("checkWait" in run.result, false, "no check stood, so no wait is said");
 });
 
 test("a navigation onto a page asking for a verification code is left to the steps after it", async () => {
@@ -294,6 +295,12 @@ test("a navigation that lands on a check which clears by itself waits it out unt
   assert.ok(calls.asked.length >= 3, "the page was asked again until it was no check, and once more after it settled");
   const validation = run.result.validation;
   assert.match(validation.status === "passed" ? validation.actual : "", /a robot check stood on the page and cleared by itself after \d+ ms, untouched/u);
+  // The same wait as a fact, the number the prose quotes.
+  const waitedMs = run.result.checkWait?.waitedMs;
+  assert.equal(typeof waitedMs, "number");
+  assert.ok(Number.isInteger(waitedMs) && waitedMs! >= 0);
+  assert.deepEqual(Object.keys(run.result.checkWait ?? {}), ["waitedMs"]);
+  assert.match(validation.status === "passed" ? validation.actual : "", new RegExp(`cleared by itself after ${waitedMs} ms`, "u"));
 });
 
 test("a check that says it clears by itself and has not within the command's time is the person's", async () => {
@@ -306,6 +313,7 @@ test("a check that says it clears by itself and has not within the command's tim
   assert.equal(run.result.failure?.code, "web.intervention.required");
   assert.match(run.result.failure?.actual ?? "", /^captcha: the page the browser landed on is a robot check that said it would clear by itself and had not after \d+ ms/u);
   assert.match(run.result.message ?? "", /did not clear by itself/u);
+  assert.equal(run.result.checkWait, undefined, "a check that did not clear is no cleared wait");
   assert.deepEqual(calls.reloaded, []);
   assert.ok(parseAutomationStudioFailureRecord(run.result.failure), "Core's parser accepts the record");
 });
@@ -316,6 +324,7 @@ test("a check that says it is checking and then asks for a person is the person'
   const run = await navigate(RESULTS, 41);
   assert.equal(run.result.failure?.code, "web.intervention.required");
   assert.match(run.result.failure?.actual ?? "", /asked for what only a person can answer/u);
+  assert.equal(run.result.checkWait, undefined, "a check that turned to a person is no cleared wait");
 });
 
 // A navigation to the address the tab already shows used to be a reload

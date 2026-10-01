@@ -31,8 +31,18 @@ export async function closeLaunch(files, start, entries, { exitCode, now, reconc
   const base = { event: "finish", launchId: start.launchId, at: new Date(now).toISOString(), instance: start.instance, task: start.task, fingerprint: start.fingerprint, exitCode };
   const marker = reconciled ? { reconciled: true } : {};
   const finishes = outcomes.length === 0
-    ? [{ ...base, runId: null, verdict: null, totalEstimatedCostUsd: null, balanceFailure: null, ...marker }]
-    : outcomes.map((outcome) => ({ ...base, runId: outcome.runId, verdict: outcome.verdict, totalEstimatedCostUsd: outcome.totalEstimatedCostUsd, balanceFailure: outcome.balanceFailure, ...marker }));
+    ? [{ ...base, runId: null, verdict: null, totalEstimatedCostUsd: null, buildCeilingUsd: null, maxBuildCostUsd: null, buildsOverCeiling: null, balanceFailure: null, ...marker }]
+    : outcomes.map((outcome) => ({
+      ...base,
+      runId: outcome.runId,
+      verdict: outcome.verdict,
+      totalEstimatedCostUsd: outcome.totalEstimatedCostUsd,
+      buildCeilingUsd: outcome.buildCeilingUsd,
+      maxBuildCostUsd: outcome.maxBuildCostUsd,
+      buildsOverCeiling: outcome.buildsOverCeiling,
+      balanceFailure: outcome.balanceFailure,
+      ...marker,
+    }));
   for (const finish of finishes) await appendLedgerEntry(files.ledger, finish);
 
   const empty = finishes.find((finish) => finish.balanceFailure !== null);

@@ -7,7 +7,9 @@
 //   outcome  "Working on it" and "Waiting for you" only while it is the
 //            action of the moment (the newest of work still under way);
 //            "Done", "Passed", "Didn't work: it wasn't on the page",
-//            "Didn't pass: no price was shown"; nothing for an action that
+//            "Didn't pass: no price was shown"; for a wait on the person
+//            that Core settled, its sentence: "Done. You pressed Continue.",
+//            "Didn't work: you pressed Stop"; nothing for an action that
 //            never said it ended once the work moved on
 //   label    all three in one line, for the card's accessible name
 //
@@ -43,10 +45,14 @@ function outcomeOf(card: ActionCard, current: boolean): [CardWords["state"], str
     case "working":
       return current ? ["working", "Working on it"] : ["settled", null];
     case "waiting":
-      return current ? ["waiting", "Waiting for you"] : ["settled", null];
+      // Only Core's resolved row ends a wait (`resolution`, including
+      // `cancelled` when the work stops first), never the work moving on.
+      return ["waiting", "Waiting for you"];
     case "done":
+      if (card.answer !== undefined) return ["done", `Done. ${card.answer}`];
       return ["done", joined(card.check ? "Passed" : "Done", card.check ? card.said : undefined)];
     case "failed":
+      if (card.why === null && card.answer !== undefined) return ["failed", `Didn't work. ${card.answer}`];
       return ["failed", joined(card.check ? "Didn't pass" : "Didn't work", card.why ?? card.said)];
   }
 }

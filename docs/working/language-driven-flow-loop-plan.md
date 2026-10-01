@@ -1,7 +1,7 @@
 # Language-Driven Flow Loop
 
 Status: Active
-Status detail: Resumed 2026-09-30 afternoon after a DeepSeek top-up: four supervised live lanes with the Lab spend guards and the honest pass verdict in their trees; no working Flow yet (pass streak 0).
+Status detail: Labs stopped by the user for merge and audit (2026-09-30 ~19:20); integration round 3 nearly done, with five fix tasks open before a full validation, a push and supervised live runs; no working Flow yet (pass streak 0).
 Created: 2026-09-24
 Last updated: 2026-09-30
 Owner: Senior supervisor agent
@@ -13,13 +13,11 @@ Related: [flow-authoring-and-defensive-runtime-plan.md](./flow-authoring-and-def
 
 ## Current State
 
-**Labs stopped by the user, 2026-09-30 ~19:20 PDT. Read this first.** No Lab may run. The order: merge everything into dev
-(the UI, the whole-page change t200, the build lifecycle t196, the lanes' fixes), waiting on the agents building them; then
-agents audit and fix the causes of the repeated failures; only then do live runs resume. The supervisor killed lane C's
-in-flight run (launch-muohg3zf-0208b447). Five finished live runs this afternoon, all failed, $0.357 in all by the ledger
-(A $0.117 + $0.080 + $0.070, B $0.028, D $0.061), plus C's killed run; each is debugged in its lane's tree. Audits under `language-driven-flow-loop-plan/audit-2026-09-30/`:
-A1 exploration and decisions (running); A2 draft and execution, A3 judgement and repair, A4 page and harness (to dispatch as
-agent slots free; the session caps concurrent agents at 20).
+**Labs stopped by the user (~19:20 PDT); integration round 3 nearly done. Read this first.** No Lab may run until the open
+tasks below merge, dev validates in full, and both dev branches are pushed; then supervised live runs resume on the new
+build with fresh lead briefs built from the audit's fix table. Afternoon live spend before the stop: $0.357 over five runs,
+all failed (ledger), plus lane C's run killed at the stop. The four audits and their fix table are in "The 2026-09-30 Audit
+And Its Fixes" below.
 
 History, in the Work Ledger: the overnight $9.46 of unattended relaunch loops and the balance stop (2026-09-30 "Stopped"); this
 afternoon's resume, where t193's `loop2.sh` was found still running and killed (kill the process tree and re-scan; renaming a
@@ -60,30 +58,18 @@ running script does not stop it).
   dropdown; and each action shows as a proper card with an icon for its kind, what it acted on, and its outcome, using the
   card and icon styles the importing repository or Core already defines.
 
-**On dev now (pushed): Core `f4feb028`, downstream `379763fb`.**
-- **Lanes merged tonight:** t176, t182, t185, t186, t187, t188, t189, t190, t192, t196, t197, t198; t191 round 1; t174 A, t193 B
-  and t195 D through round 2; t194 C through round 1.
-- **What they add:**
-  - the extension start fix (a network-guard crash; 1/10 clean starts became 10/10) and a gateway open timeout
-  - page captures cut (look 3→1, action 4→2; no route-state capture before a decision), and repeats shown to the model and
-    redirected
-  - robot checks never solved: self-clearing ones waited out, others pause and ask the person (the Lab plays the person)
-  - money, delete and send/publish always ask; the $0.25 cost ceiling per build enforced
-  - cookie walls declined; per-row loops; rate-limit waits; load-more retry; look-alike buttons told apart
-  - the extension chat can build, improve and run (Core executes chat capabilities for any client)
-  - the visible, paced overlay (t191 round 1)
-  - build caches in both repos: repeat builds in about 4-10 s
-- **Last verification of dev** (before the final revert): Core build, check and 2,075/2,075 vitest; downstream build and check;
-  extension 1,452/1,452. After `379763fb`: domain 976/976.
+**On dev (round 3, local; last pushed Core `25c8b32f`, downstream `888386b0`).** Merged after each owner's validation was
+re-run by the supervisor: lanes A-D (t174, t193, t194, t195) with their final fixes; t191 (the chat-first UI, every step a
+message with the model's reason, action cards with icons, one resolved event per ask); t196 (the authored draft, the
+instructed-act checklist, progress means the Flow advanced, replays only in judgement and repair, no forced start); t200 (the
+whole page, every frame and shadow root, no caps or ranking, covering layers flagged); t208 (a build never just ends: test,
+judge, repair rounds; `not_doable` with a reason; `evidence_budget_exhausted` with what was tried); t197, t198, t201-t207,
+t209, t212, t213. Last full validation (Core `fd2f7e6b`, downstream `ab9a352b`): Core build and check 0; web 1448/1448;
+downstream build and check 0; extension 1662/1662; domain 1038/1038; scenario-lab 620/620; test-runner 1713/1716 (the 3 fixed
+by t212, merged after); Core vitest 4395/4406 with the failures assigned below.
 
-**Honest results.** No task has produced a working Flow end to end, and the real pass streak is 0.
-- Lane D's 12 "passes" on bigbox pickup-order are permission stops with `flowCreated=false`.
-- The best partials:
-  - A's bigbox run 28 played back all 15 actions, but with the wrong product and no size or quantity.
-  - C's rung-1 run 4 reached refute, re-author and re-run.
-  - B's bigbox reached the repair stage.
-  - D's run 6 built the first real loop.
-- Per-run costs are in each run's `snapshots/live-llm.json` under `observed.totalEstimatedCostUsd`.
+**Honest results.** No task has produced a working Flow end to end, and the real pass streak is 0. The audits found why
+(A1: 57 of 117 builds ended with no Flow); the merged fixes address the top causes, none proven live yet.
 
 **The Lab's guards and the honest verdict are on dev.** A live run is refused before any model call when
 `lab-slots/STOP-balance` exists, when the previous run failed on unchanged source, when the previous run has no debug file, or
@@ -92,37 +78,17 @@ when an instance starts a 4th run in 30 minutes; overrides are user-created `lab
 `stopped_for_permission`, never a pass, in the runner, the campaign rows, the totals and the bench (`f2f80024`, t199 `39e11fd8`).
 Left open: `run-bench.ts` rebuilds a resumed evaluation without the stop label.
 
-**Lane work: WIP-committed at the shutdown state, dev merged in, unvalidated.** Each lane's owner triages its WIP (finish or
-revert) against its report's fix log. A conflicted merge is left in progress for the owner to resolve and stage; the supervisor
-commits it. t174 and t196 both edited Core `runtime/llm/node-tools/dry-run-gate.ts`: t196 owns the dry-run design and records
-what t174 drops at integration.
+**Open tasks (each in its own worktree `fxwork/<t>/`; reports under `language-driven-flow-loop-plan/reports/`).**
 
-| Lane | Tree `fxwork/<t>/`, slot | WIP commit (ds / core) | Merge of dev | Report | Next |
-| --- | --- | --- | --- | --- | --- |
-| A t174 | slot-1 | `af5e553e` / `f26e7eeb` | ds clean; Core conflict `dry-run-gate.ts` | `reports/t174-live-lane.md` | P1: refuse navigating to an unseen address; quantity and size as instructed requirements; then bigbox, crossborder, everything-store |
-| B t193 | slot-2 | `e747ed47` / - | ds clean; Core on dev | `reports/t193-live-self-repair.md` | debugs for runs 3-9; bigbox redesigned until the repaired Flow passes |
-| C t194 | slot-3 | `518e38fe` / `4c8753ed` | ds conflict `apps/extension/src/runtime/action-runner.ts`; Core clean | `reports/t194-live-judge-answer.md` | rung 1: the "Continue shopping" stop, the judge's page count, rejected rows, the "Charging Case" rule |
-| D t195 | slot-4 | `c22646d0` / `b6bf5eb0` | ds clean; Core on dev | `reports/t195-live-control-flow.md` | F20, R1/R2 interference, the withdraw permission point; pickup-order until a real Flow passes |
-| t191 UI | ui-1 | `47ba62dc` / `f9252172` | resolved `2faa7dc5`; round 2 merged to dev (ds `1c48605b`, Core `9d343d3b`) so live runs show the new UI | `live-activity-chat-plan/reports/t191-chat-ui.md` | defects 1-9 below, on its branch |
-| t192 | - | `cbf9b88c` / `3c501999` | both clean | `automated-testing-facility-plan/reports/t193-bootstrap-test-speed.md` | service-bootstrap test speed: share fixtures |
-| t196 | - | `0645df78` / `66c77aea` | ds clean; Core conflict `dry-run-gate.ts` + test | `reports/t196-state-digest-cost.md` | the dry run: N1 + D1 + wH (decisions below) |
-| t197 | ui-1 | `8e4b7bd3` / `0b3b7960` | both clean; done `5888524e` (supervisor: domain 985/985) | `reports/t197-robot-check-handoff.md` | ready for dev; its `ui-1` browser check waits on the orphaned t191 Lab |
-| t198 | ui-1 | `6587257d` / - | done `f5cc4b41`; user accepted the security change; merged to dev `9d3461a3` | `reports/t198-extension-chat-builds.md` | its browser proof waits on the orphaned t191 Lab |
-| t200 | `fxwork/t200` | new, off dev (Core-paired) | - | `reports/t200-model-sees-whole-page.md` | inventory then remove every element limit, ranking and filter between the page and the model |
-| t199 | `fxwork/t199-honest-pass-followups` | merged `39e11fd8` | - | `reports/t199-honest-pass-followups.md` | done; the worktree is removed once its two leftover processes exit |
+| Task | What | Status |
+| --- | --- | --- |
+| t191 | the resolved-ask events `waited_out` (a check that clears itself) and `cancelled` for an abandoned parked wait | in progress |
+| t206 | a run whose start throws leaves the operation lease held (`failed-start.test.ts` hangs); speed up scale-pages and the million-event stream test | in progress |
+| t210 | remove the remaining caps: Core's `maxTokensPerRun: 12000` default (with migration), F14's read-account caps, lane C's rejected-row samples (3 rows, 80 chars), and any lane cap merged after t200 | in progress |
+| t211 | an unreadable model reply is retried with a note, never a bare `evidence_invalid_decision`; root-cause the malformed replies (F16 cases) | in progress |
+| t214 | the extension chat's build path produces no adaptation (`extension-chat.test.ts`, a regression from the lifecycle merges); three `deepseek-bootstrap-exploration` ending tests against t208's endings | in progress |
 
-Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in the lane's own tree unless another plan is named.
-
-**t191 UI defects from the supervisor's screenshot review** (evidence in `C:/Users/osrs_/FluxStuff/evidence/t191-shots/`):
-1. the Simple/Advanced toggle is still shown;
-2. a half split, with status cards above the chat;
-3. contradictory status (the card says "Done" while the chat says "Building");
-4. "Couldn't load the conversation." mid-build;
-5. raw "Using core.run_node: web.action.succeeded" wording;
-6. an unlabelled "Page | Full | Small | Off" control;
-7. the overlay pill covers the site's cookie banner;
-8. the pill is tiny and low-contrast;
-9. a false "Add an AI model key: To do" while building.
+The t191 screenshot defects 1-9 are fixed in code (round 2), not yet re-shot in a browser.
 
 **Decisions made (supervisor; the user may override).**
 - Robot checks: FluxIQ never presses or solves one (t197).
@@ -147,11 +113,12 @@ Report paths are relative to `docs/working/language-driven-flow-loop-plan/` in t
 - Standing rule (user): stop orphaned Labs and dead agents' loops yourself and report it; never ask (t191's interactive Lab
   was stopped at ~19:03).
 
-**Next, in order (the user's order of ~19:20).**
-1. Commit each lane's final `Ready to commit` (the leads are wrapping up and writing "Top causes for the audit").
-2. Wait on t200 (whole page), t196 (build lifecycle), t191 (per-step chat) and t201 (dev's red tests); verify each.
-3. Merge everything into dev in both repositories (t174, t193, t194, t195, t191, t192, t196, t197, t200, t201), validate, push.
-4. Audits A1-A4, then fix workers partitioned by file on the merged dev; validate; then live runs resume, supervised.
+**Next, in order.**
+1. Verify and merge t214, t206, t210, t211 and t191 as each hands back (the supervisor re-runs each claim first).
+2. One full validation of dev in both repositories (Core build, check, runtime+storage+ui vitest, web vitest; downstream build,
+   check, extension, domain, scenario-lab, test-runner), then push both dev branches together.
+3. Live runs resume, supervised: four `lead-xhigh` leads on slots 1-4, briefed from the audit fix table and the binding rules,
+   on the ten realistic scenarios; every run debugged with the screenshot UI review; stop at the first balance failure.
 
 Older history: rung 1 in `archive/rung1-history-to-2026-09-26.md`; tonight's rounds in the Work Ledger (2026-09-29 entries).
 

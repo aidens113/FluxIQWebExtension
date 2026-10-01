@@ -337,6 +337,7 @@ test("a click whose reply is lost to its own navigation onto a check that clears
     validation.status === "passed" ? validation.actual : "",
     /^the click navigated its page before it could answer, and the page it landed on loaded; the page it landed on was a robot check that cleared by itself after \d+ ms, untouched$/u
   );
+  assert.equal(typeof result.checkWait?.waitedMs, "number", "the wait is said as a fact too");
 });
 
 test("a click whose reply is lost with no navigation started within the start grace rethrows the refusal unchanged", async (t) => {
@@ -428,6 +429,7 @@ test("a click that lands on a robot check only a person can answer fails as need
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
   assert.equal(result.commandId, REPLY.commandId, "what the frame said about the click itself is kept");
   assert.deepEqual(browser.injections, [], "a check decides the landing before the status is read");
+  assert.equal(result.checkWait, undefined, "a check only a person can answer is no cleared wait");
 });
 
 test("a robot check served 403 is still the person's to answer, not a refused page", async (t) => {
@@ -450,6 +452,11 @@ test("a click that lands on a check which clears by itself waits it out untouche
   assert.equal(result.failure, undefined);
   const validation = result.validation;
   assert.match(validation.status === "passed" ? validation.actual : "", /^it did; the page it landed on was a robot check that cleared by itself after \d+ ms, untouched$/u);
+  // The same wait as a fact: the number the prose quotes, and nothing beside it.
+  const waitedMs = result.checkWait?.waitedMs;
+  assert.deepEqual(Object.keys(result.checkWait ?? {}), ["waitedMs"]);
+  assert.match(validation.status === "passed" ? validation.actual : "", new RegExp(`after ${waitedMs} ms, untouched$`, "u"));
+  assert.equal(REPLY.checkWait, undefined, "the frame's own reply is not written on");
   assert.equal(page.asked, 3, "asked at the landing, again after half a second, and once more when the tab settled");
 });
 

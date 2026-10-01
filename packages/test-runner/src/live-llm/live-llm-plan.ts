@@ -9,7 +9,8 @@
 // operator still allows is a consequence (`--llm-permit`).
 
 import { DEFAULT_LLM_MODEL, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, LLM_LAB_MAX_CALLS_PER_RUN, isLlmModel, llmModels, type LlmActionConsequence, type LlmExecutionProfile, type LlmModel, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
-import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES } from "fluxiq/automation-studio";
+import { AUTOMATION_STUDIO_ACTION_CONSEQUENCES, automationStudioLlmRunCostCeilingUsd } from "fluxiq/automation-studio";
+import { LIVE_LLM_BUILD_COST_CEILING_USD } from "./build-cost-ceiling.js";
 import { RunnerFailure } from "../failure.js";
 
 /**
@@ -27,14 +28,6 @@ export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 /** The per-request ceiling: the configured models' own context window (Core's `AUTOMATION_STUDIO_DEEPSEEK_MODEL_LIMITS`), not a budget, so no limit hides page information from the model. Derived: a tenth copy of this number is how the previous nine happened. */
 const CORE_MAX_TOKENS = LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST;
 const CORE_MAX_TIMEOUT_MS = 25_000;
-const CORE_MAX_COST_USD = 0.25;
-/**
- * The most one Flow build, or one repair of the Flow it built, may spend in
- * all, whatever its call count: Core's ceiling on a build's total and on its
- * repair's, each on its own. A Flow's `maxEstimatedCostUsdPerRun` may only
- * lower it, so the Lab never asks for more.
- */
-const CORE_MAX_TOTAL_COST_USD = 0.25;
 /** Core's runaway backstop on a run's calls; the Lab contract carries the same number. */
 const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
 
@@ -59,12 +52,18 @@ export type LiveLlmPlan = {
    */
   maxTotalTokensPerRun: number;
   timeoutMs: number;
+  /**
+   * The most any one call may cost: the build's ceiling below, since no call
+   * can spend more than the build it belongs to. Saved as the Flow's
+   * `llmExecutionSettings.maxEstimatedCostUsd`.
+   */
   maxEstimatedCostUsd: number;
   /**
-   * The estimated cost the whole run may reach: the per-call limit across the
-   * authorized calls, held to Core's $0.25 ceiling. Saved as the Flow setting
+   * The estimated cost one build may reach in all, whatever its call count:
+   * `--llm-max-cost-usd`, held to Core's per-build ceiling and never
+   * multiplied by the call count. Saved as the Flow setting
    * `adaptationPolicySettings.maxEstimatedCostUsdPerRun`, which Core's loop
-   * budget holds every build and recovery on the Flow to.
+   * budget holds every build and recovery on the Flow to, each on its own.
    */
   maxTotalEstimatedCostUsd: number;
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
@@ -110,9 +109,11 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls);
   if (!Number.isSafeInteger(budget.timeoutMs) || budget.timeoutMs < 1) throw refusal(`--llm-timeout-ms ${budget.timeoutMs} must be a positive integer`);
   if (!Number.isFinite(budget.maxEstimatedCostUsd) || budget.maxEstimatedCostUsd <= 0) {
-    throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive limit at or below ${CORE_MAX_COST_USD}`);
+    throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive per-build limit at or below ${LIVE_LLM_BUILD_COST_CEILING_USD}`);
   }
-  const maxEstimatedCostUsd = Math.min(budget.maxEstimatedCostUsd, CORE_MAX_COST_USD);
+  // `--llm-max-cost-usd` is what one build may spend, not one call: Core's
+  // ceiling lowered by the operator's number, and never raised by any.
+  const buildCeilingUsd = automationStudioLlmRunCostCeilingUsd(budget.maxEstimatedCostUsd);
   return {
     profileId: profile.profileId,
     provider: "deepseek",
@@ -125,8 +126,8 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
     // Both clamp downward only: Core refuses anything above its own ceiling,
     // and an operator who asked for less than the ceiling keeps their number.
     timeoutMs: Math.min(budget.timeoutMs, CORE_MAX_TIMEOUT_MS),
-    maxEstimatedCostUsd,
-    maxTotalEstimatedCostUsd: Math.min(CORE_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
+    maxEstimatedCostUsd: buildCeilingUsd,
+    maxTotalEstimatedCostUsd: buildCeilingUsd,
     declared: { ...budget },
     permittedConsequences: permittedConsequencesOf(profile.permittedConsequences, purpose),
   };

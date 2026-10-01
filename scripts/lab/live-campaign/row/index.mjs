@@ -4,6 +4,7 @@
 // the task asks for (its dataset, its playback goal, or what a repair did).
 
 export { EMPTY_BUNDLE, readRunBundle } from "./bundle.mjs";
+export { perBuildSpend } from "./build-spend.mjs";
 export { consequenceSummary } from "./consequences.mjs";
 export { summarizeTask } from "./summarize-task.mjs";
 export * from "./rung-attribution.mjs";

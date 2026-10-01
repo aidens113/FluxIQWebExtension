@@ -16,6 +16,7 @@ import type { WebAutomationExtractionSummary, WebAutomationExtractListRequest, W
 // The structure-detection pair is declared beside the picker's proposal, which
 // it carries. Type-only, as the imports above are, so no cycle exists.
 import type { WebAutomationStructureDetection, WebAutomationStructureDetectionRequest } from "../extraction";
+import type { WebAutomationClearedCheckWait } from "./cleared-check-wait";
 
 export type WebAutomationActionType =
   | "web.browser.navigate"
@@ -482,6 +483,12 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   /** `web.dom.capture_snapshot` asked with `detectStructure`: the structure the page detected, or why none. Selectors, labels and counts only (D3). */
   structure?: WebAutomationStructureDetection | undefined;
   resolution?: WebAutomationTargetResolution | undefined;
+  /**
+   * A click or a navigation landed on a robot check that cleared by itself,
+   * untouched, after `waitedMs` (`./cleared-check-wait.ts`). Only that outcome:
+   * a check that needed a person fails the action instead.
+   */
+  checkWait?: WebAutomationClearedCheckWait | undefined;
   failure?: WebAutomationFailureRecord | undefined;
   startedAt: number;
   finishedAt: number;

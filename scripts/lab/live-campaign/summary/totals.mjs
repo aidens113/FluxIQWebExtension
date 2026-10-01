@@ -26,5 +26,7 @@ export function totalsOf(rows) {
     providerCalls: sum((row) => row.providerCalls),
     reportedTokens: sum((row) => row.reportedTokens),
     reportedCostUsd: Number(sum((row) => row.reportedCostUsd).toFixed(8)),
+    /** Builds that spent past the per-build ceiling they were planned under: 0 on every campaign Core held to it. */
+    buildsOverCeiling: sum((row) => row.perBuildSpend?.overCeiling),
   };
 }
