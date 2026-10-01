@@ -9,6 +9,7 @@ export { dispatchClickGesture } from "./click-gesture";
 export { executeAction } from "./execute-action";
 export { pressAgain } from "./ignored-press";
 export { recordedShadowHosts } from "./recorded-shadow-hosts";
+export { TargetResolutionError } from "./resolve-target";
 export { actionFailure } from "./results";
 
 export type { ActionResultEvidence } from "./results";

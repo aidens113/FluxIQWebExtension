@@ -67,18 +67,22 @@ const MAX_DISMISSALS_PER_ATTEMPT = 3;
  * It never throws. This runs inside the defence that exists so a step does not
  * die on something recoverable, and a defence that can itself end the step is
  * not one.
+ *
+ * `spare` is the action's own target: a layer that holds it -- the form drawer
+ * or the consent wall the step is working in -- is never cleared, only the
+ * layers in its way (`overlays.ts`).
  */
-export function clearInterference(): number {
+export function clearInterference(spare?: Element): number {
   try {
-    return pressWaysOut();
+    return pressWaysOut(spare);
   } catch {
     return 0;
   }
 }
 
-function pressWaysOut(): number {
+function pressWaysOut(spare: Element | undefined): number {
   let dismissed = 0;
-  for (const overlay of overlaysOverPage()) {
+  for (const overlay of overlaysOverPage(undefined, spare)) {
     if (dismissed >= MAX_DISMISSALS_PER_ATTEMPT) break;
     // Guard 1. A dialog that asks for what only a person can give is left
     // alone, way out or no way out (`pressable-way-out.ts`, which

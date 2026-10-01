@@ -71,16 +71,31 @@
 // record says whether the tab was returned; a failed or wrong return is said,
 // never hidden, and the click is still RATE_LIMITED.
 //
+// A click that opened its page in a tab of its own -- a `target="_blank"`
+// link, crossborder's search result cards -- commits nothing in its own tab.
+// When the click's tab did not navigate and a tab was opened from it while the
+// click was judged (`opened-tab.ts`), that tab becomes the automation tab, so
+// every later step drives the page the click opened, and its landing is judged
+// as an own-tab landing is: a robot check is the person's; a page served 429 or
+// 503 is RATE_LIMITED, and the opened tab is closed so the clicked tab, still
+// on the page the click was pressed on, is driven again and a repeat presses
+// the same control; any other status of 400 or above is
+// `navigation_unexpected`. A click that stands says, in its `actual`, that its
+// page opened in a new tab that the run now drives.
+//
 // Not caught: a soft 404, served 200 with an error notice, which needs the
 // landing the recording saw (Week 2's landing marker). A sign-in page served
-// 401 would read `navigation_unexpected` rather than `auth_required`.
+// 401 would read `navigation_unexpected` rather than `auth_required`. A new tab
+// the browser's popup blocker refused never opens, and the click stands as the
+// navigation it began.
 
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import type { OriginPace } from "../background/page-pace";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import type { WorkerActionOutcome } from "./action-results";
 import { boundWorkerValidation, navigationChallengeFailure, navigationUnexpectedFailure, workerActionResult } from "./action-results";
-import { readTabUrl } from "./automation-tab";
+import { forgetAutomationTab, readTabTitle, readTabUrl, setAutomationTab, waitForTabReady } from "./automation-tab";
+import { watchOpenedTab } from "./opened-tab";
 import { readLandedPage, type FrameSender, type LandedPageReading } from "./landed-challenge";
 import { landedPath } from "./quoted-path";
 import { checkWaitBudgetMs, clearedCheckWait, settleLandedReading, standingCheckWords, type LandedCheckWait, type LandedTabAccess } from "./landed-check-wait";
@@ -163,6 +178,7 @@ export async function sendClickCheckingLanding(
 ): Promise<BrowserActionResult> {
   if (action.actionType !== "web.dom.click") return await send();
   const watch = watchTopFrameNavigation(tabId);
+  const opened = watchOpenedTab(tabId);
   try {
     // Read before the click, since a click that navigates takes it away: a
     // landing refused for coming too fast sends the tab back to it.
@@ -185,7 +201,15 @@ export async function sendClickCheckingLanding(
       return verdict.kind === "check_cleared" ? clickAfterClearedCheck(navigated, verdict.wait) : navigated;
     }
     if (reply.status !== "succeeded") return reply;
-    const verdict = await judgeLanding(action, tabId, watch, access, pressed);
+    // Read together, so a click that opens no tab waits no longer than the
+    // grace its own tab's landing is given anyway.
+    const [verdict, openedTabId] = await Promise.all([
+      judgeLanding(action, tabId, watch, access, pressed),
+      opened.settle(NAVIGATION_START_GRACE_MS)
+    ]);
+    if (verdict === undefined && openedTabId !== undefined) {
+      return await driveOpenedTab(action, reply, { sourceTabId: tabId, openedTabId, startedAt: watch.startedAt }, access, pressed);
+    }
     if (verdict === undefined || verdict.kind === "stood") return reply;
     if (verdict.kind === "failed") {
       const failed = failedClick(reply, verdict.outcome);
@@ -194,7 +218,69 @@ export async function sendClickCheckingLanding(
     return clickAfterClearedCheck(reply, verdict.wait);
   } finally {
     watch.stop();
+    opened.stop();
   }
+}
+
+/** The tab a click was pressed in, the tab it opened, and when the click began. */
+type OpenedTab = { sourceTabId: number; openedTabId: number; startedAt: number };
+
+/**
+ * A click whose page opened in a tab of its own (see the file comment): that
+ * tab is driven from now on, once it is ready, and its landing is judged as an
+ * own-tab landing is. On a page served 429 or 503 the opened tab is closed and
+ * the clicked tab, still on the page the click was pressed on, is driven again.
+ */
+async function driveOpenedTab(
+  action: BrowserActionCommand,
+  reply: BrowserActionResult,
+  tabs: OpenedTab,
+  access: LandedTabAccess,
+  pressed: PressedPage
+): Promise<BrowserActionResult> {
+  setAutomationTab(tabs.openedTabId);
+  await waitForTabReady(tabs.openedTabId);
+  const landed = await readTabUrl(tabs.openedTabId);
+  const path = landedPath(landed ?? "");
+  const first = await readCommittedLanding(tabs.openedTabId, access.send);
+  const settled = await settleLandedReading(first, tabs.openedTabId, access, checkWaitBudgetMs(action, tabs.startedAt));
+  if (settled.reading?.kind === "robot_check") return failedClick(reply, checkLandingOutcome(path, settled.checkWait));
+  const served = await servedStatus(tabs.openedTabId, undefined);
+  const rateLimited = noteRateLimitedLanding(landed, settled.reading, served, pressed.pace);
+  if (rateLimited !== undefined) {
+    const back = await closeOpenedTab(tabs, pressed.url);
+    return failedClick(reply, rateLimitedLandingOutcome(path, rateLimited, back));
+  }
+  if ("status" in served && served.status >= FIRST_ERROR_STATUS) return failedClick(reply, refusedLandingOutcome({ status: served.status, path }));
+  const title = await readTabTitle(tabs.openedTabId);
+  const page = { ...(landed !== undefined ? { url: landed } : {}), ...(title ? { title } : {}) };
+  const validation = reply.validation;
+  const opened = `its page opened in a new tab (${path}), which the run now drives`;
+  const stood: BrowserActionResult = {
+    ...reply,
+    ...page,
+    message: `${reply.message ?? "Element clicked."} Its page opened in a new tab, which the run now drives.`,
+    ...(validation.status === "passed" ? { validation: boundWorkerValidation({ ...validation, actual: `${validation.actual}; ${opened}` }) } : {}),
+    finishedAt: Date.now()
+  };
+  return settled.checkWait?.outcome === "cleared" ? clickAfterClearedCheck(stood, settled.checkWait) : stood;
+}
+
+/**
+ * Closes the tab a click opened onto a page refused for coming too fast, and
+ * drives the clicked tab again: it never left the page the click was pressed
+ * on, so a repeat presses the same control. Said as a return to that page.
+ */
+async function closeOpenedTab(tabs: OpenedTab, pressedUrl: string | undefined): Promise<PressedPageReturn> {
+  forgetAutomationTab(tabs.openedTabId);
+  setAutomationTab(tabs.sourceTabId);
+  try {
+    await chrome.tabs.remove(tabs.openedTabId);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.trim() : "";
+    return { kind: "not_returned", why: `the new tab it opened could not be closed${detail ? ` (${detail})` : ""}, though the run drives the tab it was pressed in again`, stayed: false };
+  }
+  return { kind: "returned", path: pressedUrl === undefined ? "its address unread" : landedPath(pressedUrl) };
 }
 
 /**

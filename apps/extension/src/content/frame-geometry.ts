@@ -7,9 +7,11 @@
 import { FRAME_GEOMETRY_REQUEST, FRAME_GEOMETRY_RESPONSE } from "./messages";
 import type { RectDescriptor } from "./types";
 
-let frameViewportOffset: RectDescriptor | undefined = isTopFrame()
-  ? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }
-  : undefined;
+// A child frame's offset as its parent last answered; a top frame's own is read
+// fresh wherever it is needed. Nothing is read from `window` while the module
+// loads, so a module that imports this one can be loaded where there is no
+// window (the unit tests, which run in Node).
+let frameViewportOffset: RectDescriptor | undefined;
 let frameGeometryRequestId = 0;
 
 export function isTopFrame(): boolean {
