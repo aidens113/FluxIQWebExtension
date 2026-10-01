@@ -9,8 +9,12 @@
 //
 // **The allow-list is anchored, which is the first and strongest guard.** A
 // label qualifies only when it *begins* with one of a dozen phrases that mean
-// "go away" -- close, dismiss, not now, no thanks, maybe later, skip -- or is a
-// close glyph on its own. No destructive verb can reach the match: "Delete",
+// "go away" -- close, dismiss, minimise, not now, no thanks, maybe later, skip
+// -- or is a close glyph on its own. Minimising hides a widget and acts on
+// nothing; until 2026-10-01 it was missing, and a support chat whose only way
+// out is "Minimize chat" -- crossborder's pill over Add to cart, the everything
+// store's chat over its buy box -- refused every press under it (lane A,
+// `t174-w32`, `t174-w34`). No destructive verb can reach the match: "Delete",
 // "Buy now", "Place your order", "Confirm purchase" and "Pay" do not begin with
 // any of them, so they are refused before anything else is asked.
 //
@@ -68,7 +72,7 @@ export const DISMISS_LABEL_MAX = 48;
  * A control's own label that closes or declines what it sits on, anchored at
  * the start and followed by nothing or by a separator.
  */
-const DISMISS_LABEL = /^(?:close|dismiss|hide|not now|no,? thanks?|no thank you|maybe later|remind me later|later|skip|not interested|continue without)(?:$|[\s,.!:;-])/iu;
+const DISMISS_LABEL = /^(?:close|dismiss|minimi[sz]e|hide|not now|no,? thanks?|no thank you|maybe later|remind me later|later|skip|not interested|continue without)(?:$|[\s,.!:;-])/iu;
 
 /** A close glyph used as a whole label. */
 const CLOSE_GLYPH = /^[×✕✖╳xX]$/u;
@@ -139,6 +143,22 @@ export function isConsentLayerText(text: string): boolean {
  * so the wait has to be named with it.
  */
 const RATE_LIMIT_LAYER_PHRASE = /\b(?:(?:going|moving|posting|clicking|doing (?:this|that)) too (?:fast|quickly)|too many (?:requests|attempts|tries|actions)|slow down|temporarily (?:blocked|restricted|limited)|rate[- ]limit(?:ed)?|try again in \d+ ?(?:s|secs?|seconds?|mins?|minutes?)|wait \d+ ?(?:s|secs?|seconds?|mins?|minutes?) before)\b/iu;
+
+/**
+ * The phrases a page writes beside a press it could not carry out for now
+ * because it, or the service behind it, was busy: "Network busy, please try
+ * again", "Server busy", "Service temporarily unavailable". A closed list, each
+ * on word boundaries. Neither "Try again" nor "Something went wrong" is on it:
+ * a failed payment says both, and a press is only repeated on the page's word
+ * when that word says the press never went through. "Temporarily unavailable"
+ * alone is not on it either: a store says it of an item out of stock.
+ */
+const TRANSIENT_REFUSAL_PHRASE = /\b(?:(?:network|server|system|service) (?:is )?(?:busy|overloaded|(?:temporarily )?unavailable)|too busy|busy,? (?:please )?try again)\b/iu;
+
+/** Whether text a press brought says the page was busy and did not carry the press out (`../rate-limit-notice.ts`). */
+export function isTransientRefusalText(text: string): boolean {
+  return TRANSIENT_REFUSAL_PHRASE.test(text);
+}
 
 /**
  * The acknowledgement a rate-limit notice offers, as the whole label: OK, Okay,

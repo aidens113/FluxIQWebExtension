@@ -21,9 +21,18 @@ const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
 
 /**
+ * Elements whose text is not words on the page: a widget's stylesheet, its
+ * script, an inert template. Read, a shadow root's `<style>` alone filled most
+ * of the budget before the line it was asked about (crossborder's store coupon:
+ * about 450 characters of CSS ahead of "Network busy, please try again").
+ */
+const UNREAD_TAGS = new Set(["style", "script", "template", "noscript"]);
+
+/**
  * The layer's `aria-label` and the text of its text nodes in document order,
  * collapsed to single spaces and cut at `LAYER_TEXT_MAX`. Each text node is read
  * with a space before it, so a number in its own `<span>` stays a separate word.
+ * A stylesheet, script or template inside it is not read (`UNREAD_TAGS`).
  *
  * Document order matters. Until 2026-09-30 each element's own text nodes were
  * read before its children's, so "You can try again in <span>12</span>
@@ -47,6 +56,7 @@ export function boundedLayerText(layer: Element): string {
       if (node.nodeType !== ELEMENT_NODE) continue;
       if (++scanned > LAYER_SCAN_LIMIT) return false;
       const element = node as Element;
+      if (UNREAD_TAGS.has(String(element.tagName ?? "").toLowerCase())) continue;
       if (element.shadowRoot && !visit(element.shadowRoot)) return false;
       if (!visit(element)) return false;
     }

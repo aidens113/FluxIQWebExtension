@@ -150,14 +150,19 @@ function fakeCheckWatch(sighting: RobotCheckSighting | undefined, events: string
 
 type IgnoredRecord = { made: number; settledWith: number[]; stopped: number };
 
-/** An ignored-press watch that reports `seen` when settled, and records how the verb used it. */
-function fakeIgnoredWatch(seen: PressSignal[], events: string[]): { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord } {
+/**
+ * An ignored-press watch that reports `seen` when the first press's watch is
+ * settled and `secondSeen` for the press made once more, and records how the
+ * verb used it.
+ */
+function fakeIgnoredWatch(firstSeen: PressSignal[], events: string[], secondSeen: PressSignal[] = ["change"]): { make: ContentActionDependencies["watchIgnoredPress"]; record: IgnoredRecord } {
   const record: IgnoredRecord = { made: 0, settledWith: [], stopped: 0 };
   return {
     record,
     make: () => {
       events.push("ignored-watch");
       record.made += 1;
+      const seen = record.made === 1 ? firstSeen : secondSeen;
       return {
         settle: async (windowMs) => {
           record.settledWith.push(windowMs);
@@ -255,7 +260,7 @@ async function click(
   const checks = fakeCheckWatch(sighting, page.events);
   // A page that answers the press unless a row says it ignored it, so every
   // row written before the extra press existed keeps its meaning.
-  const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events);
+  const ignored = fakeIgnoredWatch(pressing.seen ?? ["change"], page.events, pressing.secondSeen);
   const deps = dependencies(page.element, watch.make, notices, checks, ignored, pressing.pressableAgain ?? true);
   const result = await clickAction(action, deps, startedAt);
   return { result, events: page.events, watch: watch.record, notices: notices.record, checks: checks.record, ignored: ignored.record };
@@ -269,12 +274,14 @@ type PressOptions = {
   pressableAgain?: boolean;
   /** The rate-limit notice the press made once more is answered with. */
   secondNotice?: RateLimitNotice;
+  /** The signs the press made once more was answered with; the page answers it unless a row says otherwise. */
+  secondSeen?: PressSignal[];
 };
 
 /** The events of one press, from the hover to the click, with the watches a first press on a button starts. */
 const FIRST_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "ignored-watch", "mousedown", "mouseup", "click"];
-/** A press made once more: the same gesture and the rate-limit and robot-check watches, but no ignored-press watch. */
-const SECOND_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "mousedown", "mouseup", "click"];
+/** A press made once more: the same gesture and the same three watches, since whether it was answered decides the result. */
+const SECOND_PRESS = ["mouseover", "mouseenter", "mousemove", "notice-watch", "check-watch", "ignored-watch", "mousedown", "mouseup", "click"];
 const IGNORED: PressOptions = { seen: [] };
 
 test("a link the page cancelled and then answered by changing its content passes, and says so", async (t) => {
@@ -450,10 +457,32 @@ test("a button the page ignored outright is pressed once more at the same point,
     expected: "the click lands on the target or something inside it",
     actual: "the point 10,20 landed on the target; the page ignored the first press, so it was pressed once more"
   });
-  assert.deepEqual(ignored, { made: 1, settledWith: [800], stopped: 1 });
+  assert.deepEqual(ignored, { made: 2, settledWith: [800, 800], stopped: 2 }, "the press made once more is watched for an answer too");
   assert.equal(notices.made, 2, "the press made once more is watched for a refusal like any other");
   assert.equal(notices.stopped, 2);
   assert.equal(checks.made, 2);
+});
+
+test("a press the page ignored twice is not a success: it fails as not observed, saying neither press was answered", async (t) => {
+  // everything-store's buy box comes alive 1.2 s after its page loads; a press
+  // soon after the load is ignored twice and was reported done (t174-w34).
+  const { result, events, ignored } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: [], secondSeen: [] });
+  assert.equal(result.status, "failed");
+  assert.deepEqual(events, [...FIRST_PRESS, ...SECOND_PRESS], "pressed twice, never a third time");
+  assert.deepEqual(result.validation, {
+    status: "failed",
+    expected: "the page answers the press",
+    actual: "the point 10,20 landed on the target; the page ignored the first press, so it was pressed once more, and it ignored that press too: no request, no change inside the control or its section, no navigation and no focus move"
+  });
+  assert.deepEqual(ignored, { made: 2, settledWith: [800, 800], stopped: 2 });
+});
+
+test("a press made once more that the page answered in any way passes, as the press made once more", async (t) => {
+  for (const signal of ["request", "change", "navigation", "focus"] as PressSignal[]) {
+    const { result } = await click(t, { link: false, prevent: false }, undefined, CLICK, undefined, undefined, 1_000, { seen: [], secondSeen: [signal] });
+    assert.equal(result.status, "succeeded", signal);
+    assert.match(result.validation.status === "passed" ? result.validation.actual : "", /pressed once more$/u, signal);
+  }
 });
 
 test("a press that sent a request is never pressed again, even when nothing on the page changed", async (t) => {
