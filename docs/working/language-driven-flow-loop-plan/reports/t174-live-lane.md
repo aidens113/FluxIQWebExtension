@@ -546,3 +546,17 @@ Not verified (F21): whether the live model, shown the compact page view's chosen
 - Still open, owned elsewhere: t196 (lifecycle, act-object binding, I1), t223's successor (the row key on a created press, w34 F1).
 - Still open, not built: w33 D2 (F20's scope on a pinned bar; ruled against, see part 2).
 - Not verified anywhere: live.
+
+### Session 5, part 4: dev merged (lane D F30, F32, F34; t223's stable handles), conflicts resolved, nothing committed
+
+- **Resolved and staged (`git add`), mid-merge.** All six conflicts were additive:
+  - `content/action-runtime/results.ts`: `ActionResultEvidence` keeps both lane D's `refusedBeforeDispatch` and lane A's `target`. `actionRejected` reads both: `effect: "unacted"`, and the dialog that holds the target is spared.
+  - `content/actions/{check,click,select,type}.ts`: each gate refusal passes `target: element, refusedBeforeDispatch: true`. `clear.ts` and `keypress.ts` merged clean, keep lane D's choice (no `refusedBeforeDispatch`), and keep `target`.
+  - `content/frame-geometry.ts`: dev's comment over the identical code (F18 = F34).
+  - Auto-merged and checked: N4 (`click-landing.ts`, `action-runner.ts`, `opened-tab.ts`) and N3 (`execute.ts`, `overlays.ts`, `attempt.ts`) are intact beside lane D's frame path and disabled-control wait.
+- **F23, unstaged (Ready to commit after the merge):** `content/evidence/interactions.ts` installed its listeners on load whenever any `document` existed. A test that loads the snapshot chain while another test's stand-in document is installed then failed to load: lane D's `actions/tests/gate-refusal.test.ts` failed with `document.addEventListener is not a function`, depending on run order. Leaving out any one of three different files cleared it, so it was timing. The guard now also requires `document.addEventListener` to be a function. Every real document has it, so the browser is unaffected.
+- **Validation after the merge (lead).**
+  - Unit, every affected directory (`content/{tests, evidence/tests, actions/tests, action-runtime/tests, action-runtime/{interference, recovery, ignored-press}/tests}`, `runtime/tests`): `# tests 651 # pass 651 # fail 0`. Before F23 the result was 623/624 (gate-refusal).
+  - `extension check`: rc 0. It first failed on `ClientGatewayActivity.request` (t193's files) because the tree's Core build was stale. I rebuilt Core's libraries with `heavy.sh ... pnpm --filter @fluxiq/contracts --filter fluxiq --filter @fluxiq/client-gateway-websocket build` (rc 0; Core `git status` clean).
+  - T2: `own-layer` + `press-answers` + `everything-store-cart-names` -> `9 passed (2.2m)`. T3: `opened-tab` -> `1 passed (15.1s)`.
+  - Structure audit: `passed (151 warning(s), 118 baselined)`.
