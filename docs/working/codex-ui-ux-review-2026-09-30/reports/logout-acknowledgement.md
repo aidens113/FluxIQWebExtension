@@ -18,3 +18,4 @@ Account link and role remain present. No login/setup, auth API, backend, styles,
 - Corrected focused AuthStatus6 plus unchanged AuthShell26: 2 files, 32 passed, native exit0, 2.41s through the shared heavy wrapper.
 - Scoped types using the actual web tsconfig with incremental disabled passed, native exit0. No compiler settings relaxed.
 - Final full suite, production build and structure checks remain pending while disjoint sixth-batch workers implement.
+- Review follow-up: a retained activation during unmount commit, before passive cleanup, still issued a POST. New Profiler commit regression reproduced native1 (1fail). AuthStatus now fences its lifecycle with layout cleanup; LoginPanel remains unchanged. Corrected7 plus unchanged26 pass33/native0/2.47s; scoped types36689 native0. Runtime worker received the same lifecycle review correction.

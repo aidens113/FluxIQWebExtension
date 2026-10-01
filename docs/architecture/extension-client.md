@@ -140,6 +140,12 @@ request began. Completion clears or refills a draft only when its edit revision
 still matches the submitted revision. A successful earlier settings save reports
 that newer changes remain unsaved; reconnect uses the saved settings. Typing or
 filling an example while a chat send is pending never sends that newer draft.
+Connection settings share one pending mutation owner across Save/reconnect,
+Disconnect and Forget. Status pushes cannot enable another mutation during that
+sequence; form inputs remain editable. Failed Forget retains confirmation and
+offers retry. Successful asynchronous dismissal restores opener focus only while
+the initiating control still owns focus in a visible active document; explicit
+opening focuses Cancel when the opener owns focus.
 
 The Automations list reconciles rows by flow id. Refreshing status or changing
 workload state retains mounted rows, their controls and current activation data.

@@ -335,7 +335,32 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Catch unexpected transport rejection with fixed local retry text and finally release pending controls; reconcile that error against latest rendered status too. No background/protocol/request cancellation redesign.
 - Preserve existing start-steps tests unchanged; component tests use existing fake DOM, no shared helper edits or browser claim. Record reproduction/checks in own report; broad extension checks wait for Settings worker freeze.
 
+### Production parameter recovery read-only worker brief
+
+- Worker: wait_gaps, after freezing Settings implementation/report. Read Current State; same paired t224 trees only.
+- Read exact Core paths: apps/web/src/features/programs/live-views/production-runner.tsx; its tests/production-runner.test.ts, production-runner-operations.test.tsx and production-freshness.test.tsx; packages/fluxiq/src/programs/production-runner/types.ts, api/handlers.ts and runtime/service.ts (read only).
+- Trace parameterSchema consumption, metadata start wire contract, empty/invalid numeric conversion, required/default/enum/integer/range semantics, unsupported nested fields and silent first30 truncation. Distinguish contracts actually enforced from speculative JSON Schema expectations.
+- Preserve existing draft/target/API-owner locks and polling. Propose focused UI helper/field ownership and exact regressions, with compatibility risks and backend authority explicitly stated. No model/provider/live calls or payload logs.
+- Own downstream report reports/production-parameter-recovery-audit.md only. No product/test/shared-doc edit, heavy/full check, commit or push. Return source findings and bounded next brief; supervisor releases implementation after sixth Core freeze/gates.
+
+### Recording review control identity implementation brief (released)
+
+- Worker: trace_endings, after freezing Runtime implementation/report. Same downstream t224 tree only; Core stays source-frozen in your completed five paths.
+- Read Current State and own prior extension-connection-recording-recovery-audit finding5, then exact apps/extension/src/panel/recording/review/recording-review.ts and its tests/review-model.test.ts and tests/payload-parsing.test.ts.
+- Exact edited source: that recording-review.ts; exact new test: its tests/recording-review.test.ts. Own report reports/recording-review-controls.md.
+- Reproduce phase-change replacement of still-present actions, especially Done across analyzing/building timer. Reconcile buttons by ReviewAction with current label/handler/busy state; preserve retained actions and reducer/request/epoch/id contracts.
+- If a focused action disappears, choose an explicitly owned visible local remaining action or named status fallback; never reclaim external/hidden/inactive-document focus. Dismiss hides presentation; no new external caller fallback, cancellation or backend semantics.
+- Retain unchanged review-model/payload-parsing tests and all prior paused/extraction/settings/shell fixes. Unexpected promise recovery beyond existing request contract needs a source finding and supervisor release.
+- Progressive own report; local fake DOM/focus modeling may live in new test, no shared helper edits. Narrow tests/scoped types through shared heavy wrapper, then freeze for supervisor checks. No broad/live/provider/panel/commit/push.
+
 ## Work Ledger
+
+### 2026-10-01 — Sixth extension recovery verified; recording review next
+
+- Validation: heavy-wrapped `node apps/extension/scripts/test-extension.mjs` session27784 printed1770/1770 passed,0fail/skip/cancel, native0/113444.6519ms. Actual extension tsc93764 native0; extension build47559 native0/29175ms, verified22 Chrome/Firefox/e2e files each. Full structure70713 native0,136warnings/119baseline. No source/config/baseline relaxation and no live-browser claim.
+- Settings/Forget source independently reviewed and related23 passed before full gates. Paused/Start source plus strict scoped fixtures passed before these gates. Authored architecture reflects mutation/retry/focus behavior. All extension source is frozen until exact recording-review partition begins.
+- Runtime root first focused command mistakenly named two nonexistent legacy test paths, so actual66pass did not cover required old9. Corrected actual four-file command68875 plus independently rerun strict scoped68773 are pending; report claims are not supervisor verification.
+- Remaining workers: database metadata-pruning review refinement, read-only Production parameters, and newly released recording-review controls. No merge/push or Claude modifications.
 
 ### 2026-10-01 — Logout reproduced and fixed; extension recovery released
 
@@ -345,6 +370,8 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - All work remains isolated in t224; no merge, push, live execution or Claude changes.
 - Logout scoped types passed against actual web configuration, native0. Paused recording regression reproduced enabled Start on original source (6pass/1fail); two-file correction plus architecture note now passes all7 owning tests, native0/119.8275ms. Reports preserve exact evidence; broader gates await worker freeze.
 - Checkpoints: Core logout5d023f6f; downstream paused/recovery briefsfb66ce0b. Getting Started corrected original-source reproduction3fail/1pass confirms late Connect/Disconnect failures contradict observed goals and repeated synthetic handler activation is unguarded. Narrow fix passes component5 plus unchanged guide10 (15pass/native0/240.1355ms); actual-config scoped types for Start and paused source/tests now pass after correcting fixture subscribe/surface and temporary type resolution. Own start-result-recovery report records initial harness mistake and exact limits. Extension full gates remain deferred to Settings freeze.
+- Settings worker source frozen; supervisor independently reviewed source and ran heavy-wrapped related-runner: 23/23 native0/125.8325ms including six unchanged draft cases. Full extension27784, types93764 and build47559 now run on frozen source. Getting Started checkpoint0a861fd9 saved. Runtime supervisor review requested layout teardown and known-run detail fencing; database expanded cases still in progress.
+- Logout follow-up reproduced retained activation during unmount commit before passive cleanup (1fail/native1); changing only AuthStatus lifecycle fence to layout cleanup passes7 new + unchanged26 (33pass/native0/2.47s) and scoped types36689 native0. No LoginPanel lifecycle changes. Full Core gates remain pending database/runtime freeze.
 
 ### 2026-10-01 - Fifth Core and extension naming gates complete; sixth released
 - Agent: supervisor
