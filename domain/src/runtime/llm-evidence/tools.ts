@@ -62,6 +62,7 @@ import {
   webAutomationRecoveryHarnessOptionBundle
 } from "./harness-options";
 import { WEB_LLM_DENIED_EVIDENCE_KEYS } from "./denied-keys";
+import { WEB_LLM_OBSERVED_STATE_KEYS } from "./observed-state";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { createWebNodeArrivals, createWebNodeShownAddresses, runWebOutputNode, webObservationNodeId, webRunnableNodeIds } from "./node-run";
 import {
@@ -142,6 +143,7 @@ export type WebAutomationLlmEvidenceRuntime = {
   domainId: string;
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
+  observedStateKeys: readonly string[];
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   /**
    * That this domain can run a node of the library against its live page, and
@@ -300,6 +302,7 @@ export function createWebAutomationLlmEvidenceRuntime(sessions: WebLlmEvidenceGa
     // Declared once, in `./denied-keys.ts`, because what a reading node read
     // is held to the same list before it is ever returned.
     deniedEvidenceKeys: WEB_LLM_DENIED_EVIDENCE_KEYS,
+    observedStateKeys: WEB_LLM_OBSERVED_STATE_KEYS,
     // The options a runtime recovery may explore with, declared in full so
     // they carry their own availability, safety and stages and never reach
     // Flow authoring. `same_scope` is the safe default and matches what the
