@@ -1781,6 +1781,11 @@ legacy IME key code229 and modified Enter leave the native event untouched;
 answer buttons retain their existing behavior. Conversation ownership and
 submission coordination remain in the existing Chat controller.
 
+List extraction observes queued page work once before declaring an unchanged
+growth window complete. It then rereads the item count and absolute command
+deadline. This observation grants no extra growth window; an elapsed deadline
+returns a timeout. Existing reveal limits and polling intervals remain intact.
+
 The default development endpoints are:
 
 ```text
