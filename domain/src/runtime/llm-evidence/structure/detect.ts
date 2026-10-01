@@ -47,11 +47,11 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { present } from "../present";
 import { observedElement } from "../press";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSanitizeOptions, type WebLlmSnapshotBinding } from "../sanitize";
 import { webLlmSnapshotStates } from "../state-digest";
-import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { webActionNeedsPerson } from "../action-failure";
 import { recoverable, RecoverableToolRejection, rejectionDetail } from "../tool-rejection";
 import { jsonRecord } from "../untrusted-json";
@@ -59,8 +59,6 @@ import { WEB_LLM_STRUCTURE_RESULT_CODE } from "../vocabulary";
 import type { WebLlmExtractionHandles } from "./handles";
 import { splitDetectedStructure } from "./packet";
 import { webLlmStructureRefusal } from "./refusal";
-
-const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 
 export type WebLlmStructureDetectionContext = {
   gateway: WebLlmEvidenceGateway;
@@ -197,16 +195,16 @@ function handleRefusal(reason: "handle_not_in_packet" | "page_moved_since_packet
   return rejectionDetail({ reason, target, instead: undefined, missing: undefined, requestId: undefined });
 }
 
-/** `{}` or `{ target }`, and nothing else. */
+/** `{}` or `{ target }`, and nothing else; the target in the packets' spelling, so `target.N` is read as `tN`. */
 function requestedTarget(value: JsonObject): string | undefined {
   const keys = Object.keys(value);
   if (keys.some((key) => key !== "target")) {
     recoverable("invalid_input", rejectionDetail({ reason: "unexpected_input_keys", target: undefined, instead: ["target"], missing: undefined, requestId: undefined }));
   }
   if (!keys.includes("target")) return undefined;
-  const target = value.target;
-  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) {
-    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof target === "string" ? target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  const target = canonicalWebLlmTargetHandle(value.target);
+  if (target === undefined) {
+    return recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof value.target === "string" ? value.target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
   }
   return target;
 }

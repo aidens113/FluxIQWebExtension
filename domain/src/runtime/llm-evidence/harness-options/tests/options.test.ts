@@ -71,14 +71,14 @@ test("inspects the page, returns a sanitized packet naming elements by opaque ha
   const evidence = await execute(registry, "web.recovery.inspect", {});
 
   assert.equal((evidence as JsonObject).schemaVersion, "web-llm-evidence.v2");
-  assert.deepEqual(((evidence as { elements: Array<{ target: string }> }).elements).map((element) => element.target), ["target.1", "target.2", "target.3"]);
+  assert.deepEqual(((evidence as { elements: Array<{ target: string }> }).elements).map((element) => element.target), ["t1", "t2", "t3"]);
   assert.equal(JSON.stringify(evidence).includes("#delete"), false);
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
   // The packet the model was shown is the one retained, with the selectors
   // behind its handles, so a repair naming one of them gets its hint back.
   assert.equal(retained.length, 1);
   assert.deepEqual(retained[0]!.evidence, evidence);
-  assert.equal(retained[0]!.selectors.get("target.2"), "#delete");
+  assert.equal(retained[0]!.selectors.get("t2"), "#delete");
 });
 
 // FluxIQ does not refuse a control on its own judgement of what it looks like.
@@ -92,7 +92,7 @@ test("presses the control it is asked to, whatever it says, and retains only wha
   const { registry, commands, retained } = registeredWith();
   await execute(registry, "web.recovery.inspect", {});
 
-  const pressed = await run(registry, "web.recovery.press", { target: "target.2", consequences: [] });
+  const pressed = await run(registry, "web.recovery.press", { target: "t2", consequences: [] });
 
   assert.equal((pressed as { resultCode: string }).resultCode, "web.action.succeeded");
   assert.equal((pressed as { effectApplied: boolean }).effectApplied, true);
@@ -110,7 +110,7 @@ test("refuses a target handle before this exploration has shown any packet, and 
   const { registry, commands } = registeredWith();
 
   for (const optionId of ["web.recovery.press", "web.recovery.detect_repeating_structure"]) {
-    const refused = await run(registry, optionId, optionId === "web.recovery.press" ? { target: "target.1", consequences: [] } : { target: "target.1" });
+    const refused = await run(registry, optionId, optionId === "web.recovery.press" ? { target: "t1", consequences: [] } : { target: "t1" });
     // The refusal says which of the ways a handle names nothing this was, so
     // the model calls inspect rather than the same option again.
     // `resultReason` beside the code is the same word the model is given, kept

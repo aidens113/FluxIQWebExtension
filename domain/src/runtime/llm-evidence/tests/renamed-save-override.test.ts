@@ -129,7 +129,7 @@ test("the failure packet shows the renamed Save as the page's one submit control
   const submits = evidence.elements.filter((element) => element.controlType === "submit");
   // Named by its accessible name; the visible text is the same words, so it is not repeated.
   // Every attribute the page gave it rides with it, as [name, value] pairs.
-  assert.deepEqual(submits, [{ target: "target.2", tag: "button", implicitRole: "button", name: "Apply changes", attributes: [["class", "ui-button ui-button--accent"], ["type", "submit"]], controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
+  assert.deepEqual(submits, [{ target: "t2", tag: "button", implicitRole: "button", name: "Apply changes", attributes: [["class", "ui-button ui-button--accent"], ["type", "submit"]], controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
   // Beside it, the one other button a click could land on is the reset.
   assert.deepEqual(evidence.elements.filter((element) => element.tag === "button").map((element) => [element.name, element.controlType]), [["Discard changes", "reset"], ["Apply changes", "submit"]]);
   // Nothing on the page is called what the recording called Save.
@@ -137,7 +137,7 @@ test("the failure packet shows the renamed Save as the page's one submit control
   // The packet carries the handle and the binding keeps the selector. A plain
   // text field's own value is the page's state and travels (t200); a secret
   // one's never does.
-  assert.equal(selectors.get("target.2"), RENAMED_SAVE_SELECTOR);
+  assert.equal(selectors.get("t2"), RENAMED_SAVE_SELECTOR);
   assert.doesNotMatch(JSON.stringify(evidence), /main > form|#display-name/);
   assert.equal(evidence.elements.find((element) => element.name === "Workspace name" && element.tag === "input")?.value, "Workspace 121");
 });
@@ -147,7 +147,7 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
   const resolvedSave = {
     status: "resolved",
     target: {
-      handles: { element: "target.2" },
+      handles: { element: "t2" },
       handleResolution: "named",
       tagName: "button",
       // The accessible name, which Core's matcher weighs above visible text. The
@@ -160,11 +160,11 @@ test("accepts an override naming the renamed Save, and resolves it fingerprint f
     // name the packet printed, and one plain word for what it is.
     control: { name: "Apply changes", kind: "button" }
   };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), clickAction, selectors), resolvedSave);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t2"), clickAction, selectors), resolvedSave);
   // The same repair as the live lane asks for it: a recorded click, named by
   // the output its policy node dispatches.
   const recordedClick = { nodeId: "save-changes", definitionId: "builtin.policy.action", outputId: "web.dom.click", recordedTarget: { element: RECORDED_SAVE } };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), recordedClick, selectors), resolvedSave);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t2"), recordedClick, selectors), resolvedSave);
 });
 
 test("refuses an override naming a handle it was never shown, or anything on the page a click cannot use", () => {
@@ -173,17 +173,17 @@ test("refuses an override naming a handle it was never shown, or anything on the
   // and the text field -- and a handle that resolves to none of them is refused
   // as one the packet never issued. Nothing is put in its place.
   const clickable = evidence.elements.filter((element) => elementFillsRepairableParameter(element, "clickable")).map((element) => element.target);
-  assert.deepEqual(clickable, ["target.1", "target.2", "target.3"]);
+  assert.deepEqual(clickable, ["t1", "t2", "t3"]);
   const unpressable = evidence.elements.filter((element) => !clickable.includes(element.target)).map((element) => element.target);
   assert.ok(unpressable.length > 0, "the packet described nothing a click cannot use");
-  for (const handle of ["save-changes", "#save-settings", "Save changes", "target.0", "target.99"]) {
+  for (const handle of ["save-changes", "#save-settings", "Save changes", "t0", "t99"]) {
     assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "absent", reason: "handle_not_issued" }, handle);
   }
   for (const handle of unpressable) {
     assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "absent", reason: "handle_incompatible" }, handle);
   }
   // An invented parameter is refused whatever handle rides with it.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: { element: "target.2", button: "target.2" } }, clickAction, selectors), { status: "absent", reason: "parameter_not_offered" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: { element: "t2", button: "t2" } }, clickAction, selectors), { status: "absent", reason: "parameter_not_offered" });
 });
 
 // The two controls this check used to accept. Both are on the page, both are
@@ -194,8 +194,8 @@ test("refuses an override naming a handle it was never shown, or anything on the
 test("refuses the reset beside Save and the field above it, as controls that do something else", () => {
   const { evidence, selectors } = failurePacket();
   const notEquivalent = { status: "absent", reason: "target_not_equivalent" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), clickAction, selectors), notEquivalent);
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.3"), clickAction, selectors), notEquivalent);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), clickAction, selectors), notEquivalent);
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t3"), clickAction, selectors), notEquivalent);
 });
 
 // identity-drift's `save-and-exit`: Save is gone and a different action stands

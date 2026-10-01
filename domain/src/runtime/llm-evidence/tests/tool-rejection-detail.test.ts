@@ -87,7 +87,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
   // A handle no packet ever carried.
-  const invented = await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } });
+  const invented = await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t40" } }, consequences: [] } });
   assert.equal(codeOf(invented), "target_unobserved");
   // The resolver's own codes say which way the handle stopped naming one
   // control, because the handle is made real by the same resolver the built
@@ -96,7 +96,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // Each implies a different next call, and the shapes a handle is accepted in
   // ride with them, because a code is a name for a mistake and never a
   // statement of what is accepted instead.
-  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "target.40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(invented), { reason: "handle_not_in_packet", target: "t40", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // The control the handle named has left the page.
   //
@@ -113,8 +113,8 @@ test("each way a handle stops naming one control is a different reason, and the 
   // remember the handles a recapture replaced. Until it does, this reason is
   // not invented here.
   pages.set({ url: QUEUE.url, elements: [QUEUE.elements[1]!] });
-  const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  const gone = await runtime.executeTool({ ...BASE, callId: "call.gone", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
+  assert.deepEqual(detailOf(gone), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
 
   // The page the packet described has been left. The same answer, for the same
   // reason: the page remembered under that location no longer carries the
@@ -125,8 +125,8 @@ test("each way a handle stops naming one control is a different reason, and the 
   // reply it already holds (`../repeated-refusal.ts`). The reason itself is
   // unchanged -- the count is beside it, not instead of it.
   pages.set({ url: "https://scheduler.example.test/queue/page/2", elements: QUEUE.elements });
-  const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
-  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "target.1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'], repeatedAnswer: 2 });
+  const moved = await runtime.executeTool({ ...BASE, callId: "call.moved", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
+  assert.deepEqual(detailOf(moved), { reason: "handle_not_in_packet", target: "t1", instead: ["web.handle.unknown", "web.handle.unknown:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'], repeatedAnswer: 2 });
 
   // Not a handle this domain issues at all.
   const malformed = await runtime.executeTool({ ...BASE, callId: "call.malformed", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "the schedule button" } }, consequences: [] } });
@@ -135,7 +135,7 @@ test("each way a handle stops naming one control is a different reason, and the 
   // and not `handle_not_in_packet`: looking again would not help, because what
   // was written is not the shape a handle is written in.
   assert.equal(codeOf(malformed), "target_unobserved");
-  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.selector.handle_location", "web.handle.malformed:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(malformed), { reason: "malformed_handle", instead: ["web.handle.malformed", "web.handle.expected.selector.handle_location", "web.handle.malformed:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
 
   assert.deepEqual(clicks, [], "nothing was pressed on a handle that named nothing");
 });
@@ -147,10 +147,10 @@ test("a handle the page has turned into several elements says so, rather than be
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
   pages.set(TWINNED);
-  const several = await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  const several = await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
 
   assert.equal(codeOf(several), "target_unobserved");
-  assert.deepEqual(detailOf(several), { reason: "handle_names_several_now", target: "target.1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'] });
+  assert.deepEqual(detailOf(several), { reason: "handle_names_several_now", target: "t1", instead: ["web.handle.not_unique", "web.handle.not_unique:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'] });
   assert.deepEqual(clicks, []);
 });
 
@@ -158,11 +158,11 @@ test("a call whose keys are not the tool's is told the keys the tool takes", asy
   const { gateway } = labWith(standingPage(QUEUE));
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
 
-  const extra = await runtime.executeTool({ ...BASE, callId: "call.extra", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [], selector: "#schedule" } });
+  const extra = await runtime.executeTool({ ...BASE, callId: "call.extra", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [], selector: "#schedule" } });
   assert.equal(codeOf(extra), "invalid_input");
   assert.deepEqual(detailOf(extra), { reason: "unexpected_input_keys", instead: ["node", "parameters", "consequences"] });
 
-  const short = await runtime.executeTool({ ...BASE, callId: "call.short", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } } } });
+  const short = await runtime.executeTool({ ...BASE, callId: "call.short", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } } } });
   // A node that acts must say what acting would lastingly do. A call that says
   // nothing is refused rather than read as saying it causes nothing, and it is
   // told all three keys rather than only the one it left out.
@@ -187,7 +187,7 @@ test("a press the run is not permitted names the classes it lacks and the reques
   };
 
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish"] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, permission, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: ["send_or_publish"] } });
 
   assert.equal(codeOf(refused), "permission_required");
   assert.deepEqual(detailOf(refused), { reason: "consequences_not_granted", missing: ["send_or_publish"], requestId: "permission-request:abc" });
@@ -200,7 +200,7 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
 
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["delete", "send_or_publish", "create_new"] } });
+  const refused = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: ["delete", "send_or_publish", "create_new"] } });
 
   // Only the gated part of the declaration is missing: deletion, money movement
   // and, again since 2026-09-30, sending or publishing. Ordinary creation is free.
@@ -208,17 +208,17 @@ test("a refusal with no run behind it to ask says nobody could be asked, and sti
   assert.deepEqual(detailOf(refused), { reason: "nobody_to_ask", missing: ["delete", "send_or_publish"] });
   assert.deepEqual(clicks, []);
 
-  const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["send_or_publish", "create_new"] } });
+  const sent = await runtime.executeTool({ ...BASE, callId: "call.send", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: ["send_or_publish", "create_new"] } });
   assert.equal(codeOf(sent), "permission_required");
   assert.deepEqual(detailOf(sent), { reason: "nobody_to_ask", missing: ["send_or_publish"] });
   assert.deepEqual(clicks, []);
 
-  const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["create_new"] } });
+  const created = await runtime.executeTool({ ...BASE, callId: "call.create", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: ["create_new"] } });
   assert.notEqual(codeOf(created), "permission_required");
   assert.equal(clicks.length, 1);
 
   // A declaration Core could not read is not a refusal to ask about: nothing was asked and nothing was pressed.
-  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["sell_the_company"] } });
+  const unreadable = await runtime.executeTool({ ...BASE, callId: "call.unreadable", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: ["sell_the_company"] } });
   assert.equal(codeOf(unreadable), "invalid_input");
   assert.deepEqual(detailOf(unreadable), { reason: "consequences_unreadable" });
 });
@@ -230,11 +230,11 @@ test("no refusal carries a word of the page, whatever it refused", async () => {
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
   const refusals: unknown[] = [];
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.40" } }, consequences: [] } }));
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.keys", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } } } }));
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.permission", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: ["delete"] } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.invented", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t40" } }, consequences: [] } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.keys", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } } } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.permission", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: ["delete"] } }));
   pages.set(TWINNED);
-  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } }));
+  refusals.push(await runtime.executeTool({ ...BASE, callId: "call.several", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } }));
 
   // Everything a refusal says, which is everything on it but `routeState`.
   // That member is not the refusal speaking: it is the host's route state of
@@ -291,7 +291,7 @@ test("the reason is the first the refusal names, and nothing but a code can beco
   // wrote. It is not a reason, and it is passed over rather than matched on.
   assert.equal(webLlmHandleRejectionReason(["web.handle.unknown:target", "web.handle.stale"]), "page_moved_since_packet");
   // As are the shapes a handle is accepted in.
-  assert.equal(webLlmHandleRejectionReason(['target: {"handle": "target.N"}']), "parameters_not_resolved");
+  assert.equal(webLlmHandleRejectionReason(['target: {"handle": "tN"}']), "parameters_not_resolved");
   // And nothing a page could have put there becomes a reason.
   assert.equal(webLlmHandleRejectionReason(["Schedule post", "#schedule", ""]), "parameters_not_resolved");
 });
@@ -303,8 +303,8 @@ test("the reason is the first the refusal names, and nothing but a code can beco
  * itself without this becoming a second, disagreeing copy.
  */
 test("a detail carrying the resolver's codes is sharpened once, and sharpening it again does not move it", () => {
-  const first = rejectionDetail({ reason: "parameters_not_resolved", target: "target.3", instead: ["web.handle.stale", "web.handle.stale:target"], missing: undefined, requestId: undefined, startLocation: undefined });
-  assert.deepEqual(first, { reason: "page_moved_since_packet", target: "target.3", instead: ["web.handle.stale", "web.handle.stale:target"] });
+  const first = rejectionDetail({ reason: "parameters_not_resolved", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"], missing: undefined, requestId: undefined, startLocation: undefined });
+  assert.deepEqual(first, { reason: "page_moved_since_packet", target: "t3", instead: ["web.handle.stale", "web.handle.stale:target"] });
   assert.deepEqual(rejectionDetail({ ...first, instead: first.instead, missing: undefined, requestId: undefined, startLocation: undefined }), first);
 
   // A reason that was never the resolver's is left exactly as the caller said,
@@ -337,28 +337,28 @@ test("a node given a control it cannot act on is told which node can, with the s
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   await runtime.executeTool({ ...BASE, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
 
-  const chosen = await runtime.executeTool({ ...BASE, callId: "call.choose", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "target.1" }, value: "Millbrook" }, consequences: [] } });
+  const chosen = await runtime.executeTool({ ...BASE, callId: "call.choose", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "t1" }, value: "Millbrook" }, consequences: [] } });
   assert.equal(codeOf(chosen), "target_unobserved");
   assert.deepEqual(detailOf(chosen), {
     reason: "handle_wrong_kind_of_control",
-    target: "target.1",
+    target: "t1",
     useNode: "web.output.dom-click",
-    instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click", "web.handle.wrong_control:target", 'target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}']
+    instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click", "web.handle.wrong_control:target", 'target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}']
   });
   // Nothing of the page rides on it: the node is this domain's own id.
   assert.equal(JSON.stringify(detailOf(chosen)).includes("Set as my store"), false);
 
   // Entering text into the same button names the same node.
-  const typed = await runtime.executeTool({ ...BASE, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-type", parameters: { target: { handle: "target.1" }, text: "Millbrook" }, consequences: [] } });
+  const typed = await runtime.executeTool({ ...BASE, callId: "call.type", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-type", parameters: { target: { handle: "t1" }, text: "Millbrook" }, consequences: [] } });
   assert.equal(detailOf(typed)?.useNode, "web.output.dom-click");
 
   // A control whose kind says nothing names no node, rather than one the model would be refused by again.
-  const unknown = await runtime.executeTool({ ...BASE, callId: "call.unknown", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "target.3" }, value: "x" }, consequences: [] } });
+  const unknown = await runtime.executeTool({ ...BASE, callId: "call.unknown", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-select", parameters: { target: { handle: "t3" }, value: "x" }, consequences: [] } });
   assert.equal(detailOf(unknown)?.reason, "handle_wrong_kind_of_control");
   assert.equal(detailOf(unknown)?.useNode, undefined);
 
   // The named node, with the same handle, is the call that works.
-  const pressed = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  const pressed = await runtime.executeTool({ ...BASE, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.equal(codeOf(pressed) === "target_unobserved", false, JSON.stringify(pressed));
   assert.deepEqual(clicks, ["#store-7 button"]);
 });
@@ -368,7 +368,7 @@ test("a node is named only beside the wrong-control reason, and only from a code
   const fitting = WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => code.startsWith("web.handle.expected.node."));
   assert.equal(fitting.length > 0, true);
   for (const code of fitting) {
-    const detail = rejectionDetail({ reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.wrong_control", code] });
+    const detail = rejectionDetail({ reason: "parameters_not_resolved", target: "t1", instead: ["web.handle.wrong_control", code] });
     assert.equal(detail.useNode, code.slice("web.handle.expected.node.".length), code);
   }
   // Beside any other reason, the same code names nothing.
@@ -376,6 +376,6 @@ test("a node is named only beside the wrong-control reason, and only from a code
   // A string shaped like one that the resolver never issues names nothing.
   assert.equal(rejectionDetail({ reason: "parameters_not_resolved", instead: ["web.handle.wrong_control", "web.handle.expected.node.Set as my store"] }).useNode, undefined);
   // A repeat keeps it, because it is read again from the codes the repeat carries.
-  const first = rejectionDetail({ reason: "parameters_not_resolved", target: "target.1", instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click"] });
+  const first = rejectionDetail({ reason: "parameters_not_resolved", target: "t1", instead: ["web.handle.wrong_control", "web.handle.expected.node.web.output.dom-click"] });
   assert.deepEqual(rejectionDetail({ reason: first.reason, target: first.target, instead: first.instead }), first);
 });

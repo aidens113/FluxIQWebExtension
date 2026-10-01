@@ -80,7 +80,7 @@ test("every result code the runtime actually emits is one the published set cont
     (await runtime.executeTool({ ...base, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://example.test/start" }, consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.browser-navigate", parameters: { url: "https://outside.test/" }, consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [], extra: 1 } })).resultCode,
-    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "target.9" } }, consequences: [] } })).resultCode,
+    (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t9" } }, consequences: [] } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode,
   ];
   assert.deepEqual(emitted, [

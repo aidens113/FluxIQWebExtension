@@ -177,7 +177,7 @@ test("a refusal before acting found and left the page it read; a failed action s
   const state = looked.stateDigests?.after;
   assert.ok(state);
 
-  const unobserved = await click(runtime, "call.unobserved", "target.999");
+  const unobserved = await click(runtime, "call.unobserved", "t999");
   assert.equal(unobserved.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(unobserved.stateDigests, { before: state, after: state });
 
@@ -199,7 +199,7 @@ test("a detection says the state it read the page in, on a refusal thrown after 
   assert.equal(detected.resultCode, "web.structure.detected");
   assert.deepEqual(detected.stateDigests, { before: state, after: state });
 
-  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "target.999" } });
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "t999" } });
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.stateDigests, { before: state, after: state });
 
@@ -235,7 +235,7 @@ test("a call that read no page reports no state", async () => {
   });
   assert.equal(went.effectApplied, true);
   assert.equal(went.stateDigests?.before, undefined);
-  assert.match(went.stateDigests?.after ?? "", /^web-state\.v2:/u);
+  assert.match(went.stateDigests?.after ?? "", /^web-state\.v3:/u);
 });
 
 /**
@@ -288,7 +288,7 @@ const DECISIONS: Decision[] = [
   {
     name: "action refused before acting",
     setUp: lookFirst,
-    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "target.999" } }, consequences: [] } }),
+    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "t999" } }, consequences: [] } }),
     bracketed: true, captures: { old: 3, now: 1 }, digests: "both"
   },
   {
@@ -333,11 +333,11 @@ for (const decision of DECISIONS) {
 
       assert.equal(spent, protocol === "digests-around-calls" ? decision.captures.old : decision.captures.now, protocol);
       if (decision.digests === "both") {
-        assert.match(result.stateDigests?.before ?? "", /^web-state\.v2:/u, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v2:/u, protocol);
+        assert.match(result.stateDigests?.before ?? "", /^web-state\.v3:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v3:/u, protocol);
       } else if (decision.digests === "after") {
         assert.equal(result.stateDigests?.before, undefined, protocol);
-        assert.match(result.stateDigests?.after ?? "", /^web-state\.v2:/u, protocol);
+        assert.match(result.stateDigests?.after ?? "", /^web-state\.v3:/u, protocol);
       } else {
         assert.equal(result.stateDigests, undefined, protocol);
       }

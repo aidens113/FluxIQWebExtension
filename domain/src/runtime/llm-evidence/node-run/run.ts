@@ -55,7 +55,7 @@ import { present } from "../present";
 import { webActionPermission } from "../permission";
 import { resolveWebPlanNode } from "../plan-resolution";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "../sanitize";
-import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { withoutWebLlmDeniedKeys } from "../denied-keys";
 import { WEB_LLM_EXTRACTION_HANDLE_PATTERN } from "../structure";
 import { RecoverableToolRejection, rejectionDetail, toolRejection, type WebLlmToolRejectionCode } from "../tool-rejection";
@@ -70,7 +70,6 @@ import { webUnshownAddressRefusal } from "./shown-addresses";
 import { webMovesThePage, webScopeAnchor, webStartLocationRefusal, WEB_NAVIGATION_ACTION } from "./start-location";
 import { replayWebOutputNode, webNodeReplayCall, webNodeReplayStatement, type WebNodeReplayStatement } from "./replay";
 
-const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 /**
  * The slots a handle may be written in, the one it is kept in, and the shape a
@@ -86,7 +85,7 @@ const EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 const ELEMENT_SLOTS = ["selector", "target", "element"];
 const KEPT_ELEMENT_SLOT = "target";
 const EXTRACTION_SLOT = "extractList";
-const HANDLE_SHAPE = ['target: {"handle": "target.N"}', 'extractList: {"handle": "extraction.N"}'];
+const HANDLE_SHAPE = ['target: {"handle": "tN"}', 'extractList: {"handle": "extraction.N"}'];
 /** The keys the library verb takes, and all it takes (`Core runtime/llm/node-tools/`). */
 const CALL_KEYS = ["node", "parameters", "consequences"];
 
@@ -254,7 +253,7 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // remembered as shown, a notice that pushed a shown filter past this look's
     // forty controls took the filter's handle with it (`run-muohbi3e-e5847e5a`).
     if (current) run.looked(current);
-    // A handle written bare -- `selector: target.3` -- is the shape the Flow
+    // A handle written bare -- `selector: t3` -- is the shape the Flow
     // script writes and the shape a model reaches for, and the resolver only
     // knows `{handle}`. Left alone it is not a handle at all: it goes to the
     // page as a literal selector, which is nothing, and the node fails
@@ -599,7 +598,7 @@ function handleRefusal(parameters: JsonObject, issueCodes: readonly string[]) {
 /** The first target handle a call's parameters name, wherever it wrote it. */
 function firstHandle(value: JsonValue | undefined, depth = 0): string | undefined {
   if (depth > 6 || value === undefined || value === null) return undefined;
-  if (typeof value === "string") return TARGET_HANDLE.test(value) ? value : undefined;
+  if (typeof value === "string") return canonicalWebLlmTargetHandle(value);
   if (Array.isArray(value)) {
     for (const entry of value) {
       const found = firstHandle(entry, depth + 1);
@@ -691,12 +690,15 @@ function withHandleShape(parameters: JsonObject): JsonObject {
   return out;
 }
 
-/** The target handle a value names, written bare or in the resolver's shape. */
+/**
+ * The target handle a value names, written bare or in the resolver's shape, in
+ * the one spelling the domain issues: `target.N` is kept as `tN`, so the draft
+ * shows the model the spelling every packet does.
+ */
 function elementHandle(value: JsonValue | undefined): string | undefined {
-  if (typeof value === "string") return TARGET_HANDLE.test(value) ? value : undefined;
+  if (typeof value === "string") return canonicalWebLlmTargetHandle(value);
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const handle = (value as JsonObject).handle;
-  return typeof handle === "string" && TARGET_HANDLE.test(handle) ? handle : undefined;
+  return canonicalWebLlmTargetHandle((value as JsonObject).handle);
 }
 
 /** Whether a navigation would leave the origin the exploration is on. */

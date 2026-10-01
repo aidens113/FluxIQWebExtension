@@ -73,6 +73,7 @@ import {
 import { present } from "./present";
 import { webFailureRepairParameters } from "./repairable-parameters";
 import { webLlmTargetsUnchanged } from "./target";
+import { canonicalWebLlmTargetHandle } from "./handle-spelling";
 import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_PATTERN } from "./stable-handles";
 import {
   createWebLlmExtractionHandles,
@@ -97,9 +98,9 @@ import {
   WEB_LLM_RUN_NODE_TOOL_ID
 } from "./vocabulary";
 
-// A handle the authoring tools issue: numbered for the whole Flow, so up to six digits (`./stable-handles.ts`).
+// A handle the authoring tools issue: numbered for the whole Flow, so up to six
+// digits (`./stable-handles.ts`), and read in either spelling, `tN` or `target.N`.
 const TARGET_HANDLE_PATTERN = WEB_LLM_TARGET_HANDLE_PATTERN;
-const TARGET_HANDLE = new RegExp(TARGET_HANDLE_PATTERN, "u");
 
 export type WebLlmFailureEvidenceRequest = {
   projectId: string;
@@ -201,7 +202,7 @@ export type WebAutomationLlmEvidenceRuntime = {
   resolveExtractionHandle(input: WebLlmExtractionHandleScope & { handle: string }): WebLlmExtractionHandleResolution;
   /**
    * A plan node's parameters with the handles the model wrote in them made
-   * real: a `selector` written `{ handle: "target.N" }` becomes the selector
+   * real: a `selector` written `{ handle: "tN" }` becomes the selector
    * behind the handle this project and Flow's exploration was shown, and the
    * extraction node's `extractList` written `{ handle: "extraction.N" }`
    * becomes the request behind it (`plan-resolution/`). A node with no handle
@@ -593,11 +594,13 @@ function requestedUrl(input: unknown): URL {
   }
 }
 
+/** A target handle the model wrote, in the packets' spelling: `target.N` is read as `tN`. */
 function boundedTargetHandle(input: unknown): string {
-  if (typeof input !== "string" || !TARGET_HANDLE.test(input)) {
-    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof input === "string" ? input : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  const handle = canonicalWebLlmTargetHandle(input);
+  if (handle === undefined) {
+    return recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof input === "string" ? input : undefined, instead: undefined, missing: undefined, requestId: undefined }));
   }
-  return input;
+  return handle;
 }
 
 function exactToolKeys(input: JsonObject, allowed: string[]): void {

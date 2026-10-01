@@ -4,7 +4,7 @@
 // The detection tool gives the model `extraction.N` and nothing else it could
 // address the page by. The item selector, the field specs and the pagination
 // that handle names are held here, the way `tools.ts` holds the selector behind
-// every `target.N`, so a later step can turn a plan that names the handle into
+// every `tN`, so a later step can turn a plan that names the handle into
 // the real `web.dom.extract_list` request. That step reads through
 // `resolveExtractionHandle` and nothing else.
 //
@@ -39,7 +39,7 @@ export const RETAINED_EXTRACTION_HANDLES = 16;
 /** How many let-go handles are remembered as stale before they read as unknown. Names only, never a request. */
 const REMEMBERED_STALE_HANDLES = 256;
 
-/** The only shape a handle has. Positional, like `target.N`, and meaningless without this store. */
+/** The only shape a handle has. Positional, like `tN`, and meaningless without this store. */
 export const WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
 
 const HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");

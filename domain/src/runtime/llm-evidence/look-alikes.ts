@@ -147,6 +147,11 @@ export function webLlmElementDescription(element: WebLlmEvidenceElement): string
     name: element.name,
     label: element.label,
     text: element.text,
+    // Part of `text`, a handle, and a flag only a search capture sets: none
+    // tells two elements apart for a person (t223).
+    ownText: undefined,
+    parent: undefined,
+    hidden: undefined,
     // Not identity for this purpose: a row's copy of a control usually differs
     // only by a per-instance id or class nobody reads, and counting those
     // would withhold the row's words (`within`), which is what a person reads.

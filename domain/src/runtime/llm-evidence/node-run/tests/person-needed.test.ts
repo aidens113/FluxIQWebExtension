@@ -148,7 +148,7 @@ test("a look at a robot check needs a person and proposes nothing", async () => 
 
 test("a press whose own look before acting meets a check proposes nothing, because nothing went out", async () => {
   const { runtime } = site({ capture: CHECK });
-  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "target.1" } }, consequences: [] } });
+  const pressed = await runtime.executeTool({ ...PROJECT, callId: "call.press", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "t1" } }, consequences: [] } });
 
   assert.equal(pressed.personNeeded, true);
   assert.equal(pressed.draft?.effect, "observe");

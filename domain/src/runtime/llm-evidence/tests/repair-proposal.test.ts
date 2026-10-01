@@ -116,7 +116,7 @@ const proposeThroughCore = (
 });
 
 test("Core keeps no proposal for a list extraction repair, and records why", () => {
-  const proposed = target({ item: "target.1", "field.price": "target.2" });
+  const proposed = target({ item: "t1", "field.price": "t2" });
   const result = proposeThroughCore(catalogueBinding(), { id: "rows", definitionId: "web.output.dom-extract_list" }, proposed);
   assert.equal(result.preflight.ok, false);
   assert.equal(result.preflight.issues.length, 1);
@@ -134,11 +134,11 @@ test("Core keeps no proposal for a list extraction repair, and records why", () 
 });
 
 test("Core proposes a recorded click repair, from the output the recording dispatches", () => {
-  const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "target.3" }));
+  const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "t3" }));
   assert.deepEqual(result.preflight, { ok: true, issues: [], requiresExternalSideEffectApproval: true });
   assert.equal(result.metadata?.targetResolution, "resolved");
   assert.deepEqual(result.patch.kind === "temporary_target_override" ? result.patch.target : undefined, {
-    handles: { element: "target.3" },
+    handles: { element: "t3" },
     handleResolution: "named",
     tagName: "button",
     accessibleName: "Unique",
@@ -149,11 +149,11 @@ test("Core proposes a recorded click repair, from the output the recording dispa
 });
 
 test("Core still proposes a click repair, carrying the flat fingerprint the domain resolved", () => {
-  const result = proposeThroughCore(formBinding(), createdNode("submit", "web.output.dom-click"), target({ element: "target.3" }));
+  const result = proposeThroughCore(formBinding(), createdNode("submit", "web.output.dom-click"), target({ element: "t3" }));
   assert.deepEqual(result.preflight, { ok: true, issues: [], requiresExternalSideEffectApproval: true });
   assert.equal(result.metadata?.targetResolution, "resolved");
   assert.deepEqual(result.patch.kind === "temporary_target_override" ? result.patch.target : undefined, {
-    handles: { element: "target.3" },
+    handles: { element: "t3" },
     handleResolution: "named",
     tagName: "button",
     accessibleName: "Unique",
@@ -170,7 +170,7 @@ test("Core still proposes a click repair, carrying the flat fingerprint the doma
 // `navigation-refuse-retired-page`, live repair campaign 2026-09-17).
 test("Core keeps no proposal for a failure a different target cannot fix, and never asks the domain", () => {
   for (const category of ["navigation_unexpected", "blocked_by_capability_or_policy", "auth_required"] as const) {
-    const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "target.3" }), { category, code: `web.${category}`, retryable: false });
+    const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "t3" }), { category, code: `web.${category}`, retryable: false });
     assert.equal(result.preflight.ok, false, category);
     assert.match(result.preflight.issues[0]!, /\(failure_not_target_repairable\)\.$/u, category);
     assert.equal(result.adaptation, undefined, category);
@@ -182,7 +182,7 @@ test("Core keeps no proposal for a failure a different target cannot fix, and ne
 // model was shown, that a click can use, and that is not the one the step acted
 // on. Before this the proposal was saved and the run recorded a repair.
 test("Core keeps no proposal for a repair naming another control, and records which case it was", () => {
-  const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "target.1" }));
+  const result = proposeThroughCore(formBinding(), recordedNode("save", "web.dom.click"), target({ element: "t1" }));
 
   assert.equal(result.preflight.ok, false);
   assert.match(result.preflight.issues[0]!, /\(target_not_equivalent\)\.$/u);

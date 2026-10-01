@@ -357,18 +357,18 @@ test("what cannot name one detected list or column is refused with where the han
   // A handle anywhere else in the request, or of the wrong kind, is misplaced.
   const misplaced: Array<[JsonObject, string]> = [
     [{ extractList: { handle: extraction, paginate: { next: { handle: extraction } } } }, "extractList.paginate.next"],
-    [{ extractList: { handle: "target.1" } }, "extractList"],
-    [{ extractList: { item: { handle: "target.1" }, fields: { name: "td" } } }, "extractList.item"],
-    [{ extractList: { item: "li", fields: { name: { kind: "text", selector: { handle: "target.1" } } } } }, "extractList.fields.0.selector"],
+    [{ extractList: { handle: "t1" } }, "extractList"],
+    [{ extractList: { item: { handle: "t1" }, fields: { name: "td" } } }, "extractList.item"],
+    [{ extractList: { item: "li", fields: { name: { kind: "text", selector: { handle: "t1" } } } } }, "extractList.fields.0.selector"],
     [{ target: { handle: extraction } }, "target"],
-    [{ selector: { handle: "target.1" } }, "selector"]
+    [{ selector: { handle: "t1" } }, "selector"]
   ];
   for (const [parameters, position] of misplaced) {
     assert.deepEqual(await resolve(runtime, EXTRACT_LIST_NODE, parameters), refusedAt("web.handle.misplaced", position, EXTRACTION_HINT), JSON.stringify(parameters));
   }
   // An extraction handle on an element node belongs in an extraction node; a target handle on one belongs in its selector.
   assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", EXTRACTION_HINT));
-  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "target.1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
+  assert.deepEqual(await resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "t1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
 });
 
 test("a refusal quotes where it went wrong by position, never a key or value the model chose", async () => {

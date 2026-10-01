@@ -219,7 +219,7 @@ export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[numb
  * - `unexpected_input_keys` and `missing_input_keys`: the call's keys are not
  *   the tool's. `instead` names the keys the tool takes.
  * - `malformed_handle`: the target is not a handle this domain issues. Copy one
- *   exactly as a packet shows it, `target.` and a number.
+ *   exactly as a packet shows it, `t` and a number.
  * - `not_a_number`, `not_a_url`, `value_not_text`: a value is not of the kind
  *   the tool's own schema declares.
  * - `not_a_text_field`: the control named is neither a text entry nor a select,

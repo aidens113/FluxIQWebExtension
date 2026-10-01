@@ -34,11 +34,13 @@ import { compactObject } from "./compact-object";
 import { frontLayerTest, isLeadStatement, pageEvidence, recentlyInteractedElements, type SnapshotElementCounts, type SnapshotElementEntry } from "./evidence";
 import { currentFrameViewportOffset, isTopFrame } from "./frame-geometry";
 import { observedEventElementQueue } from "./event-elements";
-import { describeElement } from "./describe-element";
+import { describeElement, ownTextBeside } from "./describe-element";
 import { isSensitiveFormControl } from "./element-traits";
+import { listedParentIndexes } from "./listed-parents";
 import { renderedElements } from "./rendered-elements";
 import { repeatExemplars } from "./repeat-exemplars";
 import { withSelectorMemo } from "./selector";
+import type { SnapshotCaptureOptions } from "../shared/snapshot-capture-options";
 import type { DomElementDescriptor, DomSnapshot } from "./types";
 
 /**
@@ -47,15 +49,18 @@ import type { DomElementDescriptor, DomSnapshot } from "./types";
  * (`selector/selector-memo.ts`): a list's rows build on one container selector
  * instead of each rebuilding it.
  */
-export function captureSnapshot(): DomSnapshot {
-  return withSelectorMemo(captureSnapshotNow);
+export function captureSnapshot(options: SnapshotCaptureOptions = {}): DomSnapshot {
+  return withSelectorMemo(() => captureSnapshotNow(options));
 }
 
-function captureSnapshotNow(): DomSnapshot {
-  const { entries, counts } = snapshotElements();
+function captureSnapshotNow(options: SnapshotCaptureOptions): DomSnapshot {
+  const { entries, shown, counts } = snapshotElements(options);
   // Before the descriptors are read out: the evidence pass sets each one's
   // `changed` and `recentlyInteracted`, and the same objects go on the wire.
-  const evidence = pageEvidence(entries, counts);
+  // It is handed the rendered elements only, so a search's capture reports the
+  // page a look reports, and the change record it keeps between captures
+  // holds the same elements whichever of the two ran last.
+  const evidence = pageEvidence(shown, counts);
   const snapshot: DomSnapshot = {
     url: location.href,
     title: document.title,
@@ -161,16 +166,37 @@ function withinSensitiveControl(node: Node | null | undefined): boolean {
  * A run of repeated controls is left where the page put it. Its first member
  * carries the run's size as `repeatCount`, so a reader can say "one of 280
  * rows" without counting; the other members are described like any element.
+ *
+ * Every descriptor carries `parent`, its nearest listed composed ancestor's
+ * index in the list (`listed-parents.ts`), and a descriptor whose `text` is
+ * all its descendants' words carries `ownText` beside it (t223).
+ *
+ * Asked with `includeHidden`, the list also holds what is not rendered, each
+ * flagged `hidden` and described like any element, in composed order among
+ * the rest (`rendered-elements.ts`). Everything that judges the page --
+ * the repeat runs, the front layer, the lead statements and the evidence pass
+ * -- is given the rendered elements alone (`shown`), so a hidden element
+ * changes no other element's descriptor, and without the option `entries` and
+ * `shown` are one list, built exactly as before.
  */
-function snapshotElements(): { entries: SnapshotElementEntry[]; counts: SnapshotElementCounts } {
-  const { elements, walked } = renderedElements();
-  const repeats = repeatExemplars(elements, touchedElements());
+function snapshotElements(options: SnapshotCaptureOptions): {
+  entries: SnapshotElementEntry[];
+  shown: SnapshotElementEntry[];
+  counts: SnapshotElementCounts;
+} {
+  const { elements, walked, hidden } = renderedElements(document, { includeHidden: options.includeHidden === true });
+  const rendered = hidden ? elements.filter((element) => !hidden.has(element)) : elements;
+  const repeats = repeatExemplars(rendered, touchedElements());
   const inFrontLayer = frontLayerTest();
-  const entries = elements.map((element) => ({
+  const parents = listedParentIndexes(elements);
+  const entries = elements.map((element, index) => ({
     element,
-    descriptor: snapshotDescriptor(element, repeats.counts.get(element), inFrontLayer(element))
+    descriptor: hidden?.has(element)
+      ? hiddenDescriptor(element, parents[index])
+      : snapshotDescriptor(element, repeats.counts.get(element), inFrontLayer(element), parents[index])
   }));
-  return { entries, counts: { scanned: walked, candidates: walked, matched: elements.length } };
+  const shown = hidden ? entries.filter((entry) => !hidden.has(entry.element)) : entries;
+  return { entries, shown, counts: { scanned: walked, candidates: walked, matched: rendered.length } };
 }
 
 /**
@@ -188,13 +214,33 @@ function touchedElements(): ReadonlySet<Element> {
 /**
  * The element's descriptor, with the facts only a snapshot knows: for a run's
  * exemplar, how many elements the run holds; whether it is on a front layer;
- * whether it is one of the main region's lead statements. The two flags are
- * written only when true.
+ * whether it is one of the main region's lead statements; its own words beside
+ * its descendants'; its listed parent. The two flags are written only when
+ * true, and the last two only when there is something to say.
  */
-function snapshotDescriptor(element: Element, repeatCount: number | undefined, frontLayer: boolean): DomElementDescriptor {
+function snapshotDescriptor(element: Element, repeatCount: number | undefined, frontLayer: boolean, parent: number | undefined): DomElementDescriptor {
   const descriptor = describeElement(element);
   if (repeatCount !== undefined) descriptor.repeatCount = repeatCount;
   if (frontLayer) descriptor.frontLayer = true;
   if (isLeadStatement(element)) descriptor.leadStatement = true;
+  return withStructure(element, descriptor, parent);
+}
+
+/**
+ * A hidden element's descriptor, for an `includeHidden` capture: described
+ * like any element, with its own words and its parent, and flagged `hidden`.
+ * It is in no repeat run, on no front layer and no lead statement -- those say
+ * how the page is painted, which a hidden element is not.
+ */
+function hiddenDescriptor(element: Element, parent: number | undefined): DomElementDescriptor {
+  const descriptor = withStructure(element, describeElement(element), parent);
+  descriptor.hidden = true;
+  return descriptor;
+}
+
+function withStructure(element: Element, descriptor: DomElementDescriptor, parent: number | undefined): DomElementDescriptor {
+  const ownText = ownTextBeside(element, descriptor.text);
+  if (ownText !== undefined) descriptor.ownText = ownText;
+  if (parent !== undefined) descriptor.parent = parent;
   return descriptor;
 }

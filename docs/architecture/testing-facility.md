@@ -115,7 +115,7 @@ inspection and recoverable rejection set `effectApplied: false`, while a
 mutation sets it to `true` only after its browser action succeeds and evidence
 is recaptured. Outcomes also carry a bounded content-free `resultCode`, which
 Core may retain with the tool ID and effect flag for Testing Lab diagnosis.
-Interactive evidence assigns opaque handles (`target.1`, `target.2`, and so
+Interactive evidence assigns opaque handles (`t1`, `t2`, and so
 on); model-selected actions copy a handle rather than reconstructing CSS. The
 runtime resolves the handle to its last-returned selector and revalidates that
 selector against fresh sanitized evidence before sending it to the browser.

@@ -164,10 +164,10 @@ test("a snapshot that never arrived produces no ref rather than a ref pointing a
 test("the diff reports the move, the counts, and which elements came and went, and stays inside the schema", () => {
   // `.v2` identifies an element by what it is and what it is called. The packet
   // stopped carrying selectors, and the opaque handle that replaced them is
-  // positional -- `target.1` is the first element of whichever capture it came
+  // positional -- `t1` is the first element of whichever capture it came
   // from -- so a diff over handles would report that nothing ever changes.
-  const before = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", title: "Cart", elements: [{ target: "target.1", tag: "button", name: "Pay" }, { target: "target.2", tag: "a", name: "Edit" }] };
-  const after = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/thanks", title: "Thanks", elements: [{ target: "target.1", tag: "a", name: "Edit" }, { target: "target.2", tag: "a", name: "Receipt" }] };
+  const before = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", title: "Cart", elements: [{ target: "t1", tag: "button", name: "Pay" }, { target: "t2", tag: "a", name: "Edit" }] };
+  const after = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/thanks", title: "Thanks", elements: [{ target: "t1", tag: "a", name: "Edit" }, { target: "t2", tag: "a", name: "Receipt" }] };
   const diff = webAutomationStateDiff(before, after, "web.state.1@a:before_action", "web.state.2@a:after_action");
   assert.deepEqual(diff, {
     schemaVersion: WEB_STATE_DIFF_SCHEMA_VERSION,
@@ -187,7 +187,7 @@ test("the diff reports the move, the counts, and which elements came and went, a
 });
 
 test("the diff lists every element that appeared or left, and its counts stay exact", () => {
-  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ target: `target.${index + 1}`, tag: "li", name: `Item ${index}` })) };
+  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ target: `t${index + 1}`, tag: "li", name: `Item ${index}` })) };
   const grown = webAutomationStateDiff({ elements: [] }, many);
   assert.equal(grown.addedElementCount, 30);
   assert.equal((grown.addedElements as unknown[]).length, 30);

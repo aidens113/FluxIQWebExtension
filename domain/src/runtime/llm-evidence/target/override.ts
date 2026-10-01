@@ -4,7 +4,7 @@
 //
 // The model never names a selector. It names opaque handles, one per
 // repairable parameter the domain declared, and a handle only means anything
-// against the packet the model was shown: `target.3` is a name this domain
+// against the packet the model was shown: `t3` is a name this domain
 // minted for the third element it described, and is a key in a map nobody else
 // holds. A handle that was invented, or that was trimmed out of the packet, or
 // that names a control the failed verb cannot use, resolves to nothing at all.
@@ -46,6 +46,7 @@
 // a control nobody can name. The gate withholds a name the model was never
 // shown, so this adds nothing to what leaves the domain.
 
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { type WebLlmEvidenceElement } from "../elements";
 import { present } from "../present";
 import {
@@ -97,7 +98,9 @@ export function validateWebRuntimeTargetOverrideEvidence(
   const resolved = new Map<string, WebLlmEvidenceElement>();
   for (const [name, handle] of Object.entries(handles)) {
     const parameter = webRepairableParameterFor(definitionId, name)!;
-    const named = evidence.elements.filter((element) => element.target === handle);
+    // Written the old way, `target.N`, it is still the `tN` the packet printed.
+    const wanted = canonicalWebLlmTargetHandle(handle) ?? handle;
+    const named = evidence.elements.filter((element) => element.target === wanted);
     // Only a packet altered after it was issued names one handle twice.
     if (named.length > 1) return { status: "ambiguous", reason: "handle_ambiguous" };
     // The handle has to stand on its own. Nothing is substituted for it: the

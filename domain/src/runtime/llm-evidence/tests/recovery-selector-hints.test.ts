@@ -2,7 +2,7 @@
 // must get back the selector hint behind exactly that control.
 //
 // Core carries the packets an exploration returned into the patch request,
-// qualifies a handle taken from one as `explored.N:target.M`, and asks this
+// qualifies a handle taken from one as `explored.N:tM`, and asks this
 // domain about exactly that packet with the qualifier removed (Core `a8ce814`,
 // `AS/runtime/recovery/annotation/{exploration,patches}.ts`). What reaches
 // `validateTargetOverrideEvidence` is a JSON clone of the packet the option
@@ -207,12 +207,12 @@ test("a repair naming a control only the exploration revealed resolves with the 
 test("a handle no packet issued is still refused, and a packet this domain never issued gets no selector hint", async () => {
   const { runtime, failure, explored } = await dismissedDialog();
 
-  assert.deepEqual(askAsCore(runtime, explored, "explored.2:target.9"), { status: "absent", reason: "handle_not_issued" });
-  assert.deepEqual(askFailure(runtime, failure, "target.9"), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(askAsCore(runtime, explored, "explored.2:t9"), { status: "absent", reason: "handle_not_issued" });
+  assert.deepEqual(askFailure(runtime, failure, "t9"), { status: "absent", reason: "handle_not_issued" });
 
   const altered = structuredClone(explored[1]!.packet);
   for (const element of altered.elements as Array<{ name?: string }>) element.name = `${element.name} (edited)`;
-  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "target.1" } }, asRecorded(altered, "target.1")));
+  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "t1" } }, asRecorded(altered, "t1")));
   assert.equal(target.selector, undefined);
 });
 
@@ -271,5 +271,5 @@ test("a recovery's structure detection is offered while exploring and kept where
   assert.deepEqual(runtime.resolveExtractionHandle({ projectId: SCOPE.projectId, flowId: "flow.other", handle: String(detected.extraction) }), { ok: false, code: "unknown_handle" });
   // A structure packet names no element a click could be re-pointed at, so a
   // repair that names it is not one this domain issued a target for.
-  assert.deepEqual(runtime.validateTargetOverrideEvidence(recovery.explored[0]!.packet, { handles: { element: "target.1" } }, CLICK), { status: "absent", reason: "evidence_unrecognized" });
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(recovery.explored[0]!.packet, { handles: { element: "t1" } }, CLICK), { status: "absent", reason: "evidence_unrecognized" });
 });

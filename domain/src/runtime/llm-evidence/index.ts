@@ -26,6 +26,9 @@ export { WEB_LLM_DENIED_EVIDENCE_KEYS, webLlmEvidenceKey } from "./denied-keys";
 // What a published string says instead of itself when it is shaped like a
 // credential, so a reader can tell a withheld string from the page's own.
 export { WEB_LLM_WITHHELD_TEXT, screenedText as screenedWebLlmText } from "./withheld";
+// A target handle as the domain spells it, `tN`, from either spelling a model
+// may write: `tN` or the old `target.N`.
+export { canonicalWebLlmTargetHandle } from "./handle-spelling";
 // A URL as the packet spells one: query and fragment kept, secrets withheld.
 export { screenedEvidenceUrl } from "./location";
 // A name this domain read as something other than what was written, which a

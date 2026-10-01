@@ -172,7 +172,7 @@ test("a page with a dialog open and an overlay in front says both, as observeRou
   assert.deepEqual(looked.routeState, answer);
 
   // Refused before acting, on the same page: it reports that page.
-  const refused = await click(runtime, "call.refused", "target.999");
+  const refused = await click(runtime, "call.refused", "t999");
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, answer);
 });
@@ -201,7 +201,7 @@ test("a refusal before acting reports the page it refused on, read by that call"
   // The page changed after the look; the refusal read the page again before
   // refusing, and that page is the one it reports.
   fake.setPage(smallPage("Changed"));
-  const refused = await click(runtime, "call.unobserved", "target.999");
+  const refused = await click(runtime, "call.unobserved", "t999");
   const refusedOn = await fake.observed();
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, refusedOn);
@@ -228,7 +228,7 @@ test("a detection reports the page it read, on a refusal thrown after the read a
   assert.equal(detected.resultCode, "web.structure.detected");
   assert.deepEqual(detected.routeState, answer);
 
-  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "target.999" } });
+  const refused = await runtime.executeTool({ ...PROJECT, callId: "call.refused", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: { target: "t999" } });
   assert.equal(refused.resultCode, "web.action.rejected.target_unobserved");
   assert.deepEqual(refused.routeState, answer);
 
@@ -283,7 +283,7 @@ const DECISIONS: Decision[] = [
   {
     name: "action refused before acting",
     setUp: lookFirst,
-    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "target.999" } }, consequences: [] } }),
+    request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle: "t999" } }, consequences: [] } }),
     captures: 1, routeState: true
   },
   { name: "detect, page-wide", page: catalogPage, request: () => ({ ...PROJECT, callId: "call.n", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} }), captures: 1, routeState: true },

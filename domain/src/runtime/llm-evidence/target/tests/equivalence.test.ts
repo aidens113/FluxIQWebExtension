@@ -78,7 +78,7 @@ test("refuses any button left on a page whose recorded item was deleted, as unan
   // The notice itself is not something a click acts on, and nothing stands in for it.
   const notice = handleOf(evidence, (element) => element.text?.startsWith("This item was deleted") === true || element.name?.startsWith("This item was deleted") === true);
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(notice), recordedDetach, selectors), refused("absent", "handle_incompatible"));
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.99"), recordedDetach, selectors), refused("absent", "handle_not_issued"));
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t99"), recordedDetach, selectors), refused("absent", "handle_not_issued"));
 });
 
 // failure-surfaces-refuse-guarded-link (`run-mu4ya9vt-cad840da`,
@@ -98,7 +98,7 @@ test("refuses the link guard's way back, and never substitutes it for a handle i
 
   const back = handleOf(evidence, (element) => element.tag === "a");
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(back), recordedDetach, selectors), refused("absent", "target_not_equivalent"));
-  for (const invented of ["target.99", "#detach-target", "Detach me"]) {
+  for (const invented of ["t99", "#detach-target", "Detach me"]) {
     assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(invented), recordedDetach, selectors), refused("absent", "handle_not_issued"), invented);
   }
 });
@@ -142,7 +142,7 @@ test("refuses the not-found page's way back as the recorded link, named or subst
 
   const back = handleOf(evidence, (element) => element.tag === "a");
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(back), recordedLink, selectors), refused("absent", "target_unanchored"));
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.99"), recordedLink, selectors), refused("absent", "handle_not_issued"));
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t99"), recordedLink, selectors), refused("absent", "handle_not_issued"));
 });
 
 // The rules on their own.
@@ -160,7 +160,7 @@ test("a shortened label still names the recorded control; a label that keeps onl
   assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handleOf(evidence, (element) => element.name === "Changes")), recorded, selectors), refused("absent", "target_unanchored"));
   // Case and spacing are not a difference.
   const exact = page("/toolbar", [button("save", "  SAVE   changes ", { landmark: "main" })]);
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(exact.evidence, override("target.1"), recorded, exact.selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(exact.evidence, override("t1"), recorded, exact.selectors).status, "resolved");
 });
 
 test("the one control of its kind in the recorded form stands in for a renamed one, and two do not", () => {
@@ -174,19 +174,19 @@ test("the one control of its kind in the recorded form stands in for a renamed o
   }
   // Another form's only submit is not in the recorded one.
   const elsewhere = page("/settings", [button("apply", "Apply changes", { formId: "billing-form" }, { type: "submit" })]);
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(elsewhere.evidence, override("target.1"), click(RECORDED_SAVE), elsewhere.selectors), refused("absent", "target_unanchored"));
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(elsewhere.evidence, override("t1"), click(RECORDED_SAVE), elsewhere.selectors), refused("absent", "target_unanchored"));
 });
 
 test("a control that joins another action to the recorded one is a different action, even in the recorded form", () => {
   const form = { formId: "settings-form", heading: "General" };
   for (const label of ["Save changes and exit", "Save & close", "Save changes then publish", "Apply and close", "Save + continue"]) {
     const { evidence, selectors } = page("/settings", [button("other", label, form)]);
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), click(RECORDED_SAVE), selectors), refused("absent", "target_not_equivalent"), label);
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), click(RECORDED_SAVE), selectors), refused("absent", "target_not_equivalent"), label);
   }
   // A recorded control that already joined two keeps its own name.
   const { evidence, selectors } = page("/settings", [button("other", "Save and close", form)]);
   const recordedCompound = click(button("save-close", "Save and close", form));
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), recordedCompound, selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), recordedCompound, selectors).status, "resolved");
 });
 
 // order-operations-repair-relabelled-dispatch (live, 2026-09-21): the recorded
@@ -207,13 +207,13 @@ test("a conjunction inside one control's name is not a second action; the record
   // the recorded action is on, and whether the recording's name was cut or kept.
   for (const label of ["Dispatch run and export", "Export and dispatch run", "Dispatch and export", "Dispatch run then print labels"]) {
     const joined = page("/orders", [button("joined", label, header, { type: "button" })]);
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(joined.evidence, override("target.1"), recordedDispatch, joined.selectors), refused("absent", "target_not_equivalent"), label);
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(joined.evidence, override("t1"), recordedDispatch, joined.selectors), refused("absent", "target_not_equivalent"), label);
   }
 
   // A compound name that is the recorded compound name, or it shortened, is the recorded control.
   const recordedCompound = click(button("pick-pack", "Pick and pack orders", header, { type: "button" }));
   const shortened = page("/orders", [button("pick", "Pick and pack", header, { type: "button" })]);
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(shortened.evidence, override("target.1"), recordedCompound, shortened.selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(shortened.evidence, override("t1"), recordedCompound, shortened.selectors).status, "resolved");
 });
 
 test("a reset is not a submit, a link is not a button, and one kind of text field is not another", () => {
@@ -227,7 +227,7 @@ test("a reset is not a submit, a link is not a button, and one kind of text fiel
   ];
   for (const [label, element, failedAction] of cases) {
     const { evidence, selectors } = page("/settings", [element]);
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), failedAction, selectors), refused("absent", "target_not_equivalent"), label);
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), failedAction, selectors), refused("absent", "target_not_equivalent"), label);
   }
 });
 
@@ -236,7 +236,7 @@ test("a button whose type the recording did not keep is compared as either kind 
   // still the reset the model was shown.
   const { evidence, selectors } = page("/settings", [button("reset", "Discard changes", { formId: "settings-form" }, { type: "reset" })]);
   const created = click({ tagName: "button", accessibleName: "Discard changes", context: { formId: "settings-form" } });
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), created, selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), created, selectors).status, "resolved");
 });
 
 test("twins that differ only by their place in a list are indistinguishable, even named as recorded", () => {
@@ -246,7 +246,7 @@ test("twins that differ only by their place in a list are indistinguishable, eve
   });
   const { evidence, selectors } = page("/catalogue", [row(1), row(2)]);
   const recorded = click(button("add-to-cart", "Add to cart", { landmark: "main", listPosition: { index: 2, total: 2 } }));
-  for (const handle of ["target.1", "target.2"]) {
+  for (const handle of ["t1", "t2"]) {
     assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), recorded, selectors), refused("ambiguous", "target_indistinguishable"), handle);
   }
 });
@@ -254,29 +254,29 @@ test("twins that differ only by their place in a list are indistinguishable, eve
 test("a node that was repaired is judged against its repair, not its recording", () => {
   const { evidence, selectors } = page("/settings", [button("apply", "Apply changes", { landmark: "main" }, { type: "submit" })]);
   const recordedOnly = click(RECORDED_SAVE);
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), recordedOnly, selectors), refused("absent", "target_unanchored"));
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), recordedOnly, selectors), refused("absent", "target_unanchored"));
   const repaired: AutomationStudioRuntimeTargetOverrideFailedAction = {
     ...recordedOnly,
     recordedTarget: {
       element: RECORDED_SAVE,
-      target: { handles: { element: "target.2" }, handleResolution: "named", tagName: "button", accessibleName: "Apply changes", metadata: { controlType: "submit", formId: "settings-form" } }
+      target: { handles: { element: "t2" }, handleResolution: "named", tagName: "button", accessibleName: "Apply changes", metadata: { controlType: "submit", formId: "settings-form" } }
     }
   };
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), repaired, selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), repaired, selectors).status, "resolved");
 });
 
 test("a long name arrives whole, and is compared as the whole name it is", () => {
   const long = `Save ${"x".repeat(400)}`;
   const { evidence, selectors } = page("/settings", [button("save", long, { landmark: "main" })]);
   assert.equal(evidence.elements[0]?.name, long);
-  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), click(button("save", long, { landmark: "main" })), selectors).status, "resolved");
+  assert.equal(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), click(button("save", long, { landmark: "main" })), selectors).status, "resolved");
 });
 
 test("a name the packet withheld as a secret is not compared as a name", () => {
   const secret = "Save sk-live0123456789abcdefghijKLMN";
   const { evidence, selectors } = page("/settings", [button("save", secret, { landmark: "main" })]);
   assert.equal(evidence.elements[0]?.name, WEB_LLM_WITHHELD_TEXT);
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), click(button("save", secret, { landmark: "main" })), selectors), refused("absent", "target_unanchored"));
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), click(button("save", secret, { landmark: "main" })), selectors), refused("absent", "target_unanchored"));
 });
 
 test("refuses every repair when nothing says what the failed action addressed", () => {
@@ -289,8 +289,8 @@ test("refuses every repair when nothing says what the failed action addressed", 
     { nodeId: "save", definitionId: "web.output.dom-click", recordedTarget: { element: { selector: "#save" }, target: { selector: "#save" } } }
   ];
   for (const failedAction of identities) {
-    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), failedAction, selectors), unknown, JSON.stringify(failedAction));
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t1"), failedAction, selectors), unknown, JSON.stringify(failedAction));
   }
   // What the target says is still judged first: an invented handle is refused as one.
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.9"), identities[0]!, selectors), refused("absent", "handle_not_issued"));
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("t9"), identities[0]!, selectors), refused("absent", "handle_not_issued"));
 });

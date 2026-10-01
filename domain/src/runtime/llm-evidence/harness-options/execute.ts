@@ -16,7 +16,7 @@
 // A target handle is bound only through a packet this exploration returned,
 // never through a capture the model was not shown. Every packet returned is
 // also handed to the runtime's selector retention, so a repair that names one
-// of its handles -- Core writes it `explored.N:target.M` and strips the
+// of its handles -- Core writes it `explored.N:tM` and strips the
 // qualifier before asking -- gets the selector hint behind exactly that
 // control.
 //
@@ -47,9 +47,9 @@ import {
 } from "../capture";
 import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
+import { canonicalWebLlmTargetHandle } from "../handle-spelling";
 import { currentElementForReturnedTarget, pressControl } from "../press";
 import type { WebLlmSnapshotBinding } from "../sanitize";
-import { WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
 import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../structure";
 import { recoverable, RecoverableToolRejection, rejectionDetail, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
@@ -273,17 +273,18 @@ function targetHandle(value: JsonObject): string {
   return handleIn(value);
 }
 
-/** The `target` handle in an input whose keys were already checked. */
+/**
+ * The `target` handle in an input whose keys were already checked, in the
+ * shape the options declare (`./options.ts`) and in the spelling the packets
+ * use: `target.N` is read as `tN`.
+ */
 function handleIn(value: JsonObject): string {
-  const target = value.target;
-  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) {
-    recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof target === "string" ? target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
+  const target = canonicalWebLlmTargetHandle(value.target);
+  if (target === undefined) {
+    return recoverable("invalid_input", rejectionDetail({ reason: "malformed_handle", target: typeof value.target === "string" ? value.target : undefined, instead: undefined, missing: undefined, requestId: undefined }));
   }
   return target;
 }
-
-/** The handle shape the options declare (`./options.ts`), read the same way. */
-const TARGET_HANDLE = new RegExp(WEB_LLM_TARGET_HANDLE_PATTERN, "u");
 
 function requestedUrl(input: unknown): URL {
   try {

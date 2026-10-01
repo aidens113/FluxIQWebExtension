@@ -47,16 +47,16 @@ test("a look cut short forgets no handle the page had, and adds its own", () => 
   const bound = LIVE_PACKET_LENGTH;
   // Shown: a packet ending at the filter.
   targets.remember(SCOPE, capture([...buttons(bound - 1, "control"), { tagName: "div", selector: "#voltbay", visibleText: "Voltbay" }]));
-  assert.equal(at(targets, `target.${bound}`), "#voltbay");
+  assert.equal(at(targets, `t${bound}`), "#voltbay");
   // Not shown: a notice first, and a capture the browser cut before the
   // filter. The notice is a control the Flow has not numbered yet, so it takes
   // the next number.
   const look = capture([{ tagName: "button", selector: "#allow", visibleText: "Allow" }, ...buttons(bound - 1, "control")], true);
   assert.equal(look.evidence.truncated, true);
   targets.rememberLook(SCOPE, look);
-  assert.equal(at(targets, `target.${bound}`), "#voltbay", "the filter the model was shown is still pressable");
-  assert.equal(at(targets, `target.${bound + 1}`), "#allow", "what the look described is pressable too");
-  assert.equal(at(targets, "target.1"), "#control-1");
+  assert.equal(at(targets, `t${bound}`), "#voltbay", "the filter the model was shown is still pressable");
+  assert.equal(at(targets, `t${bound + 1}`), "#allow", "what the look described is pressable too");
+  assert.equal(at(targets, "t1"), "#control-1");
 });
 
 test("a look that described the whole page replaces the page's handles, as a shown packet does", () => {
@@ -66,6 +66,6 @@ test("a look that described the whole page replaces the page's handles, as a sho
   const look = capture(buttons(1, "control"));
   assert.equal(look.evidence.truncated, false);
   targets.rememberLook(SCOPE, look);
-  assert.equal(at(targets, "target.1"), "#control-1");
-  assert.equal(at(targets, "target.2"), "unknown", "a control a complete look did not describe has left the page");
+  assert.equal(at(targets, "t1"), "#control-1");
+  assert.equal(at(targets, "t2"), "unknown", "a control a complete look did not describe has left the page");
 });

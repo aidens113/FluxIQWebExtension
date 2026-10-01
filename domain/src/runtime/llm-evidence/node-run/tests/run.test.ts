@@ -80,6 +80,26 @@ test("running a node dispatches the node's own command and records the step it b
   assert.equal(click?.parameters.selector, "#go");
 });
 
+test("a node run reads a handle written the old way, `target.N`, as the `tN` the packet printed (t223)", async () => {
+  const stubbed = stub();
+  const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
+  const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
+  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  assert.match(handle, /^t[1-9][0-9]*$/u, "the domain mints `tN`");
+  const legacy = `target.${handle.slice(1)}`;
+
+  // Bare and in the resolver's shape alike.
+  for (const [index, parameters] of [{ target: { handle: legacy } }, { selector: legacy }].entries()) {
+    stubbed.setTitle(`Pressed ${index}`);
+    const pressed = await runtime.executeTool({ ...PROJECT, callId: `call.legacy.${index}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters, consequences: [] } });
+    assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(parameters));
+    // The step keeps the one spelling every packet uses, so the model is never shown two.
+    assert.deepEqual(pressed.draft?.input, { node: CLICK, parameters: { target: { handle } }, consequences: [] });
+    assert.equal((pressed.draft?.ranWith?.parameters as { selector?: string }).selector, "#go");
+  }
+  assert.deepEqual(stubbed.commands.filter((command) => command.actionType === "web.dom.click").map((command) => command.parameters.selector), ["#go", "#go"]);
+});
+
 test("a node that fails is a result, under its own name, and never a step of the Flow", async () => {
   const stubbed = stub({ failClick: true });
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);

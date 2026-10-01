@@ -285,8 +285,11 @@ task:
   detected list; every row, field and string a reading node read; every
   element of a reusable-evidence projection, in document order.
 - **Target handles to six digits.** A packet of every element spends numbers
-  faster, so a Flow's handles run `target.1` to `target.999999`
-  (`stable-handles.ts`).
+  faster, so a Flow's handles run `t1` to `t999999`
+  (`stable-handles.ts`). Handles are minted `tN` (t223); a handle written
+  the old way, `target.N`, is still accepted wherever the model names an
+  element and is read as the `tN` it means
+  (`llm-evidence/handle-spelling/`).
 
 What still never reaches a model:
 
@@ -309,7 +312,7 @@ What still never reaches a model:
   millisecond timestamp, one in ten of which passes Luhn by chance, as the
   page wrote them.
 - **An address.** No selector, xpath or record key is published; the opaque
-  `target.N` handle is the only way to name an element.
+  `tN` handle is the only way to name an element.
 
 The state digest (`state-digest/state-digest.ts`, `web-state.v2`) and the
 route state (`route-state/project.ts`) are read off the same whole packet, so a
