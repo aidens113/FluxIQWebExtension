@@ -40,7 +40,13 @@ AskControls is now independently verified:54/native0/338.26ms and actual-config
 two-root strict0. Its worker completed the bounded read-only Core deletion-fixture
 audit: no source-confirmed fixture cause, protected deletion/quiescence handoff
 recorded without edits or weakened assertions. That worker now owns exact
-ProjectTree+NEWkeyboard test. Lazy worker48 focused passes await root independent checks/strict closure.
+ProjectTree+NEWkeyboard test. Lazy source/test frozen: root independent48/native0/
+41709.8521ms, worker actual-config two-root strict0; root scoped57017 queued.
+Integrated extension full45050 is queued; source remains frozen during it.
+Preview accessibility audit Complete: proposed table naming/empty text and
+same-control caret restoration remain held. Its worker now audits exact two-file
+feedback wiring read-only. Progress checkpoints downstreama09bef0e/220dc1a4 and
+Core5eec244e preserve prior results/briefs; Ask source3a55a8b1 locally committed.
 Hierarchy correction is still active: first53/54 pass exposed actual failure
 feedback rendering; direct imported StatusText inspection and a StrictMode
 regression are released within its existing component/test ownership only.
