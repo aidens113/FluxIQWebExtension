@@ -1,4 +1,4 @@
-// Simple Mode's relays (`SIMPLE_PANEL_MESSAGES`): saved automations and their
+// Automation panel's relays (`AUTOMATION_PANEL_MESSAGES`): saved automations and their
 // runs, running one, a run's facts, a dataset's export, whether an AI model key
 // is set, and turning the last recording into an automation.
 //
@@ -14,9 +14,9 @@
 // well as in Core, so an older Core that answered whole summaries still puts
 // no key name or metadata in the panel.
 
-import { SIMPLE_PANEL_MESSAGES, type PanelRelayResponse, type SimplePanelRequest } from "../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES, type PanelRelayResponse, type AutomationPanelRequest } from "../../shared/protocol";
 
-export type SimplePanelDeps = {
+export type AutomationRelayDeps = {
   readonly isControlPage: (sender: chrome.runtime.MessageSender) => boolean;
   /** A Core program call carrying the pairing token (`callCoreProgram`). */
   readonly call: (endpoint: string, payload: Record<string, unknown>, programId?: string) => Promise<PanelRelayResponse>;
@@ -31,41 +31,41 @@ type ControlResult = { readonly handled: false } | { readonly handled: true; rea
 /** How many runs the automations list reads; the panel joins each Flow to its newest. */
 export const AUTOMATION_RUN_LIST_LIMIT = 50;
 
-const MESSAGES: ReadonlySet<string> = new Set(Object.values(SIMPLE_PANEL_MESSAGES));
+const MESSAGES: ReadonlySet<string> = new Set(Object.values(AUTOMATION_PANEL_MESSAGES));
 
-export async function handleSimplePanelControl(
-  message: { type?: unknown } & SimplePanelRequest,
+export async function handleAutomationRelay(
+  message: { type?: unknown } & AutomationPanelRequest,
   sender: chrome.runtime.MessageSender,
-  deps: SimplePanelDeps
+  deps: AutomationRelayDeps
 ): Promise<ControlResult> {
   if (typeof message.type !== "string" || !MESSAGES.has(message.type)) return { handled: false };
   if (!deps.isControlPage(sender)) return { handled: true, response: failure("forbidden", "Only the FluxIQ panel can do that.") };
   return { handled: true, response: await respond(message.type, message, deps) };
 }
 
-async function respond(type: string, message: SimplePanelRequest, deps: SimplePanelDeps): Promise<PanelRelayResponse> {
-  if (type === SIMPLE_PANEL_MESSAGES.removeRecordingStep) {
+async function respond(type: string, message: AutomationPanelRequest, deps: AutomationRelayDeps): Promise<PanelRelayResponse> {
+  if (type === AUTOMATION_PANEL_MESSAGES.removeRecordingStep) {
     const entryId = text(message.entryId);
     return entryId ? deps.removeRecordedStep(entryId) : missing("entryId");
   }
-  if (type === SIMPLE_PANEL_MESSAGES.modelReadiness) return modelReadiness(deps);
+  if (type === AUTOMATION_PANEL_MESSAGES.modelReadiness) return modelReadiness(deps);
 
   const projectId = text(message.projectId) ?? text(deps.projectId());
   if (!projectId) return failure("no_project", "FluxIQ has not said which project this browser belongs to yet. Connect, then try again.");
 
   switch (type) {
-    case SIMPLE_PANEL_MESSAGES.listAutomations:
+    case AUTOMATION_PANEL_MESSAGES.listAutomations:
       return listAutomations(projectId, deps);
-    case SIMPLE_PANEL_MESSAGES.runAutomation:
-    case SIMPLE_PANEL_MESSAGES.testGeneratedAutomation: {
+    case AUTOMATION_PANEL_MESSAGES.runAutomation:
+    case AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation: {
       const flowId = text(message.flowId);
       return flowId ? deps.call("run-runtime-session", { projectId, flowId }) : missing("flowId");
     }
-    case SIMPLE_PANEL_MESSAGES.runDetail: {
+    case AUTOMATION_PANEL_MESSAGES.runDetail: {
       const runId = text(message.runId);
       return runId ? runDetail(projectId, runId, deps) : missing("runId");
     }
-    case SIMPLE_PANEL_MESSAGES.exportDataset: {
+    case AUTOMATION_PANEL_MESSAGES.exportDataset: {
       const runId = text(message.runId);
       const datasetId = text(message.datasetId);
       const format = text(message.format);
@@ -74,12 +74,12 @@ async function respond(type: string, message: SimplePanelRequest, deps: SimplePa
       if (!format) return missing("format");
       return deps.call("export-run-dataset", { projectId, runId, datasetId, format });
     }
-    case SIMPLE_PANEL_MESSAGES.generateFromRecording: {
+    case AUTOMATION_PANEL_MESSAGES.generateFromRecording: {
       const recordingId = deps.lastStoppedRecordingId();
       if (!recordingId) return failure("invalid_request", "There is no finished recording to turn into an automation. Record one, then try again.");
       return deps.call("generate-recording-proposal", { projectId, recordingId, mode: "direct" });
     }
-    case SIMPLE_PANEL_MESSAGES.saveGeneratedAutomation: {
+    case AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation: {
       const proposalId = text(message.proposalId);
       return proposalId ? deps.call("review-recording-flow-proposal", { projectId, proposalId, decision: "approved" }) : missing("proposalId");
     }
@@ -88,7 +88,7 @@ async function respond(type: string, message: SimplePanelRequest, deps: SimplePa
   }
 }
 
-async function listAutomations(projectId: string, deps: SimplePanelDeps): Promise<PanelRelayResponse> {
+async function listAutomations(projectId: string, deps: AutomationRelayDeps): Promise<PanelRelayResponse> {
   const flows = await deps.call("list-flow-summaries", { projectId });
   if (!flows.ok) return flows;
   const runs = await deps.call("list-flow-runs", { projectId, sort: "updated", direction: "desc", limit: AUTOMATION_RUN_LIST_LIMIT });
@@ -96,7 +96,7 @@ async function listAutomations(projectId: string, deps: SimplePanelDeps): Promis
   return { ok: true, payload: { flows: field(flows.payload, "flows") ?? [], runs: field(runs.payload, "runs") ?? [] } };
 }
 
-async function runDetail(projectId: string, runId: string, deps: SimplePanelDeps): Promise<PanelRelayResponse> {
+async function runDetail(projectId: string, runId: string, deps: AutomationRelayDeps): Promise<PanelRelayResponse> {
   const detail = await deps.call("get-flow-run-detail", { projectId, runId, compact: true });
   if (!detail.ok) return detail;
   const runDetailValue = field(detail.payload, "runDetail") ?? null;
@@ -107,7 +107,7 @@ async function runDetail(projectId: string, runId: string, deps: SimplePanelDeps
   return { ok: true, payload: { runDetail: runDetailValue, adaptations: field(adaptations.payload, "adaptations") ?? field(adaptations.payload, "items") ?? [] } };
 }
 
-async function modelReadiness(deps: SimplePanelDeps): Promise<PanelRelayResponse> {
+async function modelReadiness(deps: AutomationRelayDeps): Promise<PanelRelayResponse> {
   const snapshot = await deps.call("snapshot", {}, "secret-keys");
   if (!snapshot.ok) return snapshot;
   const listed = field(snapshot.payload, "keys");

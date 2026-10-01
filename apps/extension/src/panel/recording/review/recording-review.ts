@@ -3,7 +3,7 @@
 // phases and their words are `review-model.ts` and `review-view.ts`; this file
 // only sends the requests and draws.
 
-import { SIMPLE_PANEL_MESSAGES, type ExtensionStatus } from "../../../shared/protocol";
+import { AUTOMATION_PANEL_MESSAGES, type ExtensionStatus } from "../../../shared/protocol";
 import { createElement } from "../../dom";
 import { createOpenFluxIQButton } from "../../open-fluxiq";
 import type { PanelContext } from "../../shell";
@@ -78,11 +78,11 @@ export function createRecordingReview(context: PanelContext): RecordingReview {
     };
     if (action === "generate") {
       buildingTimer = setTimeout(() => dispatch({ type: "building" }), BUILDING_AFTER_MS);
-      void request<unknown>({ type: SIMPLE_PANEL_MESSAGES.generateFromRecording }).then((result) => settle({ type: "generated", result }));
+      void request<unknown>({ type: AUTOMATION_PANEL_MESSAGES.generateFromRecording }).then((result) => settle({ type: "generated", result }));
     } else if (action === "test") {
-      void request<unknown>({ type: SIMPLE_PANEL_MESSAGES.testGeneratedAutomation, ...ids() }).then((result) => settle({ type: "testFinished", result }));
+      void request<unknown>({ type: AUTOMATION_PANEL_MESSAGES.testGeneratedAutomation, ...ids() }).then((result) => settle({ type: "testFinished", result }));
     } else {
-      void request<unknown>({ type: SIMPLE_PANEL_MESSAGES.saveGeneratedAutomation, ...ids() }).then((result) => settle({ type: "saveFinished", result }));
+      void request<unknown>({ type: AUTOMATION_PANEL_MESSAGES.saveGeneratedAutomation, ...ids() }).then((result) => settle({ type: "saveFinished", result }));
     }
   }
 
