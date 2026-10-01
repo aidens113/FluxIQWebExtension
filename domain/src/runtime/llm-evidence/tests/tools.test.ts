@@ -15,6 +15,7 @@ import {
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway
 } from "..";
+import { shownPageLines } from "../page-view/tests/shown-page-lines";
 
 test("captures through the generic action bridge and keeps navigation on the inspected origin", async () => {
   const commands: Array<{ sessionId: string; actionType: string; parameters: unknown; metadata: unknown }> = [];
@@ -106,7 +107,7 @@ test("binds from the production host seam and selects the sole trusted web clien
   bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
   // One tool of this domain's own. Everything else a build does is a node of
   // the library, which Core offers because Core is what enumerates the registry.
-  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_DETECT_STRUCTURE_TOOL_ID, "web.find_on_page"]);
   // `runnable` names what this domain will actually run, and Core narrows the
   // library it offers the model to it. Without that the enum held Core's
   // built-ins too -- available in every scope -- and every call naming one
@@ -117,6 +118,8 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
     { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
+    // The search the page view points to (t223); a second query is a different request.
+    { toolId: "web.find_on_page", effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
   // The detection tool states the shape its handle is written in, because a
   // live build that was shown only a code invented a handle of its own and had
@@ -194,16 +197,18 @@ test("captures the whole sanitized post-failure page without returning the raw s
     failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed", route: "failed" },
   });
 
-  assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
+  // The page as the model reads every page (t223), with no element objects.
+  assert.equal(evidence.schemaVersion, "web-llm-page.v3");
+  assert.equal(Object.hasOwn(evidence, "elements"), false);
   // The query is kept and its secret withheld; nothing is left out.
   assert.equal(evidence.location, "https://example.test/form?token=(withheld)#secret");
   assert.equal(evidence.truncated, false);
-  assert.equal(evidence.elements.length, 40, "every safe action, the password field alone not described");
+  assert.equal(shownPageLines(evidence).length, 40, "every safe action, the password field alone not described");
   assert.equal(JSON.stringify(evidence).includes(privateValue), false);
   assert.equal(JSON.stringify(evidence).includes("private"), false);
   assert.equal(evidence.repairCandidates?.action, "known");
   // Every clickable element is a candidate, in the page's order.
-  assert.deepEqual(evidence.repairCandidates?.candidates.map((candidate) => candidate.target), evidence.elements.map((element) => element.target));
+  assert.deepEqual(evidence.repairCandidates?.candidates.map((candidate) => candidate.target), shownPageLines(evidence).map((line) => line.target));
   assert.deepEqual(commands, [{
     actionType: "web.dom.capture_snapshot",
     parameters: {},
@@ -241,9 +246,9 @@ test("a failure packet lists every element and every repair candidate, however m
     failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" },
   });
 
-  assert.equal(evidence.elements.length, 30);
+  assert.equal(shownPageLines(evidence).length, 30);
   assert.equal(evidence.repairCandidates?.candidates.length, 30);
-  assert.ok(evidence.elements.every((element) => element.text?.endsWith("x".repeat(80))), "no text is cut");
+  assert.ok(shownPageLines(evidence).every((line) => line.words?.endsWith("x".repeat(80))), "no text is cut");
 });
 
 test("a repair on a packet this runtime issued gets its selector hint back, without the packet ever carrying one", async () => {
@@ -277,10 +282,16 @@ test("a repair on a packet this runtime issued gets its selector hint back, with
     control: { name: "Place order", kind: "button" },
   });
 
-  // A packet this runtime never issued has no binding, so the repair is
-  // resolved fingerprint-only rather than refused or guessed at.
+  // A page this runtime never issued names no packet it kept, and the compact
+  // view holds no element to check a handle against (t223), so the repair is
+  // refused rather than guessed at.
   const foreign = { ...evidence, location: "https://example.test/other" };
-  assert.deepEqual(runtime.validateTargetOverrideEvidence(foreign as unknown as JsonObject, { handles: { element: "t1" } }, clickAction), {
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(foreign as unknown as JsonObject, { handles: { element: "t1" } }, clickAction), { status: "absent", reason: "evidence_unrecognized" });
+
+  // A structured packet of the shape this domain handed out before t223 is
+  // still checked against its own elements, fingerprint-only.
+  const legacy = { schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/form", truncated: false, elements: [{ target: "t1", tag: "button", text: "Place order" }] };
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(legacy as unknown as JsonObject, { handles: { element: "t1" } }, clickAction), {
     status: "resolved",
     target: { handles: { element: "t1" }, handleResolution: "named", tagName: "button", visibleText: "Place order" },
     control: { name: "Place order", kind: "button" },
@@ -356,7 +367,7 @@ test("post-failure evidence is the whole page, with no byte gate of its own", as
   });
   const failedAction = { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" };
   const whole = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction });
-  assert.equal(whole.elements.length, 60);
+  assert.equal(shownPageLines(whole).length, 60);
   assert.equal(whole.truncated, false);
   assert.ok(Buffer.byteLength(JSON.stringify(whole), "utf8") > 6_000, "larger than the gate Core used to hold it to");
 });
@@ -446,7 +457,7 @@ test("keeps an opaque press target bound to the returned element when fresh snap
   });
   const base = { projectId: "project.one", flowId: "flow.one" } as const;
   const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  assert.deepEqual((inspected.evidence as any).elements[0], { target: "t1", tag: "button", text: "Details", attributes: [["type", "button"], ["aria-expanded", "false"]], controlType: "button", revealKind: "disclosure", expanded: false });
+  assert.equal(shownPageLines(inspected.evidence)[0]!.line, "t1 button \"Details\" closed");
   const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-click", parameters: { target: { handle: "t1" } }, consequences: [] } });
   assert.equal(revealed.effectApplied, true);
   assert.deepEqual(parameters.map((entry) => (entry as { selector?: string }).selector), ["#details"]);

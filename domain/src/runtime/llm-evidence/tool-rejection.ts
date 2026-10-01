@@ -57,9 +57,10 @@
 // press is refused because a dialog or a banner covers the control, the model
 // needs to see what covers it before it can deal with it, and until it changes
 // something the loop will not let it look again. So such a refusal carries the
-// page as it now stands (`page`): the same sanitized packet an inspection
-// returns, never anything the packet would not show.
+// page as it now stands (`page`): the page as an inspection returns it, the
+// compact view (`web-llm-page.v3`, `./page-view/`), never the structured packet.
 
+import { publishedWebLlmPage, type WebLlmPublishedPage } from "./page-view";
 import { present } from "./present";
 import type { WebLlmPageEvidence, WebLlmSnapshotBinding } from "./sanitize";
 
@@ -466,8 +467,8 @@ export type WebLlmToolRejection = {
   code: WebLlmToolRejectionCode;
   /** Why, and what to do about it. Absent only where the code already says everything the model could act on. */
   detail?: WebLlmToolRejectionDetail;
-  /** The page as it stands after a refusal the page caused; absent on every other refusal. */
-  page?: WebLlmPageEvidence;
+  /** The page as it stands after a refusal the page caused, as the model reads every page (t223); absent on every other refusal. */
+  page?: WebLlmPublishedPage;
 };
 
 export class RecoverableToolRejection extends Error {
@@ -628,6 +629,10 @@ function wholeCount(value: number | undefined): number | undefined {
   return value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
+/**
+ * A refusal, with the page it was refused on when the page caused it. The page
+ * goes out as the compact view; the structured packet stays in the domain.
+ */
 export function toolRejection(code: WebLlmToolRejectionCode, page?: WebLlmPageEvidence, detail?: WebLlmToolRejectionDetail): WebLlmToolRejection {
-  return present<WebLlmToolRejection>({ schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code, detail, page });
+  return present<WebLlmToolRejection>({ schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code, detail, page: page === undefined ? undefined : publishedWebLlmPage(page) });
 }

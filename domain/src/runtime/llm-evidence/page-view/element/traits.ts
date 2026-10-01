@@ -15,7 +15,13 @@ import { meaningfulWords } from "./meaningful";
 export type WebLlmLineRole = "control" | "layer" | "text" | "image";
 
 export type WebLlmViewTraits = {
-  /** It has a box that reaches into the document, and is not a hidden element a search capture added. */
+  /**
+   * It is not a hidden element a search capture added, and its box, when it has
+   * one, reaches into the document. An element with no box is still visible:
+   * the capture lists one only when it is drawn or pressed without a box of its
+   * own (an image map `area`, a `display: contents` wrapper), and a box that
+   * failed to measure must not take a control off the page (t223, "no caps").
+   */
   visible: boolean;
   /** A link, button, field, menu or other thing a person operates. */
   control: boolean;
@@ -42,7 +48,7 @@ const SEMANTIC_TAGS: ReadonlySet<string> = new Set(["p", "li", "td", "th", "dt",
 export function webLlmViewTraits(element: WebLlmEvidenceElement): WebLlmViewTraits {
   const role = pageRole(element);
   const box = element.box;
-  const visible = box !== undefined && box.x + box.width > 0 && box.y + box.height > 0 && element.hidden !== true;
+  const visible = element.hidden !== true && (box === undefined || (box.x + box.width > 0 && box.y + box.height > 0));
   const control = isControl(element, role);
   const layer = element.isDialog !== undefined || element.covers !== undefined || element.coversCount !== undefined;
   const semantic = SEMANTIC_TAGS.has(element.tag);

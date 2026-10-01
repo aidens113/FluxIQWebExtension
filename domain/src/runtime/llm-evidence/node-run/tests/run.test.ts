@@ -14,6 +14,7 @@ import {
   type WebLlmEvidenceGateway
 } from "../..";
 import { webObservationNodeId } from "../catalog";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const CLICK = "web.output.dom-click";
@@ -40,7 +41,7 @@ test("the runnable library is derived from the domain's own node definitions", (
 
 test("the runtime offers detection beside Core's library verb, and says it runs nodes", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(stub().gateway);
-  assert.deepEqual(runtime.tools.map((tool) => tool.toolId), ["web.detect_repeating_structure"]);
+  assert.deepEqual(runtime.tools.map((tool) => tool.toolId), ["web.detect_repeating_structure", "web.find_on_page"]);
   // `runnable` is said beside the first look, because Core narrows the library
   // it offers to it and a refusal names it back (`../../tools.ts`).
   assert.deepEqual(runtime.runsNodes, {
@@ -56,7 +57,7 @@ test("running a node dispatches the node's own command and records the step it b
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
   assert.equal(looked.effectApplied, false);
   assert.deepEqual(looked.draft, { actionId: SNAPSHOT, effect: "observe", input: { node: SNAPSHOT, parameters: {}, consequences: [] }, ranWith: { node: SNAPSHOT, parameters: {}, consequences: [] }, proposes: false });
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
 
   stubbed.setTitle("Pressed");
   const pressed = await runtime.executeTool({
@@ -84,7 +85,7 @@ test("a node run reads a handle written the old way, `target.N`, as the `tN` the
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
   assert.match(handle, /^t[1-9][0-9]*$/u, "the domain mints `tN`");
   const legacy = `target.${handle.slice(1)}`;
 
@@ -104,7 +105,7 @@ test("a node that fails is a result, under its own name, and never a step of the
   const stubbed = stub({ failClick: true });
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
   const failed = await runtime.executeTool({ ...PROJECT, callId: "call.two", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: CLICK, parameters: { target: { handle } }, consequences: [] } });
   assert.equal(failed.effectApplied, false);
   assert.equal((failed.evidence as JsonObject).ok, false);
@@ -135,7 +136,7 @@ test("a declared consequence nobody permitted refuses the run, and nothing is di
   const stubbed = stub();
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
   const before = stubbed.commands.length;
   const refused = await runtime.executeTool({
     ...PROJECT,
@@ -191,7 +192,7 @@ test("a press that would move money still stops and asks, under that same gate",
   const runtime = createWebAutomationLlmEvidenceRuntime(stubbed.gateway);
   const gate = new AutomationStudioActionPermissionGate({ stage: "authoring", permittedConsequences: [] });
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.one", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const handle = ((looked.evidence as JsonObject & { elements: Array<{ target: string }> }).elements)[0]!.target;
+  const handle = shownPageLines(looked.evidence)[0]!.target;
 
   const refused = await runtime.executeTool({
     ...PROJECT,

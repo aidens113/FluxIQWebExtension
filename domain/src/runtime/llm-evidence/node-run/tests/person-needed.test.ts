@@ -18,6 +18,7 @@ import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../../failure";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { shownHandle } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const HOME = "https://store.test/home";
@@ -73,9 +74,7 @@ function page(url: string): JsonObject {
 
 async function goHandle(runtime: ReturnType<typeof createWebAutomationLlmEvidenceRuntime>): Promise<string> {
   const looked = await runtime.executeTool({ ...PROJECT, callId: "call.look", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: SNAPSHOT, parameters: {}, consequences: [] } });
-  const element = (looked.evidence as { elements: Array<{ target: string; text?: string }> }).elements.find((candidate) => candidate.text === "Go");
-  assert.ok(element, "the button is in the packet");
-  return element.target;
+  return shownHandle(looked.evidence, "Go");
 }
 
 test("a navigation that lands on a robot check needs a person, and stands as a proposing navigation", async () => {

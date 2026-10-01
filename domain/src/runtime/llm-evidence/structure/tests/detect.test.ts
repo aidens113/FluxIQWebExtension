@@ -37,6 +37,7 @@ import {
   type WebLlmStructurePaginationMode
 } from "../..";
 import { CAPTURED_DETECTIONS, type CapturedDetectionName } from "./captured-detections";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const SCOPE: { projectId: string; flowId: string } = { projectId: "project.one", flowId: "flow.one" };
 
@@ -248,8 +249,8 @@ test("a target handle an inspect issued is bound through its selector, even one 
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const handles = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements;
-  assert.deepEqual(handles.map((element) => [element.target, element.tag]), [["t1", "button"], ["t2", "a"], ["t3", "a"]]);
+  const handles = shownPageLines(inspected.evidence);
+  assert.deepEqual(handles.map((line) => [line.target, line.kind]), [["t1", "button"], ["t2", "link"], ["t3", "link"]]);
 
   commands.length = 0;
   const around = await detect(runtime, { target: "t2" });
@@ -289,7 +290,7 @@ test("a target handle an inspect issued is bound through its selector, even one 
   // not spent, whatever position it is in (see ../../stable-handles.ts).
   page = withElements(captured("product-catalog-largest"), [link(7)]);
   const framedPacket = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const framedHandle = (framedPacket.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
+  const framedHandle = shownPageLines(framedPacket.evidence)[0]!.target;
   commands.length = 0;
   const framed = await detect(runtime, { target: framedHandle });
   assert.equal(framed.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
@@ -381,7 +382,7 @@ test("a page refusal about the target says which way the handle stopped naming o
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.refusals", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const target = (inspected.evidence as { elements: Array<{ target: string; tag: string }> }).elements.find((element) => element.tag === "a")!.target;
+  const target = shownPageLines(inspected.evidence).find((line) => line.kind === "link")!.target;
 
   // The page looked where the call pointed and found no repeating children
   // there, so it was asked again as a whole, and found none there either. The
@@ -432,7 +433,7 @@ test("a target with no list around it gets the page's list, which names no targe
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect.outward", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const target = (inspected.evidence as { elements: Array<{ target: string }> }).elements[0]!.target;
+  const target = shownPageLines(inspected.evidence)[0]!.target;
 
   commands.length = 0;
   const found = await detect(runtime, { target });

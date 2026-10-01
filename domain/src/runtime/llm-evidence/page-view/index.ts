@@ -12,6 +12,7 @@ export { webLlmPageText } from "./page-text";
 export { webLlmPageTree, type WebLlmPageTree } from "./page-tree";
 export { publishedWebLlmPage, type WebLlmPublishedPage } from "./published-page";
 export { webLlmPageRetentionKey } from "./retention-key";
+export { webLlmResultRetentionKey } from "./result-retention-key";
 export { WEB_LLM_PAGE_SCHEMA_VERSION } from "./schema-version";
 export { webLlmStructureMarkers } from "./structure-markers";
 export type { WebLlmViewLine } from "./view-line";

@@ -7,14 +7,14 @@ import { bodyLines } from "./packet-fixture";
 
 const LINK = "https://shop.test/store/item";
 
-test("1: a visible control gets a line, words or not; an invisible one does not", () => {
+test("1: a visible control gets a line, words or not, and so does one with no box; an off-page or hidden one does not", () => {
   assert.deepEqual(bodyLines([
     { tag: "a", href: LINK },
     { tag: "button", name: "Go" },
     { tag: "input", name: "Search in", box: { x: -9768, y: 10, width: 9, height: 7 } },
     { tag: "button", name: "Hidden", hidden: true },
     { tag: "button", name: "No box", box: undefined }
-  ]), ["t1 link ~/item", "t2 button \"Go\""]);
+  ]), ["t1 link ~/item", "t2 button \"Go\"", "t5 button \"No box\""]);
 });
 
 test("2: a visible layer gets a line, with words or without", () => {

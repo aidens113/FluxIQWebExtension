@@ -12,10 +12,16 @@ import type { WebLlmEvidenceViewport } from "../../page-evidence";
 
 export type WebLlmElementWhere = "on screen" | "above" | "below" | "off screen" | "off-page" | "not rendered";
 
-/** Where the element is: `not rendered` without a box or when hidden, `off-page` when its box ends before the document starts. */
+/**
+ * Where the element is: `not rendered` when a search capture added it as
+ * hidden, `off-page` when its box ends before the document starts. An element
+ * a look listed without a box (an image map `area`, a `display: contents`
+ * wrapper) is placed by the capture's `onViewport` alone.
+ */
 export function webLlmElementWhere(element: WebLlmEvidenceElement, viewport: WebLlmEvidenceViewport | undefined): WebLlmElementWhere {
   const box = element.box;
-  if (box === undefined || element.hidden === true) return "not rendered";
+  if (element.hidden === true) return "not rendered";
+  if (box === undefined) return element.onViewport === false ? "below" : "on screen";
   if (box.x + box.width <= 0 || box.y + box.height <= 0) return "off-page";
   if (viewport === undefined) return element.onViewport === false ? "below" : "on screen";
   const onScreen = element.onViewport ?? intersects(box, viewport);

@@ -18,15 +18,14 @@ import test from "node:test";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import {
   createWebAutomationLlmEvidenceRuntime,
-  webLlmStateDigest,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway,
-  type WebLlmEvidenceToolExecution,
-  type WebLlmPageEvidence
+  type WebLlmEvidenceToolExecution
 } from "../..";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
+import { shownHandle } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
 const SNAPSHOT = "web.output.dom-capture_snapshot";
@@ -113,10 +112,7 @@ async function asked(runtime: WebAutomationLlmEvidenceRuntime, callId: string): 
 }
 
 function handleOf(result: WebLlmEvidenceToolExecution, text: string): string {
-  const elements = (result.evidence as JsonObject & { elements: Array<{ target: string; text?: string }> }).elements;
-  const found = elements.find((element) => element.text === text);
-  assert.ok(found, `no element reading "${text}"`);
-  return found.target;
+  return shownHandle(result.evidence, text);
 }
 
 test("the binding says its calls report their own states", () => {
@@ -124,7 +120,7 @@ test("the binding says its calls report their own states", () => {
   assert.equal(runtime.stateDigestsOnCalls, true);
 });
 
-test("a look's digest is what captureStateDigest answers for the same page, and is the digest of the packet it returned", async () => {
+test("a look's digest is what captureStateDigest answers for the same page", async () => {
   const fake = fakeGateway(largePage());
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
   const looked = await look(runtime, "call.look");
@@ -132,9 +128,9 @@ test("a look's digest is what captureStateDigest answers for the same page, and 
 
   assert.ok(answer);
   assert.deepEqual(looked.stateDigests, { before: answer, after: answer });
-  // The packet is the whole page whatever the call (t200), so the digest of
-  // what the look returned and what the host reads are one value.
-  assert.equal(webLlmStateDigest(looked.evidence as unknown as WebLlmPageEvidence), answer);
+  // What the look returned is the compact view of that page (t223); the digest
+  // is of the structured packet behind it, the one the host reads.
+  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v3");
 });
 
 test("an action's digests are the page it found and the page it left, as captureStateDigest reads them", async () => {

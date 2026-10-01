@@ -28,7 +28,8 @@ test("without a viewport, every element the capture said is not on screen reads 
 
 test("off the page, and not rendered", () => {
   assert.equal(webLlmElementWhere({ target: "t1", tag: "input", box: { x: -9768, y: 10, width: 9, height: 7 } }, VIEWPORT), "off-page");
-  assert.equal(webLlmElementWhere({ target: "t1", tag: "input" }, VIEWPORT), "not rendered");
+  assert.equal(webLlmElementWhere({ target: "t1", tag: "input" }, VIEWPORT), "on screen", "a look lists a boxless element only when it is drawn or pressed");
+  assert.equal(webLlmElementWhere({ target: "t1", tag: "area", onViewport: false }, VIEWPORT), "below");
   const hidden = at(1100);
   hidden.hidden = true;
   assert.equal(webLlmElementWhere(hidden, VIEWPORT), "not rendered");

@@ -24,6 +24,7 @@ import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM
 } from "..";
 import { sanitizeWebLlmSnapshotWithBindings, type WebLlmSnapshotBinding } from "../sanitize";
 import { createWebLlmStableTargetHandles, WEB_LLM_TARGET_HANDLE_MAX_NUMBER, WEB_LLM_TARGET_HANDLE_PATTERN } from "../stable-handles";
+import { shownPageLines } from "../page-view/tests/shown-page-lines";
 
 const PAGE_URL = "https://example.test/search";
 const OTHER_URL = "https://example.test/other";
@@ -51,8 +52,7 @@ let calls = 0;
 async function inspect(runtime: WebAutomationLlmEvidenceRuntime): Promise<Array<{ target: string; name: string }>> {
   calls += 1;
   const result = await runtime.executeTool({ projectId: "p", flowId: "f", callId: `call.${calls}`, toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const elements = (result as unknown as { evidence: { elements: Array<{ target: string; name?: string; text?: string }> } }).evidence.elements;
-  return elements.map((element) => ({ target: element.target, name: element.name ?? element.text ?? "" }));
+  return shownPageLines(result.evidence).map((line) => ({ target: line.target, name: line.words ?? "" }));
 }
 
 async function selectorFor(runtime: WebAutomationLlmEvidenceRuntime, handle: string): Promise<string | undefined> {
@@ -144,7 +144,7 @@ test("numbers belong to one Flow: another Flow's first control is t1 again", asy
   const runtime = runtimeOver(() => ({ url: PAGE_URL, elements: [banner, beds] }));
   await inspect(runtime);
   const result = await runtime.executeTool({ projectId: "p", flowId: "another", callId: "call.other", toolId: WEB_LLM_RUN_NODE_TOOL_ID, value: { node: "web.output.dom-capture_snapshot", parameters: {}, consequences: [] } });
-  const targets = (result as unknown as { evidence: { elements: Array<{ target: string }> } }).evidence.elements.map((element) => element.target);
+  const targets = shownPageLines(result.evidence).map((line) => line.target);
   assert.deepEqual(targets, ["t1", "t2"]);
 });
 

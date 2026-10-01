@@ -13,6 +13,8 @@ import { present } from "../../present";
 import type { WebLlmSnapshotBinding } from "../../sanitize";
 import { createWebLlmExtractionHandles } from "../../structure";
 import type { WebRecoveryHarnessContext } from "../execute";
+import { publishedWebLlmPage } from "../../page-view";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 import {
   webAutomationExplorationRefusalClassifier,
   webAutomationRecoveryHarnessOptionBundle,
@@ -65,19 +67,22 @@ test("declares nothing destructive, and withholds the mutating options from a ca
   );
 });
 
-test("inspects the page, returns a sanitized packet naming elements by opaque handle, and keeps its selectors for the repair", async () => {
+test("inspects the page, returns the compact view naming elements by opaque handle, and keeps its selectors for the repair", async () => {
   const { registry, commands, retained } = registeredWith();
 
   const evidence = await execute(registry, "web.recovery.inspect", {});
 
-  assert.equal((evidence as JsonObject).schemaVersion, "web-llm-evidence.v2");
-  assert.deepEqual(((evidence as { elements: Array<{ target: string }> }).elements).map((element) => element.target), ["t1", "t2", "t3"]);
+  // The page as the model reads every page (t223), with no element objects.
+  assert.equal((evidence as JsonObject).schemaVersion, "web-llm-page.v3");
+  assert.equal(Object.hasOwn(evidence as JsonObject, "elements"), false);
+  assert.deepEqual(shownPageLines(evidence).map((line) => line.target), ["t1", "t2", "t3"]);
   assert.equal(JSON.stringify(evidence).includes("#delete"), false);
   assert.deepEqual(commands, ["web.dom.capture_snapshot"]);
-  // The packet the model was shown is the one retained, with the selectors
-  // behind its handles, so a repair naming one of them gets its hint back.
+  // The packet behind the page the model was shown is the one retained, with
+  // the selectors behind its handles, so a repair naming one of them gets its
+  // hint back.
   assert.equal(retained.length, 1);
-  assert.deepEqual(retained[0]!.evidence, evidence);
+  assert.deepEqual(publishedWebLlmPage(retained[0]!.evidence), evidence);
   assert.equal(retained[0]!.selectors.get("t2"), "#delete");
 });
 
@@ -99,7 +104,7 @@ test("presses the control it is asked to, whatever it says, and retains only wha
   assert.equal(commands.filter((command) => command === "web.dom.click").length, 1);
   // The pre-press capture is not a packet the model saw; the recapture is.
   assert.equal(retained.length, 2);
-  assert.deepEqual(retained[1]!.evidence, (pressed as { evidence: unknown }).evidence);
+  assert.deepEqual(publishedWebLlmPage(retained[1]!.evidence), (pressed as { evidence: unknown }).evidence);
 });
 
 // A handle means something only against a packet this exploration returned.

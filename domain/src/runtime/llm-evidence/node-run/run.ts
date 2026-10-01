@@ -51,6 +51,7 @@ import {
   type WebLlmEvidenceToolRequest
 } from "../capture";
 import type { WebLlmNameAssumption } from "../name-assumption";
+import { publishedWebLlmPage } from "../page-view";
 import { present } from "../present";
 import { webBuildRefusalDiagnostic } from "../refusal-diagnostic";
 import { webActionPermission } from "../permission";
@@ -398,10 +399,9 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     // Arriving from nowhere changed the page by definition: there was none. A
     // page that could not be read was not compared, so it is not said.
     const changed = after === undefined ? undefined : current === undefined || JSON.stringify(after.evidence) !== JSON.stringify(current.evidence);
-    // The page, with what the node did to it written on the same packet rather
-    // than around it. One shape, the one every other packet has: a handle is
-    // read out of `elements` wherever it is read, and a consumer that knew
-    // where to look in an exploration packet still does.
+    // The page, with what the node did to it written on the same result rather
+    // than around it. One shape, the one every other page has: the compact
+    // view's `page` text, where every handle the model may use is printed.
     const outcome = present<WebNodeOutcome>({
       ok: true,
       node: node.definitionId,
@@ -622,13 +622,14 @@ function firstHandle(value: JsonValue | undefined, depth = 0): string | undefine
 }
 
 /**
- * The page, with what the node did to it written on the same packet rather than
- * around it. One shape, the one every other packet has.
+ * The page, with what the node did to it written on the same result rather than
+ * around it. The page goes out as the model reads every page, the compact view
+ * (`web-llm-page.v3`, `../page-view/`); the structured packet stays here.
  */
 function nodeEvidence(page: WebLlmPageEvidence, outcome: WebNodeOutcome): JsonValue {
-  const packet: JsonObject = page as unknown as JsonObject;
+  const published: JsonObject = publishedWebLlmPage(page) as unknown as JsonObject;
   const said: JsonObject = outcome as unknown as JsonObject;
-  return { ...packet, ...said } as unknown as JsonValue;
+  return { ...published, ...said } as unknown as JsonValue;
 }
 
 /**

@@ -49,6 +49,11 @@ export type { WebLlmEvidenceBlocker, WebLlmEvidenceDialog, WebLlmEvidenceFrame, 
 // What stands in front of the page, marked on the element it is about rather
 // than by moving it (t200, `./layers.ts`).
 export type { WebLlmLayerMarks } from "./layer-marks";
+// The page as a model reads it (t223): the compact view every page leaves the
+// domain as, `web-llm-page.v3`, and the pieces it is written from.
+export * from "./page-view";
+// Searching the whole page: hidden, off-screen and text-less elements, and any attribute (t223).
+export * from "./page-find";
 export { screenWebBuildRefusalDiagnostic, type WebBuildRefusalDiagnostic } from "./refusal-diagnostic";
 export {
   sanitizeWebLlmSnapshot,
@@ -106,6 +111,7 @@ export {
   WEB_LLM_PRESS_TOOL_ID,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_ENTER_FIELD_TOOL_ID,
+  WEB_LLM_FIND_ON_PAGE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebLlmEvidenceResultCode,

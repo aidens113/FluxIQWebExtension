@@ -20,6 +20,7 @@ import { createWebLlmExtractionHandles, type WebLlmExtractionHandles } from "../
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 import { webAutomationExplorationRefusalClassifier, webAutomationRecoveryHarnessOptionBundle } from "..";
 import { WEB_RECOVERY_DETECT_OPTION_ID } from "../vocabulary";
+import { shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const DOMAIN = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID } as const;
 const SCOPE = { projectId: "project.one", flowId: "flow.one" };
@@ -82,8 +83,8 @@ function rejection(code: string, detail?: JsonObject): { kind: string; evidence:
 }
 
 function linkHandle(packet: JsonObject): string {
-  const link = (packet.elements as Array<{ target: string; tag: string }>).find((element) => element.tag === "a");
-  assert.ok(link, "the inspect packet describes the product link");
+  const link = shownPageLines(packet).find((line) => line.kind === "link");
+  assert.ok(link, "the inspect page shows the product link");
   return link.target;
 }
 

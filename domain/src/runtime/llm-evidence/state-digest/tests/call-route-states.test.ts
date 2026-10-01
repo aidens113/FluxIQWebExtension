@@ -17,17 +17,17 @@ import test from "node:test";
 import type { OutputDispatchResult } from "fluxiq";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { createWebAutomationHostRuntime } from "../../../host-runtime";
-import { webAutomationRouteState } from "../../../route-state";
+
 import {
   createWebAutomationLlmEvidenceRuntime,
   WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_RUN_NODE_TOOL_ID,
   type WebAutomationLlmEvidenceRuntime,
   type WebLlmEvidenceGateway,
-  type WebLlmEvidenceToolExecution,
-  type WebLlmPageEvidence
+  type WebLlmEvidenceToolExecution
 } from "../..";
 import { WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS } from "../../capture";
+import { shownHandle } from "../../page-view/tests/shown-page-lines";
 import { CAPTURED_DETECTIONS } from "../../structure/tests/captured-detections";
 
 const PROJECT = { projectId: "project.one", flowId: "flow.one" };
@@ -139,26 +139,23 @@ async function click(runtime: WebAutomationLlmEvidenceRuntime, callId: string, h
 }
 
 function handleOf(result: WebLlmEvidenceToolExecution, text: string): string {
-  const elements = (result.evidence as JsonObject & { elements: Array<{ target: string; text?: string }> }).elements;
-  const found = elements.find((element) => element.text === text);
-  assert.ok(found, `no element reading "${text}"`);
-  return found.target;
+  return shownHandle(result.evidence, text);
 }
 
 test("Core's reader has learned routeState, so a result carrying it is not refused", () => {
   assert.equal(WEB_LLM_EVIDENCE_RESULT_KEYS_CORE_READS.includes("routeState"), true);
 });
 
-test("a look's route state is what observeRouteState answers for the same page, and is the route state of the packet it returned", async () => {
+test("a look's route state is what observeRouteState answers for the same page", async () => {
   const fake = fakePage(largePage());
   const runtime = createWebAutomationLlmEvidenceRuntime(fake.gateway);
   const looked = await look(runtime, "call.look");
   const answer = await fake.observed();
 
   assert.deepEqual(looked.routeState, answer);
-  // The packet is the whole page whatever the call (t200), so the route state
-  // of what the look returned and what the host reads are one value.
-  assert.deepEqual(webAutomationRouteState(looked.evidence as unknown as WebLlmPageEvidence), answer);
+  // What the look returned is the compact view of that page (t223); the route
+  // state is of the structured packet behind it, the one the host reads.
+  assert.equal((looked.evidence as JsonObject).schemaVersion, "web-llm-page.v3");
 });
 
 test("a page with a dialog open and an overlay in front says both, as observeRouteState does", async () => {

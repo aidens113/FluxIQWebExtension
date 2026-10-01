@@ -16,6 +16,10 @@
 // controls. The rows below hold the domain to never lending one packet's
 // selectors to another, and to never letting an exploration push the failure
 // packet's selectors out.
+//
+// Since t223 what Core carries is the page as the model read it, the compact
+// view (`web-llm-page.v3`): its handles are in its `page` text, and the
+// structured packet behind it is retained by the domain under that text.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -28,14 +32,15 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../constants";
 import { createWebAutomationLlmEvidenceRuntime, type WebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "..";
 import { CAPTURED_DETECTIONS } from "../structure/tests/captured-detections";
+import { shownHandle, shownPageLines } from "../page-view/tests/shown-page-lines";
 
 const SCOPE = { projectId: "project.repair", flowId: "flow.repair", runId: "run.repair" };
 const CLICK = { nodeId: "node.save", definitionId: "web.output.dom-click" };
 
 /** What the recording addressed, for a row that resolves the control named by `handle`: the same control. */
 function asRecorded(packet: JsonObject, handle: string) {
-  const element = (packet.elements as Array<{ target: string; name?: string }>).find((candidate) => candidate.target === handle);
-  const accessibleName = typeof element?.name === "string" ? element.name : undefined;
+  const line = shownPageLines(packet).find((candidate) => candidate.target === handle);
+  const accessibleName = typeof line?.words === "string" ? line.words : undefined;
   // A handle the packet never issued names no control, and the recording is
   // then a button and nothing more: the rows that pass one are about the handle
   // being refused before anything is compared.
@@ -167,9 +172,7 @@ function askFailure(runtime: WebAutomationLlmEvidenceRuntime, failure: JsonObjec
 }
 
 function handleNamed(packet: JsonObject, name: string): string {
-  const element = (packet.elements as Array<{ target: string; name?: string }>).find((candidate) => candidate.name === name);
-  assert.ok(element, `the packet describes ${name}`);
-  return element.target;
+  return shownHandle(packet, name);
 }
 
 /** The fields of the domain's resolution these rows read. Core types the target opaquely, and carries it without reading. */
@@ -204,16 +207,17 @@ test("a repair naming a control only the exploration revealed resolves with the 
   assert.deepEqual(target.handles, { element: handleNamed(revealed.packet, "Apply changes") });
 });
 
-test("a handle no packet issued is still refused, and a packet this domain never issued gets no selector hint", async () => {
+test("a handle no page issued is still refused, and a page this domain never issued is not one it can check", async () => {
   const { runtime, failure, explored } = await dismissedDialog();
 
   assert.deepEqual(askAsCore(runtime, explored, "explored.2:t9"), { status: "absent", reason: "handle_not_issued" });
   assert.deepEqual(askFailure(runtime, failure, "t9"), { status: "absent", reason: "handle_not_issued" });
 
+  // An edited page names no packet this runtime kept, and the compact view
+  // holds no element to check a handle against, so it is refused outright.
   const altered = structuredClone(explored[1]!.packet);
-  for (const element of altered.elements as Array<{ name?: string }>) element.name = `${element.name} (edited)`;
-  const target = resolvedTarget(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "t1" } }, asRecorded(altered, "t1")));
-  assert.equal(target.selector, undefined);
+  altered.page = String(altered.page).replace("Apply changes", "Apply changes (edited)");
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(altered, { handles: { element: "t1" } }, asRecorded(altered, "t1")), { status: "absent", reason: "evidence_unrecognized" });
 });
 
 test("a failure packet and explored packets of the same page, with the same element count, never lend each other selector hints", async () => {
@@ -222,9 +226,9 @@ test("a failure packet and explored packets of the same page, with the same elem
   // The collision this row exists for: one location, one count, other controls.
   for (const packet of [looked.packet, revealed.packet]) {
     assert.equal(packet.location, failure.location);
-    assert.equal((packet.elements as unknown[]).length, (failure.elements as unknown[]).length);
+    assert.equal(shownPageLines(packet).length, shownPageLines(failure).length);
   }
-  assert.notDeepEqual(revealed.packet.elements, looked.packet.elements);
+  assert.notDeepEqual(shownPageLines(revealed.packet), shownPageLines(looked.packet));
 
   assert.equal(resolvedTarget(askFailure(runtime, failure, handleNamed(failure, "Close"))).selector, "#close");
   assert.equal(resolvedTarget(askFailure(runtime, failure, handleNamed(failure, "Keep editing"))).selector, "#keep");
@@ -233,21 +237,19 @@ test("a failure packet and explored packets of the same page, with the same elem
   assert.equal(resolvedTarget(askAsCore(runtime, explored, `explored.2:${handleNamed(revealed.packet, "Discard changes")}`)).selector, "#discard");
 });
 
-test("an exploration of more than eight packets never evicts the failure packet's hints, and drops the oldest explored binding first", async () => {
+test("an exploration of more than twenty-four pages never evicts the failure page, and drops the oldest explored page first", async () => {
   const { runtime } = site(COVERED);
   const failure = await failurePacket(runtime);
   const recovery = exploration(runtime);
-  for (let index = 1; index <= 9; index += 1) await recovery.call("web.recovery.navigate_in_scope", { url: `https://example.test/results/${index}` });
-  assert.equal(recovery.explored.length, 9);
+  for (let index = 1; index <= 25; index += 1) await recovery.call("web.recovery.navigate_in_scope", { url: `https://example.test/results/${index}` });
+  assert.equal(recovery.explored.length, 25);
 
   assert.equal(resolvedTarget(askFailure(runtime, failure, handleNamed(failure, "Close"))).selector, "#close");
   assert.equal(resolvedTarget(askFailure(runtime, failure, handleNamed(failure, "Keep editing"))).selector, "#keep");
-  // The oldest explored packet was let go: its repair still resolves, on the
-  // fingerprint alone, rather than being refused.
+  // The oldest explored page was let go. The compact view it was read as holds
+  // no element to check the handle against, so it is refused, not guessed at.
   const oldest = recovery.explored[0]!;
-  const dropped = resolvedTarget(askAsCore(runtime, recovery.explored, `${oldest.evidenceId}:${handleNamed(oldest.packet, "Apply result 1")}`));
-  assert.equal(dropped.accessibleName, "Apply result 1");
-  assert.equal(dropped.selector, undefined);
+  assert.deepEqual(askAsCore(runtime, recovery.explored, `${oldest.evidenceId}:${handleNamed(oldest.packet, "Apply result 1")}`), { status: "absent", reason: "evidence_unrecognized" });
   for (const [position, entry] of recovery.explored.entries()) {
     if (position === 0) continue;
     const index = position + 1;

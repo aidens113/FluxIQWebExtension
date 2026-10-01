@@ -118,10 +118,77 @@ The supervisor committed W1–W4 (downstream `303bb5fd`, Core `776377d0`) and me
     - The three downstream fixtures are re-spelled.
   - **Narrowing.** Handles now allow at most 6 digits; the old regex allowed 16. A stored diagnostic with a longer handle is rejected, but the domain never mints one.
 
+## Phase B: finish the feature (2026-10-01)
+
+The supervisor committed phase A (`25dada82`) and merged dev with integration round 5 into both trees: downstream `9ca20158`, Core `2898488d`.
+
+**Step 1, round 5 re-checked (lead).** Core libs and the domain build pass. Results:
+- domain test `# tests 1149 # pass 1149 # fail 0`;
+- extension test `# tests 1733 # pass 1733 # fail 0`;
+- test-runner test `# tests 1734 # pass 1734 # fail 0`.
+
+Round 5 adds no `target.N` in source. The new `target.N` strings are in working-doc run records (history) and Core test fixtures (generic handles).
+
+**Discovery (lead), which corrects Decision 1 and the table:**
+- **The host runtime's `summary` does reach a model.** Core's recovery option `core.state_snapshot` (`AS/runtime/llm/harness-options/builtin.ts:95-106`) returns it as is. `core.state_diff` and the recovery context's `state_diff` section show the domain's diff, which lists `addedElements`/`removedElements` as element JSON.
+  - So `summary` becomes the v3 page, and the diff is computed over its element lines with the handles dropped. A stored v2 summary still diffs, by rendering it first.
+- **Core reads nothing structural of a page.** There is no `.elements` reader in automation-studio. `captureSanitizedFailureEvidence` returns a generic `JsonObject`; the evidence screen has no string caps; `failureEvidenceProvenance` reads only `schemaVersion` and `truncated`. Core needs no change for the v3 page.
+- **`validateTargetOverrideEvidence` reads `evidence.elements`.** With v3 it must find the structured binding by the published page's retention key: the windows keep whole bindings, and `packetKey` goes.
+- **Not live paths** (no production caller):
+  - `runtime/reusable-evidence*.ts`, whose facts are `{tag, role, name}`;
+  - test-runner's `web-flow-exploration.ts`, an older exploration with its own element JSON and selectors; it is exported but used only by its own test.
+- **Node reads.** Lane B's W1 (round 5) strips page records (`snapshot`, `element`, `visualTarget`, `resolution`, `structure`) from node reads. W5a pins it with a test.
+
+**Who did the work.** Workers could not be dispatched: the session-wide limit of 20 concurrent subagents was reached, and the error said not to retry. The lead implemented the checkpoint directly, in the planned file partitions.
+
+The supervisor then cut phase B to the shortest mergeable checkpoint, and set a new validation rule: no full suites, only the touched packages' typecheck, the tests of the changed directories, and the structure audit.
+
+**The checkpoint (done):**
+- **Every build path sends the v3 page** (`web-llm-page.v3`). No raw copy goes with it.
+  - **Node runs.** `node-run/run.ts` `nodeEvidence` covers the initial observation, every look and every action result.
+  - **Refusals.** `tool-rejection.ts` `toolRejection` publishes the refusal's `page`.
+  - **Replay and verify answers.** `node-run/replay-answer.ts`.
+  - **Recovery options.** `harness-options/execute.ts` (inspect, press, enter_field, wait, navigate) goes through a `pageOf` helper.
+  - **Failure evidence.** `tools.ts` `captureSanitizedFailureEvidence` now returns `WebLlmPublishedPage`.
+  - **Node reads.** `read.snapshot` and the other page records stay out (lane B's W1). `node-run/tests/press-raw-read.test.ts` asserts that the result is v3 and has no `elements` key.
+- **Retention and repair validation.**
+  - `tools.ts` keeps whole bindings in two windows, keyed by `webLlmPageRetentionKey(publishedWebLlmPage(binding.evidence))`. `packetKey`, and the NUL byte with it, are gone.
+  - `validateTargetOverrideEvidence` looks up a v3 page, or later a find or describe result, by `page-view/result-retention-key.ts`, and validates against the retained structured packet with its selectors.
+    - An unretained or edited page is `absent / evidence_unrecognized`; it can no longer resolve fingerprint-only.
+    - A legacy v2 packet is still checked against its own elements.
+  - The window grew from 8 to 24, Core's default recovery exploration budget (`AS/runtime/recovery/exploration-budget.ts`, `maxActions: 24`).
+- **`web.find_on_page`, registered.**
+  - `page-find/`: `search.ts` (`webLlmFindOnPage`), `query.ts` (`webLlmFindQuery`), `schema-version.ts`, `run.ts` (`runWebFindOnPage`).
+  - It takes a fresh `includeHidden` capture (`capture.ts` `captureEvidence` gained an `options` parameter; the gateway passes raw parameters to the extension's `options`). The capture is restamped, retained and kept as a look, so a handle the search prints can be pressed.
+  - It searches every element's name, text, ownText, label, value, selected value, option labels and href, plus every attribute's name and value. Hidden, off-page and text-less elements are included, matches come in page order, 50 to a page, ending with an `after` line.
+  - Its result code is `web.inspect.succeeded`; bad input is refused `invalid_input` with existing reasons.
+  - In `tools.ts` it is offered with `effect: "observe"` and a 1,218-character description of the view and the tool (Core's bound is 2,000). The tool id is in `vocabulary.ts` `WEB_LLM_EVIDENCE_TOOL_IDS`, and `llm-evidence/index.ts` exports `./page-view` and `./page-find`.
+- **One amendment to "The format"** (`page-view/element/traits.ts`, `where.ts`).
+  - `visible(e)` no longer requires a box. It is now "not `hidden`, and a box, when present, reaches into the document".
+  - Why: the default capture lists a boxless element only when it is drawn or pressed without its own box (an image map `area`, a `display: contents` wrapper). A box that failed to measure must not take a control off the page. The off-page honeypot is still dropped.
+  - A boxless element's `where` comes from `onViewport`.
+- **Test support.** `page-view/tests/shown-page-lines.ts` parses a published page's element lines (`shownPageLines`, `shownHandle`). 18 test files that read `elements` off returned results now read the page lines. Tests whose meaning changed were rewritten, not loosened:
+  - an edited or let-go page is refused;
+  - the eviction row runs past 24 pages;
+  - the digest and route-state rows assert v3, since they cannot digest the view.
+
+**Phase C (remaining, to be done while the lanes run live):**
+1. **`web.describe_element`.** Spec in "The format".
+2. **`find_on_page` (and describe) as recovery harness options**, retaining their results under `webLlmResultRetentionKey` so a repair can name a found handle.
+3. **The host runtime.**
+   - `captureStateSnapshot`'s `summary` is still a v2 packet, and Core's `core.state_snapshot` returns it to the model.
+   - `webAutomationStateDiff` still lists element JSON (`core.state_diff`, recovery context `state_diff`).
+   - Plan: the summary becomes the v3 page, and the diff is computed over its handle-less element lines; a stored v2 summary renders first.
+4. **`runtime/adapter.ts` `metadata.failureEvidence`** is still a v2 packet. No Core reader was found; publish it as v3.
+5. **Model-facing text.** The recovery `inspect` option description (`harness-options/options.ts:70`) still promises "every rendered element ... its attributes, its box". It must describe the v3 view and find.
+6. **Docs.** Bring `docs/architecture/page-evidence.md` (it still says `web-state.v2` at about line 317) and `testing-facility.md` to the v3 view and find.
+7. **Dead paths:** `runtime/reusable-evidence*.ts` (facts `{tag, role, name}`) and test-runner's `web-flow-exploration.ts` (element JSON with selectors). Neither has a production caller; delete them or convert them to lines.
+8. **Full sweep.** The supervisor's background run: the whole domain, extension and test-runner suites, plus root `pnpm check`. Only the changed directories were run here, by rule.
+
 ## Current state
 
+- **Phase B checkpoint is ready** for the supervisor to commit; see "Phase B" above. Phase C is listed there.
 - **Phase A is done and checkpointed** for integration round 5. On the merged base, every suite the brief names passes, and so does the root `pnpm check`. W3's and W4's claims are confirmed.
-- W1, W2, W3, W4 and W8 are done. W5, W6 and W7 have not been dispatched. W5 waits for the supervisor to merge round 5 (lane B's W1 removes `read.snapshot` from press outcomes).
 
 ## Baseline (W1, verified by re-running the script)
 
@@ -396,6 +463,28 @@ Core's own recovery context is metadata only: `targetResolutionSection` and `rec
   - `node scripts/structure-audit.mjs` → `structure-audit: passed (137 warning(s), 118 baselined).`
   - Root `pnpm check` → exit 0. Its scripts tests gave `# tests 549 # pass 548 # fail 0 # skipped 1`. The skip is the environmental Core-probe test (`no FluxIQ Core build output under ...\t223\!FluxIQWebExtension\scripts\!FluxIQ`). Every package check printed `Done`, the domain, extension and test-runner included.
   - The extension and Core suites above were not re-run after A1, which touched neither.
+- Phase B on the merged base (downstream `9ca20158` plus round 5, Core `2898488d`), run by the lead:
+  - **Before the change**, through `heavy.sh`:
+    - Core libs build and domain build: exit 0;
+    - domain test `# tests 1149 # pass 1149 # fail 0`;
+    - extension test `# tests 1733 # pass 1733 # fail 0`;
+    - test-runner test `# tests 1734 # pass 1734 # fail 0`.
+  - **First full domain test after the source change:** `# tests 1149 # pass 1071 # fail 78`. All 78 failures were tests reading `elements` off returned results, across 20 files in `llm-evidence/`.
+  - **Narrow runs after the fixes** (by the new rule): `node <scratch>/run-domain-tests.mjs <domain> t223-lead` over the changed `llm-evidence/` test directories, which are `page-find`, `tests`, `node-run`, `harness-options`, `page-view`, `page-view/element`, `state-digest`, `structure` and `plan-resolution`. It bundles them with the domain's esbuild exactly as `scripts/test-domain.mjs` does → `# entries 73 # tests 458 # pass 458 # fail 0`.
+    - An earlier narrow run failed once on `capture-after-action.test.ts` "the 250 ms wait was cut short", a timing assertion in a file this phase does not touch; it passed on the next two runs.
+  - `heavy.sh pnpm --filter @fluxiq-web-extension/domain check` → exit 0, no `error TS`.
+  - `node scripts/structure-audit.mjs` → `structure-audit: passed (138 warning(s), 118 baselined).`
+  - **W8, 20 pages:** `node <scratch>/t223-measure.mjs --corpus <scratch>/t223-corpus-v2 --view <scratch>/t223-w4-view.ts#view`, which runs the domain's `publishedWebLlmPage` from source.
+    - TOTAL: packet 2,248,731 B (749,583 tokens) → view JSON 117,929 B (39,316 tokens), 5.2%.
+    - everything-store: start 2,985 B, results 15,056 B.
+    - bigbox start 6,513 B; auction results 12,631 B.
+    - The largest page is 15,056 B, about 5,019 tokens.
+  - **W8, whole decide request:** decision 9 of the t194 everything-store build, on the results page, rebuilt by Core's own builder on the round-5 Core.
+    - Before: `node <scratch>/t223-request-measure.mjs` → `TOTAL request: 1,414,167 bytes, 471,405 tokens` (the provider recorded 477,506).
+    - After: `--publish t223-request/.bundle/publisher.mjs#publish` (the domain's `publishedWebLlmPage`, with lane B's page-record strip applied to `read`) → `TOTAL request: 159,997 bytes, 53,349 tokens`, 11.3% of before.
+    - The results page entry went from 340,596 B to 20,244 B, and the extraction step from 803,550 B to 62,609 B (44,653 B of that is the rows the node read).
+    - The largest constant item is now Core's node catalog, 40,952 B (13,651 tokens).
+    - The recorded packets lack `ownText` and `parent`, so this measures fallback mode; live captures fold further.
 
 ## Not verified
 

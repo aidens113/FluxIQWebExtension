@@ -8,12 +8,12 @@ import { webLlmViewTraits } from "../traits";
 const BOX = { x: 10, y: 10, width: 100, height: 20 };
 const el = (fields: Partial<WebLlmEvidenceElement> & { tag: string }): WebLlmEvidenceElement => ({ target: "t1", box: BOX, ...fields });
 
-test("visible means a box that reaches into the document, and not a hidden element a search added", () => {
+test("visible means not a hidden element a search added, and a box, if any, that reaches into the document", () => {
   assert.equal(webLlmViewTraits(el({ tag: "a" })).visible, true);
   assert.equal(webLlmViewTraits(el({ tag: "input", box: { x: -9768, y: 10, width: 9, height: 7 } })).visible, false, "the honeypot parked off the page");
   assert.equal(webLlmViewTraits(el({ tag: "div", box: { x: 0, y: -50, width: 10, height: 50 } })).visible, false, "a box ending at the top edge");
   assert.equal(webLlmViewTraits(el({ tag: "div", box: { x: -5, y: -5, width: 10, height: 10 } })).visible, true, "a box reaching in");
-  assert.equal(webLlmViewTraits({ target: "t1", tag: "a" }).visible, false, "no box, not rendered");
+  assert.equal(webLlmViewTraits({ target: "t1", tag: "a" }).visible, true, "no box: an image map area, or a box that failed to measure, is still on the page");
   assert.equal(webLlmViewTraits(el({ tag: "a", hidden: true })).visible, false);
 });
 

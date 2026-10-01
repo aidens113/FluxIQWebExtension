@@ -21,6 +21,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { createWebAutomationLlmEvidenceRuntime, WEB_LLM_RUN_NODE_TOOL_ID, type WebLlmEvidenceGateway } from "../..";
+import { shownHandle, shownPageLines } from "../../page-view/tests/shown-page-lines";
 
 const PROJECT = { projectId: "project.crossborder", flowId: "flow.crossborder" };
 const PAGE = "https://farbazaar.test/scenarios/crossborder-marketplace/search";
@@ -28,7 +29,7 @@ const CLICK = "web.output.dom-click";
 const SNAPSHOT = "web.output.dom-capture_snapshot";
 const VOLTBAY = "aside > div:nth-of-type(6) > label:nth-of-type(4) > div";
 
-type Packet = JsonObject & { elements?: Array<{ target: string; text?: string; name?: string }> };
+type Packet = JsonObject & { page?: string };
 type Element = JsonObject & { selector: string };
 
 /** Where the live packet ended: at its forty elements, the old bound. */
@@ -91,11 +92,10 @@ test("a handle from the packet just shown is pressed even when the look before t
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const shown = await look(runtime);
   // The packet the model read is the whole page, results included (t200).
-  assert.equal(shown.elements!.length, PAGE_LENGTH);
-  const voltbay = shown.elements!.find((element) => element.text === "Voltbay");
-  assert.ok(voltbay, "the packet shows the Voltbay filter");
+  assert.equal(shownPageLines(shown).length, PAGE_LENGTH);
+  const voltbay = shownHandle(shown, "Voltbay");
 
-  const pressed = await press(runtime, "press-voltbay", voltbay.target);
+  const pressed = await press(runtime, "press-voltbay", voltbay);
 
   assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
   assert.equal(pressed.effectApplied, true);
@@ -112,12 +112,11 @@ test("a handle from the packet a press returned is pressed next, though the next
   const page = searchPage((look) => look % 2 === 0);
   const runtime = createWebAutomationLlmEvidenceRuntime(page.gateway);
   const shown = await look(runtime);
-  const first = await press(runtime, "press-first", shown.elements![0]!.target);
+  const first = await press(runtime, "press-first", shownPageLines(shown)[0]!.target);
   assert.equal(first.resultCode, "web.action.succeeded");
-  const voltbay = (first.evidence as Packet).elements!.find((element) => element.text === "Voltbay");
-  assert.ok(voltbay, "the packet the first press returned shows the Voltbay filter");
+  const voltbay = shownHandle(first.evidence, "Voltbay");
 
-  const pressed = await press(runtime, "press-voltbay", voltbay.target);
+  const pressed = await press(runtime, "press-voltbay", voltbay);
 
   assert.equal(pressed.resultCode, "web.action.succeeded", JSON.stringify(pressed.evidence));
   assert.deepEqual(page.clicked, ["#control-1", VOLTBAY]);
