@@ -62,6 +62,15 @@ Three next slots are released: Menu two paths, mounted Chat eight and extraction
 draft/control four. Root ninth-supervisor-verification.md preserves original
 failures, refinements and exact full gates; no browser certification.
 
+Tenth Active: extraction draft/control frozen and independently verified66/66,
+native0/654.7189ms, strict four-root typing0. Core database semantic refinement
+passes existing three suites25/native0/8.70s. Menu frozen pending root130-test
+verification; mounted Chat remains active. All slots assigned: Chat source,
+extraction read recovery planning and shared overlay executable planning.
+[Tenth verification](./codex-ui-ux-review-2026-09-30/reports/tenth-supervisor-verification.md)
+records limits; [shell working owner audit](./codex-ui-ux-review-2026-09-30/reports/shell-working-owner-audit.md)
+is read-only backlog. Broad gates follow owning source freeze; no Claude integration.
+
 Earlier batch evidence stays in the ledger, worker reports and first-four archive.
 [Superseded Current State](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-pre-eighth-current-state.md)
 retains the prior detailed continuation record.
@@ -165,6 +174,11 @@ layout changes should answer measured problems in these journeys.
 Initial briefs and settled validation details moved to [the first-four-batch archive](./codex-ui-ux-review-2026-09-30/archive/2026-10-01-first-four-ui-batches.md).
 
 ## Active and next worker briefs
+
+### Database table labelling supervisor brief (released)
+- Core exact source: features/programs/live-views/database-manager.tsx only; root inspected rendered grid and unchanged own tests. Menu worker owns separate primitive paths.
+- Name the native records table with the current store/database context and explicit column header scope. Preserve all request/grant/search/selection/row/value behavior. No new label-mirroring test for this reversible low-impact semantic change; run existing owning database contracts/recovery/authorization tests.
+- Root records code diff/check results in parent ledger and validates with next coordinated Core gates after Menu freezes. No shared component/record/data backend/API/protected/source-test assertion change, live/browser/provider/panel/private inspection.
 
 ### Menu keyboard and disabled activation implementation brief (released)
 - Worker: deployment_docs_audit; paired t224 Core. Ninth338files2506tests/types/build independently pass; structure only inherited protectedservice. Finish own environment read-only report first, then execute frozen Menu plan.
@@ -500,6 +514,14 @@ Initial briefs and settled validation details moved to [the first-four-batch arc
 - Synthetic deferred tests first, original owning tests retained, narrow heavy/scoped then freeze. No shared helpers/callers/redaction/storage/protocol/Core/styles/docs edits, real activity/browser/provider/panel operations or commit/push.
 
 ## Work Ledger
+
+### 2026-10-01 - Tenth extraction independently verified and slots reassigned
+- Agent: supervisor
+- Changed: extraction four-path source reviewed; database one-file semantics; new verification/planning records.
+- Why: preserve column typing and retire stale row callbacks while continuing recovery work with maximum workers.
+- Validation: extraction66/native0/654.7189ms; strict four-root typing0. Database existing25/native0/8.70s. Menu source read; independent rerun and owning broad gates pending.
+- Outcome: Accepted narrow extraction and database results; no full tenth or browser certification yet.
+- Follow-up: mounted Chat implementation active; extraction read recovery and overlay executable briefs read-only; root Menu/full Core verification next.
 
 ### 2026-10-01 - Ninth full gates complete and next three units released
 - Agent: supervisor

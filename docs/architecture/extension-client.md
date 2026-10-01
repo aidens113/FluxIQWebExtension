@@ -1710,6 +1710,13 @@ handling stays inside the active extension document; selecting the browser page
 does not cancel a pick or pull focus back. Field redraws preserve the logical
 control and text selection where possible.
 
+Column-name inputs retain raw typing independently of redraw, including spaces
+and temporary blanks. Explicit change or Confirm applies the existing trimmed,
+nonempty label policy. Current row callbacks belong to their draft and render
+generation; detached rows cannot edit a replacement draft or captured receipt.
+Column groups and name/read-kind/remove controls identify their current column
+through text-only accessible names. Preview privacy narrowing stays unchanged.
+
 Confirmation freezes editing until acknowledgement. Cancellation immediately
 clears preview values from memory and rendered cells, retaining a visible pending
 or retryable failure sheet until the background acknowledges it. Per-operation

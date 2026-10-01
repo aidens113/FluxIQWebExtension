@@ -85,6 +85,9 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   const els = buildExtractionPanel(host);
   let draft: ExtractionDraft | undefined;
   let rows: ExtractionPreviewRow[] = [];
+  // Raw typing survives redraw without changing settled record names per keystroke.
+  const rawNames = new Map<string, string>();
+  let fieldGeneration = 0;
   let polling: ReturnType<typeof setInterval> | undefined;
   let busy = false;
   let epoch = 0;
@@ -111,6 +114,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     busy = false;
     stopPolling();
     draft = undefined;
+    rawNames.clear();
     rows = [];
     dialog.close();
     els.notice.hidden = true;
@@ -132,6 +136,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     busy = false;
     stopPolling();
     draft = undefined;
+    rawNames.clear();
     rows = [];
     els.notice.hidden = true;
     els.notice.textContent = "";
@@ -209,6 +214,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   function edit(next: ExtractionDraft): void {
     const before = shownColumnsKey(draft);
     draft = next;
+    for (const key of rawNames.keys()) if (!next.fields.some(field => field.sourceKey === key)) rawNames.delete(key);
     rows = retainExtractionPreview(rows, next);
     render();
     if (shownColumnsKey(next) !== before) void rereadPreview(next);
@@ -235,6 +241,8 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
   }
 
   function render(): void {
+    const token = epoch, generation = ++fieldGeneration;
+    const editable = (key: string) => token === epoch && generation === fieldGeneration && !busy && draft?.fields.some(field => field.sourceKey === key) === true;
     dialog.render(() => {
       els.body.hidden = !draft;
       els.confirmButton.disabled = busy || !draft || draft.fields.length === 0;
@@ -249,11 +257,16 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
       }
       if (els.label.value !== draft.label) els.label.value = draft.label;
       els.summary.textContent = summaryLabel(draft);
-      els.fields.replaceChildren(...draft.fields.map((field) => extractionFieldRowElement(field, {
-        rename: (key, label) => { if (!busy) edit(renameExtractionField(requireDraft(), key, label)); },
-        changeKind: (key, kind) => { if (!busy) edit(setExtractionFieldKind(requireDraft(), key, kind)); },
-        changeHandling: (key, handling) => { if (!busy) edit(setExtractionFieldHandling(requireDraft(), key, handling)); },
-        remove: (key) => { if (!busy) edit(removeExtractionField(requireDraft(), key)); }
+      els.fields.replaceChildren(...draft.fields.map((field) => extractionFieldRowElement({ ...field, label: rawNames.get(field.sourceKey) ?? field.label }, {
+        inputName: (key, raw) => { if (editable(key)) rawNames.set(key, raw); },
+        rename: (key, label) => {
+          if (!editable(key)) return;
+          const settled = (rawNames.get(key) ?? label).trim() || requireDraft().fields.find(field => field.sourceKey === key)!.label;
+          rawNames.delete(key); edit(renameExtractionField(requireDraft(), key, settled));
+        },
+        changeKind: (key, kind) => { if (editable(key)) edit(setExtractionFieldKind(requireDraft(), key, kind)); },
+        changeHandling: (key, handling) => { if (editable(key)) edit(setExtractionFieldHandling(requireDraft(), key, handling)); },
+        remove: (key) => { if (editable(key)) edit(removeExtractionField(requireDraft(), key)); }
       })));
       for (const control of els.body.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input, select, button")) control.disabled = busy;
       renderPagination(els, draft);
@@ -286,6 +299,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     els.notice.hidden = true;
     els.status.textContent = PICK_PROMPT;
     draft = undefined;
+    rawNames.clear();
     rows = [];
     dialog.open();
     void run(async (token) => {
@@ -306,6 +320,8 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
 
   els.confirmButton.addEventListener("click", () => {
     if (busy || !draft) return;
+    draft = { ...draft, fields: draft.fields.map(field => ({ ...field, label: rawNames.has(field.sourceKey) ? rawNames.get(field.sourceKey)!.trim() || field.label : field.label })) };
+    rawNames.clear();
     const payload = extractionConfirmPayload(draft);
     epoch++;
     stopPolling();
@@ -320,6 +336,7 @@ export function mountExtractionPanel(host: HTMLElement, options: ExtractionPanel
     epoch++;
     stopPolling();
     draft = undefined;
+    rawNames.clear();
     rows = [];
     els.notice.hidden = true;
     els.status.textContent = "Cancelling extraction...";
