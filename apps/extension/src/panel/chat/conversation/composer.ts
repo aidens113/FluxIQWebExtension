@@ -56,6 +56,7 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
   let enabled = false;
   let sending = false;
   let composing = false;
+  let editRevision = 0;
   let placeholder = PLACEHOLDER;
 
   function fit(): void {
@@ -84,8 +85,9 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
 
   function submit(): void {
     if (!enabled || sending || box.value.trim() === "") return;
+    const submittedRevision = editRevision;
     void send(box.value).then((sent) => {
-      if (!sent) return;
+      if (!sent || submittedRevision !== editRevision) return;
       box.value = "";
       draft.write("");
       fit();
@@ -98,6 +100,7 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
     box.focus();
   });
   box.addEventListener("input", () => {
+    editRevision += 1;
     draft.write(box.value);
     fit();
     syncButton();
@@ -132,6 +135,7 @@ export function createComposer(send: (text: string) => Promise<boolean>): Compos
       fit();
     },
     fill(text) {
+      editRevision += 1;
       box.value = text;
       draft.write(text);
       box.focus();
