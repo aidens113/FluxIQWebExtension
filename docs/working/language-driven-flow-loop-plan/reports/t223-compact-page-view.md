@@ -254,9 +254,41 @@ The supervisor then cut phase B to the shortest mergeable checkpoint, and set a 
 
 **Phase C: nothing remains.** The dead paths (`runtime/reusable-evidence*.ts`, test-runner's `web-flow-exploration.ts`) are left as they were: neither has a production caller or reaches a model.
 
+## Lane B's C1-C4 and C9: handles across layers (2026-10-02, on `fbc99916`)
+
+Source: `fxwork/t193/.../debugs/run-mup2i28c-6c7fc209.md` "Causes". There, a privacy overlay and then a timed email popup each added a `div` under `body`, so the store button's handle flipped between `target.7` and `target.339`. A handle the model had just been shown was refused `handle_not_in_packet`, with nothing saying why. Later a press through the popup "succeeded" by closing it, and the store chooser never opened.
+
+- **C1 (`stable-handles.ts`).** Addresses were a hash of the positional selector, so a layer beside the main column changed every address behind it. `restamp` now runs `rebound`, which matches in four tiers:
+  1. the exact address, accepted only when the control remembered there has the same loose address and words;
+  2. the loose address plus words, paired in document order;
+  3. the loose address alone, only for a single element and a single remembered number (a label changed by a press, "Add to cart" to "Added");
+  4. otherwise a new number.
+
+  The loose address is page, frame, selector and shadow-host chain with every `:nth-of-type(n)` and `:nth-child(n)` removed, record, and tag. The Flow's memory gains `seen` (number to loose address and words) and `byLoose`.
+  - A dialog's button that lands on the main column's old exact selector does not take the store button's number.
+  - A list whose items changed is not paired by position: new items get new numbers. This is stricter than before, when a positional selector reused the number.
+- **C2 (`rememberLook`).** No change is needed: the whole-page look keeps the shown handles because they no longer move.
+- **C3 (`node-run/run.ts`).** A handle refusal (`target_unobserved`) now carries the current page, and that page becomes the shown packet, so its handles are usable next.
+- **C4 and C9 (`node-run/covered-target.ts`, `run.ts`, `tool-rejection.ts`).**
+  - A mutating node whose control the pre-action look marks `coveredBy` is refused before dispatch: `target_covered`, or `blocked_by_dialog` under a modal.
+  - The reason is the new `covered_by_layer`, with `target` the control, `instead` the cover handles, and the page, whose `COVERING`/`DIALOG` header names the layer. The page becomes the shown packet.
+  - A read is never refused for a layer.
+- **Tests:**
+  - `tests/stable-handles.test.ts` gains five: a popup inserted before the main column; a dialog taking the main column's old position; a cookie banner appended and dismissed; run 34's shadow-hosted store button; and a label change versus a changed list.
+    - All five fail on `HEAD`'s `stable-handles.ts` and pass with the change. Checked by putting HEAD's file in place, running, and restoring it (`cmp` confirmed).
+  - The new `node-run/tests/covered-press.test.ts` has five: a timed popup over the control (refused, cover named, same handle, popup dismissed, then pressed); a non-covering layer (C2); a modal dialog (`blocked_by_dialog`); a read under a layer is not refused; and a handle refusal carries the page.
+  - `tests/tool-rejection-detail.test.ts`: page-caused handle refusals now carry the page, so the "moved" refusal is no longer a byte-for-byte repeat, and only the `page` member may hold page words.
+- **Docs:** `docs/architecture/page-evidence.md`, compact-view section, now has "A handle outlives a layer" and "A press through a cover is not sent".
+- **Validation, narrow:**
+  - `node <scratch>/run-domain-tests.mjs` over the `llm-evidence` test directories `node-run`, `tests`, `plan-resolution`, `harness-options`, `page-find`, `structure` and `state-digest` → `# entries 63 # tests 423 # pass 423 # fail 0`.
+  - The same runner over the extension's `content/action-runtime/tests` and `content/identity/tests` (the only extension tests that drive the evidence runtime) → `# tests 193 # pass 192 # fail 1`. The 1 is `assertion-evaluation.test.ts` "the wait is real", a timing test that does not use the domain. The store-chooser and created-node tests pass.
+  - `heavy.sh` domain check → exit 0; extension check → exit 0.
+  - `node scripts/structure-audit.mjs` → `passed (150 warning(s), 118 baselined)`. The new warnings are advisory: `run.ts` is at 785 lines and `stable-handles.test.ts` at 467.
+
 ## Current state
 
-- **Phase C is Ready to commit** (see "Phase C"). Every path a page reaches a model sends the compact view: authoring, refusals, replay and verify, recovery options, failure evidence, adapter metadata, host summary and state diff. The model can search the whole page and describe one element, in authoring and in recovery.
+- **Lane B's C1-C4 and C9 are Ready to commit** (section above). Handles survive layers, a press through a cover is refused with the cover named, and handle refusals carry the page.
+- **Phase C is committed** (`1ce054e5`). Every path a page reaches a model sends the compact view: authoring, refusals, replay and verify, recovery options, failure evidence, adapter metadata, host summary and state diff. The model can search the whole page and describe one element, in authoring and in recovery.
 - **Phase B is committed** (`25e993d3`).
 - **Phase A is done and checkpointed** for integration round 5. On the merged base, every suite the brief names passes, and so does the root `pnpm check`. W3's and W4's claims are confirmed.
 

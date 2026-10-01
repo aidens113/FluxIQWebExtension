@@ -280,6 +280,23 @@ Every page leaves the domain as `web-llm-page.v3`
   A node's read never carries the extension's page record (`snapshot`,
   `element`, `visualTarget`, `resolution`, `structure`;
   `node-run/page-record.ts`).
+- **A handle outlives a layer.** A popup, dialog or cookie banner the page
+  puts beside its main column shifts every positional selector
+  (`body > div` becomes `body > div:nth-of-type(2)`), and handles used to be
+  keyed on the selector, so the whole page renumbered each time one opened or
+  closed (`run-mup2i28c-6c7fc209`, C1). `stable-handles.ts` now finds an
+  element whose exact address is new by its address with positions removed,
+  its tag, record and words, so every control behind the layer keeps its
+  handle, and the layer's controls get their own. A changed list is not paired
+  up by position: new items get new handles.
+- **A press through a cover is not sent.** When the look a press takes before
+  acting shows its control `coveredBy` a layer, the press is refused
+  `target_covered` (`blocked_by_dialog` under a modal) with the reason
+  `covered_by_layer`, the covering handles in `instead`, and the page, whose
+  `COVERING` or `DIALOG` line names the layer (`node-run/covered-target.ts`).
+  A refusal for a handle the page no longer has carries the page too, and
+  both pages become the shown packet, so the next call can use their handles
+  (C3, C4, C9).
 - **The repair check reads what the model read.** A shown page, search or
   description is retained under `location + " " + text`
   (`page-view/result-retention-key.ts`) with the structured packet behind it,

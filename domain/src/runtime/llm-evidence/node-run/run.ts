@@ -66,6 +66,7 @@ import { isJsonRecord } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE, WEB_LLM_RUN_NODE_TOOL_ID } from "../vocabulary";
 import { webRunnableNode, webRunnableNodeIds, WEB_LLM_OBSERVATION_NODE_ACTION, type WebRunnableNode } from "./catalog";
 import { withClearedWait } from "./cleared-wait";
+import { webCoveredTarget } from "./covered-target";
 import type { WebNodeRun } from "./context";
 import { webObservedControl } from "./observed-control";
 import { webNodeDispatchParameters, webNodeReadWithRejectedRows } from "./rejected-rows";
@@ -280,8 +281,13 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
     record.assumed = assumed;
     if (resolved.status === "refused") {
       // The handle codes say which way the handle stopped naming one control,
-      // and each implies a different next call.
-      return refusal(undefined, "target_unobserved", handleRefusal(written, resolved.issueCodes), record);
+      // and each implies a different next call. The page goes with the refusal
+      // and is the page shown from now on: what took the control away -- a
+      // popup that opened, a list that re-rendered -- and the handles to use
+      // instead are on it, so the next call need not be a look to learn them
+      // (`run-mup2i28c-6c7fc209`, C3).
+      if (current) run.shown(current);
+      return refusal(current, "target_unobserved", handleRefusal(written, resolved.issueCodes), record);
     }
     // A node that acts on an element, whose parameters named no handle, is
     // acting on a locator the model invented: it has never been shown one.
@@ -293,6 +299,17 @@ export async function runWebOutputNode(run: WebNodeRun): Promise<WebLlmEvidenceT
       }), record);
     }
     const ran = resolved.status === "resolved" ? resolved.parameters : written;
+    // A press on a control the look just taken shows covered is not sent: it
+    // would land on the cover (`./covered-target.ts`, C4). The refusal names
+    // the cover and carries the page it is on, so the layer can be dealt with
+    // first -- a popup that opened on a timer is named this way (C9).
+    const covered = current && node.effect === "mutate" ? webCoveredTarget(current.evidence, firstHandle(written)) : undefined;
+    if (current && covered) {
+      run.shown(current);
+      return refusal(current, covered.code, rejectionDetail({
+        reason: "covered_by_layer", target: covered.target, instead: covered.covers, missing: undefined, requestId: undefined
+      }), record);
+    }
     // No page, no control to have observed: the move that goes to the start
     // location acts on the browser rather than on anything in front of it.
     const control = current ? webObservedControl(current.evidence, firstHandle(written), ran) : { name: undefined, kind: "step" };
