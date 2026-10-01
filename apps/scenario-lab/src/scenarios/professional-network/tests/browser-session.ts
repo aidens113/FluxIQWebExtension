@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { startScenarioLab, type RunningScenarioLab } from "../../../server.js";
+import { closeLabSession } from "../../tests/close-lab-session.js";
 
 /**
  * A lab server, and a browser tab on it, for the honest-path and naive-path
@@ -19,24 +20,31 @@ export function launchBrowser(): Promise<Browser> {
 
 export async function openSession(browser: Browser, seed = 42): Promise<Session> {
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
-  const offsite: string[] = [];
-  await context.route("**/*", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.hostname === "127.0.0.1" || url.protocol === "data:") return route.continue();
-    offsite.push(url.href);
-    return route.abort();
-  });
-  const page = await context.newPage();
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
-  return { lab, context, page, consoleErrors, offsite };
+  let context: BrowserContext | undefined;
+  try {
+    context = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: "en-US", timezoneId: "UTC" });
+    const offsite: string[] = [];
+    await context.route("**/*", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.hostname === "127.0.0.1" || url.protocol === "data:") return route.continue();
+      offsite.push(url.href);
+      return route.abort();
+    });
+    const page = await context.newPage();
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+    page.on("pageerror", (error) => consoleErrors.push(error.message));
+    return { lab, context, page, consoleErrors, offsite };
+  } catch (error) {
+    // The opening failure is the one to report; the lab is closed either way, or the file never exits.
+    await closeLabSession(lab, context).catch(() => undefined);
+    throw error;
+  }
 }
 
+/** The lab is closed whatever the context does, or the file never exits (`closeLabSession`). */
 export async function closeSession(session: Session): Promise<void> {
-  await session.context.close();
-  await session.lab.close();
+  await closeLabSession(session.lab, session.context);
 }
 
 /**
